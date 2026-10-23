@@ -3,6 +3,7 @@
 Uses only owned disposable fixtures. Consumer requests never use local routes.
 The shared harness retains all original files and evidence after failures.
 """
+from _creation_result import created_document
 import json
 import sys
 import time
@@ -89,7 +90,7 @@ class HostedLibrary(HostedQuery):
             refs['parent']=api('/api/navigation/capture',{'root':str(self.root),'path':str(self.root/'Shared')})['targetRef']
             refs['secret']=api('/api/navigation/capture',{'root':str(self.root),'path':str(self.root/'Secret')})['targetRef']
             for name in ['First','Second']:
-                api('/api/note/create',{'root':str(self.root),'parent':str(self.root/'Shared'),'name':name,'operationId':uid()})
+                created_document(api('/api/note/create',{'root':str(self.root),'parent':str(self.root/'Shared'),'name':name,'operationId':uid()}))
                 refs[name]=api('/api/navigation/capture',{'root':str(self.root),'path':str(self.root/'Shared'/name)})['targetRef']
             self.config['directories']={'order-parent':{'path':'Shared','title':'Visible parent','reference':refs['parent']},'secret-parent':{'path':'Secret','title':'Private parent','reference':refs['secret']}}
         self.local(provision)
@@ -240,8 +241,8 @@ class HostedLibrary(HostedQuery):
         bob = self.open(actor='bob')
         self.assertTrue(self.call('preview', {'sessionId': bob['sessionId'], 'source': bob['source']}, 'bob')['ok'])
         self.call('library/read', {'role': 'style'}, 'bob', 404)
-        req = dict(requestId=uid(), resource='Shared', source=doc['source'], format='docx',
-                   reviewMode='none', includeResolved=False, stylePolicy='source', bindings={})
+        req = {'outputLocale': 'zh-CN', 'requestId': uid(), 'resource': 'Shared', 'source': doc['source'], 'format': 'docx',
+                   'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'source', 'bindings': {}}
         artifact = self.call('office/export/prepare', req)
         self.install_style(size='20pt', marker='NEW_STYLE_MARKER')
         output = HostedOffice.deliver(self, artifact)
@@ -337,8 +338,8 @@ class HostedLibrary(HostedQuery):
         findings = [f['id'] for f in scan['findings'] if f['sourceRange']]
         self.assertTrue(findings)
         request = dict(resource='Shared', basis=profile['basis'], operationId=uid(),
-            intent=dict(kind='annotationProofread', options=options, findings=findings,
-                        scanId=scan['scanId'], ignore=False))
+            intent={'annotationLocale': 'zh-CN', 'kind': 'annotationProofread', 'options': options, 'findings': findings,
+                        'scanId': scan['scanId'], 'ignore': False})
         plan = self.call('review/prepare', request)
         sidecar = self.root/'Shared/weftext.annotations.json'
         original = sidecar.read_bytes() if sidecar.exists() else None

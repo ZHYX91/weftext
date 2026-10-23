@@ -1,3 +1,4 @@
+import { TestDocument, TestElement } from "./dom.test-support";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { convertLatexMath, createLatexMathPanel, LATEX_MATH_SUPPORT, type LatexMathPanelHost } from "./math-latex";
@@ -90,21 +91,10 @@ test("comments follow TeX newline semantics and cannot smuggle commands", () => 
 });
 
 // Minimal DOM harness exercises event/race behavior without a browser or an extra runtime package.
-class ElementStub {
-  readonly children: ElementStub[] = [];
-  textContent = ""; className = ""; id = ""; htmlFor = ""; value = ""; disabled = false; readOnly = false;
-  onclick: (() => void) | null = null; oninput: (() => void) | null = null; onchange: (() => void) | null = null;
-  constructor(readonly tag: string) {}
-  append(...nodes: ElementStub[]): void { this.children.push(...nodes); }
-  replaceChildren(...nodes: ElementStub[]): void { this.children.splice(0, this.children.length, ...nodes); }
-  setAttribute(): void { /* Attribute rendering is outside this event-only harness. */ }
-  remove(): void { /* Ownership removal does not affect the asynchronous generation guard. */ }
-  find(tag: string, text?: string): ElementStub { const found = [this, ...this.descendants()].find(item => item.tag === tag && (text === undefined || item.textContent === text)); assert.ok(found, `${tag} ${text ?? ""}`); return found; }
-  private descendants(): ElementStub[] { return this.children.flatMap(child => [child, ...child.descendants()]); }
-}
+type ElementStub = TestElement;
 async function panelFixture(run: (panel: ReturnType<typeof createLatexMathPanel>, root: ElementStub) => Promise<void>, host: LatexMathPanelHost): Promise<void> {
   const previous = Object.getOwnPropertyDescriptor(globalThis, "document");
-  Object.defineProperty(globalThis, "document", { configurable: true, value: { createElement: (tag: string) => new ElementStub(tag) } });
+  Object.defineProperty(globalThis, "document", { configurable: true, value: new TestDocument() });
   const panel = createLatexMathPanel(host);
   try { await run(panel, panel.element as unknown as ElementStub); }
   finally { panel.destroy(); if (previous) Object.defineProperty(globalThis, "document", previous); else Reflect.deleteProperty(globalThis, "document"); }

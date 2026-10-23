@@ -29,14 +29,17 @@ enum Actual {
 }
 
 fn directory_identity(path: &Path) -> FileIdentity {
-    ParentGuard::acquire(&path.join(".identity-probe"))
-        .unwrap()
-        .directory_identity()
-        .unwrap()
+    ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &path.join(".identity-probe"),
+    )
+    .unwrap()
+    .directory_identity()
+    .unwrap()
 }
 
 fn file_identity(path: &Path) -> FileIdentity {
-    crate::operations::capture_optional(path)
+    crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), path)
         .unwrap()
         .unwrap()
         .stamp
@@ -92,6 +95,22 @@ fn save(core: &mut Core, root: &Path, directory: &Path, suffix: &str) {
     let doc = core
         .open(source_path(root, directory), Some(root.into()))
         .unwrap();
+    if doc.recovered_draft_conflict {
+        // This sender fixture starts a reviewed new head from disk. Only
+        // already committed clean proposals may be retired by that decision;
+        // real pending input would invalidate the fixture rather than vanish.
+        let retained = core
+            .current_session_draft(&doc.session_id)
+            .unwrap()
+            .unwrap();
+        assert!(
+            std::iter::once(retained.proposal())
+                .chain(retained.alternatives)
+                .all(|proposal| proposal.base_known && proposal.source == proposal.base_source)
+        );
+        core.resolve_draft(&doc.session_id, "discardRecovered", None)
+            .unwrap();
+    }
     core.save(SaveRequest {
         session_id: doc.session_id,
         base_id: doc.base_id,
@@ -191,7 +210,7 @@ impl Pair {
             let directory = PathBuf::from(relative);
             let name = directory.file_name().unwrap().to_str().unwrap();
             let parent = ar.join(directory.parent().unwrap());
-            let doc = a.create_note(&ar, &parent, name).unwrap();
+            let doc = a.create_note_fixture(&ar, &parent, name).unwrap();
             let id = doc.node_id.unwrap();
             save(
                 &mut a,
@@ -392,7 +411,7 @@ impl Pair {
                 if matches!(layout, Layout::ExtractDirectoryWithNewChild) {
                     let created = self
                         .a
-                        .create_note(&self.ar, self.ar.join("Parent"), "NewChild")
+                        .create_note_fixture(&self.ar, self.ar.join("Parent"), "NewChild")
                         .unwrap();
                     self.selected
                         .insert(ObjectKey::Node(created.node_id.unwrap()));
@@ -551,7 +570,7 @@ impl Pair {
     }
 
     fn assert_installed(&mut self, request: &OperationRequest, preview: &crate::OperationPreview) {
-        assert!(self.b.committed(&preview.operation_id));
+        assert!(self.b.committed(&preview.operation_id).unwrap());
         let retained = self
             .b
             .sync_operation_request(&preview.operation_id)
@@ -1005,8 +1024,8 @@ fn compound_exchange_late_new_node_is_not_an_unmanaged_companion() {
             &creation_id,
         )
         .unwrap();
-    assert!(pair.b.committed(&creation_id));
-    let child_key = ObjectKey::Node(child.node_id.unwrap());
+    assert!(pair.b.committed(&creation_id).unwrap());
+    let child_key = ObjectKey::Node(child.node_ids[0].clone());
     let after_local = pair
         .b
         .sync_local_state(pair.b.sync_setup_for(&pair.br).unwrap())
@@ -1046,16 +1065,16 @@ fn compound_exchange_late_new_node_is_not_an_unmanaged_companion() {
         .unwrap_err();
     assert_eq!(error.code, "scopeChanged", "{error:?}");
     assert_eq!(
-        error.message,
-        "A newly admitted member changed the original moving tree"
+        error.explanation,
+        UiMessage::error_core_operations_newly_admitted_member_changed_original_moving_tree()
     );
     assert_eq!(actual_tree(&pair.br), created);
     pair.reject_every_effect(&preview);
     pair.restart();
     pair.reject_every_effect(&preview);
     assert_eq!(actual_tree(&pair.br), created);
-    assert!(pair.b.committed(&creation_id));
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(pair.b.committed(&creation_id).unwrap());
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
     assert_eq!(
         serde_json::to_value(&pair.b.operations[&preview.operation_id]).unwrap(),
         serde_json::to_value(original_plan).unwrap()
@@ -1084,7 +1103,10 @@ fn compound_exchange_late_raw_metadata_budget_is_shared_across_original_roots() 
         .execute_operation(&preview.operation_id, &preview.plan_id)
         .unwrap_err();
     assert_eq!(error.code, "coverageIncomplete", "{error:?}");
-    assert_eq!(error.message, "Compound metadata members exceed 5000");
+    assert_eq!(
+        error.explanation,
+        UiMessage::error_core_operations_compound_metadata_members_exceed5000()
+    );
     assert!(
         !pair
             .b
@@ -1115,7 +1137,7 @@ fn compound_exchange_late_raw_metadata_budget_is_shared_across_original_roots() 
             .allowed_actions
             .is_empty()
     );
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
     assert_eq!(
         serde_json::to_value(&pair.b.operations[&preview.operation_id]).unwrap(),
         original_plan
@@ -1142,7 +1164,8 @@ fn compound_exchange_late_busy_raw_uses_placement_metadata_and_moves_original_fi
                     visit(root, &entry.unwrap().path(), result);
                 }
             } else {
-                let guard = ParentGuard::acquire(path).unwrap();
+                let guard =
+                    ParentGuard::acquire(&crate::BackendContext::local().unwrap(), path).unwrap();
                 let file = guard.open_placement_file().unwrap();
                 result.insert(
                     relative,
@@ -1224,12 +1247,16 @@ fn compound_exchange_late_busy_raw_uses_placement_metadata_and_moves_original_fi
         .unwrap_err();
     assert_eq!(error.code, "recoveryPending", "{error:?}");
     assert!(
-        error.message.contains("underlying permissionDenied:"),
+        error
+            .causes
+            .as_slice()
+            .iter()
+            .any(|cause| cause.code == "permissionDenied"),
         "{error:?}"
     );
     let install = pair.b.journal_path(&preview.operation_id, "install");
     let marker = fs::read(&install).unwrap();
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
     let mut expected = BTreeMap::new();
     let coordinates = steps
         .iter()
@@ -1282,7 +1309,11 @@ fn compound_exchange_late_busy_raw_uses_placement_metadata_and_moves_original_fi
         .unwrap_err();
     assert_eq!(error.code, "recoveryPending", "{error:?}");
     assert!(
-        error.message.contains("Underlying permissionDenied:"),
+        error
+            .causes
+            .as_slice()
+            .iter()
+            .any(|cause| cause.code == "permissionDenied"),
         "{error:?}"
     );
     assert_eq!(metadata_tree(&pair.br), expected);
@@ -1304,7 +1335,7 @@ fn compound_exchange_late_busy_raw_uses_placement_metadata_and_moves_original_fi
         assert_eq!(actual_tree(directory), *records);
     }
     assert_eq!(crate::backend::stamp(&held).unwrap().identity, identity);
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
     drop(held);
     pair.b
         .resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
@@ -1341,7 +1372,11 @@ fn compound_exchange_interrupted_original_cut_rejects_late_received_head_without
         .unwrap_err();
     assert_eq!(error.code, "recoveryPending");
     assert!(
-        error.message.contains("underlying testInterrupted:"),
+        error
+            .causes
+            .as_slice()
+            .iter()
+            .any(|cause| cause.code == "testInterrupted"),
         "{error:?}"
     );
     pair.restart();
@@ -1385,7 +1420,7 @@ fn compound_exchange_interrupted_original_cut_rejects_late_received_head_without
         .unwrap(),
         serde_json::to_value(original_files).unwrap()
     );
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
 }
 
 fn exchange_parking_steps(
@@ -1420,7 +1455,11 @@ fn interrupt_placement(pair: &mut Pair, preview: &crate::OperationPreview, point
         .unwrap_err();
     assert_eq!(error.code, "recoveryPending", "{point}: {error:?}");
     assert!(
-        error.message.contains("underlying testInterrupted:"),
+        error
+            .causes
+            .as_slice()
+            .iter()
+            .any(|cause| cause.code == "testInterrupted"),
         "{point}: {error:?}"
     );
     assert!(
@@ -1428,7 +1467,7 @@ fn interrupt_placement(pair: &mut Pair, preview: &crate::OperationPreview, point
             .journal_path(&preview.operation_id, "install")
             .exists()
     );
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
 }
 
 fn copy_foreign_tree(source: &Path, target: &Path) {
@@ -1495,7 +1534,7 @@ fn reject_interrupted_placement_without_effect(pair: &mut Pair, preview: &crate:
             );
             assert_eq!(actual_tree(&pair.br), current);
         }
-        assert!(!pair.b.committed(&preview.operation_id));
+        assert!(!pair.b.committed(&preview.operation_id).unwrap());
         assert_eq!(fs::read(&install).unwrap(), original_marker);
         assert_eq!(
             serde_json::to_value(&pair.b.operations[&preview.operation_id]).unwrap(),
@@ -1629,7 +1668,7 @@ fn compound_exchange_late_foreign_parking_slot_refuses_before_first_effect() {
         serde_json::to_value(&pair.b.operations[&preview.operation_id]).unwrap(),
         original_plan
     );
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
 }
 
 #[test]
@@ -1844,7 +1883,7 @@ fn compound_exchange_original_actor_sessions_keep_continued_input_and_stale_save
                     })
                     .unwrap_err();
                 assert_eq!(error.code, "staleBase");
-                assert!(!core.committed(&operation_id));
+                assert!(!core.committed(&operation_id).unwrap());
                 assert!(!core.journal_path(&operation_id, "install").exists());
                 Ok(())
             })
@@ -1935,6 +1974,13 @@ fn compound_exchange_explicit_actor_draft_resolution_does_not_resurrect_consumed
             assert_eq!(opened.node_id.as_deref(), Some(left_id.as_str()));
             assert_eq!(opened.recovered_draft.as_deref(), Some(merged.as_str()));
             assert!(!opened.recovered_draft_conflict);
+            // This is the explicitly reviewed merged input after restart,
+            // continued through the complete-record CAS, not a fresh producer.
+            core.resume_recovered_draft(crate::ResumeDraftRequest {
+                session_id: opened.session_id.clone(),
+                record_witness: opened.recovered_draft_witness.clone().unwrap(),
+                recovered_source: merged.clone(),
+            })?;
             Ok(core
                 .save(SaveRequest {
                     session_id: opened.session_id,
@@ -1942,6 +1988,7 @@ fn compound_exchange_explicit_actor_draft_resolution_does_not_resurrect_consumed
                     operation_id: fresh(),
                     source: merged.clone(),
                 })?
+                .receipt
                 .revision_id)
         })
         .unwrap();
@@ -2282,7 +2329,7 @@ fn compound_extract_directory_parked_created_child_and_exact_5000_metadata_membe
         Some(captured.stamp.identity.clone())
     );
     assert_eq!(
-        pair.b.accepted_revision(&captured).as_ref(),
+        pair.b.accepted_revision(&captured).unwrap().as_ref(),
         chosen.state.file_revisions.get("NewChild.typ")
     );
     let owner = weftext_knowledge::NodeRef {
@@ -2304,5 +2351,7 @@ fn compound_extract_directory_parked_created_child_and_exact_5000_metadata_membe
 }
 
 fn capture_optional_for_budget(path: &Path) -> crate::operations::CapturedFile {
-    crate::operations::capture_optional(path).unwrap().unwrap()
+    crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), path)
+        .unwrap()
+        .unwrap()
 }

@@ -139,7 +139,7 @@ class Outputs(features.LocalFeatures):
         return path
 
     def prepare_output(self, doc, fmt, source=None, serial=1, **options):
-        request = {'requestId': features.uid(), 'sessionId': doc['sessionId'],
+        request = {'outputLocale': 'zh-CN', 'requestId': features.uid(), 'sessionId': doc['sessionId'],
                    'baseId': doc['baseId'], 'source': doc['source'] if source is None else source,
                    'serial': serial, 'format': fmt, 'stylePolicy': 'template', **options}
         output = self.api('/api/export/prepare', request)
@@ -186,7 +186,7 @@ class Outputs(features.LocalFeatures):
         root, _ = self.library()
         self.install_amount_schema(root)
         decimal = {'kind': 'decimal', 'value': '9007199254740993.120000000000000001'}
-        doc, _ = self.capture(root, 'Exact task', ['task'], {'status': features.text('open'), 'amount': decimal})
+        doc, _ = self.capture(root, 'Exact task', ['task'], {'tasks/status': features.text('open'), 'acceptance/amount': decimal})
         plan = {'types': ['task'], 'select': [{'name': 'amount', 'expr': 'amount'},
                     {'name': 'integer', 'expr': '9223372036854775807'},
                     {'name': 'formula-text', 'expr': "'=1+1'"}]}
@@ -307,10 +307,11 @@ class Outputs(features.LocalFeatures):
         root, doc, plan, query, decimal = self.query_fixture()
         changed = self.api('/api/data/edit', {**self.snapshot(doc, serial=2), 'key': 'amount',
                           'value': {'kind': 'decimal', 'value': '10.0'}})
+        self.map_source(doc, changed['source'], serial=3)
         current = self.saved(doc, changed['source'], root)
         fresh = self.api('/api/query/run', {'root': str(root), 'plan': plan})
         self.assertNotEqual(fresh['rows'][0]['cells']['amount']['value'], decimal)
-        _, output = self.prepare_output(current, 'xlsx', queryId=query['queryId'])
+        _, output = self.prepare_output(current, 'xlsx', serial=3, queryId=query['queryId'])
         self.assertEqual(output['preview']['query']['queryId'], query['queryId'])
         parts = unpack(self.download_output(output, 'frozen-query-exact.xlsx'))
         structure = xlsx_structure(parts)['sheet:0']

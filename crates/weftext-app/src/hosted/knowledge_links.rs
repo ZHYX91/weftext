@@ -75,26 +75,21 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "knowledgeLinksChanged",
-        "链接、词典或当前草稿依据已变化；请保留输入并重新读取。",
+        UiMessage::error_api_hosted_knowledge_links_link_basis_changed(),
     )
 }
-fn knowledge_error(error: knowledge::KnowledgeError) -> ApiError {
-    let message = match error.code.as_str() {
-        "sourceEntry" | "unmapped" => "此出现项没有唯一可写的原生参数；请保留源码并使用源码入口。",
-        "staleDictionary" | "conflict" => "当前词典或准确文字已变化；请重新读取，草稿保留。",
-        _ => "此目标或片段不能按当前获权依据准确转换；原链接和草稿保留。",
-    };
+fn knowledge_error(_: knowledge::KnowledgeError) -> ApiError {
     ApiError::new(
         StatusCode::UNPROCESSABLE_ENTITY,
         "knowledgeLinksUnavailable",
-        message,
+        UiMessage::error_api_hosted_knowledge_links_conversion_unavailable(),
     )
 }
 fn file_form() -> ApiError {
     ApiError::new(
         StatusCode::UNPROCESSABLE_ENTITY,
         "knowledgeLinksFileAddress",
-        "托管地址转换不交付服务器绝对路径；可选择稳定 ID、源相对或库内路径，已有原文仍可复制。",
+        UiMessage::error_api_hosted_knowledge_links_hosted_absolute_path_unavailable(),
     )
 }
 fn uri(node: &knowledge::NodeRef) -> String {
@@ -278,9 +273,7 @@ fn field_semantics(
         Ok(closure) => {
             // Ungranted authored members are outside the declared field scope,
             // not evidence that its qualified selected fields were incomplete.
-            result.complete &= closure.reasons.iter().all(|reason| {
-                reason == "unbound root fields are outside the installed typed closure"
-            });
+            result.complete &= closure.complete_without_unbound_root_fields;
             result.references = closure
                 .slots
                 .into_iter()
@@ -682,7 +675,9 @@ fn capture(
         }
     }
     if bytes > MAX_BYTES {
-        return Err(ApiError::bad("本次链接与词典准确依据超过 32 MiB 预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_knowledge_links_link_dictionary_basis_budget(),
+        ));
     }
     let generation = digest(&serde_json::to_vec(&json!({"binding":binding(inner,&actor)?,"actor":actor,"epoch":inner.actor_generation(&actor),"source":req.source_hash,"serial":req.serial,"semanticFields":semantic_keys,"nodes":candidates.iter().map(|c|json!({"resource":c.resource,"owner":c.qualified.owner,"hash":c.qualified.source_hash,"revision":c.qualified.revision})).collect::<Vec<_>>(),"resources":assets.iter().map(|a|json!({"asset":a.id,"hash":a.qualified.content_hash,"revision":a.qualified.revision})).collect::<Vec<_>>(),"collections":collections.iter().map(|c|json!({"owner":c.owner,"revision":c.revision})).collect::<Vec<_>>(),"complete":complete})).map_err(|_| changed())?);
     let generation = digest(
@@ -1086,7 +1081,7 @@ fn occurrence(source: &str, requested: &Occurrence) -> Result<knowledge::NativeL
 async fn read(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Snapshot>,
+    RequestJson(req): RequestJson<Snapshot>,
 ) -> ApiResult {
     let check = auth.clone();
     let mut captured = locked(&state, move |inner| {
@@ -1123,7 +1118,7 @@ let diagnostic = knowledge::link_diagnostics(&captured.inventory, &captured.prop
         let heading_tree=captured.compilations.iter().find(|c|c.index==captured.selected).and_then(|c|c.output.as_ref()).filter(|o|o["ok"]==true).and_then(|o|serde_json::from_value::<weftext_engine::RenderNode>(o["tree"].clone()).ok());
         let heading_structure=knowledge::heading_structure(heading_tree.as_ref(),&captured.request.source,5_000);
 let response=json!({"graph":graph,"headingStructure":heading_structure,"diagnostics":diagnostics,"basis":captured.basis(),"scope":"configuredAuthorizedManagedSources","links":{"coverage":index.coverage,"outgoing":index.outgoing.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"incomingId":index.incoming_id.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>(),"incomingPath":index.incoming_path.into_iter().map(|e|public_edge(&captured,e)).collect::<Vec<_>>()},"renderedLinks":rendered,"propertyReferences":{"scope":"explicitAuthorizedFields","coverage":if captured.property_complete{"complete"}else{"partial"},"items":properties},"mentions":{"scope":"nativeTitlesAndAuthorizedNameFields","coverage":scan.coverage,"fragments":mentions},"writable":writable,"fileConversion":false});
-        if serde_json::to_vec(&response).map_err(|_|changed())?.len()>MAX_OUTPUT {return Err(ApiError::bad("本次链接结果超过 8 MiB 交付预算；请缩小部署的获权范围。"));}
+        if serde_json::to_vec(&response).map_err(|_|changed())?.len()>MAX_OUTPUT {return Err(ApiError::bad(UiMessage::error_api_hosted_knowledge_links_link_result_budget()));}
         Ok(Json(response))
     }).await
 }
@@ -1857,7 +1852,7 @@ mod tests {
         let copied = copy(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Copy {
+            crate::RequestJson(Copy {
                 basis: basis.clone(),
                 snapshot: "a".repeat(64),
                 occurrence: occurrence.clone(),
@@ -1876,7 +1871,7 @@ mod tests {
             copy(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Copy {
+                crate::RequestJson(Copy {
                     basis: basis.clone(),
                     snapshot: "a".repeat(64),
                     occurrence: occurrence.clone(),
@@ -1892,7 +1887,7 @@ mod tests {
             convert(
                 State(state),
                 Extension(auth),
-                Json(Convert {
+                crate::RequestJson(Convert {
                     basis,
                     snapshot: "a".repeat(64),
                     intent: Intent::Link {
@@ -1911,7 +1906,7 @@ mod tests {
 async fn convert(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Convert>,
+    RequestJson(req): RequestJson<Convert>,
 ) -> ApiResult {
     let (captured, patch) =
         proposal(&state, &auth, req.basis, req.snapshot, req.intent, true).await?;
@@ -1926,7 +1921,7 @@ async fn convert(
 async fn copy(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Copy>,
+    RequestJson(req): RequestJson<Copy>,
 ) -> ApiResult {
     if req.form == "original" {
         return Ok(Json(locked(&state,move|inner|{
@@ -1945,7 +1940,11 @@ async fn copy(
         "relative" => knowledge::LinkForm::Relative,
         "workspace" => knowledge::LinkForm::Workspace,
         "file" => return Err(file_form()),
-        _ => return Err(ApiError::bad("请选择原文、稳定 ID、源相对或库内地址")),
+        _ => {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_knowledge_links_link_address_kind_required(),
+            ));
+        }
     };
     let from = req.occurrence.from;
     let (captured, patch) = proposal(

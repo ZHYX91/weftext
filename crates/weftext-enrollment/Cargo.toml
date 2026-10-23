@@ -1,0 +1,15 @@
+[package]
+name = "weftext-enrollment"
+version = "0.6.3-rc.4"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+libc = "0.2"
+sha2 = "0.10"
+uuid = "1"
+zeroize = "1"

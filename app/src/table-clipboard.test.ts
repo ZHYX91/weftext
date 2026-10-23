@@ -22,15 +22,15 @@ test("HTML serialization escapes author text and flat formats name the merged or
 const body = writingRange("same", 0, 4);
 function cell(row: number, column: number, rowspan = 1, colspan = 1): WritingTableCell { return { row, column, rowspan, colspan, body, range: body, header: false }; }
 test("logical navigation skips merged coverage and repeated text never identifies a target", () => {
-  const table: WritingTable = { columns: 3, rows: 3, cells: [], gridWritable: false, topologyWritable: true, logicalCells: [cell(0, 0, 2, 2), cell(0, 2), cell(1, 2), cell(2, 0), cell(2, 1), cell(2, 2)] };
+  const table: WritingTable = { columns: 3, rows: 3, cells: [], gridWritable: false, topologyWritable: true, unavailableReason: null, headerRows: 0, headerColumns: 0, logicalCells: [cell(0, 0, 2, 2), cell(0, 2), cell(1, 2), cell(2, 0), cell(2, 1), cell(2, 2)] };
   assert.equal(tableCellAt(table, { row: 1, column: 1 }), table.logicalCells![0]);
   assert.deepEqual(adjacentTableCell(table, { row: 0, column: 0 }, "next"), { row: 0, column: 2 });
   assert.deepEqual(adjacentTableCell(table, { row: 0, column: 0 }, "down"), { row: 2, column: 0 });
   assert.equal(adjacentTableCell(table, { row: 0, column: 0 }, "previous"), null);
   assert.deepEqual(tableRectangle(table, { row: 1, column: 1 }, { row: 2, column: 2 }), { top: 0, left: 0, bottom: 2, right: 2 });
 });
-test("a legacy simple map keeps independent logical slots even with equal raw text", () => {
-  const table: WritingTable = { columns: 2, rows: 2, cells: [body, body, body, body], gridWritable: true };
+test("native logical slots remain independent even with equal raw text", () => {
+  const table: WritingTable = { columns: 2, rows: 2, cells: [body, body, body, body], logicalCells: [cell(0, 0), cell(0, 1), cell(1, 0), cell(1, 1)], gridWritable: true, topologyWritable: true, unavailableReason: null, headerRows: 0, headerColumns: 0 };
   assert.deepEqual(logicalTableCells(table).map(cell => [cell.row, cell.column]), [[0, 0], [0, 1], [1, 0], [1, 1]]);
   assert.deepEqual(tableRectangle(table, { row: 1, column: 1 }, { row: 0, column: 0 }), { top: 0, left: 0, bottom: 1, right: 1 });
 });

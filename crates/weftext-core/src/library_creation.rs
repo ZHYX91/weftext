@@ -3,6 +3,7 @@
 use super::*;
 use operations::{FileChange, FrozenOperation, Mutation, NewBirth, read_blob, write_blob};
 use std::collections::BTreeMap;
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -36,7 +37,7 @@ fn validate_root(root: &InitialRootNote) -> Result<()> {
     if root.title.len() > 4096 || root.queries.len() > 3 {
         return Err(CoreError::new(
             "invalidPreset",
-            "Root preset exceeds its input budget",
+            UiMessage::error_core_library_creation_root_preset_exceeds_input_budget(),
         ));
     }
     let catalog = root_query_presets();
@@ -51,7 +52,7 @@ fn validate_root(root: &InitialRootNote) -> Result<()> {
         {
             return Err(CoreError::new(
                 "invalidPreset",
-                "Unknown or repeated root Query selection",
+                UiMessage::error_core_library_creation_unknown_or_repeated_root_query_selection(),
             ));
         }
     }
@@ -134,43 +135,50 @@ impl Core {
         valid_operation_id(operation_id)?;
         let path = path.as_ref();
         let fingerprint = request_fingerprint(path, &options)?;
+        if !self.operations.contains_key(operation_id)
+            && let Some(record) = self.resolution_record(operation_id)?
+        {
+            if record.attempt.as_ref().is_some_and(|attempt| {
+                attempt.request_kind != "createLibrary" || attempt.wire_digest != fingerprint
+            }) {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    UiMessage::error_core_library_creation_cancelled_attempt_belongs_to_different_input(),
+                ));
+            }
+            return Err(CoreError::new(
+                "operationCanceled",
+                UiMessage::error_core_library_creation_original_creation_attempt_durably_cancelled(
+                ),
+            ));
+        }
         if let Some(plan) = self.operations.get(operation_id) {
             if plan.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This operationId already belongs to different input",
+                    UiMessage::error_core_journal_operation_id_already_belongs_to_different_input(),
                 ));
             }
-            if self.resolved(operation_id) {
+            if !self.committed(operation_id)? && self.resolved(operation_id)? {
                 return Err(CoreError::new(
                     "operationCanceled",
-                    "The original creation was durably canceled or retained without activation",
+                    UiMessage::error_core_library_creation_original_creation_was_durably_canceled_or_retained_without_activation(),
                 ));
             }
-            if !self.committed(operation_id) {
+            if !self.committed(operation_id)? {
                 return Err(CoreError::new(
                     "recoveryPending",
-                    "Inspect and resolve the original creation plan; no second plan was created",
-                ));
-            }
-            let root = absolute_path(path)?;
-            if self.workspace(&root)?.as_ref().map(|w| &w.workspace_id)
-                != plan.workspace_id.as_ref()
-                || !self.library_creation_root_matches(plan, &root)?
-            {
-                return Err(CoreError::new(
-                    "committedResultUnavailable",
-                    "The original library object or configuration is unavailable; no recreation was attempted",
+                    UiMessage::error_core_library_creation_inspect_and_resolve_original_creation_plan_no_second_plan_was_created(),
                 ));
             }
             return Ok(library_info(plan));
         }
         let root = absolute_path(path)?;
-        let guard = ParentGuard::acquire(&root)?;
+        let guard = ParentGuard::acquire(&self.backend, &root)?;
         if root.try_exists()? {
             return Err(CoreError::new(
                 "exists",
-                "Library creation requires an absent directory",
+                UiMessage::error_core_library_creation_library_creation_requires_absent_directory(),
             ));
         }
         let plan = self.plan_library_creation(
@@ -185,6 +193,71 @@ impl Core {
         // Initial install and explicit continuation use identical guarded proof.
         self.resolve_library_creation_recovery(&plan, "resumeOriginalPlan")?;
         Ok(library_info(&plan))
+    }
+
+    /// The original library receipt survives independent delivery failure.
+    /// Both its root and optional root note must still be their original
+    /// physical objects; names and copied workspace declarations are not proof.
+    pub fn reopen_local_library_creation(
+        &mut self,
+        operation_id: &str,
+    ) -> Result<(Inventory, Option<OpenedDocument>)> {
+        self.sync_local_owner()?;
+        valid_operation_id(operation_id)?;
+        let invalid = || {
+            CoreError::new(
+                "committedResultUnavailable",
+                UiMessage::error_core_original_scope_creation_physical_result_unavailable(),
+            )
+        };
+        let plan = self
+            .operations
+            .get(operation_id)
+            .cloned()
+            .ok_or_else(invalid)?;
+        if plan.kind != "createLibrary" || !self.committed(operation_id)? {
+            return Err(invalid());
+        }
+        let root = PathBuf::from(&plan.path);
+        if self
+            .workspace(&root)?
+            .as_ref()
+            .map(|workspace| &workspace.workspace_id)
+            != plan.workspace_id.as_ref()
+            || !self.library_creation_root_matches(&plan, &root)?
+        {
+            return Err(invalid());
+        }
+        let inventory = self.inventory(&root)?;
+        if inventory.workspace_id != plan.workspace_id {
+            return Err(invalid());
+        }
+        let root_note = library_info(&plan)
+            .root_note_path
+            .map(|path| self.reopen_local_operation_node(operation_id, &path))
+            .transpose()?;
+        Ok((inventory, root_note))
+    }
+
+    pub fn local_library_creation_info(&self, operation_id: &str) -> Result<LibraryInfo> {
+        self.sync_local_owner()?;
+        valid_operation_id(operation_id)?;
+        let plan = self.operations.get(operation_id).ok_or_else(|| {
+            CoreError::new(
+                "operationMissing",
+                UiMessage::error_core_original_scope_creation_original_not_retained(),
+            )
+        })?;
+        if plan.kind != "createLibrary"
+            || plan.transaction.is_none()
+            || !self.committed(operation_id)?
+        {
+            return Err(CoreError::new(
+                "operationConflict",
+                UiMessage::error_core_original_scope_creation_original_not_committed_creation(),
+            ));
+        }
+        Ok(library_info(plan))
     }
 
     /// Fence an unknown original request without allocating another identity.
@@ -202,7 +275,7 @@ impl Core {
         if display(root).len() > 32_768 {
             return Err(CoreError::new(
                 "tooLarge",
-                "Creation request path exceeds its retained input budget",
+                UiMessage::error_core_library_creation_creation_request_path_exceeds_retained_input_budget(),
             ));
         }
         if let Some(style) = &options.initial_style {
@@ -216,7 +289,7 @@ impl Core {
             if plan.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This operationId already belongs to different input",
+                    UiMessage::error_core_journal_operation_id_already_belongs_to_different_input(),
                 ));
             }
             let current = self.inspect_recovery(operation_id)?;
@@ -225,28 +298,18 @@ impl Core {
             }
             return self.resolve_recovery(operation_id, "keepCurrent");
         }
-        let plan = journal::Plan::file(
-            operation_id.into(),
-            fingerprint,
-            root,
-            None,
-            serde_json::to_vec(&options)?,
-            None,
-            "cancelLibraryCreation",
-        );
-        if !is_cancellation(&plan) {
+        if let Some(record) = self.resolution_record(operation_id)?
+            && record.attempt.as_ref().is_some_and(|attempt| {
+                attempt.request_kind != "createLibrary" || attempt.wire_digest != fingerprint
+            })
+        {
             return Err(CoreError::new(
-                "invalidPlan",
-                "Cancellation must have no author participants",
+                "operationConflict",
+                UiMessage::error_core_library_creation_cancelled_attempt_belongs_to_different_input(
+                ),
             ));
         }
-        // This narrow terminal record deliberately has no author stage or sync
-        // publication. Ordinary mutation plans continue through Core::stage.
-        journal::private_create(
-            &self.journal_path(operation_id, "plan"),
-            &serde_json::to_vec(&plan)?,
-        )?;
-        self.operations.insert(operation_id.into(), plan);
+        self.settle_local_attempt(operation_id, "createLibrary", &fingerprint)?;
         self.inspect_recovery(operation_id)
     }
 
@@ -291,7 +354,10 @@ impl Core {
         if let Some(initial) = &options.initial_root {
             validate_root(initial)?;
             let name = root.file_name().and_then(|s| s.to_str()).ok_or_else(|| {
-                CoreError::new("invalidPath", "Root needs a canonical note filename")
+                CoreError::new(
+                    "invalidPath",
+                    UiMessage::error_core_library_creation_root_needs_canonical_note_filename(),
+                )
             })?;
             valid_name(name)?;
             let relative = format!("{name}.typ");
@@ -299,7 +365,7 @@ impl Core {
             let node_id = fresh();
             let title = weftext_data::NativeValue::Text(initial.title.clone())
                 .to_typst()
-                .map_err(|e| CoreError::new("invalidPreset", e.to_string()))?;
+                .map_err(|e| CoreError::from_data("invalidPreset", e))?;
             let mut source = format!(
                 "#metadata((id: \"{node_id}\", types: ())) <weftext>\n\n#set document(title: {title})\n#title()\n\n"
             );
@@ -314,7 +380,7 @@ impl Core {
                     ROOT_PRESET_SCHEMA.as_bytes().to_vec(),
                 ));
                 let schema = weftext_data::Schema::from_author_json(ROOT_PRESET_SCHEMA)
-                    .map_err(|e| CoreError::new("invalidPreset", e.to_string()))?;
+                    .map_err(|e| CoreError::from_data("invalidPreset", e))?;
                 let binding = weftext_data::SavedQueryBinding {
                     schema: format!("weftext-config://{workspace_id}/schema"),
                     revision: schema_revision,
@@ -342,7 +408,7 @@ impl Core {
                         &plan,
                         &schema,
                     )
-                    .map_err(|e| CoreError::new("invalidPreset", e.to_string()))?
+                    .map_err(|e| CoreError::from_data("invalidPreset", e))?
                     .source;
                 }
             }
@@ -356,15 +422,10 @@ impl Core {
         if let Some(style) = &options.initial_style {
             check_size(style.source.as_bytes())?;
             let inspection = weftext_engine::inspect_library_style(&style.source);
-            if !inspection.syntax_valid
-                || inspection
-                    .controls
-                    .iter()
-                    .any(|c| c.reason.as_deref() == Some("missing-or-ambiguous-entry"))
-            {
+            if !inspection.syntax_valid || inspection.entry_count != 1 {
                 return Err(CoreError::new(
                     "invalidStyle",
-                    "Initial native style needs valid syntax and one unambiguous library-style entry",
+                    UiMessage::error_core_library_creation_initial_native_style_needs_valid_syntax_and_one_unambiguous_library_style_entry(),
                 ));
             }
             let node_id = fresh();
@@ -451,7 +512,6 @@ impl Core {
                 status: "committed".into(),
                 path: display(root),
                 node_ids: births.iter().map(|b| b.node_id.clone()).collect(),
-                message: "Created the library and its initial native style in one decision".into(),
             },
             mutation: Mutation::CreateTree {
                 target: display(root),
@@ -480,7 +540,7 @@ impl Core {
             return Ok(true);
         }
         let expected = self.materialized_identity(&plan.operation_id, Path::new(&plan.path))?;
-        let guard = ParentGuard::acquire(&root.join(".library-identity"))?;
+        let guard = ParentGuard::acquire(&self.backend, &root.join(".library-identity"))?;
         Ok(expected.as_ref() == Some(&guard.directory_identity()?))
     }
 
@@ -489,9 +549,11 @@ impl Core {
         plan: &journal::Plan,
     ) -> Result<RecoveryInfo> {
         let mut result = self.inspect_transaction_recovery(plan)?;
-        if !self.committed(&plan.operation_id)
-            && !self.resolved(&plan.operation_id)
-            && self.journal_path(&plan.operation_id, "install").exists()
+        if !self.committed(&plan.operation_id)?
+            && !self.resolved(&plan.operation_id)?
+            && self
+                .backend
+                .entry_exists(self.journal_path(&plan.operation_id, "install"))?
             && result.members.iter().all(|m| {
                 if m.role == "write" {
                     m.matches_before || m.matches_after
@@ -510,13 +572,15 @@ impl Core {
         plan: &journal::Plan,
         action: &str,
     ) -> Result<RecoveryInfo> {
-        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id) {
+        if self.committed(&plan.operation_id)? || self.resolved(&plan.operation_id)? {
             return self.inspect_library_creation_recovery(plan);
         }
-        let t = plan
-            .transaction
-            .as_ref()
-            .ok_or_else(|| CoreError::new("invalidPlan", "Creation transaction is missing"))?;
+        let t = plan.transaction.as_ref().ok_or_else(|| {
+            CoreError::new(
+                "invalidPlan",
+                UiMessage::error_core_library_creation_creation_transaction_missing(),
+            )
+        })?;
         let Mutation::CreateTree {
             target,
             existing_target: false,
@@ -528,7 +592,8 @@ impl Core {
         else {
             return Err(CoreError::new(
                 "invalidPlan",
-                "Creation requires its original create-only tree",
+                UiMessage::error_core_library_creation_creation_requires_original_create_only_tree(
+                ),
             ));
         };
         if !matches!(t.request.intent, OperationIntent::CreateLibrary { .. })
@@ -538,7 +603,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "invalidPlan",
-                "Creation plan binding differs",
+                UiMessage::error_core_library_creation_creation_plan_binding_differs(),
             ));
         }
         let mut capture =
@@ -554,7 +619,9 @@ impl Core {
                     m.matches_after
                 }
             });
-            if !self.journal_path(&plan.operation_id, "install").exists()
+            if !self
+                .backend
+                .entry_exists(self.journal_path(&plan.operation_id, "install"))?
                 || !match action {
                     "adoptAfterImages" => after,
                     "resumeOriginalPlan" => resumable,
@@ -563,7 +630,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "recoveryConflict",
-                    "Original creation members are unavailable or changed; no participant was written",
+                    UiMessage::error_core_library_creation_original_creation_members_unavailable_or_changed_no_participant_was_written(),
                 ));
             }
             if action == "resumeOriginalPlan" {
@@ -583,13 +650,13 @@ impl Core {
                         .ok_or_else(|| {
                             CoreError::new(
                                 "invalidPlan",
-                                "A created directory lacks its original member",
+                                UiMessage::error_core_library_creation_created_directory_lacks_original_member(),
                             )
                         })?;
                     if member.matches_after {
                         continue;
                     }
-                    let guard = ParentGuard::acquire(&path)?;
+                    let guard = ParentGuard::acquire(&self.backend, &path)?;
                     let directory = guard.create_directory()?;
                     self.record_materialized(&plan.operation_id, &path, &directory)?;
                     capture.guards.push(guard);
@@ -603,7 +670,7 @@ impl Core {
                         .ok_or_else(|| {
                             CoreError::new(
                                 "invalidPlan",
-                                "A created file lacks its original member",
+                                UiMessage::error_core_library_creation_created_file_lacks_original_member(),
                             )
                         })?;
                     if capture.members[index].matches_after {
@@ -612,7 +679,7 @@ impl Core {
                     if let Some((_, file)) = capture.files.iter_mut().find(|(i, _)| *i == index) {
                         write_blob(file, &change.after)?;
                     } else {
-                        let guard = ParentGuard::acquire(Path::new(&change.path))?;
+                        let guard = ParentGuard::acquire(&self.backend, Path::new(&change.path))?;
                         let mut file = guard.open_file(true, true)?;
                         self.record_materialized(
                             &plan.operation_id,
@@ -631,14 +698,16 @@ impl Core {
             let mut materialized = Vec::new();
             for (index, file) in &mut capture.files {
                 let path = &capture.members[*index].path;
-                let change = files
-                    .iter()
-                    .find(|f| &f.path == path)
-                    .ok_or_else(|| CoreError::new("invalidPlan", "Unexpected creation output"))?;
+                let change = files.iter().find(|f| &f.path == path).ok_or_else(|| {
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_library_creation_unexpected_creation_output(),
+                    )
+                })?;
                 if read_blob(file)? != change.after {
                     return Err(CoreError::new(
                         "recoveryConflict",
-                        "Creation afterimage changed before decision",
+                        UiMessage::error_core_library_creation_creation_afterimage_changed_before_decision(),
                     ));
                 }
                 materialized.push((path.clone(), stamp(file)?));
@@ -656,7 +725,7 @@ fn library_info(plan: &journal::Plan) -> LibraryInfo {
         operation_id: plan.operation_id.clone(),
         root: plan.path.clone(),
         workspace_id: plan.workspace_id.clone().unwrap(),
-        status: "localMvp".into(),
+        status: "committed".into(),
         root_note_path: plan.transaction.as_ref().and_then(|t| {
             t.births()
                 .iter()

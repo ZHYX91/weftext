@@ -8,13 +8,15 @@ translation_status: synced
 
 # Local writing and knowledge tool
 
+The current development tree integrates the existing v0.7 slices: GUI/CLI entry points, Capture and reminder consumers, interface language and platform-host foundations, with unified save/original-operation delivery and Draft-baseline recovery. Validation of a merged development slice follows WORKFLOW and does not establish whole-version v0.7 completion. Native Windows window/install delivery, complete Linux/Android/Apple products, real IME/assistive technology and the performance/recognition platform matrix retain separate ROADMAP acceptance; original v0.6.3 gaps remain.
+
 The **established v0.6 scope is complete for 0.6.0 on Windows/NTFS and has passed acceptance on the final optimized executable; it is not formally published**. Local features, [controlled Server / WebUI](SERVER.md), multiuser authorization and same-owner synchronization use the same Core. That same final optimized executable passed the complete HTTP matrix, affected browser suites and real NAS HTTPS acceptance. See the [roadmap](ROADMAP.md). Native `.typ` files remain the authoring source; editors, search and views do not store a competing body.
 
 This candidate connects the **local note timeline** and **five-view body-embedded Query**, reusing Core save/recovery, shared source/Draft/Undo and the existing Query executor. The [roadmap](ROADMAP.md) records bounded local scope and outstanding platform conditions; implementation does not by itself establish all acceptance conditions.
 
 The earlier **0.6.2 local delivery candidate with the initial Windows local/self-hosted scope complete** remains the preceding delivery; the 0.6.0 conclusion above applies only to its original accepted baseline. 0.6.1 completed its automated checks, affected browsers and actual Word structural/language-slot roundtrips, retaining these evidence limits: human Windows 11 Microsoft Pinyin input in body, ordinary and merged cells was checked only on a preceding candidate, without final-candidate real-system IME qualification; an earlier cross-view Undo inserting additional source has not been reproduced in the same form. Reproducible composition settlement and history-isolation defects have fixes and automated regressions, without establishing the original anomaly's cause or whole-version IME acceptance. Obsidian/reference plugins are independent interaction references, without runtime dependency, shared vaults or synchronization with Weftext.
 
-## 0.6.3 release candidate: whole-version acceptance in progress
+## Existing 0.6.3 candidate and evidence boundaries
 
 The stabilization candidate is `0.6.3-rc.4`. Artifacts and accepted conclusions from the first three stages and rc.1/rc.2 retain their original boundaries. This iteration maintains Unicode character counts from actual CodeMirror edits and reuses the current document string. Very long source lines and native preview text disable kerning while retaining complete text, wrapping, source mappings and the same Undo. Hosted recovery synchronously retains compact differences, actual Base and the original pending save, avoiding full-body writes on every edit. A real-browser keyboard measurement entry records the feedback upper bound, Chrome Layout and its bounded scope separately; it does not measure OS IME or establish the complete performance targets. The new artifact requires affected checks. Real system IME, the original K Undo anomaly and the full reference/performance/platform gates retain the limits below.
 
@@ -58,12 +60,16 @@ Final-candidate real-system IME and the original 0.6.1 candidate-K cross-view Un
 
 ## Launch and files
 
-Run the packaged `weftext.exe`. Its window reports a local session address and opens the default browser; closing the process stops the service. Default local mode listens only on `127.0.0.1`, without a cloud account. The bounded multiuser entry requires explicit `--server-config`; see the [Server guide](SERVER.md) for configuration, startup and remaining scope.
+The 0.7 host batch is being integrated. The following is its unified entry contract; native windows, preservation on close and installation acceptance remain incomplete. Windows UI uses `weftext.exe`, and the formal console uses `weftext-cli.exe`. Local UI and CLI share the one Core for the same physical profile, without a cloud account. An ordinary launch or repeated application activation opens Library; `--capture` opens only the independent Capture window. Local browser service requires explicit CLI `serve`. Controlled multiuser service uses its `--server-config`; see [Server](SERVER.md) and [CLI](CLI.md).
+
+Replace the executable names below with the full fixed role paths printed by this attempt's `scripts/mvp.py build/check`, or their counterparts in the delivery directory. Keep both PEs and the same-build `artifact-catalog.json` together. Raw Cargo `target/debug` or `target/release` executables do not establish a qualified candidate, and executables from separate builds cannot be mixed.
 
 ```text
-weftext.exe --open "D:\Notes\example.typ"
-weftext.exe --open "D:\Project\chapter.typ" --root "D:\Project"
-weftext.exe --no-browser --data-dir "D:\Weftext-Local-State"
+weftext.exe
+weftext.exe --capture
+weftext.exe --data-dir "D:\Weftext-Local-State"
+weftext-cli.exe serve --data-dir "D:\Weftext-Local-State" --port 0
+weftext-cli.exe serve --data-dir "D:\Weftext-Local-State" --open "D:\Project\chapter.typ" --root "D:\Project" --port 0
 ```
 
 The UI accepts full local paths. New libraries use an absent directory; ordinary directories can be browsed without automatic admission. New notes use `A/A.typ` with native metadata for ID, types and fields. Ordinary files inside or outside a library can be opened, edited and saved without adding metadata. Titleless notes are valid; navigation may display a filename fallback.
@@ -134,13 +140,15 @@ XLSX exports current-note fields or the exact result selected through a Query re
 
 Native packages export the **saved entire library** and admitted dependencies; save open library drafts first. They exclude local history, journals and unmanaged raw files and do not replace recovery backups. The new closed Tags role retains the complete v2 forest. Explicitly upgrade a current v1 registry first; export does not implicitly alter originals. Import creates fresh note and whole-forest tag identities in a new destination folder, retaining ancestors and using one full-source-TagRef map for typed body references, Query tagRef literals and typed parameter defaults. Ordinary literals remain unchanged and names do not merge identities. Query bindings rebind only with provable exact packaged Schema bases and semantically equal targets; missing original history gives `schemaMappingRequired`, never guessed latest. Incompatible schemas are rejected, library settings are not replaced and complex resource-module context changes are reported. Preserve the upload and existing notes; hosted Tags/Schema effects require independent grants.
 
+The current native content package is v2. Loss explanations use shared typed messages and retain complete machine codes, locations and diagnostics. Version-1 packages are explicitly rejected while retaining the original ZIP, without automatic upgrade. This version is separate from the v2 Tag forest and complete recovery backups.
+
 BibTeX, CSL JSON and RIS import first shows complete mappings, unknown data and conflicts. Conflict-free input creates independent paper notes and retains true originals. Equal DOI, title or suggested citation key never authorizes overwriting or merging; the current UI does not automatically refresh or merge existing Works. Export uses typed publication data from a paper or explicitly bound Works. Citation declarations generate a native `.bib` from the same frozen input; an authored file at that path prevents replacement. Unknown members and non-round-trippable data remain in originals with explanations rather than claiming every format is lossless.
 
 ## Saving and recovery
 
 The Timeline button for admitted notes lists saves actually retained by Core, with recorded save time, unknown time or missing exact source. Read old source without editing, comparing with current saved content or an explicitly selected Draft snapshot. Restoration first confirms Draft protection and creates a new save, keeping later history. An original dirty buffer or input made during the request remains in the editor and recovery records. Historical preview currently means exact source/text diff, without reconstructing old fonts, modules or configuration for rich rendering.
 
-Private state defaults to `%LOCALAPPDATA%\Weftext-MVP`, including drafts, operation before/after images and actual identity records. It is not disposable cache. One process owns a data directory; do not use different data directories concurrently on the same tree. Upgrades retain the original data directory; matching IDs in files cannot recreate admission evidence.
+Windows Core private state defaults to `%LOCALAPPDATA%\Weftext-MVP\core`, including drafts, operation before/after images and actual identity records. It is not disposable cache. The separate `host-state` sibling inside the same product retention envelope stores this OS user's private host metadata; an explicit Core may neither equal, contain nor be contained by it. Old top-level Core is not adopted automatically: retain originals for explicit import or one-time conversion. One process owns a data directory; do not use different data directories concurrently on the same tree. Matching IDs in files cannot recreate admission evidence.
 
 Saving checks actual file objects and original bytes, rejecting old drafts that would overwrite external changes. Save As creates only absent targets and verifies the reopened result, preserving input typed meanwhile in the same draft and Undo. Sessions/drafts follow proved objects across rename/move/Trash. Competing retained drafts require comparison instead of silent selection.
 
@@ -154,7 +162,7 @@ Clear printed TEST samples use a fixed character-error threshold of ≤5% per mo
 
 Official-document rebuilding supports proven levels 1–6; unknown or out-of-range levels are explicitly refused rather than changed to another level. Keeping native DOCX numbering currently supports only proven single-level decimal counters. Chinese counters and nested definitions are explicitly refused; retain originals or choose removal/rebuilding. Rebuilt heading numbering can become native Word numbering and survive save/reopen. Ordinary DOCX reimport and output may downgrade numbering, including lists becoming bullets, with individual `word-heading-numbering` or `word-list-numbering` losses requiring consent; complete numbering-structure roundtrips are not claimed.
 
-The local writer profile remains `weftext.local-mvp.v1`, supporting Windows/NTFS. It does not promise network shares, cloud drives, other file systems, cross-device admission or sync. Hosted multiuser commits are serialized through this same backend; separate writers must not share the author tree. Symlinks, junctions, hard links and unprovable paths do not enter writes.
+The current v0.7 source selects `weftext.qualified-fs.v2`; old physical records require explicit import/conversion with originals preserved. Windows/NTFS qualification belongs to its actual candidate artifact. The separate [Linux controlled-service backend](LINUX.md) requires administrator enrollment and OS-separated service authority; its implementation does not promote earlier Windows results to Linux or v2 acceptance. The ordinary local writer supports Windows/NTFS. It does not promise network shares, cloud drives, other file systems, cross-device admission or sync. Hosted multiuser commits are serialized through this same backend; separate writers must not share the author tree. Symlinks, junctions, hard links and unprovable paths do not enter writes.
 
 Author source is limited to 2 MiB; raw scans to 5,000 entries, with explicit incomplete outcomes at budgets. The visual tree is limited to 100,000 nodes and a nesting depth of 256. Compiler subprocesses have a 20-second timeout, 1 GiB Windows memory limit and 24 MiB output limit; frozen Query compile inputs are limited to 64 MiB. These limits apply separately. Use the source view when visual projection is unavailable; Draft and file saves retain the original source limit. Ordinary compilation rejects dependencies outside its root; frozen compilation never reads host files outside its captured set. Network packages are not downloaded automatically and there is no package-installation UI.
 
@@ -168,21 +176,42 @@ Candidate acceptance runs frontend/Rust tests, baseline/feature/output HTTP scen
 
 Requires Rust through rustup, Node.js/npm, Python 3.11+ and Windows C++ build tools. The repository's `rust-toolchain.toml` selects the same Rust 1.99.1 and components for local work and CI without changing the machine default. Earlier candidate evidence used Rust 1.98; Node.js 24 and official Typst 0.15.1 remain in use.
 
-The first 0.7 host-foundation refactor reuses the `weftext-app` library and its `LocalService::bind` / `browser_url` / `serve_until` boundary. The existing console still provides the local browser or `--no-browser` service and the `--server-config` hosted service. The version remains `0.6.3-rc.4`; this does not complete tray support, reminders, Mobile or all of 0.7. One Core owns the private-directory lease. The host selects shutdown; browsers and future native windows do not create another writer.
+The two 0.7 executables share `weftext-app`, business routes, Core and original-operation recovery. The GUI no longer owns console scripts. CLI `serve` prints one actual Ready JSON line; the local URL contains a temporary session credential and belongs only in the selected UI. Business output and internal worker pipes have separate owners, keeping startup logs out of pipeline data. Version and accepted scope remain tied to the fixed source, artifacts and delivery record; connected source does not establish tray, reminder, Mobile or whole-version acceptance.
 
-Explicit `--data-dir` still selects persistent state for the current local service. Windows retains `%LOCALAPPDATA%/Weftext-MVP`; macOS selects `$HOME/Library/Application Support/Weftext`, and Linux selects absolute `$XDG_DATA_HOME/weftext` or `$HOME/.local/share/weftext` when that variable is unset. A missing, empty or non-absolute default root fails explicitly rather than selecting temporary storage. Core still checks actual backend capability; choosing a directory does not implement a non-Windows write backend. This is the existing portable service's data policy, without an established MSIX guarantee for recovery drafts outside the package or uninstall preservation.
+Three independent desktop preferences default off:
 
-Default-browser handoff uses Windows Shell, macOS `/usr/bin/open` or Linux `xdg-open`. A failed handoff is reported explicitly while the local service and its printed address remain available; `--no-browser` skips it. Handoff waits at most ten seconds, then reports an unconfirmed outcome without retrying; the OS may still process the original request. HTTP responds during handoff, and stopping the service does not wait for an unfinished handoff. Windows uses an independent OS-call thread so it cannot hold the host runtime's shutdown. OS acceptance does not prove that a browser page loaded or qualify an untested platform. Internal worker flags cannot mix with user launch modes, and `--root` requires `--open`.
+| Preference | Behavior |
+| --- | --- |
+| Continue running after the last window closes | Retains the desktop tray after preservation on close; explicit Exit still requires complete close and accepted-work drain. |
+| Start at login | Requests startup for this device and reports the actual system state; application requests cannot override user or policy disablement. |
+| Open Library on automatic/login startup | Selects whether login startup opens Library; ordinary manual launch still opens Library. |
+
+With only login startup enabled, login initially creates a tray with no window. After a window is opened manually, closing the last window follows the last-window preference. A CLI-first service, or a completely accepted protected CLI business call, retains the same Core and sessions for the next command. Closing the last GUI window does not revoke that service; the tray shows its background CLI state. Only explicit global Exit or owner shutdown ends it and drains accepted jobs. Client disconnection does not prove Core or worker exit. Input without a reliable Core preservation receipt blocks close. Successful browser recovery storage cannot replace that receipt.
+
+System login startup selects one qualified profile at a time. Enabling it in another profile changes the application's actual startup target. The previous profile's personal intent remains retained, but does not establish the currently effective system selection. A notification activation failure or timeout ends only that activation wait; it cannot close a subsequently opened author window or revoke a later accepted CLI service.
+
+This native GUI batch targets Windows 11 x64, build 22000 or later, with the contract's minimum WebView2 Runtime. Core/HTTP/CLI capability checks are independent. Headless checks on Windows Server 2022 do not qualify Windows 11 GUI, notifications or installation.
+
+| Delivery capability | MSIX | ZIP |
+| --- | --- | --- |
+| Native windows and manual launch | Requires the same actual candidate's acceptance | Requires the same actual candidate's acceptance |
+| Login startup | Manifest StartupTask with actual system state | Unavailable in this batch |
+| System reminders and activation | Package identity, COM activation and original notification addresses; submission/history/withdrawal require actual checks | Unavailable in this batch; no substitute registration or delivery permit |
+
+When the system disables notifications, reminder state remains available in the application. Registration does not prove submission. Unknown results retain the original record without automatic resubmission under another ID. Actual MSIX installation, notification activation and StartupTask acceptance remain pending on the same final candidate.
+
+Explicit `--data-dir` still selects Core persistent state for the current local service. Windows defaults to `%LOCALAPPDATA%/Weftext-MVP/core`, with private host metadata separately under `Weftext-MVP/host-state`; old top-level Core is not adopted automatically. macOS selects `$HOME/Library/Application Support/Weftext`, and Linux selects absolute `$XDG_DATA_HOME/weftext` or `$HOME/.local/share/weftext` when that variable is unset. A missing, empty or non-absolute default root fails explicitly rather than selecting temporary storage. Core still checks actual backend capability; choosing a directory does not implement a non-Windows write backend. The MSIX retention declaration covers the exact whole Weftext-MVP envelope; actual upgrade/uninstall guarantees still require acceptance on the same candidate.
+
+Local WebViews use configuration isolated by actual physical profile and a retained loopback port. An occupied port, missing original configuration or changed identity refuses explicitly, without changing origins and hiding recovery input not yet accepted by Core. CLI `serve --port 0` reuses that profile's retained port; only a new profile allocates one. Hosted Server continues using its configured public bind. Only external GUI links hand off to the system browser. A handoff failure or timeout does not prove page loading and does not automatically retry. Internal workers accept only their own single fixed role flag, separate from user launch modes; CLI `serve --root` requires `--open`.
 
 ```text
 python scripts/mvp.py build
 python scripts/mvp.py check
-python scripts/mvp.py package
 ```
 
-The default builds a local debug candidate; `--release` selects optimization. The entry uses Cargo's reported executable path, including `CARGO_TARGET_DIR` or Cargo configuration overrides, for subsequent checks and packaging. Packaging requires the repository's `target/` tree or a target directory outside the source tree, and excludes that build tree from the source snapshot. Checks cover documents/bounded models, fonts, frontend behavior, Rust formatting/static analysis/tests and real-program HTTP scenarios. They do not replace GUI, IME or power-loss testing.
+The default builds a local debug candidate; `--release` selects optimization. The entry reads Cargo's actual reported paths for both roles, including `CARGO_TARGET_DIR` or Cargo configuration overrides, then freezes both PEs and their catalog in a new `weftext-build-artifacts/<UUID>/` directory and prints the complete paths for subsequent checks and packaging. Packaging requires the repository's `target/` tree or a target directory outside the source tree, and excludes that build tree from the source snapshot. Checks cover documents/bounded models, fonts, frontend behavior, Rust formatting/static analysis/tests and real-program HTTP scenarios. They do not replace GUI, IME or power-loss testing.
 
-Packaging creates a new `dist/` directory, retains previous candidates and does not push or publish. It includes the working-tree source snapshot, licenses, font manifests and build dependency notices. The inventory includes test/build dependencies, not a claim every item is in the binary. Published releases follow [WORKFLOW](WORKFLOW.md).
+Windows dual-executable ZIP/MSIX uses the same entry's `package` action with exact SDK, offline material directory and actual MSVC linker; see the [packaging contract](PACKAGING.md) for the full command and current gaps. It builds/checks a fixed source copy, creates a new `dist/` candidate, retains previous candidates and does not push or publish. Source, both PEs, original licenses, font manifests and dependency notices belong to that candidate. The inventory includes test/build dependencies, not a claim every item is in the binary. Unqualified offline materials refuse generation before building; the old single-executable package cannot substitute. Published releases follow [WORKFLOW](WORKFLOW.md).
 
 
 ## Same-owner local replica controls

@@ -76,19 +76,29 @@ fn saved_query_slots(
         ast::{self, AstNode},
     };
     let definitions = weftext_data::saved_queries(source)
-        .map_err(|e| KnowledgeError::new("definitionQualification", e.to_string()))?;
+        .map_err(|e| KnowledgeError::from_data("definitionQualification", e))?;
     let parsed = Source::detached(source);
     let metadata = weftext_engine::inspect_metadata(source)
         .metadata
         .ok_or_else(|| {
-            KnowledgeError::new("definitionOwner", "Managed source identity is unavailable")
+            KnowledgeError::new(
+                "definitionOwner",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_source_identity_unavailable(),
+                ),
+            )
         })?;
     let identity = metadata
         .fields
         .iter()
         .find(|f| f.key == "id")
         .ok_or_else(|| {
-            KnowledgeError::new("definitionOwner", "Managed source has no native identity")
+            KnowledgeError::new(
+                "definitionOwner",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_source_native_identity_missing(),
+                ),
+            )
         })?;
     if !verify_string_slot(
         source,
@@ -97,14 +107,16 @@ fn saved_query_slots(
     ) {
         return Err(KnowledgeError::new(
             "definitionOwner",
-            "Saved references must belong to the exact managed source owner",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_copy_saved_reference_owner_mismatch(),
+            ),
         ));
     }
     fn members<'a>(expr: ast::Expr<'a>) -> Result<BTreeMap<String, ast::Expr<'a>>> {
         let dict = expr.to_untyped().cast::<ast::Dict>().ok_or_else(|| {
             KnowledgeError::new(
                 "definitionReferenceSlot",
-                "An authoritative control must be a direct dictionary",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_direct_control_dictionary_required()),
             )
         })?;
         let mut out = BTreeMap::new();
@@ -116,7 +128,7 @@ fn saved_query_slots(
                         .to_untyped()
                         .cast::<ast::Str>()
                         .ok_or_else(|| {
-                            KnowledgeError::new("definitionReferenceSlot", "Computed control key")
+                            KnowledgeError::new("definitionReferenceSlot", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_control_key_computed()))
                         })?
                         .get()
                         .to_string(),
@@ -125,14 +137,16 @@ fn saved_query_slots(
                 _ => {
                     return Err(KnowledgeError::new(
                         "definitionReferenceSlot",
-                        "Spread control dictionary",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_control_dictionary_spread()),
                     ));
                 }
             };
             if out.insert(key, value).is_some() {
                 return Err(KnowledgeError::new(
                     "definitionReferenceSlot",
-                    "Duplicate control key",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_copy_control_key_duplicate(),
+                    ),
                 ));
             }
         }
@@ -142,7 +156,13 @@ fn saved_query_slots(
         members.get(key).copied().ok_or_else(|| {
             KnowledgeError::new(
                 "definitionReferenceSlot",
-                format!("Missing authoritative control {key}"),
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_authoritative_control_missing(
+                        weftext_messages::params::ErrorKnowledgeCopyAuthoritativeControlMissing {
+                            control: (key).to_string(),
+                        },
+                    ),
+                ),
             )
         })
     }
@@ -159,7 +179,10 @@ fn saved_query_slots(
         {
             return Err(KnowledgeError::new(
                 "definitionReferenceSlot",
-                "Control must match one exact native string literal",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_exact_string_control_required(
+                    ),
+                ),
             ));
         }
         let range = parsed
@@ -167,7 +190,9 @@ fn saved_query_slots(
             .ok_or_else(|| {
                 KnowledgeError::new(
                     "definitionReferenceSlot",
-                    "Control has no exact source range",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_copy_control_source_range_missing(),
+                    ),
                 )
             })?
             .range();
@@ -199,7 +224,9 @@ fn saved_query_slots(
         if depth > 64 {
             return Err(KnowledgeError::new(
                 "definitionReferenceBudget",
-                "Saved Query traversal exceeds the explicit depth budget",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_query_traversal_depth_exceeded(),
+                ),
             ));
         }
         let fields = members(expr)?;
@@ -209,7 +236,7 @@ fn saved_query_slots(
                 .ok_or_else(|| {
                     KnowledgeError::new(
                         "definitionReferenceSlot",
-                        "A Query array must have exact native members",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_query_array_native_members_required()),
                     )
                 })?
                 .items()
@@ -217,7 +244,7 @@ fn saved_query_slots(
                     ast::ArrayItem::Pos(expr) => Ok(expr),
                     _ => Err(KnowledgeError::new(
                         "definitionReferenceSlot",
-                        "Spread Query array",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_query_array_spread()),
                     )),
                 })
                 .collect()
@@ -244,7 +271,9 @@ fn saved_query_slots(
             if entries.len() != columns.len() {
                 return Err(KnowledgeError::new(
                     "definitionReferenceSlot",
-                    "Query columns no longer match their exact plan",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_copy_query_columns_plan_mismatch(),
+                    ),
                 ));
             }
             for (expr, column) in entries.into_iter().zip(columns) {
@@ -274,7 +303,9 @@ fn saved_query_slots(
             if depth > 64 {
                 return Err(KnowledgeError::new(
                     "definitionReferenceBudget",
-                    "Query default shape exceeds depth budget",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_copy_query_default_depth_exceeded(),
+                    ),
                 ));
             }
             use weftext_data::{NativeValue, Shape};
@@ -316,7 +347,7 @@ fn saved_query_slots(
                     if entries.len() != values.len() {
                         return Err(KnowledgeError::new(
                             "definitionReferenceSlot",
-                            "Query list default differs from its exact native value",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_query_list_default_mismatch()),
                         ));
                     }
                     for (expr, value) in entries.into_iter().zip(values) {
@@ -351,7 +382,7 @@ fn saved_query_slots(
                     if choices.len() != 1 {
                         return Err(KnowledgeError::new(
                             "definitionReferenceSlot",
-                            "A Query default requires one unambiguous typed union variant",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_query_default_union_ambiguous()),
                         ));
                     }
                     defaults(choices[0], value, expr, context, out, depth + 1)?;
@@ -377,7 +408,10 @@ fn saved_query_slots(
             if orders.len() != plan.order.len() {
                 return Err(KnowledgeError::new(
                     "definitionReferenceSlot",
-                    "Query order no longer matches its exact plan",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_copy_query_order_plan_mismatch(
+                        ),
+                    ),
                 ));
             }
             for (expr, order) in orders.into_iter().zip(&plan.order) {
@@ -414,7 +448,7 @@ fn saved_query_slots(
             if aggregates.len() != group.aggregates.len() {
                 return Err(KnowledgeError::new(
                     "definitionReferenceSlot",
-                    "Query aggregates no longer match their exact plan",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_query_aggregates_plan_mismatch()),
                 ));
             }
             for (expr, aggregate) in aggregates.into_iter().zip(&group.aggregates) {
@@ -453,7 +487,7 @@ fn saved_query_slots(
             if parameters.len() != advanced.parameters.len() {
                 return Err(KnowledgeError::new(
                     "definitionReferenceSlot",
-                    "Query parameters no longer match their exact plan",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_query_parameters_plan_mismatch()),
                 ));
             }
             for (expr, parameter) in parameters.into_iter().zip(&advanced.parameters) {
@@ -484,7 +518,7 @@ fn saved_query_slots(
             let referenced_owner = node_ref(&call.owner).ok_or_else(|| {
                 KnowledgeError::new(
                     "definitionReferenceSlot",
-                    "Saved-call owner is not a full typed NodeRef",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_saved_call_owner_node_ref_required()),
                 )
             })?;
             let owner_slot = text_slot(member(&controls, "owner")?, &call.owner, parsed, source)?;
@@ -514,14 +548,14 @@ fn saved_query_slots(
                 revision_slot,
             });
         }
-        if !advanced.union_all.is_empty() {
+        if advanced.union_all.is_some() {
             let array = member(&fields, "unionAll")?
                 .to_untyped()
                 .cast::<ast::Array>()
                 .ok_or_else(|| {
                     KnowledgeError::new(
                         "definitionReferenceSlot",
-                        "Union producer must be a direct array",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_union_producer_array_required()),
                     )
                 })?;
             let branches: Vec<_> = array
@@ -530,17 +564,22 @@ fn saved_query_slots(
                     ast::ArrayItem::Pos(expr) => Ok(expr),
                     _ => Err(KnowledgeError::new(
                         "definitionReferenceSlot",
-                        "Spread producer array",
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_knowledge_copy_producer_array_spread(
+                            ),
+                        ),
                     )),
                 })
                 .collect::<Result<_>>()?;
-            if branches.len() != advanced.union_all.len() {
+            if branches.len() != advanced.union_branches().len() {
                 return Err(KnowledgeError::new(
                     "definitionReferenceSlot",
-                    "Union source no longer matches its parsed plan",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_copy_union_source_plan_mismatch(),
+                    ),
                 ));
             }
-            for (plan, expr) in advanced.union_all.iter().zip(branches) {
+            for (plan, expr) in advanced.union_branches().iter().zip(branches) {
                 visit(plan, expr, parsed, source, out, depth + 1, schema)?;
             }
         }
@@ -570,7 +609,7 @@ fn saved_query_slots(
             .ok_or_else(|| {
                 KnowledgeError::new(
                     "definitionQualification",
-                    "Saved Query declaration is not direct standard native metadata",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_saved_query_metadata_not_direct()),
                 )
             })?;
         let call = parsed
@@ -585,7 +624,10 @@ fn saved_query_slots(
             .ok_or_else(|| {
                 KnowledgeError::new(
                     "definitionReferenceSlot",
-                    "Saved Query declaration has no exact native call",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_copy_saved_query_call_missing(
+                        ),
+                    ),
                 )
             })?;
         let expr = call
@@ -601,7 +643,7 @@ fn saved_query_slots(
             .ok_or_else(|| {
                 KnowledgeError::new(
                     "definitionReferenceSlot",
-                    "Saved Query declaration has no exact dictionary",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_saved_query_dictionary_missing()),
                 )
             })?;
         let binding = members(member(&members(expr)?, "binding")?)?;
@@ -703,7 +745,7 @@ pub fn definition_slots(source: &str, owner: &NodeRef) -> Result<Vec<DefinitionS
     };
     let parsed = typst_syntax::Source::detached(source);
     let qualified = weftext_data::saved_queries(source)
-        .map_err(|e| KnowledgeError::new("definitionQualification", e.to_string()))?;
+        .map_err(|e| KnowledgeError::from_data("definitionQualification", e))?;
     fn static_node(node: &typst_syntax::SyntaxNode) -> bool {
         match node.kind() {
             typst_syntax::SyntaxKind::Str
@@ -760,7 +802,7 @@ pub fn definition_slots(source: &str, owner: &NodeRef) -> Result<Vec<DefinitionS
                     let Some(key) = n.key().to_untyped().cast::<ast::Str>() else {
                         return Err(KnowledgeError::new(
                             "unknownDefinition",
-                            "Dynamic application dictionary key",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_application_key_dynamic()),
                         ));
                     };
                     (key.get().to_string(), n.expr())
@@ -768,14 +810,17 @@ pub fn definition_slots(source: &str, owner: &NodeRef) -> Result<Vec<DefinitionS
                 _ => {
                     return Err(KnowledgeError::new(
                         "unknownDefinition",
-                        "Spread application dictionary",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_application_dictionary_spread()),
                     ));
                 }
             };
             if fields.insert(key, expr).is_some() {
                 return Err(KnowledgeError::new(
                     "unknownDefinition",
-                    "Duplicate application dictionary key",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_copy_application_key_duplicate(
+                        ),
+                    ),
                 ));
             }
         }
@@ -795,30 +840,43 @@ pub fn definition_slots(source: &str, owner: &NodeRef) -> Result<Vec<DefinitionS
         if !weftext_engine::standard_binding_available(source, "metadata") {
             return Err(KnowledgeError::new(
                 "definitionBinding",
-                "Application definition binding is not proven",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_application_binding_unproven(
+                    ),
+                ),
             ));
         }
         if kind != "weftext.query" || !static_node(dict.to_untyped()) {
             return Err(KnowledgeError::new(
                 "unknownDefinition",
-                "Unknown or computed application definition",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_application_definition_unknown_or_computed()),
             ));
         }
-        let key_expr = fields
-            .get("key")
-            .ok_or_else(|| KnowledgeError::new("definitionKey", "Definition key is missing"))?;
+        let key_expr = fields.get("key").ok_or_else(|| {
+            KnowledgeError::new(
+                "definitionKey",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_definition_key_missing(),
+                ),
+            )
+        })?;
         let key = key_expr
             .to_untyped()
             .cast::<ast::Str>()
             .ok_or_else(|| {
-                KnowledgeError::new("definitionKey", "Definition key is not a native literal")
+                KnowledgeError::new(
+                    "definitionKey",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_copy_definition_key_not_literal(),
+                    ),
+                )
             })?
             .get()
             .to_string();
         if uuid::Uuid::parse_str(&key).is_err() || !keys.insert(key.clone()) {
             return Err(KnowledgeError::new(
                 "definitionKey",
-                "Invalid or duplicate definition key",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_definition_key_invalid_or_duplicate()),
             ));
         }
         let label = children
@@ -829,7 +887,10 @@ pub fn definition_slots(source: &str, owner: &NodeRef) -> Result<Vec<DefinitionS
             .ok_or_else(|| {
                 KnowledgeError::new(
                     "definitionLabel",
-                    "Direct application definition label is missing",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_copy_application_label_missing(
+                        ),
+                    ),
                 )
             })?
             .get()
@@ -837,19 +898,21 @@ pub fn definition_slots(source: &str, owner: &NodeRef) -> Result<Vec<DefinitionS
         if !label.starts_with("weftext-query-") || !labels.insert(label) {
             return Err(KnowledgeError::new(
                 "definitionLabel",
-                "Invalid or duplicate application definition label",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_application_label_invalid_or_duplicate()),
             ));
         }
         if !qualified.iter().any(|definition| definition.key == key) {
             return Err(KnowledgeError::new(
                 "definitionQualification",
-                "Definition is not a qualified closed native saved query",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_definition_not_closed_saved_query(),
+                ),
             ));
         }
         let range = parsed
             .find(key_expr.to_untyped().span())
             .ok_or_else(|| {
-                KnowledgeError::new("definitionSlot", "Definition key has no exact source slot")
+                KnowledgeError::new("definitionSlot", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_definition_key_source_slot_missing()))
             })?
             .range();
         slots.push(DefinitionSlot {
@@ -862,7 +925,7 @@ pub fn definition_slots(source: &str, owner: &NodeRef) -> Result<Vec<DefinitionS
 }
 
 fn encode_string(value: &str) -> Result<String> {
-    weftext_engine::encode_string(value).map_err(|e| KnowledgeError::new("encoding", e.to_string()))
+    weftext_engine::encode_string(value).map_err(|e| KnowledgeError::from_engine("encoding", e))
 }
 fn fresh_uuid(value: &str) -> bool {
     uuid::Uuid::parse_str(value)
@@ -1010,11 +1073,12 @@ fn copy_body_references(
         losses: &mut Vec<Loss>,
     ) -> Result<()> {
         let (files, inventory, native, bindings) = context;
-        let mut lose = |code: &str, detail: &str| {
+        let mut lose = |code: &str, detail: (ErrorDescription, Vec<ErrorDescription>)| {
             losses.push(Loss {
                 path: file.source_path.clone(),
                 code: code.into(),
-                detail: detail.into(),
+                description: detail.0,
+                product_diagnostics: detail.1,
             })
         };
         if matches!(
@@ -1023,7 +1087,7 @@ fn copy_body_references(
         ) {
             lose(
                 "unqualifiedIncludeImport",
-                "Native include/import needs a qualified complete dependency map; its original source is preserved",
+                (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_include_dependency_map_incomplete()), Vec::new()),
             );
         }
         if let Some(binding) = node.get().cast::<ast::LetBinding>()
@@ -1046,7 +1110,7 @@ fn copy_body_references(
         {
             lose(
                 "aliasedNativeReference",
-                "A function-valued native link/resource alias has no complete qualified destination map; original source is preserved",
+                (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_function_alias_destination_map_incomplete()), Vec::new()),
             );
         }
         if let Some(call) = node.get().cast::<ast::FuncCall>()
@@ -1072,7 +1136,7 @@ fn copy_body_references(
             if mentions_reference(call.callee().to_untyped()) {
                 lose(
                     "indirectNativeReference",
-                    "Indirect native link/resource calls have no exact destination-slot proof; original source is preserved",
+                    (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_indirect_call_destination_unproven()), Vec::new()),
                 );
             }
         }
@@ -1086,7 +1150,7 @@ fn copy_body_references(
             if name == "link" && !native.iter().any(|link| link.from == node.range().start) {
                 lose(
                     "unmappedLinkDestination",
-                    "Computed or unverified link syntax has no proven copy destination slot; original bytes remain unchanged",
+                    (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_computed_link_destination_unproven()), Vec::new()),
                 );
             }
             if matches!(
@@ -1104,7 +1168,7 @@ fn copy_body_references(
                 if bindings.get(&name) != Some(&true) {
                     lose(
                         "unverifiedResourceCall",
-                        "Native resource function binding is not proven",
+                        (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_resource_function_binding_unproven()), Vec::new()),
                     );
                 } else if let Some(expr) = call.args().items().find_map(|arg| {
                     if let ast::Arg::Pos(expr) = arg {
@@ -1118,13 +1182,13 @@ fn copy_body_references(
                         if let Some(copied) = files.iter().find(|candidate| {
                             file_url(&candidate.source_path) == old && old.is_some()
                         }) {
-                            let address=native_relative_file(&file.target_path,&copied.target_path).ok_or_else(||KnowledgeError::new("resourcePath","A copied native resource cannot round-trip between these volumes"))?;
+                            let address=native_relative_file(&file.target_path,&copied.target_path).ok_or_else(||KnowledgeError::new("resourcePath",weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_resource_cross_volume_round_trip_unsupported())))?;
                             let slot = node
                                 .find(expr.to_untyped().span())
                                 .ok_or_else(|| {
                                     KnowledgeError::new(
                                         "resourceSlot",
-                                        "Native resource path has no exact AST slot",
+                                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_resource_path_ast_slot_missing()),
                                     )
                                 })?
                                 .range();
@@ -1139,7 +1203,7 @@ fn copy_body_references(
                         {
                             lose(
                                 "externalResource",
-                                "Native resource remains an explicit external dependency because its bytes were not re-owned in the selection",
+                                (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_resource_external_dependency_retained()), Vec::new()),
                             );
                             if let Some(address) =
                                 native_relative_file(&file.target_path, &resource.path)
@@ -1153,13 +1217,13 @@ fn copy_body_references(
                         } else {
                             lose(
                                 "unresolvedResource",
-                                "Native resource path is outside the qualified copy closure; original bytes remain unchanged",
+                                (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_resource_outside_copy_closure()), Vec::new()),
                             );
                         }
                     } else {
                         lose(
                             "computedResource",
-                            "Computed resource input lacks a complete exact dependency map; original bytes remain unchanged",
+                            (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_computed_resource_dependency_map_incomplete()), Vec::new()),
                         );
                     }
                 }
@@ -1187,7 +1251,9 @@ fn apply_slots(source: &str, mut patches: Vec<(ExactRange, String)>) -> Result<S
         if pair[0].0.to > pair[1].0.from {
             return Err(KnowledgeError::new(
                 "overlappingSlots",
-                "Copy slots overlap; do not guess which mapping wins",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_source_slots_overlap(),
+                ),
             ));
         }
     }
@@ -1196,7 +1262,9 @@ fn apply_slots(source: &str, mut patches: Vec<(ExactRange, String)>) -> Result<S
         if !range.verify(source) {
             return Err(KnowledgeError::new(
                 "staleSlot",
-                "A copy source slot does not match the frozen exact bytes",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_source_slot_frozen_bytes_mismatch(),
+                ),
             ));
         }
         after.replace_range(range.from..range.to, &replacement);
@@ -1209,7 +1277,9 @@ fn apply_slots(source: &str, mut patches: Vec<(ExactRange, String)>) -> Result<S
     {
         return Err(KnowledgeError::new(
             "invalidSource",
-            "Rewritten copy does not parse as native Typst",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_copy_rewritten_source_invalid(),
+            ),
         ));
     }
     Ok(after)
@@ -1271,7 +1341,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
         if file.target_path == file.source_path || !target_paths.insert(&file.target_path) {
             return Err(KnowledgeError::new(
                 "copyDestination",
-                "Independent copies require unique new destinations",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_independent_destinations_required()),
             ));
         }
         if matches!(file.kind, CopyFileKind::Source)
@@ -1282,7 +1352,9 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
         {
             return Err(KnowledgeError::new(
                 "copyInstances",
-                "One source cannot be copied twice through one node mapping; use separate full source/result maps",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_source_mapped_twice(),
+                ),
             ));
         }
     }
@@ -1302,7 +1374,9 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
     {
         return Err(KnowledgeError::new(
             "copyIdentity",
-            "Every copied note must receive one independent fresh identity",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_copy_fresh_node_identity_required(),
+            ),
         ));
     }
     fn tag_identity(reference: &str) -> Option<(&str, &str)> {
@@ -1319,7 +1393,9 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
         {
             return Err(KnowledgeError::new(
                 "tagMap",
-                "Tag mappings require complete typed references and distinct target identities",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_tag_mapping_invalid(),
+                ),
             ));
         }
     }
@@ -1332,7 +1408,10 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
     {
         return Err(KnowledgeError::new(
             "copyIdentity",
-            "Each copied resource requires a fresh distinct identity",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_copy_fresh_resource_identity_required(
+                ),
+            ),
         ));
     }
     for old in input.resource_map.keys() {
@@ -1344,7 +1423,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
             .ok_or_else(|| {
                 KnowledgeError::new(
                     "resourceClosure",
-                    "A mapped resource is not in the authorized inventory",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_resource_outside_authorized_inventory()),
                 )
             })?;
         if !input.files.iter().any(|f| {
@@ -1353,7 +1432,9 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
         }) {
             return Err(KnowledgeError::new(
                 "resourceClosure",
-                "Mapped resource bytes are missing from the complete selection",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_selected_resource_bytes_missing(),
+                ),
             ));
         }
     }
@@ -1368,7 +1449,9 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
     {
         return Err(KnowledgeError::new(
             "definitionMap",
-            "Copied definitions require distinct fresh UUID keys",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_copy_fresh_definition_keys_required(),
+            ),
         ));
     }
     let annotation_ids: BTreeSet<_> = input.annotation_map.values().collect();
@@ -1380,7 +1463,9 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
     {
         return Err(KnowledgeError::new(
             "copyIdentity",
-            "Annotation IDs must be fresh and unique",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_copy_fresh_annotation_ids_required(),
+            ),
         ));
     }
     let mut plan = CopyPlan {
@@ -1400,23 +1485,29 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
         )
     });
     for file in ordered {
-        let mut lose = |code: &str, detail: &str| {
+        let mut lose = |code: &str, detail: (ErrorDescription, Vec<ErrorDescription>)| {
             plan.losses.push(Loss {
                 path: file.source_path.clone(),
                 code: code.into(),
-                detail: detail.into(),
+                description: detail.0,
+                product_diagnostics: detail.1,
             });
         };
         let after = match file.kind {
             CopyFileKind::Resource => file.before.clone(),
             CopyFileKind::Source => {
                 let source = std::str::from_utf8(&file.before).map_err(|_| {
-                    KnowledgeError::new("encoding", "Copy source is not UTF-8; retain the original")
+                    KnowledgeError::new(
+                        "encoding",
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_knowledge_copy_source_encoding_invalid(),
+                        ),
+                    )
                 })?;
                 let owner = file.owner.as_ref().ok_or_else(|| {
                     KnowledgeError::new(
                         "copyOwner",
-                        "A managed source requires its exact original owner",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_original_source_owner_required()),
                     )
                 })?;
                 let original = input
@@ -1427,17 +1518,17 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                     .ok_or_else(|| {
                         KnowledgeError::new(
                             "copySnapshot",
-                            "Copy source differs from the authorized frozen inventory",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_source_inventory_mismatch()),
                         )
                     })?;
                 let new_owner = input.node_map.get(owner).ok_or_else(|| {
-                    KnowledgeError::new("copyMap", "No fresh node mapping for this source")
+                    KnowledgeError::new("copyMap", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_fresh_node_mapping_missing()))
                 })?;
                 let inspected = weftext_engine::inspect_metadata(source);
                 let metadata = inspected.metadata.ok_or_else(|| {
                     KnowledgeError::new(
                         "copyIdentity",
-                        "Native root metadata does not have a proven slot",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_root_metadata_slot_unproven()),
                     )
                 })?;
                 let id = metadata
@@ -1451,7 +1542,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                     .ok_or_else(|| {
                         KnowledgeError::new(
                             "copyIdentity",
-                            "Original native id does not match the owned source",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_original_id_owner_mismatch()),
                         )
                     })?;
                 let mut patches = vec![(
@@ -1462,22 +1553,33 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                     copy_body_references(original, file, &input.files, &input.inventory)?;
                 patches.extend(resource_patches);
                 for loss in reference_losses {
-                    lose(&loss.code, &loss.detail);
+                    lose(&loss.code, (loss.description, loss.product_diagnostics));
                 }
                 let definitions = match definition_slots(source, owner) {
                     Ok(slots) => slots,
                     Err(error) if input.allow_losses => {
-                        lose("unknownDefinitions", &error.message);
+                        {
+                            let code = error.code.clone();
+                            let (description, details) = error.into_parts();
+                            let error = KnowledgeError::with_cause(
+                                "unknownDefinitions",
+                                UiMessage::error_knowledge_copy_definition_qualification_failed(),
+                                &code,
+                                description,
+                                details,
+                            );
+                            lose("unknownDefinitions", error.into_parts());
+                        }
                         vec![]
                     }
                     Err(error) => return Err(error),
                 };
                 for slot in definitions {
-                    let new_key=input.definition_map.get(&slot.identity).ok_or_else(||KnowledgeError::new("definitionMap","Every copied application definition needs a frozen fresh owner/key mapping"))?;
+                    let new_key=input.definition_map.get(&slot.identity).ok_or_else(||KnowledgeError::new("definitionMap",weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_application_owner_key_mapping_required())))?;
                     if new_key == &slot.key || !fresh_uuid(new_key) {
                         return Err(KnowledgeError::new(
                             "definitionMap",
-                            "A copied definition requires a fresh UUID key",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_fresh_definition_uuid_required()),
                         ));
                     }
                     patches.push((slot.range, encode_string(new_key)?));
@@ -1485,7 +1587,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                 if !file.typed_refs_complete {
                     lose(
                         "unknownReferences",
-                        "The installed schema has not proved complete typed-ref slots; originals are preserved and unknown references remain unchanged",
+                        (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_typed_reference_slots_unproven()), Vec::new()),
                     );
                 }
                 if !input.tag_map.is_empty()
@@ -1497,7 +1599,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                     let slots = saved_query_slots(source, owner, None)?;
                     for (schema_range, revision_range, reference, revision) in slots.schema_bindings
                     {
-                        let (target, target_revision) = input.schema_map.get(&(reference,revision)).ok_or_else(|| KnowledgeError::new("schemaMap", "A foreign Query requires an exact equivalent target schema role and revision"))?;
+                        let (target, target_revision) = input.schema_map.get(&(reference,revision)).ok_or_else(|| KnowledgeError::new("schemaMap", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_foreign_query_schema_mapping_required())))?;
                         patches.push((schema_range, encode_string(target)?));
                         patches.push((revision_range, encode_string(target_revision)?));
                     }
@@ -1507,7 +1609,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                             &input.tag_map,
                             &owner.workspace_id,
                         )
-                        .map_err(|e| KnowledgeError::new("tagMap", e.to_string()))?;
+                        .map_err(|e| KnowledgeError::from_data("tagMap", e))?;
                         if after != expression {
                             patches.push((range, encode_string(&after)?));
                         }
@@ -1522,7 +1624,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                         {
                             return Err(KnowledgeError::new(
                                 "tagMap",
-                                "A typed source Query tag default requires its exact complete import mapping",
+                                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_query_tag_default_mapping_required()),
                             ));
                         }
                     }
@@ -1539,7 +1641,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                     if !verify_string_slot(source, &range, &slot.target) {
                         return Err(KnowledgeError::new(
                             "typedRefSlot",
-                            "Typed reference must be one exact official native string slot",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_typed_reference_string_slot_required()),
                         ));
                     }
                     let replacement = match slot.kind.as_str() {
@@ -1548,13 +1650,13 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                             let old = resolved.target.ok_or_else(|| {
                                 KnowledgeError::new(
                                     "copyRef",
-                                    "A typed node reference cannot be resolved exactly",
+                                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_node_reference_unresolved()),
                                 )
                             })?;
                             if resolved.fragment.is_some() {
                                 return Err(KnowledgeError::new(
                                     "copyRef",
-                                    "Typed node references do not accept body fragments",
+                                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_node_reference_fragment_forbidden()),
                                 ));
                             }
                             input.node_map.get(&old).map(|new| {
@@ -1585,7 +1687,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                                 if local && !same_workspace {
                                     return Err(KnowledgeError::new(
                                         "tagMap",
-                                        "A foreign import requires an exact target mapping for every source-workspace typed TagRef",
+                                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_foreign_tag_mappings_required()),
                                     ));
                                 }
                                 None
@@ -1594,7 +1696,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                         _ => {
                             lose(
                                 "unknownReferenceKind",
-                                "Unknown typed reference kind is preserved without guessing",
+                                (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_reference_kind_unknown_preserved()), Vec::new()),
                             );
                             None
                         }
@@ -1613,7 +1715,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                     {
                         return Err(KnowledgeError::new(
                             "definitionReferenceSlot",
-                            "Definition reference owner/key slots are not exact native strings",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_definition_reference_slots_not_strings()),
                         ));
                     }
                     if let Some(revision) = &reference.revision {
@@ -1624,23 +1726,23 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                         {
                             return Err(KnowledgeError::new(
                                 "definitionReferenceSlot",
-                                "Pinned definition revision is not the exact native string slot",
+                                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_pinned_revision_slot_not_string()),
                             ));
                         }
                         lose(
                             "pinnedHistoricalDefinition",
-                            "Pinned owner/key/revision retains its original historical triple as an explicit external dependency",
+                            (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_pinned_reference_external_dependency_retained()), Vec::new()),
                         );
                         continue;
                     }
                     if reference.revision_slot.is_some() {
                         return Err(KnowledgeError::new(
                             "definitionReferenceSlot",
-                            "Current definition cannot carry an unexplained historical revision slot",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_current_reference_historical_revision_unexplained()),
                         ));
                     }
                     if let Some(new_owner) = input.node_map.get(&reference.owner) {
-                        let new_key=input.definition_map.get(&definition_identity(&reference.owner,&reference.key)).ok_or_else(||KnowledgeError::new("definitionMap","A current reference needs the same frozen owner/key mapping as its definition"))?;
+                        let new_key=input.definition_map.get(&definition_identity(&reference.owner,&reference.key)).ok_or_else(||KnowledgeError::new("definitionMap",weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_current_reference_mapping_mismatch())))?;
                         patches.push((
                             reference.owner_slot.clone(),
                             encode_string(&format!(
@@ -1662,7 +1764,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                     if resolution.status != "resolved" {
                         lose(
                             "unresolvedLink",
-                            "A link is not uniquely resolved in the original context; its original bytes are preserved",
+                            (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_ambiguous_original_link_preserved()), Vec::new()),
                         );
                         continue;
                     }
@@ -1709,20 +1811,20 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                                 .ok_or_else(|| {
                                     KnowledgeError::new(
                                         "resourceClosure",
-                                        "Mapped resource has no complete copied bytes",
+                                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_copied_resource_bytes_incomplete()),
                                     )
                                 })?;
                             let address = file_url(&copied.target_path).ok_or_else(|| {
                                 KnowledgeError::new(
                                     "resourcePath",
-                                    "Resource target needs a platform absolute path",
+                                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_resource_absolute_path_required()),
                                 )
                             })?;
                             patches.push(crate::links::destination_patch(source, &link, &address)?);
                         } else {
                             lose(
                                 "externalResource",
-                                "Resource was not re-owned by the copy selection; original link is retained as an explicit external dependency",
+                                (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_resource_link_external_dependency_retained()), Vec::new()),
                             );
                         }
                     }
@@ -1748,7 +1850,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                             .ok_or_else(|| {
                                 KnowledgeError::new(
                                     "annotationMap",
-                                    "Every copied annotation needs a fresh mapping",
+                                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_annotation_mapping_required()),
                                 )
                             })?;
                     let item = &mut value["annotations"][index];
@@ -1758,7 +1860,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                             .annotation_map
                             .get(parent)
                             .ok_or_else(|| {
-                                KnowledgeError::new("annotationMap", "Reply closure is incomplete")
+                                KnowledgeError::new("annotationMap", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_reply_closure_incomplete()))
                             })?
                             .clone()
                             .into();
@@ -1766,7 +1868,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                     if record.target.validate().is_err() {
                         lose(
                             "invalidCopiedTarget",
-                            "Invalid target evidence remains untouched with the copied discussion",
+                            (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_invalid_evidence_preserved_with_discussion()), Vec::new()),
                         );
                         item["copyTargetState"] = "stale".into();
                         if let Some(suggestion) =
@@ -1826,7 +1928,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                         } else {
                             lose(
                                 "staleCopiedAnchor",
-                                "Discussion keeps its exact historical target because no continuous exact copy map could prove the new range",
+                                (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_historical_discussion_target_retained()), Vec::new()),
                             );
                             item["copyTargetState"] = "stale".into();
                         }
@@ -1841,7 +1943,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                     }) {
                         lose(
                             "staleCopiedResourceAnchor",
-                            "The copied discussion keeps its original resource target because no committed candidate resource revision was provided",
+                            (weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_resource_discussion_target_retained()), Vec::new()),
                         );
                         item["copyTargetState"] = "stale".into();
                     } else {
@@ -1854,8 +1956,15 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
                         .unwrap();
                     }
                 }
-                let bytes = serde_json::to_vec_pretty(&value)
-                    .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?;
+                let bytes = serde_json::to_vec_pretty(&value).map_err(|e| {
+                    KnowledgeError::new(
+                        "encoding",
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_knowledge_json(),
+                        )
+                        .diagnostic(weftext_messages::DiagnosticOrigin::Json, e.to_string()),
+                    )
+                })?;
                 decode_annotations(&bytes)?;
                 bytes
             }
@@ -1869,10 +1978,7 @@ pub fn plan_copy(input: CopyInput) -> Result<CopyPlan> {
     plan.files.sort_by(|a, b| a.path.cmp(&b.path));
     if !plan.losses.is_empty() {
         if !input.allow_losses {
-            return Err(KnowledgeError::new(
-                "copyLosses",
-                serde_json::to_string(&plan.losses).unwrap(),
-            ));
+            return Err(KnowledgeError::from_losses("copyLosses", plan.losses));
         }
         plan.preserved_originals = input
             .files
@@ -1932,13 +2038,17 @@ pub fn validate_template_definition(
     if definition.id.is_empty() || definition.title.trim().is_empty() {
         return Err(KnowledgeError::new(
             "templateDefinition",
-            "A template needs an identity and title",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_copy_template_identity_and_title_required(),
+            ),
         ));
     }
     if definition.source_node != source.owner || definition.source_revision != source.revision_id {
         return Err(KnowledgeError::new(
             "staleTemplate",
-            "The registered source revision is no longer current",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_copy_registered_revision_not_current(),
+            ),
         ));
     }
     validate_template_slots(&source.source, &definition.slots)
@@ -1953,7 +2063,9 @@ pub fn validate_template_slots(source: &str, slots: &[TemplateSlot]) -> Result<(
     if !parsed.root().errors_and_warnings().0.is_empty() {
         return Err(KnowledgeError::new(
             "invalidTemplate",
-            "Template source does not parse",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_copy_template_source_invalid(),
+            ),
         ));
     }
     let metadata = weftext_engine::inspect_metadata(source).metadata;
@@ -1984,7 +2096,9 @@ pub fn validate_template_slots(source: &str, slots: &[TemplateSlot]) -> Result<(
         {
             return Err(KnowledgeError::new(
                 "templateSlot",
-                "Parameter names and whole-grapheme exact source slots must be unique and current",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_parameter_slots_invalid(),
+                ),
             ));
         }
         if metadata.as_ref().is_some_and(|m| {
@@ -1995,7 +2109,7 @@ pub fn validate_template_slots(source: &str, slots: &[TemplateSlot]) -> Result<(
         }) {
             return Err(KnowledgeError::new(
                 "templateIdentity",
-                "Template parameters cannot rewrite managed identity/type controls",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_parameter_control_rewrite_forbidden()),
             ));
         }
         let valid = match slot.kind {
@@ -2028,7 +2142,9 @@ pub fn validate_template_slots(source: &str, slots: &[TemplateSlot]) -> Result<(
         if !valid {
             return Err(KnowledgeError::new(
                 "templateSlot",
-                "Parameter does not select one exact official writable literal slot",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_copy_parameter_literal_slot_required(),
+                ),
             ));
         }
         if let Some(default) = &slot.default {
@@ -2044,7 +2160,7 @@ pub fn validate_template_slots(source: &str, slots: &[TemplateSlot]) -> Result<(
             if !valid {
                 return Err(KnowledgeError::new(
                     "templateDefault",
-                    "The declared default does not have the parameter's exact type",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_parameter_default_type_mismatch()),
                 ));
             }
         }
@@ -2057,7 +2173,9 @@ pub fn validate_template_slots(source: &str, slots: &[TemplateSlot]) -> Result<(
     {
         return Err(KnowledgeError::new(
             "templateSlot",
-            "Parameter source slots overlap",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_copy_parameter_slots_overlap(),
+            ),
         ));
     }
     Ok(())
@@ -2074,7 +2192,9 @@ pub fn instantiate_template(
     if parameters.keys().any(|name| !names.contains(name)) {
         return Err(KnowledgeError::new(
             "unknownParameter",
-            "An input does not correspond to a declared template slot",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_copy_undeclared_template_input(),
+            ),
         ));
     }
     let mut patches = vec![];
@@ -2085,7 +2205,13 @@ pub fn instantiate_template(
             .ok_or_else(|| {
                 KnowledgeError::new(
                     "missingParameter",
-                    format!("Template parameter {} is required", slot.name),
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_template_parameter_required(
+                            weftext_messages::params::ErrorKnowledgeTemplateParameterRequired {
+                                name: (slot.name).to_string(),
+                            },
+                        ),
+                    ),
                 )
             })?;
         let encoded = match (slot.kind, value) {
@@ -2096,7 +2222,7 @@ pub fn instantiate_template(
             }
             (TemplateSlotKind::Markup, TemplateValue::Text(text)) => {
                 weftext_engine::encode_literal(text)
-                    .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?
+                    .map_err(|e| KnowledgeError::from_engine("encoding", e))?
             }
             (TemplateSlotKind::String, TemplateValue::Text(text)) => encode_string(text)?,
             (TemplateSlotKind::Bool, TemplateValue::Bool(value)) => value.to_string(),
@@ -2104,7 +2230,13 @@ pub fn instantiate_template(
             _ => {
                 return Err(KnowledgeError::new(
                     "parameterType",
-                    format!("Wrong type for template parameter {}", slot.name),
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_template_parameter_wrong_type(
+                            weftext_messages::params::ErrorKnowledgeTemplateParameterWrongType {
+                                name: (slot.name).to_string(),
+                            },
+                        ),
+                    ),
                 ));
             }
         };

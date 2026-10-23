@@ -2,9 +2,30 @@
 //! portable UUID claim or a remembered pathname cannot establish continuity.
 use super::*;
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 
 const DIRECTORY_MARKER: &str = "weftext.directory.json";
 const TAG_REGISTRY: &str = ".weftext-tags.json";
+
+pub(crate) enum InventoryNode<'a> {
+    Managed(&'a InventoryEntry),
+    Missing,
+    Invalid,
+}
+pub(crate) fn inventory_node<'a>(inventory: &'a Inventory, id: &str) -> InventoryNode<'a> {
+    if !inventory.complete {
+        return InventoryNode::Invalid;
+    }
+    let mut matches = inventory
+        .entries
+        .iter()
+        .filter(|entry| entry.node_id.as_deref() == Some(id));
+    match (matches.next(), matches.next()) {
+        (None, _) => InventoryNode::Missing,
+        (Some(entry), None) if entry.identity_status == "admitted" => InventoryNode::Managed(entry),
+        _ => InventoryNode::Invalid,
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -48,7 +69,7 @@ pub struct TagRegistrySnapshot {
     pub tags: Vec<TagRecord>,
     pub base_id: String,
     pub complete: bool,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<CoreDescription>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -60,6 +81,10 @@ struct DirectoryMarker {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct DirectoryReservation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    library: Option<hosted::ActorLibraryBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    operation_id: Option<String>,
     root: String,
     path: String,
     workspace_id: String,
@@ -71,6 +96,10 @@ struct DirectoryReservation {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct TagReservation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    library: Option<hosted::ActorLibraryBinding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    operation_id: Option<String>,
     root: String,
     workspace_id: String,
     tag_id: String,
@@ -143,7 +172,7 @@ fn tag_document(bytes: Option<&[u8]>) -> Result<TagDocument> {
         serde_json::from_slice(bytes)?
     };
     doc.forest()
-        .map_err(|e| CoreError::new("tagRegistry", e.to_string()))?;
+        .map_err(|e| CoreError::from_data("tagRegistry", e))?;
     Ok(doc)
 }
 
@@ -151,7 +180,7 @@ pub(crate) fn validate_sync_tags(bytes: &[u8]) -> Result<()> {
     let doc: TagDocument = serde_json::from_slice(bytes)?;
     doc.forest()
         .map(|_| ())
-        .map_err(|e| CoreError::new("tagRegistry", e.to_string()))
+        .map_err(|e| CoreError::from_data("tagRegistry", e))
 }
 pub(crate) fn decode_historical_tag_document(bytes: &[u8]) -> Result<TagDocument> {
     tag_document(Some(bytes))
@@ -161,7 +190,7 @@ fn validate_tag_name(name: &str) -> Result<()> {
     if name.trim().is_empty() || name.chars().count() > 256 || name.contains('\0') {
         return Err(CoreError::new(
             "invalidTagName",
-            "Tag display name must contain 1 to 256 characters",
+            UiMessage::error_core_directory_identity_tag_display_name_must_contain1_to256_characters(),
         ));
     }
     Ok(())
@@ -244,7 +273,7 @@ pub(crate) fn parse_ref(reference: &str) -> Result<(&str, &str, &str)> {
     let (prefix, rest) = reference.split_once("://").ok_or_else(|| {
         CoreError::new(
             "invalidReference",
-            "A typed navigation reference is required",
+            UiMessage::error_core_directory_identity_typed_navigation_reference_required(),
         )
     })?;
     let kind = match prefix {
@@ -254,28 +283,31 @@ pub(crate) fn parse_ref(reference: &str) -> Result<(&str, &str, &str)> {
         _ => {
             return Err(CoreError::new(
                 "invalidReference",
-                "Unsupported navigation reference kind",
+                UiMessage::error_core_directory_identity_unsupported_navigation_reference_kind(),
             ));
         }
     };
     let (workspace, id) = rest.split_once('/').ok_or_else(|| {
         CoreError::new(
             "invalidReference",
-            "Navigation reference needs WorkspaceId and object ID",
+            UiMessage::error_core_directory_identity_navigation_reference_needs_workspace_id_and_object_i_d(),
         )
     })?;
     if id.contains('/') || Uuid::parse_str(workspace).is_err() || Uuid::parse_str(id).is_err() {
         return Err(CoreError::new(
             "invalidReference",
-            "Navigation reference IDs must be UUIDs",
+            UiMessage::error_core_directory_identity_navigation_reference_i_ds_must_u_u_i_ds(),
         ));
     }
     Ok((kind, workspace, id))
 }
 
-fn marker_claim(path: &Path) -> Result<Option<(DirectoryMarker, FileIdentity)>> {
+fn marker_claim(
+    backend: &crate::BackendContext,
+    path: &Path,
+) -> Result<Option<(DirectoryMarker, FileIdentity)>> {
     let marker_path = path.join(DIRECTORY_MARKER);
-    let guard = ParentGuard::acquire(&marker_path)?;
+    let guard = ParentGuard::acquire(backend, &marker_path)?;
     let identity = guard.directory_identity()?;
     let mut file = match guard.open_file(false, false) {
         Ok(file) => file,
@@ -288,6 +320,66 @@ fn marker_claim(path: &Path) -> Result<Option<(DirectoryMarker, FileIdentity)>> 
 }
 
 impl Core {
+    pub(crate) fn validate_navigation_reservation(
+        &self,
+        id: &str,
+        suffix: &str,
+        bytes: &[u8],
+    ) -> Result<hosted::ActorLibraryBinding> {
+        let invalid = || {
+            CoreError::new(
+                "resolutionUnavailable",
+                UiMessage::error_core_directory_identity_original_navigation_reservation_cannot_qualified_to_attempt_and_library(),
+            )
+        };
+        let (library, original, root, workspace, ids, fingerprint) = match suffix {
+            "tag-reservation" => {
+                let r: TagReservation = serde_json::from_slice(bytes).map_err(|_| invalid())?;
+                let mut ids = r.additional_tag_ids;
+                ids.push(r.tag_id);
+                (
+                    r.library,
+                    r.operation_id,
+                    r.root,
+                    r.workspace_id,
+                    ids,
+                    r.fingerprint,
+                )
+            }
+            "directory-reservation" => {
+                let r: DirectoryReservation =
+                    serde_json::from_slice(bytes).map_err(|_| invalid())?;
+                if !Path::new(&r.path).starts_with(&r.root) {
+                    return Err(invalid());
+                }
+                (
+                    r.library,
+                    r.operation_id,
+                    r.root,
+                    r.workspace_id,
+                    vec![r.directory_id],
+                    r.fingerprint,
+                )
+            }
+            _ => return Err(invalid()),
+        };
+        let binding = library.ok_or_else(invalid)?;
+        let original_root = self.validate_original_reservation_library(&binding)?;
+        if original.as_deref() != Some(id)
+            || !root.eq_ignore_ascii_case(&original_root)
+            || binding.workspace_id.as_deref() != Some(&workspace)
+            || ids.len() > 5000
+            || fingerprint.len() != 64
+            || !fingerprint.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err(invalid());
+        }
+        for id in ids {
+            valid_operation_id(&id)?;
+        }
+        Ok(binding)
+    }
+
     /// Copy consumes the admitted source identity, while the frozen copy plan
     /// allocates a fresh ID. Its retained directory creation handle supplies the
     /// physical birth evidence in the same original operation journal.
@@ -306,7 +398,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityConflict",
-                "A copied directory marker must have one admitted original object binding",
+                UiMessage::error_core_directory_identity_copied_directory_marker_must_have_one_admitted_original_object_binding(),
             ));
         }
         Ok(serde_json::to_vec_pretty(&DirectoryMarker {
@@ -328,14 +420,14 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "identityRequired",
-                    "Directory admission requires its original Core allocation",
+                    UiMessage::error_core_directory_identity_directory_admission_requires_original_core_allocation(),
                 )
             })?;
         let marker: DirectoryMarker = serde_json::from_slice(after)?;
         let parent = path
             .parent()
-            .ok_or_else(|| CoreError::new("invalidPath", "Directory marker has no parent"))?;
-        let guard = ParentGuard::acquire(path)?;
+            .ok_or_else(|| CoreError::new("invalidPath", weftext_messages::UiMessage::error_core_directory_identity_directory_marker_has_no_parent()))?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
         if reservation.root != display(root)
             || reservation.path != display(parent)
             || reservation.workspace_id != self.require_workspace(root)?.workspace_id
@@ -349,14 +441,14 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityConflict",
-                "Directory allocation, parent object or marker differs from the original proposal",
+                UiMessage::error_core_directory_identity_directory_allocation_parent_object_or_marker_differs_from_original_proposal(),
             ));
         }
         match guard.open_file(false, false) {
             Err(error) if error.code == "missing" => Ok(()),
             Ok(_) => Err(CoreError::new(
                 "exists",
-                "Directory identity admission is create-only",
+                UiMessage::error_core_directory_identity_directory_identity_admission_create_only(),
             )),
             Err(error) => Err(error),
         }
@@ -367,10 +459,13 @@ impl Core {
         operation_id: &str,
         suffix: &str,
     ) -> Result<Option<T>> {
-        match fs::read(self.journal_path(operation_id, suffix)) {
+        match self
+            .backend
+            .read_bytes(self.journal_path(operation_id, suffix))
+        {
             Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(error) => Err(error.into()),
+            Err(error) if error.code == "missing" => Ok(None),
+            Err(error) => Err(error),
         }
     }
 
@@ -391,11 +486,7 @@ impl Core {
         identity: &FileIdentity,
     ) -> Result<Vec<(String, String)>> {
         let mut origins = vec![];
-        for plan in self
-            .operations
-            .values()
-            .filter(|plan| self.committed(&plan.operation_id))
-        {
+        for plan in self.committed_plans()?.into_iter() {
             if plan.workspace_id.as_deref() == Some(workspace)
                 && let Some(transaction) = plan.transaction.as_ref()
                 && matches!(
@@ -491,11 +582,7 @@ impl Core {
         let observed = |identity: &FileIdentity| -> Result<bool> {
             Ok(identities.contains(&serde_json::to_string(identity)?))
         };
-        for plan in self
-            .operations
-            .values()
-            .filter(|plan| self.committed(&plan.operation_id))
-        {
+        for plan in self.committed_plans()?.into_iter() {
             if plan.workspace_id.as_deref() == Some(workspace)
                 && let Some(transaction) = &plan.transaction
             {
@@ -578,9 +665,25 @@ impl Core {
         workspace: &str,
     ) -> Result<Vec<(String, String, FileIdentity)>> {
         let mut candidates = Vec::new();
-        for p in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id) && p.workspace_id.as_deref() == Some(workspace)
-        }) {
+        for p in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_deref() == Some(workspace)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             if let Some(r) = self.read_navigation_record::<DirectoryReservation>(
                 &p.operation_id,
                 "directory-reservation",
@@ -628,9 +731,25 @@ impl Core {
     ) -> Result<BTreeSet<String>> {
         let registry = display(&root.join(TAG_REGISTRY));
         let mut ids = BTreeSet::new();
-        for plan in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id) && p.workspace_id.as_deref() == Some(workspace)
-        }) {
+        for plan in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_deref() == Some(workspace)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
@@ -710,7 +829,8 @@ impl Core {
         if !path.starts_with(&root) {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Navigation target is outside the selected library",
+                UiMessage::error_core_directory_identity_navigation_target_outside_selected_library(
+                ),
             ));
         }
         self.check_pending(&path)?;
@@ -767,7 +887,7 @@ impl Core {
                 label,
             ));
         }
-        match marker_claim(&path) {
+        match marker_claim(&self.backend, &path) {
             Ok(Some((marker, _))) => self.resolve_navigation_target(
                 &root,
                 &entity_ref("directory", &workspace.workspace_id, &marker.directory_id),
@@ -806,13 +926,13 @@ impl Core {
         if workspace.workspace_id != ref_workspace {
             return Err(CoreError::new(
                 "outsideWorkspace",
-                "Navigation reference belongs to a different workspace",
+                UiMessage::error_core_directory_identity_navigation_reference_belongs_to_different_workspace(),
             ));
         }
         if kind == "tag" {
             let registry = root.join(TAG_REGISTRY);
             self.check_pending(&registry)?;
-            let guard = ParentGuard::acquire(&registry)?;
+            let guard = ParentGuard::acquire(&self.backend, &registry)?;
             let mut file = match guard.open_file(false, false) {
                 Ok(file) => file,
                 Err(error) if error.code == "missing" => {
@@ -846,8 +966,8 @@ impl Core {
                 stamp: observed_stamp,
                 bytes,
             };
-            if self.accepted_revision(&captured).is_none()
-                || !self.tag_registry_identity_admitted(&root, &identity)
+            if self.accepted_revision(&captured)?.is_none()
+                || !self.tag_registry_identity_admitted(&root, &identity)?
                 || !self.tag_admitted(&root, ref_workspace, id, &identity)?
             {
                 return Ok(target(
@@ -888,30 +1008,27 @@ impl Core {
             ));
         }
         if kind == "node" {
-            let matches = inventory
-                .entries
-                .iter()
-                .filter(|entry| entry.node_id.as_deref() == Some(id))
-                .collect::<Vec<_>>();
-            if matches.is_empty() {
-                return Ok(target(
-                    kind,
-                    "missing",
-                    Some(reference.into()),
-                    None,
-                    String::new(),
-                ));
-            }
-            if matches.len() != 1 || matches[0].identity_status != "admitted" {
-                return Ok(target(
-                    kind,
-                    "identityInvalid",
-                    Some(reference.into()),
-                    None,
-                    String::new(),
-                ));
-            }
-            let entry = matches[0];
+            let entry = match inventory_node(&inventory, id) {
+                InventoryNode::Managed(entry) => entry,
+                InventoryNode::Missing => {
+                    return Ok(target(
+                        kind,
+                        "missing",
+                        Some(reference.into()),
+                        None,
+                        String::new(),
+                    ));
+                }
+                InventoryNode::Invalid => {
+                    return Ok(target(
+                        kind,
+                        "identityInvalid",
+                        Some(reference.into()),
+                        None,
+                        String::new(),
+                    ));
+                }
+            };
             let parent = Path::new(&entry.path).parent().unwrap();
             return Ok(target(
                 kind,
@@ -935,7 +1052,7 @@ impl Core {
         );
         for path in candidates {
             self.check_pending(&path.join(DIRECTORY_MARKER))?;
-            if let Some((marker, identity)) = marker_claim(&path)?
+            if let Some((marker, identity)) = marker_claim(&self.backend, &path)?
                 && marker.directory_id == id
             {
                 matches.push((path, identity));
@@ -985,7 +1102,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "operationMissing",
-                "Original navigation plan is unavailable",
+                UiMessage::error_core_directory_identity_original_navigation_plan_unavailable(),
             ));
         }
         let fingerprint = hash(&operations::canonical_json_bytes(canonical)?);
@@ -996,7 +1113,7 @@ impl Core {
                     .ok_or_else(|| {
                         CoreError::new(
                             "invalidState",
-                            "Original directory reservation is unavailable",
+                            UiMessage::error_core_directory_identity_original_directory_reservation_unavailable(),
                         )
                     })?;
                 if reservation.fingerprint != fingerprint
@@ -1005,7 +1122,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "operationConflict",
-                        "Original directory reservation differs",
+                        UiMessage::error_core_directory_identity_original_directory_reservation_differs(),
                     ));
                 }
                 Ok(entity_ref(
@@ -1018,12 +1135,12 @@ impl Core {
                 let reservation: TagReservation = self
                     .read_navigation_record(operation_id, "tag-reservation")?
                     .ok_or_else(|| {
-                        CoreError::new("invalidState", "Original tag reservation is unavailable")
+                        CoreError::new("invalidState", UiMessage::error_core_directory_identity_original_tag_reservation_unavailable())
                     })?;
                 if reservation.fingerprint != fingerprint || canonical["root"] != reservation.root {
                     return Err(CoreError::new(
                         "operationConflict",
-                        "Original tag reservation differs",
+                        UiMessage::error_core_directory_identity_original_tag_reservation_differs(),
                     ));
                 }
                 Ok(entity_ref(
@@ -1036,11 +1153,15 @@ impl Core {
                 .as_str()
                 .map(str::to_owned)
                 .ok_or_else(|| {
-                    CoreError::new("invalidState", "Original tag reference is unavailable")
+                    CoreError::new(
+                        "invalidState",
+                        UiMessage::error_core_directory_identity_original_tag_reference_unavailable(
+                        ),
+                    )
                 }),
             _ => Err(CoreError::new(
                 "unsupportedIntent",
-                "Expected an original navigation operation",
+                UiMessage::error_core_directory_identity_expected_original_navigation_operation(),
             )),
         }
     }
@@ -1059,7 +1180,10 @@ impl Core {
             let reservation: DirectoryReservation = self
                 .read_navigation_record(operation_id, "directory-reservation")?
                 .ok_or_else(|| {
-                    CoreError::new("invalidState", "Original directory allocation is missing")
+                    CoreError::new(
+                        "invalidState",
+                        UiMessage::error_core_directory_identity_original_directory_allocation_missing(),
+                    )
                 })?;
             return Ok(NavigationPreparation {
                 preview,
@@ -1074,11 +1198,11 @@ impl Core {
         if self.capture_navigation_target(&root, &path)?.status != "unmanaged" {
             return Err(CoreError::new(
                 "identityConflict",
-                "Only an explicitly selected non-Node container can receive a directory identity",
+                UiMessage::error_core_directory_identity_only_explicitly_selected_non_node_container_can_receive_directory_identity(),
             ));
         }
         let marker_path = path.join(DIRECTORY_MARKER);
-        let guard = ParentGuard::acquire(&marker_path)?;
+        let guard = ParentGuard::acquire(&self.backend, &marker_path)?;
         let identity = guard.directory_identity()?;
         let fingerprint = hash(&operations::canonical_json_bytes(&canonical)?);
         let reservation = if let Some(old) = self
@@ -1087,12 +1211,14 @@ impl Core {
             if old.fingerprint != fingerprint || old.identity != identity {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "Original directory allocation belongs to another proposal or directory object",
+                    UiMessage::error_core_directory_identity_original_directory_allocation_belongs_to_another_proposal_or_directory_object(),
                 ));
             }
             old
         } else {
             let new = DirectoryReservation {
+                library: self.draft_library_for_root(&root)?,
+                operation_id: Some(operation_id.into()),
                 root: display(&root),
                 path: display(&path),
                 workspace_id: workspace.workspace_id,
@@ -1101,6 +1227,7 @@ impl Core {
                 fingerprint,
             };
             journal::private_create(
+                &self.backend,
                 &self.journal_path(operation_id, "directory-reservation"),
                 &serde_json::to_vec(&new)?,
             )?;
@@ -1153,24 +1280,31 @@ impl Core {
             .map(|file| file.stamp.identity.clone());
         let mut tags = Vec::new();
         let mut warnings = Vec::new();
-        if snapshot.bytes.is_none() && self.tag_registry_was_born(&root) {
+        if snapshot.bytes.is_none() && self.tag_registry_was_born(&root)? {
             return Err(CoreError::new(
                 "identityConflict",
-                "The admitted registry is missing; recover the original object",
+                UiMessage::error_core_directory_identity_admitted_registry_missing_recover_original_object(),
             ));
         }
         if snapshot.bytes.is_some()
             && (snapshot.revision.is_none()
                 || identity
                     .as_ref()
-                    .is_none_or(|fi| !self.tag_registry_identity_admitted(&root, fi)))
+                    .map(|fi| {
+                        self.tag_registry_identity_admitted(&root, fi)
+                            .map(|admitted| !admitted)
+                    })
+                    .transpose()?
+                    .unwrap_or(true))
         {
             return Ok(TagRegistrySnapshot {
                 tags,
                 base_id: snapshot.base_id,
                 complete: false,
                 warnings: vec![
-                    "Registry is external_pending or its physical identity is unadmitted".into(),
+                    UiMessage::error_core_directory_identity_registry_physical_identity_unadmitted(
+                    )
+                    .into(),
                 ],
             });
         }
@@ -1188,10 +1322,12 @@ impl Core {
                     parent_tag_id: tag.parent_tag_id,
                 });
             } else {
-                warnings.push(format!(
-                    "Tag {} has no committed binding to this registry object",
-                    tag.tag_id
-                ));
+                warnings.push(
+                    UiMessage::error_core_directory_identity_tag_has_no_committed_binding(weftext_messages::params::ErrorCoreDirectoryIdentityTagHasNoCommittedBinding {
+                        tag_id: tag.tag_id,
+                    })
+                    .into(),
+                );
             }
         }
         Ok(TagRegistrySnapshot {
@@ -1203,14 +1339,16 @@ impl Core {
     }
 
     fn tag_write_basis(&self, root: &Path, base_id: &str) -> Result<TagWriteBasis> {
-        let basis = self
-            .snapshots
-            .get(base_id)
-            .ok_or_else(|| CoreError::new("staleBase", "Read the tag registry before preparing"))?;
+        let basis = self.snapshots.get(base_id).ok_or_else(|| {
+            CoreError::new(
+                "staleBase",
+                UiMessage::error_core_directory_identity_read_tag_registry_before_preparing(),
+            )
+        })?;
         if basis.path != display(&root.join(TAG_REGISTRY)) {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Tag registry basis belongs to another root or role",
+                UiMessage::error_core_directory_identity_tag_registry_basis_belongs_to_another_root_or_role(),
             ));
         }
         let before = basis.captured.as_ref().map(|file| file.bytes.clone());
@@ -1218,19 +1356,19 @@ impl Core {
             .captured
             .as_ref()
             .map(|file| file.stamp.identity.clone());
-        if before.is_none() && self.tag_registry_was_born(root) {
+        if before.is_none() && self.tag_registry_was_born(root)? {
             return Err(CoreError::new(
                 "identityConflict",
-                "An admitted registry is missing; recover its original object",
+                UiMessage::error_core_directory_identity_admitted_registry_missing_recover_original_object(),
             ));
         }
         if let Some(file) = &basis.captured
-            && (self.accepted_revision(file).is_none()
-                || !self.tag_registry_identity_admitted(root, &file.stamp.identity))
+            && (self.accepted_revision(file)?.is_none()
+                || !self.tag_registry_identity_admitted(root, &file.stamp.identity)?)
         {
             return Err(CoreError::new(
                 "externalPending",
-                "The registry requires its original accepted physical binding",
+                UiMessage::error_core_directory_identity_registry_requires_original_accepted_physical_binding(),
             ));
         }
         let doc = tag_document(before.as_deref())?;
@@ -1244,7 +1382,7 @@ impl Core {
             if !admitted.contains(&tag.tag_id) {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "Registry contains an unadmitted TagId or replaced registry object",
+                    UiMessage::error_core_directory_identity_registry_contains_unadmitted_tag_id_or_replaced_registry_object(),
                 ));
             }
         }
@@ -1255,42 +1393,42 @@ impl Core {
         })
     }
 
-    fn tag_registry_was_born(&self, root: &Path) -> bool {
+    fn tag_registry_was_born(&self, root: &Path) -> Result<bool> {
         let path = display(&root.join(TAG_REGISTRY));
-        self.operations.values().any(|p| {
-            self.committed(&p.operation_id)
-                && p.transaction.as_ref().is_some_and(|t| {
-                    t.created_files().iter().any(|f| f.path == path)
-                        || t.files.iter().any(|f| f.path == path)
-                        || tag_update_files(t).iter().any(|f| f.path == path)
-                })
-        })
+        Ok(self.committed_plans()?.into_iter().any(|p| {
+            p.transaction.as_ref().is_some_and(|t| {
+                t.created_files().iter().any(|f| f.path == path)
+                    || t.files.iter().any(|f| f.path == path)
+                    || tag_update_files(t).iter().any(|f| f.path == path)
+            })
+        }))
     }
 
-    fn tag_registry_identity_admitted(&self, root: &Path, identity: &FileIdentity) -> bool {
+    fn tag_registry_identity_admitted(&self, root: &Path, identity: &FileIdentity) -> Result<bool> {
         let path = display(&root.join(TAG_REGISTRY));
-        self.operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-            .any(|p| {
-                p.transaction.as_ref().is_some_and(|t| {
-                    t.files
-                        .iter()
-                        .any(|f| f.path == path && &f.stamp.identity == identity)
-                        || t.created_files().iter().any(|f| {
-                            f.path == path
-                                && self
-                                    .materialized_identity(&p.operation_id, Path::new(&path))
-                                    .is_ok_and(|fi| fi.as_ref() == Some(identity))
-                        })
-                        || (tag_update_files(t)
-                            .iter()
-                            .any(|f| f.path == path && f.before.is_none())
-                            && self
-                                .materialized_identity(&p.operation_id, Path::new(&path))
-                                .is_ok_and(|fi| fi.as_ref() == Some(identity)))
-                })
-            })
+        for plan in self.committed_plans()? {
+            let Some(t) = plan.transaction.as_ref() else {
+                continue;
+            };
+            if t.files
+                .iter()
+                .any(|f| f.path == path && &f.stamp.identity == identity)
+            {
+                return Ok(true);
+            }
+            if (t.created_files().iter().any(|f| f.path == path)
+                || tag_update_files(t)
+                    .iter()
+                    .any(|f| f.path == path && f.before.is_none()))
+                && self
+                    .materialized_identity(&plan.operation_id, Path::new(&path))?
+                    .as_ref()
+                    == Some(identity)
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// Qualify only the exact bytes already captured with the caller's other
@@ -1302,23 +1440,26 @@ impl Core {
     ) -> Result<TagDocument> {
         let root = absolute_path(root.as_ref())?;
         if Path::new(&file.path) != root.join(TAG_REGISTRY) {
-            return Err(CoreError::new("outsideRoot", "Not the selected Tags role"));
+            return Err(CoreError::new(
+                "outsideRoot",
+                UiMessage::error_core_directory_identity_not_selected_tags_role(),
+            ));
         }
         let basis = self.tag_write_basis(&root, &file.base_id)?;
         if basis.bytes != file.bytes {
             return Err(CoreError::new(
                 "conflict",
-                "Frozen tag bytes differ from the original capture",
+                UiMessage::error_core_directory_identity_frozen_tag_bytes_differ_from_original_capture(),
             ));
         }
         Ok(basis.document)
     }
 
     pub(crate) fn validate_tag_registry_absence(&self, root: &Path) -> Result<()> {
-        if self.tag_registry_was_born(root) {
+        if self.tag_registry_was_born(root)? {
             Err(CoreError::new(
                 "identityConflict",
-                "The original Tags object is missing",
+                UiMessage::error_core_directory_identity_original_tags_object_missing(),
             ))
         } else {
             Ok(())
@@ -1331,12 +1472,12 @@ impl Core {
         file: &operations::CapturedFile,
     ) -> Result<TagDocument> {
         if Path::new(&file.path) != root.join(TAG_REGISTRY)
-            || !self.tag_registry_identity_admitted(root, &file.stamp.identity)
-            || self.accepted_revision(file).is_none()
+            || !self.tag_registry_identity_admitted(root, &file.stamp.identity)?
+            || self.accepted_revision(file)?.is_none()
         {
             return Err(CoreError::new(
                 "identityConflict",
-                "Captured Tags are not the original accepted registry",
+                UiMessage::error_core_directory_identity_captured_tags_not_original_accepted_registry(),
             ));
         }
         let doc = tag_document(Some(&file.bytes))?;
@@ -1346,7 +1487,7 @@ impl Core {
             if !admitted.contains(&tag.tag_id) {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "Captured tag is not admitted",
+                    UiMessage::error_core_directory_identity_captured_tag_not_admitted(),
                 ));
             }
         }
@@ -1365,14 +1506,14 @@ impl Core {
     ) -> Result<(FileChange, std::collections::BTreeMap<String, String>)> {
         source_doc
             .forest()
-            .map_err(|e| CoreError::new("tagRegistry", e.to_string()))?;
+            .map_err(|e| CoreError::from_data("tagRegistry", e))?;
         valid_operation_id(source_workspace)?;
         valid_operation_id(operation_id)?;
         let registry = self.read_tag_registry(root)?;
         if !registry.complete {
             return Err(CoreError::new(
                 "identityConflict",
-                "Import needs the complete qualified target Tags object",
+                UiMessage::error_core_directory_identity_import_needs_complete_qualified_target_tags_object(),
             ));
         }
         let TagWriteBasis {
@@ -1383,7 +1524,7 @@ impl Core {
         if doc.tags.len() + source_doc.tags.len() > 5000 {
             return Err(CoreError::new(
                 "budget",
-                "Imported forest exceeds 5000 tags",
+                UiMessage::error_core_directory_identity_imported_forest_exceeds5000_tags(),
             ));
         }
         let workspace = self.require_workspace(root)?.workspace_id;
@@ -1398,12 +1539,15 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "Original tag import allocation differs",
+                    UiMessage::error_core_directory_identity_original_tag_import_allocation_differs(
+                    ),
                 ));
             }
             old
         } else {
             let new = TagReservation {
+                library: self.draft_library_for_root(root)?,
+                operation_id: Some(operation_id.into()),
                 root: display(root),
                 workspace_id: workspace.clone(),
                 tag_id: fresh(),
@@ -1412,6 +1556,7 @@ impl Core {
                 fingerprint: fingerprint.into(),
             };
             journal::private_create(
+                &self.backend,
                 &self.journal_path(operation_id, "tag-reservation"),
                 &serde_json::to_vec(&new)?,
             )?;
@@ -1431,7 +1576,7 @@ impl Core {
             });
         }
         doc.forest()
-            .map_err(|e| CoreError::new("tagRegistry", e.to_string()))?;
+            .map_err(|e| CoreError::from_data("tagRegistry", e))?;
         let mappings = map_ids
             .into_iter()
             .map(|(old, new)| {
@@ -1465,7 +1610,10 @@ impl Core {
         }
         validate_sync_tags(&change.after)?;
         let base = change.base_id.as_deref().ok_or_else(|| {
-            CoreError::new("basisRequired", "Tag changes require their original basis")
+            CoreError::new(
+                "basisRequired",
+                UiMessage::error_core_directory_identity_tag_changes_require_their_original_basis(),
+            )
         })?;
         let old = if self.snapshots.contains_key(base) {
             self.tag_write_basis(root, base)?
@@ -1476,7 +1624,12 @@ impl Core {
                 .operations
                 .get(operation)
                 .and_then(|p| p.transaction.as_ref())
-                .ok_or_else(|| CoreError::new("staleBase", "Original tag Plan is unavailable"))?;
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "staleBase",
+                        UiMessage::error_core_directory_identity_original_tag_plan_unavailable(),
+                    )
+                })?;
             let original = t.files.iter().find(|f| f.path == change.path);
             if change.before.is_none() {
                 self.validate_tag_registry_absence(root)?;
@@ -1484,7 +1637,7 @@ impl Core {
             if original.map(|f| &f.bytes) != change.before.as_ref() {
                 return Err(CoreError::new(
                     "conflict",
-                    "Original tag before image differs",
+                    UiMessage::error_core_directory_identity_original_tag_before_image_differs(),
                 ));
             }
             let document = tag_document(change.before.as_deref())?;
@@ -1502,7 +1655,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "Recovered tags lack their original binding",
+                    UiMessage::error_core_directory_identity_recovered_tags_lack_their_original_binding(),
                 ));
             }
             TagWriteBasis {
@@ -1512,7 +1665,10 @@ impl Core {
             }
         };
         if old.bytes != change.before {
-            return Err(CoreError::new("conflict", "Tag before bytes differ"));
+            return Err(CoreError::new(
+                "conflict",
+                UiMessage::error_core_directory_identity_tag_before_bytes_differ(),
+            ));
         }
         let doc = tag_document(Some(&change.after))?;
         let before_ids = old
@@ -1525,7 +1681,7 @@ impl Core {
         if !before_ids.is_subset(&after_ids) {
             return Err(CoreError::new(
                 "unsupportedIntent",
-                "Tag deletion is not supported",
+                UiMessage::error_core_directory_identity_tag_deletion_not_supported(),
             ));
         }
         let added = doc
@@ -1539,7 +1695,7 @@ impl Core {
             let reservation = reservation.ok_or_else(|| {
                 CoreError::new(
                     "identityRequired",
-                    "Tag creation needs its original Core allocation",
+                    UiMessage::error_core_directory_identity_tag_creation_needs_original_core_allocation(),
                 )
             })?;
             let expected = std::iter::once(&reservation.tag_id)
@@ -1551,7 +1707,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "New tags differ from the original allocation",
+                    UiMessage::error_core_directory_identity_new_tags_differ_from_original_allocation(),
                 ));
             }
         }
@@ -1588,7 +1744,7 @@ impl Core {
             if seen {
                 return Err(CoreError::new(
                     "duplicatePath",
-                    "One Plan cannot install the Tags role twice",
+                    UiMessage::error_core_directory_identity_one_plan_cannot_install_tags_role_twice(),
                 ));
             }
             seen = true;
@@ -1605,7 +1761,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "Tag allocation belongs to another original author intent",
+                    UiMessage::error_core_directory_identity_tag_allocation_belongs_to_another_original_author_intent(),
                 ));
             }
         }
@@ -1615,11 +1771,14 @@ impl Core {
     pub(crate) fn validate_tag_plan_changes(&self, plan: &journal::Plan) -> Result<()> {
         // A retained terminal receipt cannot acquire another filesystem effect.
         // Historical v1 receipts remain readable rather than being rewritten.
-        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id) {
+        if self.committed(&plan.operation_id)? || self.resolved(&plan.operation_id)? {
             return Ok(());
         }
         let transaction = plan.transaction.as_ref().ok_or_else(|| {
-            CoreError::new("invalidState", "The original Tag Plan is unavailable")
+            CoreError::new(
+                "invalidState",
+                UiMessage::error_core_directory_identity_original_tag_plan_unavailable(),
+            )
         })?;
         self.validate_tag_mutation_changes(
             Path::new(&transaction.request.root),
@@ -1687,7 +1846,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "staleBase",
-                    "First assignment needs the exact saved note basis",
+                    UiMessage::error_core_directory_identity_first_assignment_needs_exact_saved_note_basis(),
                 )
             })?;
         self.check_session_base(&session_id, &assignment.base_id)?;
@@ -1703,7 +1862,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "staleBase",
-                    "The original saved note changed during assignment preparation",
+                    UiMessage::error_core_directory_identity_original_saved_note_changed_during_assignment_preparation(),
                 )
             })?;
         Ok((snapshot.base_id, file))
@@ -1726,7 +1885,10 @@ impl Core {
             let reservation: TagReservation = self
                 .read_navigation_record(operation_id, "tag-reservation")?
                 .ok_or_else(|| {
-                    CoreError::new("invalidState", "Original tag allocation is missing")
+                    CoreError::new(
+                        "invalidState",
+                        UiMessage::error_core_directory_identity_original_tag_allocation_missing(),
+                    )
                 })?;
             return Ok(NavigationPreparation {
                 preview,
@@ -1743,7 +1905,8 @@ impl Core {
         if doc.tags.len() >= 5000 {
             return Err(CoreError::new(
                 "budget",
-                "The tag registry already contains 5000 entries",
+                UiMessage::error_core_directory_identity_tag_registry_already_contains5000_entries(
+                ),
             ));
         }
         let fingerprint = hash(&operations::canonical_json_bytes(&canonical)?);
@@ -1753,12 +1916,14 @@ impl Core {
             if old.fingerprint != fingerprint || old.registry_identity != registry_identity {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "Tag allocation belongs to another proposal or registry basis",
+                    UiMessage::error_core_directory_identity_tag_allocation_belongs_to_another_proposal_or_registry_basis(),
                 ));
             }
             old
         } else {
             let new = TagReservation {
+                library: self.draft_library_for_root(&root)?,
+                operation_id: Some(operation_id.into()),
                 root: display(&root),
                 workspace_id: workspace.workspace_id,
                 tag_id: fresh(),
@@ -1767,6 +1932,7 @@ impl Core {
                 fingerprint,
             };
             journal::private_create(
+                &self.backend,
                 &self.journal_path(operation_id, "tag-reservation"),
                 &serde_json::to_vec(&new)?,
             )?;
@@ -1789,8 +1955,12 @@ impl Core {
             let path = Path::new(&assignment.path);
             let current = self.managed_node(
                 &root,
-                path.parent()
-                    .ok_or_else(|| CoreError::new("invalidPath", "Assignment needs a note"))?,
+                path.parent().ok_or_else(|| {
+                    CoreError::new(
+                        "invalidPath",
+                        UiMessage::error_core_directory_identity_assignment_needs_note(),
+                    )
+                })?,
                 false,
             )?;
             if !same_path(&current.path, Path::new(&file.path))
@@ -1798,7 +1968,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "Assignment must target the original admitted note",
+                    UiMessage::error_core_directory_identity_assignment_must_target_original_admitted_note(),
                 ));
             }
             let config = self.read_config(&root, ConfigRole::Schema)?;
@@ -1808,12 +1978,17 @@ impl Core {
                     .as_ref()
                     .map(|b| std::str::from_utf8(b))
                     .transpose()
-                    .map_err(|_| CoreError::new("invalidSchema", "Schema is not UTF-8"))?
+                    .map_err(|_| {
+                        CoreError::new(
+                            "invalidSchema",
+                            UiMessage::error_core_directory_identity_schema_not_u_t_f8(),
+                        )
+                    })?
                     .unwrap_or(include_str!(
                         "../../../docs/design/examples/schema.authoring.json"
                     )),
             )
-            .map_err(|e| CoreError::new("invalidSchema", e.to_string()))?;
+            .map_err(|e| CoreError::from_data("invalidSchema", e))?;
             let source = decode(&file.bytes)?;
             let projection = weftext_data::project(&source, &schema);
             let field = projection
@@ -1823,7 +1998,7 @@ impl Core {
                 .ok_or_else(|| {
                     CoreError::new(
                         "invalidField",
-                        "First assignment requires the installed writable tags field",
+                        UiMessage::error_core_directory_identity_first_assignment_requires_installed_writable_tags_field(),
                     )
                 })?;
             let mut values = match &field.cell {
@@ -1834,7 +2009,7 @@ impl Core {
                 _ => {
                     return Err(CoreError::new(
                         "invalidField",
-                        "Existing tag input is invalid or unavailable; preserve it before assigning",
+                        UiMessage::error_core_directory_identity_existing_tag_input_invalid_or_unavailable_preserve_it_before_assigning(),
                     ));
                 }
             };
@@ -1855,7 +2030,7 @@ impl Core {
                 &[],
                 &weftext_data::NativeValue::Array(values),
             )
-            .map_err(|e| CoreError::new("invalidField", e.to_string()))?;
+            .map_err(|e| CoreError::from_data("invalidField", e))?;
             changes.push(FileChange {
                 path: file.path,
                 base_id: Some(source_base),
@@ -1903,7 +2078,7 @@ impl Core {
         if kind != "tag" || ref_workspace != workspace.workspace_id {
             return Err(CoreError::new(
                 "invalidReference",
-                "Rename requires a TagRef in the selected workspace",
+                UiMessage::error_core_directory_identity_rename_requires_tag_ref_in_selected_workspace(),
             ));
         }
         let TagWriteBasis {
@@ -1918,7 +2093,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "missingTag",
-                    "The selected TagId is absent; matching display names are not replacements",
+                    UiMessage::error_core_directory_identity_selected_tag_id_absent_matching_display_names_not_replacements(),
                 )
             })?;
         tag.display_name = display_name.into();
@@ -1955,7 +2130,7 @@ impl Core {
                 if kind != "tag" || ws != workspace || !doc.tags.iter().any(|t| t.tag_id == id) {
                     return Err(CoreError::new(
                         "invalidReference",
-                        "Parent requires an admitted TagRef in this exact registry",
+                        UiMessage::error_core_directory_identity_parent_requires_admitted_tag_ref_in_exact_registry(),
                     ));
                 }
                 Ok(id.to_owned())
@@ -1985,7 +2160,7 @@ impl Core {
         if kind != "tag" || ws != workspace.workspace_id {
             return Err(CoreError::new(
                 "invalidReference",
-                "Move requires a TagRef in this workspace",
+                UiMessage::error_core_directory_identity_move_requires_tag_ref_in_workspace(),
             ));
         }
         let TagWriteBasis {
@@ -1997,10 +2172,15 @@ impl Core {
         doc.tags
             .iter_mut()
             .find(|t| t.tag_id == id)
-            .ok_or_else(|| CoreError::new("missingTag", "The exact tag is unavailable"))?
+            .ok_or_else(|| {
+                CoreError::new(
+                    "missingTag",
+                    UiMessage::error_core_directory_identity_exact_tag_unavailable(),
+                )
+            })?
             .parent_tag_id = parent;
         doc.forest()
-            .map_err(|e| CoreError::new("tagRegistry", e.to_string()))?;
+            .map_err(|e| CoreError::from_data("tagRegistry", e))?;
         let preview = self.prepare_feature_operation(
             OperationRequest {
                 operation_id: operation_id.into(),
@@ -2035,7 +2215,10 @@ impl Core {
             .get(operation_id)
             .and_then(|p| p.transaction.as_ref())
             .ok_or_else(|| {
-                CoreError::new("invalidState", "Original navigation Plan is unavailable")
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_directory_identity_original_navigation_plan_unavailable(),
+                )
             })?;
         if preview.plan_id != plan_id
             || original.request.root != display(&root)
@@ -2043,16 +2226,19 @@ impl Core {
         {
             return Err(CoreError::new(
                 "operationConflict",
-                "Cancellation requires the exact navigation Plan",
+                UiMessage::error_core_directory_identity_cancellation_requires_exact_navigation_plan(),
             ));
         }
         if matches!(preview.status.as_str(), "committed" | "resolved") {
             return Ok(preview);
         }
-        if self.journal_path(operation_id, "install").exists() {
+        if self
+            .backend
+            .entry_exists(self.journal_path(operation_id, "install"))?
+        {
             return Err(CoreError::new(
                 "recoveryPending",
-                "Inspect the original operation; installation may have effects",
+                UiMessage::error_core_directory_identity_inspect_original_operation_installation_may_have_effects(),
             ));
         }
         self.resolve_record(operation_id, "cancelPrepared")?;
@@ -2078,10 +2264,15 @@ impl Core {
                 serde_json::json!({"operationId":operation_id,"planId":preview.plan_id,"status":preview.status}),
             );
         }
-        if plan_id.is_some() || self.journal_path(operation_id, "install").exists() {
+        if plan_id.is_some()
+            || self
+                .backend
+                .entry_exists(self.journal_path(operation_id, "install"))?
+        {
             return Err(CoreError::new(
                 "recoveryPending",
-                "The original navigation Plan cannot be qualified",
+                UiMessage::error_core_directory_identity_original_navigation_plan_cannot_qualified(
+                ),
             ));
         }
         self.resolve_record(operation_id, "cancelPrepared")?;
@@ -2263,7 +2454,7 @@ mod tests {
     #[test]
     fn node_directory_capture_uses_existing_node_ref() {
         let (_temp, mut core, root, _) = fixture();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let captured = core
             .capture_navigation_target(&root, root.join("Note"))
             .unwrap();
@@ -2282,7 +2473,7 @@ mod tests {
     #[test]
     fn copied_node_containers_receive_fresh_directory_births() {
         let (_temp, mut core, root, _) = fixture();
-        core.create_note(&root, &root, "Original").unwrap();
+        core.create_note_fixture(&root, &root, "Original").unwrap();
         let child = root.join("Original/Container");
         fs::create_dir(&child).unwrap();
         let admitted = core
@@ -2353,7 +2544,7 @@ mod tests {
     #[test]
     fn tag_rename_and_equal_names_preserve_distinct_refs_and_sources() {
         let (_temp, mut core, root, _) = fixture();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let basis = core.read_tag_registry(&root).unwrap();
         let first = core
             .prepare_create_tag(&root, "Research", &basis.base_id, &fresh())
@@ -2457,6 +2648,32 @@ mod tests {
         let registry_snapshot = core.read_tag_registry(&root).unwrap();
         assert!(!registry_snapshot.complete);
         assert!(registry_snapshot.tags.is_empty());
+        assert_eq!(
+            core.snapshots[&registry_snapshot.base_id].path,
+            display(&registry)
+        );
+        assert_eq!(fs::read(&registry).unwrap(), bytes);
+        assert_eq!(registry_snapshot.warnings.len(), 1);
+        let warning = &registry_snapshot.warnings[0];
+        assert_eq!(
+            warning.explanation.key(),
+            "error.core.directoryIdentity.registryPhysicalIdentityUnadmitted"
+        );
+        assert!(warning.diagnostics.is_empty());
+        assert!(warning.causes.as_slice().is_empty());
+        assert!(warning.details.is_none());
+        let wire = serde_json::to_value(warning).unwrap();
+        let decoded: CoreDescription = serde_json::from_value(wire.clone()).unwrap();
+        assert_eq!(decoded, *warning);
+        assert!(wire["message"].is_null());
+        assert_ne!(
+            warning.explanation.render(weftext_messages::UiLocale::ZhCn),
+            warning.explanation.render(weftext_messages::UiLocale::EnUs)
+        );
+        assert_eq!(
+            fs::read(temp.path().join("original-registry")).unwrap(),
+            bytes
+        );
         let workspace = core.require_workspace(&root).unwrap();
         let fabricated = fresh();
         fs::write(
@@ -2696,7 +2913,7 @@ mod tests {
             cancelled
         );
         let note = core
-            .create_note(&root, &root, "CannotReuseCancelledId")
+            .create_note_fixture(&root, &root, "CannotReuseCancelledId")
             .unwrap();
         assert_eq!(
             core.save(SaveRequest {
@@ -2727,7 +2944,7 @@ mod tests {
     #[test]
     fn tag_creation_and_first_assignment_share_original_plan_and_recover_after_restart() {
         let (_temp, mut core, root, state) = fixture();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         core.save(SaveRequest {
             session_id: note.session_id.clone(),
             base_id: note.base_id.clone(),
@@ -2787,7 +3004,9 @@ mod tests {
     #[test]
     fn first_assignment_qualifies_the_original_local_session_and_rejects_changed_bytes() {
         let (_temp, mut core, root, _state) = fixture();
-        let note = core.create_note(&root, &root, "SessionNote").unwrap();
+        let note = core
+            .create_note_fixture(&root, &root, "SessionNote")
+            .unwrap();
         let source = note
             .source
             .replace("types: ()", "types: (\"task\",), status: \"open\"");
@@ -2801,7 +3020,7 @@ mod tests {
             .unwrap();
         let assignment = TagAssignment {
             path: note.path.clone(),
-            base_id: saved.base_id,
+            base_id: saved.receipt.base_id,
             field_id: "core/tags".into(),
         };
         let tags = core.read_tag_registry(&root).unwrap();
@@ -2839,7 +3058,9 @@ mod tests {
                 .unwrap()
                 .contains(&prepared.target_ref)
         );
-        let other = core.create_note(&root, &root, "ChangedNote").unwrap();
+        let other = core
+            .create_note_fixture(&root, &root, "ChangedNote")
+            .unwrap();
         let tags = core.read_tag_registry(&root).unwrap();
         let registry = fs::read(root.join(TAG_REGISTRY)).unwrap();
         fs::write(&other.path, format!("{}\nexternal change\n", other.source)).unwrap();

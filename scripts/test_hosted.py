@@ -1,11 +1,11 @@
 """Real hosted HTTP boundaries against owned disposable libraries; no desktop input."""
+from _cli_serve import launch_serve
+from _creation_result import created_document
 import copy
 import hashlib
 import json
 from pathlib import Path
-import re
 import secrets
-import subprocess
 import tempfile
 import unittest
 from urllib.error import HTTPError
@@ -20,25 +20,15 @@ def uid(): return str(uuid.uuid4())
 def digest(text): return hashlib.sha256(text.encode()).hexdigest()
 
 class Server:
-    def __init__(self, args, hosted=False):
-        self.process = subprocess.Popen([str(EXE), *args], stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                        text=True, encoding='utf-8', creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        self.token = None
-        for _ in range(4):
-            line = self.process.stdout.readline()
-            match = re.search(r'(http://127\.0\.0\.1:\d+)/' + (r'\s*$' if hosted else r'#token=(\w+)'), line)
-            if match:
-                self.url = match[1]
-                if not hosted: self.token = match[2]
-                break
-        else:
-            self.close()
-            raise RuntimeError('Server did not start')
+    def __init__(self, args, hosted=False, *, expected_default_data_dir=None, evidence_parent=None):
+        self.owner = launch_serve(EXE, args, hosted=hosted, expected_default_data_dir=expected_default_data_dir,
+                                  evidence_parent=evidence_parent)
+        self.process = self.owner.process
+        self.url, self.token = self.owner.ready['base'], self.owner.ready['token']
         self.hosted = hosted
 
     def close(self):
-        self.process.terminate()
-        self.process.communicate(timeout=15)
+        return self.owner.stop()
 
     def call(self, route, data=None, token=None, headers=None):
         auth = {'Authorization': 'Bearer ' + (token or '')} if self.hosted else {'X-Weftext-Token': self.token}
@@ -64,13 +54,14 @@ class Hosted(unittest.TestCase):
         self.folder.mkdir()
         self.data = self.folder / 'state'
         self.root = self.folder / 'library'
-        local = Server(['--no-browser','--data-dir',str(self.data)])
+        local = Server(['--data-dir',str(self.data)])
         try:
             self.assertEqual(local.call('/api/library/create', {'path':str(self.root),'operationId':uid()})[0],200)
             self.docs = {}
             for name, content in [('Shared','初始共同正文'),('Other','独立正文'),('Secret','HIDDEN_PAYLOAD_987')]:
                 code, doc, _ = local.call('/api/note/create',{'root':str(self.root),'parent':str(self.root),'name':name,'operationId':uid()})
                 self.assertEqual(code,200,doc)
+                doc = created_document(doc)
                 doc['source'] += content
                 code, _, _ = local.call('/api/save',{'sessionId':doc['sessionId'],'baseId':doc['baseId'],'source':doc['source'],'operationId':uid()})
                 self.assertEqual(code,200)
@@ -91,9 +82,30 @@ class Hosted(unittest.TestCase):
 
     def start(self):
         self.config_path.write_text(json.dumps(self.config),'utf-8')
-        self.server = Server(['--no-browser','--data-dir',str(self.data),'--server-config',str(self.config_path)],hosted=True)
+        self.server = Server(['--data-dir',str(self.data),'--server-config',str(self.config_path)],hosted=True)
 
     def tearDown(self): self.server.close()
+
+    def test_device_reminder_capabilities_are_absent_from_hosted_routes(self):
+        device = self.data / 'device-state'
+        def records():
+            return {str(path.relative_to(device)): path.read_bytes() for path in device.rglob('*') if path.is_file()}
+        before = records()
+        owner = {'workspaceId':uid(),'nodeId':uid()}
+        routes = {
+            'settings':{}, 'inspect':{'sessionId':uid()},
+            'library':{'action':'enable','root':str(self.root),'expectedRevision':0,'mutationId':uid()},
+            'subscription':{'root':str(self.root),'owner':owner,'reminderId':uid(),'enabled':True,'expectedRevision':0,'mutationId':uid()},
+            'status':{'executionKey':'a'*64}, 'records':{'after':None},
+            'schedule':{'cursor':None}, 'open':{'executionKey':'a'*64}, 'handle':{'executionKey':'a'*64},
+        }
+        for actor in ['alice','reader']:
+            for route, body in routes.items():
+                with self.subTest(actor=actor,route=route):
+                    code, result, _ = self.server.call('/api/reminders/'+route,body,self.tokens[actor])
+                    self.assertEqual(code,404,result)
+                    self.assertEqual(records(),before)
+
     def call(self, route, data=None, actor='alice', status=200, headers=None):
         code, result, returned = self.server.call('/api/hosted/'+route,data,self.tokens.get(actor,'x'*40),headers)
         self.assertEqual(code,status,str(result)[:1500])
@@ -103,6 +115,24 @@ class Hosted(unittest.TestCase):
     def save(self,doc,source,actor='alice',status=200,op=None):
         req={'sessionId':doc['sessionId'],'baseId':doc['baseId'],'source':source,'operationId':op or uid()}
         return self.call('save',req,actor,status),req
+    def save_current(self, doc, source):
+        status, original = self.save(doc, source)
+        return self.committed_document(doc, source, status, original)
+
+    def committed_document(self, doc, source, status, original):
+        self.assertEqual(original['sessionId'], doc['sessionId'])
+        self.assertEqual(original['baseId'], doc['baseId'])
+        self.assertEqual(original['source'], source)
+        self.assertEqual(status['status'], 'committed')
+        self.assertEqual(status['operationId'], original['operationId'])
+        self.assertEqual(status['resource'], doc['resource'])
+        self.assertIsInstance(status['baseId'], str)
+        self.assertTrue(status['baseId'])
+        self.assertNotIn('recoveryIssue', status)
+        path = self.root / self.config['files'][status['resource']]['path']
+        self.assertEqual(path.read_bytes(), source.encode('utf-8'))
+        return {**doc, 'source': source, 'baseId': status['baseId']}
+
     def policy(self, transform):
         old=self.call('admin/policy',actor='admin')
         users=copy.deepcopy(old['users']);transform(users)
@@ -137,7 +167,7 @@ class Hosted(unittest.TestCase):
         self.assertEqual(no,hidden)
         self.assertEqual(self.call('search',{'text':'HIDDEN_PAYLOAD'},'bob')['rows'],[])
         self.assertNotIn(str(self.root),json.dumps(files))
-        for route in ['/api/open','/api/recovery','/api/library/open','/api/export/prepare','/api/knowledge/annotations','/index.html', '/api/sync/binding', '/api/sync/enable', '/api/sync/status', '/api/sync/publish', '/api/sync/receive', '/api/sync/export', '/api/sync/file', '/api/sync/cancel-prepared', '/api/sync/operation']:
+        for route in ['/api/open','/api/recovery','/api/library/open','/api/export/prepare','/api/knowledge/annotations','/api/recognition/open','/api/operations/status','/api/operations/settle','/index.html', '/api/sync/binding', '/api/sync/enable', '/api/sync/status', '/api/sync/publish', '/api/sync/receive', '/api/sync/export', '/api/sync/file', '/api/sync/cancel-prepared', '/api/sync/operation']:
             code,body,_=self.server.call(route,{} if route.startswith('/api/') else None,self.tokens['alice'])
             self.assertEqual(code,404,(route,body))
 
@@ -171,13 +201,13 @@ class Hosted(unittest.TestCase):
     def test_retries_status_actor_namespace_and_restart(self):
         a=self.open();b=self.open(actor='bob');op=uid()
         saved,req=self.save(a,a['source']+'saved',op=op)
-        other_op=self.call('operation',{'operationId':op},'bob')
+        other_op=self.call('operation',{'resource':'Shared','operationId':op},'bob')
         self.assertEqual(other_op['status'],'notRegistered')
         self.save(b,b['source']+'conflict','bob',409,op)
         self.call('save',{**req,'source':req['source']+'changed'},status=409)
         self.server.close();self.start()
-        self.assertEqual(self.call('operation',{'operationId':op}),saved)
-        self.assertEqual(self.call('operation',{'operationId':op},'bob')['status'],'notCommitted')
+        self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op}),saved)
+        self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op},'bob')['status'],'notCommitted')
         reopened=self.open(actor='bob');self.assertIn('conflict',reopened['recoveredDraft'])
 
     def test_history_authorized_without_other_users_drafts(self):
@@ -237,7 +267,7 @@ class Hosted(unittest.TestCase):
 
     def test_unknown_request_is_fenced_before_a_new_proposal(self):
         a=self.open();op=uid()
-        self.assertEqual(self.call('operation',{'operationId':op})['status'],'notRegistered')
+        self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op})['status'],'notRegistered')
         self.assertEqual(self.call('operation/settle',{'resource':'Shared','operationId':op})['status'],'cancelled')
         self.save(a,a['source']+'late original',status=409,op=op)
         self.assertNotIn('late original',(self.root/'Shared/Shared.typ').read_text('utf-8'))

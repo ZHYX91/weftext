@@ -1,8 +1,9 @@
 //! A read-only projection of the existing commit, admission and exact-byte
 //! journal. Restoring is an ordinary guarded save, never a chain rewind.
 use super::*;
-use operations::{CapturedFile, Mutation, RevisionFact};
+use operations::{CapturedFile, FrozenOperation, Mutation, RevisionFact};
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,7 +18,7 @@ pub struct HistoryVersion {
     pub status: String,
     pub byte_length: Option<usize>,
     pub sha256: Option<String>,
-    pub message: String,
+    pub description: CoreDescription,
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -28,7 +29,7 @@ pub struct HistoryRetention {
     pub available_versions: usize,
     pub oldest_saved_at_unix_ms: Option<u64>,
     pub newest_saved_at_unix_ms: Option<u64>,
-    pub message: String,
+    pub description: CoreDescription,
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,7 +43,7 @@ pub struct HistoryTimeline {
     pub versions: Vec<HistoryVersion>,
     pub retention: HistoryRetention,
     pub protected_drafts: Vec<DraftAlternative>,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<CoreDescription>,
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -52,7 +53,7 @@ pub struct HistoryRead {
     pub source: String,
     pub read_only: bool,
     pub preview_status: String,
-    pub preview_message: String,
+    pub preview_description: CoreDescription,
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -98,10 +99,16 @@ pub struct HistoryRestoreResult {
     pub source: String,
     pub version_id: String,
     pub protected_drafts: Vec<DraftAlternative>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovery_issue: Option<RecoveryIssue>,
 }
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryRestoreStatus {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub receipt: Option<Receipt>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result_error: Option<RecoveryIssue>,
     pub operation_id: String,
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -122,21 +129,22 @@ struct HistoryRecord {
 impl Core {
     fn history_context(&self, session_id: &str) -> Result<HistoryContext> {
         self.check_actor_session(session_id)?;
-        let session = self
-            .sessions
-            .get(session_id)
-            .cloned()
-            .ok_or_else(|| CoreError::new("sessionMissing", "Open the note again"))?;
+        let session = self.sessions.get(session_id).cloned().ok_or_else(|| {
+            CoreError::new(
+                "sessionMissing",
+                UiMessage::error_core_history_open_note_again(),
+            )
+        })?;
         self.check_pending(&session.path)?;
-        let guard = ParentGuard::acquire(&session.path)?;
+        let guard = ParentGuard::acquire(&self.backend, &session.path)?;
         let mut handle = guard.open_file(false, false)?;
         let observed = stamp(&handle)?;
         self.check_pending_identity(&observed.identity)?;
         let bytes = read_source(&mut handle)?;
-        let birth = self.admitted_binding(&observed.identity).ok_or_else(|| {
+        let birth = self.admitted_binding(&observed.identity)?.ok_or_else(|| {
             CoreError::new(
                 "historyUnavailable",
-                "This source has no admitted stable note identity",
+                UiMessage::error_core_history_source_has_no_admitted_stable_note_identity(),
             )
         })?;
         if session.stamp.identity != observed.identity
@@ -148,28 +156,40 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "The current note object or declaration needs identity recovery; history was not joined by name",
+                UiMessage::error_core_history_current_note_object_or_declaration_needs_identity_recovery_history_was_not_joined_by_name(),
             ));
         }
         let root = self
             .operations
             .values()
-            .find(|p| {
-                matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
-                    && p.workspace_id.as_ref() == Some(&birth.workspace_id)
-                    && self.committed(&p.operation_id)
-            })
+            .try_fold(None, |found, p| -> Result<Option<_>> {
+                if found.is_some() {
+                    Ok(found)
+                } else {
+                    Ok(
+                        if {
+                            matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
+                                && p.workspace_id.as_ref() == Some(&birth.workspace_id)
+                                && self.committed(&p.operation_id)?
+                        } {
+                            Some(p)
+                        } else {
+                            None
+                        },
+                    )
+                }
+            })?
             .map(|p| PathBuf::from(&p.path))
             .ok_or_else(|| {
                 CoreError::new(
                     "historyUnavailable",
-                    "The original library admission is unavailable",
+                    UiMessage::error_core_history_original_library_admission_unavailable(),
                 )
             })?;
         if !session.path.starts_with(&root) {
             return Err(CoreError::new(
                 "identityPending",
-                "The note is outside its admitted library",
+                UiMessage::error_core_history_note_outside_admitted_library(),
             ));
         }
         let in_trash = session.path.strip_prefix(&root).is_ok_and(|relative| {
@@ -183,7 +203,7 @@ impl Core {
         if !is_canonical(&session.path) && !in_trash {
             return Err(CoreError::new(
                 "identityPending",
-                "The source is not at its canonical live placement",
+                UiMessage::error_core_history_source_not_at_canonical_live_placement(),
             ));
         }
         // Missing semantic configuration does not prevent exact source viewing.
@@ -204,14 +224,21 @@ impl Core {
 
     pub(crate) fn check_history_placement(&self, birth: &Birth, current: &Path) -> Result<()> {
         let places = self.node_placement_paths(birth)?;
+        self.check_history_placement_paths(current, &places)
+    }
+    pub(crate) fn check_history_placement_paths(
+        &self,
+        current: &Path,
+        places: &BTreeSet<String>,
+    ) -> Result<()> {
         if places.len() != 1
             || !places
                 .iter()
-                .any(|p| same_placement_path(Path::new(p), current).unwrap_or(false))
+                .any(|p| same_placement_path(&self.backend, Path::new(p), current).unwrap_or(false))
         {
             return Err(CoreError::new(
                 "identityPending",
-                "No committed application placement proves this exact object",
+                UiMessage::error_core_history_no_committed_application_placement_proves_exact_object(),
             ));
         }
         Ok(())
@@ -226,31 +253,67 @@ impl Core {
         birth: &Birth,
         through: Option<u64>,
     ) -> Result<BTreeSet<String>> {
-        let mut places = BTreeSet::<String>::new();
-        let mut birth_sequence = None;
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
-            if self.read_births(&p.operation_id)?.iter().any(|b| {
-                b.node_id == birth.node_id
-                    && b.workspace_id == birth.workspace_id
-                    && b.identity == birth.identity
-            }) {
-                let sequence = self.history_commit_time(p)?.1;
-                if let Some(limit) = through {
-                    let sequence = sequence.ok_or_else(|| {
-                        CoreError::new(
-                            "historyUnavailable",
-                            "Original placement ordering is unavailable",
-                        )
-                    })?;
-                    if sequence > limit {
-                        continue;
-                    }
+        let plans = self.committed_plans()?;
+        Ok(self
+            .node_placement_paths_in_cut(&plans, std::slice::from_ref(birth), through, None)?
+            .pop()
+            .unwrap())
+    }
+    pub(crate) fn node_placement_paths_in_cut(
+        &self,
+        plans: &[&journal::Plan],
+        births: &[Birth],
+        through: Option<u64>,
+        original_births: Option<&std::collections::BTreeMap<String, Vec<Birth>>>,
+    ) -> Result<Vec<BTreeSet<String>>> {
+        let mut states = births
+            .iter()
+            .map(|_| (BTreeSet::<String>::new(), None))
+            .collect::<Vec<_>>();
+        for p in plans {
+            let current_births;
+            let plan_births = if let Some(original_births) = original_births {
+                original_births.get(&p.operation_id).ok_or_else(|| {
+                    CoreError::new(
+                        "identityPending",
+                        UiMessage::error_core_backend_committed_birth_incomplete(),
+                    )
+                })?
+            } else {
+                current_births = self.read_births(&p.operation_id)?;
+                &current_births
+            };
+            let matching = births
+                .iter()
+                .enumerate()
+                .filter(|(_, birth)| {
+                    plan_births.iter().any(|b| {
+                        b.node_id == birth.node_id
+                            && b.workspace_id == birth.workspace_id
+                            && b.identity == birth.identity
+                    })
+                })
+                .map(|(index, _)| index)
+                .collect::<Vec<_>>();
+            if matching.is_empty() {
+                continue;
+            }
+            let sequence = self.history_commit_time(p)?.1;
+            if let Some(limit) = through {
+                let sequence = sequence.ok_or_else(|| {
+                    CoreError::new(
+                        "historyUnavailable",
+                        UiMessage::error_core_history_original_placement_ordering_unavailable(),
+                    )
+                })?;
+                if sequence > limit {
+                    continue;
                 }
-                birth_sequence = sequence;
+            }
+            for index in matching {
+                let birth = &births[index];
+                let (places, birth_sequence) = &mut states[index];
+                *birth_sequence = sequence;
                 if p.kind == "createNote" {
                     places.insert(p.path.clone());
                 }
@@ -264,14 +327,21 @@ impl Core {
                 }
             }
         }
-        self.replay_placements_at(
-            places,
-            birth_sequence,
-            &birth.identity,
-            Some(&birth.node_id),
-            None,
-            through,
-        )
+        let edges = self.placement_edges_in_cut(plans, through)?;
+        Ok(states
+            .into_iter()
+            .zip(births)
+            .map(|((places, born), birth)| {
+                Self::replay_placement_edges(
+                    places,
+                    born,
+                    &birth.identity,
+                    Some(&birth.node_id),
+                    None,
+                    &edges,
+                )
+            })
+            .collect())
     }
     pub(crate) fn replay_placements(
         &self,
@@ -285,19 +355,26 @@ impl Core {
     }
     fn replay_placements_at(
         &self,
-        mut places: BTreeSet<String>,
+        places: BTreeSet<String>,
         born: Option<u64>,
         identity: &FileIdentity,
         node: Option<&str>,
         directory: Option<&str>,
         through: Option<u64>,
     ) -> Result<BTreeSet<String>> {
+        let plans = self.committed_plans()?;
+        let edges = self.placement_edges_in_cut(&plans, through)?;
+        Ok(Self::replay_placement_edges(
+            places, born, identity, node, directory, &edges,
+        ))
+    }
+    fn placement_edges_in_cut<'a>(
+        &self,
+        plans: &[&'a journal::Plan],
+        through: Option<u64>,
+    ) -> Result<Vec<(Option<u64>, &'a FrozenOperation)>> {
         let mut edges = Vec::new();
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
+        for p in plans {
             if let Some(t) = &p.transaction
                 && matches!(
                     t.mutation,
@@ -309,20 +386,31 @@ impl Core {
                     let sequence = sequence.ok_or_else(|| {
                         CoreError::new(
                             "historyUnavailable",
-                            "Original placement ordering is unavailable",
+                            UiMessage::error_core_history_original_placement_ordering_unavailable(),
                         )
                     })?;
                     if sequence > limit {
                         continue;
                     }
                 }
-                if !matches!((born,sequence),(Some(a),Some(b)) if b<=a) {
-                    edges.push((sequence, t));
-                }
+                edges.push((sequence, t));
             }
         }
         edges.sort_by_key(|e| e.0);
-        for (_, t) in edges {
+        Ok(edges)
+    }
+    fn replay_placement_edges(
+        mut places: BTreeSet<String>,
+        born: Option<u64>,
+        identity: &FileIdentity,
+        node: Option<&str>,
+        directory: Option<&str>,
+        edges: &[(Option<u64>, &FrozenOperation)],
+    ) -> BTreeSet<String> {
+        for (sequence, t) in edges {
+            if matches!((born, *sequence), (Some(a), Some(b)) if b <= a) {
+                continue;
+            }
             // Each original step maps its own before coordinates once. A
             // final location is never fed through another step in the same Plan.
             let original_places = places.clone();
@@ -397,21 +485,24 @@ impl Core {
                 }
             }
         }
-        Ok(places)
+        places
     }
     pub(crate) fn history_commit_time(
         &self,
         plan: &journal::Plan,
     ) -> Result<(Option<u64>, Option<u64>)> {
-        let v: serde_json::Value =
-            serde_json::from_slice(&fs::read(self.journal_path(&plan.operation_id, "commit"))?)?;
+        let v: serde_json::Value = serde_json::from_slice(
+            &self
+                .backend
+                .read_bytes(self.journal_path(&plan.operation_id, "commit"))?,
+        )?;
         if v["operationId"] != plan.operation_id
             || v["fingerprint"] != plan.fingerprint
             || v["storageProfile"] != STORAGE_PROFILE
         {
             return Err(CoreError::new(
                 "historyUnavailable",
-                "The original commit witness is invalid",
+                UiMessage::error_core_history_original_commit_witness_invalid(),
             ));
         }
         Ok((v["savedAtUnixMs"].as_u64(), v["commitSequence"].as_u64()))
@@ -422,11 +513,7 @@ impl Core {
     }
     fn history_records_for(&self, birth: &Birth) -> Result<Vec<HistoryRecord>> {
         let mut records = Vec::new();
-        for p in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
+        for p in self.committed_plans()?.into_iter() {
             let candidate = if matches!(p.kind.as_str(), "save" | "createNote") {
                 (p.identity.as_ref() == Some(&birth.identity)
                     || (p.node_id.as_ref() == Some(&birth.node_id)
@@ -488,29 +575,62 @@ impl Core {
             };
             let (saved_at, sequence) = self.history_commit_time(p)?;
             let mut version = HistoryVersion {
-                version_id: p.operation_id.clone(), revision_id: None, operation_id: p.operation_id.clone(), kind: p.kind.clone(),
-                saved_at_unix_ms: saved_at, time_basis: if saved_at.is_some() { "commitClock" } else { "unknown" }.into(), commit_sequence: sequence,
-                status: "available".into(), byte_length: Some(bytes.len()), sha256: Some(hash(&bytes)), message: "Exact retained committed source; dependencies and semantic configuration are not reconstructed".into(),
+                version_id: p.operation_id.clone(),
+                revision_id: None,
+                operation_id: p.operation_id.clone(),
+                kind: p.kind.clone(),
+                saved_at_unix_ms: saved_at,
+                time_basis: if saved_at.is_some() {
+                    "commitClock"
+                } else {
+                    "unknown"
+                }
+                .into(),
+                commit_sequence: sequence,
+                status: "available".into(),
+                byte_length: Some(bytes.len()),
+                sha256: Some(hash(&bytes)),
+                description: UiMessage::history_retained_committed_source().into(),
             };
             let checked = (|| -> Result<RevisionFact> {
+                if matches!(p.kind.as_str(), "save" | "saveAs") {
+                    self.validate_file_save_plan(p)?;
+                    if !matches!(&p.file_save.as_ref().unwrap().scope, QualifiedInputScope::Library { binding } if binding.workspace_id == birth.workspace_id)
+                    {
+                        return Err(CoreError::new(
+                            "historyUnavailable",
+                            UiMessage::error_core_history_retained_save_different_scope(),
+                        ));
+                    }
+                }
                 // A cached plan is not a replacement for a removed/unreadable
                 // retained record. Re-read and require its exact payload.
-                let retained: journal::Plan =
-                    serde_json::from_slice(&fs::read(self.journal_path(&p.operation_id, "plan"))?)?;
+                let retained: journal::Plan = serde_json::from_slice(
+                    &self
+                        .backend
+                        .read_bytes(self.journal_path(&p.operation_id, "plan"))?,
+                )?;
                 if serde_json::to_vec(&retained)? != serde_json::to_vec(p)? {
-                    return Err(CoreError::new("invalidState", "Retained plan changed"));
+                    return Err(CoreError::new(
+                        "invalidState",
+                        UiMessage::error_core_history_retained_plan_changed(),
+                    ));
                 }
                 let facts = self.read_observation_facts(&p.operation_id)?;
                 let fact = facts
                     .into_iter()
                     .find(|f| f.path == path && f.stamp.identity == birth.identity)
                     .ok_or_else(|| {
-                        CoreError::new("missing", "The exact committed revision witness is missing")
+                        CoreError::new(
+                            "missing",
+                            UiMessage::error_core_history_exact_committed_revision_witness_missing(
+                            ),
+                        )
                     })?;
                 if fact.hash != hash(&bytes) || decode(&bytes).is_err() {
                     return Err(CoreError::new(
                         "invalidState",
-                        "The exact retained source or its integrity witness is invalid",
+                        UiMessage::error_core_history_exact_retained_source_or_integrity_witness_invalid(),
                     ));
                 }
                 // A declared ID alone never established membership; the fact
@@ -528,14 +648,17 @@ impl Core {
                 }
                 Err(e) => {
                     version.status = match e.code.as_str() {
-                        "missing" => "missing",
+                        // Missing committed observations stay unavailable. This
+                        // presentation state never admits a new ordinary source.
+                        "missing" | "identityPending" => "missing",
+                        "unsupportedFileSaveEvidence" => "unsupported",
                         "permissionDenied" | "io" | "busy" => "unreadable",
                         _ => "invalid",
                     }
                     .into();
                     version.byte_length = None;
                     version.sha256 = None;
-                    version.message = e.message;
+                    version.description = e.into();
                     records.push(HistoryRecord {
                         version,
                         bytes: None,
@@ -550,13 +673,32 @@ impl Core {
         // This is an existing reservation + committed frozen read, not a new
         // history record, and must not be omitted merely because it was not the
         // operation's final output.
-        for p in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id) && p.workspace_id.as_ref() == Some(&birth.workspace_id)
-        }) {
-            let bytes = match fs::read(self.journal_path(&p.operation_id, "revision-reservation")) {
+        for p in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_ref() == Some(&birth.workspace_id)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
+            let bytes = match self
+                .backend
+                .read_bytes(self.journal_path(&p.operation_id, "revision-reservation"))
+            {
                 Ok(bytes) => bytes,
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-                Err(e) => return Err(e.into()),
+                Err(e) if e.code == "missing" => continue,
+                Err(e) => return Err(e),
             };
             let r: operations::RevisionReservation = serde_json::from_slice(&bytes)?;
             if r.stamp.identity != birth.identity
@@ -572,12 +714,15 @@ impl Core {
                 continue;
             }
             let (time, sequence) = self.history_commit_time(p)?;
-            let retained: journal::Plan =
-                serde_json::from_slice(&fs::read(self.journal_path(&p.operation_id, "plan"))?)?;
+            let retained: journal::Plan = serde_json::from_slice(
+                &self
+                    .backend
+                    .read_bytes(self.journal_path(&p.operation_id, "plan"))?,
+            )?;
             if serde_json::to_vec(&retained)? != serde_json::to_vec(p)? {
                 return Err(CoreError::new(
                     "historyUnavailable",
-                    "Committed admission plan changed",
+                    UiMessage::error_core_history_committed_admission_plan_changed(),
                 ));
             }
             let fact = RevisionFact {
@@ -586,12 +731,28 @@ impl Core {
                 hash: hash(&r.bytes),
                 revision: r.revision.clone(),
             };
-            records.push(HistoryRecord { version: HistoryVersion {
-                version_id: r.revision.clone(), revision_id: Some(r.revision), operation_id: p.operation_id.clone(), kind: "admittedSource".into(),
-                saved_at_unix_ms: time, time_basis: if time.is_some() { "commitClock" } else { "unknown" }.into(), commit_sequence: sequence,
-                status: "available".into(), byte_length: Some(r.bytes.len()), sha256: Some(hash(&r.bytes)),
-                message: "Exact external preimage explicitly admitted by the retained committed operation".into(),
-            }, bytes: Some(r.bytes), fact: Some(fact) });
+            records.push(HistoryRecord {
+                version: HistoryVersion {
+                    version_id: r.revision.clone(),
+                    revision_id: Some(r.revision),
+                    operation_id: p.operation_id.clone(),
+                    kind: "admittedSource".into(),
+                    saved_at_unix_ms: time,
+                    time_basis: if time.is_some() {
+                        "commitClock"
+                    } else {
+                        "unknown"
+                    }
+                    .into(),
+                    commit_sequence: sequence,
+                    status: "available".into(),
+                    byte_length: Some(r.bytes.len()),
+                    sha256: Some(hash(&r.bytes)),
+                    description: UiMessage::history_admitted_external_preimage().into(),
+                },
+                bytes: Some(r.bytes),
+                fact: Some(fact),
+            });
         }
         records.sort_by(|a, b| {
             b.version
@@ -643,7 +804,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "currentSavedUnavailable",
-                    "The exact current saved operation evidence is unavailable",
+                    UiMessage::error_core_history_exact_current_saved_operation_evidence_unavailable(),
                 )
             })?;
         Ok(Some(saved.version.operation_id.clone()))
@@ -658,18 +819,38 @@ impl Core {
             .filter_map(|r| r.version.saved_at_unix_ms)
             .collect::<Vec<_>>();
         let available = records.iter().filter(|r| r.bytes.is_some()).count();
-        let protected_drafts = self.history_protected_drafts(&context.birth.identity)?;
+        let protected_drafts = self.history_protected_drafts(
+            &context.birth.identity,
+            &context.session.file_scope.clone()?,
+        )?;
         let mut warnings = Vec::new();
         if current_saved_version_id.is_none() {
-            warnings.push("Current bytes are an unadmitted external observation or their saved witness is unavailable; they are not listed as a saved version".into());
+            warnings.push(UiMessage::history_current_source_not_saved().into());
         }
         Ok(HistoryTimeline {
-            node_id: context.birth.node_id, workspace_id: context.birth.workspace_id, path: context.current.path, current_base_id: context.session.base_id,
-            currentness: if current_saved_version_id.is_some() { "saved" } else { "external" }.into(), current_saved_version_id,
-            retention: HistoryRetention { policy: "retainedCoreJournal".into(), complete: false, known_versions: records.len(), available_versions: available,
-                oldest_saved_at_unix_ms: times.iter().min().copied(), newest_saved_at_unix_ms: times.iter().max().copied(),
-                message: "Only committed source records still retained in this local Core journal are shown. Earlier/pruned records, keystrokes and other-device history are not guaranteed; an empty list does not prove the note was never saved".into() },
-            versions: records.into_iter().map(|r| r.version).collect(), protected_drafts, warnings,
+            node_id: context.birth.node_id,
+            workspace_id: context.birth.workspace_id,
+            path: context.current.path,
+            current_base_id: context.session.base_id,
+            currentness: if current_saved_version_id.is_some() {
+                "saved"
+            } else {
+                "external"
+            }
+            .into(),
+            current_saved_version_id,
+            retention: HistoryRetention {
+                policy: "retainedCoreJournal".into(),
+                complete: false,
+                known_versions: records.len(),
+                available_versions: available,
+                oldest_saved_at_unix_ms: times.iter().min().copied(),
+                newest_saved_at_unix_ms: times.iter().max().copied(),
+                description: UiMessage::history_retention_limited().into(),
+            },
+            versions: records.into_iter().map(|r| r.version).collect(),
+            protected_drafts,
+            warnings,
         })
     }
     fn selected_history_record(
@@ -679,12 +860,21 @@ impl Core {
     ) -> Result<HistoryRead> {
         valid_operation_id(version_id)?;
         let record = self.history_records(context)?.into_iter().find(|r| r.version.version_id == version_id)
-            .ok_or_else(|| CoreError::new("historyUnavailable", "The selected retained version does not belong to this note; latest was not substituted"))?;
+            .ok_or_else(|| CoreError::new("historyUnavailable", UiMessage::error_core_history_selected_retained_version_does_not_belong_to_note_latest_was_not_substituted()))?;
         let source = decode(&record.bytes.ok_or_else(|| {
-            CoreError::new("historyUnavailable", record.version.message.clone())
+            record
+                .version
+                .description
+                .clone()
+                .into_error("historyUnavailable")
         })?)?;
-        Ok(HistoryRead { version: record.version, source, read_only: true, preview_status: "sourceOnly".into(),
-            preview_message: "Exact source viewing remains available without its original dependencies or configuration. Historical semantic preview is unavailable; current settings are not substituted".into() })
+        Ok(HistoryRead {
+            version: record.version,
+            source,
+            read_only: true,
+            preview_status: "sourceOnly".into(),
+            preview_description: UiMessage::history_source_only_preview().into(),
+        })
     }
     pub fn read_history(&self, session_id: &str, version_id: &str) -> Result<HistoryRead> {
         let context = self.history_context(session_id)?;
@@ -695,7 +885,7 @@ impl Core {
         let selected = self.selected_history_record(&context, version_id)?;
         let records = self.history_records(&context)?;
         let saved = Self::history_saved_record(&records, &context)
-            .ok_or_else(|| CoreError::new("currentSavedUnavailable", "The current file is an external observation or its exact saved witness is missing; reopen and explicitly accept it before comparing to current saved content"))?;
+            .ok_or_else(|| CoreError::new("currentSavedUnavailable", UiMessage::error_core_history_current_file_external_observation_or_exact_saved_witness_missing_reopen_and_explicitly_accept_it_before_comparing_to_current_saved_content()))?;
         let source = decode(&context.current.bytes)?;
         Ok(HistoryComparison {
             equal: selected.source == source,
@@ -711,25 +901,61 @@ impl Core {
         })
     }
 
-    fn history_protected_drafts(&self, identity: &FileIdentity) -> Result<Vec<DraftAlternative>> {
+    fn history_protected_drafts(
+        &self,
+        identity: &FileIdentity,
+        scope: &QualifiedInputScope,
+    ) -> Result<Vec<DraftAlternative>> {
         let mut drafts = Vec::new();
         let mut total = 0usize;
-        for entry in fs::read_dir(self.draft_directory("draft-history"))? {
+        let mut records = 0usize;
+        for entry in self
+            .backend
+            .read_dir(self.draft_directory("draft-history"))?
+        {
             let path = entry?.path();
             if path.extension().is_none_or(|e| e != "json") {
                 continue;
             }
-            let bytes = fs::read(path)?;
-            let draft: Draft = serde_json::from_slice(&bytes)?;
-            if draft.identity.as_ref() != Some(identity) {
+            let guard = ParentGuard::acquire(&self.backend, &path)?;
+            let mut file = guard.open_read_guard_file()?;
+            let Some((metadata, bytes)) = hosted::read_qualified_private_record(
+                &mut file,
+                |file| {
+                    let metadata = draft_recovery::read_draft_metadata(file)?;
+                    self.validate_original_input_scope(&metadata.scope)?;
+                    if metadata.scope != *scope {
+                        return Ok(None);
+                    }
+                    if metadata.identity != *identity {
+                        return Ok(None);
+                    }
+                    let remaining = 16 * 1024 * 1024usize - total;
+                    if records >= 128 {
+                        return Err(CoreError::new(
+                            "budget",
+                            UiMessage::error_core_history_protected_draft_browsing_exceeds128_records_or16_mi_b(),
+                        ));
+                    }
+                    records += 1;
+                    Ok(Some((metadata, remaining)))
+                },
+            )?
+            else {
                 continue;
-            }
+            };
             total += bytes.len();
-            if drafts.len() >= 128 || total > 16 * 1024 * 1024 {
+            let draft: Draft = serde_json::from_slice(&bytes)?;
+            if draft.identity != metadata.identity || draft.scope != metadata.scope {
                 return Err(CoreError::new(
-                    "budget",
-                    "Protected draft browsing exceeds 128 records or 16 MiB",
+                    "privateEvidence",
+                    weftext_messages::UiMessage::error_core_history_protected_draft_metadata_changed_during_its_qualified_read(),
                 ));
+            }
+            draft.validate_producers()?;
+            for input in std::iter::once(draft.proposal()).chain(draft.alternatives.iter().cloned())
+            {
+                self.qualify_committed_baseline(&draft.scope, &draft.identity, &input)?;
             }
             append_draft_alternatives(&mut drafts, &draft);
         }
@@ -739,7 +965,7 @@ impl Core {
         let binding = plan.history_restore.as_ref().ok_or_else(|| {
             CoreError::new(
                 "operationConflict",
-                "This operation is not a history restore",
+                UiMessage::error_core_history_operation_not_history_restore(),
             )
         })?;
         self.authorize_restore_result(binding)?;
@@ -754,7 +980,7 @@ impl Core {
         let binding = plan.history_restore.as_ref().ok_or_else(|| {
             CoreError::new(
                 "operationConflict",
-                "This operation is not a history restore",
+                UiMessage::error_core_history_operation_not_history_restore(),
             )
         })?;
         let current = self.qualified_node_at(root, path)?;
@@ -764,58 +990,114 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "The explicitly selected restore owner differs",
+                UiMessage::error_core_history_explicitly_selected_restore_owner_differs(),
             ));
         }
         self.retained_restore_result(plan)
     }
     fn retained_restore_result(&self, plan: &journal::Plan) -> Result<HistoryRestoreResult> {
+        self.validate_file_save_plan(plan)?;
         let binding = plan.history_restore.as_ref().ok_or_else(|| {
             CoreError::new(
                 "operationConflict",
-                "This operation is not a history restore",
+                UiMessage::error_core_history_operation_not_history_restore(),
             )
         })?;
-        let retained: journal::Plan =
-            serde_json::from_slice(&fs::read(self.journal_path(&plan.operation_id, "plan"))?)?;
+        if !matches!(&plan.file_save.as_ref().unwrap().scope, QualifiedInputScope::Library { binding: scope } if scope.workspace_id == binding.workspace_id)
+        {
+            return Err(CoreError::new(
+                "historyUnavailable",
+                UiMessage::error_core_history_restore_different_owner(),
+            ));
+        }
+        let retained: journal::Plan = serde_json::from_slice(
+            &self
+                .backend
+                .read_bytes(self.journal_path(&plan.operation_id, "plan"))?,
+        )?;
         if serde_json::to_vec(&retained)? != serde_json::to_vec(plan)? {
             return Err(CoreError::new(
                 "historyUnavailable",
-                "The original committed restore plan is unavailable or changed",
+                UiMessage::error_core_history_original_committed_restore_plan_unavailable_or_changed(),
             ));
         }
         let mut protected_drafts = Vec::new();
+        if binding.draft_records.len() > 128 {
+            return Err(CoreError::new(
+                "budget",
+                weftext_messages::UiMessage::error_core_history_original_restore_exceeds128_protected_draft_records(),
+            ));
+        }
+        let mut protected_bytes = 0usize;
         for name in &binding.draft_records {
             valid_operation_id(name)?;
-            let draft: Draft = serde_json::from_slice(&fs::read(
-                self.draft_directory("draft-history")
-                    .join(format!("{name}.json")),
-            )?)?;
+            let path = self
+                .draft_directory("draft-history")
+                .join(format!("{name}.json"));
+            let (draft, bytes) = self
+                .read_draft_record(
+                    &path,
+                    &plan.file_save.as_ref().unwrap().scope,
+                    plan.identity.as_ref().ok_or_else(|| {
+                        CoreError::new(
+                            "historyUnavailable",
+                            weftext_messages::UiMessage::error_core_history_original_restore_physical_owner_is_missing(),
+                        )
+                    })?,
+                )?
+                .ok_or_else(|| {
+                    CoreError::new("historyUnavailable", weftext_messages::UiMessage::error_core_history_original_protected_draft_is_missing())
+                })?;
+            protected_bytes = protected_bytes
+                .checked_add(bytes.len())
+                .ok_or_else(|| CoreError::new("budget", weftext_messages::UiMessage::error_core_history_protected_draft_byte_count_overflow()))?;
+            if protected_bytes > 16 * 1024 * 1024 {
+                return Err(CoreError::new(
+                    "budget",
+                    weftext_messages::UiMessage::error_core_history_original_protected_drafts_exceed16_mi_b(),
+                ));
+            }
             append_draft_alternatives(&mut protected_drafts, &draft);
         }
         Ok(HistoryRestoreResult {
             receipt: plan.receipt.clone().ok_or_else(|| {
-                CoreError::new("invalidState", "The original save receipt is missing")
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_history_original_save_receipt_missing(),
+                )
             })?,
             source: decode(&plan.after)?,
             version_id: binding.version_id.clone(),
             protected_drafts,
+            recovery_issue: None,
         })
     }
     fn authorize_restore_result(&self, binding: &RestoreBinding) -> Result<()> {
         let root = self
             .operations
             .values()
-            .find(|p| {
-                matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
-                    && p.workspace_id.as_ref() == Some(&binding.workspace_id)
-                    && self.committed(&p.operation_id)
-            })
+            .try_fold(None, |found, p| -> Result<Option<_>> {
+                if found.is_some() {
+                    Ok(found)
+                } else {
+                    Ok(
+                        if {
+                            matches!(p.kind.as_str(), "createLibrary" | "cloneSync")
+                                && p.workspace_id.as_ref() == Some(&binding.workspace_id)
+                                && self.committed(&p.operation_id)?
+                        } {
+                            Some(p)
+                        } else {
+                            None
+                        },
+                    )
+                }
+            })?
             .map(|p| PathBuf::from(&p.path))
             .ok_or_else(|| {
                 CoreError::new(
                     "historyUnavailable",
-                    "The original library admission is unavailable",
+                    UiMessage::error_core_history_original_library_admission_unavailable(),
                 )
             })?;
         let inventory = self.inventory(&root)?;
@@ -829,17 +1111,17 @@ impl Core {
         if owners.len() != 1 {
             return Err(CoreError::new(
                 "identityPending",
-                "The current restore owner is unavailable or no longer qualified",
+                UiMessage::error_core_history_current_restore_owner_unavailable_or_no_longer_qualified(),
             ));
         }
         let path = Path::new(&owners[0].path);
-        let guard = ParentGuard::acquire(path)?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
         let mut file = guard.open_file(false, false)?;
         let current = stamp(&file)?;
         if current.identity != binding.identity {
             return Err(CoreError::new(
                 "identityPending",
-                "The restored note object was replaced",
+                UiMessage::error_core_history_restored_note_object_was_replaced(),
             ));
         }
         read_source(&mut file)?;
@@ -856,69 +1138,105 @@ impl Core {
         )
     }
     pub fn history_restore_status(&self, operation_id: &str) -> Result<HistoryRestoreStatus> {
+        self.backend.check_path(&self.data_dir)?;
         valid_operation_id(operation_id)?;
         let Some(plan) = self.operations.get(operation_id) else {
             return Ok(HistoryRestoreStatus {
                 operation_id: operation_id.into(),
-                status: "missing".into(),
+                status: if self.resolved(operation_id)? {
+                    "resolved"
+                } else {
+                    "missing"
+                }
+                .into(),
                 result: None,
+                receipt: None,
+                result_error: None,
             });
         };
         if plan.history_restore.is_none() {
             return Err(CoreError::new(
                 "operationConflict",
-                "This operation is not a history restore",
+                UiMessage::error_core_history_operation_not_history_restore(),
             ));
         }
-        let committed = self.committed(operation_id);
+        let committed = self.committed(operation_id)?;
+        let (result, result_error) = if committed {
+            match self.restore_result(plan) {
+                Ok(result) => (Some(result), None),
+                Err(error) => (None, Some(error)),
+            }
+        } else {
+            (None, None)
+        };
         Ok(HistoryRestoreStatus {
+            receipt: if committed {
+                plan.receipt.clone()
+            } else {
+                None
+            },
+            result_error,
             operation_id: operation_id.into(),
             status: if committed {
                 "committed"
-            } else if self.resolved(operation_id) {
+            } else if self.resolved(operation_id)? {
                 "resolved"
             } else {
                 "recoveryPending"
             }
             .into(),
-            result: if committed {
-                Some(self.restore_result(plan)?)
-            } else {
-                None
-            },
+            result,
         })
+    }
+    /// Result-delivery fallback must still belong to the exact original input;
+    /// an error code alone cannot distinguish conflict from a later read error.
+    pub fn history_restore_status_for_request(
+        &self,
+        request: &HistoryRestoreRequest,
+    ) -> Result<HistoryRestoreStatus> {
+        valid_operation_id(&request.operation_id)?;
+        self.check_restore_request(request)?;
+        self.history_restore_status(&request.operation_id)
+    }
+    fn check_restore_request(&self, request: &HistoryRestoreRequest) -> Result<()> {
+        if let Some(plan) = self.operations.get(&request.operation_id) {
+            let fingerprint = hash(&serde_json::to_vec(request)?);
+            if plan
+                .history_restore
+                .as_ref()
+                .is_none_or(|binding| binding.fingerprint != fingerprint)
+            {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    UiMessage::error_core_history_original_restore_input_immutable_operation_id_belongs_to_different_request(),
+                ));
+            }
+        }
+        Ok(())
     }
     pub fn restore_history(
         &mut self,
         request: HistoryRestoreRequest,
     ) -> Result<HistoryRestoreResult> {
         valid_operation_id(&request.operation_id)?;
+        self.check_attempt_not_cancelled(&request.operation_id)?;
         let fingerprint = hash(&serde_json::to_vec(&request)?);
         // Reconcile the original exact operation before current session/Base
         // checks. A lost response may have already advanced that Base.
         if let Some(plan) = self.operations.get(&request.operation_id) {
-            if plan
-                .history_restore
-                .as_ref()
-                .is_none_or(|b| b.fingerprint != fingerprint)
-            {
-                return Err(CoreError::new(
-                    "operationConflict",
-                    "The original restore input is immutable; this operationId belongs to a different request",
-                ));
-            }
-            if self.committed(&request.operation_id) {
+            self.check_restore_request(&request)?;
+            if self.committed(&request.operation_id)? {
                 return self.restore_result(plan);
             }
             return Err(CoreError::new(
                 "recoveryPending",
-                "The original restore may have effects; inspect its operation and do not create another save",
+                UiMessage::error_core_history_original_restore_may_have_effects_inspect_operation_and_do_not_create_another_save(),
             ));
         }
         if !matches!(request.draft_action.as_str(), "retain" | "none") {
             return Err(CoreError::new(
                 "invalidDraftAction",
-                "Choose retain or none explicitly",
+                UiMessage::error_core_history_choose_retain_or_none_explicitly(),
             ));
         }
         self.check_session_base(&request.session_id, &request.base_id)?;
@@ -940,14 +1258,14 @@ impl Core {
         if !matches!(request.draft_action.as_str(), "retain" | "none") {
             return Err(CoreError::new(
                 "invalidDraftAction",
-                "Choose retain or none explicitly",
+                UiMessage::error_core_history_choose_retain_or_none_explicitly(),
             ));
         }
         self.check_session_base(&request.session_id, &request.base_id)?;
         if self.sessions[&request.session_id].path != absolute_path(path)? {
             return Err(CoreError::new(
                 "operationConflict",
-                "The session and configured owner path differ",
+                UiMessage::error_core_history_session_and_configured_owner_path_differ(),
             ));
         }
         let fingerprint = hash(&serde_json::to_vec(&request)?);
@@ -963,7 +1281,7 @@ impl Core {
         if context.in_trash {
             return Err(CoreError::new(
                 "readOnlyLifecycle",
-                "Restore the note from Trash before replacing its content with a historical version",
+                UiMessage::error_core_history_restore_note_from_trash_before_replacing_content_with_historical_version(),
             ));
         }
         let selected = self.selected_history_record(&context, &request.version_id)?;
@@ -981,7 +1299,7 @@ impl Core {
         if request.draft_action == "none" && (dirty_persisted || dirty_buffer) {
             return Err(CoreError::new(
                 "draftProtectionRequired",
-                "An unsaved draft exists; explicitly retain it before restoring",
+                UiMessage::error_core_history_unsaved_draft_exists_explicitly_retain_it_before_restoring(),
             ));
         }
         let mut draft_records = Vec::new();
@@ -992,21 +1310,26 @@ impl Core {
                 .collect::<Vec<_>>();
             if let Some(source) = &request.draft_source {
                 check_size(source.as_bytes())?;
-                if dirty_buffer && !to_protect.iter().any(|d| d.source == *source) {
+                // Equal text does not identify an unacknowledged buffer's
+                // producer. Retain this explicit input independently.
+                if dirty_buffer {
                     to_protect.push(Draft {
-                        library: self.draft_session_library(&request.session_id)?,
+                        scope: self.draft_session_scope(&request.session_id)?,
                         path: context.current.path.clone(),
                         base_source: current_source.clone(),
                         source: source.clone(),
                         base_known: true,
-                        identity: Some(context.birth.identity.clone()),
+                        identity: context.birth.identity.clone(),
                         alternatives: Vec::new(),
+                        producer_id: None,
+                        role: DraftRole::Proposal,
                     });
                 }
             }
             for draft in to_protect {
                 let name = fresh();
                 journal::private_create(
+                    &self.backend,
                     &self
                         .draft_directory("draft-history")
                         .join(format!("{name}.json")),
@@ -1024,7 +1347,7 @@ impl Core {
             workspace_id: context.birth.workspace_id,
             identity: context.birth.identity,
         };
-        self.save_with_restore(
+        let outcome = self.save_with_restore(
             SaveRequest {
                 session_id: request.session_id,
                 base_id: request.base_id,
@@ -1033,27 +1356,21 @@ impl Core {
             },
             Some(binding),
         )?;
-        if let Some((root, path)) = explicit_owner {
-            self.restore_result_at(&self.operations[&operation_id], root, path)
+        let mut result = if let Some((root, path)) = explicit_owner {
+            self.restore_result_at(&self.operations[&operation_id], root, path)?
         } else {
-            self.restore_result(&self.operations[&operation_id])
-        }
+            self.restore_result(&self.operations[&operation_id])?
+        };
+        result.recovery_issue = outcome.recovery_issue;
+        Ok(result)
     }
 }
 fn append_draft_alternatives(out: &mut Vec<DraftAlternative>, draft: &Draft) {
-    for proposal in std::iter::once(DraftAlternative {
-        path: draft.path.clone(),
-        base_source: draft.base_source.clone(),
-        source: draft.source.clone(),
-        base_known: draft.base_known,
-    })
-    .chain(draft.alternatives.iter().cloned())
-    {
-        if !out.iter().any(|d| {
-            d.source == proposal.source
-                && d.base_source == proposal.base_source
-                && d.base_known == proposal.base_known
-        }) {
+    for proposal in std::iter::once(draft.proposal()).chain(draft.alternatives.iter().cloned()) {
+        if !out
+            .iter()
+            .any(|d| draft_recovery::same_proposal(d, &proposal))
+        {
             out.push(proposal);
         }
     }
@@ -1072,14 +1389,18 @@ pub(crate) fn history_relative_path(path: &Path, prefix: &Path) -> Option<PathBu
     }
     Some(components.collect())
 }
-pub(crate) fn same_placement_path(expected: &Path, actual: &Path) -> Result<bool> {
+pub(crate) fn same_placement_path(
+    backend: &crate::BackendContext,
+    expected: &Path,
+    actual: &Path,
+) -> Result<bool> {
     if !history_relative_path(expected, actual).is_some_and(|p| p.as_os_str().is_empty()) {
         return Ok(false);
     }
     // Resolve only these two explicit parent directories. Their final handle
     // coordinates preserve real OS names without Unicode case folding.
-    let a = ParentGuard::acquire(expected)?;
-    let b = ParentGuard::acquire(actual)?;
+    let a = ParentGuard::acquire(backend, expected)?;
+    let b = ParentGuard::acquire(backend, actual)?;
     Ok(a.directory_identity()? == b.directory_identity()?
         && a.directory_coordinates()? == b.directory_coordinates()?
         && expected

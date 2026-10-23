@@ -68,7 +68,11 @@ fn sync_error(error: CoreError) -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "syncRecordRejected",
-        format!("同步记录未接纳（{}）；已保存原稿不受影响", error.code),
+        UiMessage::error_api_hosted_sync_transport_record_rejected(
+            weftext_messages::params::ErrorApiHostedSyncTransportRecordRejected {
+                code: error.code,
+            },
+        ),
     )
 }
 fn publish_bound(inner: &HostedInner, identity: &SyncIdentity) -> Result<(), ApiError> {
@@ -139,7 +143,7 @@ struct Append {
 async fn status(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Pair>,
+    RequestJson(req): RequestJson<Pair>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -153,21 +157,21 @@ async fn status(
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Prepare>,
+    RequestJson(req): RequestJson<Prepare>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let (actor, identity) = owner(inner, &auth, Some(&req.identity))?;
         publish_bound(inner, &identity)?;
         expire_revoked(inner);
-        if inner.sync.downloads.len() >= 4 { return Err(ApiError::bad("同步读取快照已达上限，请结束旧传输")); }
+        if inner.sync.downloads.len() >= 4 { return Err(ApiError::bad(UiMessage::error_api_hosted_sync_transport_sync_download_capacity())); }
         let bundle = match req.objects {
             Some(objects) => inner.core.export_sync_objects(&identity, &objects),
             None => inner.core.export_sync_history(&identity),
         }.map_err(sync_error)?;
-        let records = sync_wire::records(bundle).map_err(|_| ApiError::internal("同步记录编码失败"))?;
+        let records = sync_wire::records(bundle).map_err(|_| ApiError::internal(UiMessage::error_api_hosted_sync_transport_sync_record_encoding_failed()))?;
         let bytes: usize = records.iter().map(|(r, _)| r.bytes).sum();
         let retained: usize = inner.sync.downloads.values().flat_map(|v| &v.records).map(|(r, _)| r.bytes).sum();
-        if records.len() > sync_wire::MAX_RECORDS || bytes > MAX_BYTES.saturating_sub(retained) { return Err(ApiError::bad("同步读取快照超过总计 256 MiB 预算")); }
+        if records.len() > sync_wire::MAX_RECORDS || bytes > MAX_BYTES.saturating_sub(retained) { return Err(ApiError::bad(UiMessage::error_api_hosted_sync_transport_sync_download_budget())); }
         let ticket = uuid::Uuid::new_v4().to_string();
         let result = json!({"ticket":ticket,"identity":identity,"records":records.len(),"bytes":bytes,"chunkBytes":CHUNK});
         inner.sync.downloads.insert(ticket, Snapshot { lease: lease(inner, actor), records });
@@ -177,7 +181,7 @@ async fn prepare(
 async fn catalog(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Catalog>,
+    RequestJson(req): RequestJson<Catalog>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let (actor, _) = owner(inner, &auth, None)?;
@@ -190,7 +194,7 @@ async fn catalog(
 async fn chunk(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<ReadChunk>,
+    RequestJson(req): RequestJson<ReadChunk>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let (actor, _) = owner(inner, &auth, None)?;
@@ -204,13 +208,15 @@ async fn chunk(
 async fn upload(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Begin>,
+    RequestJson(req): RequestJson<Begin>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
             let (actor, identity) = owner(inner, &auth, Some(&req.identity))?;
             if !req.record.validate() {
-                return Err(ApiError::bad("记录摘要或长度无效"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_sync_transport_sync_record_metadata_invalid(),
+                ));
             }
             if let Some(bytes) = inner
                 .core
@@ -218,7 +224,9 @@ async fn upload(
                 .map_err(sync_error)?
             {
                 if bytes.len() != req.record.bytes {
-                    return Err(ApiError::bad("记录长度与已保留内容不同"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_sync_transport_sync_record_length_conflict(),
+                    ));
                 }
                 return Ok(json!({"ticket":null,"offset":bytes.len(),"complete":true}));
             }
@@ -238,7 +246,9 @@ async fn upload(
             if inner.sync.uploads.len() >= 32
                 || req.record.bytes > MAX_BYTES.saturating_sub(reserved)
             {
-                return Err(ApiError::bad("同步上传暂存已达预算，请结束旧传输"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_sync_transport_sync_upload_budget(),
+                ));
             }
             let ticket = uuid::Uuid::new_v4().to_string();
             let lease = lease(inner, actor);
@@ -259,7 +269,7 @@ async fn upload(
 async fn append(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Append>,
+    RequestJson(req): RequestJson<Append>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -271,28 +281,40 @@ async fn append(
                 .filter(|v| current(inner, &actor, &v.lease))
                 .ok_or_else(unavailable)?;
             if req.bytes.len() > CHUNK * 2 {
-                return Err(ApiError::bad("同步块超出预算"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_sync_transport_sync_chunk_budget(),
+                ));
             }
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(&req.bytes)
-                .map_err(|_| ApiError::bad("同步块编码无效"))?;
+                .map_err(|_| {
+                    ApiError::bad(
+                        UiMessage::error_api_hosted_sync_transport_sync_chunk_encoding_invalid(),
+                    )
+                })?;
             if bytes.len() > CHUNK
                 || !req.offset.is_multiple_of(CHUNK)
                 || req.offset > upload.bytes.len()
                 || bytes.len() != CHUNK.min(upload.record.bytes.saturating_sub(req.offset))
             {
-                return Err(ApiError::bad("同步块位置或长度无效"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_sync_transport_sync_chunk_position_invalid(),
+                ));
             }
             if upload.complete {
                 if upload.bytes[req.offset..req.offset + bytes.len()] != bytes {
-                    return Err(ApiError::bad("重复同步块与原内容不同"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_sync_transport_sync_duplicate_chunk_conflict(),
+                    ));
                 }
                 return Ok(json!({"offset":upload.record.bytes,"complete":true}));
             }
             let end = req.offset + bytes.len();
             if req.offset < upload.bytes.len() {
                 if end > upload.bytes.len() || upload.bytes[req.offset..end] != bytes {
-                    return Err(ApiError::bad("重复同步块与原内容不同"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_sync_transport_sync_duplicate_chunk_conflict(),
+                    ));
                 }
                 return Ok(json!({"offset":upload.bytes.len(),"complete":false}));
             }
@@ -318,7 +340,7 @@ async fn append(
 async fn close(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Ticket>,
+    RequestJson(req): RequestJson<Ticket>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {

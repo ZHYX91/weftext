@@ -3,6 +3,7 @@
 These cases use owned fixtures and the real Core journal/HTTP boundary. Local
 routes only provision the initial library/schema while its server is stopped.
 """
+from _creation_result import created_document
 import json
 import sys
 import unittest
@@ -63,6 +64,7 @@ class HostedDefinition(HostedQuery):
         self.call('query/definition/prepare', changed, status=409)
         result, save = self.definition_save(doc, prepared['source'], [request['operationId']])
         self.assertEqual(result['status'], 'committed')
+        current_doc = self.committed_document(doc, prepared['source'], result, save)
         self.assertEqual([item['key'] for item in self.definitions()], [key])
         self.assertEqual(self.receipt('Shared', request['operationId'])['status'], 'admitted')
         self.assertEqual(self.call('save', save)['status'], 'committed')
@@ -71,9 +73,9 @@ class HostedDefinition(HostedQuery):
         self.assertEqual(current, prepared['source'])
         # Admission is historical identity, so later ordinary Undo/save/Redo
         # does not need the allocation ID again or mint another key.
-        self.save(self.open(), personal)
+        current_doc = self.save_current(current_doc, personal)
         self.assertEqual(self.definitions(), [])
-        self.save(self.open(), prepared['source'])
+        self.save_current(current_doc, prepared['source'])
         self.assertEqual([item['key'] for item in self.definitions()], [key])
         self.assertEqual(self.receipt('Shared', request['operationId'])['status'], 'admitted')
 
@@ -106,7 +108,7 @@ class HostedDefinition(HostedQuery):
                          {first['definition']['key'], second['definition']['key']})
         self.server.close()
         self.start()
-        self.assertEqual(self.call('operation', {'operationId': request['operationId']})['status'], 'committed')
+        self.assertEqual(self.call('operation', {'resource': 'Shared', 'operationId': request['operationId']})['status'], 'committed')
         self.assertEqual(self.receipt('Shared', two['operationId'])['status'], 'admitted')
         self.assertEqual(self.open()['source'], final_source)
         call = {'advanced': {'call': {'owner': 'Shared', 'selection': {'mode': 'current', 'key': second['definition']['key']}}}}
@@ -119,15 +121,15 @@ class HostedDefinition(HostedQuery):
         key = prepared['definition']['key']
         # Valid author source can be retained without a definition admission.
         # Neither the exposed UUID nor a manually invented UUID is evidence.
-        self.save(doc, prepared['source'])
+        current = self.save_current(doc, prepared['source'])
         self.assertEqual(self.definitions(), [])
         self.assertEqual(self.receipt('Shared', proposal['operationId'])['status'], 'reserved')
-        current = self.open()
-        self.definition_save(current, prepared['source'] + '\nEXPLICIT_ADMISSION', [proposal['operationId']])
+        admitted_source = prepared['source'] + '\nEXPLICIT_ADMISSION'
+        saved, original = self.definition_save(current, admitted_source, [proposal['operationId']])
+        current = self.committed_document(current, admitted_source, saved, original)
         self.assertEqual([item['key'] for item in self.definitions()], [key])
-        current = self.open()
-        unbound, _ = self.proposal(current, label='weftext-query-not-admitted')
-        self.save(current, unbound['source'])
+        unbound, _ = self.proposal(current, serial=2, label='weftext-query-not-admitted')
+        self.save_current(current, unbound['source'])
         partial = self.call('query/definitions', {'resource': 'Shared'})
         self.assertEqual(partial['coverage'], 'partial')
         self.assertEqual([item['key'] for item in partial['definitions']], [key])
@@ -177,7 +179,7 @@ class HostedDefinition(HostedQuery):
         retained = self.open()
         self.assertEqual(retained['source'], doc['source'])
         self.assertEqual(retained['recoveredDraft'], unfinished)
-        self.assertEqual(self.call('operation', {'operationId': request['operationId']})['status'], 'notCommitted')
+        self.assertEqual(self.call('operation', {'resource': 'Shared', 'operationId': request['operationId']})['status'], 'notCommitted')
         self.assertIn(self.call('operation/settle', {'resource': 'Shared', 'operationId': request['operationId']})['status'], ['cancelled', 'resolved'])
         self.assertEqual(self.receipt('Shared', proposal['operationId'])['status'], 'reserved')
         self.server.close()
@@ -288,8 +290,8 @@ class HostedDefinition(HostedQuery):
         self.provision()
         doc = self.open()
         prepared, request = self.proposal(doc, source=doc['source'] + '\nORIGINAL_OWNER_PRIVATE_PROPOSAL😀')
-        replacement = self.local(lambda api: api('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
-                                                                     'name': 'Replacement', 'operationId': uid()}))
+        replacement = self.local(lambda api: created_document(api('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
+                                                                     'name': 'Replacement', 'operationId': uid()})))
         original_bytes = (self.root / 'Shared/Shared.typ').read_bytes()
         other_bytes = (self.root / 'Replacement/Replacement.typ').read_bytes()
         self.server.close()

@@ -10,6 +10,7 @@ use crate::operations::{
 use crate::{
     Core, OperationPreview, OperationReceipt, OperationRequest, Path, PathBuf, display, fresh,
 };
+use weftext_messages::UiMessage;
 
 pub(crate) struct RelocationInput {
     pub request: OperationRequest,
@@ -38,7 +39,7 @@ pub(crate) fn members_removed(old: &ObjectState, new: &ObjectState) -> bool {
 fn structure_required() -> CoreError {
     CoreError::new(
         "syncStructureRequired",
-        "Combined structure/content changes require one complete guarded plan; received versions are retained",
+        UiMessage::error_core_sync_combined_structure_content_changes_require_one_complete_guarded_plan_received_versions_retained(),
     )
 }
 
@@ -193,7 +194,7 @@ impl Core {
         )?;
         let mut files = vec![];
         let mut directories = vec![];
-        snapshot_tree(source, &mut files, &mut directories, false)?;
+        snapshot_tree(&self.backend, source, &mut files, &mut directories, false)?;
         // Preserve arbitrary local companion files, but every managed file must
         // still be the exact installed portable preimage. Raw edits need adoption.
         let mut write_parents = Vec::new();
@@ -223,13 +224,13 @@ impl Core {
                         .ok_or_else(|| {
                             CoreError::new(
                                 "syncExternalChange",
-                                "Installed subtree member is missing",
+                                UiMessage::error_core_sync_installed_subtree_member_missing(),
                             )
                         })?;
                     if hash(&file.bytes) != *digest {
                         return Err(CoreError::new(
                             "syncExternalChange",
-                            "Subtree has an external edit; preserve and adopt it first",
+                            UiMessage::error_core_sync_subtree_has_external_edit_preserve_and_adopt_it_first(),
                         ));
                     }
                     self.check_pending(&path)?;
@@ -241,12 +242,12 @@ impl Core {
                         .find(|f| Path::new(&f.path) == path)
                         .ok_or_else(structure_required)?;
                     if self
-                        .admitted_binding(&captured.stamp.identity)
+                        .admitted_binding(&captured.stamp.identity)?
                         .is_none_or(|b| b.node_id != *id || b.workspace_id != identity.workspace_id)
                     {
                         return Err(CoreError::new(
                             "syncExternalChange",
-                            "Moved Node identity differs from its original admission",
+                            UiMessage::error_core_sync_moved_node_identity_differs_from_original_admission(),
                         ));
                     }
                     if let Some(manifest) = files.iter().find(|f| {
@@ -272,10 +273,10 @@ impl Core {
                                 &identity.workspace_id,
                                 id,
                                 &resource.stamp.identity,
-                            ) {
+                            )? {
                                 return Err(CoreError::new(
                                     "syncExternalChange",
-                                    "Moved resource identity differs from its original admission",
+                                    UiMessage::error_core_sync_moved_resource_identity_differs_from_original_admission(),
                                 ));
                             }
                         }
@@ -290,7 +291,7 @@ impl Core {
                     if !self.directory_admitted(&identity.workspace_id, id, &directory.identity)? {
                         return Err(CoreError::new(
                             "syncExternalChange",
-                            "Moved directory identity differs from its original admission",
+                            UiMessage::error_core_sync_moved_directory_identity_differs_from_original_admission(),
                         ));
                     }
                 }
@@ -299,16 +300,18 @@ impl Core {
                 // exact read, held through the same decision even though unmoved.
                 for (name, digest) in &old.state.files {
                     let path = Path::new(&old.directory).join(name);
-                    let captured = capture_optional(&path)?.ok_or_else(structure_required)?;
+                    let captured =
+                        capture_optional(&self.backend, &path)?.ok_or_else(structure_required)?;
                     if hash(&captured.bytes) != *digest {
                         return Err(CoreError::new(
                             "syncExternalChange",
-                            "Relocation prerequisite has an external change",
+                            UiMessage::error_core_sync_relocation_prerequisite_has_external_change(
+                            ),
                         ));
                     }
                     write_parents.push((
                         display(&path),
-                        ParentGuard::acquire(&path)?.directory_identity()?,
+                        ParentGuard::acquire(&self.backend, &path)?.directory_identity()?,
                     ));
                     files.push(captured);
                 }
@@ -327,12 +330,12 @@ impl Core {
                     .find(|f| Path::new(&f.path) == path)
                     .ok_or_else(structure_required)?;
                 if self
-                    .admitted_binding(&file.stamp.identity)
+                    .admitted_binding(&file.stamp.identity)?
                     .is_none_or(|b| b.node_id != *id || b.workspace_id != identity.workspace_id)
                 {
                     return Err(CoreError::new(
                         "syncExternalChange",
-                        "Unmoved content participant lost its original identity",
+                        UiMessage::error_core_sync_unmoved_content_participant_lost_original_identity(),
                     ));
                 }
             }
@@ -351,7 +354,9 @@ impl Core {
             for (name, digest) in &new.state.files {
                 let path = Path::new(&new.directory).join(name);
                 if !file_paths.insert(display(&path).to_lowercase()) {
-                    return Err(invalid("Compound incoming content files overlap"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_compound_incoming_files_overlap(),
+                    ));
                 }
                 let preimage = Path::new(&old.directory).join(old_name(name));
                 let captured = files.iter().find(|f| Path::new(&f.path) == preimage);
@@ -359,17 +364,18 @@ impl Core {
                 if captured.map(|f| hash(&f.bytes)).as_ref() != expected {
                     return Err(CoreError::new(
                         "syncExternalChange",
-                        "A new incoming filename is occupied by local content",
+                        UiMessage::error_core_sync_new_incoming_filename_occupied_by_local_content(
+                        ),
                     ));
                 }
                 if captured.is_none() {
-                    if !preimage.parent().unwrap().exists() {
+                    if !self.backend.entry_exists(preimage.parent().unwrap())? {
                         return Err(structure_required());
                     }
-                    if capture_optional(&preimage)?.is_some() {
+                    if capture_optional(&self.backend, &preimage)?.is_some() {
                         return Err(CoreError::new(
                             "syncExternalChange",
-                            "Incoming creation is occupied",
+                            UiMessage::error_core_sync_incoming_creation_occupied(),
                         ));
                     }
                     if !resources.contains_key(name)
@@ -383,14 +389,14 @@ impl Core {
                     if moved.is_none() {
                         write_parents.push((
                             display(&path),
-                            ParentGuard::acquire(&preimage)?.directory_identity()?,
+                            ParentGuard::acquire(&self.backend, &preimage)?.directory_identity()?,
                         ));
                     }
                 }
                 if let Some(resource_id) = resources.get(name) {
                     if !resource_ids.insert(resource_id.clone()) {
                         return Err(invalid(
-                            "Compound incoming resource identity is duplicated across owners",
+                            UiMessage::error_core_sync_compound_resource_owner_identity_duplicate(),
                         ));
                     }
                     let ObjectKey::Node(owner) = object else {
@@ -402,10 +408,10 @@ impl Core {
                             &identity.workspace_id,
                             owner,
                             &file.stamp.identity,
-                        ) {
+                        )? {
                             return Err(CoreError::new(
                                 "syncExternalChange",
-                                "Incoming resource changed its admitted identity",
+                                UiMessage::error_core_sync_incoming_resource_changed_admitted_identity(),
                             ));
                         }
                     } else {
@@ -416,11 +422,14 @@ impl Core {
                     }
                 }
                 if matches!(object, ObjectKey::Tags)
-                    && captured.is_some_and(|f| self.accepted_revision(f).is_none())
+                    && captured
+                        .map(|f| self.accepted_revision(f).map(|revision| revision.is_none()))
+                        .transpose()?
+                        .unwrap_or(false)
                 {
                     return Err(CoreError::new(
                         "syncExternalChange",
-                        "Registry no longer has its original observed admission",
+                        UiMessage::error_core_sync_registry_no_longer_has_original_observed_admission(),
                     ));
                 }
                 let bytes = graph.blob(digest).ok_or_else(structure_required)?.to_vec();
@@ -449,7 +458,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "Relocation including prerequisites exceeds the 64 MiB / 5000 file budget",
+                UiMessage::error_core_sync_relocation_including_prerequisites_exceeds64_mi_b5000_file_budget(),
             ));
         }
         for file in &files {
@@ -465,7 +474,13 @@ impl Core {
         if !preview.node_map.contains_key(node_id) {
             return Err(structure_required());
         }
-        let receipt = OperationReceipt { operation_id: request.operation_id.clone(), plan_id: preview.plan_id.clone(), status: "committed".into(), path: display(&target), node_ids: preview.node_map.keys().cloned().collect(), message: "Received subtree placement committed through the original namespace decision; files and drafts retained".into() };
+        let receipt = OperationReceipt {
+            operation_id: request.operation_id.clone(),
+            plan_id: preview.plan_id.clone(),
+            status: "committed".into(),
+            path: display(&target),
+            node_ids: preview.node_map.keys().cloned().collect(),
+        };
         let mut plan = Plan::file(
             request.operation_id.clone(),
             fingerprint,

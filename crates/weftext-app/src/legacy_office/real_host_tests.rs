@@ -1,9 +1,4 @@
-// Standalone module harness while the HTTP consumer is integrated separately.
-#[allow(dead_code)]
-#[path = "../src/legacy_office.rs"]
-mod legacy_office;
-
-use legacy_office::{ConversionRequest, Direction, convert};
+use super::{ConversionRequest, Direction, convert};
 use std::{
     collections::BTreeMap,
     path::PathBuf,
@@ -45,8 +40,8 @@ async fn real_libreoffice_doc_roundtrip_preserves_originals() {
     .unwrap();
     assert_eq!(
         outgoing.status, "succeeded",
-        "{} {}",
-        outgoing.message, outgoing.diagnostic
+        "{:?} {:?}",
+        outgoing.description, outgoing.details
     );
     assert_eq!(outgoing.original.bytes, bytes);
     assert_eq!(
@@ -73,8 +68,8 @@ async fn real_libreoffice_doc_roundtrip_preserves_originals() {
     .unwrap();
     assert_eq!(
         incoming.status, "succeeded",
-        "{} {}",
-        incoming.message, incoming.diagnostic
+        "{:?} {:?}",
+        incoming.description, incoming.details
     );
     assert_eq!(incoming.original.bytes, generated_doc.bytes);
     assert_eq!(
@@ -89,7 +84,7 @@ async fn real_libreoffice_doc_roundtrip_preserves_originals() {
     assert!(weftext_export::docx::list_template_controls(&generated_docx.bytes).is_ok());
     println!(
         "backends: {}",
-        serde_json::to_string(&legacy_office::probe().await).unwrap()
+        serde_json::to_string(&super::probe().await).unwrap()
     );
     println!(
         "outbound={} inbound={}",

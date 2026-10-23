@@ -12,6 +12,7 @@ use crate::{
     Core, OperationIntent, OperationPreview, OperationRequest, Path, PathBuf, SnapshotWitness,
     absolute_path, display,
 };
+use weftext_messages::UiMessage;
 
 pub enum SyncOperationPreparation {
     Prepared(Box<OperationPreview>),
@@ -83,6 +84,7 @@ impl SyncNativeRenderInputs {
 /// There is no serde input for installing a client supplied compilation proof.
 pub struct SyncNativeRenderOutput {
     pub ok: bool,
+    pub diagnostics: Vec<weftext_engine::Diagnostic>,
     pub products: Option<weftext_engine::RenderProducts>,
     pub dependencies: Vec<weftext_engine::Dependency>,
     pub compiler_version: String,
@@ -91,6 +93,7 @@ impl From<weftext_engine::RenderOutput> for SyncNativeRenderOutput {
     fn from(output: weftext_engine::RenderOutput) -> Self {
         Self {
             ok: output.ok,
+            diagnostics: output.diagnostics,
             products: output.products,
             dependencies: output.dependencies,
             compiler_version: output.compiler_version,
@@ -120,14 +123,14 @@ struct NativeResult {
     provenance: Vec<serde_json::Value>,
     unselected: BTreeSet<ObjectKey>,
 }
-fn unavailable(message: &str) -> CoreError {
+fn unavailable(message: UiMessage) -> CoreError {
     CoreError::new("queryInvocationUnavailable", message)
 }
 fn relative(root: &Path, path: &Path) -> Result<String> {
     crate::history::history_relative_path(path, root)
         .filter(|path| !path.as_os_str().is_empty())
         .map(|path| path.to_string_lossy().replace('\\', "/"))
-        .ok_or_else(|| unavailable("A native input is outside the original root"))
+        .ok_or_else(|| unavailable(UiMessage::error_core_sync_native_input_outside_original_root()))
 }
 fn same(a: &Path, b: &Path) -> bool {
     crate::history::history_relative_path(a, b).is_some_and(|path| path.as_os_str().is_empty())
@@ -146,10 +149,12 @@ fn style_from_files(
     }
     let selector = settings["defaultStyle"]["resource"]
         .as_str()
-        .ok_or_else(|| unavailable("The exact default style selector is unavailable"))?;
+        .ok_or_else(|| {
+            unavailable(UiMessage::error_core_sync_exact_default_style_selector_unavailable())
+        })?;
     if !selector.starts_with(&format!("weftext-resource://{workspace}/")) {
         return Err(unavailable(
-            "The exact default style belongs to another workspace",
+            UiMessage::error_core_sync_exact_default_style_belongs_to_another_workspace(),
         ));
     }
     if settings["defaultStyle"]["entryFunction"]
@@ -157,20 +162,19 @@ fn style_from_files(
         .is_some_and(|entry| entry != "library-style")
     {
         return Err(unavailable(
-            "The selected style entry function is unsupported",
+            UiMessage::error_core_sync_selected_style_entry_function_unsupported(),
         ));
     }
-    let registry: serde_json::Value = serde_json::from_slice(
-        files
-            .get("Styles/weftext.resources.json")
-            .ok_or_else(|| unavailable("The original style resource binding is missing"))?,
-    )?;
+    let registry: serde_json::Value =
+        serde_json::from_slice(files.get("Styles/weftext.resources.json").ok_or_else(|| {
+            unavailable(UiMessage::error_core_sync_original_style_resource_binding_missing())
+        })?)?;
     let id = selector.rsplit('/').next().unwrap_or_default();
     uuid(id)?;
     if registry["version"] != 1 {
         return Err(CoreError::new(
             "styleSelection",
-            "The original style registry version is unsupported",
+            UiMessage::error_core_sync_original_style_registry_version_unsupported(),
         ));
     }
     if !registry["resources"].as_array().is_some_and(|resources| {
@@ -180,15 +184,17 @@ fn style_from_files(
             .collect::<Vec<_>>();
         exact.len() == 1 && exact[0]["path"] == "library-style.typ"
     }) {
-        return Err(unavailable("The exact style resource binding is ambiguous"));
+        return Err(unavailable(
+            UiMessage::error_core_sync_exact_style_resource_binding_ambiguous(),
+        ));
     }
     let source = String::from_utf8(
         files
             .get("Styles/library-style.typ")
-            .ok_or_else(|| unavailable("The original style source is missing"))?
+            .ok_or_else(|| unavailable(UiMessage::error_core_sync_original_style_source_missing()))?
             .clone(),
     )
-    .map_err(|_| unavailable("The original style is not UTF-8"))?;
+    .map_err(|_| unavailable(UiMessage::error_core_sync_original_style_not_u_t_f8()))?;
     Ok(Some(weftext_engine::StyleModule {
         path: "Styles/library-style.typ".into(),
         source,
@@ -291,7 +297,7 @@ impl Core {
             if !members.is_subset(&selected) {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "The original review membership changed before native capture",
+                    UiMessage::error_core_sync_original_review_membership_changed_before_native_capture(),
                 ));
             }
             let checked = super::revalidation::inspect_revalidation(
@@ -325,11 +331,17 @@ impl Core {
                     &invocation.plan,
                     &invocation.context.definitions,
                 )
-                .map_err(|_| unavailable("Actual review lifecycle closure is unavailable"))?;
+                .map_err(|_| {
+                    unavailable(
+                        UiMessage::error_core_sync_actual_review_lifecycle_closure_unavailable(),
+                    )
+                })?;
                 let mut notes = vec![];
                 for object in &invocation.members {
                     let ObjectKey::Node(id) = object else {
-                        return Err(unavailable("Actual Query membership is not a Node"));
+                        return Err(unavailable(
+                            UiMessage::error_core_sync_actual_query_membership_not_node(),
+                        ));
                     };
                     let state = &chosen[object].state;
                     let lifecycle = if super::revalidation::effective_retired(object, &chosen)? {
@@ -341,13 +353,20 @@ impl Core {
                         continue;
                     }
                     let file = format!("{}.typ", state.name);
-                    let source = String::from_utf8(
-                        graph
-                            .blob(&state.files[&file])
-                            .ok_or_else(|| unavailable("An exact review source is missing"))?
-                            .to_vec(),
-                    )
-                    .map_err(|_| unavailable("An exact review source is not UTF-8"))?;
+                    let source =
+                        String::from_utf8(
+                            graph
+                                .blob(&state.files[&file])
+                                .ok_or_else(|| {
+                                    unavailable(
+                                        UiMessage::error_core_sync_exact_review_source_missing(),
+                                    )
+                                })?
+                                .to_vec(),
+                        )
+                        .map_err(|_| {
+                            unavailable(UiMessage::error_core_sync_exact_review_source_not_u_t_f8())
+                        })?;
                     notes.push(weftext_data::FrozenNote {
                         entity_key: format!("weftext-node://{}/{id}", identity.workspace_id),
                         path: display(&locations[object].join(&file)),
@@ -363,11 +382,15 @@ impl Core {
                 let mut context = invocation.context.clone();
                 for scope in
                     weftext_data::required_query_scopes(&invocation.plan, &context.definitions)
-                        .map_err(|_| unavailable("An exact review scope is unavailable"))?
+                        .map_err(|_| {
+                            unavailable(UiMessage::error_core_sync_exact_review_scope_unavailable())
+                        })?
                 {
                     let (kind, workspace, id) = crate::directory_identity::parse_ref(&scope)?;
                     if workspace != identity.workspace_id {
-                        return Err(unavailable("Review scope belongs to another workspace"));
+                        return Err(unavailable(
+                            UiMessage::error_core_sync_review_scope_belongs_to_another_workspace(),
+                        ));
                     }
                     let object = if kind == "node" {
                         ObjectKey::Node(id.into())
@@ -379,7 +402,9 @@ impl Core {
                     context.scope_bindings.insert(
                         scope,
                         display(locations.get(&object).ok_or_else(|| {
-                            unavailable("An exact review scope location is missing")
+                            unavailable(
+                                UiMessage::error_core_sync_exact_review_scope_location_missing(),
+                            )
                         })?),
                     );
                 }
@@ -409,7 +434,11 @@ impl Core {
                         relative(&root, &locations[object].join(file))?,
                         graph
                             .blob(digest)
-                            .ok_or_else(|| unavailable("An exact native review blob is missing"))?
+                            .ok_or_else(|| {
+                                unavailable(
+                                    UiMessage::error_core_sync_exact_native_review_blob_missing(),
+                                )
+                            })?
                             .to_vec(),
                     );
                 }
@@ -496,7 +525,7 @@ impl Core {
             SyncReviewPreparation::Reviewed(review) => Ok(review),
             SyncReviewPreparation::Native(_) => Err(CoreError::new(
                 "syncDependencyRequired",
-                "Continue the exact read-only native review closure before preparing",
+                UiMessage::error_core_sync_continue_exact_read_only_native_review_closure_before_preparing(),
             )),
         }
     }
@@ -513,7 +542,7 @@ impl Core {
         if setup.identity != captured.identity {
             return Err(CoreError::new(
                 "syncIdentity",
-                "The original review replica changed",
+                UiMessage::error_core_sync_original_review_replica_changed(),
             ));
         }
         let local = self.sync_local_state(setup)?.0;
@@ -524,7 +553,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "syncConflictChanged",
-                "The exact native review cut changed while the worker ran",
+                UiMessage::error_core_sync_exact_native_review_cut_changed_while_worker_ran(),
             ));
         }
         for (lifecycle, original) in &captured.memberships {
@@ -544,7 +573,7 @@ impl Core {
             if !same {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "The actual native review membership changed",
+                    UiMessage::error_core_sync_actual_native_review_membership_changed(),
                 ));
             }
         }
@@ -563,7 +592,7 @@ impl Core {
                         let view = current.get(object).ok_or_else(|| {
                             CoreError::new(
                                 "syncDependencyRequired",
-                                "An actual native dependency has no received version",
+                                UiMessage::error_core_sync_actual_native_dependency_has_no_received_version(),
                             )
                         })?;
                         declared.insert(
@@ -600,7 +629,7 @@ impl Core {
                 if next.work > 32 {
                     return Err(CoreError::new(
                         "budget",
-                        "Native dependency discovery exceeded the original 32-note worker budget",
+                        UiMessage::error_core_sync_native_dependency_discovery_exceeded_original32_note_worker_budget(),
                     ));
                 }
             }
@@ -656,7 +685,7 @@ impl Core {
             if original.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This operationId already names different input",
+                    UiMessage::error_core_sync_operation_id_already_names_different_input(),
                 ));
             }
             return self
@@ -784,7 +813,7 @@ impl Core {
             if original.fingerprint != prepared.plan.fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "The original operation belongs to another request",
+                    UiMessage::error_core_sync_original_operation_belongs_to_another_request(),
                 ));
             }
             return self.operation_details(&original.operation_id);
@@ -809,7 +838,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "syncDependencyRequired",
-                        "The reviewed native dependency cut differs from the exact actual reads",
+                        UiMessage::error_core_sync_reviewed_native_dependency_cut_differs_from_exact_actual_reads(),
                     ));
                 }
             }
@@ -845,33 +874,36 @@ impl Core {
         }
         for file in &transaction.files {
             self.check_pending(Path::new(&file.path))?;
-            let current = capture_optional(Path::new(&file.path))?;
+            let current = capture_optional(&self.backend, Path::new(&file.path))?;
             if current.as_ref().map(|file| (&file.stamp, &file.bytes))
                 != Some((&file.stamp, &file.bytes))
             {
                 return Err(CoreError::new(
                     "syncEvidenceChanged",
-                    "An original private Plan input changed while the native worker ran",
+                    UiMessage::error_core_sync_original_private_plan_input_changed_while_native_worker_ran(),
                 ));
             }
         }
         for (path, parent) in &transaction.write_parents {
-            if ParentGuard::acquire(Path::new(path))?.directory_identity()? != *parent {
+            if ParentGuard::acquire(&self.backend, Path::new(path))?.directory_identity()?
+                != *parent
+            {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "An original native input parent changed",
+                    UiMessage::error_core_sync_original_native_input_parent_changed(),
                 ));
             }
         }
         for absent in &transaction.absent_dependencies {
             self.check_pending(Path::new(&absent.path))?;
-            if capture_optional(Path::new(&absent.path))?.is_some()
-                || ParentGuard::acquire(Path::new(&absent.path))?.directory_identity()?
+            if capture_optional(&self.backend, Path::new(&absent.path))?.is_some()
+                || ParentGuard::acquire(&self.backend, Path::new(&absent.path))?
+                    .directory_identity()?
                     != absent.parent
             {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "An original native negative dependency changed",
+                    UiMessage::error_core_sync_original_native_negative_dependency_changed(),
                 ));
             }
         }
@@ -894,7 +926,7 @@ impl Core {
             {
                 continue;
             }
-            validate_directory(directory)?;
+            validate_directory(&self.backend, directory)?;
         }
         Ok(())
     }
@@ -916,7 +948,7 @@ impl Core {
         let selected = states.keys().cloned().collect::<BTreeSet<_>>();
         let mut files = vec![];
         let mut directories = vec![];
-        snapshot_tree(root, &mut files, &mut directories, false)?;
+        snapshot_tree(&self.backend, root, &mut files, &mut directories, false)?;
         let paths = files
             .iter()
             .map(|file| file.path.clone())
@@ -936,27 +968,28 @@ impl Core {
         let mut originals = BTreeMap::new();
         let mut render_files = BTreeMap::new();
         for (original, witness) in files.into_iter().zip(captured_witnesses) {
-            let witness =
-                witness.ok_or_else(|| unavailable("An original native base is missing"))?;
-            let captured = witness
-                .binding
-                .captured
-                .as_ref()
-                .ok_or_else(|| unavailable("A native input disappeared during capture"))?;
+            let witness = witness.ok_or_else(|| {
+                unavailable(UiMessage::error_core_sync_original_native_base_missing())
+            })?;
+            let captured = witness.binding.captured.as_ref().ok_or_else(|| {
+                unavailable(UiMessage::error_core_sync_native_input_disappeared_during_capture())
+            })?;
             if original.stamp != captured.stamp || original.bytes != captured.bytes {
                 return Err(CoreError::new(
                     "syncEvidenceChanged",
-                    "A native compile input changed during capture",
+                    UiMessage::error_core_sync_native_compile_input_changed_during_capture(),
                 ));
             }
             let path = relative(root, &map_path(Path::new(&original.path)))?;
             if render_files.insert(path.clone(), original.bytes).is_some() {
-                return Err(unavailable("Native after input locators overlap"));
+                return Err(unavailable(
+                    UiMessage::error_core_sync_native_after_input_locators_overlap(),
+                ));
             }
             originals.insert(path, witness);
         }
         for directory in &directories {
-            validate_directory(directory)?;
+            validate_directory(&self.backend, directory)?;
         }
         let directory_after = directories
             .iter()
@@ -987,7 +1020,7 @@ impl Core {
                     .ok_or_else(|| {
                         CoreError::new(
                             "syncExternalChange",
-                            "An original installed native input is missing",
+                            UiMessage::error_core_sync_original_installed_native_input_missing(),
                         )
                     })?;
                 let observed_adoption = planned.is_some_and(|plan| {
@@ -1011,7 +1044,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "syncExternalChange",
-                        "An original installed native input has an external edit or replacement",
+                        UiMessage::error_core_sync_original_installed_native_input_has_external_edit_or_replacement(),
                     ));
                 }
             }
@@ -1040,7 +1073,7 @@ impl Core {
                         .find(|member| same(Path::new(&member.source), &original))
                         .ok_or_else(|| {
                             unavailable(
-                                "Native resource removal has no original Plan member retirement",
+                                UiMessage::error_core_sync_native_resource_removal_has_no_original_plan_member_retirement(),
                             )
                         })?;
                     if &member.object != object
@@ -1051,14 +1084,14 @@ impl Core {
                         || member.identity != stamps[&removed.file_revision].identity
                     {
                         return Err(unavailable(
-                            "Native resource removal differs from its original Plan/FI",
+                            UiMessage::error_core_sync_native_resource_removal_differs_from_original_plan_f_i(),
                         ));
                     }
                 }
                 let logical = relative(root, &map_path(&original))?;
                 if after_files.contains_key(&logical) {
                     return Err(unavailable(
-                        "A retired resource conflicts with a planned after output",
+                        UiMessage::error_core_sync_retired_resource_conflicts_with_planned_after_output(),
                     ));
                 }
                 retired_files.insert(logical);
@@ -1073,7 +1106,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "The native after input exceeds 5000 files / 64 MiB",
+                UiMessage::error_core_sync_native_after_input_exceeds5000_files64_mi_b(),
             ));
         }
         let mut object_files = BTreeMap::new();
@@ -1096,7 +1129,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "syncDependencyRequired",
-                "Adopt and explicitly review the original Settings configuration before strong native validation",
+                UiMessage::error_core_sync_adopt_and_explicitly_review_original_settings_configuration_before_strong_native_validation(),
             ));
         }
         let style = style_from_files(&render_files, &workspace)?;
@@ -1104,7 +1137,7 @@ impl Core {
             let Some(ObjectKey::Node(owner)) = object_files.get("Styles/Styles.typ") else {
                 return Err(CoreError::new(
                     "styleSelection",
-                    "The selected style has no original admitted Node owner",
+                    UiMessage::error_core_sync_selected_style_has_no_original_admitted_node_owner(),
                 ));
             };
             let owner_key = ObjectKey::Node(owner.clone());
@@ -1113,7 +1146,7 @@ impl Core {
                 .ok_or_else(|| {
                     CoreError::new(
                         "syncDependencyRequired",
-                        "The original style owner is outside the reviewed cut",
+                        UiMessage::error_core_sync_original_style_owner_outside_reviewed_cut(),
                     )
                 })?
                 .state;
@@ -1143,17 +1176,17 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "styleSelection",
-                    "The original style Node/resource role does not match the exact selected state",
+                    UiMessage::error_core_sync_original_style_node_resource_role_does_not_match_exact_selected_state(),
                 ));
             }
             if let Some(original) = originals
                 .get("Styles/library-style.typ")
                 .and_then(|witness| witness.binding.captured.as_ref())
             {
-                if !self.admitted_resource(resource, &workspace, owner, &original.stamp.identity) {
+                if !self.admitted_resource(resource, &workspace, owner, &original.stamp.identity)? {
                     return Err(CoreError::new(
                         "styleSelection",
-                        "The selected style is not the original admitted resource object",
+                        UiMessage::error_core_sync_selected_style_not_original_admitted_resource_object(),
                     ));
                 }
             } else if let Some(plan) = planned {
@@ -1175,7 +1208,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "styleSelection",
-                        "The new style lacks its original create-only resource materialization",
+                        UiMessage::error_core_sync_new_style_lacks_original_create_only_resource_materialization(),
                     ));
                 }
             }
@@ -1194,7 +1227,7 @@ impl Core {
                     .or_insert_with(|| (note.clone(), BTreeSet::new()));
                 if entry.0.path != note.path {
                     return Err(unavailable(
-                        "One exact native source has competing after locators",
+                        UiMessage::error_core_sync_one_exact_native_source_has_competing_after_locators(),
                     ));
                 }
                 entry
@@ -1205,7 +1238,8 @@ impl Core {
         if notes.len() > 32 {
             return Err(CoreError::new(
                 "budget",
-                "Strong native validation requires at most 32 exact notes",
+                UiMessage::error_core_sync_strong_native_validation_requires_at_most32_exact_notes(
+                ),
             ));
         }
         let mut note_inputs = vec![];
@@ -1218,7 +1252,7 @@ impl Core {
                 != Some(note.source.as_bytes())
             {
                 return Err(unavailable(
-                    "Native main source differs from the original exact after image",
+                    UiMessage::error_core_sync_native_main_source_differs_from_original_exact_after_image(),
                 ));
             }
             note_inputs.push((note.source, PathBuf::from(note.path)));
@@ -1235,7 +1269,8 @@ impl Core {
         if serde_json::to_vec(&world_provenance)?.len() > 4 * 1024 * 1024 {
             return Err(CoreError::new(
                 "budget",
-                "Native input provenance exceeds the bounded metadata budget",
+                UiMessage::error_core_sync_native_input_provenance_exceeds_bounded_metadata_budget(
+                ),
             ));
         }
         Ok(NativeCapture {
@@ -1270,7 +1305,7 @@ impl Core {
     ) -> Result<NativeResult> {
         if outputs.len() != native.inputs.len() {
             return Err(unavailable(
-                "The native worker did not return every exact compile",
+                UiMessage::error_core_sync_native_worker_did_not_return_every_exact_compile(),
             ));
         }
         let mut products = BTreeMap::new();
@@ -1311,7 +1346,7 @@ impl Core {
                         if !allow_discovery {
                             return Err(CoreError::new(
                                 "syncDependencyRequired",
-                                "A native compiler read requires an explicit exact object in the reviewed cut",
+                                UiMessage::error_core_sync_native_compiler_read_requires_explicit_exact_object_in_reviewed_cut(),
                             ));
                         }
                         unselected.insert(object.clone());
@@ -1339,15 +1374,22 @@ impl Core {
             }
             provenance.push(serde_json::json!({"entityKey":native.keys[index].0,"fileRevision":native.keys[index].1,
                 "sourceHash":native.keys[index].2,"compileIdentity":identity,"target":"html","compilerVersion":output.compiler_version,"ok":output.ok,
-                "dependencies":output.dependencies,"inputDigest":native.world_provenance["inputDigest"]}));
+                "dependencies":output.dependencies,"diagnostics":output.diagnostics,"inputDigest":native.world_provenance["inputDigest"]}));
             let product = match (output.ok, output.products) {
                 (true, Some(product)) if product.target == "html" => {
                     weftext_data::native_query_products(identity, product)
                 }
                 _ => {
-                    let unavailable = || weftext_data::Cell::Unavailable {
-                        reason: "The exact frozen native HTML compile did not qualify this product"
-                            .into(),
+                    let unavailable = || {
+                        weftext_data::Cell::Unavailable {
+                        kind: weftext_data::DataErrorKind::Unavailable,
+                        reason: weftext_messages::UiMessage::error_sync_native_compile_unqualified().into(),
+                        diagnostics: output.diagnostics.iter().map(|diagnostic| weftext_messages::ErrorDescription {
+                            explanation: diagnostic.explanation.clone().unwrap_or_else(weftext_messages::UiMessage::error_sync_native_compile_unqualified),
+                            diagnostics: diagnostic.diagnostics.clone(),
+                            causes: Default::default(),
+                        }).collect(),
+                    }
                     };
                     weftext_data::NoteProducts {
                         compile_identity: identity,
@@ -1370,9 +1412,12 @@ impl Core {
     }
 }
 
-fn validate_directory(directory: &CapturedDirectory) -> Result<()> {
+fn validate_directory(
+    backend: &crate::BackendContext,
+    directory: &CapturedDirectory,
+) -> Result<()> {
     let path = Path::new(&directory.path);
-    let guard = ParentGuard::acquire(&path.join(".native-capture-prospective"))?;
+    let guard = ParentGuard::acquire(backend, &path.join(".native-capture-prospective"))?;
     let (entries, complete) = guard.directory_entries(MAX_FILES)?;
     if !complete
         || guard.directory_identity()? != directory.identity
@@ -1380,7 +1425,7 @@ fn validate_directory(directory: &CapturedDirectory) -> Result<()> {
     {
         return Err(CoreError::new(
             "scopeChanged",
-            "Original native input membership changed during capture",
+            UiMessage::error_core_sync_original_native_input_membership_changed_during_capture(),
         ));
     }
     Ok(())
@@ -1398,14 +1443,16 @@ fn native_negative(native: &NativeCapture, relative: &Path) -> Result<SnapshotWi
             let name = child
                 .file_name()
                 .and_then(|name| name.to_str())
-                .ok_or_else(|| unavailable("Invalid native negative dependency"))?;
+                .ok_or_else(|| {
+                    unavailable(UiMessage::error_core_sync_invalid_native_negative_dependency())
+                })?;
             if original.entries.iter().any(|entry| {
                 entry
                     .rsplit_once(':')
                     .is_some_and(|(entry, _)| entry.eq_ignore_ascii_case(name))
             }) {
                 return Err(unavailable(
-                    "The compiler omitted an existing original native input",
+                    UiMessage::error_core_sync_compiler_omitted_existing_original_native_input(),
                 ));
             }
             return Ok(SnapshotWitness {
@@ -1419,7 +1466,7 @@ fn native_negative(native: &NativeCapture, relative: &Path) -> Result<SnapshotWi
         child = parent;
     }
     Err(unavailable(
-        "The original native negative namespace is unavailable",
+        UiMessage::error_core_sync_original_native_negative_namespace_unavailable(),
     ))
 }
 fn augment_native_dependencies(
@@ -1428,10 +1475,11 @@ fn augment_native_dependencies(
     reads: &BTreeMap<ObjectKey, BTreeSet<ObjectKey>>,
 ) -> Result<()> {
     for (owner, objects) in reads {
-        let dependencies = checked
-            .dependency_reads
-            .get_mut(owner)
-            .ok_or_else(|| unavailable("Native invocation has no original semantic owner"))?;
+        let dependencies = checked.dependency_reads.get_mut(owner).ok_or_else(|| {
+            unavailable(
+                UiMessage::error_core_sync_native_invocation_has_no_original_semantic_owner(),
+            )
+        })?;
         let mut exact = dependencies
             .iter()
             .map(|dependency| (dependency.object.clone(), dependency.clone()))
@@ -1445,7 +1493,7 @@ fn augment_native_dependencies(
                     .ok_or_else(|| {
                         CoreError::new(
                             "syncDependencyRequired",
-                            "The native dependency has no exact reviewed received versions",
+                            UiMessage::error_core_sync_native_dependency_has_no_exact_reviewed_received_versions(),
                         )
                     })?
                     .clone(),
@@ -1470,12 +1518,14 @@ fn review_location(
     }
     if !visiting.insert(object.clone()) {
         return Err(unavailable(
-            "The reviewed native placement contains a cycle",
+            UiMessage::error_core_sync_reviewed_native_placement_contains_cycle(),
         ));
     }
     let state = &chosen
         .get(object)
-        .ok_or_else(|| unavailable("An exact reviewed native parent is missing"))?
+        .ok_or_else(|| {
+            unavailable(UiMessage::error_core_sync_exact_reviewed_native_parent_missing())
+        })?
         .state;
     let path = if !matches!(object, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
         root.to_path_buf()
@@ -1485,7 +1535,7 @@ fn review_location(
         } else {
             let operation_id = operation_id.ok_or_else(|| CoreError::new(
                 "syncStructureRequired",
-                "Bind this review to its original operationId before validating a newly retired native source",
+                UiMessage::error_core_sync_bind_review_to_original_operation_id_before_validating_newly_retired_native_source(),
             ))?;
             super::relocate::single_relocation_target(root, operation_id, state, local)?
         }

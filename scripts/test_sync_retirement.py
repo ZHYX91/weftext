@@ -7,6 +7,7 @@ No received versions, private records or Trash destinations are fabricated.
 Run: python scripts/test_sync_retirement.py EXE [exact_test_name ...]
 WEFTEXT_SYNC_EVIDENCE_DIR selects a fresh retained directory.
 """
+from _creation_result import created_document
 import hashlib
 import json
 import os
@@ -35,8 +36,8 @@ class SyncRetirement(SyncCompound):
         self.folder = self.evidence / f'c{names.index(self._testMethodName) + 1:02}'
         self.folder.mkdir()
         self.servers, self.transfer_number = [], 0
-        self.a = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'pa')], 'A')
-        self.b = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'pb')], 'B')
+        self.a = self.start_server([ '--data-dir', str(self.folder / 'pa')], 'A')
+        self.b = self.start_server([ '--data-dir', str(self.folder / 'pb')], 'B')
         self.ra, self.rb = self.folder / 'a', self.folder / 'b'
         self.call(self.a, '/api/library/create', path=str(self.ra), operationId=uid())
         self.initial_paths = {name: Path(relative) for name, relative in [
@@ -44,8 +45,8 @@ class SyncRetirement(SyncCompound):
             ('Other', 'Other/Other.typ'), ('Live', 'Live/Live.typ')]}
         self.keys, self.resource_bytes = {}, {}
         for name, relative in self.initial_paths.items():
-            doc = self.call(self.a, '/api/note/create', root=str(self.ra),
-                            parent=str((self.ra / relative).parent.parent), name=name, operationId=uid())
+            doc = created_document(self.call(self.a, '/api/note/create', root=str(self.ra),
+                            parent=str((self.ra / relative).parent.parent), name=name, operationId=uid()))
             self.keys[name] = {'kind': 'node', 'id': doc['nodeId']}
             self.save(self.a, self.ra, relative, f'ORIGINAL {name} 中文😀')
             data = f'original registered resource {doc["nodeId"]}'.encode()
@@ -92,7 +93,7 @@ class SyncRetirement(SyncCompound):
 
     def restart_b(self):
         self.close_server(self.b)
-        self.b = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'pb')], 'B-restart')
+        self.b = self.start_server([ '--data-dir', str(self.folder / 'pb')], 'B-restart')
 
     def local_operation(self, intent):
         plan = self.call(self.a, '/api/operations/prepare', root=str(self.ra), operationId=uid(), intent=intent)

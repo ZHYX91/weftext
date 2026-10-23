@@ -103,11 +103,18 @@ pub fn propose_publication_merge(
 ) -> Result<PublicationMergeProposal> {
     let mut members = current
         .record()
-        .ok_or_else(|| fail("Current publication is not a record"))?
+        .ok_or_else(|| {
+            fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_current_publication_not_record(),
+            ))
+        })?
         .to_vec();
-    let incoming = imported
-        .record()
-        .ok_or_else(|| fail("Imported publication is not a record"))?;
+    let incoming = imported.record().ok_or_else(|| {
+        fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_imported_publication_not_record(
+            ),
+        ))
+    })?;
     let mut conflicts = vec![];
     for member in incoming {
         if let Some(existing) = members.iter().find(|m| m.key == member.key) {
@@ -133,28 +140,30 @@ pub fn project_bibliography(
     format: BibliographyFormat,
 ) -> Result<BibliographyProjection> {
     if works.len() > MAX_RECORDS {
-        return Err(fail("Bibliography record budget exceeded"));
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_record_budget_exceeded(),
+        )));
     }
     let mut keys = BTreeSet::new();
     let mut losses = vec![];
     let mut rows = vec![];
     for work in works {
         if !citation_key(&work.key) || !keys.insert(work.key.clone()) {
-            return Err(fail(
-                "Citation key is invalid or repeated; no bibliography generated",
-            ));
+            return Err(fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_citation_key_invalid_or_duplicate(),
+            )));
         }
         if !weftext_data::scalar_valid("node_ref", &NativeValue::Text(work.work.entity_ref.clone()))
             || work.work.source_basis.is_empty()
         {
             return Err(fail(
-                "Bibliography requires a stable Work reference and frozen source basis",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_stable_work_and_frozen_basis_required()),
             ));
         }
         work.work
             .publication
             .to_typst()
-            .map_err(|e| fail(e.to_string()))?;
+            .map_err(ExportError::from_data)?;
         rows.push(project_work(work, &mut losses)?);
     }
     let bytes = match format {
@@ -173,7 +182,9 @@ pub fn project_bibliography(
             .into_bytes(),
     };
     if bytes.len() > MAX_BYTES {
-        return Err(fail("Generated bibliography exceeds byte budget"));
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_generated_bytes_exceeded(),
+        )));
     }
     Ok(BibliographyProjection {
         bytes,
@@ -192,14 +203,24 @@ pub fn project_bibliography(
 
 fn project_work(work: &CitationWork, losses: &mut Vec<ExportLoss>) -> Result<Value> {
     let p = &work.work.publication;
-    let members = p
-        .record()
-        .ok_or_else(|| fail(format!("{}: publication is not a record", work.key)))?;
+    let members = p.record().ok_or_else(|| {
+        fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_publication_not_record(
+                weftext_messages::params::ErrorExportBibliographyPublicationNotRecord {
+                    work_key: (work.key).to_string(),
+                },
+            ),
+        ))
+    })?;
     let required = |key| {
         text(p, key).filter(|s| !s.is_empty()).ok_or_else(|| {
-            fail(format!(
-                "{}: complete citation needs publication.{key}",
-                work.key
+            fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_required_publication_member(
+                    weftext_messages::params::ErrorExportBibliographyRequiredPublicationMember {
+                        work_key: (work.key).to_string(),
+                        member: (key).to_string(),
+                    },
+                ),
             ))
         })
     };
@@ -215,9 +236,13 @@ fn project_work(work: &CitationWork, losses: &mut Vec<ExportLoss>) -> Result<Val
         "thesis" => "thesis",
         "web" => "webpage",
         _ => {
-            return Err(fail(format!(
-                "{}: unsupported Work kind {kind}; original publication remains available",
-                work.key
+            return Err(fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_unsupported_work_kind(
+                    weftext_messages::params::ErrorExportBibliographyUnsupportedWorkKind {
+                        work_key: (work.key).to_string(),
+                        kind: (kind).to_string(),
+                    },
+                ),
             )));
         }
     };
@@ -250,7 +275,7 @@ fn project_work(work: &CitationWork, losses: &mut Vec<ExportLoss>) -> Result<Val
             None => loss(
                 losses,
                 "datePrecision",
-                "Issued calendar/instant cannot be expressed as a Gregorian CSL date; preserved exactly without inventing a day",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_issued_date_not_gregorian_representable()),
                 format!("{}.issued", work.key),
             ),
         }
@@ -277,7 +302,7 @@ fn project_work(work: &CitationWork, losses: &mut Vec<ExportLoss>) -> Result<Val
             loss(
                 losses,
                 "publicationExtension",
-                "Publication member retained in the exact extension; standard bibliography consumers may ignore it",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_publication_member_extension_only()),
                 format!("{}.{}", work.key, member.key),
             );
         }
@@ -298,16 +323,38 @@ fn project_contributors(
     let contributors = p
         .member("contributors")
         .and_then(NativeValue::array)
-        .ok_or_else(|| fail(format!("{}: ordered contributors unavailable", key)))?;
+        .ok_or_else(|| {
+            fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_contributors_unavailable(
+                    weftext_messages::params::ErrorExportBibliographyContributorsUnavailable {
+                        work_key: (key).to_string(),
+                    },
+                ),
+            ))
+        })?;
     if complete && contributors.is_empty() {
-        return Err(fail(format!("{key}: ordered contributors unavailable")));
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_contributors_unavailable(
+                weftext_messages::params::ErrorExportBibliographyContributorsUnavailable {
+                    work_key: (key).to_string(),
+                },
+            ),
+        )));
     }
     let mut authors = vec![];
     let mut editors = vec![];
     for (index, contributor) in contributors.iter().enumerate() {
-        let agent = contributor
-            .member("agent")
-            .ok_or_else(|| fail(format!("{}: contributor {index} agent unavailable", key)))?;
+        let agent = contributor.member("agent").ok_or_else(|| {
+            fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_contributor_agent_unavailable(weftext_messages::params::ErrorExportBibliographyContributorAgentUnavailable {
+                    work_key: (key).to_string(),
+                    index: weftext_messages::UiInteger::new(
+                        i64::try_from(index).expect("bounded product count"),
+                    )
+                    .expect("bounded product count"),
+                }),
+            ))
+        })?;
         let agent_ref = agent.member("ref");
         let agent_text = agent.member("text");
         if agent.record().is_none()
@@ -315,9 +362,16 @@ fn project_contributors(
             || agent_ref.is_some_and(|value| !weftext_data::scalar_valid("node_ref", value))
             || agent_text.is_some_and(|value| !weftext_data::scalar_valid("nonempty_text", value))
         {
-            return Err(fail(format!(
-                "{}: contributor {index} needs exactly one valid ref/text Agent branch",
-                key
+            return Err(fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_contributor_agent_branch(
+                    weftext_messages::params::ErrorExportBibliographyContributorAgentBranch {
+                        work_key: (key).to_string(),
+                        index: weftext_messages::UiInteger::new(
+                            i64::try_from(index).expect("bounded product count"),
+                        )
+                        .expect("bounded product count"),
+                    },
+                ),
             )));
         }
         let family = text(contributor, "family").filter(|s| !s.is_empty());
@@ -334,15 +388,34 @@ fn project_contributors(
         } else if let Some(literal) = literal {
             person.insert("literal".into(), json!(literal));
         } else {
-            return Err(fail(format!(
-                "{}: contributor {index} has no credited or structured name; referenced Agent is not guessed",
-                key
+            return Err(fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_contributor_name_missing(
+                    weftext_messages::params::ErrorExportBibliographyContributorNameMissing {
+                        work_key: (key).to_string(),
+                        index: weftext_messages::UiInteger::new(
+                            i64::try_from(index).expect("bounded product count"),
+                        )
+                        .expect("bounded product count"),
+                    },
+                ),
             )));
         }
         let roles = contributor
             .member("roles")
             .and_then(NativeValue::array)
-            .ok_or_else(|| fail(format!("{}: contributor {index} role is unknown", key)))?;
+            .ok_or_else(|| {
+                fail(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_bibliography_contributor_role_unknown(
+                        weftext_messages::params::ErrorExportBibliographyContributorRoleUnknown {
+                            work_key: (key).to_string(),
+                            index: weftext_messages::UiInteger::new(
+                                i64::try_from(index).expect("bounded product count"),
+                            )
+                            .expect("bounded product count"),
+                        },
+                    ),
+                ))
+            })?;
         let mut mapped = false;
         let mut seen_roles = BTreeSet::new();
         for role in roles {
@@ -352,7 +425,7 @@ fn project_contributors(
                 loss(
                     losses,
                     "duplicateContributorRole",
-                    "Repeated role retained in the exact extension; standard citation lists the contributor once for this role",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_repeated_role_extension_only()),
                     format!("{}.contributors[{index}].roles", key),
                 );
                 continue;
@@ -369,19 +442,19 @@ fn project_contributors(
                 Some(role) => loss(
                     losses,
                     "contributorRole",
-                    format!(
-                        "Role {role} is retained in the exact extension; standard author/editor arrays do not express it"
-                    ),
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_role_retained_in_extension(weftext_messages::params::ErrorExportBibliographyRoleRetainedInExtension { role: (role).to_string() })),
                     format!("{}.contributors[{index}].roles", key),
                 ),
-                None => return Err(fail(format!("{}: contributor role is not text", key))),
+                None => return Err(fail(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_contributor_role_not_text(weftext_messages::params::ErrorExportBibliographyContributorRoleNotText { work_key: (key).to_string() })))),
             }
         }
         if !mapped {
             loss(
                 losses,
                 "contributorNotInStandardCitation",
-                "Contributor retained only in the exact publication extension",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_bibliography_contributor_extension_only(),
+                ),
                 format!("{}.contributors[{index}]", key),
             );
         }
@@ -398,15 +471,18 @@ fn project_contributors(
             loss(
                 losses,
                 "contributorExtension",
-                "Agent references, affiliations and additional contributor members are retained exactly; standard bibliography consumers only receive the rendered name and author/editor role",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_contributor_details_extension_only()),
                 format!("{}.contributors[{index}]", key),
             );
         }
     }
     if complete && authors.is_empty() && editors.is_empty() {
-        return Err(fail(format!(
-            "{}: no author/editor is declared; complete citation unavailable",
-            key
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_author_editor_missing(
+                weftext_messages::params::ErrorExportBibliographyAuthorEditorMissing {
+                    work_key: (key).to_string(),
+                },
+            ),
         )));
     }
     if !complete || !authors.is_empty() {
@@ -428,9 +504,9 @@ fn project_identifiers(
     if let Some(identifiers) = p.member("identifiers").and_then(NativeValue::array) {
         for (index, identifier) in identifiers.iter().enumerate() {
             let scheme =
-                text(identifier, "scheme").ok_or_else(|| fail("Identifier scheme unavailable"))?;
+                text(identifier, "scheme").ok_or_else(|| fail(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_identifier_scheme_unavailable())))?;
             let value =
-                text(identifier, "value").ok_or_else(|| fail("Identifier value unavailable"))?;
+                text(identifier, "value").ok_or_else(|| fail(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_identifier_value_unavailable())))?;
             let csl = match scheme {
                 "doi" => Some("DOI"),
                 "isbn" => Some("ISBN"),
@@ -443,7 +519,7 @@ fn project_identifiers(
                 loss(
                     losses,
                     "identifier",
-                    "Identifier scheme or additional value retained only in the exact publication extension",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_identifier_details_extension_only()),
                     format!("{}.identifiers[{index}]", key),
                 );
             }
@@ -461,7 +537,7 @@ fn project_keywords(p: &NativeValue) -> Result<Option<Value>> {
                 .map(NativeValue::text)
                 .collect::<Option<Vec<_>>>()
                 .map(|values| json!(values.join(", ")))
-                .ok_or_else(|| fail("Publication keyword is not text"))
+                .ok_or_else(|| fail(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_publication_keyword_not_text())))
         })
         .transpose()
 }
@@ -476,7 +552,11 @@ fn csl_to_bib(row: &Value) -> Result<String> {
         "dataset" => "dataset",
         "thesis" => "thesis",
         "webpage" => "online",
-        _ => return Err(fail("Unsupported CSL type")),
+        _ => {
+            return Err(fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_csl_type_unsupported(),
+            )));
+        }
     };
     let mut fields = vec![];
     for (csl, bib) in [
@@ -564,7 +644,11 @@ fn csl_to_ris(row: &Value) -> Result<String> {
         "dataset" => "DATA",
         "thesis" => "THES",
         "webpage" => "ELEC",
-        _ => return Err(fail("Unsupported CSL type")),
+        _ => {
+            return Err(fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_csl_type_unsupported(),
+            )));
+        }
     };
     let mut lines = vec![
         format!("TY  - {kind}"),
@@ -634,10 +718,15 @@ pub fn import_bibliography(
     bytes: &[u8],
 ) -> Result<ImportBibliographyProposal> {
     if bytes.len() > MAX_BYTES {
-        return Err(fail("Bibliography import exceeds byte budget"));
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_import_bytes_exceeded(),
+        )));
     }
-    let source = std::str::from_utf8(bytes)
-        .map_err(|_| fail("Bibliography import must be UTF-8; original bytes were not changed"))?;
+    let source = std::str::from_utf8(bytes).map_err(|_| {
+        fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_import_utf_eight_required(),
+        ))
+    })?;
     let mut losses = vec![];
     let records = match format {
         BibliographyFormat::CslJson => import_csl(source, &mut losses)?,
@@ -645,13 +734,15 @@ pub fn import_bibliography(
         BibliographyFormat::Ris => import_ris(source, &mut losses)?,
     };
     if records.len() > MAX_RECORDS {
-        return Err(fail("Bibliography import record budget exceeded"));
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_import_records_exceeded(),
+        )));
     }
     for record in &records {
         record
             .publication
             .to_typst()
-            .map_err(|e| fail(e.to_string()))?;
+            .map_err(ExportError::from_data)?;
     }
     Ok(ImportBibliographyProposal {
         format,
@@ -662,16 +753,21 @@ pub fn import_bibliography(
 }
 
 fn import_csl(source: &str, losses: &mut Vec<ExportLoss>) -> Result<Vec<ImportedPublication>> {
-    let mut decoder = serde_json::Deserializer::from_str(source);
-    let value = UniqueJson::deserialize(&mut decoder)
-        .map_err(|e| fail(format!("Invalid CSL JSON: {e}")))?
-        .0;
-    decoder.end()?;
-    let rows = value
-        .as_array()
-        .ok_or_else(|| fail("CSL JSON bibliography must be an array of records"))?;
+    let value = weftext_data::parse_unique_json(source.as_bytes()).map_err(|error| {
+        let mut error = ExportError::from_data(error);
+        error.description.explanation =
+            weftext_messages::UiMessage::error_export_bibliography_invalid_csl_json();
+        error
+    })?;
+    let rows = value.as_array().ok_or_else(|| {
+        fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_csl_record_array_required(),
+        ))
+    })?;
     if rows.len() > MAX_RECORDS {
-        return Err(fail("Bibliography import record budget exceeded"));
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_import_records_exceeded(),
+        )));
     }
     rows.iter()
         .enumerate()
@@ -680,9 +776,11 @@ fn import_csl(source: &str, losses: &mut Vec<ExportLoss>) -> Result<Vec<Imported
 }
 
 fn map_csl(row: &Value, index: usize, losses: &mut Vec<ExportLoss>) -> Result<ImportedPublication> {
-    let object = row
-        .as_object()
-        .ok_or_else(|| fail("CSL item is not a record"))?;
+    let object = row.as_object().ok_or_else(|| {
+        fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_csl_item_not_record(),
+        ))
+    })?;
     let suggested_key = row["id"].as_str().map(str::to_owned);
     let mut fields = vec![];
     let mut sources = vec![];
@@ -729,7 +827,9 @@ fn map_csl(row: &Value, index: usize, losses: &mut Vec<ExportLoss>) -> Result<Im
             loss(
                 losses,
                 "fieldType",
-                "Non-text CSL field preserved in original; no rounded/stringified replacement proposed",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_bibliography_non_text_csl_field_preserved(),
+                ),
                 format!("records[{index}].{csl}"),
             );
         }
@@ -764,7 +864,7 @@ fn map_csl(row: &Value, index: usize, losses: &mut Vec<ExportLoss>) -> Result<Im
         if let Some(names) = row[role].as_array() {
             for (ordinal, name) in names.iter().enumerate() {
                 let Some(name) = name.as_object() else {
-                    return Err(fail("CSL contributor is not a record"));
+                    return Err(fail(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_csl_contributor_not_record())));
                 };
                 let family = name.get("family").and_then(Value::as_str);
                 let given = name.get("given").and_then(Value::as_str);
@@ -774,7 +874,7 @@ fn map_csl(row: &Value, index: usize, losses: &mut Vec<ExportLoss>) -> Result<Im
                 });
                 let Some(credited) = credited.filter(|v| !v.is_empty()) else {
                     return Err(fail(
-                        "CSL contributor has no supported literal/structured name",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_csl_contributor_name_unsupported()),
                     ));
                 };
                 let mut members = vec![
@@ -810,7 +910,7 @@ fn map_csl(row: &Value, index: usize, losses: &mut Vec<ExportLoss>) -> Result<Im
                     loss(
                         losses,
                         "nameParts",
-                        "Additional CSL name parts preserved in original; no forced Person is created",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_additional_csl_name_parts_preserved()),
                         format!("records[{index}].{role}[{ordinal}]"),
                     );
                 }
@@ -821,7 +921,7 @@ fn map_csl(row: &Value, index: usize, losses: &mut Vec<ExportLoss>) -> Result<Im
                 contributors.push(NativeValue::Record(members));
             }
         } else if object.contains_key(role) {
-            return Err(fail("CSL author/editor must be an ordered array"));
+            return Err(fail(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_csl_contributors_ordered_array_required())));
         }
     }
     if !contributors.is_empty() {
@@ -847,7 +947,9 @@ fn map_csl(row: &Value, index: usize, losses: &mut Vec<ExportLoss>) -> Result<Im
             loss(
                 losses,
                 "datePrecision",
-                "Unsupported CSL date remains in original; no day 1 default is introduced",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_bibliography_csl_date_unsupported(),
+                ),
                 format!("records[{index}].issued"),
             );
         }
@@ -855,7 +957,10 @@ fn map_csl(row: &Value, index: usize, losses: &mut Vec<ExportLoss>) -> Result<Im
         loss(
             losses,
             "datePrecision",
-            "CSL literal/range/unknown date retained in original without inventing an exact date",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_csl_imprecise_date_preserved(
+                ),
+            ),
             format!("records[{index}].issued"),
         );
     }
@@ -874,7 +979,9 @@ fn map_csl(row: &Value, index: usize, losses: &mut Vec<ExportLoss>) -> Result<Im
         loss(
             losses,
             "unknownProviderFields",
-            "Unmapped CSL members retained in the original record",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_unmapped_csl_members_preserved(),
+            ),
             format!("records[{index}]"),
         );
     }
@@ -914,9 +1021,7 @@ fn exact_standard_conflicts(
 ) -> Result<Vec<PublicationConflict>> {
     let object = row.as_object().unwrap();
     let incomparable = |field: &str| {
-        fail(format!(
-            "records[{index}].{field}: standard field cannot be compared accurately with the exact publication; preserve both originals"
-        ))
+        fail(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_standard_field_comparison_unavailable(weftext_messages::params::ErrorExportBibliographyStandardFieldComparisonUnavailable { index: weftext_messages::UiInteger::new(i64::try_from(index).expect("bounded product count")).expect("bounded product count"), field: (field).to_string() })))
     };
     let mut conflicts = vec![];
     let mut compare = |key: &str, imported: NativeValue| {
@@ -1089,27 +1194,50 @@ fn exact_standard_conflicts(
 }
 
 fn import_bib(source: &str, losses: &mut Vec<ExportLoss>) -> Result<Vec<ImportedPublication>> {
-    let raw = biblatex::RawBibliography::parse(source)
-        .map_err(|e| fail(format!("Invalid BibTeX: {e}")))?;
+    let raw = biblatex::RawBibliography::parse(source).map_err(|e| {
+        fail(
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_invalid_bibtex(),
+            )
+            .diagnostic(
+                weftext_messages::DiagnosticOrigin::Dependency,
+                e.to_string(),
+            ),
+        )
+    })?;
     let mut abbreviations = BTreeSet::new();
     for abbreviation in &raw.abbreviations {
         if !abbreviations.insert(abbreviation.key.v.to_ascii_lowercase()) {
-            return Err(fail(
-                "Duplicate BibTeX abbreviation; explicit repair required",
-            ));
+            return Err(fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_bibtex_abbreviation_duplicate(),
+            )));
         }
     }
     for entry in &raw.entries {
         let mut fields = BTreeSet::new();
         for field in &entry.v.fields {
             if !fields.insert(field.key.v.to_ascii_lowercase()) {
-                return Err(fail("Duplicate BibTeX field; explicit repair required"));
+                return Err(fail(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_bibliography_bibtex_field_duplicate(),
+                )));
             }
         }
     }
-    let parsed = Bibliography::from_raw(raw).map_err(|e| fail(format!("Invalid BibTeX: {e}")))?;
+    let parsed = Bibliography::from_raw(raw).map_err(|e| {
+        fail(
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_invalid_bibtex(),
+            )
+            .diagnostic(
+                weftext_messages::DiagnosticOrigin::Dependency,
+                e.to_string(),
+            ),
+        )
+    })?;
     if parsed.len() > MAX_RECORDS {
-        return Err(fail("Bibliography import record budget exceeded"));
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_import_records_exceeded(),
+        )));
     }
     let mut result = vec![];
     for (index, entry) in parsed.iter().enumerate() {
@@ -1174,9 +1302,19 @@ fn import_bib(source: &str, losses: &mut Vec<ExportLoss>) -> Result<Vec<Imported
         }
         for role in ["author", "editor"] {
             if let Some(chunks) = entry.get(role) {
-                let names = chunks
-                    .parse::<Vec<biblatex::Person>>()
-                    .map_err(|e| fail(format!("Invalid BibTeX {role}: {e}")))?;
+                let names = chunks.parse::<Vec<biblatex::Person>>().map_err(|e| {
+                    fail(
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_export_bibliography_invalid_bibtex_role(weftext_messages::params::ErrorExportBibliographyInvalidBibtexRole {
+                                role: (role).to_string(),
+                            }),
+                        )
+                        .diagnostic(
+                            weftext_messages::DiagnosticOrigin::Dependency,
+                            e.to_string(),
+                        ),
+                    )
+                })?;
                 csl[role] = Value::Array(
                     names
                         .into_iter()
@@ -1185,7 +1323,7 @@ fn import_bib(source: &str, losses: &mut Vec<ExportLoss>) -> Result<Vec<Imported
                                 loss(
                                     losses,
                                     "nameParts",
-                                    "BibTeX name prefix/suffix retained in original record",
+                                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_bibtex_name_affixes_preserved()),
                                     format!("records[{index}].{role}"),
                                 );
                             }
@@ -1216,7 +1354,7 @@ fn import_bib(source: &str, losses: &mut Vec<ExportLoss>) -> Result<Vec<Imported
                 loss(
                     losses,
                     "datePrecision",
-                    "BibTeX date retained in original; range/uncertainty/month macro is not assigned an exact day",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_bibtex_imprecise_date_preserved()),
                     format!("records[{index}].date"),
                 );
             }
@@ -1276,7 +1414,7 @@ fn import_bib(source: &str, losses: &mut Vec<ExportLoss>) -> Result<Vec<Imported
             loss(
                 losses,
                 "unknownProviderFields",
-                "Unmapped BibTeX fields retained in original record",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_unmapped_bibtex_fields_preserved()),
                 format!("records[{index}]"),
             );
         }
@@ -1285,7 +1423,9 @@ fn import_bib(source: &str, losses: &mut Vec<ExportLoss>) -> Result<Vec<Imported
         loss(
             losses,
             "bibtexTextProjection",
-            "BibTeX TeX markup, macros and inheritance project to text; complete source bytes are retained",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_bibtex_markup_projected_as_text(),
+            ),
             format!("records[{index}]"),
         );
         result.push(proposal);
@@ -1312,28 +1452,44 @@ fn import_ris(source: &str, losses: &mut Vec<ExportLoss>) -> Result<Vec<Imported
                 last.1.push_str(line.trim_start());
                 continue;
             }
-            return Err(fail(format!("Malformed RIS line {}", line_no + 1)));
+            return Err(fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_malformed_ris_line(
+                    weftext_messages::params::ErrorExportBibliographyMalformedRisLine {
+                        line: weftext_messages::UiInteger::new(
+                            i64::try_from(line_no + 1).expect("bounded product count"),
+                        )
+                        .expect("bounded product count"),
+                    },
+                ),
+            )));
         }
         let key = &line[..2];
         let value = &line[6..];
         if key == "TY" {
             if !fields.is_empty() {
-                return Err(fail("RIS record missing ER before next TY"));
+                return Err(fail(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_ris_record_missing_end_before_next())));
             }
         } else if fields.is_empty() {
-            return Err(fail("RIS record must start with TY"));
+            return Err(fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_ris_record_start_required(),
+            )));
         }
         fields.push((key.into(), value.into()));
         if key == "ER" {
             if records.len() >= MAX_RECORDS {
-                return Err(fail("Bibliography import record budget exceeded"));
+                return Err(fail(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_bibliography_import_records_exceeded(
+                    ),
+                )));
             }
             records.push(map_ris(&fields, records.len(), losses)?);
             fields.clear();
         }
     }
     if !fields.is_empty() {
-        return Err(fail("RIS record missing closing ER"));
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_ris_record_end_required(),
+        )));
     }
     Ok(records)
 }
@@ -1352,8 +1508,12 @@ fn map_ris(
         match values.as_slice() {
             [] => Ok(None),
             [value] => Ok(Some(*value)),
-            _ => Err(fail(format!(
-                "RIS repeated singleton field {tag}; explicit repair required"
+            _ => Err(fail(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_repeated_ris_singleton(
+                    weftext_messages::params::ErrorExportBibliographyRepeatedRisSingleton {
+                        tag: (tag).to_string(),
+                    },
+                ),
             ))),
         }
     };
@@ -1421,7 +1581,7 @@ fn map_ris(
             loss(
                 losses,
                 "datePrecision",
-                "RIS date retained in original without inferred day",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_bibliography_ris_date_preserved_without_day_inference()),
                 format!("records[{index}].PY"),
             );
         }
@@ -1440,7 +1600,9 @@ fn map_ris(
         .filter_map(|(_, v)| v.strip_prefix("weftext-v1:"))
         .collect::<Vec<_>>();
     if extensions.len() > 1 {
-        return Err(fail("Repeated exact RIS publication extension"));
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_ris_exact_extension_duplicate(),
+        )));
     }
     if let Some(extension) = extensions.first() {
         csl["weftext"] = decode_extension(extension)?;
@@ -1472,7 +1634,10 @@ fn map_ris(
         loss(
             losses,
             "unknownProviderFields",
-            "Unmapped RIS tags retained in original record",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_bibliography_unmapped_ris_tags_preserved(
+                ),
+            ),
             format!("records[{index}]"),
         );
     }
@@ -1519,17 +1684,24 @@ fn exact_extension(
     losses: &mut Vec<ExportLoss>,
 ) -> Result<NativeValue> {
     if value["version"] != 1 {
-        return Err(fail("Unsupported exact publication extension version"));
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_exact_extension_version_unsupported(),
+        )));
     }
     let publication: NativeValue = serde_json::from_value(value["publication"].clone())?;
-    publication
-        .record()
-        .ok_or_else(|| fail("Exact publication extension must contain a native record"))?;
-    publication.to_typst().map_err(|e| fail(e.to_string()))?;
+    publication.record().ok_or_else(|| {
+        fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_exact_extension_record_required(
+            ),
+        ))
+    })?;
+    publication.to_typst().map_err(ExportError::from_data)?;
     loss(
         losses,
         "exactExtension",
-        "Exact publication extension is proposed as author data; original Work reference/basis is provenance and is not reused as import identity",
+        weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_exact_extension_identity_not_reused(),
+        ),
         format!("records[{index}].weftext"),
     );
     Ok(publication)
@@ -1635,14 +1807,21 @@ fn citation_key(key: &str) -> bool {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
 }
-fn fail(message: impl Into<String>) -> ExportError {
-    ExportError(message.into())
+fn fail(message: impl Into<weftext_messages::ErrorDescription>) -> ExportError {
+    ExportError::new(message)
 }
-fn loss(losses: &mut Vec<ExportLoss>, code: &str, message: impl Into<String>, location: String) {
+fn loss(
+    losses: &mut Vec<ExportLoss>,
+    code: &str,
+    message: impl Into<weftext_messages::ErrorDescription>,
+    location: String,
+) {
     losses.push(ExportLoss {
         code: code.into(),
-        message: message.into(),
+        description: message.into(),
         location: Some(location),
+
+        product_diagnostics: Vec::new(),
     });
 }
 fn bib_text(value: &str) -> String {
@@ -1672,7 +1851,9 @@ fn hex(bytes: &[u8]) -> String {
 }
 fn decode_extension(value: &str) -> Result<Value> {
     if value.len() > MAX_BYTES || !value.len().is_multiple_of(2) {
-        return Err(fail("Invalid exact publication extension"));
+        return Err(fail(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_bibliography_exact_extension_invalid(),
+        )));
     }
     let bytes = value
         .as_bytes()
@@ -1681,89 +1862,19 @@ fn decode_extension(value: &str) -> Result<Value> {
         .iter()
         .map(|p| {
             let digit = |c: u8| (c as char).to_digit(16).map(|v| v as u8);
-            Ok(
-                digit(p[0]).ok_or_else(|| fail("Invalid extension hex"))? * 16
-                    + digit(p[1]).ok_or_else(|| fail("Invalid extension hex"))?,
-            )
+            Ok(digit(p[0]).ok_or_else(|| {
+                fail(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_bibliography_extension_hex_invalid(),
+                ))
+            })? * 16
+                + digit(p[1]).ok_or_else(|| {
+                    fail(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_bibliography_extension_hex_invalid(),
+                ))
+                })?)
         })
         .collect::<Result<Vec<u8>>>()?;
-    let mut decoder = serde_json::Deserializer::from_slice(&bytes);
-    let value = UniqueJson::deserialize(&mut decoder)?.0;
-    decoder.end()?;
-    Ok(value)
-}
-
-/// Duplicate JSON members are invalid rather than last-write-wins imports.
-struct UniqueJson(Value);
-impl<'de> Deserialize<'de> for UniqueJson {
-    fn deserialize<D: serde::Deserializer<'de>>(de: D) -> std::result::Result<Self, D::Error> {
-        struct Visitor;
-        impl<'de> serde::de::Visitor<'de> for Visitor {
-            type Value = UniqueJson;
-            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                f.write_str("a JSON value with unique members")
-            }
-            fn visit_bool<E: serde::de::Error>(
-                self,
-                v: bool,
-            ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(json!(v)))
-            }
-            fn visit_i64<E: serde::de::Error>(self, v: i64) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(json!(v)))
-            }
-            fn visit_u64<E: serde::de::Error>(self, v: u64) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(json!(v)))
-            }
-            fn visit_f64<E: serde::de::Error>(self, v: f64) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(json!(v)))
-            }
-            fn visit_str<E: serde::de::Error>(
-                self,
-                v: &str,
-            ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(json!(v)))
-            }
-            fn visit_string<E: serde::de::Error>(
-                self,
-                v: String,
-            ) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(json!(v)))
-            }
-            fn visit_none<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(Value::Null))
-            }
-            fn visit_unit<E: serde::de::Error>(self) -> std::result::Result<Self::Value, E> {
-                Ok(UniqueJson(Value::Null))
-            }
-            fn visit_seq<A: serde::de::SeqAccess<'de>>(
-                self,
-                mut access: A,
-            ) -> std::result::Result<Self::Value, A::Error> {
-                let mut rows = vec![];
-                while let Some(value) = access.next_element::<UniqueJson>()? {
-                    rows.push(value.0);
-                }
-                Ok(UniqueJson(Value::Array(rows)))
-            }
-            fn visit_map<A: serde::de::MapAccess<'de>>(
-                self,
-                mut access: A,
-            ) -> std::result::Result<Self::Value, A::Error> {
-                let mut values = Map::new();
-                while let Some(key) = access.next_key::<String>()? {
-                    if values.contains_key(&key) {
-                        return Err(serde::de::Error::custom(format!(
-                            "Duplicate JSON member {key}"
-                        )));
-                    }
-                    values.insert(key, access.next_value::<UniqueJson>()?.0);
-                }
-                Ok(UniqueJson(Value::Object(values)))
-            }
-        }
-        de.deserialize_any(Visitor)
-    }
+    weftext_data::parse_unique_json(&bytes).map_err(ExportError::from_data)
 }
 
 #[cfg(test)]
@@ -1881,8 +1992,10 @@ mod tests {
         let output = engine.render_frozen(&input).unwrap();
         assert!(!output.ok);
         assert!(output.diagnostics.iter().any(|d| {
-            d.message
-                .contains("both in the document and a bibliography")
+            d.diagnostics.iter().any(|raw| {
+                raw.origin == weftext_messages::DiagnosticOrigin::Typst
+                    && raw.text.contains("both in the document and a bibliography")
+            })
         }));
     }
     #[test]
@@ -2022,7 +2135,9 @@ mod tests {
                 &serde_json::to_vec(&rows).unwrap()
             )
             .unwrap_err()
-            .0
+            .description
+            .explanation
+            .render(weftext_messages::UiLocale::EnUs)
             .contains("cannot be compared accurately")
         );
         let exact = record([
@@ -2040,7 +2155,9 @@ mod tests {
             assert!(
                 import_bibliography(BibliographyFormat::CslJson, &bytes)
                     .unwrap_err()
-                    .0
+                    .description
+                    .explanation
+                    .render(weftext_messages::UiLocale::EnUs)
                     .contains("cannot be compared accurately")
             );
             assert_eq!(text(&exact, "title"), Some("Exact title"));

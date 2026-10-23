@@ -33,8 +33,10 @@ translation_status: source
 
 ```text
 python scripts/server_config.py --root "D:\Notes" --out "D:\Weftext-Service\server.json" --document shared=Shared/Shared.typ --document other=Other/Other.typ --user alice --user bob
-weftext.exe --server-config "D:\Weftext-Service\server.json" --data-dir "D:\Weftext-State" --no-browser
+weftext-cli.exe serve --server-config "D:\Weftext-Service\server.json" --data-dir "D:\Weftext-State"
 ```
+
+示例程序名指本次产品入口打印的固定 CLI 角色完整路径；保留同目录的双程序及 `artifact-catalog.json`。Server 的监听地址来自配置 `bind`，不另传 `--port`。
 
 默认绑定 `127.0.0.1:47821`。浏览器打开服务地址，输入个人凭据；管理员凭据不用于正文登录。配置中 `root`、文件 ID / 相对路径 / 显示标题 / `editable`、明确的 `inputs` 依赖和部署 ID 由受信管理员选择。客户端只传对象 ID 或已打开的会话，不能传本机路径、依赖根或自行声明用户身份。每个用户的每个对象有分别的 `read`、`write`、`history`、`download`；缺项拒绝，禁用用户拒绝全部访问。后三项还要求 `read`；资源可以单独获权，输入依赖不继承主文档权限。
 
@@ -50,6 +52,8 @@ WebUI 提供源码、带样式源码、按需语法、可视写作、阅读五�
 
 浏览器输入立即保存在本标签页会话存储中，并在联网空闲时保留到服务端的个人草稿。断线时可以继续输入，不获得本地提交资格，也不自动重试保存。断线期间重载页面并不保证可加载应用；恢复连接后重新打开文档可核对仍在同标签页存储中的草稿。浏览器关闭、私密模式或存储清理可能丢失尚未送到服务端的输入，存储写入失败会提示。不同用户、设备和浏览器标签不共享本页恢复存储。
 
+显式正文、可视文字和作者面板的新增输入另存入本部署、本账号的纯输入恢复域。它仅包含实际键入或显式粘贴的新文字、来源位置／基线摘要及原保存编号，不包含旧 Base、完整保护正文、Schema、预览或凭据。注释共用“取回本人未上传输入”入口。已注册控件携带其实际正文、字段／路径、讨论／媒体、库角色或注册目标，不借当前打开正文补 owner；搜索、筛选和临时 Query 参数排除。保存成功推进准确提交原子的非撤销检查点，后续新字映射到该保存 Base；跨保存 Undo/Redo 保留原来源，已确认原生输入继续只供复制。剪贴板续接和 IME 终止事件必须保持原绑定代次。401、退出或代次变化先保已观测的新输入，再清除保护缓存；只有重新验证原账号后才能取回。来源不明的原生替换、表单历史及未应用面板文字只供独立复制，可能已应用或撤销，不冒充当前正文。源码恢复须重新获权，并核对同一稳定目标和准确基线；未知原保存先按原编号查询／落定，不能换号重发。额度或存储失败保内存原文并明确提示未可靠持久；不能据此保证关闭页面后的恢复。尚未打开文档的结构捕获稿仍属独立待实现范围。
+
 退出会先使用原凭据释放本页持有的文档会话，再清除本页凭据、展示和缓存；最终离开页面时也尽力释放会话。浏览器保留的前进／后退缓存页面暂不关闭会话，恢复后仍须通过当前授权与会话检查。释放只移除内存会话和编辑版本，不删除作者文件、已经持久保留的个人恢复稿或原保存操作记录。退出后迟到的临时打开结果也使用原凭据清理，不借用新登录用户的凭据。
 
 文档会话在 30 分钟没有获权请求后到期。在线页面的既有五秒授权检查同时为当前文档调用 `POST /api/hosted/session/keepalive`；单独查询身份不会续期其他文档或遗留会话。服务每分钟回收已到期会话，并在判断打开数量上限前再次回收；新请求不能复活已到期会话。网络中断或页面长时间冻结后，界面保留本页草稿与 Undo，并要求“重新读取与核对”后继续保存，不自动重开或重放写入。
@@ -62,7 +66,7 @@ WebUI 提供源码、带样式源码、按需语法、可视写作、阅读五�
 
 每个用户有服务端产生的授权代次。读取、搜索、历史、保存及每块下载重新授权；预览在启动前只冻结各自获权的明确输入，编译后交付前再检查该用户代次。冻结 World 不从磁盘补缺失输入，编译器不返回服务器绝对路径诊断。撤权与保存 / 单块交付的决议通过同一短时服务边界排序；已放行的字节不能撤回，新块不再放行。失效后的旧会话和下载票据不会因重新授权而复活；其他用户未变的授权和保存会话保持有效。
 
-下载先冻结当时的准确字节、长度和摘要，每次请求最多 64 KiB；后续保存不替换这份工件。票据绑定用户和授权代次，15 分钟后到期，服务重启失效，不能给另一用户续传。WebUI 收完后验证摘要才交付文件。接口响应均禁用浏览器缓存；在线空闲界面每 5 秒检查授权，确认变化或无权响应时清空旧展示、预览和本页恢复缓存。不能撤回用户已经收到 / 另存的内容，也不声称离线浏览器立即得知撤权。
+下载先冻结当时的准确字节、长度和摘要，每次请求最多 64 KiB；后续保存不替换这份工件。票据绑定用户和授权代次，15 分钟后到期，服务重启失效，不能给另一用户续传。WebUI 收完后验证摘要才交付文件。接口响应均禁用浏览器缓存；在线空闲界面每 5 秒检查授权，确认变化或无权响应时清空旧展示、预览和包含保护原文的本页恢复缓存，纯本人输入按上述独立规则保留。不能撤回用户已经收到 / 另存的内容，也不声称离线浏览器立即得知撤权。
 
 ## 预算、验收与剩余范围
 
@@ -255,15 +259,17 @@ Query 静态读取分析识别 FEATURES §5.6 的结构谓词及完整 callee �
 
 ## 创建、模板与笔记结构操作
 
-托管结构入口复用 Core 原有新建、改名、移动、完整复制、模板、回收与恢复计划。部署者配置 `structureSlots.<id> = {parent, name, types?}`；parent 指向已配置且实际纳管的目录 ID，name 固定目标名称。同 ID 的 files 项必须准确指向 `PARENT/NAME/NAME.typ`，且为 live、editable、非 importable。客户端仅提交这些选择器，不提交服务器路径。预留位置由原已提交的托管生产操作、目标槽位和当前物理身份共同确认；普通本地新建、原始复制或后来占用相同路径的其他对象不会自动获得预授权。
+托管结构入口复用 Core 原有新建、改名、移动、完整复制、模板、回收与恢复计划。部署者配置 `structureSlots.<id> = {parent, namePolicy, types?}`；parent 指向已配置且实际纳管的目录 ID。`namePolicy` 必须显式为 `{kind:"fixed",name}` 或 `{kind:"uniqueChildren",prefix,maxMembers}`，不接受旧 name 字段或缺省策略。fixed 的同 ID files 项必须准确指向 `PARENT/NAME/NAME.typ`，且为 live、editable、非 importable。uniqueChildren 不配置同 ID files；非空 prefix 最多 180 UTF-8 字节，maxMembers 为 1–5000。客户端只提交选择器，不提交服务器路径、名称策略或物理身份。
 
-用户的 `structure.sources.<fileId>` 分别设置 rename、move、trash、restore、copy、template、treeRead、treeExport；`structure.destinations.<slotId>` 分别设置 create、receive，全部默认拒绝。正文 read/write 不隐含结构权限，创建也不自动获得新对象的正文、字段、批注或资源权限。改名必须同父目录，移动保持原名称；复制和注册模板另需明确的整个源子树 treeRead/treeExport 及 Schema read。这项完整子树授权包括其未单列配置的成员，必须在首次读取之前成立；实现不扫描其他库对象来补全传输引用。
+uniqueChildren 仅允许新建和已独立获权的模板创建；名称固定为 `prefix + 原外部 operationId`，使用同一 Core no-replace producer。原号重试不改名、不另分配编号；同名普通对象、原始复制或其他 producer 不会被收养。原 FeatureOperation 与 FrozenOperation 共同固定槽 ID、真实父目录 FileIdentity、WorkspaceId、位置提示、prefix、maxMembers 及原外部编号；原记录的 qualified inputScope 与 Plan 仍须匹配。成员 `slotId/nodeUUID` 仅由原已提交 Plan/Birth 派生，读取时另核原 Birth 的物理身份，不扫描目录或新建成员账本。准备与提交都累计该槽／物理父目录下保留的原成员，包括不可用成员和旧 prefix；预算耗尽不删除原件或绕过限制。当前 prefix 变化使旧 prefix 成员不再获得此配置的读取入口。
+
+用户的 `structure.sources.<fileId>` 分别设置 rename、move、trash、restore、copy、template、treeRead、treeExport；uniqueChildren 的 `slotId/*` 可显式选择其原成员。`structure.destinations.<slotId>` 的 create、receive 默认拒绝；uniqueChildren 必须 receive=false，不能扩大改名、移动、复制或恢复的目的能力。其 `members` 显式使用文档正文、字段、历史、批注、查询等既有权限，未授予项拒绝，create 不隐授 read；fixed 的 members 必须为空，继续使用准确 files 授权。创建字段与实际默认值仍分别按准确 FieldId 核 members.fields 的读写资格，不因允许创建就读取旧 Schema 或模板。资源集合权限继续独立配置。改名必须同父目录，移动保持原名称；复制和注册模板另需明确的整个源子树 treeRead/treeExport 及 Schema read。这项完整子树授权包括其未单列配置的成员，必须在首次读取之前成立；实现不扫描其他库对象来补全传输引用。
 
 `GET structure` 只列获权来源、位置、模板和可用状态。`structure/prepare|commit|operation|settle` 使用原 resource、operationId 和 planId。create/copy/template 以目标槽位为请求锚；rename/move/trash/restore 以原来源为锚。恢复须提供该用户原回收操作的准确外部编号，不提供任意回收站目录枚举。预览保留原意图、身份映射及明确损失；commit 的 acceptLosses 不得替代未展示的损失确认。未知结果查询和结束沿用原持久操作，重启不另建编号，已结束请求不能迟到生效。原计划按当前授权代次、配置和实际来源、成员、父目录及 Schema 复验。
 
-create 可带 `capture = {title?, body?, bodyMode?, types?, fields?}`。默认 text 将正文与标题按字面原生编码；markup 只接受可证明不会执行任意代码或追加身份／字段声明的排版内容。types 必须来自该槽位的明确允许集；fields 使用准确 FieldId 和原生值，显式值、必填值与实际原生默认值分别要求字段 read/write，并按原 Schema、提供者及约束验证。没有值的可选字段不因 absent 默认而要求写权。Core 分配唯一新身份，不由表单提供。内置 native-note 模板使用字面 title/body；`structureTemplates.<id> = {source, templateId}` 则选择已登记的准确原生模板，固定原设置、来源、参数槽和完整子树。
+create 可带 `capture = {title?, body?, bodyMode?, types?, fields?, formBasis?}`。默认 text 将正文与标题按字面原生编码；markup 只接受可证明不会执行任意代码或追加身份／字段声明的排版内容。types 必须来自该槽位的明确允许集；fields 使用准确 FieldId 和原生值，显式值、必填值与实际原生默认值分别要求字段 read/write，并按原 Schema、提供者及约束验证。没有值的可选字段不因 absent 默认而要求写权。typed fields/types 须携准确 Schema roleRef 与 semanticDigest 的 formBasis；当前 Schema 不同则保留原输入并拒绝旧解释。Core 分配唯一新身份，不由表单提供。内置 native-note 模板使用字面 title/body；`structureTemplates.<id> = {source, templateId}` 则选择已登记的准确原生模板，固定原设置、来源、参数槽和完整子树。
 
-成功回执中的 result.resource 指向准确目标槽位；canOpen 另核当前独立正文读取权。WebUI 仅在用户明确选择时打开该入口。当前编辑器受到移动或回收影响时，保留个人草稿和撤销，停止把旧会话当作新位置；结果回执不替换后来输入，也不自动换 Base。复制产生独立身份，改名、移动与恢复继续原身份。该接口接通与实际测试范围沿用同一候选记录；完整 v0.6 的剩余消费者仍须单独完成。
+成功回执中的 result.resource 指向准确 fixed 目标槽位或原 uniqueChildren 成员 `slotId/nodeUUID`；canOpen 另核当前独立正文读取权。WebUI 仅在用户明确选择时打开该入口。当前编辑器受到移动或回收影响时，保留个人草稿和撤销，停止把旧会话当作新位置；结果回执不替换后来输入，也不自动换 Base。复制产生独立身份，改名、移动与恢复继续原身份。该接口接通与实际测试范围沿用同一候选记录；完整 v0.6 的剩余消费者仍须单独完成。
 
 结构创建的资源集合可预先使用 `fromStructureSlot: true`，owner 指向准确槽位；它与 expectedOwner、fromImportSlot 互斥。集合所有者仍须通过原托管结构生产记录及当前物理身份证明，不能读取未由该槽位产生的占位对象。集合 read/download/import 继续分别授权，原生资源登记仍是成员依据；`files.<id>.inputs` 可预选该集合，创建成功后直接使用原有媒体与编译消费者。结构请求的可选 inputs 列出额外独立获权的文件选择器，固定它们的原依据以验证明确引用，不自动扫描或展开全库。
 
@@ -333,3 +339,5 @@ DOCX／PDF 可显式选择 `embeddedQueries: [{occurrenceId, queryId}]` 的已�
 DOCX 导入要求管理员事先配置一个 `importable: true`、`editable: true` 的空槽位，路径固定为 `PARENT/NAME/document/document.typ`（PARENT 可为空，即库根）；例如 `Imported/document/document.typ`。用户须有该对象 read、write 和 office.import。客户端只选择对象 ID，不能传服务端路径。`office/import-targets` 列出获权槽位和是否尚未占用；父目录仍须满足原 Core 的纳管条件。`office/import/prepare|commit|operation|settle` 复用原 create-only ImportDocx 计划，创建完整原生树、转换正文和批注，并保留 DOCX 原件及图片。准备的安全损失说明与原计划持久保留，确认才能提交；同一原操作重启后继续核对，不覆盖已占用目录。结束未安装的原请求会阻止迟到提交。未知成员和恢复语义沿用 Core，不另造导入 writer。导入生成的资源默认不获得读取／输出／下载权限；部署者可逐项配置，或通过上面的 fromImportSlot 集合提前授予明确资源权限并选为 inputs。客户端不能借导入修改策略。
 
 Office 输出最多 32 件、单用户 8 件，输入／工件分别最多 32 MiB，保留工件与预览合计 64 MiB，15 分钟到期；每块下载最多 64 KiB。模板和 DOCX 原件各最多 16 MiB，对应路由 JSON 限额 24 MiB，其他托管路由保持 3 MiB。冻结 Query 最多 32 份、单用户 8 份、数据与限定 Schema 合计 32 MiB，至多保留 15 分钟。达到容量时只淘汰同一用户最旧结果，旧 queryId 明确过期，既有已准备 Office 工件仍保留原字节；不淘汰其他用户结果或自动重跑。新结果自身或其他用户占额使其无法容纳时，拒绝新结果并保留已有缓存。浏览器存储容量可能更小；写入失败会保留本页原件和输入、提示复制／重新选择，并阻止无法保留原编号的新请求或提交。`test_hosted_office.py` 使用真实转换和 HTTP 校验独立授权、原工件、审阅交换、限定 Schema、重启、原导入及撤权；`test_hosted_office_browser.mjs EXE NEW_EVIDENCE_DIRECTORY` 是后台浏览器入口。真实 Word／WPS 等兼容性按候选记录逐项验收，不由 HTTP 或 ZIP 检查替代。
+
+原正文保存 `/api/hosted/operation` 与 `operation/settle` 均必需冻结的 `resource` 和 `operationId`。Server 先核该 resource 当前读取授权，Core 再核同 actor 的原首部、输入归属与请求目标，之后才读取私有正文。浏览器 pending 同时保原 resource；同对象的别名切换不能把原操作改成新别名查询。原结果未终结时保原编辑器、后续输入与 Undo，确认终态后再采用新别名；没有重发保存或换号。

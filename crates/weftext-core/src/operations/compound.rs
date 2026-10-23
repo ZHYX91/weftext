@@ -3,6 +3,7 @@ use super::*;
 use crate::backend::MultiNamespaceGuard;
 use crate::journal::{Plan, RecoveryBlob, RecoveryIdentity, RecoveryMember};
 use crate::transaction_recovery::RecoveryCapture;
+use weftext_messages::UiMessage;
 
 #[path = "compound_placement.rs"]
 mod placement;
@@ -35,17 +36,18 @@ fn steps(t: &FrozenOperation) -> Result<&[RelocationStep]> {
         }
         _ => Err(CoreError::new(
             "invalidPlan",
-            "Compound requires bounded independent original placements",
+            UiMessage::error_core_operations_compound_requires_bounded_independent_original_placements(),
         )),
     }
 }
 /// Coordinates from the original frozen namespace phases only. Consumers must
 /// independently retain the returned directory and compare its original FI.
 pub(crate) fn compound_membership_positions(
+    backend: &crate::BackendContext,
     t: &FrozenOperation,
 ) -> Result<BTreeMap<String, PathBuf>> {
     let steps = steps(t)?;
-    let phases = placement::phases(steps)?;
+    let phases = placement::phases(backend, steps)?;
     Ok(steps
         .iter()
         .zip(phases)
@@ -84,7 +86,7 @@ pub(crate) fn validate_compound_namespace(t: &FrozenOperation) -> Result<()> {
         if slots.insert(path, true).is_some() {
             return Err(CoreError::new(
                 "invalidPlan",
-                "A compound file and directory share a final namespace slot",
+                UiMessage::error_core_operations_compound_file_and_directory_share_final_namespace_slot(),
             ));
         }
     }
@@ -92,7 +94,7 @@ pub(crate) fn validate_compound_namespace(t: &FrozenOperation) -> Result<()> {
         if slots.insert(PathBuf::from(directory), true).is_some() {
             return Err(CoreError::new(
                 "invalidPlan",
-                "A create-only directory overlaps an original final namespace slot",
+                UiMessage::error_core_operations_create_only_directory_overlaps_original_final_namespace_slot(),
             ));
         }
     }
@@ -118,7 +120,7 @@ pub(crate) fn validate_compound_namespace(t: &FrozenOperation) -> Result<()> {
         {
             return Err(CoreError::new(
                 "invalidPlan",
-                "Compound final namespace slots collide or a file is used as a directory",
+                UiMessage::error_core_operations_compound_final_namespace_slots_collide_or_file_used_as_directory(),
             ));
         }
     }
@@ -163,7 +165,7 @@ fn expected_parent(
             {
                 return Err(CoreError::new(
                     "invalidPlan",
-                    "Created target parent is not in this original Plan",
+                    UiMessage::error_core_operations_created_target_parent_not_in_original_plan(),
                 ));
             }
             core.materialized_identity(&plan.operation_id, Path::new(created_directory))
@@ -183,7 +185,8 @@ fn verify_created_membership(
         if !complete {
             return Err(CoreError::new(
                 "scopeChanged",
-                "Created directory membership exceeds its bounded proof",
+                UiMessage::error_core_operations_created_directory_membership_exceeds_bounded_proof(
+                ),
             ));
         }
         let mut allowed = BTreeSet::new();
@@ -244,7 +247,7 @@ fn verify_created_membership(
         {
             return Err(CoreError::new(
                 "thirdState",
-                "Created directory has an unplanned member",
+                UiMessage::error_core_operations_created_directory_has_unplanned_member(),
             ));
         }
     }
@@ -274,26 +277,29 @@ fn member(
         identity_binding: "unavailable".into(),
         expected_identity: expected.map(RecoveryIdentity::from),
         current_identity: None,
-        message: String::new(),
+        description: None,
     }
 }
-fn bound_directory(path: &Path) -> Result<Option<FileIdentity>> {
-    match ParentGuard::acquire(&path.join(".compound-directory-prospective")) {
+fn bound_directory(backend: &crate::BackendContext, path: &Path) -> Result<Option<FileIdentity>> {
+    match ParentGuard::acquire(backend, &path.join(".compound-directory-prospective")) {
         Ok(guard) => Ok(Some(guard.directory_identity()?)),
         Err(error) if error.code == "missing" => Ok(None),
         Err(error) => Err(error),
     }
 }
-fn phase(step: &RelocationStep) -> Result<StepPhase> {
+fn phase(backend: &crate::BackendContext, step: &RelocationStep) -> Result<StepPhase> {
     let source = Path::new(&step.source);
     let target = Path::new(&step.target);
-    match (bound_directory(source)?, bound_directory(target)?) {
+    match (
+        bound_directory(backend, source)?,
+        bound_directory(backend, target)?,
+    ) {
         (Some(identity), None) if identity == step.source_identity => {
             if step.old_leaf == step.new_leaf {
                 return Ok(StepPhase::Before);
             }
-            let old = capture_optional(&source.join(&step.old_leaf))?;
-            let new = capture_optional(&source.join(&step.new_leaf))?;
+            let old = capture_optional(backend, &source.join(&step.old_leaf))?;
+            let new = capture_optional(backend, &source.join(&step.new_leaf))?;
             match (old, new) {
                 (Some(file), None) if file.stamp.identity == step.leaf_identity => {
                     Ok(StepPhase::Before)
@@ -303,14 +309,14 @@ fn phase(step: &RelocationStep) -> Result<StepPhase> {
                 }
                 _ => Err(CoreError::new(
                     "thirdState",
-                    "Canonical namespace is not an original before/intermediate state",
+                    UiMessage::error_core_operations_canonical_namespace_not_original_before_intermediate_state(),
                 )),
             }
         }
         (None, Some(identity)) if identity == step.source_identity => Ok(StepPhase::After),
         _ => Err(CoreError::new(
             "thirdState",
-            "Original moving root is missing, replaced, or its other location is occupied",
+            UiMessage::error_core_operations_original_moving_root_missing_replaced_or_other_location_occupied(),
         )),
     }
 }
@@ -432,7 +438,7 @@ fn check_membership(
         {
             return Err(CoreError::new(
                 "scopeChanged",
-                "An original Compound directory identity or captured member changed",
+                UiMessage::error_core_operations_original_compound_directory_identity_or_captured_member_changed(),
             ));
         }
         for (name, attributes) in entries {
@@ -465,7 +471,10 @@ fn check_step_identity(
                     .iter()
                     .find(|(path, _)| locator_equal(path, parking))
                     .ok_or_else(|| {
-                        CoreError::new("invalidPlan", "Original parking parent evidence is missing")
+                        CoreError::new(
+                            "invalidPlan",
+                            UiMessage::error_core_operations_original_parking_parent_evidence_missing(),
+                        )
                     })?
                     .1
                     .clone(),
@@ -490,17 +499,24 @@ fn check_step_identity(
     {
         return Err(CoreError::new(
             "thirdState",
-            "Compound original directory or parent identity changed",
+            UiMessage::error_core_operations_compound_original_directory_or_parent_identity_changed(
+            ),
         ));
     }
     // Both address slots are part of the same namespace closure. Equal bytes
     // elsewhere never license a second object occupying the vacated slot.
     if step.parking.is_none() {
-        ensure_absent(Path::new(if phase == StepPhase::After {
-            &step.source
-        } else {
-            &step.target
-        }))?;
+        placement::ensure_absent(
+            &core.backend,
+            union,
+            steps(t)?,
+            phases,
+            Path::new(if phase == StepPhase::After {
+                &step.source
+            } else {
+                &step.target
+            }),
+        )?;
     } else if union
         .directory_identity(&placement::source_parent_path(steps(t)?, phases, step))?
         .as_ref()
@@ -514,7 +530,7 @@ fn check_step_identity(
     {
         return Err(CoreError::new(
             "thirdState",
-            "The original parking parent was replaced",
+            UiMessage::error_core_operations_original_parking_parent_was_replaced(),
         ));
     }
     Ok(())
@@ -525,7 +541,7 @@ fn open_tree(
     step: &RelocationStep,
     phase: StepPhase,
     raw_budget: &mut raw::Budget,
-) -> Result<Vec<(usize, File)>> {
+) -> Result<Vec<(usize, backend::BoundFile)>> {
     check_membership(
         namespace,
         t,
@@ -554,13 +570,13 @@ fn open_tree(
         {
             return Err(CoreError::new(
                 "conflict",
-                "Retired member attributes changed",
+                UiMessage::error_core_operations_retired_member_attributes_changed(),
             ));
         }
         if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
             return Err(CoreError::new(
                 "conflict",
-                "Compound member no longer has its original stamp and bytes",
+                UiMessage::error_core_operations_compound_member_no_longer_has_original_stamp_and_bytes(),
             ));
         }
         handles.push((index, handle));
@@ -580,7 +596,7 @@ fn open_tree(
             .ok_or_else(|| {
                 CoreError::new(
                     "invalidPlan",
-                    "Placement member lacks the same original captured file",
+                    UiMessage::error_core_operations_placement_member_lacks_same_original_captured_file(),
                 )
             })?;
         if captured.stamp.identity != entry.identity
@@ -588,7 +604,7 @@ fn open_tree(
         {
             return Err(CoreError::new(
                 "thirdState",
-                "Compound original placement member or parent changed",
+                UiMessage::error_core_operations_compound_original_placement_member_or_parent_changed(),
             ));
         }
     }
@@ -606,13 +622,18 @@ fn move_final(
     if union.target_parent_identity(index)? != expected_parent(core, plan, step)? {
         return Err(CoreError::new(
             "thirdState",
-            "Original final parent changed before placement",
+            UiMessage::error_core_operations_original_final_parent_changed_before_placement(),
         ));
     }
     let name = Path::new(&step.target)
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| CoreError::new("invalidPlan", "Original final directory name is invalid"))?;
+        .ok_or_else(|| {
+            CoreError::new(
+                "invalidPlan",
+                UiMessage::error_core_operations_original_final_directory_name_invalid(),
+            )
+        })?;
     union.select(index)?.move_source(name)?;
     protect_final_source(union, index, plan.transaction.as_ref().unwrap(), step)
 }
@@ -632,11 +653,21 @@ fn protect_final_source(
                 &display(&Path::new(&step.source).join(&step.old_leaf)),
             )
         })
-        .ok_or_else(|| CoreError::new("invalidPlan", "Final source canonical input is missing"))?;
+        .ok_or_else(|| {
+            CoreError::new(
+                "invalidPlan",
+                UiMessage::error_core_operations_final_source_canonical_input_missing(),
+            )
+        })?;
     let name = Path::new(&step.target)
         .file_name()
         .and_then(|name| name.to_str())
-        .ok_or_else(|| CoreError::new("invalidPlan", "Original final directory name is invalid"))?;
+        .ok_or_else(|| {
+            CoreError::new(
+                "invalidPlan",
+                UiMessage::error_core_operations_original_final_directory_name_invalid(),
+            )
+        })?;
     union.finish_source_move(index, name, &step.new_leaf, &original.stamp.identity)
 }
 
@@ -655,11 +686,17 @@ fn rename_original_leaf(
                 &display(&Path::new(&step.source).join(&step.old_leaf)),
             )
         })
-        .ok_or_else(|| CoreError::new("invalidPlan", "Compound canonical before image missing"))?;
+        .ok_or_else(|| {
+            CoreError::new(
+                "invalidPlan",
+                UiMessage::error_core_operations_compound_canonical_before_image_missing(),
+            )
+        })?;
     if stamp(&leaf)? != original.stamp || read_blob(&mut leaf)? != original.bytes {
         return Err(CoreError::new(
             "recoveryPending",
-            "Original canonical input changed before its namespace step",
+            UiMessage::error_core_operations_original_canonical_input_changed_before_namespace_step(
+            ),
         ));
     }
     if step.old_leaf != step.new_leaf {
@@ -679,7 +716,7 @@ fn verify_creation_absence(
             Ok(_) => {
                 return Err(CoreError::new(
                     "exists",
-                    "Renamed canonical filename is occupied",
+                    UiMessage::error_core_operations_renamed_canonical_filename_occupied(),
                 ));
             }
         }
@@ -700,7 +737,7 @@ fn verify_creation_absence(
                     Ok(_) => {
                         return Err(CoreError::new(
                             "exists",
-                            "Compound create-only participant is occupied",
+                            UiMessage::error_core_operations_compound_create_only_participant_occupied(),
                         ));
                     }
                 }
@@ -718,15 +755,15 @@ impl Core {
         let t = plan.transaction.as_ref().ok_or_else(|| {
             CoreError::new(
                 "invalidPlan",
-                "The original Compound transaction is missing",
+                UiMessage::error_core_operations_original_compound_transaction_missing(),
             )
         })?;
         validate_compound_namespace(t)?;
         let relocations = steps(t)?;
-        let phases = placement::phases(relocations)?;
+        let phases = placement::phases(&self.backend, relocations)?;
         let keys = directory_keys(t, &phases);
-        let mut union = placement::acquire(relocations, &phases, &keys)?;
-        placement::verify_vacancies(relocations, &phases)?;
+        let mut union = placement::acquire(&self.backend, relocations, &phases, &keys)?;
+        placement::verify_vacancies(&self.backend, &mut union, relocations, &phases)?;
         drop(retirement::capture(self, plan, &mut union, &phases, false)?);
         let mut raw_budget = raw::Budget::new(t)?;
         for (index, step) in relocations.iter().enumerate() {
@@ -782,13 +819,17 @@ impl Core {
         // Plan's captured tree. Compare the original unfinished writer's frozen
         // addresses against both namespace scopes, rather than scanning current
         // files or treating absent children as unowned slots.
-        for other in self.operations.values().filter(|other| {
-            other.operation_id != plan.operation_id
-                && !self.committed(&other.operation_id)
-                && !self.resolved(&other.operation_id)
-                && (other.transaction.is_none()
-                    || self.journal_path(&other.operation_id, "install").exists())
-        }) {
+        for other in self.operations.values() {
+            if other.operation_id == plan.operation_id
+                || self.committed(&other.operation_id)?
+                || self.resolved(&other.operation_id)?
+                || (other.transaction.is_some()
+                    && !self
+                        .backend
+                        .entry_exists(self.journal_path(&other.operation_id, "install"))?)
+            {
+                continue;
+            }
             let mut paths = Vec::new();
             if let Some(transaction) = &other.transaction {
                 paths.extend(
@@ -861,7 +902,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "recoveryPending",
-                            "An original unfinished writer overlaps this compound namespace; inspect its retained operation before any effect",
+                            UiMessage::error_core_operations_original_unfinished_writer_overlaps_compound_namespace_inspect_retained_operation_before_any_effect(),
                         ));
                     }
                 }
@@ -884,13 +925,13 @@ impl Core {
                 Some(_) => {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Created directory is not its original materialized object",
+                        UiMessage::error_core_operations_created_directory_not_original_materialized_object(),
                     ));
                 }
                 None if expected.is_some() => {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Original created directory disappeared",
+                        UiMessage::error_core_operations_original_created_directory_disappeared(),
                     ));
                 }
                 None => {
@@ -922,7 +963,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Created directory changed across its original namespace step",
+                    UiMessage::error_core_operations_created_directory_changed_across_original_namespace_step(),
                 ));
             }
         }
@@ -959,7 +1000,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "invalidPlan",
-                        "Compound namespace targets overlap under the Windows ordinal name comparison",
+                        UiMessage::error_core_operations_compound_namespace_targets_overlap_under_windows_ordinal_name_comparison(),
                     ));
                 }
             }
@@ -977,8 +1018,8 @@ impl Core {
             }
         }
         let keys = directory_keys(t, &initial_phases);
-        let mut union = placement::acquire(relocations, &initial_phases, &keys)?;
-        placement::verify_vacancies(relocations, &initial_phases)?;
+        let mut union = placement::acquire(&self.backend, relocations, &initial_phases, &keys)?;
+        placement::verify_vacancies(&self.backend, &mut union, relocations, &initial_phases)?;
         drop(retirement::capture(
             self,
             plan,
@@ -989,25 +1030,43 @@ impl Core {
         let mut outside_guards = Vec::new();
         let mut outside_handles = Vec::new();
         for (path, expected) in &t.write_parents {
-            let guard = ParentGuard::acquire(Path::new(path))?;
-            if guard.directory_identity()? != *expected {
+            let (parent, guard) = placement::entry_parent(
+                &self.backend,
+                &mut union,
+                relocations,
+                &initial_phases,
+                Path::new(path),
+            )?;
+            if parent != *expected {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Compound external write parent changed",
+                    UiMessage::error_core_operations_compound_external_write_parent_changed(),
                 ));
             }
-            outside_guards.push(guard);
+            outside_guards.extend(guard);
         }
         for absent in &t.absent_dependencies {
-            let guard = ParentGuard::acquire(Path::new(&absent.path))?;
-            if guard.directory_identity()? != absent.parent {
+            let (parent, guard) = placement::entry_parent(
+                &self.backend,
+                &mut union,
+                relocations,
+                &initial_phases,
+                Path::new(&absent.path),
+            )?;
+            if parent != absent.parent {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Compound absent dependency parent changed",
+                    UiMessage::error_core_operations_compound_absent_dependency_parent_changed(),
                 ));
             }
-            ensure_absent(Path::new(&absent.path))?;
-            outside_guards.push(guard);
+            placement::ensure_absent(
+                &self.backend,
+                &mut union,
+                relocations,
+                &initial_phases,
+                Path::new(&absent.path),
+            )?;
+            outside_guards.extend(guard);
         }
         let mut tree_handles = Vec::new();
         let mut raw_budget = raw::Budget::new(t)?;
@@ -1038,7 +1097,7 @@ impl Core {
                 .any(|step| relative(&file.path, &step.source).is_some())
         }) {
             self.check_pending(Path::new(&file.path))?;
-            let guard = ParentGuard::acquire(Path::new(&file.path))?;
+            let guard = ParentGuard::acquire(&self.backend, Path::new(&file.path))?;
             let write =
                 update(t, file).is_some_and(|change| change.before.as_ref() != Some(&change.after));
             let mut handle = if t.is_retired_member(&file.path) {
@@ -1053,7 +1112,7 @@ impl Core {
             if stamp(&handle)? != file.stamp || read_blob(&mut handle)? != file.bytes {
                 return Err(CoreError::new(
                     "conflict",
-                    "Compound external dependency changed",
+                    UiMessage::error_core_operations_compound_external_dependency_changed(),
                 ));
             }
             outside_handles.push((index, handle));
@@ -1074,14 +1133,20 @@ impl Core {
                     .any(|step| relative(&change.path, &step.target).is_some())
         }) {
             self.check_pending(Path::new(&change.path))?;
-            ensure_absent(&physical_path(t, &change.path, &initial_phases))?;
+            placement::ensure_absent(
+                &self.backend,
+                &mut union,
+                relocations,
+                &initial_phases,
+                &physical_path(t, &change.path, &initial_phases),
+            )?;
         }
         for (path, key) in &keys {
             self.check_pending(Path::new(path))?;
             if union.directory_identity(key)?.is_some() {
                 return Err(CoreError::new(
                     "exists",
-                    "Create-only directory is occupied",
+                    UiMessage::error_core_operations_create_only_directory_occupied(),
                 ));
             }
         }
@@ -1094,7 +1159,7 @@ impl Core {
             if step.parking.is_none() {
                 continue;
             }
-            placement::verify_vacancies(relocations, &current_phases)?;
+            placement::verify_vacancies(&self.backend, &mut union, relocations, &current_phases)?;
             tree_handles.retain(|(file, _)| !placement::owns(t, &t.files[*file].path, step));
             union.release_source_descendants(index)?;
             let namespace = union.select(index)?;
@@ -1102,7 +1167,7 @@ impl Core {
             compound_failpoint(&format!("leaf{index}"))?;
             union.move_source_to(index, Path::new(step.parking.as_ref().unwrap()))?;
             current_phases[index] = StepPhase::Parked;
-            placement::verify_vacancies(relocations, &current_phases)?;
+            placement::verify_vacancies(&self.backend, &mut union, relocations, &current_phases)?;
             self.retain_compound_directories(plan, &mut union, &keys)?;
             let mut step_raw_budget = raw::Budget::new(t)?;
             tree_handles.extend(open_tree(
@@ -1120,7 +1185,7 @@ impl Core {
         }
         for index in placement::order(relocations, false) {
             let step = &relocations[index];
-            placement::verify_vacancies(relocations, &current_phases)?;
+            placement::verify_vacancies(&self.backend, &mut union, relocations, &current_phases)?;
             // Releasing only this root's descendants is required by NTFS parent
             // rename. All other roots and the union ancestor closure stay held.
             tree_handles.retain(|(file, _)| !placement::owns(t, &t.files[*file].path, step));
@@ -1132,7 +1197,7 @@ impl Core {
             }
             move_final(self, plan, &mut union, index, step)?;
             current_phases[index] = StepPhase::After;
-            placement::verify_vacancies(relocations, &current_phases)?;
+            placement::verify_vacancies(&self.backend, &mut union, relocations, &current_phases)?;
             // Source descendants had to be released for NTFS rename. Rebind
             // only through the same original root and retained materialization.
             self.retain_compound_directories(plan, &mut union, &keys)?;
@@ -1165,13 +1230,17 @@ impl Core {
                     .iter()
                     .position(|(member, _)| *member == original)
                     .ok_or_else(|| {
-                        CoreError::new("invalidPlan", "Retirement lacks its original guarded file")
+                        CoreError::new(
+                            "invalidPlan",
+                            UiMessage::error_core_operations_retirement_lacks_original_guarded_file(
+                            ),
+                        )
                     })?;
                 outside_handles.remove(position).1
             };
             retirement::check_file(t, retired, &mut file)?;
             union.move_file_to(&file, Path::new(&retired.target))?;
-            retirement::verify_held(self, plan, &union, retired, &mut file)?;
+            retirement::verify_held(self, plan, &mut union, &current_phases, retired, &mut file)?;
             preserved.push((index, file));
             compound_failpoint(&format!("retire{index}"))?;
         }
@@ -1193,7 +1262,7 @@ impl Core {
                     true,
                 )?
             } else {
-                let guard = ParentGuard::acquire(Path::new(&change.path))?;
+                let guard = ParentGuard::acquire(&self.backend, Path::new(&change.path))?;
                 let file = guard.open_file(true, true)?;
                 outside_guards.push(guard);
                 file
@@ -1224,7 +1293,10 @@ impl Core {
                 .iter()
                 .find(|change| locator_equal(&change.path, &path))
                 .ok_or_else(|| {
-                    CoreError::new("invalidPlan", "Compound mapped participant missing")
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_operations_compound_mapped_participant_missing(),
+                    )
                 })?;
             if change.before.as_ref() != Some(&change.after) {
                 write_blob(file, &change.after)?;
@@ -1232,7 +1304,7 @@ impl Core {
             if read_blob(file)? != change.after {
                 return Err(CoreError::new(
                     "recoveryPending",
-                    "Compound after image verification failed",
+                    UiMessage::error_core_operations_compound_after_image_verification_failed(),
                 ));
             }
             materialized.push((path, stamp(file)?));
@@ -1255,7 +1327,14 @@ impl Core {
         raw_budget.validate(self, t)?;
         verify_created_membership(t, &union, &keys)?;
         for (index, file) in &mut preserved {
-            retirement::verify_held(self, plan, &union, &t.retired_members()[*index], file)?;
+            retirement::verify_held(
+                self,
+                plan,
+                &mut union,
+                &current_phases,
+                &t.retired_members()[*index],
+                file,
+            )?;
         }
         self.publish_recovery_facts(plan, &materialized)?;
         compound_failpoint("facts")?;
@@ -1273,10 +1352,10 @@ impl Core {
         validate_compound_namespace(t)?;
         self.validate_compound_pending(plan)?;
         let relocations = steps(t)?;
-        let phases = placement::phases(relocations)?;
+        let phases = placement::phases(&self.backend, relocations)?;
         let keys = directory_keys(t, &phases);
-        let mut union = placement::acquire(relocations, &phases, &keys)?;
-        placement::verify_vacancies(relocations, &phases)?;
+        let mut union = placement::acquire(&self.backend, relocations, &phases, &keys)?;
+        placement::verify_vacancies(&self.backend, &mut union, relocations, &phases)?;
         for (path, key) in &keys {
             let expected = self.materialized_identity(&plan.operation_id, Path::new(path))?;
             let actual = union.directory_identity(key)?;
@@ -1301,11 +1380,10 @@ impl Core {
             } else {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Create-only directory lost its exact original materialization",
+                    UiMessage::error_core_operations_create_only_directory_lost_exact_original_materialization(),
                 ));
             }
-            directory.message =
-                "Only this Plan's create-only directory may supply the planned parent".into();
+            directory.description = Some(UiMessage::recovery_compound_directory_parent().into());
             capture.members.push(directory);
         }
         verify_created_membership(t, &union, &keys)?;
@@ -1351,7 +1429,7 @@ impl Core {
                 StepPhase::After => "knownAfter",
             }
             .into();
-            root.message = "Exact original namespace root, parents and membership retained".into();
+            root.description = Some(UiMessage::recovery_compound_namespace_retained().into());
             capture.members.push(root);
             for original in &t.files {
                 if t.is_retired_member(&original.path) {
@@ -1399,11 +1477,11 @@ impl Core {
                 }
                 .into();
                 m.identity_binding = if bound { "original" } else { "mismatch" }.into();
-                m.message = "Exact original compound file and before/after bytes".into();
+                m.description = Some(UiMessage::recovery_compound_file_retained().into());
                 if !before && !after {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Compound file is neither its original before nor exact after object",
+                        UiMessage::error_core_operations_compound_file_neither_original_before_nor_exact_after_object(),
                     ));
                 }
                 capture.files.push((capture.members.len(), held));
@@ -1422,7 +1500,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Original compound member parent changed",
+                        UiMessage::error_core_operations_original_compound_member_parent_changed(),
                     ));
                 }
                 if !t.files.iter().any(|file| {
@@ -1432,7 +1510,7 @@ impl Core {
                 }) {
                     return Err(CoreError::new(
                         "invalidPlan",
-                        "Compound placement member lacks original physical input",
+                        UiMessage::error_core_operations_compound_placement_member_lacks_original_physical_input(),
                     ));
                 }
             }
@@ -1464,7 +1542,7 @@ impl Core {
                         Err(error) if error.code == "missing" => {
                             return Err(CoreError::new(
                                 "thirdState",
-                                "Original created compound object disappeared",
+                                UiMessage::error_core_operations_original_created_compound_object_disappeared(),
                             ));
                         }
                         Err(error) => return Err(error),
@@ -1477,7 +1555,7 @@ impl Core {
                             {
                                 return Err(CoreError::new(
                                     "thirdState",
-                                    "Compound create-only output is not the original materialized before/after object",
+                                    UiMessage::error_core_operations_compound_create_only_output_not_original_materialized_before_after_object(),
                                 ));
                             }
                             m.matches_before = bytes.is_empty();
@@ -1494,7 +1572,7 @@ impl Core {
                             capture.files.push((capture.members.len(), file));
                         }
                     }
-                    m.message = "Original compound create-only output; only its original materialization may resume".into();
+                    m.description = Some(UiMessage::recovery_compound_create_output().into());
                     capture.members.push(m);
                 }
             }
@@ -1522,7 +1600,8 @@ impl Core {
             let compound = capture.compound.as_mut().ok_or_else(|| {
                 CoreError::new(
                     "recoveryConflict",
-                    "Original compound namespace proof is unavailable",
+                    UiMessage::error_core_operations_original_compound_namespace_proof_unavailable(
+                    ),
                 )
             })?;
             self.materialize_compound_directories(
@@ -1570,11 +1649,18 @@ impl Core {
                 .find(|(index, _)| *index == member)
                 .unwrap()
                 .1;
-            let compound = capture.compound.as_ref().unwrap();
+            let compound = capture.compound.as_mut().unwrap();
             compound
                 .namespace
                 .move_file_to(file, Path::new(&retired.target))?;
-            retirement::verify_held(self, plan, &compound.namespace, retired, file)?;
+            retirement::verify_held(
+                self,
+                plan,
+                &mut compound.namespace,
+                &compound.phases,
+                retired,
+                file,
+            )?;
             capture.members[member].matches_before = false;
             capture.members[member].matches_after = true;
             capture.members[member].state = "knownAfter".into();
@@ -1602,7 +1688,12 @@ impl Core {
                 .as_ref()
                 .is_some_and(|path| relative(path, &display(current)).is_some())
         });
-        placement::verify_vacancies(steps(t)?, &compound.phases)?;
+        placement::verify_vacancies(
+            &self.backend,
+            &mut compound.namespace,
+            steps(t)?,
+            &compound.phases,
+        )?;
         compound.namespace.release_source_descendants(index)?;
         let namespace = compound.namespace.select(index)?;
         if phase == StepPhase::Before {
@@ -1615,7 +1706,12 @@ impl Core {
             compound.namespace.move_source_to(index, target)?;
         }
         compound.phases[index] = next;
-        placement::verify_vacancies(steps(t)?, &compound.phases)?;
+        placement::verify_vacancies(
+            &self.backend,
+            &mut compound.namespace,
+            steps(t)?,
+            &compound.phases,
+        )?;
         self.retain_compound_directories(plan, &mut compound.namespace, &compound.directory_keys)?;
         let namespace = compound.namespace.select(index)?;
         let mut step_raw_budget = raw::Budget::new(t)?;
@@ -1654,7 +1750,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "recoveryConflict",
-                    "Compound original file changed during namespace continuation",
+                    UiMessage::error_core_operations_compound_original_file_changed_during_namespace_continuation(),
                 ));
             }
             capture.members[member_index].matches_after =
@@ -1685,14 +1781,17 @@ impl Core {
     ) -> Result<()> {
         let t = plan.transaction.as_ref().unwrap();
         let compound = capture.compound.as_mut().ok_or_else(|| {
-            CoreError::new("recoveryConflict", "Original namespace proof missing")
+            CoreError::new(
+                "recoveryConflict",
+                UiMessage::error_core_operations_original_namespace_proof_missing(),
+            )
         })?;
         let mut raw_budget = raw::Budget::new(t)?;
         for (index, step) in steps(t)?.iter().enumerate() {
             if compound.phases[index] != StepPhase::After {
                 return Err(CoreError::new(
                     "recoveryConflict",
-                    "Original namespace is incomplete",
+                    UiMessage::error_core_operations_original_namespace_incomplete(),
                 ));
             }
             check_membership(
@@ -1718,10 +1817,20 @@ impl Core {
                 .iter_mut()
                 .find(|(member, _)| *member == index)
                 .ok_or_else(|| {
-                    CoreError::new("recoveryConflict", "Original retired file proof is missing")
+                    CoreError::new(
+                        "recoveryConflict",
+                        UiMessage::error_core_operations_original_retired_file_proof_missing(),
+                    )
                 })?
                 .1;
-            retirement::verify_held(self, plan, &compound.namespace, retired, file)?;
+            retirement::verify_held(
+                self,
+                plan,
+                &mut compound.namespace,
+                &compound.phases,
+                retired,
+                file,
+            )?;
         }
         Ok(())
     }
@@ -1730,7 +1839,7 @@ impl Core {
         plan: &Plan,
         capture: &mut RecoveryCapture,
         path: &str,
-    ) -> Result<Option<File>> {
+    ) -> Result<Option<backend::BoundFile>> {
         let t = plan.transaction.as_ref().unwrap();
         let Some(compound) = capture.compound.as_mut() else {
             return Ok(None);
@@ -1743,7 +1852,7 @@ impl Core {
                 if compound.phases[index] != StepPhase::After {
                     return Err(CoreError::new(
                         "recoveryConflict",
-                        "Create-only output's original placement is incomplete",
+                        UiMessage::error_core_operations_create_only_output_s_original_placement_incomplete(),
                     ));
                 }
                 return Ok(Some(
@@ -1764,7 +1873,7 @@ impl Core {
 
 #[cfg(test)]
 thread_local! { static COMPOUND_FAILPOINT: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) }; }
-#[cfg(test)]
+#[cfg(all(test, windows))]
 pub(crate) fn set_compound_failpoint(name: &str) {
     COMPOUND_FAILPOINT.with(|point| *point.borrow_mut() = Some(name.into()));
 }
@@ -1774,7 +1883,7 @@ fn compound_failpoint(name: &str) -> Result<()> {
         COMPOUND_FAILPOINT.with(|point| *point.borrow_mut() = None);
         return Err(CoreError::new(
             "testInterrupted",
-            "Interrupted original compound operation",
+            UiMessage::error_core_operations_interrupted_original_compound_operation(),
         ));
     }
     let _ = name;

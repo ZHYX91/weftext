@@ -109,7 +109,9 @@ fn members(inner: &HostedInner, slot: &str) -> Result<Vec<(String, NodeRef)>, Ap
         .content_import_slot_members_at(&inner.config.root, &target, slot)
         .map_err(core_error)?;
     if entries.len() > MAX_MEMBERS {
-        return Err(ApiError::bad("导入成员超过 5000 项预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_content_import_import_member_budget(),
+        ));
     }
     let mut unique = BTreeSet::new();
     entries
@@ -172,7 +174,9 @@ pub(super) fn member_ids(inner: &HostedInner, actor: &str) -> Result<Vec<String>
             ids.push(format!("{id}/{}", owner.node_id));
         }
         if ids.len() > MAX_MEMBERS {
-            return Err(ApiError::bad("获权导入成员超过 5000 项预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_content_import_authorized_import_member_budget(),
+            ));
         }
     }
     Ok(ids)
@@ -195,7 +199,9 @@ pub(super) fn collection_ids(inner: &HostedInner, actor: &str) -> Result<Vec<Str
         if r.resources.read || r.resources.r#import {
             ids.extend(slot_member_ids(inner, slot)?);
             if ids.len() > MAX_MEMBERS {
-                return Err(ApiError::bad("集合目录超过 5000 项预算"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_content_import_collection_catalog_budget(),
+                ));
             }
         }
     }
@@ -337,7 +343,7 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "contentImportChanged",
-        "导入槽、原件、授权或原计划已变化，请保留原输入并核对原操作。",
+        UiMessage::error_api_hosted_content_import_import_basis_changed(),
     )
 }
 fn core_error(_: CoreError) -> ApiError {
@@ -417,8 +423,9 @@ fn upload_shared_access(
     if format != "native" {
         return Ok(());
     }
-    let package = weftext_export::exchange::read_native_package(bytes)
-        .map_err(|_| ApiError::bad("原生包无效或超过预算；原件未改动"))?;
+    let package = weftext_export::exchange::read_native_package(bytes).map_err(|_| {
+        ApiError::bad(UiMessage::error_api_hosted_content_import_native_package_invalid())
+    })?;
     if let Some(raw) = package.files.get(".weftext-tags.json") {
         let tags: weftext_data::TagDocument = serde_json::from_slice(raw).map_err(|_| changed())?;
         if !tags.tags.is_empty() {
@@ -453,13 +460,21 @@ fn upload_shared_access(
 }
 fn upload(value: &str) -> Result<Vec<u8>, ApiError> {
     if value.len() > MAX_UPLOAD.div_ceil(3) * 4 {
-        return Err(ApiError::bad("导入原件上限为 16 MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_content_import_import_original_size_limit(),
+        ));
     }
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(value)
-        .map_err(|_| ApiError::bad("导入原件编码无效"))?;
+        .map_err(|_| {
+            ApiError::bad(
+                UiMessage::error_api_hosted_content_import_import_original_encoding_invalid(),
+            )
+        })?;
     if bytes.is_empty() || bytes.len() > MAX_UPLOAD {
-        return Err(ApiError::bad("导入原件须为 1 字节至 16 MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_content_import_import_original_size_range(),
+        ));
     }
     Ok(bytes)
 }
@@ -537,14 +552,19 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
 }
 fn inspect_upload(inner: &mut HostedInner, format: &str, bytes: &[u8]) -> Result<Value, ApiError> {
     if format == "native" {
-        let p = weftext_export::exchange::read_native_package(bytes)
-            .map_err(|_| ApiError::bad("原生包无效或超过预算；原件未改动"))?;
+        let p = weftext_export::exchange::read_native_package(bytes).map_err(|_| {
+            ApiError::bad(UiMessage::error_api_hosted_content_import_native_package_invalid())
+        })?;
         return Ok(
             json!({"uploadDigest":digest(bytes),"recordCount":p.manifest.entries.values().filter(|e|e.role==weftext_export::exchange::NativeFileRole::Source).count(),"losses":[],"canPrepare":true}),
         );
     }
-    let proposal = bibliography_import_api::inspect_bibliography_import(format, bytes)
-        .map_err(|_| ApiError::bad("文献原件无法完整解析或核对其保留字段，输入未改动"))?;
+    let proposal =
+        bibliography_import_api::inspect_bibliography_import(format, bytes).map_err(|_| {
+            ApiError::bad(
+                UiMessage::error_api_hosted_content_import_bibliography_original_unqualified(),
+            )
+        })?;
     let conflict = proposal.records.iter().any(|r| !r.conflicts.is_empty());
     let config = inner
         .core
@@ -564,13 +584,13 @@ fn inspect_upload(inner: &mut HostedInner, format: &str, bytes: &[u8]) -> Result
         )
         .is_ok();
     Ok(
-        json!({"uploadDigest":digest(bytes),"records":proposal.records,"losses":proposal.losses,"canPrepare":can_prepare,"reason":if can_prepare{Value::Null}else{json!("本次上传存在出版字段冲突、无映射的 typed 引用或不符合目的 Schema；请保留并核对原件，未创建或更新笔记。")}}),
+        json!({"uploadDigest":digest(bytes),"records":proposal.records,"losses":proposal.losses,"canPrepare":can_prepare,"reason":if can_prepare{Value::Null}else{json!(ErrorDescription::from(UiMessage::error_api_hosted_content_import_proposal_not_ready()))}}),
     )
 }
 async fn inspect(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Inspect>,
+    RequestJson(req): RequestJson<Inspect>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -587,16 +607,16 @@ async fn inspect(
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Prepare>,
+    RequestJson(req): RequestJson<Prepare>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner|{
     let actor=inner.actor(&auth)?;import_access(inner,&actor,&req.slot,&req.format)?;let bytes=upload(&req.bytes_base64)?;let upload_digest=digest(&bytes);let fp=digest(&serde_json::to_vec(&json!({"slot":req.slot,"format":req.format,"uploadDigest":upload_digest})).map_err(|_|changed())?);let scope=scope(inner,&actor);let root=inner.config.root.clone();
     if let Some(old)=inner.core.with_actor_for_root(&scope,&root,|c|c.actor_feature_retry(&req.slot,&req.operation_id,&fp)).map_err(core_error)?{return safe_status(inner,&actor,&req.slot,old);}
     library::access(inner,&actor,"schema",false)?;
     upload_shared_access(inner,&actor,&req.format,&bytes)?;
-    let inspected=inspect_upload(inner,&req.format,&bytes)?;if inspected["canPrepare"]!=true{return Err(ApiError::new(StatusCode::CONFLICT,"contentImportUnavailable","本次上传有冲突、typed 引用缺少映射或不符合目的 Schema；原件保留，未创建或更新笔记。"));}
+    let inspected=inspect_upload(inner,&req.format,&bytes)?;if inspected["canPrepare"]!=true{return Err(ApiError::new(StatusCode::CONFLICT,"contentImportUnavailable",UiMessage::error_api_hosted_content_import_import_proposal_unqualified()));}
     let s=inner.config.content_import_slots[&req.slot].clone();let p=inner.config.directories[&s.parent].clone();let parent=root.join(&p.path);let q=inner.core.qualified_query_scope_at(&root,&parent,&p.reference,"live").map_err(core_error)?;let mut witnesses:Vec<SnapshotWitness>=vec![];weftext_core::Core::merge_query_scope_witness(&mut witnesses,&q.witness).map_err(core_error)?;
-    let d=Decision{epoch:inner.actor_generation(&actor),config_hash:config_hash(inner,&req.slot)?,expires:now_ms().saturating_add(TTL_MS),format:req.format.clone(),upload_digest};let preview=json!({"summary":"在固定空槽中创建独立管理笔记，保留上传原件与已支持的资源；原计划损失须明确接受。","recordCount":inspected.get("recordCount").cloned().unwrap_or_else(||json!(inspected["records"].as_array().map_or(0,Vec::len))),"_contentImport":d});
+    let d=Decision{epoch:inner.actor_generation(&actor),config_hash:config_hash(inner,&req.slot)?,expires:now_ms().saturating_add(TTL_MS),format:req.format.clone(),upload_digest};let preview=json!({"summary":UiMessage::error_api_hosted_content_import_plan_summary(),"recordCount":inspected.get("recordCount").cloned().unwrap_or_else(||json!(inspected["records"].as_array().map_or(0,Vec::len))),"_contentImport":d});
     let intent=if req.format=="native"{OperationIntent::ImportNative{parent:parent.to_string_lossy().into_owned(),name:s.name,bytes,allow_losses:true}}else{OperationIntent::ImportBibliography{parent:parent.to_string_lossy().into_owned(),name:s.name,format:req.format,bytes,allow_losses:true}};
     let request=OperationRequest{operation_id:req.operation_id.clone(),root:root.to_string_lossy().into_owned(),intent};let refs=witnesses.iter().collect::<Vec<_>>();let status=inner.core.with_actor_for_root(&scope,&root,|c|c.actor_feature_prepare_content_import(&req.slot,&req.operation_id,&fp,request,preview,&refs,&req.slot)).map_err(core_error)?;safe_status(inner,&actor,&req.slot,status)
 }).await?))
@@ -604,14 +624,14 @@ async fn prepare(
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner|{let actor=inner.actor(&auth)?;operation_access(inner,&actor,&req.slot)?;let root=inner.config.root.clone();let scope=scope(inner,&actor);match inner.core.with_actor_for_root(&scope,&root,|c|c.actor_feature_status(&req.slot,&req.operation_id)).map_err(core_error)?{Some(s)=>safe_status(inner,&actor,&req.slot,s),None=>Ok(json!({"slot":req.slot,"operationId":req.operation_id,"status":"notRegistered","planId":null,"preview":{},"nodeRefs":[],"commitAllowed":false}))}}).await?))
 }
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -633,7 +653,7 @@ async fn settle(
 async fn commit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Commit>,
+    RequestJson(req): RequestJson<Commit>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -673,7 +693,7 @@ async fn commit(
 async fn list_members(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Members>,
+    RequestJson(req): RequestJson<Members>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner|{let actor=inner.actor(&auth)?;let r=inner.policy.users[&actor].content_imports.get(&req.slot).ok_or_else(unavailable)?;if r.members==super::Rights::default()&&!r.resources.read{return Err(unavailable());}let mut result=vec![];let mut partial=false;for(_,owner)in members(inner,&req.slot)?{let resource=format!("{}/{}",req.slot,owner.node_id);let ready=qualify_member(inner,&resource).is_ok();partial|=!ready;result.push(json!({"resource":resource,"nodeRef":owner,"title":inner.config.content_import_slots[&req.slot].title,"status":if ready{"ready"}else{"unavailable"},"canOpen":ready&&r.members.read}));}Ok(json!({"scope":"configuredImportSlotMembers","coverage":if partial{"partial"}else{"complete"},"members":result}))}).await?))
 }
@@ -764,16 +784,20 @@ mod tests {
         }
     }
     async fn apply(state: &HostedState, auth: &Auth, req: Prepare) -> Value {
-        let plan = prepare(State(state.clone()), Extension(auth.clone()), Json(req))
-            .await
-            .unwrap()
-            .0;
+        let plan = prepare(
+            State(state.clone()),
+            Extension(auth.clone()),
+            crate::RequestJson(req),
+        )
+        .await
+        .unwrap()
+        .0;
         assert_eq!(plan["status"], "prepared");
         assert!(plan["preview"]["losses"].is_array());
         commit(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Commit {
+            crate::RequestJson(Commit {
                 slot: plan["slot"].as_str().unwrap().into(),
                 operation_id: plan["operationId"].as_str().unwrap().into(),
                 plan_id: plan["planId"].as_str().unwrap().into(),
@@ -790,11 +814,15 @@ mod tests {
         let (_temp, state, auth, bytes) = fixture();
         let req = request("Native", "native", &bytes);
         assert_eq!(
-            prepare(State(state.clone()), Extension(auth.clone()), Json(req))
-                .await
-                .err()
-                .unwrap()
-                .status,
+            prepare(
+                State(state.clone()),
+                Extension(auth.clone()),
+                crate::RequestJson(req)
+            )
+            .await
+            .err()
+            .unwrap()
+            .status,
             StatusCode::NOT_FOUND
         );
         grant(&state, false);
@@ -831,7 +859,7 @@ mod tests {
         let listing = list_members(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Members {
+            crate::RequestJson(Members {
                 slot: "Native".into(),
             }),
         )
@@ -899,7 +927,7 @@ mod tests {
         let first = prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(original),
+            crate::RequestJson(original),
         )
         .await
         .unwrap()
@@ -907,7 +935,7 @@ mod tests {
         let retry = prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Prepare {
+            crate::RequestJson(Prepare {
                 slot: "Native".into(),
                 operation_id: op.clone(),
                 format: "native".into(),
@@ -921,7 +949,7 @@ mod tests {
         let changed = prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Prepare {
+            crate::RequestJson(Prepare {
                 slot: "Native".into(),
                 operation_id: op,
                 format: "native".into(),
@@ -936,7 +964,7 @@ mod tests {
         let result = settle(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 slot: "Cancelled".into(),
                 operation_id: cancelled.clone(),
             }),
@@ -948,7 +976,7 @@ mod tests {
         let late = prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Prepare {
+            crate::RequestJson(Prepare {
                 slot: "Cancelled".into(),
                 operation_id: cancelled,
                 format: "native".into(),

@@ -1,6 +1,7 @@
 //! Closed owner recovery backup, around the original BackupLibrary Plan.
 use super::*;
 use operations::Mutation;
+use weftext_messages::UiMessage;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -34,22 +35,11 @@ impl Core {
         operation: &str,
     ) -> Result<Option<ActorOperation>> {
         feature::valid_resource(resource)?;
-        let file = match File::open(self.actor_record(operation)?) {
-            Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
+        let Some(record) =
+            self.read_actor_operation(operation, resource, MAX_SOURCE_BYTES + 4096)?
+        else {
+            return Ok(None);
         };
-        let mut bytes = Vec::new();
-        file.take((MAX_SOURCE_BYTES + 4097) as u64)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > MAX_SOURCE_BYTES + 4096 {
-            return Err(CoreError::new(
-                "budget",
-                "Owner backup record exceeds its budget",
-            ));
-        }
-        let record: ActorOperation = serde_json::from_slice(&bytes)?;
-        self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
             || record.owner_backup.is_none()
@@ -78,7 +68,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "libraryScopeRequired",
-                    "Owner backup requires a trusted admitted library scope",
+                    UiMessage::error_core_hosted_backup_owner_backup_requires_trusted_admitted_library_scope(),
                 )
             })?;
         let root = self
@@ -94,6 +84,7 @@ impl Core {
         resource: &str,
         operation: &str,
     ) -> Result<Option<ActorOwnerBackupStatus>> {
+        self.backend.check_path(&self.data_dir)?;
         self.require_owner_backup_scope()?;
         let Some(record) = self.owner_backup_record(resource, operation)? else {
             return Ok(None);
@@ -125,8 +116,8 @@ impl Core {
                 if error.code == "operationMissing"
                     && !self.operations.contains_key(&record.core_operation_id)
                     && !self
-                        .journal_path(&record.core_operation_id, "plan")
-                        .exists() =>
+                        .backend
+                        .entry_exists(self.journal_path(&record.core_operation_id, "plan"))? =>
             {
                 None
             }
@@ -136,9 +127,11 @@ impl Core {
             Some("committed") => "committed",
             Some("recoveryPending") => "recoveryPending",
             Some("resolved") => {
-                let resolution: serde_json::Value = serde_json::from_slice(&fs::read(
-                    self.journal_path(&record.core_operation_id, "resolution"),
-                )?)?;
+                let resolution: serde_json::Value = serde_json::from_slice(
+                    &self
+                        .backend
+                        .read_bytes(self.journal_path(&record.core_operation_id, "resolution"))?,
+                )?;
                 if resolution["action"] == "cancelPrepared" {
                     "cancelled"
                 } else {
@@ -151,7 +144,7 @@ impl Core {
             _ => {
                 return Err(CoreError::new(
                     "invalidState",
-                    "Unknown original backup state",
+                    UiMessage::error_core_hosted_backup_unknown_original_backup_state(),
                 ));
             }
         };
@@ -201,6 +194,7 @@ impl Core {
         let destination = display(&absolute_path(destination)?);
         check_size(&serde_json::to_vec(&preview)?)?;
         let record = ActorOperation {
+            scope: self.actor_input_scope_for_root(&root)?,
             library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
@@ -219,8 +213,9 @@ impl Core {
             }),
         };
         journal::private_create(
+            &self.backend,
             &self.actor_record(operation)?,
-            &Self::actor_operation_bytes(&record)?,
+            &self.actor_operation_bytes(&record)?,
         )?;
         #[cfg(all(test, windows))]
         definition_test_failpoint("ownerBackupActorDurable")?;
@@ -266,6 +261,7 @@ impl Core {
         let mut record = match self.owner_backup_record(resource, operation)? {
             Some(record) => record,
             None => ActorOperation {
+                scope: self.actor_attempt_input_scope()?,
                 library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
@@ -295,9 +291,9 @@ impl Core {
                 self.resolve_record(&record.core_operation_id, "cancelPrepared")?;
             }
             record.cancelled = true;
-            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+            private_replace(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+            journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_owner_backup_status(resource, operation)?
             .ok_or_else(feature::conflict)
@@ -314,7 +310,7 @@ impl Core {
         if status.status != "committed" {
             return Err(CoreError::new(
                 "artifactUnavailable",
-                "The original backup is not committed",
+                UiMessage::error_core_hosted_backup_original_backup_not_committed(),
             ));
         }
         self.owner_backup_artifact_from_plan(resource, operation)
@@ -334,7 +330,7 @@ impl Core {
         if status.status != "prepared" || status.plan_id.as_deref() != Some(plan_id) {
             return Err(CoreError::new(
                 "artifactUnavailable",
-                "The exact original backup is not prepared",
+                UiMessage::error_core_hosted_backup_exact_original_backup_not_prepared(),
             ));
         }
         self.owner_backup_artifact_from_plan(resource, operation)
@@ -391,7 +387,7 @@ impl Core {
         if manifest != 1 || bytes > 64 * 1024 * 1024 {
             return Err(CoreError::new(
                 "budget",
-                "Original backup artifact exceeds its budget",
+                UiMessage::error_core_hosted_backup_original_backup_artifact_exceeds_budget(),
             ));
         }
         let mut names = Vec::new();
@@ -434,7 +430,7 @@ impl Core {
         if output.len() + names.len() > 5000 {
             return Err(CoreError::new(
                 "budget",
-                "Original backup members exceed their budget",
+                UiMessage::error_core_hosted_backup_original_backup_members_exceed_their_budget(),
             ));
         }
         Ok(OwnerBackupArtifact {

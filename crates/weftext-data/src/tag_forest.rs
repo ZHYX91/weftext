@@ -33,7 +33,9 @@ pub struct TagForest {
 impl TagDocument {
     pub fn forest(&self) -> Result<TagForest> {
         if self.version != 2 || self.tags.len() > 5000 {
-            return Err(DataError("Unsupported or oversized tag registry".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_tag_forest_tag_registry_unsupported_or_oversized(),
+            ));
         }
         let mut positions = BTreeMap::new();
         for (i, tag) in self.tags.iter().enumerate() {
@@ -44,7 +46,7 @@ impl TagDocument {
                 || tag.display_name.contains('\0')
                 || positions.insert(tag.tag_id.as_str(), i).is_some()
             {
-                return Err(DataError("Invalid or duplicate tag declaration".into()));
+                return Err(DataError::new(weftext_messages::UiMessage::error_data_tag_forest_tag_declaration_invalid_or_duplicate()));
             }
         }
         let mut children = vec![Vec::new(); self.tags.len()];
@@ -53,11 +55,15 @@ impl TagDocument {
             match tag.parent_tag_id.as_deref() {
                 None => roots.push(i),
                 Some(parent) => {
-                    let p = *positions
-                        .get(parent)
-                        .ok_or_else(|| DataError("Missing tag parent".into()))?;
+                    let p = *positions.get(parent).ok_or_else(|| {
+                        DataError::new(
+                            weftext_messages::UiMessage::error_data_tag_forest_tag_parent_missing(),
+                        )
+                    })?;
                     if p == i {
-                        return Err(DataError("A tag cannot parent itself".into()));
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_tag_forest_tag_cannot_parent_itself(),
+                        ));
                     }
                     children[p].push(i);
                 }
@@ -82,7 +88,9 @@ impl TagDocument {
             }
         }
         if clock != self.tags.len() {
-            return Err(DataError("Cyclic tag parent chain".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_tag_forest_tag_parent_chain_cycle(),
+            ));
         }
         Ok(TagForest { intervals })
     }
@@ -92,14 +100,16 @@ impl TagForest {
         self.intervals.contains_key(id)
     }
     pub fn in_subtree(&self, candidate: &str, root: &str) -> Result<bool> {
-        let &(start, end) = self
-            .intervals
-            .get(root)
-            .ok_or_else(|| DataError("Tag root unavailable".into()))?;
-        let &(at, _) = self
-            .intervals
-            .get(candidate)
-            .ok_or_else(|| DataError("Tag candidate unavailable".into()))?;
+        let &(start, end) = self.intervals.get(root).ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_tag_forest_tag_root_unavailable(),
+            )
+        })?;
+        let &(at, _) = self.intervals.get(candidate).ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_tag_forest_tag_candidate_unavailable(),
+            )
+        })?;
         Ok(start <= at && at < end)
     }
 }

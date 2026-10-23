@@ -1,0 +1,7 @@
+.interface-locale { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem; margin-inline-start: auto; max-width: 100%; font: inherit; }
+.interface-locale label { display: flex; align-items: center; gap: .35rem; margin: 0; white-space: nowrap; font: inherit; }
+.interface-locale select { max-width: 12rem; padding: .3rem; font: inherit; }
+.interface-locale [role="status"] { max-width: 24rem; white-space: normal; overflow-wrap: anywhere; font-size: .8em; }
+.interface-locale button { padding: .3rem .5rem; font: inherit; }
+.interface-locale-host { display: flex; min-width: 0; max-width: 100%; }
+.hosted-app-header { flex-wrap: wrap; gap: .5rem; }

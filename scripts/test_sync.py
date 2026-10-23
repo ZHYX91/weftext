@@ -1,6 +1,7 @@
 """Two actual local programs, separate private state and author trees. Owned
 fixtures are retained; this never drives a desktop or borrows another project.
 """
+from _creation_result import created_document
 import copy
 import json
 from pathlib import Path
@@ -19,14 +20,14 @@ class Sync(unittest.TestCase):
     def setUp(self):
         self.folder = self.evidence / self._testMethodName
         self.folder.mkdir()
-        self.a = Server(['--no-browser', '--data-dir', str(self.folder / 'state-a')])
+        self.a = Server([ '--data-dir', str(self.folder / 'state-a')])
         self.addCleanup(lambda: self.a.close())
-        self.b = Server(['--no-browser', '--data-dir', str(self.folder / 'state-b')])
+        self.b = Server([ '--data-dir', str(self.folder / 'state-b')])
         self.addCleanup(lambda: self.b.close())
         self.ra, self.rb = self.folder / 'library-a', self.folder / 'library-b'
         self.call(self.a, '/api/library/create', path=str(self.ra), operationId=uid())
-        self.note = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra), name='Note', operationId=uid())
-        self.other = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra), name='Other', operationId=uid())
+        self.note = created_document(self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra), name='Note', operationId=uid()))
+        self.other = created_document(self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra), name='Other', operationId=uid()))
         self.key = {'kind': 'node', 'id': self.note['nodeId']}
         self.other_key = {'kind': 'node', 'id': self.other['nodeId']}
         operation_id = uid()
@@ -112,7 +113,7 @@ class Sync(unittest.TestCase):
         # Do not use the first receipt; restart recovers the original durable decision.
         self.commit(self.b, plan)
         self.b.close()
-        self.b = Server(['--no-browser', '--data-dir', str(self.folder / 'state-b')])
+        self.b = Server([ '--data-dir', str(self.folder / 'state-b')])
         result = self.call(self.b, '/api/operations/status', operationId=plan['operationId'])
         self.assertEqual(result['status'], 'committed')
         recovered = self.call(self.b, '/api/sync/operation', operationId=plan['operationId'])

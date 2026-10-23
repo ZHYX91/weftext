@@ -52,7 +52,7 @@ impl Fixture {
         plan.workspace_id = Some(workspace.clone());
         plan.files=vec![(".weftext-workspace.json".into(),serde_json::to_vec(&config).unwrap()),(".weftext-format".into(),b"weftext.typst.v1\n".to_vec()),(".weftext-mvp-commit.json".into(),serde_json::to_vec(&serde_json::json!({"workspaceId":workspace,"operationId":operation,"storageProfile":STORAGE_PROFILE})).unwrap())];
         core.stage(plan.clone()).unwrap();
-        let guard = ParentGuard::acquire(&root).unwrap();
+        let guard = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), &root).unwrap();
         let directory = guard.create_directory().unwrap();
         for (name, bytes) in &plan.files {
             let mut file = ParentGuard::child_file(&directory, name).unwrap();
@@ -64,7 +64,7 @@ impl Fixture {
         Self::finish(temp, data, root, core)
     }
     fn finish(temp: tempfile::TempDir, data: PathBuf, root: PathBuf, mut core: Core) -> Self {
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let owner = weftext_knowledge::NodeRef {
             workspace_id: core.require_workspace(&root).unwrap().workspace_id,
             node_id: note.node_id.unwrap(),
@@ -224,7 +224,10 @@ fn exact_resource_reads_only_selected_leaf_and_never_registers_writable_bases() 
             .code,
         "resourcePath"
     );
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     assert!(
         f.core
             .qualified_resource_at(
@@ -766,7 +769,7 @@ fn hosted_resource_original_ref_and_plan_survive_restart_retry_and_settle() {
     );
     assert!(
         f.core
-            .with_actor(ACTOR, |core| core.actor_save_status(&op))
+            .with_actor(ACTOR, |core| core.actor_save_status("Note", &op))
             .is_err()
     );
     assert!(

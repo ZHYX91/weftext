@@ -3,6 +3,7 @@
 use super::*;
 use operations::{CapturedFile, Mutation, SnapshotBinding, resource_path};
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 
 pub struct ResourceCollectionEntry {
     pub resource_ref: String,
@@ -68,14 +69,7 @@ fn diagnostic_witness_token(
         .captured
         .as_ref()
         .map(|captured| resource_diagnostics::stamp_token(&captured.stamp))
-        .unwrap_or_else(|| {
-            format!(
-                "absent:{}:{}:{}",
-                manifest.binding.parent.volume,
-                manifest.binding.parent.index,
-                manifest.binding.parent.created
-            )
-        });
+        .unwrap_or_else(|| format!("absent:{:?}", manifest.binding.parent));
     format!("{owner}:{stamp}:{}", revision.unwrap_or("none"))
 }
 
@@ -88,18 +82,37 @@ impl Core {
         root: &Path,
         source_path: &Path,
     ) -> Result<QualifiedQueryNode> {
+        self.backend.check_path(&self.data_dir)?;
         let root = absolute_path(root)?;
         let source_path = absolute_path(source_path)?;
         let workspace = self.require_workspace(&root)?;
         self.check_pending(&source_path)?;
-        let guard = ParentGuard::acquire(&source_path)?;
-        let identity = stamp(&guard.open_placement_file()?)?.identity;
+        let guard = ParentGuard::acquire(&self.backend, &source_path)?;
+        let identity = {
+            let file = guard.open_placement_file()?;
+            stamp(&file)?.identity
+        };
         self.check_pending_identity(&identity)?;
         let mut expected = None;
-        for plan in self.operations.values().filter(|plan| {
-            self.committed(&plan.operation_id)
-                && plan.workspace_id.as_deref() == Some(&workspace.workspace_id)
-        }) {
+        for plan in self
+            .operations
+            .values()
+            .map(|plan| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&plan.operation_id)?
+                            && plan.workspace_id.as_deref() == Some(&workspace.workspace_id)
+                    } {
+                        Some(plan)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let Some(operation) = &plan.transaction else {
                 continue;
             };
@@ -161,7 +174,7 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "resourceOwner",
-                        "Original imported source admission is ambiguous",
+                        UiMessage::error_core_resource_collection_original_imported_source_admission_ambiguous(),
                     ));
                 }
             }
@@ -169,7 +182,7 @@ impl Core {
         let expected = expected.ok_or_else(|| {
             CoreError::new(
                 "resourceOwner",
-                "This exact slot has no committed original DOCX source producer",
+                UiMessage::error_core_resource_collection_exact_slot_has_no_committed_original_d_o_c_x_source_producer(),
             )
         })?;
         self.qualified_query_node_at(&root, &source_path, &expected, "live")
@@ -193,17 +206,29 @@ impl Core {
                     error,
                 )
             })?;
-        let owner_guard = ParentGuard::acquire(&owner_path).inspect_err(|error| {
-            resource_diagnostics::error("collection.owner.guard", &expected_owner.node_id, error)
-        })?;
-        let identity = stamp(&owner_guard.open_placement_file().inspect_err(|error| {
-            resource_diagnostics::error("collection.owner.open", &expected_owner.node_id, error)
-        })?)
-        .inspect_err(|error| {
-            resource_diagnostics::error("collection.owner.stamp", &expected_owner.node_id, error)
-        })?
-        .identity;
-        let birth = self.admitted_binding(&identity).ok_or_else(|| {
+        let owner_guard =
+            ParentGuard::acquire(&self.backend, &owner_path).inspect_err(|error| {
+                resource_diagnostics::error(
+                    "collection.owner.guard",
+                    &expected_owner.node_id,
+                    error,
+                )
+            })?;
+        let identity = {
+            let file = owner_guard.open_placement_file().inspect_err(|error| {
+                resource_diagnostics::error("collection.owner.open", &expected_owner.node_id, error)
+            })?;
+            stamp(&file)
+                .inspect_err(|error| {
+                    resource_diagnostics::error(
+                        "collection.owner.stamp",
+                        &expected_owner.node_id,
+                        error,
+                    )
+                })?
+                .identity
+        };
+        let birth = self.admitted_binding(&identity)?.ok_or_else(|| {
             resource_diagnostics::branch(
                 "collection.owner.birth",
                 &expected_owner.node_id,
@@ -211,7 +236,7 @@ impl Core {
             );
             CoreError::new(
                 "resourceOwner",
-                "The original resource owner is unavailable",
+                UiMessage::error_core_resource_collection_original_resource_owner_unavailable(),
             )
         })?;
         if birth.workspace_id != expected_owner.workspace_id
@@ -224,7 +249,7 @@ impl Core {
             );
             return Err(CoreError::new(
                 "resourceOwner",
-                "The selected resource owner changed",
+                UiMessage::error_core_resource_collection_selected_resource_owner_changed(),
             ));
         }
         let directory = owner_path.parent().unwrap();
@@ -236,7 +261,7 @@ impl Core {
                 error,
             )
         })?;
-        let guard = ParentGuard::acquire(&manifest_path).inspect_err(|error| {
+        let guard = ParentGuard::acquire(&self.backend, &manifest_path).inspect_err(|error| {
             resource_diagnostics::error("collection.manifest.guard", &expected_owner.node_id, error)
         })?;
         if guard.directory_coordinates()? != owner.coordinate.parent().unwrap() {
@@ -247,7 +272,7 @@ impl Core {
             );
             return Err(CoreError::new(
                 "staleBase",
-                "The resource owner's actual directory changed",
+                UiMessage::error_core_resource_resource_owner_s_actual_directory_changed(),
             ));
         }
         let (captured, entries, unrecognized_entries, revision) = match guard
@@ -281,7 +306,7 @@ impl Core {
                     stamp: observed,
                     bytes,
                 };
-                let revision = self.accepted_revision(&captured).ok_or_else(|| {
+                let revision = self.accepted_revision(&captured)?.ok_or_else(|| {
                     resource_diagnostics::branch(
                         "collection.manifest.accepted",
                         &resource_diagnostics::stamp_token(&captured.stamp),
@@ -289,7 +314,7 @@ impl Core {
                     );
                     CoreError::new(
                         "resourceManifestUnavailable",
-                        "Collection membership requires a currently accepted exact manifest",
+                        UiMessage::error_core_resource_collection_collection_membership_requires_currently_accepted_exact_manifest(),
                     )
                 })?;
                 let document: serde_json::Value = serde_json::from_slice(&captured.bytes)
@@ -304,12 +329,16 @@ impl Core {
                     .as_array()
                     .filter(|_| document["version"] == 1)
                     .ok_or_else(|| {
-                        CoreError::new("resourceManifest", "Unsupported owned resource manifest")
+                        CoreError::new(
+                            "resourceManifest",
+                            UiMessage::error_core_resource_unsupported_owned_resource_manifest(),
+                        )
                     })?;
                 if records.len() > 64 {
                     return Err(CoreError::new(
                         "budget",
-                        "At most 64 registered resource descriptors",
+                        UiMessage::error_core_operations_at_most64_registered_resource_descriptors(
+                        ),
                     ));
                 }
                 let mut entries = Vec::new();
@@ -323,7 +352,7 @@ impl Core {
                         .ok()
                         .is_none_or(|uuid| uuid.to_string() != id)
                         || resource_path(directory, name).is_err()
-                        || !self.resource_owner_birth_known(id, expected_owner)
+                        || !self.resource_owner_birth_known(id, expected_owner)?
                         || records.iter().filter(|r| r["resourceId"] == id).count() != 1
                         || records
                             .iter()
@@ -434,11 +463,33 @@ impl Core {
     /// This projects original observation facts at their original identity-
     /// proved placement; it does not create another membership ledger.
     pub(crate) fn require_resource_collection_uninitialized(&self, owner: &Birth) -> Result<()> {
-        for plan in self.operations.values().filter(|plan| {
-            self.committed(&plan.operation_id)
-                && plan.workspace_id.as_deref() == Some(&owner.workspace_id)
-        }) {
-            let facts = self.read_observation_facts(&plan.operation_id)?;
+        for plan in self
+            .operations
+            .values()
+            .map(|plan| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&plan.operation_id)?
+                            && plan.workspace_id.as_deref() == Some(&owner.workspace_id)
+                    } {
+                        Some(plan)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
+            let facts = self
+                .read_observation_facts(&plan.operation_id)
+                .map_err(|mut error| {
+                    if error.code == "identityPending" {
+                        error.code = "resourceManifestUnavailable".into();
+                    }
+                    error
+                })?;
             let mut paths = facts
                 .iter()
                 .map(|fact| fact.path.clone())
@@ -488,7 +539,7 @@ impl Core {
             let sequence = self.history_commit_time(plan)?.1.ok_or_else(|| {
                 CoreError::new(
                     "resourceManifestUnavailable",
-                    "Original collection placement ordering is unavailable",
+                    UiMessage::error_core_resource_collection_original_collection_placement_ordering_unavailable(),
                 )
             })?;
             let places = self
@@ -496,7 +547,7 @@ impl Core {
                 .map_err(|_| {
                     CoreError::new(
                         "resourceManifestUnavailable",
-                        "Original collection placement evidence is unavailable",
+                        UiMessage::error_core_resource_collection_original_collection_placement_evidence_unavailable(),
                     )
                 })?;
             if manifests.iter().any(|path| {
@@ -511,7 +562,7 @@ impl Core {
             }) {
                 return Err(CoreError::new(
                     "resourceManifestUnavailable",
-                    "The original committed resource manifest is missing; it cannot be reinitialized",
+                    UiMessage::error_core_resource_collection_original_committed_resource_manifest_missing_it_cannot_reinitialized(),
                 ));
             }
         }
@@ -543,15 +594,15 @@ impl Core {
                 .ok_or_else(|| {
                     CoreError::new(
                         "resourceOwner",
-                        "Original import owner evidence is unavailable",
+                        UiMessage::error_core_resource_collection_original_import_owner_evidence_unavailable(),
                     )
                 })?;
             let birth = self
-                .admitted_binding(&source.stamp.identity)
+                .admitted_binding(&source.stamp.identity)?
                 .ok_or_else(|| {
                     CoreError::new(
                         "resourceOwner",
-                        "Original import owner admission is unavailable",
+                        UiMessage::error_core_resource_collection_original_import_owner_admission_unavailable(),
                     )
                 })?;
             self.require_resource_collection_uninitialized(&birth)?;
@@ -579,7 +630,7 @@ impl Core {
             );
             return Err(CoreError::new(
                 "outsideRoot",
-                "Collection evidence belongs to another configured root",
+                UiMessage::error_core_resource_collection_collection_evidence_belongs_to_another_configured_root(),
             ));
         }
         self.validate_query_node_witness(root, &witness.owner_witness)
@@ -599,7 +650,7 @@ impl Core {
                 )
             })?;
         if let Some(captured) = &witness.manifest.binding.captured {
-            if self.accepted_revision(captured) != witness.revision {
+            if self.accepted_revision(captured)? != witness.revision {
                 resource_diagnostics::branch(
                     "collection.recheck.accepted",
                     diagnostic_token.as_deref().unwrap_or("disabled"),
@@ -607,7 +658,7 @@ impl Core {
                 );
                 return Err(CoreError::new(
                     "resourceVersion",
-                    "The original collection revision qualification changed",
+                    UiMessage::error_core_resource_collection_original_collection_revision_qualification_changed(),
                 ));
             }
         } else {
@@ -634,7 +685,7 @@ impl Core {
             pool.clear();
             return Err(CoreError::new(
                 "basisRequired",
-                "An uninitialized collection cannot supply a guarded positive Plan dependency",
+                UiMessage::error_core_resource_collection_uninitialized_collection_cannot_supply_guarded_positive_plan_dependency(),
             ));
         }
         Self::merge_query_node_witness(pool, &witness.owner_witness)?;

@@ -44,15 +44,14 @@ struct NativeTable {
     column_expr: Range<usize>,
 }
 
-fn fail(message: &str) -> EngineError {
-    EngineError(format!("table-unavailable: {message}"))
+fn fail(explanation: UiMessage) -> EngineError {
+    EngineError::new(explanation)
 }
 
 fn span_range(parsed: &Source, node: &SyntaxNode) -> Result<Range<usize>, EngineError> {
-    parsed
-        .find(node.span())
-        .map(|n| n.range())
-        .ok_or_else(|| fail("来源不可证明"))
+    parsed.find(node.span()).map(|n| n.range()).ok_or_else(|| {
+        fail(weftext_messages::UiMessage::error_engine_table_editor_origin_unverified())
+    })
 }
 
 fn integer(expr: ast::Expr<'_>) -> Option<usize> {
@@ -161,12 +160,13 @@ fn parse_cell(
     let block = if let Some(block) = expr.to_untyped().cast::<ast::ContentBlock>() {
         block
     } else {
-        let call = expr
-            .to_untyped()
-            .cast::<ast::FuncCall>()
-            .ok_or_else(|| fail("动态单元格保源"))?;
+        let call = expr.to_untyped().cast::<ast::FuncCall>().ok_or_else(|| {
+            fail(weftext_messages::UiMessage::error_engine_table_editor_cell_dynamic())
+        })?;
         if !field_call(call, "cell") || uncertain_table_trivia(expr.to_untyped()) {
-            return Err(fail("仅支持显式 table.cell，包装注释归属不明时保源"));
+            return Err(fail(
+                weftext_messages::UiMessage::error_engine_table_editor_cell_explicit_required(),
+            ));
         }
         let mut body = None;
         let mut names = std::collections::HashSet::new();
@@ -176,13 +176,13 @@ fn parse_cell(
                     body = Some(
                         e.to_untyped()
                             .cast::<ast::ContentBlock>()
-                            .ok_or_else(|| fail("cell 的位置参数须为唯一显式内容块"))?,
+                            .ok_or_else(|| fail(weftext_messages::UiMessage::error_engine_table_editor_cell_body_positional_required()))?,
                     )
                 }
                 ast::Arg::Named(n) => {
                     let name = n.name().get();
                     if !names.insert(name.to_string()) {
-                        return Err(fail("重复 cell 参数保源"));
+                        return Err(fail(weftext_messages::UiMessage::error_engine_table_editor_cell_duplicate_argument()));
                     }
                     match name.as_str() {
                         "body" if body.is_none() => {
@@ -191,29 +191,33 @@ fn parse_cell(
                         "rowspan" => {
                             rowspan = integer(n.expr())
                                 .filter(|n| *n > 0)
-                                .ok_or_else(|| fail("动态 rowspan 保源"))?
+                                .ok_or_else(|| fail(weftext_messages::UiMessage::error_engine_table_editor_rowspan_dynamic()))?
                         }
                         "colspan" => {
                             colspan = integer(n.expr())
                                 .filter(|n| *n > 0)
-                                .ok_or_else(|| fail("动态 colspan 保源"))?
+                                .ok_or_else(|| fail(weftext_messages::UiMessage::error_engine_table_editor_colspan_dynamic()))?
                         }
                         "inset" | "align" | "fill" | "stroke" | "breakable"
                             if static_option(n.expr().to_untyped(), certificate) =>
                         {
                             styles.push(source[span_range(parsed, n.to_untyped())?].to_string());
                         }
-                        _ => return Err(fail("坐标、动态样式或未知 cell 参数保源")),
+                        _ => return Err(fail(weftext_messages::UiMessage::error_engine_table_editor_cell_argument_unsupported())),
                     }
                 }
-                _ => return Err(fail("生成或重复 cell body 保源")),
+                _ => return Err(fail(weftext_messages::UiMessage::error_engine_table_editor_cell_body_generated_or_duplicate())),
             }
         }
-        body.ok_or_else(|| fail("cell 需要唯一显式内容块"))?
+        body.ok_or_else(|| {
+            fail(weftext_messages::UiMessage::error_engine_table_editor_cell_body_unique_required())
+        })?
     };
     let body = span_range(parsed, block.body().to_untyped())?;
     if full.start > body.start || body.end > full.end {
-        return Err(fail("内容来源不在单元格内"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_cell_origin_outside(),
+        ));
     }
     Ok(Cell {
         info: TableCellInfo {
@@ -243,7 +247,9 @@ fn parse(
         known: std::cell::RefCell::new(std::collections::HashMap::new()),
     };
     if uncertain_table_trivia(node.get()) || !topology_rules_known(parsed.root(), &certificate) {
-        return Err(fail("表外或包装注释、动态 table/cell 规则不能可靠重定位"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_comments_or_rules_unlocatable(),
+        ));
     }
     let mut columns = None;
     let mut column_expr = None;
@@ -259,16 +265,18 @@ fn parse(
         match arg {
             ast::Arg::Named(n) => {
                 if first_cell.is_some() {
-                    return Err(fail("单元格之后的命名参数暂不可安全重排"));
+                    return Err(fail(weftext_messages::UiMessage::error_engine_table_editor_named_arguments_after_cells()));
                 }
                 let name = n.name().get().to_string();
                 if options.iter().any(|(key, _)| key == &name) {
-                    return Err(fail("重复表格参数保源"));
+                    return Err(fail(
+                        weftext_messages::UiMessage::error_engine_table_editor_argument_duplicate(),
+                    ));
                 }
                 if name == "columns" {
                     columns = integer(n.expr()).filter(|n| *n > 0);
                     if columns.is_none() {
-                        return Err(fail("列数需要显式正整数"));
+                        return Err(fail(weftext_messages::UiMessage::error_engine_table_editor_columns_positive_integer_required()));
                     }
                     let expr = span_range(parsed, n.expr().to_untyped())?;
                     column_expr =
@@ -284,7 +292,7 @@ fn parse(
                         | "column-gutter"
                 ) || !static_option(n.expr().to_untyped(), &certificate)
                 {
-                    return Err(fail("行列格式或动态参数不能可靠重排"));
+                    return Err(fail(weftext_messages::UiMessage::error_engine_table_editor_dynamic_format_unsortable()));
                 }
                 options.push((
                     name,
@@ -302,7 +310,7 @@ fn parse(
                     .filter(|c| field_call(*c, "header"))
                 {
                     if header_seen || data_seen {
-                        return Err(fail("只支持开头唯一的显式行表头"));
+                        return Err(fail(weftext_messages::UiMessage::error_engine_table_editor_header_explicit_required()));
                     }
                     header_seen = true;
                     header_range = Some(arg_range);
@@ -324,26 +332,36 @@ fn parse(
                                         _ => false,
                                     }
                                 {
-                                    return Err(fail("动态或多级表头保源"));
+                                    return Err(fail(weftext_messages::UiMessage::error_engine_table_editor_header_dynamic()));
                                 }
                             }
-                            _ => return Err(fail("带参数的多级/动态表头保源")),
+                            _ => return Err(fail(weftext_messages::UiMessage::error_engine_table_editor_header_arguments_unsupported())),
                         }
                     }
                     if cells.len() == count {
-                        return Err(fail("空表头无法证明完整逻辑行"));
+                        return Err(fail(
+                            weftext_messages::UiMessage::error_engine_table_editor_header_empty(),
+                        ));
                     }
                 } else {
                     data_seen = true;
                     cells.push(parse_cell(e, false, source, parsed, &certificate)?);
                 }
             }
-            _ => return Err(fail("生成 cells 或 spread 保源")),
+            _ => {
+                return Err(fail(
+                    weftext_messages::UiMessage::error_engine_table_editor_cells_generated(),
+                ));
+            }
         }
     }
-    let columns = columns.ok_or_else(|| fail("缺少显式列数"))?;
+    let columns = columns.ok_or_else(|| {
+        fail(weftext_messages::UiMessage::error_engine_table_editor_columns_missing())
+    })?;
     if cells.is_empty() || columns > 1000 {
-        return Err(fail("需要有界显式单元格"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_cells_bounded_required(),
+        ));
     }
     let rows = place(&mut cells, columns)?;
     let header_rows = cells
@@ -356,9 +374,13 @@ fn parse(
         c.info.header != (c.info.row < header_rows)
             || c.info.row < header_rows && c.info.row + c.info.rowspan > header_rows
     }) {
-        return Err(fail("表头必须覆盖完整逻辑行"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_header_row_incomplete(),
+        ));
     }
-    let first = first_cell.ok_or_else(|| fail("表格为空"))?;
+    let first = first_cell.ok_or_else(|| {
+        fail(weftext_messages::UiMessage::error_engine_table_editor_table_empty())
+    })?;
     let last = last_cell.unwrap();
     let first_info = &cells[0].info.range;
     let separator = if cells.len() > 1 && !header_seen {
@@ -409,25 +431,31 @@ fn place(cells: &mut [Cell], columns: usize) -> Result<usize, EngineError> {
         }
         let row = cursor / columns;
         let column = cursor % columns;
-        let height = row
-            .checked_add(cell.info.rowspan)
-            .ok_or_else(|| fail("表格超出预算"))?;
+        let height = row.checked_add(cell.info.rowspan).ok_or_else(|| {
+            fail(weftext_messages::UiMessage::error_engine_table_editor_table_budget())
+        })?;
         let end = height
             .checked_mul(columns)
             .filter(|n| *n <= MAX_CELLS)
-            .ok_or_else(|| fail("表格超出预算"))?;
+            .ok_or_else(|| {
+                fail(weftext_messages::UiMessage::error_engine_table_editor_table_budget())
+            })?;
         if column
             .checked_add(cell.info.colspan)
             .is_none_or(|n| n > columns)
         {
-            return Err(fail("跨格越过行边界"));
+            return Err(fail(
+                weftext_messages::UiMessage::error_engine_table_editor_span_crosses_row(),
+            ));
         }
         slots.resize(slots.len().max(end), false);
         for y in row..height {
             for x in column..column + cell.info.colspan {
                 let slot = y * columns + x;
                 if slots[slot] {
-                    return Err(fail("跨格重叠"));
+                    return Err(fail(
+                        weftext_messages::UiMessage::error_engine_table_editor_spans_overlap(),
+                    ));
                 }
                 slots[slot] = true;
             }
@@ -436,7 +464,9 @@ fn place(cells: &mut [Cell], columns: usize) -> Result<usize, EngineError> {
         cell.info.column = column;
     }
     if slots.is_empty() || slots.iter().any(|filled| !filled) {
-        return Err(fail("不完整矩形保源"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_rectangle_incomplete(),
+        ));
     }
     Ok(slots.len() / columns)
 }
@@ -469,7 +499,7 @@ pub(super) fn inspect(
             grid_writable,
             logical_cells: vec![],
             topology_writable: false,
-            unavailable_reason: Some(error.0),
+            unavailable_reason: Some(error.description()),
             header_rows: 0,
             header_columns: 0,
         },
@@ -494,7 +524,9 @@ fn selected(
     right: usize,
 ) -> Result<Vec<usize>, EngineError> {
     if top > bottom || left > right || bottom >= table.rows || right >= table.columns {
-        return Err(fail("选区超出当前表格"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_selection_outside(),
+        ));
     }
     let mut indices = vec![];
     for (index, cell) in table.cells.iter().enumerate() {
@@ -509,7 +541,9 @@ fn selected(
                 || c.row + c.rowspan > bottom + 1
                 || c.column + c.colspan > right + 1
             {
-                return Err(fail("选区必须完整覆盖合并格"));
+                return Err(fail(
+                    weftext_messages::UiMessage::error_engine_table_editor_selection_splits_merged_cell(),
+                ));
             }
             indices.push(index);
         }
@@ -570,10 +604,9 @@ fn blank(row: usize, column: usize, header: bool) -> Cell {
 fn complete(table: &mut NativeTable) -> Result<(), EngineError> {
     check_grid(
         table.columns,
-        table
-            .rows
-            .checked_mul(table.columns)
-            .ok_or_else(|| fail("表格超出预算"))?,
+        table.rows.checked_mul(table.columns).ok_or_else(|| {
+            fail(weftext_messages::UiMessage::error_engine_table_editor_table_budget())
+        })?,
     )?;
     table.cells.sort_by_key(|c| (c.info.row, c.info.column));
     let mut occupied = vec![false; table.rows * table.columns];
@@ -584,24 +617,33 @@ fn complete(table: &mut NativeTable) -> Result<(), EngineError> {
             || c.row + c.rowspan > table.rows
             || c.column + c.colspan > table.columns
         {
-            return Err(fail("跨格超出目标表格"));
+            return Err(fail(
+                weftext_messages::UiMessage::error_engine_table_editor_target_span_outside(),
+            ));
         }
         for y in c.row..c.row + c.rowspan {
             for x in c.column..c.column + c.colspan {
                 let index = y * table.columns + x;
                 if occupied[index] {
-                    return Err(fail("目标表格跨格重叠"));
+                    return Err(fail(
+                        weftext_messages::UiMessage::error_engine_table_editor_target_spans_overlap(
+                        ),
+                    ));
                 }
                 occupied[index] = true;
             }
         }
         cell.info.header = cell.info.row < table.header_rows;
         if cell.info.header && cell.info.row + cell.info.rowspan > table.header_rows {
-            return Err(fail("合并格跨越表头边界"));
+            return Err(fail(
+                weftext_messages::UiMessage::error_engine_table_editor_merged_cell_crosses_header(),
+            ));
         }
     }
     if occupied.iter().any(|c| !c) {
-        return Err(fail("目标表格有未覆盖槽"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_target_slots_uncovered(),
+        ));
     }
     Ok(())
 }
@@ -651,20 +693,27 @@ fn serialize(table: &NativeTable) -> String {
 fn axis_insert(table: &mut NativeTable, index: usize, column: bool) -> Result<(), EngineError> {
     let length = if column { table.columns } else { table.rows };
     if index > length {
-        return Err(fail("插入位置超出范围"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_insertion_outside(),
+        ));
     }
     let rows = table
         .rows
         .checked_add(usize::from(!column))
-        .ok_or_else(|| fail("表格超出预算"))?;
+        .ok_or_else(|| {
+            fail(weftext_messages::UiMessage::error_engine_table_editor_table_budget())
+        })?;
     let columns = table
         .columns
         .checked_add(usize::from(column))
-        .ok_or_else(|| fail("表格超出预算"))?;
+        .ok_or_else(|| {
+            fail(weftext_messages::UiMessage::error_engine_table_editor_table_budget())
+        })?;
     check_grid(
         columns,
-        rows.checked_mul(columns)
-            .ok_or_else(|| fail("表格超出预算"))?,
+        rows.checked_mul(columns).ok_or_else(|| {
+            fail(weftext_messages::UiMessage::error_engine_table_editor_table_budget())
+        })?,
     )?;
     for cell in &table.cells {
         let start = if column {
@@ -678,7 +727,10 @@ fn axis_insert(table: &mut NativeTable, index: usize, column: bool) -> Result<()
             cell.info.rowspan
         };
         if start < index && index < start + span {
-            return Err(fail("插入线穿过合并格，请先拆分"));
+            return Err(fail(
+                weftext_messages::UiMessage::error_engine_table_editor_insertion_splits_merged_cell(
+                ),
+            ));
         }
     }
     for cell in &mut table.cells {
@@ -713,7 +765,9 @@ fn axis_insert(table: &mut NativeTable, index: usize, column: bool) -> Result<()
 fn axis_remove(table: &mut NativeTable, index: usize, column: bool) -> Result<(), EngineError> {
     let length = if column { table.columns } else { table.rows };
     if index >= length || length == 1 {
-        return Err(fail("不能删除不存在或最后一行/列"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_deletion_invalid(),
+        ));
     }
     for cell in &table.cells {
         let start = if column {
@@ -727,7 +781,10 @@ fn axis_remove(table: &mut NativeTable, index: usize, column: bool) -> Result<()
             cell.info.rowspan
         };
         if start <= index && index < start + span && span != 1 {
-            return Err(fail("删除范围穿过合并格，请先拆分"));
+            return Err(fail(
+                weftext_messages::UiMessage::error_engine_table_editor_deletion_splits_merged_cell(
+                ),
+            ));
         }
     }
     table.cells.retain(|cell| {
@@ -766,7 +823,9 @@ fn axis_move(
 ) -> Result<(), EngineError> {
     let length = if column { table.columns } else { table.rows };
     if from >= length || to >= length {
-        return Err(fail("移动位置超出范围"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_movement_outside(),
+        ));
     }
     let map = |index: usize| {
         if index == from {
@@ -794,14 +853,19 @@ fn axis_move(
         let minimum = *positions.iter().min().unwrap();
         let maximum = *positions.iter().max().unwrap();
         if maximum - minimum + 1 != span {
-            return Err(fail("移动会切断合并格，请先拆分"));
+            return Err(fail(
+                weftext_messages::UiMessage::error_engine_table_editor_movement_splits_merged_cell(
+                ),
+            ));
         }
         if !column
             && positions
                 .iter()
                 .any(|r| (*r < table.header_rows) != cell.info.header)
         {
-            return Err(fail("移动不能静默改变表头归属"));
+            return Err(fail(
+                weftext_messages::UiMessage::error_engine_table_editor_movement_changes_header(),
+            ));
         }
         if column {
             cell.info.column = minimum;
@@ -827,27 +891,33 @@ fn paste_cells(
         || row >= table.rows
         || column >= table.columns
     {
-        return Err(fail("粘贴目标或尺寸无效"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_paste_target_invalid(),
+        ));
     }
-    let bottom = row
-        .checked_add(height)
-        .ok_or_else(|| fail("粘贴超出预算"))?;
-    let right = column
-        .checked_add(width)
-        .ok_or_else(|| fail("粘贴超出预算"))?;
+    let bottom = row.checked_add(height).ok_or_else(|| {
+        fail(weftext_messages::UiMessage::error_engine_table_editor_paste_budget())
+    })?;
+    let right = column.checked_add(width).ok_or_else(|| {
+        fail(weftext_messages::UiMessage::error_engine_table_editor_paste_budget())
+    })?;
     if bottom.checked_mul(right).is_none_or(|n| n > MAX_CELLS) {
-        return Err(fail("粘贴超出预算"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_paste_budget(),
+        ));
     }
     let final_rows = table.rows.max(bottom);
     let final_columns = table.columns.max(right);
     check_grid(
         final_columns,
-        final_rows
-            .checked_mul(final_columns)
-            .ok_or_else(|| fail("粘贴超出预算"))?,
+        final_rows.checked_mul(final_columns).ok_or_else(|| {
+            fail(weftext_messages::UiMessage::error_engine_table_editor_paste_budget())
+        })?,
     )?;
     if !expand && (bottom > table.rows || right > table.columns) {
-        return Err(fail("粘贴超出现有范围，需要明确选择扩展"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_paste_expansion_required(),
+        ));
     }
     let mut coverage = vec![false; height * width];
     let mut replacements = vec![];
@@ -856,7 +926,9 @@ fn paste_cells(
         bytes = bytes
             .checked_add(cell.text.len())
             .filter(|n| *n <= 1_048_576)
-            .ok_or_else(|| fail("剪贴板文字超出预算"))?;
+            .ok_or_else(|| {
+                fail(weftext_messages::UiMessage::error_engine_table_editor_clipboard_text_budget())
+            })?;
         if cell.rowspan == 0
             || cell.colspan == 0
             || cell
@@ -868,17 +940,23 @@ fn paste_cells(
                 .checked_add(cell.colspan)
                 .is_none_or(|n| n > width)
         {
-            return Err(fail("剪贴板跨格超出矩形"));
+            return Err(fail(
+                weftext_messages::UiMessage::error_engine_table_editor_clipboard_span_outside(),
+            ));
         }
         if cell.header != (row + cell.row < table.header_rows)
             || cell.header && row + cell.row + cell.rowspan > table.header_rows
         {
-            return Err(fail("剪贴板表头与目标不兼容，需明确转换"));
+            return Err(fail(
+                weftext_messages::UiMessage::error_engine_table_editor_clipboard_header_incompatible(),
+            ));
         }
         for y in cell.row..cell.row + cell.rowspan {
             for x in cell.column..cell.column + cell.colspan {
                 if coverage[y * width + x] {
-                    return Err(fail("剪贴板跨格重叠"));
+                    return Err(fail(
+                        weftext_messages::UiMessage::error_engine_table_editor_clipboard_spans_overlap(),
+                    ));
                 }
                 coverage[y * width + x] = true;
             }
@@ -893,7 +971,9 @@ fn paste_cells(
         replacements.push(new);
     }
     if coverage.iter().any(|c| !c) {
-        return Err(fail("剪贴板未完整覆盖矩形"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_clipboard_rectangle_incomplete(),
+        ));
     }
     // Expansion only adds bottom/right slots. Build them once after checking
     // final dimensions, rather than repeatedly scanning the growing table.
@@ -955,7 +1035,10 @@ fn paste_cells(
                     .iter()
                     .any(|index| table.cells[*index].styles != first.styles)
                 {
-                    return Err(fail("粘贴拓扑会合并不同原生格式，请先明确统一或拆分目标"));
+                    return Err(fail(
+                        weftext_messages::UiMessage::error_engine_table_editor_paste_merges_formats(
+                        ),
+                    ));
                 }
                 new.styles = first.styles.clone();
                 let (rowspan, colspan, body) = (
@@ -985,8 +1068,9 @@ pub(super) fn encode_clipboard(
 ) -> Result<String, EngineError> {
     check_grid(
         columns,
-        rows.checked_mul(columns)
-            .ok_or_else(|| fail("表格超出预算"))?,
+        rows.checked_mul(columns).ok_or_else(|| {
+            fail(weftext_messages::UiMessage::error_engine_table_editor_table_budget())
+        })?,
     )?;
     let header_rows = cells
         .iter()
@@ -995,7 +1079,9 @@ pub(super) fn encode_clipboard(
         .max()
         .unwrap_or(0);
     if header_rows > rows {
-        return Err(fail("剪贴板表头超出行数"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_clipboard_header_outside(),
+        ));
     }
     let mut table = NativeTable {
         rows,
@@ -1027,7 +1113,9 @@ pub(super) fn encode_clipboard(
             .collect::<Vec<_>>()
             != desired
     {
-        return Err(fail("剪贴板拓扑无法由原生顺序表示"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_clipboard_topology_unsupported(),
+        ));
     }
     Ok(serialize(&table))
 }
@@ -1038,18 +1126,20 @@ pub(super) fn edit(
     action: &TableAction,
     patches: &mut Vec<SourcePatch>,
 ) -> Result<(), EngineError> {
-    let info = structure
-        .table
-        .as_ref()
-        .ok_or_else(|| fail("不是当前表格"))?;
+    let info = structure.table.as_ref().ok_or_else(|| {
+        fail(weftext_messages::UiMessage::error_engine_table_editor_table_not_current())
+    })?;
     if !info.topology_writable {
-        return Err(fail(
-            info.unavailable_reason.as_deref().unwrap_or("来源无法证明"),
+        return Err(EngineError::new(
+            info.unavailable_reason
+                .clone()
+                .unwrap_or_else(|| UiMessage::error_engine_table_editor_origin_unverified().into()),
         ));
     }
     let parsed = Source::detached(source);
-    let node = find_call(&LinkedNode::new(parsed.root()), &structure.range)
-        .ok_or_else(|| fail("表格来源已变化"))?;
+    let node = find_call(&LinkedNode::new(parsed.root()), &structure.range).ok_or_else(|| {
+        fail(weftext_messages::UiMessage::error_engine_table_editor_table_source_stale())
+    })?;
     let call = node.get().cast::<ast::FuncCall>().unwrap();
     let mut table = parse(&node, call, source, &parsed)?;
     let original_cells = table.cells.clone();
@@ -1078,7 +1168,9 @@ pub(super) fn edit(
             row, column, text, ..
         } => {
             if *row >= table.rows || *column >= table.columns {
-                return Err(fail("粘贴目标超出当前表格"));
+                return Err(fail(
+                    weftext_messages::UiMessage::error_engine_table_editor_paste_target_outside(),
+                ));
             }
             let matrix = super::table_clipboard::parse_tsv(text)?;
             let width = matrix[0].len();
@@ -1127,15 +1219,21 @@ pub(super) fn edit(
                 return Ok(());
             }
             if *top < table.header_rows && *bottom >= table.header_rows {
-                return Err(fail("不能跨越表头合并"));
+                return Err(fail(
+                    weftext_messages::UiMessage::error_engine_table_editor_merge_crosses_header(),
+                ));
             }
-            let first = *indices.first().ok_or_else(|| fail("空选区"))?;
+            let first = *indices.first().ok_or_else(|| {
+                fail(weftext_messages::UiMessage::error_engine_table_editor_selection_empty())
+            })?;
             let mut merged = table.cells[first].clone();
             if indices
                 .iter()
                 .any(|i| table.cells[*i].styles != merged.styles)
             {
-                return Err(fail("各格格式不同，不能静默丢弃样式"));
+                return Err(fail(
+                    weftext_messages::UiMessage::error_engine_table_editor_merge_formats_differ(),
+                ));
             }
             let text = indices
                 .iter()
@@ -1170,7 +1268,9 @@ pub(super) fn edit(
                 .cells
                 .iter()
                 .position(|c| c.info.row == *row && c.info.column == *column)
-                .ok_or_else(|| fail("拆分需要合并格的逻辑起点"))?;
+                .ok_or_else(|| {
+                    fail(weftext_messages::UiMessage::error_engine_table_editor_split_origin_required())
+                })?;
             let original = table.cells.remove(index);
             let mut first = original.clone();
             rewrite_cell(&mut first, 1, 1, None);
@@ -1188,16 +1288,22 @@ pub(super) fn edit(
         }
         TableAction::SetHeader { rows, columns } => {
             if *columns != 0 {
-                return Err(fail("当前 Typst 原生 table.header 只支持整行表头"));
+                return Err(fail(
+                    weftext_messages::UiMessage::error_engine_table_editor_header_whole_row_required(),
+                ));
             }
             if *rows > table.rows {
-                return Err(fail("表头超出行数"));
+                return Err(fail(
+                    weftext_messages::UiMessage::error_engine_table_editor_header_outside(),
+                ));
             }
             table.header_rows = *rows;
         }
         TableAction::Transpose => {
             if table.header_rows > 0 {
-                return Err(fail("行表头无法无损变为原生列表头；请先明确取消表头再转置"));
+                return Err(fail(
+                    weftext_messages::UiMessage::error_engine_table_editor_transpose_header_unsupported(),
+                ));
             }
             if table.options.iter().any(|(name, _)| {
                 matches!(
@@ -1206,7 +1312,9 @@ pub(super) fn edit(
                 )
             }) || table.cells.iter().any(|c| !c.styles.is_empty())
             {
-                return Err(fail("方向样式无法无损转置，请编辑表格源码"));
+                return Err(fail(
+                    weftext_messages::UiMessage::error_engine_table_editor_transpose_styles_unsupported(),
+                ));
             }
             std::mem::swap(&mut table.columns, &mut table.rows);
             for cell in &mut table.cells {
@@ -1261,7 +1369,9 @@ pub(super) fn edit(
             .collect::<Vec<_>>()
             != desired
     {
-        return Err(fail("目标拓扑不能由当前显式原生顺序表示"));
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_target_topology_unsupported(),
+        ));
     }
     push_patch(
         patches,

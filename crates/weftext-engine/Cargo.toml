@@ -5,6 +5,7 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
+weftext-messages = { path = "../weftext-messages" }
 typst = "=0.15.1"
 typst-html = "=0.15.1"
 typst-layout = "=0.15.1"
@@ -14,7 +15,7 @@ typst-kit = { version = "=0.15.1", default-features = false, features = ["scan-f
 typst-syntax = "=0.15.1"
 typst-assets = {version="=0.15.1", features=["fonts"]}
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { workspace = true }
 sha2 = "0.10"
 
 [dev-dependencies]

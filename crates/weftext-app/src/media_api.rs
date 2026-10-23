@@ -1,6 +1,9 @@
 //! Resource reads use the Core's owned manifest and exact current snapshot.
 //! Container metadata is derived from the same bytes that the viewer receives.
 use super::{ApiError, ApiResult, AppState, core_call, location, value};
+#[cfg(test)]
+use crate::CoreTestFixture;
+use crate::RequestJson;
 use axum::{
     Json, Router,
     body::Body,
@@ -16,6 +19,7 @@ use serde_json::{Value, json};
 use std::{collections::BTreeSet, io::Cursor};
 use weftext_core::{Core, CoreError, ManagedResource, SnapshotFile};
 use weftext_knowledge::{PdfPageFacts, ResourceFacts, Timebase};
+use weftext_messages::{DiagnosticOrigin, ErrorDescription, UiMessage};
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
@@ -50,7 +54,8 @@ pub(crate) enum ResourceMetadata {
         height: u64,
     },
     Unsupported {
-        message: String,
+        #[serde(flatten)]
+        description: ErrorDescription,
     },
 }
 pub(crate) struct QualifiedResource {
@@ -65,7 +70,7 @@ pub(crate) struct QualifiedResource {
 }
 pub(crate) struct ResourceSet {
     pub resources: Vec<QualifiedResource>,
-    pub warnings: Vec<String>,
+    pub warnings: Vec<ErrorDescription>,
 }
 
 pub(crate) async fn resource_set(
@@ -80,7 +85,7 @@ pub(crate) async fn resource_set(
     analyze_resources(managed).await
 }
 async fn analyze_resources(managed: Vec<ManagedResource>) -> Result<ResourceSet, ApiError> {
-    tokio::task::spawn_blocking(move || {
+    crate::work::spawn_blocking(move || {
         let mut resources = Vec::new();
         let mut warnings = Vec::new();
         for resource in managed {
@@ -90,9 +95,12 @@ async fn analyze_resources(managed: Vec<ManagedResource>) -> Result<ResourceSet,
                 .as_ref()
                 .and_then(|revision| metadata_facts(&metadata, &resource.resource_ref, revision));
             if resource.identity_status != "admitted" {
-                warnings.push(format!(
-                    "{}：资源身份或版本尚未接纳，只能重新读取后明确处理。",
-                    resource.path
+                warnings.push(ErrorDescription::new(
+                    UiMessage::error_api_media_resource_admission_pending(
+                        weftext_messages::params::ErrorApiMediaResourceAdmissionPending {
+                            path: resource.path.clone(),
+                        },
+                    ),
                 ));
             }
             resources.push(QualifiedResource {
@@ -133,7 +141,7 @@ async fn analyze_resources(managed: Vec<ManagedResource>) -> Result<ResourceSet,
         }
     })
     .await
-    .map_err(|_| ApiError::internal("资源元数据读取未完成；原件保留"))
+    .map_err(|_| ApiError::internal(UiMessage::error_api_media_metadata_read_incomplete()))
 }
 pub(crate) async fn qualified_resource(
     state: &AppState,
@@ -150,7 +158,7 @@ pub(crate) async fn qualified_resource(
             ApiError::new(
                 StatusCode::CONFLICT,
                 "resourceUnavailable",
-                "此资源未在当前笔记的获权清单中登记；标注草稿已保留",
+                UiMessage::error_api_media_resource_not_registered(),
             )
         })?;
     let selected = set.resources.remove(position);
@@ -158,7 +166,7 @@ pub(crate) async fn qualified_resource(
         return Err(ApiError::new(
             StatusCode::CONFLICT,
             "resourceVersion",
-            "资源对象或准确版本已变化，请重新打开资源；标注草稿已保留",
+            UiMessage::error_api_media_resource_version_changed(),
         ));
     }
     Ok(selected)
@@ -168,7 +176,10 @@ pub(crate) async fn qualified_resource(
 struct SessionRequest {
     session_id: String,
 }
-async fn list(State(state): State<AppState>, Json(request): Json<SessionRequest>) -> ApiResult {
+async fn list(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<SessionRequest>,
+) -> ApiResult {
     let set = resource_set(&state, &request.session_id).await?;
     let resources: Vec<_> = set.resources.iter().map(descriptor).collect();
     Ok(Json(json!({"resources":resources,"warnings":set.warnings})))
@@ -202,7 +213,7 @@ struct NavigationPreviewRequest {
 /// subsequent pixels use the same exact-source/resource preview path as Query.
 async fn navigation_preview(
     State(state): State<AppState>,
-    Json(request): Json<NavigationPreviewRequest>,
+    RequestJson(request): RequestJson<NavigationPreviewRequest>,
 ) -> ApiResult {
     let proof = core_call(&state, move |core| {
         let inventory = core.inventory(&request.root)?;
@@ -220,7 +231,7 @@ async fn navigation_preview(
         {
             return Err(CoreError::new(
                 "stalePreview",
-                "笔记内容或身份已变化，请刷新当前列表；未采用新版缩略图",
+                UiMessage::error_api_media_note_preview_basis_changed(),
             ));
         }
         Ok(QueryPreviewRequest {
@@ -230,7 +241,7 @@ async fn navigation_preview(
         })
     })
     .await?;
-    query_preview(State(state), Json(proof)).await
+    query_preview(State(state), crate::RequestJson(proof)).await
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -254,7 +265,12 @@ fn query_resource_cut(
     let mut managed = core.managed_resource_snapshot(&request.root, &entity.path)?;
     let manifest = std::path::Path::new(&entity.path)
         .parent()
-        .ok_or_else(|| CoreError::new("invalidPath", "Missing preview resource owner"))?
+        .ok_or_else(|| {
+            CoreError::new(
+                "invalidPath",
+                UiMessage::error_api_media_preview_owner_missing(),
+            )
+        })?
         .join("weftext.resources.json")
         .to_string_lossy()
         .into_owned();
@@ -267,7 +283,7 @@ fn query_resource_cut(
     {
         return Err(CoreError::new(
             "stalePreview",
-            "The actual source object or revision differs from the frozen query row",
+            UiMessage::error_api_media_query_preview_basis_changed(),
         ));
     }
     if let Some(base) = observed {
@@ -283,7 +299,7 @@ fn query_resource_cut(
     {
         return Err(CoreError::new(
             "scopeChanged",
-            "The resource manifest changed while reading the row preview",
+            UiMessage::error_api_media_preview_manifest_changed(),
         ));
     }
     for (resource, file) in managed.iter_mut().zip(&cut.files[2..]) {
@@ -293,7 +309,7 @@ fn query_resource_cut(
         {
             return Err(CoreError::new(
                 "scopeChanged",
-                "The resource object or manifest changed while reading the row preview",
+                UiMessage::error_api_media_preview_object_changed(),
             ));
         }
         resource.base_id = file.base_id.clone();
@@ -303,7 +319,7 @@ fn query_resource_cut(
 }
 async fn query_preview(
     State(state): State<AppState>,
-    Json(request): Json<QueryPreviewRequest>,
+    RequestJson(request): RequestJson<QueryPreviewRequest>,
 ) -> ApiResult {
     let source_base = request
         .revision
@@ -324,7 +340,7 @@ async fn query_preview(
         Ok(managed) => managed,
         Err(error) => {
             return Ok(Json(
-                json!({"state":"unavailable","sourceRevision":source_revision,"sourceBaseId":source_base,"sourceBasisKind":source_basis_kind,"message":error.message}),
+                json!({"state":"unavailable","sourceRevision":source_revision,"sourceBaseId":source_base,"sourceBasisKind":source_basis_kind,"explanation":error.explanation,"diagnostics":error.diagnostics,"causes":error.causes}),
             ));
         }
     };
@@ -342,12 +358,13 @@ async fn query_preview(
         ));
     }
     Ok(Json(
-        json!({"state":if set.resources.is_empty(){"absent"}else{"unsupported"},"sourceRevision":source_revision,"sourceBaseId":source_base,"sourceBasisKind":source_basis_kind,"message":"当前资源清单没有可验证的图片或 PDF 缩略图。"}),
+        json!({"state":if set.resources.is_empty(){"absent"}else{"unsupported"},"sourceRevision":source_revision,"sourceBaseId":source_base,"sourceBasisKind":source_basis_kind,
+            "explanation":UiMessage::error_api_media_thumbnail_unavailable(),"diagnostics":[],"causes":[]}),
     ))
 }
 async fn query_preview_resource(
     State(state): State<AppState>,
-    Json(request): Json<QueryPreviewResourceRequest>,
+    RequestJson(request): RequestJson<QueryPreviewResourceRequest>,
 ) -> Result<Response, ApiError> {
     let proof = QueryPreviewRequest {
         root: request.root,
@@ -367,14 +384,14 @@ async fn query_preview_resource(
             ApiError::new(
                 StatusCode::CONFLICT,
                 "stalePreview",
-                "缩略图资源版本已变化，请刷新当前列表",
+                UiMessage::error_api_media_thumbnail_version_changed(),
             )
         })?;
     let resource = set.resources.remove(index);
     let bytes = resource
         .file
         .bytes
-        .ok_or_else(|| ApiError::bad("缩略图资源字节不可用"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_media_thumbnail_bytes_unavailable()))?;
     Ok((
         [
             (header::CONTENT_TYPE, resource.content_type),
@@ -393,7 +410,7 @@ struct ReadRequest {
 }
 async fn read(
     State(state): State<AppState>,
-    Json(request): Json<ReadRequest>,
+    RequestJson(request): RequestJson<ReadRequest>,
 ) -> Result<Response, ApiError> {
     let item = qualified_resource(
         &state,
@@ -405,7 +422,7 @@ async fn read(
     let bytes = item
         .file
         .bytes
-        .ok_or_else(|| ApiError::bad("资源字节不可用"))?;
+        .ok_or_else(|| ApiError::bad(UiMessage::error_api_media_resource_bytes_unavailable()))?;
     Ok((
         [
             (header::CONTENT_TYPE, item.content_type),
@@ -425,18 +442,18 @@ struct ImportRequest {
 }
 async fn prepare_import(
     State(state): State<AppState>,
-    Json(request): Json<ImportRequest>,
+    RequestJson(request): RequestJson<ImportRequest>,
 ) -> ApiResult {
     // The authenticated browser explicitly chooses/uploads this input. No client
     // path is read and no API code writes a filesystem object.
     if request.bytes.len() > 86 * 1024 * 1024 {
-        return Err(ApiError::bad("导入资源超过 64 MiB 上限"));
+        return Err(ApiError::bad(UiMessage::error_api_media_import_budget()));
     }
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(&request.bytes)
-        .map_err(|_| ApiError::bad("资源上传不是有效 Base64"))?;
+        .map_err(|_| ApiError::bad(UiMessage::error_api_media_upload_base64_invalid()))?;
     if bytes.len() > 64 * 1024 * 1024 {
-        return Err(ApiError::bad("导入资源超过 64 MiB 上限"));
+        return Err(ApiError::bad(UiMessage::error_api_media_import_budget()));
     }
     let loc = location(&state, &request.session_id)?;
     Ok(Json(value(
@@ -495,13 +512,8 @@ pub(crate) fn metadata_facts(
         ResourceMetadata::Unsupported { .. } => return None,
     })
 }
-fn unsupported(message: impl Into<String>, mime: &str) -> (ResourceMetadata, String) {
-    (
-        ResourceMetadata::Unsupported {
-            message: message.into(),
-        },
-        mime.into(),
-    )
+fn unsupported(description: ErrorDescription, mime: &str) -> (ResourceMetadata, String) {
+    (ResourceMetadata::Unsupported { description }, mime.into())
 }
 pub(crate) fn inspect_media(bytes: &[u8]) -> (ResourceMetadata, String) {
     if bytes.starts_with(b"%PDF-") {
@@ -528,7 +540,12 @@ pub(crate) fn inspect_media(bytes: &[u8]) -> (ResourceMetadata, String) {
             image::ImageFormat::Jpeg => "image/jpeg",
             image::ImageFormat::Gif => "image/gif",
             image::ImageFormat::WebP => "image/webp",
-            _ => return unsupported("当前图片格式尚无准确区域读取器", "application/octet-stream"),
+            _ => {
+                return unsupported(
+                    ErrorDescription::new(UiMessage::error_api_media_image_format_unsupported()),
+                    "application/octet-stream",
+                );
+            }
         };
         let mut reader = image::ImageReader::with_format(Cursor::new(bytes), format);
         let mut limits = image::Limits::default();
@@ -536,17 +553,24 @@ pub(crate) fn inspect_media(bytes: &[u8]) -> (ResourceMetadata, String) {
         limits.max_image_height = Some(16384);
         limits.max_alloc = Some(128 * 1024 * 1024);
         reader.limits(limits);
-        let result = (|| {
-            let mut decoder = reader
-                .into_decoder()
-                .map_err(|_| "图片无法完整解码或超出解码上限")?;
-            if decoder.orientation().map_err(|_| "图片方向元数据无效")?
-                != image::metadata::Orientation::NoTransforms
+        let result = (|| -> Result<ResourceMetadata, ErrorDescription> {
+            let mut decoder = reader.into_decoder().map_err(|error| {
+                ErrorDescription::new(UiMessage::error_api_media_image_decode_unavailable())
+                    .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+            })?;
+            if decoder.orientation().map_err(|error| {
+                ErrorDescription::new(UiMessage::error_api_media_image_orientation_invalid())
+                    .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+            })? != image::metadata::Orientation::NoTransforms
             {
-                return Err("带方向变换的图片暂不能创建原始像素区域；原件保留");
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_image_transform_unsupported(),
+                ));
             }
-            let image =
-                image::DynamicImage::from_decoder(decoder).map_err(|_| "图片字节无法完整解码")?;
+            let image = image::DynamicImage::from_decoder(decoder).map_err(|error| {
+                ErrorDescription::new(UiMessage::error_api_media_image_bytes_undecodable())
+                    .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+            })?;
             Ok(ResourceMetadata::Image {
                 width: u64::from(image.width()),
                 height: u64::from(image.height()),
@@ -558,7 +582,7 @@ pub(crate) fn inspect_media(bytes: &[u8]) -> (ResourceMetadata, String) {
         };
     }
     unsupported(
-        "此资源可保留；当前没有验证该格式的准确页面、像素或时基读取器",
+        ErrorDescription::new(UiMessage::error_api_media_format_reader_unavailable()),
         "application/octet-stream",
     )
 }
@@ -566,20 +590,28 @@ pub(crate) fn metadata_from_bytes(bytes: &[u8]) -> ResourceMetadata {
     inspect_media(bytes).0
 }
 
-fn pdf_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
+fn pdf_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
     // This library's structural stream decompression is not output-bounded.
     // Refuse it before loading instead of claiming an unqualified parser sandbox.
     if bytes.len() > 16 * 1024 * 1024 || pdf_structural_stream(bytes) {
-        return Err("当前 PDF 页面读取器仅支持 16 MiB 内的普通对象与 xref 表；压缩对象/xref 流原件保留，区域暂不可写".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_pdf_structural_profile_unsupported(),
+        ));
     }
-    let document =
-        lopdf::Document::load_mem(bytes).map_err(|_| "PDF 无法读取；原件保留".to_owned())?;
+    let document = lopdf::Document::load_mem(bytes).map_err(|error| {
+        ErrorDescription::new(UiMessage::error_api_media_pdf_unreadable())
+            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+    })?;
     if document.is_encrypted() {
-        return Err("加密 PDF 未解锁，不能建立准确页面区域".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_pdf_encrypted(),
+        ));
     }
     let pages = document.get_pages();
     if pages.is_empty() || pages.len() > 2000 {
-        return Err("PDF 页面为空或超过 2000 页上限".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_pdf_page_budget(),
+        ));
     }
     let mut facts = Vec::with_capacity(pages.len());
     for id in pages.values() {
@@ -591,11 +623,14 @@ fn pdf_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
         let mut unit = None;
         loop {
             if !visited.insert(cursor) || visited.len() > 64 {
-                return Err("PDF 页面继承链循环或超出上限".into());
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_pdf_inheritance_cycle(),
+                ));
             }
-            let dictionary = document
-                .get_dictionary(cursor)
-                .map_err(|_| "PDF 页面字典无效")?;
+            let dictionary = document.get_dictionary(cursor).map_err(|error| {
+                ErrorDescription::new(UiMessage::error_api_media_pdf_page_dictionary_invalid())
+                    .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+            })?;
             if media.is_none() {
                 media = dictionary.get(b"MediaBox").ok().cloned();
             }
@@ -617,12 +652,16 @@ fn pdf_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
                 None => break,
             }
         }
-        let resolve = |object: lopdf::Object| -> Result<lopdf::Object, String> {
+        let resolve = |object: lopdf::Object| -> Result<lopdf::Object, ErrorDescription> {
             match object {
-                lopdf::Object::Reference(reference) => document
-                    .get_object(reference)
-                    .cloned()
-                    .map_err(|_| "PDF 页面属性引用无效".into()),
+                lopdf::Object::Reference(reference) => {
+                    document.get_object(reference).cloned().map_err(|error| {
+                        ErrorDescription::new(
+                            UiMessage::error_api_media_pdf_page_reference_invalid(),
+                        )
+                        .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+                    })
+                }
                 object => Ok(object),
             }
         };
@@ -633,26 +672,41 @@ fn pdf_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
                 _ => None,
             }
         };
-        let media = resolve(media.ok_or("PDF 页面缺少 MediaBox")?)?;
-        let array = media.as_array().map_err(|_| "PDF MediaBox 不是准确矩形")?;
+        let media = resolve(media.ok_or(ErrorDescription::new(
+            UiMessage::error_api_media_pdf_media_box_missing(),
+        ))?)?;
+        let array = media.as_array().map_err(|error| {
+            ErrorDescription::new(UiMessage::error_api_media_pdf_media_box_not_rectangle())
+                .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+        })?;
         if array.len() != 4 {
-            return Err("PDF 页面矩形无效".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_pdf_rectangle_invalid(),
+            ));
         }
         let values: Option<Vec<_>> = array.iter().map(numeric).collect();
-        let values = values.ok_or("PDF 页面矩形不是数值")?;
+        let values = values.ok_or(ErrorDescription::new(
+            UiMessage::error_api_media_pdf_rectangle_not_numeric(),
+        ))?;
         if values.iter().any(|n| !n.is_finite()) || values[2] <= values[0] || values[3] <= values[1]
         {
-            return Err("PDF 页面尺寸无效".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_pdf_page_size_invalid(),
+            ));
         }
         if let Some(crop) = crop
             && resolve(crop)? != media
         {
-            return Err("带裁切页面的 PDF 暂不能创建未旋转页面区域；原件保留".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_pdf_crop_unsupported(),
+            ));
         }
         if let Some(unit) = unit
             && numeric(&resolve(unit)?) != Some(1.0)
         {
-            return Err("PDF 非标准 UserUnit 暂不支持准确点坐标".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_pdf_user_unit_unsupported(),
+            ));
         }
         let rotation = rotation
             .map(resolve)
@@ -661,11 +715,15 @@ fn pdf_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
             .and_then(numeric)
             .unwrap_or(0.0);
         if rotation.fract() != 0.0 {
-            return Err("PDF 页面旋转无效".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_pdf_rotation_invalid(),
+            ));
         }
         let rotation = (rotation as i32).rem_euclid(360);
         if !matches!(rotation, 0 | 90 | 180 | 270) {
-            return Err("PDF 页面旋转无效".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_pdf_rotation_invalid(),
+            ));
         }
         facts.push(PdfPageFacts {
             width: values[2] - values[0],
@@ -720,41 +778,72 @@ fn pdf_structural_stream(bytes: &[u8]) -> bool {
     }
     false
 }
-fn wav_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
+fn wav_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
     let declared = u32::from_le_bytes(
         bytes
             .get(4..8)
-            .ok_or("WAV 头不完整")?
+            .ok_or(ErrorDescription::new(
+                UiMessage::error_api_media_wav_header_incomplete(),
+            ))?
             .try_into()
-            .map_err(|_| "WAV 头不完整")?,
+            .map_err(|error: std::array::TryFromSliceError| {
+                ErrorDescription::new(UiMessage::error_api_media_wav_header_incomplete())
+                    .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+            })?,
     ) as usize;
     if declared.checked_add(8) != Some(bytes.len()) {
-        return Err("WAV 容器长度与实际字节不一致".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_wav_length_mismatch(),
+        ));
     }
     let mut position = 12usize;
     let mut format = None;
     let mut data = None;
     while position < bytes.len() {
-        let header = bytes.get(position..position + 8).ok_or("WAV 块头不完整")?;
+        let header = bytes
+            .get(position..position + 8)
+            .ok_or(ErrorDescription::new(
+                UiMessage::error_api_media_wav_chunk_header_incomplete(),
+            ))?;
         let length = u32::from_le_bytes(header[4..8].try_into().unwrap()) as usize;
-        let start = position.checked_add(8).ok_or("WAV 块长度溢出")?;
-        let end = start.checked_add(length).ok_or("WAV 块长度溢出")?;
-        let block = bytes.get(start..end).ok_or("WAV 数据块超出真实字节")?;
+        let start = position.checked_add(8).ok_or(ErrorDescription::new(
+            UiMessage::error_api_media_wav_chunk_length_overflow(),
+        ))?;
+        let end = start.checked_add(length).ok_or(ErrorDescription::new(
+            UiMessage::error_api_media_wav_chunk_length_overflow(),
+        ))?;
+        let block = bytes.get(start..end).ok_or(ErrorDescription::new(
+            UiMessage::error_api_media_wav_chunk_outside_bytes(),
+        ))?;
         match &header[..4] {
             b"fmt " => {
                 if format.replace(block).is_some() {
-                    return Err("WAV 存在多个格式块".into());
+                    return Err(ErrorDescription::new(
+                        UiMessage::error_api_media_wav_format_ambiguous(),
+                    ));
                 }
             }
-            b"data" if data.replace(block).is_some() => return Err("WAV 存在多个音频数据块".into()),
+            b"data" if data.replace(block).is_some() => {
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_wav_data_ambiguous(),
+                ));
+            }
             _ => {}
         }
-        position = end.checked_add(length % 2).ok_or("WAV 块长度溢出")?;
+        position = end.checked_add(length % 2).ok_or(ErrorDescription::new(
+            UiMessage::error_api_media_wav_chunk_length_overflow(),
+        ))?;
     }
-    let format = format.ok_or("WAV 缺少格式块")?;
-    let data = data.ok_or("WAV 缺少音频数据")?;
+    let format = format.ok_or(ErrorDescription::new(
+        UiMessage::error_api_media_wav_format_missing(),
+    ))?;
+    let data = data.ok_or(ErrorDescription::new(
+        UiMessage::error_api_media_wav_data_missing(),
+    ))?;
     if format.len() < 16 {
-        return Err("WAV 格式块不完整".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_wav_format_incomplete(),
+        ));
     }
     let u16_at = |offset| u16::from_le_bytes(format[offset..offset + 2].try_into().unwrap());
     let u32_at = |offset| u32::from_le_bytes(format[offset..offset + 4].try_into().unwrap());
@@ -772,14 +861,23 @@ fn wav_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
         || bits % 8 != 0
         || align == 0
         || u32::from(align) != u32::from(channels) * u32::from(bits / 8)
-        || byte_rate != rate.checked_mul(u32::from(align)).ok_or("WAV 时基溢出")?
+        || byte_rate
+            != rate
+                .checked_mul(u32::from(align))
+                .ok_or(ErrorDescription::new(
+                    UiMessage::error_api_media_wav_timebase_overflow(),
+                ))?
         || data.len() % usize::from(align) != 0
     {
-        return Err("WAV 不是受支持的完整 PCM/浮点采样，不能建立准确采样时基".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_wav_sampling_unsupported(),
+        ));
     }
     let duration_tick = (data.len() / usize::from(align)) as u64;
     if duration_tick == 0 {
-        return Err("WAV 音频为空".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_wav_audio_empty(),
+        ));
     }
     Ok(ResourceMetadata::Audio {
         timebase: Timebase {
@@ -795,11 +893,13 @@ struct Mp4Box<'a> {
     kind: [u8; 4],
     body: &'a [u8],
 }
-fn boxes(mut bytes: &[u8]) -> Result<Vec<Mp4Box<'_>>, String> {
+fn boxes(mut bytes: &[u8]) -> Result<Vec<Mp4Box<'_>>, ErrorDescription> {
     let mut output = Vec::new();
     while !bytes.is_empty() {
         if bytes.len() < 8 || output.len() > 10000 {
-            return Err("MP4 块头无效或超出上限".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_chunk_header_invalid(),
+            ));
         }
         let small = u32::from_be_bytes(bytes[..4].try_into().unwrap());
         let kind = bytes[4..8].try_into().unwrap();
@@ -807,18 +907,28 @@ fn boxes(mut bytes: &[u8]) -> Result<Vec<Mp4Box<'_>>, String> {
             0 => (bytes.len(), 8),
             1 => {
                 if bytes.len() < 16 {
-                    return Err("MP4 长块头不完整".into());
+                    return Err(ErrorDescription::new(
+                        UiMessage::error_api_media_mp4_extended_header_incomplete(),
+                    ));
                 }
                 (
-                    usize::try_from(u64::from_be_bytes(bytes[8..16].try_into().unwrap()))
-                        .map_err(|_| "MP4 长度超出范围")?,
+                    usize::try_from(u64::from_be_bytes(bytes[8..16].try_into().unwrap())).map_err(
+                        |error| {
+                            ErrorDescription::new(
+                                UiMessage::error_api_media_mp4_length_out_of_range(),
+                            )
+                            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+                        },
+                    )?,
                     16,
                 )
             }
             n => (n as usize, 8),
         };
         if size < header || size > bytes.len() {
-            return Err("MP4 块超出实际资源字节".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_chunk_outside_bytes(),
+            ));
         }
         output.push(Mp4Box {
             kind,
@@ -828,7 +938,7 @@ fn boxes(mut bytes: &[u8]) -> Result<Vec<Mp4Box<'_>>, String> {
     }
     Ok(output)
 }
-fn one<'a>(input: &[Mp4Box<'a>], kind: &[u8; 4]) -> Result<Mp4Box<'a>, String> {
+fn one<'a>(input: &[Mp4Box<'a>], kind: &[u8; 4]) -> Result<Mp4Box<'a>, ErrorDescription> {
     let found: Vec<_> = input
         .iter()
         .filter(|item| &item.kind == kind)
@@ -837,26 +947,33 @@ fn one<'a>(input: &[Mp4Box<'a>], kind: &[u8; 4]) -> Result<Mp4Box<'a>, String> {
     if let [item] = found.as_slice() {
         Ok(*item)
     } else {
-        Err(format!(
-            "MP4 必须恰有一个 {} 块",
-            String::from_utf8_lossy(kind)
+        Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_box_not_unique(
+                weftext_messages::params::ErrorApiMediaMp4BoxNotUnique {
+                    box_kind: String::from_utf8_lossy(kind).into_owned(),
+                },
+            ),
         ))
     }
 }
-fn be32(input: &[u8], offset: usize) -> Result<u32, String> {
+fn be32(input: &[u8], offset: usize) -> Result<u32, ErrorDescription> {
     Ok(u32::from_be_bytes(
         input
             .get(offset..offset + 4)
-            .ok_or("MP4 字段不完整")?
+            .ok_or(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_field_incomplete(),
+            ))?
             .try_into()
             .unwrap(),
     ))
 }
-fn be64(input: &[u8], offset: usize) -> Result<u64, String> {
+fn be64(input: &[u8], offset: usize) -> Result<u64, ErrorDescription> {
     Ok(u64::from_be_bytes(
         input
             .get(offset..offset + 8)
-            .ok_or("MP4 字段不完整")?
+            .ok_or(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_field_incomplete(),
+            ))?
             .try_into()
             .unwrap(),
     ))
@@ -866,9 +983,11 @@ fn verify_mp4_samples(
     root: &[Mp4Box<'_>],
     stbl: &[Mp4Box<'_>],
     samples: u64,
-) -> Result<(), String> {
+) -> Result<(), ErrorDescription> {
     if samples > 1_000_000 {
-        return Err("MP4 采样数超过当前验证上限".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_sample_budget(),
+        ));
     }
     if stbl.iter().any(|item| item.kind == *b"ctts") {
         let ctts = one(stbl, b"ctts")?;
@@ -880,22 +999,30 @@ fn verify_mp4_samples(
                 .iter()
                 .any(|entry| entry[4..] != [0, 0, 0, 0])
         {
-            return Err("MP4 合成时间偏移暂不能映射到准确播放器区间".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_composition_offset_unsupported(),
+            ));
         }
     }
     let size = one(stbl, b"stsz")?;
     let fixed = be32(size.body, 4)?;
     let count = be32(size.body, 8)? as usize;
     if (fixed == 0 && size.body.len() != 12 + count * 4) || (fixed != 0 && size.body.len() != 12) {
-        return Err("MP4 采样大小表长度无效".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_sample_size_table_invalid(),
+        ));
     }
     let offsets: Vec<u64> = if let Ok(stco) = one(stbl, b"stco") {
         if stbl.iter().any(|item| item.kind == *b"co64") {
-            return Err("MP4 块偏移表不唯一".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_chunk_offsets_ambiguous(),
+            ));
         }
         let count = be32(stco.body, 4)? as usize;
         if count > 1_000_000 || stco.body.len() != 8 + count * 4 {
-            return Err("MP4 块偏移表无效".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_chunk_offsets_invalid(),
+            ));
         }
         stco.body[8..]
             .as_chunks::<4>()
@@ -907,7 +1034,9 @@ fn verify_mp4_samples(
         let co64 = one(stbl, b"co64")?;
         let count = be32(co64.body, 4)? as usize;
         if count > 1_000_000 || co64.body.len() != 8 + count * 8 {
-            return Err("MP4 长块偏移表无效".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_extended_offsets_invalid(),
+            ));
         }
         co64.body[8..]
             .as_chunks::<8>()
@@ -919,7 +1048,9 @@ fn verify_mp4_samples(
     let map = one(stbl, b"stsc")?;
     let entries = be32(map.body, 4)? as usize;
     if entries == 0 || entries > offsets.len() || map.body.len() != 8 + entries * 12 {
-        return Err("MP4 采样块映射无效".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_sample_chunks_invalid(),
+        ));
     }
     let mut mappings = Vec::new();
     let mut prior = 0u32;
@@ -931,13 +1062,17 @@ fn verify_mp4_samples(
             || per_chunk == 0
             || be32(entry, 8)? != 1
         {
-            return Err("MP4 采样块映射不连续或采样描述不唯一".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_sample_chunks_discontinuous(),
+            ));
         }
         mappings.push((first as usize, per_chunk));
         prior = first;
     }
     if mappings[0].0 != 1 {
-        return Err("MP4 采样块映射缺少第一块".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_first_chunk_missing(),
+        ));
     }
     let media: Vec<_> = root
         .iter()
@@ -959,7 +1094,9 @@ fn verify_mp4_samples(
         let mut total = 0u64;
         for _ in 0..mappings[mapping].1 {
             if sample >= count {
-                return Err("MP4 采样块超出实际采样数".into());
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_chunks_exceed_samples(),
+                ));
             }
             let length = if fixed == 0 {
                 be32(size.body, 12 + sample * 4)?
@@ -967,40 +1104,54 @@ fn verify_mp4_samples(
                 fixed
             };
             if length == 0 {
-                return Err("MP4 媒体采样为空".into());
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_media_sample_empty(),
+                ));
             }
             total = total
                 .checked_add(u64::from(length))
-                .ok_or("MP4 采样字节范围溢出")?;
+                .ok_or(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_sample_range_overflow(),
+                ))?;
             sample += 1;
         }
-        let end = offset.checked_add(total).ok_or("MP4 采样字节范围溢出")?;
+        let end = offset.checked_add(total).ok_or(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_sample_range_overflow(),
+        ))?;
         if !media
             .iter()
             .any(|(start, limit)| offset >= start && end <= *limit)
         {
-            return Err("MP4 采样指向实际媒体数据范围之外".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_samples_outside_media(),
+            ));
         }
     }
     if sample != count || sample as u64 != samples {
-        return Err("MP4 采样块未覆盖完整采样时序".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_sample_timeline_incomplete(),
+        ));
     }
     Ok(())
 }
-fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
+fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
     let root = boxes(bytes)?;
     one(&root, b"ftyp")?;
     let moov = boxes(one(&root, b"moov")?.body)?;
     if root.iter().any(|item| item.kind == *b"moof")
         || moov.iter().any(|item| item.kind == *b"mvex")
     {
-        return Err("分片 MP4 暂不支持准确区间标注".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_fragmented_unsupported(),
+        ));
     }
     if !root
         .iter()
         .any(|item| item.kind == *b"mdat" && !item.body.is_empty())
     {
-        return Err("MP4 缺少实际媒体数据".into());
+        return Err(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_media_data_missing(),
+        ));
     }
     let mut audio = None;
     let mut video = None;
@@ -1009,11 +1160,15 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
         // Edit lists translate the media timeline to the browser's presentation
         // timeline. They are rejected until that mapping is represented exactly.
         if track.iter().any(|item| item.kind == *b"edts") {
-            return Err("带编辑时间线的 MP4 暂不能建立准确播放器区间；原件保留".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_edited_timeline_unsupported(),
+            ));
         }
         let mdia = boxes(one(&track, b"mdia")?.body)?;
         let handler = one(&mdia, b"hdlr")?;
-        let kind = handler.body.get(8..12).ok_or("MP4 轨道类型不完整")?;
+        let kind = handler.body.get(8..12).ok_or(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_track_type_incomplete(),
+        ))?;
         if !matches!(kind, b"vide" | b"soun") {
             continue;
         }
@@ -1021,29 +1176,43 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
         let (rate, duration) = match mdhd.body.first() {
             Some(0) => (be32(mdhd.body, 12)?, u64::from(be32(mdhd.body, 16)?)),
             Some(1) => (be32(mdhd.body, 20)?, be64(mdhd.body, 24)?),
-            _ => return Err("MP4 时间头版本无效".into()),
+            _ => {
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_time_header_version_invalid(),
+                ));
+            }
         };
         if rate == 0 || duration == 0 || duration > 9_007_199_254_740_991 {
-            return Err("MP4 时间范围无效或超出准确整数上限".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_time_range_invalid(),
+            ));
         }
         let minf = boxes(one(&mdia, b"minf")?.body)?;
         let dinf = boxes(one(&minf, b"dinf")?.body)?;
         let dref = one(&dinf, b"dref")?;
         if be32(dref.body, 4)? != 1 {
-            return Err("MP4 外部或多源数据引用暂不支持准确区域".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_external_sources_unsupported(),
+            ));
         }
-        let references = boxes(dref.body.get(8..).ok_or("MP4 数据引用无效")?)?;
+        let references = boxes(dref.body.get(8..).ok_or(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_data_reference_invalid(),
+        ))?)?;
         if references.len() != 1
             || references[0].kind != *b"url "
             || references[0].body != [0, 0, 0, 1]
         {
-            return Err("MP4 媒体数据必须完整包含在准确资源字节中".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_media_must_be_internal(),
+            ));
         }
         let stbl = boxes(one(&minf, b"stbl")?.body)?;
         let stts = one(&stbl, b"stts")?;
         let entries = be32(stts.body, 4)? as usize;
         if entries > 100000 || stts.body.len() != 8 + entries * 8 {
-            return Err("MP4 采样时序表无效".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_sample_timeline_invalid(),
+            ));
         }
         let mut sample_count = 0u64;
         let mut sample_duration = 0u64;
@@ -1051,32 +1220,54 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
             let count = u64::from(be32(entry, 0)?);
             let delta = u64::from(be32(entry, 4)?);
             if count == 0 || delta == 0 {
-                return Err("MP4 采样时间无效".into());
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_sample_time_invalid(),
+                ));
             }
-            sample_count = sample_count.checked_add(count).ok_or("MP4 采样数量溢出")?;
+            sample_count = sample_count
+                .checked_add(count)
+                .ok_or(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_sample_count_overflow(),
+                ))?;
             sample_duration = sample_duration
-                .checked_add(count.checked_mul(delta).ok_or("MP4 采样时间溢出")?)
-                .ok_or("MP4 采样时间溢出")?;
+                .checked_add(count.checked_mul(delta).ok_or(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_sample_time_overflow(),
+                ))?)
+                .ok_or(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_sample_time_overflow(),
+                ))?;
         }
         if sample_duration != duration || sample_count == 0 {
-            return Err("MP4 时间头与实际采样时序不一致".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_time_header_mismatch(),
+            ));
         }
         let stsz = one(&stbl, b"stsz")?;
         if u64::from(be32(stsz.body, 8)?) != sample_count {
-            return Err("MP4 采样大小和时序数量不一致".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_sample_counts_mismatch(),
+            ));
         }
         verify_mp4_samples(bytes, &root, &stbl, sample_count)?;
         let stsd = one(&stbl, b"stsd")?;
         if be32(stsd.body, 4)? != 1 {
-            return Err("多格式 MP4 轨道暂不支持准确区域".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_multiple_formats_unsupported(),
+            ));
         }
-        let descriptions = boxes(stsd.body.get(8..).ok_or("MP4 采样描述无效")?)?;
+        let descriptions = boxes(stsd.body.get(8..).ok_or(ErrorDescription::new(
+            UiMessage::error_api_media_mp4_sample_description_invalid(),
+        ))?)?;
         if descriptions.len() != 1 {
-            return Err("MP4 采样描述不唯一".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_sample_description_ambiguous(),
+            ));
         }
         let description = descriptions[0];
         if description.body.get(6..8) != Some(&[0, 1]) {
-            return Err("MP4 采样引用未绑定唯一内部媒体数据".into());
+            return Err(ErrorDescription::new(
+                UiMessage::error_api_media_mp4_sample_reference_ambiguous(),
+            ));
         }
         let timebase = Timebase {
             numerator: u64::from(rate),
@@ -1088,7 +1279,9 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
                 b"avc1" | b"avc3" | b"hvc1" | b"hev1" | b"vp09" | b"av01"
             ) || description.body.len() < 78
             {
-                return Err("此 MP4 视频采样格式暂不支持准确像素".into());
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_video_format_unsupported(),
+                ));
             }
             let width = u64::from(u16::from_be_bytes(
                 description.body[24..26].try_into().unwrap(),
@@ -1097,27 +1290,39 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
                 description.body[26..28].try_into().unwrap(),
             ));
             if width == 0 || height == 0 {
-                return Err("MP4 视频像素尺寸为空".into());
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_video_dimensions_empty(),
+                ));
             }
             let tkhd = one(&track, b"tkhd")?;
             let matrix = match tkhd.body.first() {
                 Some(0) => 40,
                 Some(1) => 52,
-                _ => return Err("MP4 轨道头版本无效".into()),
+                _ => {
+                    return Err(ErrorDescription::new(
+                        UiMessage::error_api_media_mp4_track_header_version_invalid(),
+                    ));
+                }
             };
             let identity = [65536u32, 0, 0, 0, 65536, 0, 0, 0, 1073741824];
             for (index, expected) in identity.iter().enumerate() {
                 if be32(tkhd.body, matrix + index * 4)? != *expected {
-                    return Err("带旋转/变换的视频暂不支持原始像素区域".into());
+                    return Err(ErrorDescription::new(
+                        UiMessage::error_api_media_mp4_video_transform_unsupported(),
+                    ));
                 }
             }
             let child = boxes(&description.body[78..])?;
             if child.iter().any(|item| item.kind == *b"clap") {
-                return Err("带裁切的视频暂不支持原始像素区域".into());
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_video_crop_unsupported(),
+                ));
             }
             for aspect in child.iter().filter(|item| item.kind == *b"pasp") {
                 if be32(aspect.body, 0)? != be32(aspect.body, 4)? {
-                    return Err("非方形像素视频暂不支持准确区域".into());
+                    return Err(ErrorDescription::new(
+                        UiMessage::error_api_media_mp4_pixel_aspect_unsupported(),
+                    ));
                 }
             }
             if video
@@ -1129,11 +1334,15 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
                 })
                 .is_some()
             {
-                return Err("多视频轨道暂不支持准确播放器目标".into());
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_multiple_video_tracks_unsupported(),
+                ));
             }
         } else {
             if description.kind != *b"mp4a" {
-                return Err("此 MP4 音频采样格式暂不支持准确时基".into());
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_audio_format_unsupported(),
+                ));
             }
             if audio
                 .replace(ResourceMetadata::Audio {
@@ -1142,16 +1351,54 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, String> {
                 })
                 .is_some()
             {
-                return Err("多音频轨道暂不支持准确播放器目标".into());
+                return Err(ErrorDescription::new(
+                    UiMessage::error_api_media_mp4_multiple_audio_tracks_unsupported(),
+                ));
             }
         }
     }
-    video.or(audio).ok_or("MP4 缺少受支持的媒体轨道".into())
+    video.or(audio).ok_or(ErrorDescription::new(
+        UiMessage::error_api_media_mp4_supported_track_missing(),
+    ))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn unsupported_media_keeps_product_validation_and_real_parser_diagnostics_separate() {
+        let (metadata, content_type) = inspect_media(b"%PDF-invalid-owned-test");
+        assert_eq!(content_type, "application/pdf");
+        let ResourceMetadata::Unsupported { description } = metadata else {
+            panic!("invalid PDF was admitted")
+        };
+        assert_eq!(
+            description.explanation.key(),
+            "error.api.media.pdfUnreadable"
+        );
+        assert_eq!(description.diagnostics.len(), 1);
+        assert_eq!(
+            description.diagnostics[0].origin,
+            DiagnosticOrigin::Dependency
+        );
+        assert!(!description.diagnostics[0].text.is_empty());
+        let wire = serde_json::to_value(ResourceMetadata::Unsupported { description }).unwrap();
+        assert_eq!(wire["kind"], "unsupported");
+        assert!(wire.get("message").is_none());
+        assert!(wire.get("explanation").is_some());
+        assert!(wire["diagnostics"].is_array());
+        assert_eq!(wire["causes"], json!([]));
+
+        let (metadata, _) = inspect_media(b"RIFF\0\0\0\0WAVE");
+        let ResourceMetadata::Unsupported { description } = metadata else {
+            panic!("invalid WAV was admitted")
+        };
+        assert_eq!(
+            description.explanation.key(),
+            "error.api.media.wavLengthMismatch"
+        );
+        assert!(description.diagnostics.is_empty());
+    }
     fn wave() -> Vec<u8> {
         let data = vec![0u8; 960];
         let mut bytes = b"RIFF".to_vec();
@@ -1387,7 +1634,9 @@ mod tests {
         let mut core = weftext_core::Core::new(root.join("private")).unwrap();
         let library = root.join("library");
         core.create_library(&library).unwrap();
-        let opened = core.create_note(&library, &library, "媒体").unwrap();
+        let opened = core
+            .create_note_fixture(&library, &library, "媒体")
+            .unwrap();
         let bytes = wave();
         let operation_id = uuid::Uuid::new_v4().to_string();
         let preview = core
@@ -1414,6 +1663,7 @@ mod tests {
             renders: Arc::new(Mutex::new(std::collections::HashMap::new())),
             editor_versions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             exports: Arc::new(Mutex::new(crate::export_api::ExportStore::default())),
+            native_status: Default::default(),
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
             initial: None,
@@ -1424,10 +1674,7 @@ mod tests {
         )
         .ok()
         .unwrap();
-        let mut set = resource_set(&state, &opened.session_id)
-            .await
-            .map_err(|error| error.message)
-            .unwrap();
+        let mut set = resource_set(&state, &opened.session_id).await.unwrap();
         assert_eq!(set.resources.len(), 1);
         let selected = set.resources.remove(0);
         let revision = selected.file.revision.clone().unwrap();
@@ -1441,14 +1688,13 @@ mod tests {
         );
         let response = read(
             State(state.clone()),
-            Json(ReadRequest {
+            crate::RequestJson(ReadRequest {
                 session_id: opened.session_id.clone(),
                 resource: selected.resource_ref.clone(),
                 revision: revision.clone(),
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap();
         let delivered = axum::body::to_bytes(response.into_body(), 64 * 1024 * 1024)
             .await
@@ -1482,7 +1728,9 @@ mod tests {
         let mut core = weftext_core::Core::new(root.join("private")).unwrap();
         let library = root.join("library");
         core.create_library(&library).unwrap();
-        let opened = core.create_note(&library, &library, "缩略图").unwrap();
+        let opened = core
+            .create_note_fixture(&library, &library, "缩略图")
+            .unwrap();
         let mut image = Cursor::new(Vec::new());
         image::DynamicImage::new_rgb8(3, 2)
             .write_to(&mut image, image::ImageFormat::Png)
@@ -1537,6 +1785,7 @@ mod tests {
             renders: Arc::new(Mutex::new(std::collections::HashMap::new())),
             editor_versions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             exports: Arc::new(Mutex::new(crate::export_api::ExportStore::default())),
+            native_status: Default::default(),
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
             initial: None,
@@ -1550,9 +1799,8 @@ mod tests {
             ),
             revision,
         };
-        let ready = query_preview(State(state.clone()), Json(request.clone()))
+        let ready = query_preview(State(state.clone()), crate::RequestJson(request.clone()))
             .await
-            .map_err(|error| error.message)
             .unwrap()
             .0;
         assert_eq!(ready["state"], "ready");
@@ -1568,9 +1816,8 @@ mod tests {
             resource: ready["descriptor"]["resource"].as_str().unwrap().into(),
             resource_revision: ready["descriptor"]["revision"].as_str().unwrap().into(),
         };
-        let response = query_preview_resource(State(state.clone()), Json(raw))
+        let response = query_preview_resource(State(state.clone()), crate::RequestJson(raw))
             .await
-            .map_err(|error| error.message)
             .unwrap();
         let delivered = axum::body::to_bytes(response.into_body(), 64 * 1024 * 1024)
             .await
@@ -1578,13 +1825,12 @@ mod tests {
         assert_eq!(delivered.as_ref(), bytes.as_slice());
         let stale = query_preview(
             State(state.clone()),
-            Json(QueryPreviewRequest {
+            crate::RequestJson(QueryPreviewRequest {
                 revision: uuid::Uuid::new_v4().to_string(),
                 ..request.clone()
             }),
         )
         .await
-        .map_err(|error| error.message)
         .unwrap()
         .0;
         assert_eq!(stale["state"], "unavailable");
@@ -1607,11 +1853,13 @@ mod tests {
             revision: format!("observed-source:{}", observed.base_id),
             ..request
         };
-        let ready = query_preview(State(state.clone()), Json(observed_request.clone()))
-            .await
-            .map_err(|error| error.message)
-            .unwrap()
-            .0;
+        let ready = query_preview(
+            State(state.clone()),
+            crate::RequestJson(observed_request.clone()),
+        )
+        .await
+        .unwrap()
+        .0;
         assert_eq!(ready["state"], "ready");
         assert_eq!(ready["sourceBasisKind"], "observed");
         assert!(ready["sourceRevision"].is_null());
@@ -1621,9 +1869,8 @@ mod tests {
             format!("{}\nAnother external draft\n", opened.source),
         )
         .unwrap();
-        let stale = query_preview(State(state.clone()), Json(observed_request))
+        let stale = query_preview(State(state.clone()), crate::RequestJson(observed_request))
             .await
-            .map_err(|error| error.message)
             .unwrap()
             .0;
         assert_eq!(stale["state"], "unavailable");

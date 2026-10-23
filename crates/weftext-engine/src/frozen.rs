@@ -16,6 +16,13 @@ pub struct FrozenRenderRequest {
 
 impl Engine {
     pub fn render_frozen(&self, input: &FrozenRenderRequest) -> Result<RenderOutput, EngineError> {
+        self.render_frozen_compilation(input)
+            .map(crate::render::RenderCompilation::into_output)
+    }
+    pub(crate) fn render_frozen_compilation(
+        &self,
+        input: &FrozenRenderRequest,
+    ) -> Result<crate::render::RenderCompilation, EngineError> {
         let world = LocalWorld::frozen(&self.library, &self.fonts, input)?;
         let map = match &input.style {
             Some(style) => crate::inspect_editor_with_style(&input.source, style),

@@ -32,7 +32,7 @@ pub fn validate_relation_graph(
         || proposed.id.as_deref() != owner.rsplit('/').next()
     {
         out.unavailable
-            .push("Exact author owner qualification unavailable".into());
+            .push(weftext_messages::UiMessage::error_data_relations_exact_author_owner_qualification_unavailable().into());
         return out;
     }
     let constrained = schema
@@ -50,7 +50,7 @@ pub fn validate_relation_graph(
     let mut keys = BTreeSet::new();
     let ambiguous = sources.iter().any(|s| !keys.insert(&s.entity_key));
     for relation in constrained {
-        let refs = |p: &NoteProjection| -> std::result::Result<BTreeSet<String>, String> {
+        let refs = |p: &NoteProjection| -> std::result::Result<BTreeSet<String>, ErrorDescription> {
             let Some(f) = p.fields.iter().find(|f| f.field_id == relation.field) else {
                 return Ok(BTreeSet::new());
             };
@@ -65,7 +65,7 @@ pub fn validate_relation_graph(
                         .map(str::to_owned)
                         .collect())
                 }
-                _ => Err("Graph source assertion unavailable".into()),
+                _ => Err(weftext_messages::UiMessage::error_data_relations_graph_source_assertion_unavailable().into()),
             }
         };
         let after_refs = match refs(&proposed) {
@@ -85,7 +85,7 @@ pub fn validate_relation_graph(
         }
         if !coverage_complete || sources.len() > 100_000 || ambiguous {
             out.unavailable
-                .push("Complete unambiguous authorized graph constraint scope unavailable".into());
+                .push(weftext_messages::UiMessage::error_data_relations_complete_authorized_graph_constraint_scope_unavailable().into());
             continue;
         }
         let mut graph: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
@@ -119,7 +119,7 @@ pub fn validate_relation_graph(
         }
         if !readable || edges > 1_000_000 {
             out.unavailable
-                .push("Graph constraint source closure unavailable or over budget".into());
+                .push(weftext_messages::UiMessage::error_data_relations_graph_constraint_source_closure_unavailable_or_over_budget().into());
             continue;
         }
         if relation.direction == "symmetric" {
@@ -163,10 +163,7 @@ pub fn validate_relation_graph(
                 }
             }
             if cycle {
-                out.diagnostics.push(format!(
-                    "{}: proposed edge creates a configured cycle",
-                    relation.id
-                ));
+                out.diagnostics.push(weftext_messages::UiMessage::error_data_relations_proposed_edge_creates_configured_cycle(weftext_messages::params::ErrorDataRelationsProposedEdgeCreatesConfiguredCycle {relation_id: (relation.id).to_string()}).into());
             }
             if relation.direction == "symmetric" {
                 graph
@@ -253,13 +250,17 @@ fn validate_relation_change_inner(
     let proposed = project(after, schema);
     let original = project(before, schema);
     if proposed.qualification != "qualified" {
-        out.unavailable
-            .push("proposed control projection unavailable".into());
+        out.unavailable.push(
+            weftext_messages::UiMessage::error_data_relations_proposed_control_projection_unavailable()
+                .into(),
+        );
         return out;
     }
     let mut target_keys = BTreeSet::new();
     if targets.iter().any(|t| !target_keys.insert(&t.entity_key)) {
-        out.unavailable.push("ambiguous target inventory".into());
+        out.unavailable.push(
+            weftext_messages::UiMessage::error_data_relations_target_inventory_ambiguous().into(),
+        );
         return out;
     }
     for relation in schema.relations.iter().filter(|r| {
@@ -277,13 +278,25 @@ fn validate_relation_change_inner(
             Cell::Absent | Cell::Null => continue,
             Cell::Value { value } => value,
             Cell::Invalid { .. } => {
-                out.diagnostics
-                    .push(format!("{}: invalid author field", relation.id));
+                out.diagnostics.push(
+                    weftext_messages::UiMessage::error_data_relations_invalid_author_field(
+                        weftext_messages::params::ErrorDataRelationsInvalidAuthorField {
+                            relation_id: (relation.id).to_string(),
+                        },
+                    )
+                    .into(),
+                );
                 continue;
             }
             Cell::Unavailable { .. } => {
-                out.unavailable
-                    .push(format!("{}: author field unavailable", relation.id));
+                out.unavailable.push(
+                    weftext_messages::UiMessage::error_data_relations_author_field_unavailable(
+                        weftext_messages::params::ErrorDataRelationsAuthorFieldUnavailable {
+                            relation_id: (relation.id).to_string(),
+                        },
+                    )
+                    .into(),
+                );
                 continue;
             }
         };
@@ -293,10 +306,12 @@ fn validate_relation_change_inner(
             .max_assertions
             .is_some_and(|max| assertions.len() > max)
         {
-            out.diagnostics.push(format!(
-                "{}: source assertion cardinality exceeded",
-                relation.id
-            ));
+            out.diagnostics.push(
+                weftext_messages::UiMessage::error_data_relations_source_assertion_cardinality_exceeded(weftext_messages::params::ErrorDataRelationsSourceAssertionCardinalityExceeded {
+                    relation_id: (relation.id).to_string(),
+                })
+                .into(),
+            );
         }
         let before_value = original
             .fields
@@ -312,8 +327,12 @@ fn validate_relation_change_inner(
                 continue;
             }
             let Some(target) = assertion.text() else {
-                out.diagnostics
-                    .push(format!("{}: relation target not a ref string", relation.id));
+                out.diagnostics.push(
+                    weftext_messages::UiMessage::error_data_relations_relation_target_not_ref_string(weftext_messages::params::ErrorDataRelationsRelationTargetNotRefString {
+                        relation_id: (relation.id).to_string(),
+                    })
+                    .into(),
+                );
                 continue;
             };
             if relation.reject_self
@@ -327,8 +346,14 @@ fn validate_relation_change_inner(
                     |owner| target == owner,
                 )
             {
-                out.diagnostics
-                    .push(format!("{}: self relation forbidden", relation.id));
+                out.diagnostics.push(
+                    weftext_messages::UiMessage::error_data_relations_self_relation_forbidden(
+                        weftext_messages::params::ErrorDataRelationsSelfRelationForbidden {
+                            relation_id: (relation.id).to_string(),
+                        },
+                    )
+                    .into(),
+                );
             }
             let unchanged = before_assertions.iter().any(|v| v.text() == Some(target))
                 && original.resolved_types.contains(&relation.source_type);
@@ -336,13 +361,10 @@ fn validate_relation_change_inner(
             if current.is_none_or(|t| t.lifecycle != "live") {
                 if !unchanged {
                     if coverage_complete {
-                        out.diagnostics.push(format!(
-                            "{}: new target must be an exact live admitted node",
-                            relation.id
-                        ));
+                        out.diagnostics.push(weftext_messages::UiMessage::error_data_relations_new_target_requires_exact_live_admitted_node(weftext_messages::params::ErrorDataRelationsNewTargetRequiresExactLiveAdmittedNode {relation_id: (relation.id).to_string()}).into());
                     } else {
                         out.unavailable
-                            .push(format!("{}: target qualification unavailable", relation.id));
+                            .push(weftext_messages::UiMessage::error_data_relations_target_qualification_unavailable(weftext_messages::params::ErrorDataRelationsTargetQualificationUnavailable {relation_id: (relation.id).to_string()}).into());
                     }
                 }
                 continue;
@@ -350,8 +372,12 @@ fn validate_relation_change_inner(
             let current = current.unwrap();
             let (target_types, check) = schema.expand_types(&current.types);
             if !check.is_valid() {
-                out.unavailable
-                    .push(format!("{}: target type closure unavailable", relation.id));
+                out.unavailable.push(
+                    weftext_messages::UiMessage::error_data_relations_target_type_closure_unavailable(weftext_messages::params::ErrorDataRelationsTargetTypeClosureUnavailable {
+                        relation_id: (relation.id).to_string(),
+                    })
+                    .into(),
+                );
                 continue;
             }
             if relation.target_types["kind"].as_str() == Some("any_of")
@@ -360,14 +386,17 @@ fn validate_relation_change_inner(
                         .any(|id| id.as_str().is_some_and(|id| target_types.contains(id)))
                 })
             {
-                out.diagnostics
-                    .push(format!("{}: target has incompatible type", relation.id));
+                out.diagnostics.push(
+                    weftext_messages::UiMessage::error_data_relations_target_type_incompatible(
+                        weftext_messages::params::ErrorDataRelationsTargetTypeIncompatible {
+                            relation_id: (relation.id).to_string(),
+                        },
+                    )
+                    .into(),
+                );
             }
             if enforce_graph && relation.cycle_policy != "allow" && !unchanged {
-                out.unavailable.push(format!(
-                    "{}: complete authorized graph scope required for cycle admission",
-                    relation.id
-                ));
+                out.unavailable.push(weftext_messages::UiMessage::error_data_relations_cycle_admission_requires_complete_authorized_graph(weftext_messages::params::ErrorDataRelationsCycleAdmissionRequiresCompleteAuthorizedGraph {relation_id: (relation.id).to_string()}).into());
             }
         }
     }

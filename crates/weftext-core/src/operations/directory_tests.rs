@@ -24,11 +24,11 @@ fn fixture() -> Fixture {
     core.execute_operation(&directory.preview.operation_id, &directory.preview.plan_id)
         .unwrap();
     let child = core
-        .create_note(&root, root.join("Folder"), "Child")
+        .create_note_fixture(&root, root.join("Folder"), "Child")
         .unwrap()
         .node_id
         .unwrap();
-    core.create_note(&root, &root, "Parent").unwrap();
+    core.create_note_fixture(&root, &root, "Parent").unwrap();
     let info = core.enable_sync(&root, &fresh()).unwrap();
     Fixture {
         temp,
@@ -232,8 +232,12 @@ fn directory_relocation_original_after_placement_can_be_adopted_without_new_ids(
     let preview = f.core.prepare_operation(request(&f)).unwrap();
     let plan = f.core.operations[&preview.operation_id].clone();
     f.core.install_record(&plan).unwrap();
-    let namespace =
-        NamespaceGuard::acquire(&f.root.join("Folder"), &f.root.join("Parent")).unwrap();
+    let namespace = NamespaceGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &f.root.join("Folder"),
+        &f.root.join("Parent"),
+    )
+    .unwrap();
     namespace.move_source("Moved #[dir]").unwrap();
     drop(namespace);
     drop(f.core);
@@ -287,11 +291,14 @@ fn directory_relocation_sync_uses_original_directory_role_and_receiver_child_ide
         b"receiver original companion",
     )
     .unwrap();
-    let original = capture_optional(&root.join("Folder/Child/Child.typ"))
-        .unwrap()
-        .unwrap()
-        .stamp
-        .identity;
+    let original = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &root.join("Folder/Child/Child.typ"),
+    )
+    .unwrap()
+    .unwrap()
+    .stamp
+    .identity;
     let preview = f.core.prepare_operation(request(&f)).unwrap();
     f.core
         .execute_operation(&preview.operation_id, &preview.plan_id)
@@ -318,11 +325,14 @@ fn directory_relocation_sync_uses_original_directory_role_and_receiver_child_ide
         .unwrap();
     let target = root.join("Parent/Moved #[dir]");
     assert_eq!(
-        capture_optional(&target.join("Child/Child.typ"))
-            .unwrap()
-            .unwrap()
-            .stamp
-            .identity,
+        capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            &target.join("Child/Child.typ")
+        )
+        .unwrap()
+        .unwrap()
+        .stamp
+        .identity,
         original
     );
     assert_eq!(
@@ -474,8 +484,8 @@ fn pending_child_refuses_directory_relocation(recovery: bool) {
         assert!(!f.root.join("Parent/Moved #[dir]").exists(), "{kind}");
         assert!(!f.root.join("Folder/LateChild").exists(), "{kind}");
         assert!(!f.root.join("IndependentCopy").exists(), "{kind}");
-        assert!(!f.core.committed(&original.operation_id));
-        assert!(!f.core.committed(&other.operation_id));
+        assert!(!f.core.committed(&original.operation_id).unwrap());
+        assert!(!f.core.committed(&other.operation_id).unwrap());
         for (path, bytes) in retained {
             assert_eq!(
                 fs::read(path).unwrap(),
@@ -503,8 +513,12 @@ fn directory_relocation_same_bytes_marker_replacement_after_original_move_refuse
     f.core
         .install_record(&f.core.operations[&preview.operation_id])
         .unwrap();
-    let namespace =
-        NamespaceGuard::acquire(&f.root.join("Folder"), &f.root.join("Parent")).unwrap();
+    let namespace = NamespaceGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &f.root.join("Folder"),
+        &f.root.join("Parent"),
+    )
+    .unwrap();
     namespace.move_source("Moved #[dir]").unwrap();
     drop(namespace);
     let marker = f.root.join("Parent/Moved #[dir]/weftext.directory.json");
@@ -526,19 +540,23 @@ fn directory_relocation_same_bytes_marker_replacement_after_original_move_refuse
     assert_eq!(fs::read(marker).unwrap(), before);
     assert!(!f.root.join("Folder").exists());
     assert!(f.root.join("Parent/Moved #[dir]/Child/Child.typ").exists());
-    assert!(!f.core.committed(&preview.operation_id));
+    assert!(!f.core.committed(&preview.operation_id).unwrap());
 }
 
 #[test]
 fn directory_relocation_node_guard_rejects_both_separator_recursions_and_allows_adjacent_prefix() {
     let mut f = fixture();
     let source = f.root.join("Folder").join("Child");
-    f.core.create_note(&f.root, &source, "Grand").unwrap();
     f.core
-        .create_note(&f.root, f.root.join("Folder"), "ChildNext")
+        .create_note_fixture(&f.root, &source, "Grand")
+        .unwrap();
+    f.core
+        .create_note_fixture(&f.root, f.root.join("Folder"), "ChildNext")
         .unwrap();
     let canonical = source.join("Child.typ");
-    let before = capture_optional(&canonical).unwrap().unwrap();
+    let before = capture_optional(&crate::BackendContext::local().unwrap(), &canonical)
+        .unwrap()
+        .unwrap();
     for slashes in [false, true] {
         for parent in [&source, &source.join("Grand")] {
             let mut input = display(&source);
@@ -580,7 +598,11 @@ fn directory_relocation_node_guard_rejects_both_separator_recursions_and_allows_
         .unwrap();
     let moved = f.root.join("Folder/ChildNext/Child/Child.typ");
     assert_eq!(
-        capture_optional(&moved).unwrap().unwrap().stamp.identity,
+        capture_optional(&crate::BackendContext::local().unwrap(), &moved)
+            .unwrap()
+            .unwrap()
+            .stamp
+            .identity,
         before.stamp.identity
     );
     assert_eq!(fs::read(&moved).unwrap(), before.bytes);
@@ -604,18 +626,28 @@ fn directory_relocation_ordinal_unicode_descendants_refuse_and_adjacent_prefix_i
     f.core
         .execute_operation(&admitted.preview.operation_id, &admitted.preview.plan_id)
         .unwrap();
-    f.core.create_note(&f.root, &source, "Inside").unwrap();
-    f.core.create_note(&f.root, &f.root, "äNeighbor").unwrap();
+    f.core
+        .create_note_fixture(&f.root, &source, "Inside")
+        .unwrap();
+    f.core
+        .create_note_fixture(&f.root, &f.root, "äNeighbor")
+        .unwrap();
     let alias = f.root.join("ä");
-    let identity = ParentGuard::acquire(&source.join("weftext.directory.json"))
+    let identity = ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &source.join("weftext.directory.json"),
+    )
+    .unwrap()
+    .directory_identity()
+    .unwrap();
+    assert_eq!(
+        ParentGuard::acquire(
+            &crate::BackendContext::local().unwrap(),
+            &alias.join("weftext.directory.json")
+        )
         .unwrap()
         .directory_identity()
-        .unwrap();
-    assert_eq!(
-        ParentGuard::acquire(&alias.join("weftext.directory.json"))
-            .unwrap()
-            .directory_identity()
-            .unwrap(),
+        .unwrap(),
         identity,
         "The actual NTFS namespace must prove this ordinal alias"
     );
@@ -666,10 +698,13 @@ fn directory_relocation_ordinal_unicode_descendants_refuse_and_adjacent_prefix_i
         .unwrap();
     let moved = f.root.join("äNeighbor/UnicodeMoved");
     assert_eq!(
-        ParentGuard::acquire(&moved.join("weftext.directory.json"))
-            .unwrap()
-            .directory_identity()
-            .unwrap(),
+        ParentGuard::acquire(
+            &crate::BackendContext::local().unwrap(),
+            &moved.join("weftext.directory.json")
+        )
+        .unwrap()
+        .directory_identity()
+        .unwrap(),
         identity
     );
     assert_eq!(

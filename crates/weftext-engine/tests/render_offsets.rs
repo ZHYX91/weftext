@@ -72,7 +72,11 @@ fn actual_main_import_and_style_origins_keep_their_own_unicode_coordinates() {
         }
     }
     assert_eq!(seen, sources.keys().cloned().collect());
-    assert_eq!(output.source_info.writer_status, "unverified-library-style");
+    assert_eq!(output.source_info.writer_status, "unavailable");
+    assert_eq!(
+        output.source_info.writer_reason.unwrap().explanation.key(),
+        "error.engine.reason.libraryStyleUnverified"
+    );
 }
 
 #[test]

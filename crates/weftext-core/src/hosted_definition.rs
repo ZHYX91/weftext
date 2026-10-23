@@ -4,6 +4,7 @@ use super::*;
 use std::collections::BTreeSet;
 use weftext_data::{FieldPatch, SavedQueryBinding};
 use weftext_knowledge::NodeRef;
+use weftext_messages::UiMessage;
 
 const MAX_SAVE_RESERVATIONS: usize = 32;
 const MAX_PENDING_RESERVATIONS: usize = 128;
@@ -25,7 +26,11 @@ pub(crate) fn test_failpoint(point: &str) -> Result<()> {
             active.set(None);
             Err(CoreError::new(
                 "injectedFailure",
-                format!("Interrupted after {point}"),
+                UiMessage::error_core_test_interrupted(
+                    weftext_messages::params::ErrorCoreTestInterrupted {
+                        point: point.into(),
+                    },
+                ),
             ))
         } else {
             Ok(())
@@ -70,6 +75,12 @@ pub(super) struct DefinitionOperation {
     proposal: Option<DefinitionProposalRecord>,
 }
 
+impl DefinitionOperation {
+    pub(super) fn input_owner(&self) -> Option<&NodeRef> {
+        self.proposal.as_ref().map(|proposal| &proposal.owner)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct DefinitionProposalRecord {
@@ -105,18 +116,36 @@ struct DefinitionSaveRecord {
     source_hash: String,
     reservations: Vec<SaveDefinitionReservation>,
 }
+#[derive(PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DefinitionSaveMetadata {
+    core_operation_id: String,
+    save_operation_id: String,
+    actor: String,
+    resource: String,
+}
+impl From<&DefinitionSaveRecord> for DefinitionSaveMetadata {
+    fn from(record: &DefinitionSaveRecord) -> Self {
+        Self {
+            core_operation_id: record.core_operation_id.clone(),
+            save_operation_id: record.save_operation_id.clone(),
+            actor: record.actor.clone(),
+            resource: record.resource.clone(),
+        }
+    }
+}
 
 fn conflict() -> CoreError {
     CoreError::new(
         "operationConflict",
-        "The original definition actor, owner or intent differs",
+        UiMessage::error_core_hosted_definition_original_definition_actor_owner_or_intent_differs(),
     )
 }
 fn valid_resource(resource: &str) -> Result<()> {
     if resource.is_empty() || resource.len() > 256 || resource.chars().any(char::is_control) {
         return Err(CoreError::new(
             "invalidResource",
-            "A bounded resource identity is required",
+            UiMessage::error_core_hosted_definition_bounded_resource_identity_required(),
         ));
     }
     Ok(())
@@ -129,7 +158,7 @@ fn valid_fingerprint(fingerprint: &str) -> Result<()> {
     {
         return Err(CoreError::new(
             "invalidIntent",
-            "A lowercase SHA-256 author intent fingerprint is required",
+            UiMessage::error_core_hosted_definition_lowercase_s_h_a256_author_intent_fingerprint_required(),
         ));
     }
     Ok(())
@@ -156,29 +185,71 @@ fn exact_insertion(patch: &FieldPatch) -> bool {
             .is_some_and(|(from, to)| patch.source.get(from..to) == Some(patch.text.as_str()))
 }
 
-fn bounded_record(path: &Path) -> Result<Option<Vec<u8>>> {
-    let file = match File::open(path) {
-        Ok(file) => file,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        Err(e) => return Err(e.into()),
+fn bounded_record(
+    backend: &crate::BackendContext,
+    path: &Path,
+    accept: impl FnOnce(&DefinitionSaveMetadata) -> Result<bool>,
+) -> Result<Option<(DefinitionSaveRecord, Vec<u8>)>> {
+    let guard = match ParentGuard::acquire(backend, path) {
+        Ok(guard) => guard,
+        Err(error) if error.code == "missing" => return Ok(None),
+        Err(error) => return Err(error),
     };
-    let mut bytes = vec![];
-    file.take((MAX_RECORD_BYTES + 1) as u64)
-        .read_to_end(&mut bytes)?;
-    if bytes.len() > MAX_RECORD_BYTES {
+    let mut file = match guard.open_read_guard_file() {
+        Ok(file) => file,
+        Err(error) if error.code == "missing" => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    let Some((metadata, bytes)) = read_qualified_private_record(&mut file, |file| {
+        let fields = read_metadata_prefix(
+            file,
+            &[
+                ("coreOperationId", false),
+                ("saveOperationId", false),
+                ("actor", false),
+                ("resource", false),
+            ],
+            4096,
+        )?
+        .ok_or_else(|| {
+            CoreError::new(
+                "privateEvidence",
+                weftext_messages::UiMessage::error_core_hosted_definition_definition_admission_metadata_is_missing(),
+            )
+        })?;
+        let metadata: DefinitionSaveMetadata = decode_metadata(fields)?;
+        valid_operation_id(&metadata.core_operation_id)?;
+        valid_operation_id(&metadata.save_operation_id)?;
+        valid_resource(&metadata.resource)?;
+        if metadata.actor.is_empty() || metadata.actor.len() > 256 {
+            return Err(CoreError::new(
+                "privateEvidence",
+                weftext_messages::UiMessage::error_core_hosted_definition_invalid_definition_admission_actor(),
+            ));
+        }
+        if !accept(&metadata)? {
+            return Ok(None);
+        }
+        Ok(Some((metadata, MAX_RECORD_BYTES)))
+    })?
+    else {
+        return Ok(None);
+    };
+    let record: DefinitionSaveRecord = serde_json::from_slice(&bytes)?;
+    if DefinitionSaveMetadata::from(&record) != metadata {
         return Err(CoreError::new(
-            "budget",
-            "Definition record exceeds its byte budget",
+            "privateEvidence",
+            weftext_messages::UiMessage::error_core_hosted_definition_definition_admission_metadata_changed_during_its_qualified_read(),
         ));
     }
-    Ok(Some(bytes))
+    Ok(Some((record, bytes)))
 }
 
 pub(super) fn canonical_proposal_ids(ids: &[String]) -> Result<Vec<String>> {
     if ids.len() > MAX_SAVE_RESERVATIONS {
         return Err(CoreError::new(
             "budget",
-            "At most 32 definition reservations per source save",
+            UiMessage::error_core_hosted_definition_at_most32_definition_reservations_per_source_save(),
         ));
     }
     for id in ids {
@@ -186,7 +257,7 @@ pub(super) fn canonical_proposal_ids(ids: &[String]) -> Result<Vec<String>> {
         if Uuid::parse_str(id).unwrap().to_string() != *id {
             return Err(CoreError::new(
                 "invalidOperationId",
-                "A canonical proposal UUID is required",
+                UiMessage::error_core_hosted_definition_canonical_proposal_u_u_i_d_required(),
             ));
         }
     }
@@ -202,11 +273,9 @@ impl Core {
     fn definition_record(&self, resource: &str, operation: &str) -> Result<Option<ActorOperation>> {
         valid_resource(resource)?;
         canonical_proposal_ids(&[operation.to_owned()])?;
-        let Some(bytes) = bounded_record(&self.actor_record(operation)?)? else {
+        let Some(record) = self.read_actor_operation(operation, resource, MAX_RECORD_BYTES)? else {
             return Ok(None);
         };
-        let record: ActorOperation = serde_json::from_slice(&bytes)?;
-        self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
             || record.definition.is_none()
@@ -245,11 +314,11 @@ impl Core {
         {
             return Err(CoreError::new(
                 "unsupportedRole",
-                "Definitions require an admitted canonical owner source",
+                UiMessage::error_core_hosted_definition_definitions_require_admitted_canonical_owner_source(),
             ));
         }
         let birth = self
-            .admitted_binding(&session.stamp.identity)
+            .admitted_binding(&session.stamp.identity)?
             .ok_or_else(conflict)?;
         if birth.workspace_id != workspace.workspace_id
             || Some(&birth.node_id) != session.node_id.as_ref()
@@ -297,7 +366,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "schemaBasisChanged",
-                "The initial definition schema role or language differs",
+                UiMessage::error_core_hosted_definition_initial_definition_schema_role_or_language_differs(),
             ));
         }
         // require an original admitted configuration, never a supplied UUID.
@@ -309,7 +378,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "budget",
-                "At most 128 pending definition reservations per owner",
+                UiMessage::error_core_hosted_definition_at_most128_pending_definition_reservations_per_owner(),
             ));
         }
         let key = fresh();
@@ -333,7 +402,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "definitionQualification",
-                "The exact Draft patch lacks its qualified owner/key/binding",
+                UiMessage::error_core_hosted_definition_exact_draft_patch_lacks_qualified_owner_key_binding(),
             ));
         }
         let fingerprint = hash(&serde_json::to_vec(&serde_json::json!({
@@ -343,6 +412,9 @@ impl Core {
             "intent":request.intent_fingerprint,"binding":request.binding,
         }))?);
         let record = ActorOperation {
+            scope: ActorInputScope::Qualified {
+                scope: self.draft_session_scope(&request.session_id)?,
+            },
             library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
@@ -368,14 +440,19 @@ impl Core {
             history: None,
             owner_backup: None,
         };
-        let bytes = Self::actor_operation_bytes(&record)?;
+        let bytes = self.actor_operation_bytes(&record)?;
         if bytes.len() > MAX_RECORD_BYTES {
             return Err(CoreError::new(
                 "budget",
-                "Definition proposal exceeds its durable budget",
+                UiMessage::error_core_hosted_definition_definition_proposal_exceeds_durable_budget(
+                ),
             ));
         }
-        journal::private_create(&self.actor_record(&request.operation_id)?, &bytes)?;
+        journal::private_create(
+            &self.backend,
+            &self.actor_record(&request.operation_id)?,
+            &bytes,
+        )?;
         #[cfg(all(test, windows))]
         test_failpoint("reservationDurable")?;
         self.actor_definition_details(resource, &request.operation_id)?
@@ -405,6 +482,7 @@ impl Core {
         resource: &str,
         operation: &str,
     ) -> Result<Option<ActorDefinitionStatus>> {
+        self.backend.check_path(&self.data_dir)?;
         let Some(record) = self.definition_record(resource, operation)? else {
             return Ok(None);
         };
@@ -417,7 +495,15 @@ impl Core {
         let mut saved = None;
         if let Some(proposal) = proposal {
             for plan in self.operations.values() {
-                let Some(admissions) = self.definition_save_record(plan)? else {
+                let ActorInputScope::Qualified { scope } = &record.scope else {
+                    return Err(conflict());
+                };
+                let Some(admissions) = self.definition_save_record(
+                    plan,
+                    Some(scope),
+                    Some((&record.actor, resource)),
+                )?
+                else {
                     continue;
                 };
                 if admissions.actor != record.actor
@@ -431,12 +517,12 @@ impl Core {
                 {
                     continue;
                 }
-                if self.committed(&plan.operation_id) {
+                if self.committed(&plan.operation_id)? {
                     state = "admitted";
                     saved = Some(admissions.save_operation_id);
                     break;
                 }
-                if !self.resolved(&plan.operation_id) {
+                if !self.resolved(&plan.operation_id)? {
                     state = "recoveryPending";
                     saved = Some(admissions.save_operation_id);
                 }
@@ -483,6 +569,7 @@ impl Core {
         let mut record = match self.definition_record(resource, operation)? {
             Some(record) => record,
             None => ActorOperation {
+                scope: self.actor_attempt_input_scope()?,
                 library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
@@ -502,9 +589,9 @@ impl Core {
                 return Ok(status);
             }
             record.cancelled = true;
-            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+            private_replace(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+            journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_definition_status(resource, operation)?
             .ok_or_else(conflict)
@@ -518,13 +605,14 @@ impl Core {
         root: &Path,
         session_id: &str,
     ) -> Result<Vec<ActorDefinitionStatus>> {
+        self.backend.check_path(&self.data_dir)?;
         valid_resource(resource)?;
         self.check_actor_session(session_id)?;
         self.check_session_base(session_id, &self.sessions[session_id].base_id)?;
         let (owner, identity) = self.definition_owner(root, session_id)?;
         let mut result = vec![];
         let mut bytes_used = 0usize;
-        for entry in fs::read_dir(self.draft_directory("operations"))? {
+        for entry in self.backend.read_dir(self.draft_directory("operations"))? {
             let path = entry?.path();
             let Some(operation) = path.file_stem().and_then(|s| s.to_str()) else {
                 continue;
@@ -534,23 +622,21 @@ impl Core {
             {
                 continue;
             }
-            let Some(bytes) = bounded_record(&path)? else {
-                return Err(conflict());
+            let Some((record, count)) = self.read_actor_operation_counted(
+                operation,
+                resource,
+                (16 * 1024 * 1024).min(MAX_LIST_BYTES - bytes_used),
+                true,
+            )?
+            else {
+                continue;
             };
-            bytes_used = bytes_used.checked_add(bytes.len()).ok_or_else(conflict)?;
+            bytes_used = bytes_used.checked_add(count).ok_or_else(conflict)?;
             if bytes_used > MAX_LIST_BYTES {
                 return Err(CoreError::new(
                     "budget",
-                    "Definition enumeration exceeds 64 MiB",
+                    UiMessage::error_core_hosted_definition_definition_enumeration_exceeds64_mi_b(),
                 ));
-            }
-            let record: ActorOperation = serde_json::from_slice(&bytes)?;
-            self.check_actor_library(&record.library)?;
-            if self.actor.as_ref() != Some(&record.actor) {
-                return Err(conflict());
-            }
-            if record.resource != resource {
-                continue;
             }
             let Some(proposal) = record.definition.as_ref().and_then(|d| d.proposal.as_ref())
             else {
@@ -567,7 +653,7 @@ impl Core {
                 if result.len() > MAX_PENDING_RESERVATIONS {
                     return Err(CoreError::new(
                         "budget",
-                        "Pending definition enumeration exceeds 128 entries",
+                        UiMessage::error_core_hosted_definition_pending_definition_enumeration_exceeds128_entries(),
                     ));
                 }
             }
@@ -602,7 +688,7 @@ impl Core {
             let record = self.definition_record(resource, id)?.ok_or_else(|| {
                 CoreError::new(
                     "operationMissing",
-                    "The original definition reservation is unavailable",
+                    UiMessage::error_core_hosted_definition_original_definition_reservation_unavailable(),
                 )
             })?;
             let cancelled = record.cancelled;
@@ -625,13 +711,13 @@ impl Core {
             if cancelled {
                 return Err(CoreError::new(
                     "operationCancelled",
-                    "The definition reservation was durably cancelled",
+                    UiMessage::error_core_hosted_definition_definition_reservation_was_durably_cancelled(),
                 ));
             }
             if status.status == "recoveryPending" {
                 return Err(CoreError::new(
                     "recoveryPending",
-                    "The original definition save requires recovery",
+                    UiMessage::error_core_hosted_definition_original_definition_save_requires_recovery(),
                 ));
             }
             if weftext_engine::inspect_metadata(&request.source)
@@ -641,14 +727,14 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "The qualified afterimage must retain the reserved definition owner",
+                    UiMessage::error_core_hosted_definition_qualified_afterimage_must_retain_reserved_definition_owner(),
                 ));
             }
             let definition = weftext_data::saved_queries(&request.source)
                 .map_err(|_| {
                     CoreError::new(
                         "definitionQualification",
-                        "The reserved carrier is unavailable",
+                        UiMessage::error_core_hosted_definition_reserved_carrier_unavailable(),
                     )
                 })?
                 .into_iter()
@@ -659,7 +745,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "schemaBasisChanged",
-                    "First admission must preserve the original reserved schema binding",
+                    UiMessage::error_core_hosted_definition_first_admission_must_preserve_original_reserved_schema_binding(),
                 ));
             }
             // Undo may omit this key. Its identity remains reserved, and raw or
@@ -687,7 +773,7 @@ impl Core {
         let session = self.sessions.get(&request.session_id).ok_or_else(|| {
             CoreError::new(
                 "sessionMissing",
-                "Open the source again before an explicitly new save",
+                UiMessage::error_core_hosted_definition_open_source_again_before_explicitly_new_save(),
             )
         })?;
         for reservation in &record.save_definition_reservations {
@@ -697,7 +783,7 @@ impl Core {
             if original.cancelled {
                 return Err(CoreError::new(
                     "operationCancelled",
-                    "The original definition reservation was cancelled before saving",
+                    UiMessage::error_core_hosted_definition_original_definition_reservation_was_cancelled_before_saving(),
                 ));
             }
             let original = original.definition.unwrap().proposal.ok_or_else(conflict)?;
@@ -709,10 +795,23 @@ impl Core {
                 return Err(conflict());
             }
         }
-        let fingerprint = hash(&serde_json::to_vec(&serde_json::json!({
-            "kind":"save","session":request.session_id,"base":request.base_id,
-            "path":display(&session.path),"source":request.source,
-        }))?);
+        let ActorInputScope::Qualified { scope } = &record.scope else {
+            return Err(conflict());
+        };
+        let data = file_save_scope::FileSaveData::new(
+            request.session_id.clone(),
+            Some(request.base_id.clone()),
+            scope.clone(),
+            self.operations
+                .get(&request.operation_id)
+                .and_then(|plan| plan.file_save.as_ref())
+                .map_or_else(
+                    || session.draft_producer_id.clone(),
+                    |data| data.draft_producer_id.clone(),
+                ),
+        );
+        let fingerprint =
+            file_save_scope::fingerprint("save", &session.path, &request.source, &data, None)?;
         let admissions = DefinitionSaveRecord {
             core_operation_id: record.core_operation_id.clone(),
             save_operation_id: request.operation_id.clone(),
@@ -725,25 +824,55 @@ impl Core {
         };
         let path = self.journal_path(&record.core_operation_id, "definition-reservations");
         let bytes = serde_json::to_vec(&admissions)?;
-        if let Some(original) = bounded_record(&path)? {
+        let expected = DefinitionSaveMetadata::from(&admissions);
+        if let Some((_, original)) = bounded_record(&self.backend, &path, |metadata| {
+            if *metadata != expected {
+                return Err(conflict());
+            }
+            Ok(true)
+        })? {
             if original != bytes {
                 return Err(conflict());
             }
         } else {
-            journal::private_create(&path, &bytes)?;
+            journal::private_create(&self.backend, &path, &bytes)?;
         }
         #[cfg(all(test, windows))]
         test_failpoint("admissionsDurable")?;
         Ok(())
     }
 
-    fn definition_save_record(&self, plan: &journal::Plan) -> Result<Option<DefinitionSaveRecord>> {
-        let Some(bytes) =
-            bounded_record(&self.journal_path(&plan.operation_id, "definition-reservations"))?
+    fn definition_save_record(
+        &self,
+        plan: &journal::Plan,
+        scope: Option<&QualifiedInputScope>,
+        audience: Option<(&str, &str)>,
+    ) -> Result<Option<DefinitionSaveRecord>> {
+        let path = self.journal_path(&plan.operation_id, "definition-reservations");
+        if plan.kind != "save" || plan.transaction.is_some() {
+            if path.try_exists()? {
+                return Err(CoreError::new(
+                    "privateEvidence",
+                    weftext_messages::UiMessage::error_core_hosted_definition_definition_admission_references_another_plan_kind(),
+                ));
+            }
+            return Ok(None);
+        }
+        self.validate_file_save_plan(plan)?;
+        if scope.is_some_and(|scope| scope != &plan.file_save.as_ref().unwrap().scope) {
+            return Ok(None);
+        }
+        let Some((record, _)) = bounded_record(&self.backend, &path, |metadata| {
+            if metadata.core_operation_id != plan.operation_id {
+                return Err(conflict());
+            }
+            Ok(audience.is_none_or(|(actor, resource)| {
+                metadata.actor == actor && metadata.resource == resource
+            }))
+        })?
         else {
             return Ok(None);
         };
-        let record: DefinitionSaveRecord = serde_json::from_slice(&bytes)?;
         if record.core_operation_id != plan.operation_id
             || record.path != plan.path
             || record.save_fingerprint != plan.fingerprint
@@ -754,7 +883,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "privateEvidence",
-                "Definition admission differs from its original source save",
+                UiMessage::error_core_hosted_definition_definition_admission_differs_from_original_source_save(),
             ));
         }
         for reservation in &record.reservations {
@@ -768,7 +897,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Original owner afterimage has no qualified reserved key",
+                    UiMessage::error_core_hosted_definition_original_owner_afterimage_has_no_qualified_reserved_key(),
                 ));
             }
         }
@@ -781,15 +910,25 @@ impl Core {
         owner: &NodeRef,
         key: &str,
     ) -> Result<bool> {
-        if !self.committed(&plan.operation_id) {
+        if !self.committed(&plan.operation_id)? {
             return Ok(false);
         }
-        Ok(self.definition_save_record(plan)?.is_some_and(|record| {
-            record
-                .reservations
-                .iter()
-                .any(|r| &r.owner == owner && r.key == key)
-        }))
+        if plan.kind != "save" {
+            return Ok(false);
+        }
+        self.validate_file_save_plan(plan)?;
+        if !matches!(&plan.file_save.as_ref().unwrap().scope, QualifiedInputScope::Library { binding } if binding.workspace_id == owner.workspace_id)
+        {
+            return Ok(false);
+        }
+        Ok(self
+            .definition_save_record(plan, None, None)?
+            .is_some_and(|record| {
+                record
+                    .reservations
+                    .iter()
+                    .any(|r| &r.owner == owner && r.key == key)
+            }))
     }
 }
 

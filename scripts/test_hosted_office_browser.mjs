@@ -1,7 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { createdDocument } from './_creation_result.mjs';
 // Optional real-browser acceptance. Supply EXE, a new owned evidence directory,
 // WEFTEXT_PLAYWRIGHT_MODULE when necessary, and an installed Python 3 runtime.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile, readdir, access } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
@@ -16,16 +18,16 @@ const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const token = Object.fromEntries(['alice', 'bob', 'writer', 'admin'].map(actor => [actor, randomBytes(32).toString('hex')]));
 let local, server, browser, page, base, localToken, stderr = '';
 async function start(args, hosted = false) {
-  const process = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let text = '';
+  const process = spawnServe(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let text = '';
   process.stdout.on('data', bytes => text += bytes); process.stderr.on('data', bytes => stderr += bytes);
   for (let i = 0; i < 300; i++) {
-    const match = text.match(hosted ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (match) { base = match[1]; localToken = match[2]; return process; }
+    const match = serveReady(process);
+    if (match) { base = match.base; localToken = match.token; return process; }
     if (process.exitCode !== null) throw new Error(stderr); await pause(100);
   }
-  process.kill(); throw new Error('startup timeout');
+  await stopServe(process); throw new Error('startup timeout');
 }
-async function stop(process) { if (process && process.exitCode === null && process.signalCode === null) { const done = new Promise(resolve => process.once('exit', resolve)); process.kill(); await done; } }
+async function stop(process) { await stopServe(process); }
 async function api(route, data, actor) {
   const response = await fetch(base + route, { method: data === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(actor ? { Authorization: 'Bearer ' + token[actor] } : { 'X-Weftext-Token': localToken }) }, body: data === undefined ? undefined : JSON.stringify(data) });
   const body = await response.json(); assert.ok(response.ok, JSON.stringify(body)); return body;
@@ -68,13 +70,13 @@ with zipfile.ZipFile(output,'w',zipfile.ZIP_DEFLATED) as target:
 sys.stdout.buffer.write(output.getvalue())`], { input: bytes, windowsHide: true, maxBuffer: 40 * 1024 * 1024 });
 }
 try {
-  const data = path.join(out, 'state'), root = path.join(out, 'library'); local = await start(['--no-browser', '--data-dir', data]);
+  const data = path.join(out, 'state'), root = path.join(out, 'library'); local = await start(['--data-dir', data]);
   await api('/api/library/create', { path: root, operationId: randomUUID() });
   const schema = await api('/api/data/schema', { root }), operationId = randomUUID();
   const installed = JSON.parse(schema.source); installed.fields.find(field => field.id === 'tasks/priority').shape = { kind: 'scalar', semantic: 'int' };
   const plan = await api('/api/data/schema/prepare', { root, source: JSON.stringify(installed, null, 2), beforeSource: schema.source, beforeRevision: schema.revision, operationId });
   await api('/api/data/schema/install', { operationId, planId: plan.planId });
-  const note = await api('/api/note/create', { root, parent: root, name: 'Shared', operationId: randomUUID() });
+  const note = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Shared', operationId: randomUUID() }));
   const initial = note.source.replace('types: ()', 'types: ("task",), status: "open"') + '\n共同正文中文😀\n';
   await api('/api/save', { sessionId: note.sessionId, baseId: note.baseId, source: initial, operationId: randomUUID() }); await stop(local); local = null;
   const config = { deployment: 'office-browser', bind: '127.0.0.1:0', root, adminTokenSha256: sha(token.admin), files: {
@@ -85,7 +87,7 @@ try {
     bob: { enabled: true, tokenSha256: sha(token.bob), grants: { shared: { fields: { 'tasks/status': { read: true } }, office: { export: true, download: true } } } },
     writer: { enabled: true, tokenSha256: sha(token.writer), grants: { shared: { read: true, write: true } } },
   } };
-  const configPath = path.join(out, 'server.json'); await writeFile(configPath, JSON.stringify(config, null, 2)); server = await start(['--no-browser', '--data-dir', data, '--server-config', configPath], true);
+  const configPath = path.join(out, 'server.json'); await writeFile(configPath, JSON.stringify(config, null, 2)); server = await start(['--data-dir', data, '--server-config', configPath], true);
   browser = await chromium.launch({ channel: 'chrome', headless: true }); result.browser = browser.version();
   const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, acceptDownloads: true }); page = await context.newPage();
   page.on('pageerror', error => result.pageErrors.push(String(error))); page.on('console', message => { if (message.type() === 'error') result.consoleErrors.push(message.text()); }); page.on('dialog', dialog => dialog.accept());
@@ -159,4 +161,4 @@ try {
   result.cases.push('revocation clears output/import recovery data and rejects held late artifact delivery while the other actor remains authorized');
   assert.deepEqual(result.pageErrors, []); result.completed = true;
 } catch (error) { result.failure = String(error.stack ?? error); if (page) await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); throw error; }
-finally { await browser?.close(); await stop(local); await stop(server); await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, cases: result.cases, completed: result.completed, pageErrors: result.pageErrors })); }
+finally { await browser?.close(); await stop(local); await stop(server); await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, cases: result.cases, completed: result.completed, pageErrors: result.pageErrors })); }

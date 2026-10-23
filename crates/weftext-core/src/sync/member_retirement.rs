@@ -10,6 +10,7 @@ use super::{
 };
 use crate::CoreError;
 use std::{cmp::Ordering, collections::BTreeSet, path::Path};
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RetiredResourceMember {
@@ -33,7 +34,7 @@ pub(crate) fn qualify_member_retirements(
     let failure = || {
         CoreError::new(
             "syncStructureRequired",
-            "Only exact original registered Resource leaves can join member retirement; other missing roles need their original structure proof",
+            UiMessage::error_core_sync_only_exact_original_registered_resource_leaves_can_join_member_retirement_other_missing_roles_need_their_original_structure_proof(),
         )
     };
 
@@ -85,13 +86,15 @@ fn validate_input<'a>(graph: &ReplicaGraph, state: &'a ObjectState) -> Result<Ve
         || serde_json::to_vec(state)?.len() > MAX_MANIFEST_BYTES
     {
         return Err(invalid(
-            "Member retirement requires bounded exact file revisions",
+            UiMessage::error_core_sync_member_retirement_exact_file_revisions_required(),
         ));
     }
     if let Some(parent) = &state.parent {
         key(parent)?;
         if !matches!(parent, ObjectKey::Node(_) | ObjectKey::Directory(_)) {
-            return Err(invalid("Member retirement has an invalid placement parent"));
+            return Err(invalid(
+                UiMessage::error_core_sync_member_retirement_placement_parent_invalid(),
+            ));
         }
     }
     let mut names = Vec::<&str>::new();
@@ -100,11 +103,15 @@ fn validate_input<'a>(graph: &ReplicaGraph, state: &'a ObjectState) -> Result<Ve
         digest(blob)?;
         uuid(&state.file_revisions[name])?;
         if graph.blob(blob).is_none() {
-            return Err(invalid("Member retirement lacks an exact historical blob"));
+            return Err(invalid(
+                UiMessage::error_core_sync_member_retirement_historical_blob_missing(),
+            ));
         }
         let (index, found) = find_name(&names, name)?;
         if found {
-            return Err(invalid("Member retirement has aliased file names"));
+            return Err(invalid(
+                UiMessage::error_core_sync_member_retirement_file_names_aliased(),
+            ));
         }
         names.insert(index, name);
     }

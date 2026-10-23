@@ -1,12 +1,20 @@
 //! Operator-bound namespace transactions over the original Core writer.
 //! Source, subtree transfer and destination capabilities are independent.
 use super::*;
+#[cfg(test)]
+use crate::CoreTestFixture;
 use std::path::Path;
 use weftext_core::{
     ActorFeatureStatus, ConfigRole, OperationIntent, OperationRequest, SnapshotWitness,
 };
 use weftext_data::{NativeValue, Schema};
 use weftext_knowledge::NodeRef;
+use weftext_messages::UiMessage;
+#[path = "structure/capture.rs"]
+mod capture;
+#[path = "structure/members.rs"]
+mod members;
+pub(super) use members::{member_file, member_ids, member_rights, split_member};
 
 const MAX_BYTES: usize = 32 * 1024 * 1024;
 const MAX_SOURCE: usize = 2 * 1024 * 1024;
@@ -19,9 +27,36 @@ const KINDS: [&str; 7] = [
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct Slot {
     parent: String,
-    name: String,
+    name_policy: NamePolicy,
     #[serde(default)]
     types: BTreeSet<String>,
+}
+#[derive(Clone, Deserialize, Serialize, PartialEq)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub(super) enum NamePolicy {
+    Fixed { name: String },
+    UniqueChildren { prefix: String, max_members: u32 },
+}
+impl Slot {
+    fn name(&self, operation: &str) -> Result<String, ApiError> {
+        match &self.name_policy {
+            NamePolicy::Fixed { name } => Ok(name.clone()),
+            NamePolicy::UniqueChildren { prefix, .. } => {
+                if !uuid::Uuid::parse_str(operation).is_ok_and(|id| id.to_string() == operation) {
+                    return Err(ApiError::bad(weftext_messages::UiMessage::error_api_structure_the_original_creation_operation_i_d_must_be_a_canonical_u_u_i_d()));
+                }
+                Ok(format!("{prefix}{operation}"))
+            }
+        }
+    }
+    fn unique(&self) -> bool {
+        matches!(self.name_policy, NamePolicy::UniqueChildren { .. })
+    }
 }
 #[derive(Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -69,6 +104,8 @@ pub(super) struct DestinationRights {
     create: bool,
     #[serde(default)]
     receive: bool,
+    #[serde(default)]
+    members: super::Rights,
 }
 #[derive(Clone, Default, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -77,6 +114,49 @@ pub(super) struct Rights {
     sources: BTreeMap<String, SourceRights>,
     #[serde(default)]
     destinations: BTreeMap<String, DestinationRights>,
+}
+fn valid_member_rights(r: &super::Rights) -> bool {
+    !r.office.r#import
+        && !r.office.doc.r#import
+        && !r.office.wps.r#import
+        && (!r.write || r.read)
+        && (!r.history || r.read)
+        && (!r.download || r.read)
+        && query::valid_rights(&r.query)
+        && r.fields.len() <= 64
+        && r.fields
+            .iter()
+            .all(|(id, f)| !id.is_empty() && id.len() <= 256 && (!f.write || f.read))
+        && (!r.annotations.write || r.annotations.read)
+        && (!r.annotations.accept || r.annotations.write && r.annotations.target && r.write)
+        && (!r.annotations.proofread || r.read && r.annotations.target)
+        && office::valid_legacy_rights(&r.office)
+}
+fn creation_grants<'a>(
+    inner: &'a HostedInner,
+    actor: &str,
+    slot: &str,
+) -> Result<&'a super::Rights, ApiError> {
+    let user = inner
+        .policy
+        .users
+        .get(actor)
+        .filter(|u| u.enabled)
+        .ok_or_else(expired)?;
+    if inner
+        .config
+        .structure_slots
+        .get(slot)
+        .is_some_and(Slot::unique)
+    {
+        user.structure
+            .destinations
+            .get(slot)
+            .map(|r| &r.members)
+            .ok_or_else(unavailable)
+    } else {
+        user.grants.get(slot).ok_or_else(unavailable)
+    }
 }
 fn valid_name(name: &str) -> bool {
     !name.is_empty()
@@ -94,22 +174,38 @@ pub(super) fn valid_config(config: &Config) -> bool {
         && config.structure_templates.len() <= 64
         && config.structure_slots.iter().all(|(id, slot)| {
             valid_id(id)
-                && valid_name(&slot.name)
                 && slot.types.len() <= 32
                 && slot.types.iter().all(|t| !t.is_empty() && t.len() <= 256)
                 && config.directories.get(&slot.parent).is_some_and(|p| {
                     p.lifecycle == "live"
-                        && config.files.get(id).is_some_and(|f| {
-                            f.lifecycle == "live"
-                                && f.editable
-                                && !f.importable
-                                && same_path(
-                                    Path::new(&f.path),
-                                    &Path::new(&p.path)
-                                        .join(&slot.name)
-                                        .join(format!("{}.typ", slot.name)),
-                                )
-                        })
+                        && match &slot.name_policy {
+                            NamePolicy::Fixed { name } => {
+                                valid_name(name)
+                                    && config.files.get(id).is_some_and(|f| {
+                                        f.lifecycle == "live"
+                                            && f.editable
+                                            && !f.importable
+                                            && same_path(
+                                                Path::new(&f.path),
+                                                &Path::new(&p.path)
+                                                    .join(name)
+                                                    .join(format!("{name}.typ")),
+                                            )
+                                    })
+                            }
+                            NamePolicy::UniqueChildren {
+                                prefix,
+                                max_members,
+                            } => {
+                                valid_name(prefix)
+                                    && prefix.len() <= 180
+                                    && (1..=5000).contains(max_members)
+                                    && !config.files.contains_key(id)
+                                    && !config.resources.contains_key(id)
+                                    && !config.resource_collections.contains_key(id)
+                                    && !config.content_import_slots.contains_key(id)
+                            }
+                        }
                 })
         })
         && config.structure_templates.iter().all(|(id, t)| {
@@ -127,23 +223,38 @@ pub(super) fn valid_rights(config: &Config, rights: &Rights) -> bool {
     rights.sources.len() <= 256
         && rights.destinations.len() <= 64
         && rights.sources.iter().all(|(id, _)| {
-            id.strip_suffix("/*")
-                .is_some_and(|s| config.content_import_slots.contains_key(s))
-                || content_import::split_member(config, id).is_some()
+            id.strip_suffix("/*").is_some_and(|s| {
+                config.content_import_slots.contains_key(s)
+                    || config.structure_slots.get(s).is_some_and(Slot::unique)
+            }) || content_import::split_member(config, id).is_some()
+                || split_member(config, id).is_some()
                 || config
                     .files
                     .get(id)
                     .is_some_and(|f| f.lifecycle == "live" && f.editable)
         })
-        && rights
-            .destinations
-            .keys()
-            .all(|id| config.structure_slots.contains_key(id))
+        && rights.destinations.iter().all(|(id, r)| {
+            config.structure_slots.get(id).is_some_and(|slot| {
+                if slot.unique() {
+                    !r.receive && valid_member_rights(&r.members)
+                } else {
+                    r.members == super::Rights::default()
+                }
+            })
+        })
 }
 /// Future slots are bound to original committed structural producer facts.
 /// Neither a raw occupant nor another admitted object at that name qualifies.
 pub(super) fn guard_slot(inner: &HostedInner, resource: &str) -> Result<(), ApiError> {
-    if inner.config.structure_slots.contains_key(resource) {
+    if split_member(&inner.config, resource).is_some() {
+        return members::qualify_member(inner, resource);
+    }
+    if inner
+        .config
+        .structure_slots
+        .get(resource)
+        .is_some_and(|s| !s.unique())
+    {
         let file = &inner.file(resource)?;
         let q = inner
             .core
@@ -163,7 +274,7 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "structureChanged",
-        "原结构依据、权限或目标已变化；请保留草稿并核对原操作。",
+        UiMessage::error_api_hosted_structure_structure_basis_changed(),
     )
 }
 fn core_error(error: CoreError) -> ApiError {
@@ -171,13 +282,13 @@ fn core_error(error: CoreError) -> ApiError {
         return ApiError::new(
             StatusCode::CONFLICT,
             "basisRequired",
-            "结构事务的保护需要现存的库规则文件；请由库所有者显式安装后重试。",
+            UiMessage::error_api_hosted_structure_structure_rules_required(),
         );
     }
     ApiError::new(
         StatusCode::CONFLICT,
         &error.code,
-        "结构操作未完成，原件与草稿保留；请核对原操作状态。",
+        UiMessage::error_api_hosted_structure_structure_operation_unresolved(),
     )
 }
 fn scope(inner: &HostedInner, actor: &str) -> String {
@@ -204,13 +315,25 @@ fn rights(inner: &HostedInner, actor: &str) -> Result<Rights, ApiError> {
         .iter()
         .filter_map(|(id, r)| {
             id.strip_suffix("/*")
-                .filter(|s| inner.config.content_import_slots.contains_key(*s))
+                .filter(|s| {
+                    inner.config.content_import_slots.contains_key(*s)
+                        || inner
+                            .config
+                            .structure_slots
+                            .get(*s)
+                            .is_some_and(Slot::unique)
+                })
                 .map(|s| (id.clone(), s.to_owned(), r.clone()))
         })
         .collect::<Vec<_>>();
     for (selector, slot, r) in selectors {
         rights.sources.remove(&selector);
-        for id in content_import::slot_member_ids(inner, &slot)? {
+        let selected = if inner.config.content_import_slots.contains_key(&slot) {
+            content_import::slot_member_ids(inner, &slot)?
+        } else {
+            members::slot_member_ids(inner, &slot)?
+        };
+        for id in selected {
             if let Some(existing) = rights.sources.get_mut(&id) {
                 existing.rename |= r.rename;
                 existing.r#move |= r.r#move;
@@ -222,6 +345,9 @@ fn rights(inner: &HostedInner, actor: &str) -> Result<Rights, ApiError> {
                 existing.tree_export |= r.tree_export;
             } else {
                 rights.sources.insert(id, r.clone());
+            }
+            if rights.sources.len() > 5000 {
+                return Err(ApiError::bad(weftext_messages::UiMessage::error_api_structure_authorized_structure_sources_exceed_the5000_member_budget()));
             }
         }
     }
@@ -239,6 +365,7 @@ struct Capture {
     types: Vec<String>,
     #[serde(default, deserialize_with = "crate::data_api::unique_fields")]
     fields: BTreeMap<String, NativeValue>,
+    form_basis: Option<weftext_core::CaptureFormBasis>,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -287,6 +414,7 @@ pub(super) fn router() -> Router<HostedState> {
         .route("/api/hosted/structure/commit", post(commit))
         .route("/api/hosted/structure/operation", post(operation))
         .route("/api/hosted/structure/settle", post(settle))
+        .merge(capture::router())
 }
 fn anchor_access(inner: &HostedInner, actor: &str, resource: &str) -> Result<(), ApiError> {
     let r = rights(inner, actor)?;
@@ -305,14 +433,23 @@ fn anchor_access(inner: &HostedInner, actor: &str, resource: &str) -> Result<(),
 fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiError> {
     let rights = rights(inner, actor)?;
     if !KINDS.contains(&req.kind.as_str()) {
-        return Err(ApiError::bad("未知结构操作"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_unknown_structure_operation(),
+        ));
     }
     let builtin = req.kind == "template" && req.template.as_deref() == Some("native-note");
+    let unique_destination = req
+        .destination
+        .as_ref()
+        .and_then(|id| inner.config.structure_slots.get(id))
+        .is_some_and(Slot::unique);
+    if unique_destination && !matches!(req.kind.as_str(), "create" | "template") {
+        return Err(unavailable());
+    }
     if req.kind == "create" || builtin {
-        let d = req
-            .destination
-            .as_deref()
-            .ok_or_else(|| ApiError::bad("缺少固定目标槽"))?;
+        let d = req.destination.as_deref().ok_or_else(|| {
+            ApiError::bad(UiMessage::error_api_hosted_structure_fixed_destination_slot_required())
+        })?;
         if req.resource != d
             || req.source.is_some()
             || !rights.destinations.get(d).is_some_and(|d| d.create)
@@ -320,10 +457,11 @@ fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiE
             return Err(unavailable());
         }
     } else {
-        let source = req
-            .source
-            .as_deref()
-            .ok_or_else(|| ApiError::bad("缺少配置源对象"))?;
+        let source = req.source.as_deref().ok_or_else(|| {
+            ApiError::bad(
+                UiMessage::error_api_hosted_structure_configuration_source_object_required(),
+            )
+        })?;
         let r = rights
             .sources
             .get(source)
@@ -344,11 +482,18 @@ fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiE
             library::access(inner, actor, "schema", false)?;
         }
         if req.kind != "trash" {
-            let d = req
-                .destination
-                .as_deref()
-                .ok_or_else(|| ApiError::bad("缺少固定目标槽"))?;
-            if !rights.destinations.get(d).is_some_and(|d| d.receive) {
+            let d = req.destination.as_deref().ok_or_else(|| {
+                ApiError::bad(
+                    UiMessage::error_api_hosted_structure_fixed_destination_slot_required(),
+                )
+            })?;
+            if !rights.destinations.get(d).is_some_and(|d| {
+                if unique_destination {
+                    d.create
+                } else {
+                    d.receive
+                }
+            }) {
                 return Err(unavailable());
             }
         }
@@ -360,10 +505,14 @@ fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiE
     }
     if req.inputs.len() > 64 || req.inputs.iter().collect::<BTreeSet<_>>().len() != req.inputs.len()
     {
-        return Err(ApiError::bad("显式引用输入超过预算或重复"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_explicit_reference_inputs_invalid(),
+        ));
     }
     if !req.inputs.is_empty() && !matches!(req.kind.as_str(), "create" | "copy" | "template") {
-        return Err(ApiError::bad("此结构操作不读取显式引用输入"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_explicit_references_unused(),
+        ));
     }
     for id in &req.inputs {
         if !inner
@@ -390,7 +539,9 @@ fn authorize(inner: &HostedInner, actor: &str, req: &Prepare) -> Result<(), ApiE
         || req.kind != "restore" && req.trash_operation_id.is_some()
         || req.kind == "trash" && req.destination.is_some()
     {
-        return Err(ApiError::bad("输入不属于所选原结构操作"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_structure_inputs_mismatch(),
+        ));
     }
     Ok(())
 }
@@ -443,7 +594,19 @@ fn safe_status(
         let destination = d.request.destination.as_ref();
         let actor_scope = scope(inner, actor);
         if let Some(destination) = destination {
-            let path = inner.config.root.join(&inner.file(destination)?.path);
+            let slot = &inner.config.structure_slots[destination];
+            let unique = slot.unique();
+            let path = if unique {
+                let name = slot.name(&status.operation_id)?;
+                inner
+                    .config
+                    .root
+                    .join(&inner.config.directories[&slot.parent].path)
+                    .join(&name)
+                    .join(format!("{name}.typ"))
+            } else {
+                inner.config.root.join(&inner.file(destination)?.path)
+            };
             let root = inner.config.root.clone();
             let receipt = inner
                 .core
@@ -466,8 +629,14 @@ fn safe_status(
                             &node.node_ref,
                         )
                     });
-                let can_open = q.is_ok() && inner.rights(actor, destination).is_ok_and(|r| r.read);
-                result = json!({"resource":destination,"nodeRef":node.node_ref,"canOpen":can_open,"status":if q.is_ok(){"available"}else{"unavailable"}});
+                let result_resource = if unique {
+                    format!("{destination}/{}", node.node_ref.node_id)
+                } else {
+                    destination.clone()
+                };
+                let can_open =
+                    q.is_ok() && inner.rights(actor, &result_resource).is_ok_and(|r| r.read);
+                result = json!({"resource":result_resource,"nodeRef":node.node_ref,"canOpen":can_open,"status":if q.is_ok(){"available"}else{"unavailable"}});
             } else {
                 result = json!({"resource":destination,"canOpen":false,"status":"unavailable"});
             }
@@ -504,11 +673,14 @@ fn owner(inner: &HostedInner, id: &str) -> Result<weftext_core::QualifiedQueryNo
 }
 fn capture_body(c: &Capture) -> Result<String, ApiError> {
     if c.body.len() > MAX_SOURCE || c.title.as_ref().is_some_and(|t| t.len() > 16 * 1024) {
-        return Err(ApiError::bad("创建正文或标题超过预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_created_body_title_budget(),
+        ));
     }
     let body = match c.body_mode.as_deref().unwrap_or("text") {
-        "text" => weftext_engine::encode_literal(&c.body)
-            .map_err(|_| ApiError::bad("文字输入不可编码"))?,
+        "text" => weftext_engine::encode_literal(&c.body).map_err(|_| {
+            ApiError::bad(UiMessage::error_api_hosted_structure_text_encoding_unsupported())
+        })?,
         "markup" => {
             fn isolated(
                 node: &typst_syntax::SyntaxNode,
@@ -539,23 +711,62 @@ fn capture_body(c: &Capture) -> Result<String, ApiError> {
             let source = typst_syntax::Source::detached(c.body.clone());
             if !isolated(source.root(), 0, &mut 20_000) {
                 return Err(ApiError::bad(
-                    "创建 markup 仅支持可证明的排版内容；代码与身份、类型、字段声明须经独立正文编辑保存",
+                    UiMessage::error_api_hosted_structure_created_markup_unsupported(),
                 ));
             }
             c.body.clone()
         }
-        _ => return Err(ApiError::bad("正文模式须为 text 或 markup")),
+        _ => {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_structure_body_mode_invalid(),
+            ));
+        }
     };
     Ok(if let Some(title) = &c.title {
         format!(
             "\n#set document(title: [{}])\n#title()\n\n{}",
-            weftext_engine::encode_literal(title).map_err(|_| ApiError::bad("标题不可编码"))?,
+            weftext_engine::encode_literal(title).map_err(|_| ApiError::bad(
+                UiMessage::error_api_hosted_structure_title_encoding_unsupported()
+            ))?,
             body
         )
     } else {
         body
     })
 }
+fn authorize_capture_fields(
+    schema: &Schema,
+    resolved: &BTreeSet<String>,
+    fields: &BTreeMap<String, NativeValue>,
+    grants: &super::Rights,
+) -> Result<(), ApiError> {
+    for id in fields.keys() {
+        if !schema.fields.iter().any(|field| field.id == *id) {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_structure_exact_created_field_id_required(),
+            ));
+        }
+        if !grants.fields.get(id).is_some_and(|f| f.read && f.write) {
+            return Err(unavailable());
+        }
+    }
+    for (field, required) in schema.applicable_fields(resolved) {
+        if (required
+            || field
+                .default
+                .as_ref()
+                .is_some_and(|d| d["kind"] == "native"))
+            && !grants
+                .fields
+                .get(&field.id)
+                .is_some_and(|f| f.read && f.write)
+        {
+            return Err(unavailable());
+        }
+    }
+    Ok(())
+}
+
 fn capture_source(
     inner: &mut HostedInner,
     actor: &str,
@@ -565,7 +776,9 @@ fn capture_source(
     captured: &inputs::Captured,
 ) -> Result<String, ApiError> {
     if c.types.len() > 32 || c.fields.len() > 64 {
-        return Err(ApiError::bad("创建类型或字段超过预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_created_types_fields_budget(),
+        ));
     }
     let body = capture_body(c)?;
     if c.types.is_empty() && c.fields.is_empty() {
@@ -576,10 +789,7 @@ fn capture_source(
     if c.types.iter().any(|t| !slot.types.contains(t)) {
         return Err(unavailable());
     }
-    let grants = inner.policy.users[actor]
-        .grants
-        .get(destination)
-        .ok_or_else(unavailable)?;
+    let grants = creation_grants(inner, actor, destination)?.clone();
     for id in c.fields.keys() {
         if !grants.fields.get(id).is_some_and(|f| f.read && f.write) {
             return Err(unavailable());
@@ -601,24 +811,21 @@ fn capture_source(
         None => Schema::bundled(),
     }
     .map_err(|_| changed())?;
+    let schema_digest = digest(&serde_json::to_vec(&schema).map_err(|_| changed())?);
+    if c.form_basis.as_ref().is_none_or(|basis| {
+        basis.schema_ref != doc.role_ref || basis.semantic_digest != schema_digest
+    }) {
+        return Err(changed());
+    }
     // Creation defaults are writes too. Authorize the exact applicable field
     // closure before invoking any native default, constraint or validator.
     let (resolved, check) = schema.expand_types(&c.types);
     if !check.is_valid() {
-        return Err(ApiError::bad("类型组合不可用"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_type_combination_unavailable(),
+        ));
     }
-    for (f, required) in schema.applicable_fields(&resolved) {
-        if (required
-            || c.fields.contains_key(&f.id)
-            || f.default.as_ref().is_some_and(|d| d["kind"] == "native"))
-            && !grants.fields.get(&f.id).is_some_and(|f| f.read && f.write)
-        {
-            return Err(unavailable());
-        }
-        if c.fields.keys().any(|id| id == &f.key && id != &f.id) {
-            return Err(ApiError::bad("创建字段须使用准确 FieldId"));
-        }
-    }
+    authorize_capture_fields(&schema, &resolved, &c.fields, &grants)?;
     // Provider capability remains separate even when complete schema read is
     // authorized: only granted registries can execute field validation.
     let providers = &inner.policy.users[actor].query_providers;
@@ -629,8 +836,12 @@ fn capture_source(
     restricted
         .series_policies
         .retain(|p| providers.series_policies.contains(&p.id));
-    let source = weftext_data::capture_template(&c.types, &c.fields, &body, &restricted)
-        .map_err(|_| ApiError::bad("创建字段或原生依赖不可用"))?;
+    let source =
+        weftext_data::capture_template(&c.types, &c.fields, &body, &restricted).map_err(|_| {
+            ApiError::bad(
+                UiMessage::error_api_hosted_structure_created_field_dependencies_unavailable(),
+            )
+        })?;
     let check_source = weftext_data::capture_source(
         "00000000-0000-4000-8000-000000000000",
         &c.types,
@@ -638,7 +849,11 @@ fn capture_source(
         &body,
         &restricted,
     )
-    .map_err(|_| ApiError::bad("创建字段或原生依赖不可用"))?;
+    .map_err(|_| {
+        ApiError::bad(
+            UiMessage::error_api_hosted_structure_created_field_dependencies_unavailable(),
+        )
+    })?;
     let validation = weftext_data::validate_note(
         &check_source,
         &restricted,
@@ -649,7 +864,9 @@ fn capture_source(
         },
     );
     if !validation.is_valid() {
-        return Err(ApiError::bad("创建类型、字段或上下文约束不可用"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_created_context_constraints_unavailable(),
+        ));
     }
     let mut targets = vec![];
     let mut sources = vec![];
@@ -695,7 +912,7 @@ fn capture_source(
     );
     if !relations.is_valid() {
         return Err(ApiError::bad(
-            "创建关系需要准确获权目标；完整图依赖未获权时不可假定成功",
+            UiMessage::error_api_hosted_structure_relation_target_qualification_required(),
         ));
     }
     pool.push(w);
@@ -735,9 +952,8 @@ fn typed_catalog(inner: &mut HostedInner, actor: &str, id: &str) -> Result<Value
         .applicable_fields(&expanded)
         .into_iter()
         .filter(|(f, _)| {
-            inner.policy.users[actor]
-                .grants
-                .get(id)
+            creation_grants(inner, actor, id)
+                .ok()
                 .and_then(|r| r.fields.get(&f.id))
                 .is_some_and(|f| f.read && f.write)
         })
@@ -783,9 +999,11 @@ fn typed_catalog(inner: &mut HostedInner, actor: &str, id: &str) -> Result<Value
         .core
         .validate_snapshot_witness(&inner.config.root, Path::new(&doc.path), &w)
         .map_err(core_error)?;
-    let dto = json!({"types":schema.types.iter().filter(|t|expanded.contains(&t.id)).collect::<Vec<_>>(),"fields":fields,"definitions":definitions,"aliases":{}});
+    let dto = json!({"types":schema.types.iter().filter(|t|expanded.contains(&t.id)).collect::<Vec<_>>(),"fields":fields,"definitions":definitions,"aliases":{},"roleRef":doc.role_ref,"semanticDigest":digest(&serde_json::to_vec(&schema).map_err(|_| changed())?)});
     if serde_json::to_vec(&dto).map_err(|_| changed())?.len() > MAX_SOURCE {
-        return Err(ApiError::bad("类型创建表单超过预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_type_creation_form_budget(),
+        ));
     }
     Ok(dto)
 }
@@ -824,7 +1042,9 @@ fn template_catalog(inner: &mut HostedInner, actor: &str, id: &str) -> Result<Va
             .sum::<usize>(),
     ) > MAX_BYTES
     {
-        return Err(ApiError::bad("模板依据超过预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_template_basis_budget(),
+        ));
     }
     let f = &cut.files[0];
     if cut.files[1].revision.is_none() {
@@ -868,7 +1088,7 @@ fn template_catalog(inner: &mut HostedInner, actor: &str, id: &str) -> Result<Va
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Prepare>,
+    RequestJson(req): RequestJson<Prepare>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| prepare_inner(inner, &auth, req)).await?,
@@ -879,7 +1099,9 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
     authorize(inner, &actor, &req)?;
     let encoded = serde_json::to_vec(&req).map_err(|_| changed())?;
     if encoded.len() > MAX_SOURCE + 128 * 1024 {
-        return Err(ApiError::bad("结构请求超过预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_structure_structure_request_budget(),
+        ));
     }
     let fp = digest(&encoded);
     let actor_scope = scope(inner, &actor);
@@ -900,7 +1122,9 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
     let built = (|| {
         let captured = inputs::capture(inner, &actor, &req.inputs)?;
         if captured.retained_bytes() > MAX_BYTES {
-            return Err(ApiError::bad("显式引用输入超过 32 MiB 预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_structure_explicit_reference_input_budget(),
+            ));
         }
         let transfer = captured.plan_witnesses()?;
         let destination = if let Some(d) = &req.destination {
@@ -923,10 +1147,11 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
         let mut selected_source = None;
         if let Some(source) = &req.source {
             let q = if req.kind == "restore" {
-                let original = req
-                    .trash_operation_id
-                    .as_deref()
-                    .ok_or_else(|| ApiError::bad("缺少原 Trash 操作编号"))?;
+                let original = req.trash_operation_id.as_deref().ok_or_else(|| {
+                    ApiError::bad(
+                        UiMessage::error_api_hosted_structure_original_trash_id_required(),
+                    )
+                })?;
                 let receipt = inner
                     .core
                     .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
@@ -968,7 +1193,9 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     .capture_feature_tree(&root, path.parent().ok_or_else(changed)?, &q.owner)
                     .map_err(core_error)?;
                 if captured.retained_bytes() > MAX_BYTES {
-                    return Err(ApiError::bad("整树传递依据超过 32 MiB 预算"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_structure_whole_tree_basis_budget(),
+                    ));
                 }
                 tree = Some(captured);
             }
@@ -992,7 +1219,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     .transpose()?;
                 OperationIntent::NewNode {
                     parent: p.to_string_lossy().into_owned(),
-                    name: s.name.clone(),
+                    name: s.name(&req.operation_id)?,
                     source,
                 }
             }
@@ -1003,7 +1230,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                 )?;
                 OperationIntent::NewNode {
                     parent: p.to_string_lossy().into_owned(),
-                    name: s.name.clone(),
+                    name: s.name(&req.operation_id)?,
                     source: Some(source),
                 }
             }
@@ -1015,7 +1242,9 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     .qualified_query_node_at(&root, path, source_owner.as_ref().unwrap(), "live")
                     .map_err(core_error)?;
                 if q.coordinate.parent().and_then(Path::parent) != Some(coordinate.as_path()) {
-                    return Err(ApiError::bad("重命名须使用同一父目录中的固定目标槽"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_structure_rename_destination_slot_invalid(),
+                    ));
                 }
                 OperationIntent::RenameNode {
                     source: path
@@ -1023,18 +1252,21 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                         .ok_or_else(changed)?
                         .to_string_lossy()
                         .into_owned(),
-                    name: s.name.clone(),
+                    name: s.name(&req.operation_id)?,
                 }
             }
             "move" => {
                 let (s, p, _) = destination.as_ref().unwrap();
                 let path = &selected_source.as_ref().unwrap().0;
+                let name = s.name(&req.operation_id)?;
                 if path
                     .parent()
                     .and_then(Path::file_name)
-                    .is_none_or(|n| n != s.name.as_str())
+                    .is_none_or(|n| n != name.as_str())
                 {
-                    return Err(ApiError::bad("移动目标须保留原笔记名称"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_structure_move_name_must_remain(),
+                    ));
                 }
                 OperationIntent::MoveNode {
                     source: path
@@ -1057,7 +1289,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                         .to_string_lossy()
                         .into_owned(),
                     parent: p.to_string_lossy().into_owned(),
-                    name: s.name.clone(),
+                    name: s.name(&req.operation_id)?,
                     allow_losses: true,
                 }
             }
@@ -1077,7 +1309,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     trash_operation_id: selected_source.as_ref().unwrap().1.clone(),
                     node_id: Some(source_owner.as_ref().unwrap().node_id.clone()),
                     parent: p.to_string_lossy().into_owned(),
-                    name: s.name.clone(),
+                    name: s.name(&req.operation_id)?,
                 }
             }
             "template" => {
@@ -1130,7 +1362,11 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                         .slots
                         .iter()
                         .find(|s| s.name == *name)
-                        .ok_or_else(|| ApiError::bad("参数不属于原准确模板槽"))?;
+                        .ok_or_else(|| {
+                            ApiError::bad(
+                                UiMessage::error_api_hosted_structure_template_parameter_mismatch(),
+                            )
+                        })?;
                     parameters.insert(
                         name.clone(),
                         crate::knowledge_api::parse_template_value(v, slot.kind)?,
@@ -1141,16 +1377,24 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     &definition.slots,
                     &parameters,
                 )
-                .map_err(|_| ApiError::bad("模板参数或原准确槽不可用"))?;
+                .map_err(|_| {
+                    ApiError::bad(
+                        UiMessage::error_api_hosted_structure_template_parameters_unavailable(),
+                    )
+                })?;
                 OperationIntent::TemplateNode {
                     source: path.to_string_lossy().into_owned(),
                     parent: p.to_string_lossy().into_owned(),
-                    name: s.name.clone(),
+                    name: s.name(&req.operation_id)?,
                     instantiated_source: instantiated,
                     source_base_id: f.base_id.clone(),
                 }
             }
-            _ => return Err(ApiError::bad("未知结构操作")),
+            _ => {
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_structure_unknown_structure_operation(),
+                ));
+            }
         };
         let bytes = pool
             .iter()
@@ -1166,7 +1410,9 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
             )
             .saturating_add(encoded.len());
         if bytes > MAX_BYTES {
-            return Err(ApiError::bad("结构请求与原保护依据超过 32 MiB 预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_structure_structure_protection_budget(),
+            ));
         }
         let decision = Decision {
             epoch: inner.actor_generation(&actor),
@@ -1175,7 +1421,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
             request: req.clone(),
             owner: source_owner.clone(),
         };
-        let preview = json!({"kind":req.kind,"summary":"在明确授权的源与固定目标槽之间执行原结构事务；正文草稿不自动保存或切换。","source":req.source,"destination":req.destination,"_structure":decision});
+        let preview = json!({"kind":req.kind,"summary":UiMessage::error_api_hosted_structure_plan_summary(),"source":req.source,"destination":req.destination,"_structure":decision});
         let request = OperationRequest {
             operation_id: req.operation_id.clone(),
             root: root.to_string_lossy().into_owned(),
@@ -1188,6 +1434,30 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
         } else {
             vec![]
         };
+        let destination_binding = req
+            .destination
+            .as_ref()
+            .map(|id| {
+                let slot = &inner.config.structure_slots[id];
+                match &slot.name_policy {
+                    NamePolicy::Fixed { .. } => Ok(weftext_core::HostedDestination::fixed(id)),
+                    NamePolicy::UniqueChildren {
+                        prefix,
+                        max_members,
+                    } => inner
+                        .core
+                        .hosted_unique_child_destination(
+                            &root,
+                            &root.join(&inner.config.directories[&slot.parent].path),
+                            id,
+                            prefix,
+                            *max_members,
+                            &req.operation_id,
+                        )
+                        .map_err(core_error),
+                }
+            })
+            .transpose()?;
         let status = inner
             .core
             .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
@@ -1200,7 +1470,7 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
                     &tokens,
                     &refs,
                     &transfer_refs,
-                    req.destination.as_deref(),
+                    destination_binding.as_ref(),
                     tree.as_ref(),
                 )
             })
@@ -1215,14 +1485,14 @@ fn prepare_inner(inner: &mut HostedInner, auth: &Auth, req: Prepare) -> Result<V
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(locked(&state,move|inner|{let actor=inner.actor(&auth)?;anchor_access(inner,&actor,&req.resource)?;let status=inner.core.with_actor_for_root(&scope(inner,&actor), &inner.config.root,|c|c.actor_feature_status(&req.resource,&req.operation_id)).map_err(core_error)?;match status{Some(s)=>safe_status(inner,&actor,s),None=>Ok(json!({"resource":req.resource,"operationId":req.operation_id,"status":"notRegistered","planId":null,"preview":{},"nodeRefs":[],"resourceRefs":[],"commitAllowed":false,"result":null}))}}).await?))
 }
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -1242,46 +1512,46 @@ async fn settle(
 async fn commit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Commit>,
+    RequestJson(req): RequestJson<Commit>,
 ) -> ApiResult {
     Ok(Json(
-        locked(&state, move |inner| {
-            let actor = inner.actor(&auth)?;
-            anchor_access(inner, &actor, &req.resource)?;
-            let actor_scope = scope(inner, &actor);
-            let old = inner
-                .core
-                .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
-                    c.actor_feature_status(&req.resource, &req.operation_id)
-                })
-                .map_err(core_error)?
-                .ok_or_else(changed)?;
-            if old.status == "prepared" {
-                let d: Decision = serde_json::from_value(old.preview["_structure"].clone())
-                    .map_err(|_| changed())?;
-                authorize(inner, &actor, &d.request)?;
-                if !original_allowed(inner, &actor, &old)
-                    || d.expires <= now_ms()
-                    || old.plan_id.as_deref() != Some(req.plan_id.as_str())
-                {
-                    return Err(changed());
-                }
-            }
-            let s = inner
-                .core
-                .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
-                    c.actor_feature_commit_with_losses(
-                        &req.resource,
-                        &req.operation_id,
-                        &req.plan_id,
-                        req.accept_losses,
-                    )
-                })
-                .map_err(core_error)?;
-            safe_status(inner, &actor, s)
-        })
-        .await?,
+        locked(&state, move |inner| commit_inner(inner, &auth, req)).await?,
     ))
+}
+fn commit_inner(inner: &mut HostedInner, auth: &Auth, req: Commit) -> Result<Value, ApiError> {
+    let actor = inner.actor(auth)?;
+    anchor_access(inner, &actor, &req.resource)?;
+    let actor_scope = scope(inner, &actor);
+    let old = inner
+        .core
+        .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
+            c.actor_feature_status(&req.resource, &req.operation_id)
+        })
+        .map_err(core_error)?
+        .ok_or_else(changed)?;
+    if old.status == "prepared" {
+        let d: Decision =
+            serde_json::from_value(old.preview["_structure"].clone()).map_err(|_| changed())?;
+        authorize(inner, &actor, &d.request)?;
+        if !original_allowed(inner, &actor, &old)
+            || d.expires <= now_ms()
+            || old.plan_id.as_deref() != Some(req.plan_id.as_str())
+        {
+            return Err(changed());
+        }
+    }
+    let s = inner
+        .core
+        .with_actor_for_root(&actor_scope, &inner.config.root, |c| {
+            c.actor_feature_commit_with_losses(
+                &req.resource,
+                &req.operation_id,
+                &req.plan_id,
+                req.accept_losses,
+            )
+        })
+        .map_err(core_error)?;
+    safe_status(inner, &actor, s)
 }
 async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
     Ok(Json(locked(&state,move|inner|{
@@ -1289,10 +1559,11 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
         for(id,r)in &rights.sources {let file=&inner.file(id)?;let ready=owner(inner,id).is_ok();partial|=!ready;
             let actions=KINDS.iter().filter(|k|r.allows(k)&&(!matches!(**k,"copy"|"template")||(r.tree_read&&r.tree_export&&library::access(inner,&actor,"schema",false).is_ok()))).collect::<Vec<_>>();
             if !actions.is_empty(){sources.push(json!({"resource":id,"title":file.title,"actions":actions,"status":if ready{"ready"}else{"unavailable"}}));}}
-        for(id,r)in &rights.destinations {if !r.create&&!r.receive{continue;}let slot=&inner.config.structure_slots[id];let parent=&inner.config.directories[&slot.parent];let ready=inner.core.qualified_query_scope_at(&inner.config.root,&inner.config.root.join(&parent.path),&parent.reference,"live").is_ok();partial|=!ready;
-            let mut row=json!({"resource":id,"title":inner.file(id)?.title,"name":slot.name,"parent":slot.parent,"parentTitle":parent.title,"create":r.create,"receive":r.receive,"status":if ready{"ready"}else{"unavailable"},"types":slot.types});
+        for(id,r)in &rights.destinations {if !r.create&&!r.receive{continue;}let slot=&inner.config.structure_slots[id];let parent=&inner.config.directories[&slot.parent];let parent_path = inner.config.root.join(&parent.path);let ready=inner.core.qualified_query_scope_at(&inner.config.root,&parent_path,&parent.reference,"live").is_ok() && match &slot.name_policy { NamePolicy::Fixed {..} => true, NamePolicy::UniqueChildren {prefix,max_members} => inner.core.hosted_unique_child_available_at(&inner.config.root,&parent_path,id,prefix,*max_members).unwrap_or(false) };partial|=!ready;
+            let slot_title = if slot.unique() { id.clone() } else { inner.file(id)?.title };
+            let mut row=json!({"resource":id,"title":slot_title,"namePolicy":slot.name_policy,"parent":slot.parent,"parentTitle":parent.title,"create":r.create,"receive":r.receive,"status":if ready{"ready"}else{"unavailable"},"types":slot.types});
             if r.create&&!slot.types.is_empty(){match typed_catalog(inner,&actor,id){Ok(c)=>row["capture"]=c,Err(_)=>{row["captureStatus"]="unavailable".into();partial=true;}}}slots.push(row);}
-        if rights.destinations.values().any(|d|d.create){templates.push(json!({"id":"native-note","title":"原生笔记","status":"ready","builtin":true,"parameters":[{"name":"title","kind":"markup","nullable":false,"required":true},{"name":"body","kind":"markup","nullable":false,"required":false,"default":""}]}));}
+        if rights.destinations.values().any(|d|d.create){templates.push(json!({"id":"native-note","title":UiMessage::error_api_hosted_structure_native_note_template_title(),"status":"ready","builtin":true,"parameters":[{"name":"title","kind":"markup","nullable":false,"required":true},{"name":"body","kind":"markup","nullable":false,"required":false,"default":""}]}));}
         let configured=inner.config.structure_templates.clone();for(id,t)in &configured {if rights.sources.get(&t.source).is_some_and(|r|r.template&&r.tree_read&&r.tree_export)&&library::access(inner,&actor,"schema",false).is_ok(){match template_catalog(inner,&actor,id){Ok(t)=>templates.push(t),Err(_)=>{templates.push(json!({"id":id,"title":inner.file(&t.source)?.title,"source":t.source,"status":"unavailable","builtin":false}));partial=true;}}}}
         Ok(json!({"scope":"configuredAuthorizedStructure","coverage":if partial{"partial"}else{"complete"},"sources":sources,"slots":slots,"templates":templates}))
     }).await?))
@@ -1304,7 +1575,7 @@ mod tests {
     fn id() -> String {
         uuid::Uuid::new_v4().to_string()
     }
-    fn fixture() -> (tempfile::TempDir, HostedState, Auth) {
+    pub(super) fn fixture() -> (tempfile::TempDir, HostedState, Auth) {
         let (temp, state, auth, _, _, _) = history_api::test_fixture();
         let mut inner = state.inner.lock().unwrap();
         let root = inner.config.root.clone();
@@ -1330,7 +1601,7 @@ mod tests {
                 name.into(),
                 Slot {
                     parent: "root".into(),
-                    name: name.into(),
+                    name_policy: NamePolicy::Fixed { name: name.into() },
                     types: BTreeSet::new(),
                 },
             );
@@ -1393,6 +1664,7 @@ mod tests {
             DestinationRights {
                 create: kind == "create",
                 receive: kind != "create",
+                members: super::super::Rights::default(),
             },
         );
     }
@@ -1413,6 +1685,58 @@ mod tests {
             .unwrap();
         safe_status(inner, &actor, s).unwrap()
     }
+    #[tokio::test]
+    async fn builtin_template_title_is_typed_and_slot_author_title_stays_exact() {
+        let (_temp, state, auth) = fixture();
+        let author_title = "Author 原题名 😀";
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner.config.files.get_mut("Created").unwrap().title = author_title.into();
+            grant(&mut inner, "Shared", "create", "Created");
+        }
+        let delivered = catalog(State(state.clone()), Extension(auth.clone()))
+            .await
+            .unwrap()
+            .0;
+        let template = delivered["templates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["builtin"] == true)
+            .unwrap();
+        let title: UiMessage = serde_json::from_value(template["title"].clone()).unwrap();
+        assert_eq!(
+            title.key(),
+            "error.api.hostedStructure.nativeNoteTemplateTitle"
+        );
+        assert_eq!(title.render(weftext_messages::UiLocale::ZhCn), "原生笔记");
+        assert_eq!(
+            title.render(weftext_messages::UiLocale::EnUs),
+            "Native note"
+        );
+        let slot = delivered["slots"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|entry| entry["resource"] == "Created")
+            .unwrap();
+        assert_eq!(slot["title"], author_title);
+        {
+            let mut inner = state.inner.lock().unwrap();
+            inner
+                .policy
+                .users
+                .get_mut("alice")
+                .unwrap()
+                .structure
+                .destinations
+                .clear();
+        }
+        let revoked = catalog(State(state), Extension(auth)).await.unwrap().0;
+        assert!(revoked["templates"].as_array().unwrap().is_empty());
+        assert!(revoked["slots"].as_array().unwrap().is_empty());
+    }
+
     #[test]
     fn independent_creation_read_and_original_request_fence() {
         let (_temp, state, auth) = fixture();
@@ -1473,7 +1797,10 @@ mod tests {
         let (_temp, state, _auth) = fixture();
         let mut inner = state.inner.lock().unwrap();
         let root = inner.config.root.clone();
-        let local = inner.core.create_note(&root, &root, "Created").unwrap();
+        let local = inner
+            .core
+            .create_note_fixture(&root, &root, "Created")
+            .unwrap();
         inner.core.close_session(&local.session_id).unwrap();
         assert!(inner.open("alice", "Created").is_err());
         assert!(guard_slot(&inner, "Created").is_err());
@@ -1482,7 +1809,9 @@ mod tests {
             .structure_slots
             .get_mut("Created")
             .unwrap()
-            .name = "OtherName".into();
+            .name_policy = NamePolicy::Fixed {
+            name: "OtherName".into(),
+        };
         assert!(!valid_config(&inner.config));
     }
     #[test]
@@ -1601,10 +1930,15 @@ mod tests {
             .insert("tasks/task".into());
         inner.policy.users.get_mut("alice").unwrap().library =
             serde_json::from_value(json!({"schema":{"read":true}})).unwrap();
+        let catalog = typed_catalog(&mut inner, "alice", "Created").unwrap();
         let mut req = request("create", None, Some("Created"));
         req.capture = Some(Capture {
             types: vec!["tasks/task".into()],
             fields: BTreeMap::from([("tasks/status".into(), NativeValue::Text("open".into()))]),
+            form_basis: Some(weftext_core::CaptureFormBasis {
+                schema_ref: catalog["roleRef"].as_str().unwrap().into(),
+                semantic_digest: catalog["semanticDigest"].as_str().unwrap().into(),
+            }),
             ..Default::default()
         });
         assert_eq!(
@@ -1629,6 +1963,20 @@ mod tests {
                     write: true,
                 },
             );
+        let mut stale = req.clone();
+        stale
+            .capture
+            .as_mut()
+            .unwrap()
+            .form_basis
+            .as_mut()
+            .unwrap()
+            .semantic_digest = "0".repeat(64);
+        assert_eq!(
+            prepare_inner(&mut inner, &auth, stale).unwrap_err().status,
+            StatusCode::CONFLICT
+        );
+        assert!(!inner.config.root.join("Created").exists());
         let result = execute(&mut inner, &auth, &req);
         assert_eq!(result["result"]["canOpen"], true);
         let source = inner.open("alice", "Created").unwrap()["source"]
@@ -1646,6 +1994,73 @@ mod tests {
                 .native(),
             Some(&NativeValue::Text("open".into()))
         );
+    }
+
+    #[test]
+    fn capture_colliding_native_key_never_borrows_a_field_grant_or_default() {
+        let mut schema = Schema::bundled().unwrap();
+        schema.fields.insert(
+            0,
+            weftext_data::Field {
+                id: "private/config".into(),
+                key: "tasks/status".into(),
+                shape: weftext_data::Shape::Scalar {
+                    semantic: "text".into(),
+                },
+                nullable: false,
+                default: Some(json!({"kind":"absent"})),
+            },
+        );
+        schema
+            .types
+            .iter_mut()
+            .find(|t| t.id == "tasks/task")
+            .unwrap()
+            .fields
+            .push(weftext_data::FieldContribution {
+                id: "private/config".into(),
+                required: false,
+            });
+        let mut schema =
+            Schema::from_author_json(&serde_json::to_string(&schema).unwrap()).unwrap();
+        let (resolved, validation) = schema.expand_types(&["tasks/task".into()]);
+        assert!(validation.is_valid());
+        let mut grants = super::super::Rights::default();
+        grants.fields.insert(
+            "tasks/status".into(),
+            FieldRights {
+                read: true,
+                write: true,
+            },
+        );
+        let mut fields =
+            BTreeMap::from([("tasks/status".into(), NativeValue::Text("open".into()))]);
+        authorize_capture_fields(&schema, &resolved, &fields, &grants).unwrap();
+        fields.insert(
+            "private/config".into(),
+            NativeValue::Text("independent".into()),
+        );
+        assert!(authorize_capture_fields(&schema, &resolved, &fields, &grants).is_err());
+        grants.fields.insert(
+            "private/config".into(),
+            FieldRights {
+                read: true,
+                write: true,
+            },
+        );
+        authorize_capture_fields(&schema, &resolved, &fields, &grants).unwrap();
+        fields.remove("private/config");
+        grants.fields.remove("private/config");
+        schema
+            .fields
+            .iter_mut()
+            .find(|f| f.id == "private/config")
+            .unwrap()
+            .default = Some(json!({"kind":"native","source":"\"private default\""}));
+        let schema = Schema::from_author_json(&serde_json::to_string(&schema).unwrap()).unwrap();
+        assert!(authorize_capture_fields(&schema, &resolved, &fields, &grants).is_err());
+        fields = BTreeMap::from([("status".into(), NativeValue::Text("open".into()))]);
+        assert!(authorize_capture_fields(&schema, &resolved, &fields, &grants).is_err());
     }
     #[test]
     fn future_resource_collection_uses_original_structure_slot_and_independent_grants() {

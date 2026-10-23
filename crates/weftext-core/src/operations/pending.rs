@@ -183,13 +183,17 @@ impl Core {
         } else {
             read_scopes(t)
         };
-        for other in self.operations.values().filter(|other| {
-            other.operation_id != plan.operation_id
-                && !self.committed(&other.operation_id)
-                && !self.resolved(&other.operation_id)
-                && (other.transaction.is_none()
-                    || self.journal_path(&other.operation_id, "install").exists())
-        }) {
+        for other in self.operations.values() {
+            if other.operation_id == plan.operation_id
+                || self.committed(&other.operation_id)?
+                || self.resolved(&other.operation_id)?
+                || (other.transaction.is_some()
+                    && !self
+                        .backend
+                        .entry_exists(self.journal_path(&other.operation_id, "install"))?)
+            {
+                continue;
+            }
             let (other_writes, other_reads) = if let Some(transaction) = &other.transaction {
                 (write_scopes(transaction), read_scopes(transaction))
             } else {
@@ -229,8 +233,10 @@ impl Core {
 fn pending(operation_id: &str) -> CoreError {
     CoreError::new(
         "recoveryPending",
-        format!(
-            "Original unfinished operation {operation_id} overlaps this Plan's frozen read or mutation scope; inspect its retained recovery before any effect"
+        UiMessage::error_core_pending_original_operation(
+            weftext_messages::params::ErrorCorePendingOriginalOperation {
+                operation_id: operation_id.into(),
+            },
         ),
     )
 }

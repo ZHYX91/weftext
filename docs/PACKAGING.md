@@ -1,0 +1,43 @@
+---
+source_language: zh-CN
+translation_of: PACKAGING.zh-CN.md
+translation_status: synced
+---
+
+# Windows candidate packaging
+
+The single product entry remains `scripts/mvp.py`. Desktop `weftext.exe` and console `weftext-cli.exe` must come from the same Cargo build and source. Renaming cannot change the actual PE subsystem. Both executables retain the original compiler-worker protocols; Server/CLI/workers do not start another service through a GUI wrapper.
+
+`build`/`check` use current source. `package` first qualifies complete offline materials and SDK tools, then freezes public product source in a new owned input directory under Cargo's actual target. Building and the same checks run in that copy. source.zip contains those fixed bytes; embedded frontend assets have a separate exact inventory. Rescanning an edited checkout after compilation cannot establish correspondence. Changed source, frontend, executables, license originals or material qualification refuse packaging. Failures retain originals without an old-target or single-executable fallback.
+
+The same entry separately qualifies shared-target Rust inputs by content: actual Rust/Cargo, local path sources including vendor, build scripts, embedded assets, command/source-root context, previous successful artifacts and local generated-output tree content must match. Unknown or changed qualification recompiles only relevant local entries, retaining unchanged registry dependencies without cleaning or a cold cache per checkout. The target's disposable input hint becomes pending first and records success only after command success and input/artifact checks; failure cannot claim new-source compilation. Both executable copies are fixed under the product lock before another product invocation proceeds. [WORKFLOW](WORKFLOW.md) defines lock ordering and direct-Cargo limits; this mechanism does not replace candidate acceptance.
+
+Initial packaging requires an actual product Git checkout and Git. `git ls-files -c -o --exclude-standard -z` selects tracked and visible unignored public files, using their current working-tree bytes. Uncommitted edits, additions and deletions appear in the snapshot; ignored local materials are not scanned or read. The source archive excludes `.git` and supports independent `build`/`check` after extraction. Repackaging an arbitrary directory without Git is not a supported entry.
+
+After a Windows build, the entry point creates a new artifact directory under the actual target and fixes both final executables beside `artifact-catalog.json`; subsequent checks and packaging use this role map. Use the two exact paths printed by the entry point; mutable Cargo debug/release outputs are not this acceptance role map. Fixed release copies and final candidates are delivery artifacts outside automatic temp cleanup. The catalog contains `schemaVersion`, `architecture`, `sourceSha256`, `hostContractSha256`, `buildId` and `roles`; desktop/cli each record their fixed filename, exact SHA-256/byte length and PE subsystem. `buildId` is SHA-256 of the source-archive, host-contract, desktop and CLI lowercase hex digests, in that order as ASCII strings separated by LF, with no final LF. The host checks actual process images obtained from the OS against these roles, rather than trusting a peer's identity claim or directory name. Different builds require explicit upgrade coordination; a shared directory does not authorize takeover.
+
+```text
+python scripts/mvp.py build
+python scripts/mvp.py check
+python scripts/mvp.py package --release --windows-sdk "C:\Program Files (x86)\Windows Kits\10\bin\10.0.26100.0\x64" --offline-materials "D:\Weftext-Materials" --msvc-linker "C:\Path\To\MSVC\bin\Hostx64\x64\link.exe"
+```
+
+Replace example material/linker paths with exact inputs. Packaging explicitly uses that installed x64 MSVC linker and requires an offline VC version no older than its actual file version. Building and dependency acquisition still require the Node/Rust toolchains. Generation does not download, execute installers, sign, install or change trust/registry. There is no bypass for roles, licenses, locks or offline signature checks.
+
+## Shared contract and materials
+
+[`host-contract.json`](../packaging/windows/host-contract.json) is the native host and manifest's single identity/path/activation configuration: Win11 x64, minimum build22000, local identity `Weftext.Desktop`, Publisher `CN=Weftext`, AppId `Weftext`. Publisher constrains the local signing Subject; it does not establish a certificate or trust. `persistentRelativeRoot` defines the `%LOCALAPPDATA%/Weftext-MVP` retention envelope, `coreRelativePath=core` selects default Core, and `hostStateRelativePath=host-state` selects this OS user's private host metadata. These directories must be disjoint: an explicit Core may neither equal, contain nor be contained by host-state. The notification routing catalog does not become another Core. Old top-level Core originals are not adopted automatically; retain them for explicit import or one-time conversion, without parallel path compatibility. Cache/WebView UDF stay outside this envelope under `Weftext/Cache`. The manifest excludes the exact whole Weftext-MVP envelope, covering both children. Arbitrary KnownFolders, parents and traversal are refused; AppData/registry virtualization is not globally disabled.
+
+StartupTask defaults off and passes only `--login-startup`. Notification COM uses the fixed CLSID and `--toast-server`; activation forwards an opaque original task key and reauthorizes. The packaged CLI execution alias explicitly selects console behavior. Package resources include common-source icons and Chinese/English PRI strings; they do not replace personal UI-language preferences.
+
+[`offline-materials.json`](../packaging/windows/offline-materials.json) admits only qualified originals, binding kind, payload architecture, version, official initial/final URL, length/SHA-256, actual Microsoft signer and original license. An installer stub's PE machine does not identify its payload architecture. Verification holds one read-only handle without write/delete sharing and uses cache-only WinVerifyTrust, without claiming fresh online revocation status. A missing cached chain refuses the candidate. Caller JSON or a renamed Bootstrapper cannot qualify a Standalone installer.
+
+The current lock includes actual VC14.51.36247.0 and lacks a qualified WebView2 x64 Standalone installer, so complete offline Windows generation is explicitly refused. Installed host runtimes, differential installers, ordinary Edge or another workspace's materials cannot fill that gap. Original licenses and redistribution conditions are retained; acquisition/signature checks do not establish public redistribution entitlement. WebView2 `ExternalDependency` applies only through App Installer and is ignored by PowerShell and other installation paths; it cannot replace offline qualification. Recognition retains its explicit separate runtime/model-lock setup and is not claimed bundled.
+
+## Artifacts and actual acceptance
+
+Success creates a new `dist/` candidate containing ZIP and unsigned MSIX from fixed common payload. source.zip, font manifests, original licenses, actual Cargo build participants/installed npm dependency notices and BUILD.json are retained; Microsoft Loader terms are separate from Rust crate licenses. Complete bytes and MSIX blockmap are checked across containers. PACKAGE.json records role, source, resource, tool and container digests. Existing candidates are not overwritten; SDK failure leaves INCOMPLETE.json and original output.
+
+The local version mapping accepts canonical `major.minor.patch-rc.N` (`0 ≤ N < 65535`) and stable SemVer: the fourth part is N for RC and65535 for stable; the next patch sorts above the previous stable. Other prerelease/build metadata, noncanonical leading zeros and overflow are refused. This is a local MSIX policy, not a claim of Store numbering compliance. Different bytes with equal package identity/version do not establish upgrade success; actual upgrade acceptance uses a higher candidate version.
+
+Generation establishes package structure and byte correspondence. Signature/trust, minimum OS, offline missing-dependency installation, real notification/StartupTask, upgrade with CaptureDraft/pending/ledger, failed-upgrade recovery and uninstall/reinstall preservation still require the same final candidate under [WORKFLOW](WORKFLOW.md) and DSK09/DSK10. Blank SDK probes, unit tests and unrun cases do not qualify those gates. The current `0.6.3-rc.4` version field does not establish v0.7 completion.

@@ -24,7 +24,7 @@ pub struct StructureInfo {
     #[serde(default)]
     pub level_writable: bool,
     #[serde(default)]
-    pub level_reason: Option<String>,
+    pub level_reason: Option<weftext_messages::ErrorDescription>,
     pub label: Option<String>,
     #[serde(default)]
     pub language: Option<String>,
@@ -46,7 +46,7 @@ pub struct TableInfo {
     #[serde(default)]
     pub topology_writable: bool,
     #[serde(default)]
-    pub unavailable_reason: Option<String>,
+    pub unavailable_reason: Option<weftext_messages::ErrorDescription>,
     #[serde(default)]
     pub header_rows: usize,
     #[serde(default)]
@@ -98,7 +98,7 @@ pub struct EditorMap {
     pub title: DocumentRole,
     pub subtitle: DocumentRole,
     pub body_insertion: Option<SourceRange>,
-    pub unavailable_reason: Option<String>,
+    pub unavailable_reason: Option<weftext_messages::ErrorDescription>,
     #[serde(default)]
     pub notes: crate::NotesSourceMap,
     pub heading_numbering: crate::HeadingNumberingInspection,

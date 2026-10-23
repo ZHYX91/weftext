@@ -12,11 +12,15 @@ use std::{
     io,
     net::Ipv4Addr,
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 /// An explicit document locator; Core still qualifies identity and restores Draft.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct InitialDocument {
     pub path: PathBuf,
     pub root: Option<PathBuf>,
@@ -45,40 +49,103 @@ impl LocalServiceOptions {
 /// Each executable hosting this service must also dispatch `--render-worker` and
 /// `--notes-edit-worker` before GUI initialization or Core acquisition: isolated
 /// workers start through the current executable. The existing console dispatch
-/// is [`crate::launch::run`].
+/// is [`crate::launch::dispatch_worker`].
 pub struct LocalService {
     listener: tokio::net::TcpListener,
     router: Router,
     browser_url: String,
+    state: api::AppState,
+    admitting: Arc<AtomicBool>,
+}
+/// The HTTP tail has stopped, but the original Core lease is still owned.
+/// A native supervisor can continue preserving its exposed inputs after an
+/// HTTP failure, then release this exact lease after its other owners drain.
+pub(crate) struct ServiceStopped {
+    pub core: Arc<Mutex<weftext_core::Core>>,
+    pub outcome: io::Result<()>,
 }
 
 impl LocalService {
     /// Core failures retain `CoreError` in `io::Error::get_ref`; a host may
     /// inspect its code without treating paths or diagnostic text as authority.
     pub async fn bind(options: LocalServiceOptions) -> io::Result<Self> {
-        let (mut core, data) = api::host_environment::open_core(options.data_dir)?;
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, options.port))
+            .await
+            .map_err(|cause| {
+                let kind = cause.kind();
+                let mut error = api::CoreError::from(cause);
+                error.explanation = weftext_messages::UiMessage::error_local_service_bind_failed(
+                    weftext_messages::params::ErrorLocalServiceBindFailed {
+                        port: options.port.to_string(),
+                    },
+                );
+                io::Error::new(kind, error)
+            })?;
+        Self::bind_with_listener(options, listener).await
+    }
+
+    /// A native-attachable owner supplies its already reserved stable-origin
+    /// listener after acquiring the sole physical-profile owner lease.
+    pub(crate) async fn bind_with_listener(
+        options: LocalServiceOptions,
+        listener: tokio::net::TcpListener,
+    ) -> io::Result<Self> {
+        Self::bind_core(options, listener, None).await
+    }
+
+    #[cfg(windows)]
+    pub(crate) async fn bind_existing_with_listener(
+        options: LocalServiceOptions,
+        listener: tokio::net::TcpListener,
+        physical_identity: &str,
+        device_id: &str,
+    ) -> io::Result<Self> {
+        Self::bind_core(options, listener, Some((physical_identity, device_id))).await
+    }
+
+    async fn bind_core(
+        options: LocalServiceOptions,
+        listener: tokio::net::TcpListener,
+        existing: Option<(&str, &str)>,
+    ) -> io::Result<Self> {
+        let bound = listener.local_addr()?;
+        if bound.ip() != std::net::IpAddr::V4(Ipv4Addr::LOCALHOST)
+            || bound.port() == 0
+            || (options.port != 0 && options.port != bound.port())
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "The owned listener does not match the exact local bind contract",
+            ));
+        }
+        let (mut core, data) = match existing {
+            #[cfg(windows)]
+            Some((physical, device)) => {
+                api::host_environment::open_existing_core(options.data_dir, physical, device)?
+            }
+            #[cfg(not(windows))]
+            Some(_) => {
+                return Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "This local owner authority is unavailable",
+                ));
+            }
+            None => api::host_environment::open_core(options.data_dir)?,
+        };
         let initial = options
             .initial_document
             .map(|document| {
                 let path = std::path::absolute(document.path)?;
                 let root = document.root.map(std::path::absolute).transpose()?;
                 let opened = core.open(path, root).map_err(io::Error::other)?;
-                serde_json::to_value(opened)
-                    .map(Arc::new)
-                    .map_err(io::Error::other)
+                serde_json::to_value(opened).map(Arc::new).map_err(|error| {
+                    let mut error = api::CoreError::from(error);
+                    error.explanation =
+                        weftext_messages::UiMessage::error_local_service_document_encoding_failed();
+                    io::Error::other(error)
+                })
             })
             .transpose()?;
-        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, options.port))
-            .await
-            .map_err(|error| {
-                io::Error::new(
-                    error.kind(),
-                    format!(
-                        "Cannot bind Weftext local service on port {}: {error}",
-                        options.port
-                    ),
-                )
-            })?;
         let port = listener.local_addr()?.port();
         let token = format!(
             "{}{}",
@@ -95,18 +162,25 @@ impl LocalService {
             exports: Arc::new(Mutex::new(api::export_api::ExportStore::with_legacy_root(
                 data.join("legacy-office"),
             ))),
+            native_status: Default::default(),
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
             sync_remote: Arc::new(Mutex::new(api::remote_sync::Store::default())),
             initial,
         };
         if let Some(document) = state.initial.as_ref() {
-            api::remember(&state, document).map_err(|error| io::Error::other(error.message))?;
+            api::remember(&state, document).map_err(io::Error::other)?;
         }
-        let router = router(state);
+        let admitting = Arc::new(AtomicBool::new(true));
+        let router = router(state.clone()).layer(middleware::from_fn_with_state(
+            admitting.clone(),
+            admit_request,
+        ));
         Ok(Self {
             listener,
             router,
             browser_url: format!("http://127.0.0.1:{port}/#token={token}"),
+            state,
+            admitting,
         })
     }
 
@@ -115,22 +189,90 @@ impl LocalService {
         &self.browser_url
     }
 
-    /// The caller owns shutdown. Returning drains HTTP requests and drops Core.
+    /// Only trusted in-process native/broker coordinators receive this handle;
+    /// clients never obtain Core, session credentials or arbitrary HTTP access.
+    pub(crate) fn authority(&self) -> api::AppState {
+        self.state.clone()
+    }
+
+    /// Stop new requests, drain accepted HTTP and all registered async/blocking
+    /// work. In-process authority handles must also be dropped by the host
+    /// before it can claim that the final Core lease has been released.
     pub async fn serve_until(
         self,
         shutdown: impl Future<Output = ()> + Send + 'static,
     ) -> io::Result<()> {
-        axum::serve(self.listener, self.router)
-            .with_graceful_shutdown(shutdown)
-            .await
+        let stopped = self.serve_retaining_until(shutdown).await;
+        let core = Arc::try_unwrap(stopped.core).map_err(|_| {
+            io::Error::other("Core authority is still retained after accepted work drained")
+        })?;
+        drop(
+            core.into_inner()
+                .map_err(|_| io::Error::other("Core authority was poisoned during shutdown"))?,
+        );
+        stopped.outcome
     }
+
+    pub(crate) async fn serve_retaining_until(
+        self,
+        shutdown: impl Future<Output = ()> + Send + 'static,
+    ) -> ServiceStopped {
+        let admitting = self.admitting;
+        let stopping_state = self.state.clone();
+        let (http, tails) = crate::http_lifetime::track(self.router);
+        let result = axum::serve(self.listener, http)
+            .with_graceful_shutdown(async move {
+                shutdown.await;
+                admitting.store(false, Ordering::Release);
+                close_jobs(&stopping_state);
+            })
+            .await;
+        let http_drained = tails.drain().await;
+        close_jobs(&self.state);
+        let drained = api::work::registry().drain().await;
+        ServiceStopped {
+            core: self.state.core,
+            outcome: result.and(http_drained).and(drained),
+        }
+    }
+}
+
+fn close_jobs(state: &api::AppState) {
+    match state.exports.lock() {
+        Ok(mut exports) => exports.close(),
+        Err(_) => api::work::fault(),
+    }
+    match state.sync_remote.lock() {
+        Ok(mut sync) => sync.close(),
+        Err(_) => api::work::fault(),
+    }
+}
+
+pub(crate) async fn admit_request(
+    axum::extract::State(admitting): axum::extract::State<Arc<AtomicBool>>,
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    if !admitting.load(Ordering::Acquire) {
+        use axum::response::IntoResponse;
+        return (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            axum::Json(serde_json::json!({
+                "error": {"code":"hostClosing", "message":"The owner is draining accepted work"}
+            })),
+        )
+            .into_response();
+    }
+    next.run(request).await
 }
 
 fn router(state: api::AppState) -> Router {
     Router::new()
         .merge(api::writing_api::router())
+        .merge(api::client_preferences_api::router())
         .merge(api::builtin_module_api::router())
         .merge(api::data_api::router())
+        .merge(api::desktop_api::router())
         .merge(api::embedded_query_api::router())
         .merge(api::history_api::router())
         .merge(api::knowledge_api::router())
@@ -158,6 +300,7 @@ fn router(state: api::AppState) -> Router {
         .route("/api/save-as", post(api::save_as))
         .route("/api/draft", post(api::draft))
         .route("/api/draft/resolve", post(api::resolve_draft))
+        .route("/api/draft/resume", post(api::resume_draft))
         .route("/api/render", post(api::render))
         .route("/api/editor/preview", post(api::proposal_preview))
         .route("/api/paged", post(api::paged))
@@ -175,6 +318,159 @@ fn router(state: api::AppState) -> Router {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn native_http_tail_hands_back_the_same_core_before_final_authority_release() {
+        let directory = tempfile::tempdir().unwrap();
+        let data = directory.path().join("core");
+        let service = LocalService::bind(LocalServiceOptions::new(data.clone()))
+            .await
+            .unwrap();
+        let mut address = url::Url::parse(service.browser_url()).unwrap();
+        let token = address
+            .fragment()
+            .unwrap()
+            .strip_prefix("token=")
+            .unwrap()
+            .to_owned();
+        address.set_fragment(None);
+        address.set_path("/api/bootstrap");
+        let state = service.authority();
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let host = tokio::spawn(service.serve_retaining_until(async {
+            let _ = stopped.await;
+        }));
+        let client = reqwest::Client::new();
+        let mut requests = tokio::task::JoinSet::new();
+        for _ in 0..16 {
+            let client = client.clone();
+            let address = address.clone();
+            let token = token.clone();
+            requests.spawn(async move {
+                let response = client
+                    .get(address)
+                    .header("x-weftext-token", token)
+                    .send()
+                    .await
+                    .unwrap();
+                assert!(response.status().is_success());
+                response.json::<serde_json::Value>().await.unwrap();
+            });
+        }
+        while let Some(result) = requests.join_next().await {
+            result.unwrap();
+        }
+        stop.send(()).unwrap();
+        let returned = tokio::time::timeout(std::time::Duration::from_secs(10), host)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(returned.outcome.is_ok());
+        assert!(Arc::ptr_eq(&returned.core, &state.core));
+        assert!(weftext_core::Core::new(&data).is_err());
+        drop(returned.core);
+        assert!(weftext_core::Core::new(&data).is_err());
+        drop(state);
+        drop(weftext_core::Core::new(&data).unwrap());
+    }
+
+    #[tokio::test]
+    async fn authenticated_preference_json_rejections_use_typed_wire_and_preserve_original_state() {
+        let directory = tempfile::tempdir().unwrap();
+        let data = directory.path().join("state");
+        let service = LocalService::bind(LocalServiceOptions::new(data.clone()))
+            .await
+            .unwrap();
+        let address = url::Url::parse(service.browser_url()).unwrap();
+        let token = address
+            .fragment()
+            .unwrap()
+            .strip_prefix("token=")
+            .unwrap()
+            .to_owned();
+        let endpoint = format!(
+            "http://127.0.0.1:{}/api/client-preferences/update",
+            address.port().unwrap()
+        );
+        let (stop, stopped) = tokio::sync::oneshot::channel();
+        let host = tokio::spawn(service.serve_until(async {
+            let _ = stopped.await;
+        }));
+        let client = reqwest::Client::new();
+        let saved = client
+            .post(&endpoint)
+            .header("x-weftext-token", &token)
+            .json(&serde_json::json!({"expectedRevision":0,"preferences":{"uiLocale":"en-US"}}))
+            .send()
+            .await
+            .unwrap();
+        assert!(saved.status().is_success());
+        assert_eq!(
+            saved.json::<serde_json::Value>().await.unwrap()["revision"],
+            1
+        );
+        let path = data.join("device-state/client-preferences.json");
+        let original = std::fs::read(&path).unwrap();
+        for (credential, content_type, body, status, key) in [
+            (
+                None,
+                Some("application/json"),
+                "{",
+                reqwest::StatusCode::FORBIDDEN,
+                "error.localSessionInvalid",
+            ),
+            (
+                Some(token.as_str()),
+                Some("application/json"),
+                "{",
+                reqwest::StatusCode::BAD_REQUEST,
+                "error.api.jsonSyntaxInvalid",
+            ),
+            (
+                Some(token.as_str()),
+                None,
+                "{",
+                reqwest::StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                "error.api.jsonContentTypeRequired",
+            ),
+            (
+                Some(token.as_str()),
+                Some("application/json"),
+                r#"{"expectedRevision":1,"preferences":{"uiLocale":"en"}}"#,
+                reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+                "error.api.jsonDataInvalid",
+            ),
+            (
+                Some(token.as_str()),
+                Some("application/json"),
+                r#"{"expectedRevision":1,"preferences":{"uiLocale":{"en-US":null}}}"#,
+                reqwest::StatusCode::UNPROCESSABLE_ENTITY,
+                "error.api.jsonDataInvalid",
+            ),
+        ] {
+            let mut request = client.post(&endpoint).body(body);
+            if let Some(credential) = credential {
+                request = request.header("x-weftext-token", credential);
+            }
+            if let Some(content_type) = content_type {
+                request = request.header("content-type", content_type);
+            }
+            let response = request.send().await.unwrap();
+            assert_eq!(response.status(), status);
+            let response: serde_json::Value = response.json().await.unwrap();
+            assert_eq!(response["error"]["explanation"]["key"], key);
+            assert!(response["error"].get("message").is_none());
+            assert!(response["error"]["causes"].is_array());
+            assert_eq!(std::fs::read(&path).unwrap(), original);
+        }
+        assert!(!data.join("device-state/identity.json").exists());
+        stop.send(()).unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(5), host)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+    }
 
     #[tokio::test]
     async fn host_shutdown_releases_the_only_core_lease_and_listener() {
@@ -254,7 +550,23 @@ mod tests {
             Err(error) => error,
         };
         assert_eq!(error.kind(), io::ErrorKind::AddrInUse);
-        assert!(error.to_string().contains("Cannot bind Weftext"));
+        let original = error
+            .get_ref()
+            .and_then(|error| error.downcast_ref::<api::CoreError>())
+            .expect("Bind error discarded its typed Core/OS facts");
+        assert_eq!(
+            original.explanation,
+            weftext_messages::UiMessage::error_local_service_bind_failed(
+                weftext_messages::params::ErrorLocalServiceBindFailed {
+                    port: occupied.local_addr().unwrap().port().to_string()
+                },
+            )
+        );
+        assert_eq!(original.diagnostics.len(), 1);
+        assert_eq!(
+            original.diagnostics[0].origin,
+            weftext_messages::DiagnosticOrigin::Os
+        );
         let retry = LocalService::bind(LocalServiceOptions::new(data))
             .await
             .unwrap();

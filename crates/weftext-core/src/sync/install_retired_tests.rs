@@ -36,12 +36,16 @@ fn fixture() -> Fixture {
     let data = temp.path().join("receiver-private");
     let mut first = Core::new(temp.path().join("source-private")).unwrap();
     first.create_library(&source).unwrap();
-    let parent = first.create_note(&source, &source, "Parent").unwrap();
-    let child = first
-        .create_note(&source, source.join("Parent"), "Child")
+    let parent = first
+        .create_note_fixture(&source, &source, "Parent")
         .unwrap();
-    let other = first.create_note(&source, &source, "Other").unwrap();
-    let live = first.create_note(&source, &source, "Live").unwrap();
+    let child = first
+        .create_note_fixture(&source, source.join("Parent"), "Child")
+        .unwrap();
+    let other = first
+        .create_note_fixture(&source, &source, "Other")
+        .unwrap();
+    let live = first.create_note_fixture(&source, &source, "Live").unwrap();
     let resource = first
         .prepare_import_resource(
             &source,
@@ -109,12 +113,15 @@ fn assert_installed(f: &mut Fixture, operation_id: &str) {
         assert_eq!(local[key].state, versions[key].versions[0].state);
         assert_eq!(local[key].revision, versions[key].versions[0].revision);
         for (name, digest) in &local[key].state.files {
-            let file = capture_optional(&Path::new(&local[key].directory).join(name))
-                .unwrap()
-                .unwrap();
+            let file = capture_optional(
+                &crate::BackendContext::local().unwrap(),
+                &Path::new(&local[key].directory).join(name),
+            )
+            .unwrap()
+            .unwrap();
             assert_eq!(hash(&file.bytes), *digest);
             assert_eq!(
-                f.second.accepted_revision(&file).as_ref(),
+                f.second.accepted_revision(&file).unwrap().as_ref(),
                 local[key].state.file_revisions.get(name)
             );
             assert_eq!(
@@ -272,7 +279,8 @@ fn materialize_original(f: &Fixture, preview: &OperationPreview) {
         panic!("original CreateTree required")
     };
     f.second.install_record(plan).unwrap();
-    let guard = ParentGuard::acquire(Path::new(target)).unwrap();
+    let guard =
+        ParentGuard::acquire(&crate::BackendContext::local().unwrap(), Path::new(target)).unwrap();
     let directory = guard.create_directory().unwrap();
     f.second
         .record_materialized(&preview.operation_id, Path::new(target), &directory)
@@ -357,15 +365,21 @@ fn retired_clone_restore_requires_exact_root_then_preserves_files_history_and_sy
     let (local, _) = f.second.sync_local_state(&setup).unwrap();
     let child_path =
         Path::new(&local[&ObjectKey::Node(f.child.clone())].directory).join("Child.typ");
-    let child_before = capture_optional(&child_path).unwrap().unwrap();
+    let child_before = capture_optional(&crate::BackendContext::local().unwrap(), &child_path)
+        .unwrap()
+        .unwrap();
     let parent_before = capture_optional(
+        &crate::BackendContext::local().unwrap(),
         &Path::new(&local[&ObjectKey::Node(f.parent.clone())].directory).join("Parent.typ"),
     )
     .unwrap()
     .unwrap();
-    let resource_before = capture_optional(&child_path.parent().unwrap().join("original.bin"))
-        .unwrap()
-        .unwrap();
+    let resource_before = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &child_path.parent().unwrap().join("original.bin"),
+    )
+    .unwrap()
+    .unwrap();
     let opened = f.second.open(&child_path, Some(f.target.clone())).unwrap();
     let history = f.second.list_history(&opened.session_id).unwrap().versions;
     let ambiguous = restore_request(&f, &preview.operation_id, None);
@@ -396,12 +410,18 @@ fn retired_clone_restore_requires_exact_root_then_preserves_files_history_and_sy
     f.second
         .execute_operation(&restore.operation_id, &restore.plan_id)
         .unwrap();
-    let child_after = capture_optional(&f.target.join("Restored/Child/Child.typ"))
-        .unwrap()
-        .unwrap();
-    let parent_after = capture_optional(&f.target.join("Restored/Restored.typ"))
-        .unwrap()
-        .unwrap();
+    let child_after = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &f.target.join("Restored/Child/Child.typ"),
+    )
+    .unwrap()
+    .unwrap();
+    let parent_after = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &f.target.join("Restored/Restored.typ"),
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(child_after.stamp.identity, child_before.stamp.identity);
     assert_eq!(parent_after.stamp.identity, parent_before.stamp.identity);
     assert_eq!(child_after.bytes, child_before.bytes);
@@ -411,11 +431,14 @@ fn retired_clone_restore_requires_exact_root_then_preserves_files_history_and_sy
         .managed_resource_snapshot(&f.target, f.target.join("Restored/Child/Child.typ"))
         .unwrap();
     assert_eq!(
-        capture_optional(Path::new(&resources[0].path))
-            .unwrap()
-            .unwrap()
-            .stamp
-            .identity,
+        capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            Path::new(&resources[0].path)
+        )
+        .unwrap()
+        .unwrap()
+        .stamp
+        .identity,
         resource_before.stamp.identity
     );
     assert_eq!(resources[0].bytes, resource_before.bytes);
@@ -575,7 +598,7 @@ fn retired_clone_same_bytes_replacement_never_supplies_trash_or_recovery_ownersh
                         .is_err()
                 );
             }
-            assert!(!f.second.committed(&preview.operation_id));
+            assert!(!f.second.committed(&preview.operation_id).unwrap());
         }
         assert_eq!(
             fs::read(f.second.journal_path(&preview.operation_id, "plan")).unwrap(),
@@ -598,14 +621,16 @@ fn clone_preexisting_trash(nested: bool) {
     let target = temp.path().join("receiver");
     let mut first = Core::new(temp.path().join("source-private")).unwrap();
     first.create_library(&source).unwrap();
-    let parent = first.create_note(&source, &source, "Parent").unwrap();
+    let parent = first
+        .create_note_fixture(&source, &source, "Parent")
+        .unwrap();
     let parent_id = parent.node_id.unwrap();
     let child = nested.then(|| {
         first
-            .create_note(&source, source.join("Parent"), "Child")
+            .create_note_fixture(&source, source.join("Parent"), "Child")
             .unwrap()
     });
-    let live = first.create_note(&source, &source, "Live").unwrap();
+    let live = first.create_note_fixture(&source, &source, "Live").unwrap();
     let owner_source = child
         .as_ref()
         .map_or(parent.path.as_str(), |child| child.path.as_str());
@@ -621,11 +646,21 @@ fn clone_preexisting_trash(nested: bool) {
     first
         .execute_operation(&resource.operation_id, &resource.plan_id)
         .unwrap();
-    let parent_before = capture_optional(Path::new(&parent.path)).unwrap().unwrap();
-    let parent_revision = first.accepted_revision(&parent_before).unwrap();
-    let child_before = child
-        .as_ref()
-        .map(|child| capture_optional(Path::new(&child.path)).unwrap().unwrap());
+    let parent_before = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        Path::new(&parent.path),
+    )
+    .unwrap()
+    .unwrap();
+    let parent_revision = first.accepted_revision(&parent_before).unwrap().unwrap();
+    let child_before = child.as_ref().map(|child| {
+        capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            Path::new(&child.path),
+        )
+        .unwrap()
+        .unwrap()
+    });
     let trash = execute(
         &mut first,
         &source,
@@ -634,10 +669,13 @@ fn clone_preexisting_trash(nested: bool) {
         },
     );
     let original_tree = source.join(".weftext-trash").join(&trash.operation_id);
-    let original_root = ParentGuard::acquire(&original_tree.join(".original-root-proof"))
-        .unwrap()
-        .directory_identity()
-        .unwrap();
+    let original_root = ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &original_tree.join(".original-root-proof"),
+    )
+    .unwrap()
+    .directory_identity()
+    .unwrap();
     let enable = fresh();
     let info = first.enable_sync(&source, &enable).unwrap();
     let setup = first.sync_setup_for(&source).unwrap().clone();
@@ -665,18 +703,24 @@ fn clone_preexisting_trash(nested: bool) {
         );
     }
     assert_eq!(
-        capture_optional(&original_tree.join("Parent.typ"))
-            .unwrap()
-            .unwrap()
-            .stamp
-            .identity,
+        capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            &original_tree.join("Parent.typ")
+        )
+        .unwrap()
+        .unwrap()
+        .stamp
+        .identity,
         parent_before.stamp.identity
     );
     assert_eq!(
-        ParentGuard::acquire(&original_tree.join(".original-root-proof"))
-            .unwrap()
-            .directory_identity()
-            .unwrap(),
+        ParentGuard::acquire(
+            &crate::BackendContext::local().unwrap(),
+            &original_tree.join(".original-root-proof")
+        )
+        .unwrap()
+        .directory_identity()
+        .unwrap(),
         original_root
     );
     let keys = info.installed_objects;
@@ -710,20 +754,26 @@ fn clone_preexisting_trash(nested: bool) {
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].node_id, parent_id);
     let cloned_root = Path::new(&entries[0].path);
-    let parent_after = capture_optional(&cloned_root.join("Parent.typ"))
-        .unwrap()
-        .unwrap();
+    let parent_after = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &cloned_root.join("Parent.typ"),
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(parent_after.bytes, parent_before.bytes);
     assert_ne!(parent_after.stamp.identity, parent_before.stamp.identity);
     assert_eq!(
-        second.accepted_revision(&parent_after).as_ref(),
+        second.accepted_revision(&parent_after).unwrap().as_ref(),
         Some(&parent_revision)
     );
     let mut trash_nodes = BTreeSet::from([parent_id]);
     if let Some(child) = &child {
-        let child_after = capture_optional(&cloned_root.join("Child/Child.typ"))
-            .unwrap()
-            .unwrap();
+        let child_after = capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            &cloned_root.join("Child/Child.typ"),
+        )
+        .unwrap()
+        .unwrap();
         assert_eq!(child_after.bytes, child_before.as_ref().unwrap().bytes);
         assert_ne!(
             child_after.stamp.identity,

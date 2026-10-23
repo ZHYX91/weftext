@@ -1,6 +1,8 @@
 """Actual two-replica + hosted-relay acceptance. All roots/state are owned
 disposable fixtures, retained for diagnosis; no desktop or external service.
 """
+from _cli_serve import serve_command
+from _creation_result import created_document
 import base64
 import copy
 import hashlib
@@ -26,12 +28,12 @@ class RemoteSync(unittest.TestCase):
 
     def setUp(self):
         self.folder = self.evidence / self._testMethodName; self.folder.mkdir()
-        self.a = Server(['--no-browser','--data-dir',str(self.folder/'state-a')]); self.addCleanup(lambda:self.a.close())
-        self.b = Server(['--no-browser','--data-dir',str(self.folder/'state-b')]); self.addCleanup(lambda:self.b.close())
+        self.a = Server(['--data-dir',str(self.folder/'state-a')]); self.addCleanup(lambda:self.a.close())
+        self.b = Server(['--data-dir',str(self.folder/'state-b')]); self.addCleanup(lambda:self.b.close())
         self.ra, self.rb = self.folder/'a', self.folder/'b'
         self.local(self.a,'/api/library/create',path=str(self.ra),operationId=uid())
-        self.note = self.local(self.a,'/api/note/create',root=str(self.ra),parent=str(self.ra),name='Note',operationId=uid())
-        self.other = self.local(self.a,'/api/note/create',root=str(self.ra),parent=str(self.ra),name='Other',operationId=uid())
+        self.note = created_document(self.local(self.a,'/api/note/create',root=str(self.ra),parent=str(self.ra),name='Note',operationId=uid()))
+        self.other = created_document(self.local(self.a,'/api/note/create',root=str(self.ra),parent=str(self.ra),name='Other',operationId=uid()))
         self.key = {'kind':'node','id':self.note['nodeId']}; self.other_key = {'kind':'node','id':self.other['nodeId']}
         self.identity = self.local(self.a,'/api/sync/enable',root=str(self.ra),operationId=uid())['identity']
         self.tokens = {name:secrets.token_hex(32) for name in ['admin','owner','owner2','author']}
@@ -41,7 +43,7 @@ class RemoteSync(unittest.TestCase):
             'users':{name:{'enabled':True,'tokenSha256':sha(self.tokens[name].encode()),'syncOwner':name.startswith('owner'),
                      'grants':{'shared':{'read':True,'write':True,'history':True,'download':True}}} for name in ['owner','owner2','author']}}
         self.config_path=self.folder/'server.json'; self.config_path.write_text(json.dumps(self.config),encoding='utf-8')
-        self.server = Server(['--no-browser','--data-dir',str(self.folder/'relay-state'),'--server-config',str(self.config_path)],hosted=True)
+        self.server = Server(['--data-dir',str(self.folder/'relay-state'),'--server-config',str(self.config_path)],hosted=True)
         self.addCleanup(lambda:self.server.close())
 
     def local(self, server, route, expected=200, **data):
@@ -125,7 +127,7 @@ class RemoteSync(unittest.TestCase):
         final={'ticket':new['ticket'],'offset':65536,'bytes':base64.b64encode(data[65536:]).decode()}
         done=self.remote('sync/append',final);self.assertTrue(done['complete']);self.assertEqual(done,self.remote('sync/append',final))
         self.remote('sync/append',{**final,'bytes':base64.b64encode(b'X'*len(data[65536:])).decode()},expected=400)
-        self.server.close();self.server=Server(['--no-browser','--data-dir',str(self.folder/'relay-state'),'--server-config',str(self.config_path)],hosted=True)
+        self.server.close();self.server=Server(['--data-dir',str(self.folder/'relay-state'),'--server-config',str(self.config_path)],hosted=True)
         self.remote('sync/append',final,expected=404)
         complete=self.remote('sync/upload',{'identity':self.identity,'record':record});self.assertTrue(complete['complete']);self.assertIsNone(complete['ticket'])
         damaged={'manifest':False,'id':sha(b'good'),'bytes':4}
@@ -169,7 +171,7 @@ class RemoteSync(unittest.TestCase):
         self.server.close(); self.a.close()
         self.config['root']=str(self.ra);self.config['files']['shared']['path']='Note/Note.typ'
         self.config_path.write_text(json.dumps(self.config),encoding='utf-8')
-        self.server=Server(['--no-browser','--data-dir',str(self.folder/'state-a'),'--server-config',str(self.config_path)],hosted=True)
+        self.server=Server(['--data-dir',str(self.folder/'state-a'),'--server-config',str(self.config_path)],hosted=True)
         doc=self.remote('open',{'resource':'shared'},actor='author')
         source=doc['source']+'\n服务端作者保存'
         result=self.remote('save',{'sessionId':doc['sessionId'],'baseId':doc['baseId'],'source':source,'operationId':uid()},actor='author')
@@ -236,7 +238,7 @@ class RemoteSync(unittest.TestCase):
         # A stopped partial blob is not a complete reusable immutable record.
         completed=start();self.assertEqual(finished(completed,'complete')['recordsDone'],1)
         self.assertEqual(chunks,[0,0,65536]);self.assertFalse(self.rb.exists())
-        self.b.close();self.b=Server(['--no-browser','--data-dir',str(self.folder/'state-b')])
+        self.b.close();self.b=Server(['--data-dir',str(self.folder/'state-b')])
         self.assertEqual(self.local(self.b,'/api/sync/remote/job',requestId=completed)['status'],'unknown')
         finished(start(),'complete');self.assertEqual(chunks,[0,0,65536]);self.assertFalse(self.rb.exists())
 
@@ -244,14 +246,14 @@ class RemoteSync(unittest.TestCase):
         self.server.close()
         changed=copy.deepcopy(self.config);changed['syncIdentity']={**self.identity,'workspaceId':uid()}
         self.config_path.write_text(json.dumps(changed),encoding='utf-8')
-        rejected=subprocess.run([str(EXE),'--no-browser','--data-dir',str(self.folder/'relay-state'),'--server-config',str(self.config_path)],capture_output=True,text=True,encoding='utf-8',timeout=20,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
+        rejected=subprocess.run(serve_command(str(EXE), ['--data-dir', str(self.folder / 'relay-state'), '--server-config', str(self.config_path)]),capture_output=True,text=True,encoding='utf-8',timeout=20,creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
         self.assertNotEqual(rejected.returncode,0);self.assertIn('Persisted sync pairing',rejected.stderr)
         legacy=copy.deepcopy(self.config);legacy.pop('syncIdentity')
         for user in legacy['users'].values():user['syncOwner']=False
         self.config_path.write_text(json.dumps(legacy),encoding='utf-8')
-        self.server=Server(['--no-browser','--data-dir',str(self.folder/'legacy-state'),'--server-config',str(self.config_path)],hosted=True)
+        self.server=Server(['--data-dir',str(self.folder/'legacy-state'),'--server-config',str(self.config_path)],hosted=True)
         self.server.close();self.config_path.write_text(json.dumps(self.config),encoding='utf-8')
-        self.server=Server(['--no-browser','--data-dir',str(self.folder/'legacy-state'),'--server-config',str(self.config_path)],hosted=True)
+        self.server=Server(['--data-dir',str(self.folder/'legacy-state'),'--server-config',str(self.config_path)],hosted=True)
         self.remote('sync/status',{'identity':self.identity},expected=404)
         self.policy(lambda users:users['owner'].update(syncOwner=True))
         self.assertEqual(self.remote('sync/status',{'identity':self.identity})['identity'],self.identity)

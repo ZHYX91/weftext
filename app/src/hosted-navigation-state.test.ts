@@ -21,7 +21,7 @@ test("navigation stages the actor's actual local/recovered Draft and never settl
   assert.deepEqual(nodeTargetDraft("saved", "server draft", "server base", local), local);
   assert.notEqual(nodeTargetDraft("saved", undefined, undefined, local), local);
   assert.deepEqual(nodeTargetDraft("new saved", undefined, undefined, { source: "old saved", baseSource: "old saved" }), { source: "new saved", baseSource: "new saved" });
-  assert.throws(() => nodeTargetDraft("saved", undefined, undefined, { ...local, pending: { operationId: "unknown", source: "sent" } }), /原保存/);
+  assert.throws(() => nodeTargetDraft("saved", undefined, undefined, { ...local, pending: { resource: "Shared", operationId: "unknown", source: "sent" } }), /原保存/);
   for (const invalid of [null, {}, { source: "draft" }, { source: 2, baseSource: "base" }]) assert.throws(() => nodeTargetDraft("saved", undefined, undefined, invalid as unknown as typeof local), /恢复稿/);
 });
 test("only an exact Draft compile's unique main-source range is selected; saved, include, duplicate, wrong-resource and broken Unicode ranges cannot be reused", () => {

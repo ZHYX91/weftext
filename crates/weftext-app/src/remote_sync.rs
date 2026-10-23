@@ -15,6 +15,15 @@ use weftext_core::sync::{ObjectKey, SyncBundle, SyncIdentity};
 #[derive(Default)]
 pub(crate) struct Store {
     jobs: HashMap<String, Job>,
+    closing: bool,
+}
+impl Store {
+    pub(crate) fn close(&mut self) {
+        self.closing = true;
+        for job in self.jobs.values() {
+            job.stop.store(true, Ordering::Release);
+        }
+    }
 }
 struct Job {
     fingerprint: String,
@@ -31,8 +40,10 @@ struct Progress {
     records_total: usize,
     bytes_done: usize,
     bytes_total: usize,
-    message: String,
+    #[serde(flatten)]
+    description: ErrorDescription,
     identity: SyncIdentity,
+    error: Option<ApiError>,
 }
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -67,8 +78,9 @@ struct Client {
 }
 impl Client {
     fn new(connection: &Connection) -> Result<Self, ApiError> {
-        let endpoint = url::Url::parse(&connection.endpoint)
-            .map_err(|_| ApiError::bad("请输入准确服务地址"))?;
+        let endpoint = url::Url::parse(&connection.endpoint).map_err(|_| {
+            ApiError::bad(UiMessage::error_api_remote_sync_server_address_required())
+        })?;
         let loopback = endpoint.host_str().is_some_and(|h| {
             h.trim_matches(['[', ']'])
                 .parse::<std::net::IpAddr>()
@@ -85,13 +97,15 @@ impl Client {
             || connection.token.len() > 512
         {
             return Err(ApiError::bad(
-                "使用 HTTPS 服务根地址（本机回环可用 HTTP），凭据单独填写",
+                UiMessage::error_api_remote_sync_secure_root_address_required(),
             ));
         }
         let mut headers = reqwest::header::HeaderMap::new();
         let mut token =
             reqwest::header::HeaderValue::from_str(&format!("Bearer {}", connection.token))
-                .map_err(|_| ApiError::bad("凭据格式无效"))?;
+                .map_err(
+                    |_| ApiError::bad(UiMessage::error_api_remote_sync_invalid_credential()),
+                )?;
         token.set_sensitive(true);
         headers.insert(reqwest::header::AUTHORIZATION, token);
         let http = reqwest::Client::builder()
@@ -106,7 +120,9 @@ impl Client {
             .no_deflate()
             .no_zstd()
             .build()
-            .map_err(|_| ApiError::internal("同步网络客户端初始化失败"))?;
+            .map_err(|_| {
+                ApiError::internal(UiMessage::error_api_remote_sync_client_initialization_failed())
+            })?;
         Ok(Self { http, endpoint })
     }
     async fn call<T: DeserializeOwned>(
@@ -118,7 +134,9 @@ impl Client {
         let url = self
             .endpoint
             .join(&format!("api/hosted/sync/{route}"))
-            .map_err(|_| ApiError::bad("服务地址无效"))?;
+            .map_err(
+                |_| ApiError::bad(UiMessage::error_api_remote_sync_invalid_server_address()),
+            )?;
         let mut response = self
             .http
             .post(url)
@@ -129,16 +147,20 @@ impl Client {
                 ApiError::new(
                     StatusCode::BAD_GATEWAY,
                     "syncConnection",
-                    "远端连接未完成；已接收的完整记录保留，可重新开始传输",
+                    UiMessage::error_api_remote_sync_connection_incomplete(),
                 )
             })?;
         if !response.status().is_success() {
             return Err(ApiError::new(
                 StatusCode::BAD_GATEWAY,
                 "syncRemoteRejected",
-                format!(
-                    "远端拒绝继续传输（HTTP {}）；核对配对和当前同步授权",
-                    response.status().as_u16()
+                UiMessage::error_api_remote_sync_remote_rejected(
+                    weftext_messages::params::ErrorApiRemoteSyncRemoteRejected {
+                        status: weftext_messages::UiInteger::new(i64::from(
+                            response.status().as_u16(),
+                        ))
+                        .expect("HTTP status is a safe integer"),
+                    },
                 ),
             ));
         }
@@ -146,20 +168,25 @@ impl Client {
             .content_length()
             .is_some_and(|len| len > limit as u64)
         {
-            return Err(ApiError::bad("远端响应超过同步预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_remote_sync_response_budget(),
+            ));
         }
         let mut bytes = Vec::new();
         while let Some(part) = response
             .chunk()
             .await
-            .map_err(|_| ApiError::bad("远端响应中断，完整记录仍保留"))?
+            .map_err(|_| ApiError::bad(UiMessage::error_api_remote_sync_response_interrupted()))?
         {
             if part.len() > limit.saturating_sub(bytes.len()) {
-                return Err(ApiError::bad("远端响应超过同步预算"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_remote_sync_response_budget(),
+                ));
             }
             bytes.extend_from_slice(&part);
         }
-        serde_json::from_slice(&bytes).map_err(|_| ApiError::bad("远端响应格式无效"))
+        serde_json::from_slice(&bytes)
+            .map_err(|_| ApiError::bad(UiMessage::error_api_remote_sync_invalid_response()))
     }
     async fn close(&self, ticket: &str) {
         let _: Result<Value, _> = self.call("close", json!({"ticket":ticket}), 4096).await;
@@ -172,19 +199,23 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/api/sync/remote/job", post(job))
         .route("/api/sync/remote/stop", post(stop))
 }
-async fn inspect(Json(req): Json<Connection>) -> ApiResult {
+async fn inspect(RequestJson(req): RequestJson<Connection>) -> ApiResult {
     let client = Client::new(&req)?;
     let result: Value = client
         .call("status", json!({"identity":req.identity}), 16 * 1024 * 1024)
         .await?;
     if result["identity"] != value(&req.identity)? {
-        return Err(ApiError::bad("远端配对身份与请求不一致"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_remote_sync_pairing_mismatch(),
+        ));
     }
     Ok(Json(result))
 }
-async fn start(State(state): State<AppState>, Json(req): Json<Start>) -> ApiResult {
+async fn start(State(state): State<AppState>, RequestJson(req): RequestJson<Start>) -> ApiResult {
     if uuid::Uuid::parse_str(&req.request_id).is_err() {
-        return Err(ApiError::bad("传输编号无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_remote_sync_invalid_transfer_id(),
+        ));
     }
     let client = Client::new(&req.connection)?;
     weftext_core::sync::ReplicaGraph::new(
@@ -193,9 +224,9 @@ async fn start(State(state): State<AppState>, Json(req): Json<Start>) -> ApiResu
     )?;
     let fingerprint = format!(
         "{:x}",
-        Sha256::digest(
-            serde_json::to_vec(&req).map_err(|_| ApiError::internal("同步记录编码失败"))?
-        )
+        Sha256::digest(serde_json::to_vec(&req).map_err(|_| ApiError::internal(
+            UiMessage::error_api_remote_sync_transfer_encoding_failed()
+        ))?)
     );
     let stop = Arc::new(AtomicBool::new(false));
     let info = Progress {
@@ -205,28 +236,41 @@ async fn start(State(state): State<AppState>, Json(req): Json<Start>) -> ApiResu
         records_total: 0,
         bytes_done: 0,
         bytes_total: 0,
-        message: "正在配对并冻结准确传输记录".into(),
+        description: UiMessage::error_api_remote_sync_pairing_and_freezing().into(),
         identity: req.connection.identity.clone(),
+        error: None,
     };
     {
-        let mut store = state
-            .sync_remote
-            .lock()
-            .map_err(|_| ApiError::internal("同步状态不可用"))?;
+        let mut store = state.sync_remote.lock().map_err(|_| {
+            ApiError::internal(UiMessage::error_api_remote_sync_state_unavailable())
+        })?;
         if let Some(original) = store.jobs.get(&req.request_id) {
             if original.fingerprint != fingerprint {
-                return Err(ApiError::bad("同一传输编号不能用于不同请求"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_remote_sync_transfer_request_reuse(),
+                ));
             }
             return Ok(Json(value(&original.info)?));
         }
+        if store.closing {
+            return Err(ApiError::new(
+                StatusCode::SERVICE_UNAVAILABLE,
+                "hostClosing",
+                weftext_messages::UiMessage::error_api_remote_sync_owner_closing(),
+            ));
+        }
         if store.jobs.values().any(|v| v.info.status == "running") {
-            return Err(ApiError::bad("已有远程传输进行中，可查看或停止原传输"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_remote_sync_transfer_already_running(),
+            ));
         }
         store
             .jobs
             .retain(|_, v| v.created.elapsed() < Duration::from_secs(3600));
         if store.jobs.len() >= 64 {
-            return Err(ApiError::bad("本机传输记录已达预算，旧记录一小时后过期"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_remote_sync_retained_transfer_budget(),
+            ));
         }
         store.jobs.insert(
             req.request_id.clone(),
@@ -238,7 +282,7 @@ async fn start(State(state): State<AppState>, Json(req): Json<Start>) -> ApiResu
             },
         );
     }
-    tokio::spawn(async move {
+    crate::work::spawn(async move {
         let id = req.request_id.clone();
         let result = tokio::time::timeout(
             Duration::from_secs(15 * 60),
@@ -248,7 +292,7 @@ async fn start(State(state): State<AppState>, Json(req): Json<Start>) -> ApiResu
         update(&state, &id, |p| match result {
             Ok(Ok(())) => {
                 p.status = "complete".into();
-                p.message = "传输完成；接收内容仍须预览后应用到资料库".into();
+                p.description = UiMessage::error_api_remote_sync_transfer_complete().into();
             }
             Ok(Err(error)) => {
                 p.status = if stop.load(Ordering::Relaxed) {
@@ -257,11 +301,12 @@ async fn start(State(state): State<AppState>, Json(req): Json<Start>) -> ApiResu
                     "failed"
                 }
                 .into();
-                p.message = error.message;
+                p.description = UiMessage::error_api_remote_sync_transfer_failed().into();
+                p.error = Some(error);
             }
             Err(_) => {
                 p.status = "failed".into();
-                p.message = "传输超时；已接收完整记录保留，重新连接可复用".into();
+                p.description = UiMessage::error_api_remote_sync_transfer_timed_out().into();
             }
         });
     });
@@ -277,36 +322,41 @@ fn update(state: &AppState, id: &str, f: impl FnOnce(&mut Progress)) {
 fn check_stop(stop: &AtomicBool) -> Result<(), ApiError> {
     if stop.load(Ordering::Relaxed) {
         Err(ApiError::bad(
-            "传输已停止；已接收完整记录保留，未写入资料库",
+            UiMessage::error_api_remote_sync_transfer_stopped(),
         ))
     } else {
         Ok(())
     }
 }
-async fn job(State(state): State<AppState>, Json(req): Json<JobRequest>) -> ApiResult {
+async fn job(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<JobRequest>,
+) -> ApiResult {
     let store = state
         .sync_remote
         .lock()
-        .map_err(|_| ApiError::internal("同步状态不可用"))?;
+        .map_err(|_| ApiError::internal(UiMessage::error_api_remote_sync_state_unavailable()))?;
     Ok(Json(match store.jobs.get(&req.request_id) {
         Some(job) => value(&job.info)?,
         None => {
-            json!({"requestId":req.request_id,"status":"unknown","message":"原传输记录已过期或进程已重启。已接收的完整记录保留，可明确开始新传输"})
+            json!({"requestId":req.request_id,"status":"unknown","explanation":UiMessage::error_api_remote_sync_transfer_record_unavailable(),"diagnostics":[],"causes":[],"error":null})
         }
     }))
 }
-async fn stop(State(state): State<AppState>, Json(req): Json<JobRequest>) -> ApiResult {
+async fn stop(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<JobRequest>,
+) -> ApiResult {
     let mut store = state
         .sync_remote
         .lock()
-        .map_err(|_| ApiError::internal("同步状态不可用"))?;
-    let job = store
-        .jobs
-        .get_mut(&req.request_id)
-        .ok_or_else(|| ApiError::bad("没有进行中的原传输"))?;
+        .map_err(|_| ApiError::internal(UiMessage::error_api_remote_sync_state_unavailable()))?;
+    let job = store.jobs.get_mut(&req.request_id).ok_or_else(|| {
+        ApiError::bad(UiMessage::error_api_remote_sync_original_transfer_missing())
+    })?;
     if job.info.status == "running" {
         job.stop.store(true, Ordering::Relaxed);
-        job.info.message = "正在停止；当前块可能已经接收，之后不再请求新块".into();
+        job.info.description = UiMessage::error_api_remote_sync_stopping().into();
     }
     Ok(Json(value(&job.info)?))
 }
@@ -360,16 +410,16 @@ async fn transfer(
     let identity = req.connection.identity;
     match req.direction {
         Direction::Push => {
-            let root = req
-                .root
-                .ok_or_else(|| ApiError::bad("上传须选择本机已配对资料库"))?;
+            let root = req.root.ok_or_else(|| {
+                ApiError::bad(UiMessage::error_api_remote_sync_local_pairing_required())
+            })?;
             let requested = req.objects;
             let paired = identity.clone();
             let records = core_call(state, move |core| {
                 if core.sync_binding_info(&root)?.identity != paired {
                     return Err(CoreError::new(
                         "syncIdentityMismatch",
-                        "Local replica pairing differs",
+                        UiMessage::error_api_remote_sync_local_pairing_mismatch(),
                     ));
                 }
                 core.publish_sync(&root)?;
@@ -382,7 +432,9 @@ async fn transfer(
             .await?;
             let metas: Vec<_> = records.iter().map(|(r, _)| r.clone()).collect();
             if !sync_wire::check_catalog(&metas) {
-                return Err(ApiError::bad("本机传输记录超过预算"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_remote_sync_local_transfer_budget(),
+                ));
             }
             update(state, &req.request_id, |p| {
                 p.records_total = records.len();
@@ -397,19 +449,21 @@ async fn transfer(
                     || (!begun.complete && !begun.offset.is_multiple_of(CHUNK))
                     || (begun.complete && begun.offset != record.bytes)
                 {
-                    return Err(ApiError::bad("远端上传进度无效"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_remote_sync_invalid_upload_progress(),
+                    ));
                 }
                 if !begun.complete {
-                    let ticket = begun
-                        .ticket
-                        .ok_or_else(|| ApiError::bad("远端未返回上传票据"))?;
+                    let ticket = begun.ticket.ok_or_else(|| {
+                        ApiError::bad(UiMessage::error_api_remote_sync_upload_ticket_missing())
+                    })?;
                     let result = async {
                         let mut offset = begun.offset;
                         loop {
                             check_stop(&stop)?;
                             let end = offset.saturating_add(CHUNK).min(bytes.len());
                             let written: Written = client.call("append", json!({"ticket":ticket,"offset":offset,"bytes":base64::engine::general_purpose::STANDARD.encode(&bytes[offset..end])}), 4096).await?;
-                            if written.offset != end || written.complete != (end == bytes.len()) { return Err(ApiError::bad("远端没有确认准确同步块")); }
+                            if written.offset != end || written.complete != (end == bytes.len()) { return Err(ApiError::bad(UiMessage::error_api_remote_sync_chunk_not_acknowledged())); }
                             if written.complete { break; } offset = end;
                         }
                         Ok(())
@@ -420,7 +474,7 @@ async fn transfer(
                 update(state, &req.request_id, |p| {
                     p.records_done += 1;
                     p.bytes_done += record.bytes;
-                    p.message = "原始不可变记录已由远端确认".into();
+                    p.description = UiMessage::error_api_remote_sync_record_acknowledged().into();
                 });
             }
         }
@@ -437,7 +491,9 @@ async fn transfer(
                 || prepared.bytes > MAX_BYTES
                 || prepared.chunk_bytes != CHUNK
             {
-                return Err(ApiError::bad("远端配对或传输预算不符"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_remote_sync_remote_pairing_or_budget_mismatch(),
+                ));
             }
             let ticket = prepared.ticket;
             let result = async {
@@ -458,14 +514,18 @@ async fn transfer(
                         || page.next > prepared.records
                         || page.complete != (page.next == prepared.records)
                     {
-                        return Err(ApiError::bad("远端目录分页不连续"));
+                        return Err(ApiError::bad(
+                            UiMessage::error_api_remote_sync_catalog_page_discontinuous(),
+                        ));
                     }
                     records.extend(page.records);
                 }
                 if !sync_wire::check_catalog(&records)
                     || records.iter().map(|r| r.bytes).sum::<usize>() != prepared.bytes
                 {
-                    return Err(ApiError::bad("远端目录不完整或超过预算"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_remote_sync_catalog_incomplete(),
+                    ));
                 }
                 let paired = identity.clone();
                 core_call(state, move |core| {
@@ -488,7 +548,9 @@ async fn transfer(
                     .await?;
                     if let Some(len) = present {
                         if len != record.bytes {
-                            return Err(ApiError::bad("已接收记录与远端长度不同"));
+                            return Err(ApiError::bad(
+                                UiMessage::error_api_remote_sync_record_length_mismatch(),
+                            ));
                         }
                     } else {
                         let mut bytes = Vec::new();
@@ -503,7 +565,9 @@ async fn transfer(
                                 .await?;
                             let data = base64::engine::general_purpose::STANDARD
                                 .decode(part.bytes)
-                                .map_err(|_| ApiError::bad("远端同步块编码无效"))?;
+                                .map_err(|_| {
+                                    ApiError::bad(UiMessage::error_api_remote_sync_chunk_encoding())
+                                })?;
                             let end = bytes.len().saturating_add(CHUNK).min(record.bytes);
                             if part.record != record
                                 || part.offset != bytes.len()
@@ -511,7 +575,9 @@ async fn transfer(
                                 || data.len() != end - bytes.len()
                                 || part.complete != (end == record.bytes)
                             {
-                                return Err(ApiError::bad("远端同步块与冻结记录不一致"));
+                                return Err(ApiError::bad(
+                                    UiMessage::error_api_remote_sync_chunk_mismatch(),
+                                ));
                             }
                             bytes.extend(data);
                             if part.complete {
@@ -528,7 +594,7 @@ async fn transfer(
                     update(state, &req.request_id, |p| {
                         p.records_done += 1;
                         p.bytes_done += record.bytes;
-                        p.message = "完整记录已通过摘要检查并保留，资料库尚未改变".into();
+                        p.description = UiMessage::error_api_remote_sync_record_retained().into();
                     });
                 }
                 Ok(())

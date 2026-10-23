@@ -17,14 +17,19 @@ fn hosted_content_import_losses_project_known_codes_without_private_details() {
     .map(|code| weftext_knowledge::Loss {
         path: "PRIVATE_SCHEMA_PATH".into(),
         code: (*code).into(),
-        detail: "PRIVATE_PRODUCER_DETAILS".into(),
+        description: UiMessage::common_operation(weftext_messages::params::CommonOperation {
+            operation_id: "PRIVATE_PRODUCER_DETAILS".into(),
+        })
+        .into(),
+        product_diagnostics: Vec::new(),
     })
     .collect();
     for kind in [
         FeatureIntentKind::ImportNative,
         FeatureIntentKind::ImportBibliography,
     ] {
-        let projected = feature_losses(&original, kind);
+        let frozen = feature_losses(&original, kind);
+        let projected = public_feature_losses(&frozen).unwrap();
         assert_eq!(projected.as_array().unwrap().len(), 5);
         for code in [
             "generatedBibliographyNotInstalled",
@@ -50,13 +55,14 @@ fn hosted_content_import_losses_project_known_codes_without_private_details() {
         ] {
             assert!(!public.contains(secret));
         }
-        assert!(
-            projected
-                .as_array()
-                .unwrap()
-                .iter()
-                .all(|loss| loss.as_object().unwrap().len() == 2)
-        );
+        assert!(projected.as_array().unwrap().iter().all(|loss| {
+            loss.as_object().unwrap().len() == 5
+                && loss.get("message").is_none()
+                && loss["diagnostics"] == serde_json::json!([])
+                && loss["causes"] == serde_json::json!([])
+                && loss["productDiagnostics"] == serde_json::json!([])
+                && serde_json::from_value::<UiMessage>(loss["explanation"].clone()).is_ok()
+        }));
     }
 }
 
@@ -79,7 +85,7 @@ impl Fixture {
         let root = temp.path().join("library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let doc = core.create_note(&root, &root, "Note").unwrap();
+        let doc = core.create_note_fixture(&root, &root, "Note").unwrap();
         Self {
             _temp: temp,
             data,
@@ -287,7 +293,7 @@ fn hosted_feature_original_preview_plan_commit_and_private_draft_survive_restart
     );
     assert!(
         f.core
-            .with_actor(ACTOR, |core| core.actor_save_status(&op))
+            .with_actor(ACTOR, |core| core.actor_save_status("Note", &op))
             .is_err()
     );
     assert!(
@@ -331,7 +337,7 @@ fn hosted_feature_settle_fences_unknown_delayed_prepare_and_cancels_uninstalled_
             .status,
         "cancelled"
     );
-    assert!(f.core.resolved(&internal));
+    assert!(f.core.resolved(&internal).unwrap());
     f.restart();
     assert_eq!(
         f.core
@@ -411,6 +417,7 @@ fn hosted_feature_install_marker_cannot_be_cancelled_or_blindly_replayed() {
     let prepared = f.prepare(&op);
     let internal = f.internal(&op);
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &f.core.journal_path(&internal, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -435,7 +442,7 @@ fn hosted_feature_install_marker_cannot_be_cancelled_or_blindly_replayed() {
             .status,
         "recoveryPending"
     );
-    assert!(!f.core.resolved(&internal));
+    assert!(!f.core.resolved(&internal).unwrap());
     assert_eq!(fs::read(&f.source).unwrap(), source_before);
     assert!(!f.sidecar.exists());
     f.core.resolve_record(&internal, "keepCurrent").unwrap();
@@ -689,6 +696,94 @@ fn prepare_import(f: &mut Fixture, op: &str) -> ActorFeatureStatus {
 }
 
 #[test]
+fn original_feature_member_delivery_retains_actor_scope_and_physical_birth_after_move() {
+    let mut f = Fixture::new();
+    let op = fresh();
+    let prepared = prepare_import(&mut f, &op);
+    let committed = f
+        .core
+        .with_actor(IMPORT_ACTOR, |core| {
+            core.actor_feature_commit_with_losses(
+                "Imported",
+                &op,
+                prepared.plan_id.as_ref().unwrap(),
+                true,
+            )
+        })
+        .unwrap();
+    let owner = committed.node_refs.first().unwrap().clone();
+    let opened = f
+        .core
+        .with_actor(IMPORT_ACTOR, |core| {
+            core.actor_feature_open_original_node("Imported", &op, &owner)
+        })
+        .unwrap();
+    let identity = f.core.sessions[&opened.session_id].stamp.identity.clone();
+    let parent = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "DeliveryParent")
+        .unwrap();
+    let preview = f
+        .core
+        .prepare_operation(OperationRequest {
+            operation_id: fresh(),
+            root: display(&f.root),
+            intent: OperationIntent::MoveNode {
+                source: display(Path::new(&opened.path).parent().unwrap()),
+                parent: display(Path::new(&parent.path).parent().unwrap()),
+            },
+        })
+        .unwrap();
+    f.core
+        .execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    let old_directory = Path::new(&opened.path).parent().unwrap();
+    let substitute = f
+        .core
+        .create_note_fixture(
+            &f.root,
+            old_directory.parent().unwrap(),
+            old_directory.file_name().unwrap().to_str().unwrap(),
+        )
+        .unwrap();
+    let delivered = f
+        .core
+        .with_actor(IMPORT_ACTOR, |core| {
+            core.actor_feature_open_original_node("Imported", &op, &owner)
+        })
+        .unwrap();
+    assert_eq!(delivered.node_id.as_ref(), Some(&owner.node_id));
+    assert_ne!(delivered.node_id, substitute.node_id);
+    assert_eq!(
+        f.core.sessions[&delivered.session_id].stamp.identity,
+        identity
+    );
+    for (actor, resource) in [("deployment:other", "Imported"), (IMPORT_ACTOR, "Other")] {
+        assert!(
+            f.core
+                .with_actor(actor, |core| core
+                    .actor_feature_open_original_node(resource, &op, &owner))
+                .is_err()
+        );
+    }
+    let foreign = weftext_knowledge::NodeRef {
+        workspace_id: owner.workspace_id.clone(),
+        node_id: substitute.node_id.unwrap(),
+    };
+    assert!(
+        f.core
+            .with_actor(IMPORT_ACTOR, |core| core
+                .actor_feature_open_original_node("Imported", &op, &foreign))
+            .is_err()
+    );
+    assert!(
+        f.core
+            .actor_feature_open_original_node("Imported", &op, &owner)
+            .is_err()
+    );
+}
+
+#[test]
 fn hosted_feature_docx_import_retains_frozen_safe_losses_and_plan_across_restart() {
     let mut f = Fixture::new();
     let opened = f
@@ -902,6 +997,7 @@ fn hosted_feature_docx_unknown_fence_and_install_marker_survive_restart() {
         })
         .unwrap();
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &f.core.journal_path(&internal, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -928,7 +1024,7 @@ fn hosted_feature_docx_unknown_fence_and_install_marker_survive_restart() {
         "recoveryPending"
     );
     assert!(!f.root.join("Imported").exists());
-    assert!(!f.core.resolved(&internal));
+    assert!(!f.core.resolved(&internal).unwrap());
 }
 
 #[test]
@@ -984,7 +1080,11 @@ fn hosted_feature_import_loss_preview_never_copies_schema_paths_or_details() {
     transaction.preview.losses.push(weftext_knowledge::Loss {
         path: "C:/PRIVATE_SCHEMA".into(),
         code: "unrecognized-private-detail".into(),
-        detail: "PRIVATE_SCHEMA_CONTENT".into(),
+        description: UiMessage::common_operation(weftext_messages::params::CommonOperation {
+            operation_id: "PRIVATE_SCHEMA_CONTENT".into(),
+        })
+        .into(),
+        product_diagnostics: Vec::new(),
     });
     let safe = serde_json::to_string(&import_losses(&transaction.preview)).unwrap();
     assert!(!safe.contains("PRIVATE_SCHEMA"));
@@ -1004,8 +1104,7 @@ fn hosted_feature_import_loss_preview_never_copies_schema_paths_or_details() {
 }
 
 #[test]
-fn hosted_feature_docx_safe_loss_freeze_recovers_before_first_delivery_and_keeps_original_wording()
-{
+fn hosted_feature_docx_safe_loss_freeze_recovers_before_first_delivery_and_keeps_semantics() {
     let mut f = Fixture::new();
     let op = fresh();
     let prepared = prepare_import(&mut f, &op);
@@ -1013,13 +1112,25 @@ fn hosted_feature_docx_safe_loss_freeze_recovers_before_first_delivery_and_keeps
         .with_actor(IMPORT_ACTOR, |core| {
             let mut record = core.actor_feature_record("Imported", &op)?.unwrap();
             assert_eq!(
-                record.feature.as_ref().unwrap().import_losses.as_ref(),
-                Some(&prepared.preview["losses"])
+                public_feature_losses(
+                    record
+                        .feature
+                        .as_ref()
+                        .unwrap()
+                        .import_losses
+                        .as_ref()
+                        .unwrap()
+                )?,
+                prepared.preview["losses"]
             );
             // Model a crash after Core's frozen plan but before its safe loss list
             // became durable or reached the browser.
             record.feature.as_mut().unwrap().import_losses = None;
-            private_replace(&core.actor_record(&op)?, &serde_json::to_vec(&record)?)
+            private_replace(
+                &crate::BackendContext::local().unwrap(),
+                &core.actor_record(&op)?,
+                &serde_json::to_vec(&record)?,
+            )
         })
         .unwrap();
     f.restart();
@@ -1031,15 +1142,24 @@ fn hosted_feature_docx_safe_loss_freeze_recovers_before_first_delivery_and_keeps
         .unwrap()
         .unwrap();
     assert_eq!(recovered.preview, prepared.preview);
-    let original = serde_json::json!([{"code":"word-layout","message":"Original reviewed wording from a prior version"}]);
-    f.core
+    let (record_path, original_bytes, frozen) = f
+        .core
         .with_actor(IMPORT_ACTOR, |core| {
-            let mut record = core.actor_feature_record("Imported", &op)?.unwrap();
-            assert!(record.feature.as_ref().unwrap().import_losses.is_some());
-            record.feature.as_mut().unwrap().import_losses = Some(original.clone());
-            private_replace(&core.actor_record(&op)?, &serde_json::to_vec(&record)?)
+            let path = core.actor_record(&op)?;
+            let record = core.actor_feature_record("Imported", &op)?.unwrap();
+            let frozen = record.feature.unwrap().import_losses.unwrap();
+            let bytes = core.backend.read_bytes(&path)?;
+            Ok((path, bytes, frozen))
         })
         .unwrap();
+    for loss in &frozen {
+        let message = loss.explanation();
+        assert_ne!(
+            message.render(weftext_messages::UiLocale::ZhCn),
+            message.render(weftext_messages::UiLocale::EnUs)
+        );
+    }
+    assert_eq!(fs::read(&record_path).unwrap(), original_bytes);
     f.restart();
     let retained = f
         .core
@@ -1048,8 +1168,43 @@ fn hosted_feature_docx_safe_loss_freeze_recovers_before_first_delivery_and_keeps
         })
         .unwrap()
         .unwrap();
-    assert_eq!(retained.preview["losses"], original);
+    assert_eq!(
+        retained.preview["losses"],
+        public_feature_losses(&frozen).unwrap()
+    );
     assert_eq!(retained.plan_id, prepared.plan_id);
+    assert_eq!(fs::read(&record_path).unwrap(), original_bytes);
+}
+
+#[test]
+fn hosted_feature_rejects_old_loss_wording_without_rewriting_the_original_record() {
+    let mut f = Fixture::new();
+    let op = fresh();
+    prepare_import(&mut f, &op);
+    let (record_path, original_bytes) = f
+        .core
+        .with_actor(IMPORT_ACTOR, |core| {
+            let path = core.actor_record(&op)?;
+            let record = core.actor_feature_record("Imported", &op)?.unwrap();
+            let mut old = serde_json::to_value(record)?;
+            old["feature"]["importLosses"] = serde_json::json!([
+                {"code":"word-layout","message":"Original retained wording"}
+            ]);
+            let bytes = serde_json::to_vec(&old)?;
+            private_replace(&core.backend, &path, &bytes)?;
+            Ok((path, bytes))
+        })
+        .unwrap();
+    f.restart();
+    let error = f
+        .core
+        .with_actor(IMPORT_ACTOR, |core| {
+            core.actor_feature_status("Imported", &op)
+        })
+        .unwrap_err();
+    assert_eq!(error.code, "invalidState");
+    assert_eq!(error.explanation, UiMessage::error_core_json_failure());
+    assert_eq!(fs::read(&record_path).unwrap(), original_bytes);
 }
 
 #[test]

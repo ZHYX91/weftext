@@ -8,7 +8,10 @@ const FP: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 fn hosted_content_import_generated_bibliography_loss_is_fixed_and_requires_original_plan_acceptance()
  {
     let mut f = Fixture::new();
-    let note = f.core.create_note(&f.root, &f.root, "Note").unwrap();
+    let note = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Note")
+        .unwrap();
     let mut package = weftext_export::exchange::read_native_package(
         &f.core.export_native_package(&f.root).unwrap(),
     )
@@ -25,7 +28,11 @@ fn hosted_content_import_generated_bibliography_loss_is_fixed_and_requires_origi
         .push(weftext_export::exchange::NativeLoss {
             path: "PRIVATE_SCHEMA_PATH".into(),
             code: "PRIVATE_UNKNOWN_CODE".into(),
-            detail: "PRIVATE_PRODUCER_DETAILS".into(),
+            description: UiMessage::common_operation(weftext_messages::params::CommonOperation {
+                operation_id: "PRIVATE_PRODUCER_DETAILS".into(),
+            })
+            .into(),
+            product_diagnostics: Vec::new(),
         });
     let bytes = weftext_export::exchange::write_native_package(&package).unwrap();
     let original = bytes.clone();
@@ -59,7 +66,13 @@ fn hosted_content_import_generated_bibliography_loss_is_fixed_and_requires_origi
         .iter()
         .find(|loss| loss["code"] == "generatedBibliographyNotInstalled")
         .unwrap();
-    assert!(loss["message"].as_str().unwrap().contains("不安装"));
+    let explanation: UiMessage = serde_json::from_value(loss["explanation"].clone()).unwrap();
+    assert!(
+        explanation
+            .render(weftext_messages::UiLocale::ZhCn)
+            .contains("不安装")
+    );
+    assert!(loss.get("message").is_none());
     let public = serde_json::to_string(&prepared).unwrap();
     for secret in [
         "PRIVATE_SCHEMA_PATH",
@@ -235,7 +248,10 @@ fn content_import_bibliography_original_multinode_receipt_and_metadata_listing_s
 #[test]
 fn content_import_slot_rejects_local_producer_uncommitted_and_samebytes_replacement() {
     let mut f = Fixture::new();
-    let ordinary = f.core.create_note(&f.root, &f.root, "Unrelated").unwrap();
+    let ordinary = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Unrelated")
+        .unwrap();
     assert_eq!(
         f.core
             .content_import_slot_members_at(&f.root, &f.root.join("Unrelated"), "Unrelated")
@@ -290,7 +306,9 @@ fn content_import_slot_rejects_local_producer_uncommitted_and_samebytes_replacem
 #[test]
 fn content_import_native_keeps_original_plan_identity_losses_and_future_slot_binding() {
     let mut f = Fixture::new();
-    f.core.create_note(&f.root, &f.root, "Note").unwrap();
+    f.core
+        .create_note_fixture(&f.root, &f.root, "Note")
+        .unwrap();
     let bytes = f.core.export_native_package(&f.root).unwrap();
     let operation = fresh();
     let request = OperationRequest {

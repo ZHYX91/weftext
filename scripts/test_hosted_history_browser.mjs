@@ -1,7 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { createdDocument } from './_creation_result.mjs';
 // Real hosted history/navigation consumer checks. Every process, library,
 // browser context and evidence path is owned by this run; no ambient server.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
@@ -15,12 +17,12 @@ const token = Object.fromEntries(['alice', 'bob', 'carol', 'admin'].map(actor =>
 let local, server, browser, page, base, localToken, stderr = '', localConsumerCalls = 0, config, configPath, data;
 const routeErrors = [], heldRoutes = [], networkRecent = [], pendingNetwork = new Map();
 async function start(args, hosted = false) {
-  const child = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = '';
+  const child = spawnServe(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = '';
   child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes);
-  for (let i = 0; i < 300; i++) { const match = stdout.match(hosted ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/); if (match) { base = match[1]; localToken = match[2]; return child; } if (child.exitCode !== null) throw new Error(stderr); await pause(100); }
-  child.kill(); throw new Error('startup timeout');
+  for (let i = 0; i < 300; i++) { const match = serveReady(child); if (match) { base = match.base; localToken = match.token; return child; } if (child.exitCode !== null) throw new Error(stderr); await pause(100); }
+  await stopServe(child); throw new Error('startup timeout');
 }
-async function stop(child) { if (child && child.exitCode === null && child.signalCode === null) { const done = new Promise(resolve => child.once('exit', resolve)); child.kill(); await done; } }
+async function stop(child) { await stopServe(child); }
 async function api(route, body, actor = 'alice', expected = 200) { const response = await fetch(base + route, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(actor ? { Authorization: 'Bearer ' + token[actor] } : { 'X-Weftext-Token': localToken }) }, body: body === undefined ? undefined : JSON.stringify(body) }); const value = await response.json(); assert.equal(response.status, expected, JSON.stringify(value)); return value; }
 async function click(name, target = page) { await target.getByRole('button', { name, exact: true }).click(); }
 async function ready(target = page) { await target.getByLabel('Office 输出格式', { exact: true }).waitFor(); await target.waitForLoadState('networkidle'); }
@@ -46,11 +48,11 @@ function heldRoute(pattern, match = () => true) {
   const handler = async route => { if (!match(route.request().postDataJSON())) return route.continue(); try { const response = await route.fetch(), body = await response.json(); assert.equal(response.status(), 200, JSON.stringify(body)); report({ body, request: route.request().postDataJSON() }); await resumed; await route.fulfill({ response }); } catch (error) { routeErrors.push(String(error)); report({ error }); await route.abort('failed').catch(() => {}); } };
   const held = { pattern, handler, observed, release: () => release() }; heldRoutes.push(held); return held;
 }
-async function restart(change = () => {}) { const previous = base; config.bind = new URL(base).host; change(config); await writeFile(configPath, JSON.stringify(config, null, 2)); await stop(server); server = null; server = await start(['--no-browser', '--data-dir', data, '--server-config', configPath], true); assert.equal(base, previous); }
+async function restart(change = () => {}) { const previous = base; config.bind = new URL(base).host; change(config); await writeFile(configPath, JSON.stringify(config, null, 2)); await stop(server); server = null; server = await start(['--data-dir', data, '--server-config', configPath], true); assert.equal(base, previous); }
 async function lostRestore(id) { await prepare(id); let captured; const done = new Promise(resolve => page.route('**/api/hosted/history/restore', async route => { try { const response = await route.fetch(); assert.equal(response.status(), 200); captured = { body: await response.json(), request: route.request().postDataJSON() }; await route.abort('failed'); } catch (error) { routeErrors.push(String(error)); } finally { resolve(); } })); await click('确认历史恢复并新保存'); await done; await page.unroute('**/api/hosted/history/restore'); assert.ok(captured); await page.waitForFunction(() => document.querySelector('.history-status')?.textContent.includes('fetch')); return captured; }
 try {
-  data = path.join(out, 'state'); const root = path.join(out, 'library'); local = await start(['--no-browser', '--data-dir', data]); await api('/api/library/create', { path: root, operationId: randomUUID() }, null);
-  const shared = await api('/api/note/create', { root, parent: root, name: 'Shared', operationId: randomUUID() }, null), other = await api('/api/note/create', { root, parent: root, name: 'Other', operationId: randomUUID() }, null), hidden = await api('/api/note/create', { root, parent: root, name: 'Hidden', operationId: randomUUID() }, null);
+  data = path.join(out, 'state'); const root = path.join(out, 'library'); local = await start(['--data-dir', data]); await api('/api/library/create', { path: root, operationId: randomUUID() }, null);
+  const shared = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Shared', operationId: randomUUID() }, null)), other = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Other', operationId: randomUUID() }, null)), hidden = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Hidden', operationId: randomUUID() }, null));
   const inventory = await api('/api/library/open', { path: root }, null), sharedRef = `weftext-node://${inventory.workspaceId}/${shared.nodeId}`, otherRef = `weftext-node://${inventory.workspaceId}/${other.nodeId}`, hiddenRef = `weftext-node://${inventory.workspaceId}/${hidden.nodeId}`;
   const sources = Object.fromEntries(['A', 'B', 'C'].map(letter => [letter, `#metadata((id: "${shared.nodeId}", types: ("note",))) <weftext>\r\n\r\n= 版本 ${letter}🌿\r\n准确正文 ${letter} 中文😀。\r\n\r\n#link("${otherRef}")[跳转获权目标]\r\n#link("${hiddenRef}")[跳转隐藏目标]\r\n#link("https://example.com/")[外部网页]\r\n`]));
   let basis = shared.baseId; for (const source of Object.values(sources)) { const receipt = await api('/api/save', { sessionId: shared.sessionId, baseId: basis, source, operationId: randomUUID() }, null); basis = receipt.baseId; }
@@ -60,7 +62,7 @@ try {
     alice: { enabled: true, tokenSha256: sha(token.alice), grants: { shared: { read: true, write: true, history: true }, other: { read: true, write: true, history: true } } },
     bob: { enabled: true, tokenSha256: sha(token.bob), grants: { shared: { read: true, history: true } } },
     carol: { enabled: true, tokenSha256: sha(token.carol), grants: { shared: { read: true } } },
-  } }; configPath = path.join(out, 'server.json'); await writeFile(configPath, JSON.stringify(config, null, 2)); server = await start(['--no-browser', '--data-dir', data, '--server-config', configPath], true);
+  } }; configPath = path.join(out, 'server.json'); await writeFile(configPath, JSON.stringify(config, null, 2)); server = await start(['--data-dir', data, '--server-config', configPath], true);
   const initialDoc = await api('/api/hosted/open', { resource: 'shared' }), initialTimeline = await api('/api/hosted/history/list', { sessionId: initialDoc.sessionId }), version = {};
   for (const row of initialTimeline.versions.filter(row => row.status === 'available')) { const read = await api('/api/hosted/history/read', { sessionId: initialDoc.sessionId, versionId: row.versionId }); for (const letter of ['A', 'B', 'C']) if (read.source === sources[letter]) version[letter] = row.versionId; }
   assert.deepEqual(Object.keys(version).sort(), ['A', 'B', 'C']); await closeDocument(initialDoc);
@@ -106,4 +108,4 @@ try {
   result.cases.push('revocation disposes history/source/Ref and modal before held delivery; failed removeItem reports remaining cache accurately, while server actor epoch isolates those bytes after reload');
   assert.equal(localConsumerCalls, 0); assert.deepEqual(result.pageErrors, []); assert.deepEqual(routeErrors, []); result.completed = true;
 } catch (error) { result.failure = String(error.stack ?? error); result.pendingNetwork = [...pendingNetwork.values()].map(value => ({ ...value, elapsedMs: Date.now() - value.started })); result.networkRecent = networkRecent.slice(-100); if (page) await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); throw error; }
-finally { heldRoutes.forEach(held => held.release()); await browser?.close(); await stop(local); await stop(server); result.routeErrors = routeErrors; result.localConsumerCalls = localConsumerCalls; result.stderrBytes = Buffer.byteLength(stderr); result.ownedProcessesClosed = (!browser || !browser.isConnected()) && (!local || local.exitCode !== null || local.signalCode !== null) && (!server || server.exitCode !== null || server.signalCode !== null); await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, cases: result.cases, completed: result.completed, pageErrors: result.pageErrors })); }
+finally { heldRoutes.forEach(held => held.release()); await browser?.close(); await stop(local); await stop(server); result.routeErrors = routeErrors; result.localConsumerCalls = localConsumerCalls; result.stderrBytes = Buffer.byteLength(stderr); result.ownedProcessesClosed = (!browser || !browser.isConnected()) && (!local || local.exitCode !== null || local.signalCode !== null) && (!server || server.exitCode !== null || server.signalCode !== null); await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, cases: result.cases, completed: result.completed, pageErrors: result.pageErrors })); }

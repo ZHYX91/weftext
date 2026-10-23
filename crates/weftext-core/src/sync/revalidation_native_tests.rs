@@ -16,6 +16,23 @@ fn compile(inputs: &SyncNativeRenderInputs) -> Vec<SyncNativeRenderOutput> {
         })
         .collect()
 }
+#[test]
+fn native_adapter_retains_actual_failed_compiler_diagnostics_and_origins() {
+    let temp = tempfile::tempdir().unwrap();
+    let output = engine()
+        .render(
+            "#missing-convergence-function()",
+            &temp.path().join("original.typ"),
+            temp.path(),
+        )
+        .unwrap();
+    assert!(!output.ok);
+    assert!(!output.diagnostics.is_empty());
+    let original = serde_json::to_value(&output.diagnostics).unwrap();
+    let adapted = SyncNativeRenderOutput::from(output);
+    assert_eq!(serde_json::to_value(adapted.diagnostics).unwrap(), original);
+    assert!(!adapted.ok);
+}
 struct Fixture {
     _temp: tempfile::TempDir,
     a: Core,
@@ -64,7 +81,12 @@ impl Fixture {
         for name in ["Note", "Task", "Unrelated"] {
             nodes.insert(
                 name,
-                ObjectKey::Node(a.create_note(&ar, &ar, name).unwrap().node_id.unwrap()),
+                ObjectKey::Node(
+                    a.create_note_fixture(&ar, &ar, name)
+                        .unwrap()
+                        .node_id
+                        .unwrap(),
+                ),
             );
         }
         let schema = a.read_config(&ar, ConfigRole::Schema).unwrap();
@@ -305,9 +327,12 @@ fn typed_native_same_request_retire_and_new_definition_reviews_the_actual_after_
     let operations = f.b.operations.len();
     let snapshots = f.b.snapshots.len();
     let cuts = f.b.admitted_cuts.len();
-    let original = capture_optional(&f.br.join("Task").join("Task.typ"))
-        .unwrap()
-        .unwrap();
+    let original = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &f.br.join("Task").join("Task.typ"),
+    )
+    .unwrap()
+    .unwrap();
     match f
         .b
         .capture_sync_revalidation_review(&f.br, &f.identity, &choices, &BTreeMap::new())
@@ -346,9 +371,12 @@ fn typed_native_same_request_retire_and_new_definition_reviews_the_actual_after_
     assert_eq!(f.b.snapshots.len(), snapshots);
     assert_eq!(f.b.admitted_cuts.len(), cuts);
     assert!(!expected_path.exists());
-    let unchanged = capture_optional(&f.br.join("Task").join("Task.typ"))
-        .unwrap()
-        .unwrap();
+    let unchanged = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &f.br.join("Task").join("Task.typ"),
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(unchanged.bytes, original.bytes);
     assert_eq!(unchanged.stamp, original.stamp);
     let request = OperationRequest {
@@ -366,7 +394,7 @@ fn typed_native_same_request_retire_and_new_definition_reviews_the_actual_after_
     f.b.execute_operation(&preview.operation_id, &preview.plan_id)
         .unwrap();
     assert_eq!(
-        capture_optional(&expected_path)
+        capture_optional(&crate::BackendContext::local().unwrap(), &expected_path)
             .unwrap()
             .unwrap()
             .stamp
@@ -483,7 +511,7 @@ fn semantic_membership_original_created_node_does_not_mask_a_later_foreign_birth
     let data = temp.path().join("private");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    core.create_note(&root, &root, "Existing").unwrap();
+    core.create_note_fixture(&root, &root, "Existing").unwrap();
     let cut = core.admitted_snapshot(&root).unwrap();
     let request = OperationRequest {
         operation_id: crate::fresh(),
@@ -509,27 +537,43 @@ fn semantic_membership_original_created_node_does_not_mask_a_later_foreign_birth
         preview.plan_id
     );
     core.validate_recovery_scope(transaction).unwrap();
-    let own = capture_optional(&root.join("OriginalBirth").join("OriginalBirth.typ"))
-        .unwrap()
+    let own = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &root.join("OriginalBirth").join("OriginalBirth.typ"),
+    )
+    .unwrap()
+    .unwrap();
+    let foreign = core
+        .create_note_fixture(&root, &root, "LaterForeignBirth")
         .unwrap();
-    let foreign = core.create_note(&root, &root, "LaterForeignBirth").unwrap();
-    let foreign_file = capture_optional(Path::new(&foreign.path)).unwrap().unwrap();
+    let foreign_file = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        Path::new(&foreign.path),
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(
         core.validate_recovery_scope(transaction).unwrap_err().code,
         "scopeChanged"
     );
     assert_eq!(
-        capture_optional(Path::new(&own.path))
-            .unwrap()
-            .unwrap()
-            .stamp,
+        capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            Path::new(&own.path)
+        )
+        .unwrap()
+        .unwrap()
+        .stamp,
         own.stamp
     );
     assert_eq!(
-        capture_optional(Path::new(&foreign.path))
-            .unwrap()
-            .unwrap()
-            .stamp,
+        capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            Path::new(&foreign.path)
+        )
+        .unwrap()
+        .unwrap()
+        .stamp,
         foreign_file.stamp
     );
 }
@@ -569,7 +613,9 @@ fn typed_native_inherited_trash_child_keeps_original_false_flag_and_actual_compi
     let parent = child.state.parent.as_ref().unwrap();
     assert!(local[parent].state.retired);
     let source_path = Path::new(&child.directory).join("Task.typ");
-    let original = capture_optional(&source_path).unwrap().unwrap();
+    let original = capture_optional(&crate::BackendContext::local().unwrap(), &source_path)
+        .unwrap()
+        .unwrap();
     let task = task.clone();
     let request = f.request();
     let preview = f.prepare_native(request);
@@ -584,7 +630,9 @@ fn typed_native_inherited_trash_child_keeps_original_false_flag_and_actual_compi
         after[&task].directory,
         display(source_path.parent().unwrap())
     );
-    let current = capture_optional(&source_path).unwrap().unwrap();
+    let current = capture_optional(&crate::BackendContext::local().unwrap(), &source_path)
+        .unwrap()
+        .unwrap();
     assert_eq!(current.bytes, original.bytes);
     assert_eq!(current.stamp.identity, original.stamp.identity);
     let trash = f.b.trash_admitted_snapshot(&f.br).unwrap();
@@ -600,10 +648,19 @@ fn typed_native_inherited_trash_child_keeps_original_false_flag_and_actual_compi
 #[test]
 fn typed_native_multiple_retired_roots_share_the_original_compound_layout_and_file_identities() {
     let mut f = Fixture::with_plan(GOOD, trash_native_plan());
-    let late = f.b.create_note(&f.br, &f.br, "LateForeign").unwrap();
+    let late =
+        f.b.create_note_fixture(&f.br, &f.br, "LateForeign")
+            .unwrap();
     let late_directory = Path::new(&late.path).parent().unwrap().to_path_buf();
-    let late_original = capture_optional(Path::new(&late.path)).unwrap().unwrap();
-    let foreign = f.b.create_note(&f.br, &f.br, "ExistingTrash").unwrap();
+    let late_original = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        Path::new(&late.path),
+    )
+    .unwrap()
+    .unwrap();
+    let foreign =
+        f.b.create_note_fixture(&f.br, &f.br, "ExistingTrash")
+            .unwrap();
     let foreign_retirement =
         f.b.prepare_operation(OperationRequest {
             operation_id: crate::fresh(),
@@ -631,7 +688,9 @@ fn typed_native_multiple_retired_roots_share_the_original_compound_layout_and_fi
     let mut original_files = BTreeMap::new();
     for name in ["Task", "Unrelated"] {
         let source_path = f.br.join(name).join(format!("{name}.typ"));
-        let source = capture_optional(&source_path).unwrap().unwrap();
+        let source = capture_optional(&crate::BackendContext::local().unwrap(), &source_path)
+            .unwrap()
+            .unwrap();
         let id =
             weftext_engine::inspect_metadata(&String::from_utf8(source.bytes.clone()).unwrap())
                 .id
@@ -703,10 +762,13 @@ fn typed_native_multiple_retired_roots_share_the_original_compound_layout_and_fi
                             .any(|(_, path)| same(path, &expected))
                     );
                     assert_eq!(
-                        capture_optional(Path::new(&original.path))
-                            .unwrap()
-                            .unwrap()
-                            .stamp,
+                        capture_optional(
+                            &crate::BackendContext::local().unwrap(),
+                            Path::new(&original.path)
+                        )
+                        .unwrap()
+                        .unwrap()
+                        .stamp,
                         original.stamp
                     );
                     assert!(!expected.exists());
@@ -756,12 +818,16 @@ fn typed_native_multiple_retired_roots_share_the_original_compound_layout_and_fi
             .unwrap_err();
     assert_eq!(interrupted.code, "recoveryPending");
     assert!(
-        interrupted.message.contains("underlying testInterrupted:"),
+        interrupted
+            .causes
+            .as_slice()
+            .iter()
+            .any(|cause| cause.code == "testInterrupted"),
         "{interrupted:?}"
     );
     assert!(moves[0].1.is_dir());
     assert!(moves[1].0.is_dir());
-    assert!(!f.b.committed(&operation_id));
+    assert!(!f.b.committed(&operation_id).unwrap());
     let install_path = f.b.journal_path(&operation_id, "install");
     let install = fs::read(&install_path).unwrap();
     drop(f.b);
@@ -776,9 +842,12 @@ fn typed_native_multiple_retired_roots_share_the_original_compound_layout_and_fi
     );
     let late_target = foreign_root.join("LateForeign");
     fs::rename(&late_directory, &late_target).unwrap();
-    let late_current = capture_optional(&late_target.join("LateForeign.typ"))
-        .unwrap()
-        .unwrap();
+    let late_current = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &late_target.join("LateForeign.typ"),
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(late_current.stamp.identity, late_original.stamp.identity);
     assert_eq!(
         f.b.validate_recovery_scope(transaction).unwrap_err().code,
@@ -794,7 +863,7 @@ fn typed_native_multiple_retired_roots_share_the_original_compound_layout_and_fi
         assert!(f.b.resolve_recovery(&operation_id, action).is_err());
     }
     assert_eq!(fs::read(&install_path).unwrap(), install);
-    assert!(!f.b.committed(&operation_id));
+    assert!(!f.b.committed(&operation_id).unwrap());
     assert_eq!(
         fs::read(late_target.join("LateForeign.typ")).unwrap(),
         late_original.bytes
@@ -803,7 +872,7 @@ fn typed_native_multiple_retired_roots_share_the_original_compound_layout_and_fi
     f.b.validate_recovery_scope(transaction).unwrap();
     f.b.resolve_recovery(&operation_id, "resumeOriginalPlan")
         .unwrap();
-    assert!(f.b.committed(&operation_id));
+    assert!(f.b.committed(&operation_id).unwrap());
     assert_eq!(
         f.b.prepare_operation(request).unwrap().plan_id,
         preview.plan_id
@@ -817,7 +886,9 @@ fn typed_native_multiple_retired_roots_share_the_original_compound_layout_and_fi
             f.br.join(".weftext-trash")
                 .join(format!("{operation_id}-node-{id}"))
                 .join(name);
-        let after = capture_optional(&target).unwrap().unwrap();
+        let after = capture_optional(&crate::BackendContext::local().unwrap(), &target)
+            .unwrap()
+            .unwrap();
         assert_eq!(after.bytes, original.bytes);
         assert_eq!(after.stamp.identity, original.stamp.identity);
         assert!(!Path::new(&original.path).exists());
@@ -1246,9 +1317,12 @@ fn typed_native_concurrent_actual_directory_read_requires_an_explicit_exact_deci
         .iter()
         .map(|version| version.revision.clone())
         .collect::<BTreeSet<_>>();
-    let original = capture_optional(&f.br.join("Independent").join("weftext.directory.json"))
-        .unwrap()
-        .unwrap();
+    let original = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &f.br.join("Independent").join("weftext.directory.json"),
+    )
+    .unwrap()
+    .unwrap();
     let operations = f.b.operations.len();
     let captured = f.capture_review();
     let outputs = compile(captured.render_inputs());
@@ -1317,9 +1391,12 @@ fn typed_native_concurrent_actual_directory_read_requires_an_explicit_exact_deci
     let preview = f.prepare_native(request);
     f.b.execute_operation(&preview.operation_id, &preview.plan_id)
         .unwrap();
-    let now = capture_optional(&f.br.join("Independent").join("weftext.directory.json"))
-        .unwrap()
-        .unwrap();
+    let now = capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &f.br.join("Independent").join("weftext.directory.json"),
+    )
+    .unwrap()
+    .unwrap();
     assert_eq!(now.bytes, original.bytes);
     assert_eq!(now.stamp.identity, original.stamp.identity);
     let publication = f.b.operations[&preview.operation_id]
@@ -1389,12 +1466,16 @@ fn typed_native_adoption_uses_original_installed_cut_and_no_write_plan_across_re
     assert_eq!(received.len(), 2);
     assert!(!f.br.join(".weftext-settings.json").exists());
     let path = f.br.join("Note").join("Note.typ");
-    let original = capture_optional(&path).unwrap().unwrap();
+    let original = capture_optional(&crate::BackendContext::local().unwrap(), &path)
+        .unwrap()
+        .unwrap();
     let external = String::from_utf8(original.bytes).unwrap()
         + "\n#undefined-display-only()\nexternal exact body";
     fs::write(&path, &external).unwrap();
     let task_path = f.br.join("Task").join("Task.typ");
-    let original_task = capture_optional(&task_path).unwrap().unwrap();
+    let original_task = capture_optional(&crate::BackendContext::local().unwrap(), &task_path)
+        .unwrap()
+        .unwrap();
     let external_task =
         String::from_utf8(original_task.bytes).unwrap() + "\n#for n in (3,) [外部新增循环#n]";
     fs::write(&task_path, &external_task).unwrap();
@@ -1415,7 +1496,11 @@ fn typed_native_adoption_uses_original_installed_cut_and_no_write_plan_across_re
     assert_eq!(preview.kind, "adoptSyncExternal");
     assert_eq!(fs::read(&path).unwrap(), external.as_bytes());
     assert_eq!(
-        capture_optional(&path).unwrap().unwrap().stamp.identity,
+        capture_optional(&crate::BackendContext::local().unwrap(), &path)
+            .unwrap()
+            .unwrap()
+            .stamp
+            .identity,
         original.stamp.identity
     );
     let plan = &f.b.operations[&preview.operation_id];
@@ -1459,7 +1544,7 @@ fn typed_native_adoption_uses_original_installed_cut_and_no_write_plan_across_re
     assert_eq!(fs::read(path).unwrap(), external.as_bytes());
     assert_eq!(fs::read(&task_path).unwrap(), external_task.as_bytes());
     assert_eq!(
-        capture_optional(&task_path)
+        capture_optional(&crate::BackendContext::local().unwrap(), &task_path)
             .unwrap()
             .unwrap()
             .stamp
@@ -1527,7 +1612,9 @@ fn typed_native_receiver_removed_member_world_requires_the_original_retirement_p
         f.install_definition();
         f.b.publish_sync(&f.br).unwrap();
         let b_asset = f.br.join("Task").join("removed.typ");
-        let original = capture_optional(&b_asset).unwrap().unwrap();
+        let original = capture_optional(&crate::BackendContext::local().unwrap(), &b_asset)
+            .unwrap()
+            .unwrap();
         let a_asset = f.ar.join("Task").join("removed.typ");
         let a_retained = f
             ._temp
@@ -1605,7 +1692,10 @@ fn typed_native_receiver_removed_member_world_requires_the_original_retirement_p
                 .contains_key("Task/removed.typ")
         );
         assert_eq!(
-            capture_optional(&b_asset).unwrap().unwrap().stamp,
+            capture_optional(&crate::BackendContext::local().unwrap(), &b_asset)
+                .unwrap()
+                .unwrap()
+                .stamp,
             original.stamp
         );
         let outputs = compile(captured.render_inputs());
@@ -1618,7 +1708,10 @@ fn typed_native_receiver_removed_member_world_requires_the_original_retirement_p
             );
             assert!(!f.b.operations.contains_key(&operation_id));
             assert_eq!(
-                capture_optional(&b_asset).unwrap().unwrap().stamp,
+                capture_optional(&crate::BackendContext::local().unwrap(), &b_asset)
+                    .unwrap()
+                    .unwrap()
+                    .stamp,
                 original.stamp
             );
             continue;
@@ -1660,7 +1753,10 @@ fn typed_native_receiver_removed_member_world_requires_the_original_retirement_p
             f.b.finish_sync_native_preparation(captured, outputs)
                 .unwrap();
         assert_eq!(
-            capture_optional(&b_asset).unwrap().unwrap().stamp,
+            capture_optional(&crate::BackendContext::local().unwrap(), &b_asset)
+                .unwrap()
+                .unwrap()
+                .stamp,
             original.stamp
         );
         assert!(!target.exists());
@@ -1673,7 +1769,9 @@ fn typed_native_receiver_removed_member_world_requires_the_original_retirement_p
         f.b.execute_operation(&preview.operation_id, &preview.plan_id)
             .unwrap();
         assert!(!b_asset.exists());
-        let retained = capture_optional(&target).unwrap().unwrap();
+        let retained = capture_optional(&crate::BackendContext::local().unwrap(), &target)
+            .unwrap()
+            .unwrap();
         assert_eq!(retained.stamp.identity, original.stamp.identity);
         assert_eq!(retained.bytes, original.bytes);
         assert_eq!(fs::read(a_retained).unwrap(), original.bytes);
@@ -1727,7 +1825,9 @@ fn typed_native_adoption_removed_member_uses_actual_after_world_and_original_neg
         f.b.publish_sync(&f.br).unwrap();
         f.install_definition();
         let asset = f.br.join("Task").join("removed.typ");
-        let original = capture_optional(&asset).unwrap().unwrap();
+        let original = capture_optional(&crate::BackendContext::local().unwrap(), &asset)
+            .unwrap()
+            .unwrap();
         let retained = f._temp.path().join("retained-external-resource.typ");
         fs::rename(&asset, &retained).unwrap();
         let manifest_path = f.br.join("Task").join("weftext.resources.json");
@@ -1782,7 +1882,11 @@ fn typed_native_adoption_removed_member_uses_actual_after_world_and_original_neg
         assert!(!asset.exists());
         assert_eq!(fs::read(&retained).unwrap(), original.bytes);
         assert_eq!(
-            capture_optional(&retained).unwrap().unwrap().stamp.identity,
+            capture_optional(&crate::BackendContext::local().unwrap(), &retained)
+                .unwrap()
+                .unwrap()
+                .stamp
+                .identity,
             original.stamp.identity
         );
         assert_eq!(fs::read(&note_path).unwrap(), external_note.as_bytes());
@@ -1887,7 +1991,9 @@ fn typed_native_moved_include_keeps_original_file_identity_through_real_plan_and
         f.transfer(&BTreeSet::from([task.clone()]));
         f.apply(BTreeSet::from([task.clone()]));
         let original_path = f.br.join("Task").join("part.typ");
-        let original = capture_optional(&original_path).unwrap().unwrap();
+        let original = capture_optional(&crate::BackendContext::local().unwrap(), &original_path)
+            .unwrap()
+            .unwrap();
         let renamed =
             f.a.prepare_operation(OperationRequest {
                 operation_id: crate::fresh(),
@@ -1934,7 +2040,11 @@ fn typed_native_moved_include_keeps_original_file_identity_through_real_plan_and
             .unwrap();
         let moved = f.br.join("Renamed").join("part.typ");
         assert_eq!(
-            capture_optional(&moved).unwrap().unwrap().stamp.identity,
+            capture_optional(&crate::BackendContext::local().unwrap(), &moved)
+                .unwrap()
+                .unwrap()
+                .stamp
+                .identity,
             original.stamp.identity
         );
         assert!(!f.br.join("Task").exists());
@@ -1961,7 +2071,11 @@ fn typed_native_moved_include_keeps_original_file_identity_through_real_plan_and
                     .is_err()
             );
             assert_ne!(
-                capture_optional(&moved).unwrap().unwrap().stamp.identity,
+                capture_optional(&crate::BackendContext::local().unwrap(), &moved)
+                    .unwrap()
+                    .unwrap()
+                    .stamp
+                    .identity,
                 original.stamp.identity
             );
         } else {
@@ -1978,7 +2092,11 @@ fn typed_native_moved_include_keeps_original_file_identity_through_real_plan_and
                 "committed"
             );
             assert_eq!(
-                capture_optional(&moved).unwrap().unwrap().stamp.identity,
+                capture_optional(&crate::BackendContext::local().unwrap(), &moved)
+                    .unwrap()
+                    .unwrap()
+                    .stamp
+                    .identity,
                 original.stamp.identity
             );
         }

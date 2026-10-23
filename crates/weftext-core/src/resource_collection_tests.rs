@@ -17,7 +17,7 @@ impl Fixture {
         let root = temp.path().join("Library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let owner = weftext_knowledge::NodeRef {
             workspace_id: core.require_workspace(&root).unwrap().workspace_id,
             node_id: note.node_id.unwrap(),
@@ -431,19 +431,27 @@ fn resource_collection_delayed_original_first_import_cannot_reset_newly_lost_man
 fn resource_collection_missing_observation_cannot_erase_original_empty_initialization() {
     let mut f = Fixture::new();
     let plan = f.write_manifest(serde_json::json!({"version":1,"resources":[]}));
+    let original_commit = fs::read(f.core.journal_path(&plan.operation_id, "commit")).unwrap();
     fs::remove_file(f.core.journal_path(&plan.operation_id, "observations")).unwrap();
     fs::remove_file(f.manifest()).unwrap();
     f.restart();
-    assert_eq!(
-        f.collection().err().unwrap().code,
-        "resourceManifestUnavailable"
-    );
+    assert_eq!(f.collection().err().unwrap().code, "identityPending");
     assert_eq!(
         f.core
             .prepare_import_resource(&f.root, &f.source, "new.bin", vec![1], &fresh())
             .unwrap_err()
             .code,
         "resourceManifestUnavailable"
+    );
+    assert!(!f.manifest().exists());
+    assert!(
+        !f.core
+            .journal_path(&plan.operation_id, "observations")
+            .exists()
+    );
+    assert_eq!(
+        fs::read(f.core.journal_path(&plan.operation_id, "commit")).unwrap(),
+        original_commit
     );
 }
 
@@ -464,12 +472,17 @@ fn resource_collection_original_first_import_afterimages_remain_recoverable() {
         _ => unreachable!(),
     };
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &f.core.journal_path(&plan.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
     .unwrap();
     for change in &changes {
-        let guard = ParentGuard::acquire(Path::new(&change.path)).unwrap();
+        let guard = ParentGuard::acquire(
+            &crate::BackendContext::local().unwrap(),
+            Path::new(&change.path),
+        )
+        .unwrap();
         let mut handle = guard.open_file(true, true).unwrap();
         f.core
             .record_materialized(&plan.operation_id, Path::new(&change.path), &handle)
@@ -581,7 +594,10 @@ fn resource_collection_old_path_new_owner_does_not_transfer_initialization() {
         name: "Moved".into(),
     });
     f.source = f.root.join("Moved/Moved.typ");
-    let new = f.core.create_note(&f.root, &f.root, "Note").unwrap();
+    let new = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Note")
+        .unwrap();
     let plan = f
         .core
         .prepare_import_resource(&f.root, &new.path, "new-owner.bin", vec![2], &fresh())
@@ -684,7 +700,10 @@ fn resource_collection_raw_manifest_replacement_and_explicit_owner_mismatch_fail
         f.collection().err().unwrap().code,
         "resourceManifestUnavailable"
     );
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     assert!(
         f.core
             .qualified_resource_collection_at(&f.root, Path::new(&other.path), &f.owner, "live")

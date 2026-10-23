@@ -123,7 +123,7 @@ fn options(enabled: bool) -> LibraryCreateOptions {
 }
 
 fn prepare(core: &mut Core, root: &Path, input: LibraryCreateOptions, op: &str) -> journal::Plan {
-    let guard = ParentGuard::acquire(root).unwrap();
+    let guard = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), root).unwrap();
     let plan = core
         .plan_library_creation(
             root,
@@ -255,7 +255,7 @@ fn library_creation_pending_subtree_resumes_after_restart_in_same_plan() {
         queries: vec!["tasks".into(), "events".into()],
     });
     let plan = prepare(&mut core, &root, input.clone(), &op);
-    let guard = ParentGuard::acquire(&root).unwrap();
+    let guard = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), &root).unwrap();
     let directory = guard.create_directory().unwrap();
     core.record_materialized(&op, &root, &directory).unwrap();
     let styles = ParentGuard::child_directory(&directory, "Styles").unwrap();
@@ -332,7 +332,7 @@ fn library_creation_after_images_can_be_adopted_with_original_bindings() {
     let op = fresh();
     let mut core = Core::new(&data).unwrap();
     let plan = prepare(&mut core, &root, options(true), &op);
-    let guard = ParentGuard::acquire(&root).unwrap();
+    let guard = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), &root).unwrap();
     let directory = guard.create_directory().unwrap();
     core.record_materialized(&op, &root, &directory).unwrap();
     let styles = ParentGuard::child_directory(&directory, "Styles").unwrap();
@@ -399,10 +399,13 @@ fn library_creation_same_path_replacement_root_never_becomes_original_result() {
     ] {
         fs::copy(held.join(name), root.join(name)).unwrap();
     }
+    let receipt = core
+        .create_library_with_options_and_id(&root, options(true), &op)
+        .unwrap();
+    assert_eq!(receipt.operation_id, op);
+    assert_eq!(receipt.status, "committed");
     assert_eq!(
-        core.create_library_with_options_and_id(&root, options(true), &op)
-            .unwrap_err()
-            .code,
+        core.reopen_local_library_creation(&op).err().unwrap().code,
         "committedResultUnavailable"
     );
     assert!(core.workspace(&root).unwrap().is_none());
@@ -420,7 +423,7 @@ fn library_creation_recovery_rejects_unbound_equal_bytes_and_changed_member() {
         let mut core = Core::new(temp.path().join("private")).unwrap();
         let op = fresh();
         prepare(&mut core, &root, options(true), &op);
-        let guard = ParentGuard::acquire(&root).unwrap();
+        let guard = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), &root).unwrap();
         let directory = guard.create_directory().unwrap();
         if bind {
             core.record_materialized(&op, &root, &directory).unwrap();
@@ -449,7 +452,7 @@ fn library_creation_recovery_rejects_unbound_equal_bytes_and_changed_member() {
             "recoveryConflict"
         );
         assert_eq!(fs::read(root.join(".weftext-format")).unwrap(), before);
-        assert!(!core.committed(&op));
+        assert!(!core.committed(&op).unwrap());
     }
 }
 
@@ -557,14 +560,15 @@ fn library_creation_staged_before_tree_can_cancel_but_partial_tree_cannot() {
         let op = fresh();
         prepare(&mut core, &root, options(true), &op);
         if partial {
-            let guard = ParentGuard::acquire(&root).unwrap();
+            let guard =
+                ParentGuard::acquire(&crate::BackendContext::local().unwrap(), &root).unwrap();
             let directory = guard.create_directory().unwrap();
             core.record_materialized(&op, &root, &directory).unwrap();
         }
         let result = core.cancel_library_creation_with_options_and_id(&root, options(true), &op);
         if partial {
             assert_eq!(result.unwrap_err().code, "recoveryConflict");
-            assert!(!core.resolved(&op));
+            assert!(!core.resolved(&op).unwrap());
             assert!(root.exists());
         } else {
             assert_eq!(result.unwrap().status, "resolved");
@@ -657,10 +661,10 @@ fn library_creation_invalid_raw_request_cancellation_is_single_durable_terminal_
             .status,
         "resolved"
     );
-    assert!(!core.journal_path(&op, "resolution").exists());
-    assert!(is_cancellation(&core.operations[&op]));
-    // The Plan is already the complete cancel fact: the old two-record crash
-    // window cannot leave a raw path pending, even with no resolution record.
+    assert!(core.journal_path(&op, "resolution").exists());
+    assert!(!core.journal_path(&op, "plan").exists());
+    assert!(!core.operations.contains_key(&op));
+    // The one original resolution is a device fence, never an author Plan.
     drop(core);
     let mut core = Core::new(&data).unwrap();
     let status = core.inspect_recovery(&op).unwrap();
@@ -697,7 +701,16 @@ fn library_creation_cancel_terminal_recognizer_rejects_author_participants_or_ch
     let op = fresh();
     core.cancel_library_creation_with_options_and_id(&root, options(true), &op)
         .unwrap();
-    let original = core.operations[&op].clone();
+    let original = journal::Plan::file(
+        op.clone(),
+        request_fingerprint(&root, &options(true)).unwrap(),
+        &root,
+        None,
+        serde_json::to_vec(&options(true)).unwrap(),
+        None,
+        "cancelLibraryCreation",
+    );
+    assert!(is_cancellation(&original));
     let other = prepare(
         &mut core,
         &temp.path().join("other"),
@@ -708,7 +721,7 @@ fn library_creation_cancel_terminal_recognizer_rejects_author_participants_or_ch
     changed.transaction = other.transaction;
     assert!(!is_cancellation(&changed));
     changed = original.clone();
-    changed.identity = Some(FileIdentity {
+    changed.identity = Some(FileIdentity::Windows {
         volume: 1,
         index: 1,
         created: 1,

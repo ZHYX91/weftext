@@ -70,7 +70,7 @@ def native_upload(schema, *, derived=False, tags=False, query=False):
     if derived:
         files['One/weftext.citations.bib'] = b'@article{retainedOnly,title={Derived input}}\n'
         roles['One/weftext.citations.bib'] = {'role': 'generatedBibliography', 'ownerNodeId': first}
-    manifest = dict(format='weftext.native-package', version=1, packageId=uid(),
+    manifest = dict(format='weftext.native-package', version=2, packageId=uid(),
                     workspaceId=workspace, scope='library', schemaPath='.weftext-schema.json',
                     losses=[], entries={path: {**roles[path], 'bytes': len(value),
                         'sha256': hashlib.sha256(value).hexdigest()} for path, value in files.items()})

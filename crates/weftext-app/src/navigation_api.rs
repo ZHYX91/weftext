@@ -1,6 +1,7 @@
 //! Source-independent navigation adapters. Preview and commit share Core's
 //! original operation ledger with every other author action.
 use super::{ApiResult, AppState, core_call, value};
+use crate::RequestJson;
 use axum::{Json, Router, extract::State, routing::post};
 use serde::Deserialize;
 
@@ -60,7 +61,7 @@ struct OrderCancelRequest {
 
 async fn order_cancel(
     State(state): State<AppState>,
-    Json(req): Json<OrderCancelRequest>,
+    RequestJson(req): RequestJson<OrderCancelRequest>,
 ) -> ApiResult {
     let result = core_call(&state, move |core| {
         core.cancel_navigation_reorder(req.root, &req.operation_id, &req.plan_id)
@@ -69,7 +70,10 @@ async fn order_cancel(
     Ok(Json(value(result)?))
 }
 
-async fn order_read(State(state): State<AppState>, Json(req): Json<OrderReadRequest>) -> ApiResult {
+async fn order_read(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<OrderReadRequest>,
+) -> ApiResult {
     let result = core_call(&state, move |core| {
         core.read_navigation_order(req.root, &req.parent_ref)
     })
@@ -79,7 +83,7 @@ async fn order_read(State(state): State<AppState>, Json(req): Json<OrderReadRequ
 
 async fn order_prepare(
     State(state): State<AppState>,
-    Json(req): Json<OrderPrepareRequest>,
+    RequestJson(req): RequestJson<OrderPrepareRequest>,
 ) -> ApiResult {
     let result = core_call(&state, move |core| {
         core.prepare_navigation_reorder(
@@ -116,7 +120,10 @@ struct CancelRequest {
     plan_id: Option<String>,
 }
 
-async fn cancel(State(state): State<AppState>, Json(req): Json<CancelRequest>) -> ApiResult {
+async fn cancel(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<CancelRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.cancel_navigation_attempt(req.root, &req.operation_id, req.plan_id.as_deref())
@@ -158,7 +165,10 @@ struct RenameTagRequest {
     operation_id: String,
 }
 
-async fn capture(State(state): State<AppState>, Json(req): Json<CaptureRequest>) -> ApiResult {
+async fn capture(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<CaptureRequest>,
+) -> ApiResult {
     let result = core_call(&state, move |core| {
         core.capture_navigation_target(req.root, req.path)
     })
@@ -166,7 +176,10 @@ async fn capture(State(state): State<AppState>, Json(req): Json<CaptureRequest>)
     Ok(Json(value(result)?))
 }
 
-async fn resolve(State(state): State<AppState>, Json(req): Json<ResolveRequest>) -> ApiResult {
+async fn resolve(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<ResolveRequest>,
+) -> ApiResult {
     let result = core_call(&state, move |core| {
         core.resolve_navigation_target(req.root, &req.target_ref)
     })
@@ -176,7 +189,7 @@ async fn resolve(State(state): State<AppState>, Json(req): Json<ResolveRequest>)
 
 async fn admit_directory(
     State(state): State<AppState>,
-    Json(req): Json<AdmitRequest>,
+    RequestJson(req): RequestJson<AdmitRequest>,
 ) -> ApiResult {
     let result = core_call(&state, move |core| {
         core.prepare_directory_admission(req.root, req.path, &req.operation_id)
@@ -185,12 +198,18 @@ async fn admit_directory(
     Ok(Json(value(result)?))
 }
 
-async fn tags(State(state): State<AppState>, Json(req): Json<TagsRequest>) -> ApiResult {
+async fn tags(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<TagsRequest>,
+) -> ApiResult {
     let result = core_call(&state, move |core| core.read_tag_registry(req.root)).await?;
     Ok(Json(value(result)?))
 }
 
-async fn create_tag(State(state): State<AppState>, Json(req): Json<CreateTagRequest>) -> ApiResult {
+async fn create_tag(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<CreateTagRequest>,
+) -> ApiResult {
     let result = core_call(&state, move |core| {
         core.prepare_create_tag_with_assignment(
             req.root,
@@ -205,7 +224,10 @@ async fn create_tag(State(state): State<AppState>, Json(req): Json<CreateTagRequ
     Ok(Json(value(result)?))
 }
 
-async fn move_tag(State(state): State<AppState>, Json(req): Json<MoveTagRequest>) -> ApiResult {
+async fn move_tag(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<MoveTagRequest>,
+) -> ApiResult {
     let result = core_call(&state, move |core| {
         core.prepare_move_tag(
             req.root,
@@ -219,7 +241,10 @@ async fn move_tag(State(state): State<AppState>, Json(req): Json<MoveTagRequest>
     Ok(Json(value(result)?))
 }
 
-async fn rename_tag(State(state): State<AppState>, Json(req): Json<RenameTagRequest>) -> ApiResult {
+async fn rename_tag(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<RenameTagRequest>,
+) -> ApiResult {
     let result = core_call(&state, move |core| {
         core.prepare_rename_tag(
             req.root,

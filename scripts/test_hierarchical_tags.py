@@ -5,6 +5,7 @@ per-request timings are retained in fresh directories; no existing library or
 private journal is rewritten. --artifacts-dir selects the current workspace's
 temporary parent; the portable default stays inside this repository's target.
 """
+from _creation_result import created_document
 import argparse
 import base64
 import copy
@@ -44,7 +45,7 @@ def native_tags(schema, count=3, mutate=None):
     roles = {'.weftext-schema.json': {'role': 'schema'},
              '.weftext-tags.json': {'role': 'tags'},
              'Imported/Imported.typ': {'role': 'source', 'nodeId': node}}
-    manifest = dict(format='weftext.native-package', version=1, packageId=uid(),
+    manifest = dict(format='weftext.native-package', version=2, packageId=uid(),
         workspaceId=workspace, scope='library', schemaPath='.weftext-schema.json', losses=[],
         entries={name: {**roles[name], 'bytes': len(value),
                        'sha256': hashlib.sha256(value).hexdigest()} for name, value in files.items()})
@@ -62,7 +63,7 @@ class HierarchicalTags(unittest.TestCase):
         (self.folder / 'test-case.txt').write_text(self._testMethodName, 'utf-8')
         self.data, self.root = self.folder / 'state', self.folder / 'Library'
         self.timings = []
-        self.server = Server(['--no-browser', '--data-dir', str(self.data)])
+        self.server = Server([ '--data-dir', str(self.data)])
         self.library = self.call('/api/library/create', {'path': str(self.root), 'operationId': uid()})
         self.doc = self.note('Anchor')
         print('Hierarchical tags evidence:', self.folder, flush=True)
@@ -97,8 +98,8 @@ class HierarchicalTags(unittest.TestCase):
         return error
 
     def note(self, name):
-        return self.call('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
-                                            'name': name, 'operationId': uid()})
+        return created_document(self.call('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
+                                            'name': name, 'operationId': uid()}))
 
     def registry(self):
         value = self.call('/api/navigation/tags', {'root': str(self.root)})
@@ -264,7 +265,7 @@ class HierarchicalTags(unittest.TestCase):
         # Discard the response body rather than accepting its receipt.
         connection.close()
         self.server.close()
-        self.server = Server(['--no-browser', '--data-dir', str(self.data)])
+        self.server = Server([ '--data-dir', str(self.data)])
         status = self.call('/api/operations/status', {'operationId': preview['operationId']})
         self.assertEqual(status['status'], 'committed')
         replay = self.call('/api/navigation/create-tag', request)

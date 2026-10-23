@@ -8,19 +8,26 @@ license = "AGPL-3.0-or-later"
 name = "weftext"
 path = "src/main.rs"
 
+[[bin]]
+name = "weftext-cli"
+path = "src/cli_main.rs"
+
 [dependencies]
 weftext-core = { path = "../weftext-core" }
 weftext-engine = { path = "../weftext-engine" }
 weftext-data = { path = "../weftext-data" }
 weftext-knowledge = { path = "../weftext-knowledge" }
 weftext-export = { path = "../weftext-export" }
+weftext-messages = { path = "../weftext-messages" }
 typst-syntax = "=0.15.1"
 axum = "0.8"
+tower = { version = "0.5.3", default-features = false }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { workspace = true }
+mime = "0.3.17"
 uuid = { version = "1", features = ["v4"] }
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4", features = ["derive", "string"] }
 include_dir = "0.7"
 mime_guess = "2"
 url = "2"
@@ -34,5 +41,8 @@ reqwest = { version = "0.12.28", default-features = false, features = ["json", "
 tempfile = "3"
 
 [target.'cfg(windows)'.dependencies]
+webview2-com = "=0.39.1"
+windows-core = "=0.62.2"
+windows = { version = "=0.62.2", features = ["ApplicationModel", "Data_Xml_Dom", "Foundation", "UI_Notifications", "Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Gdi", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_Storage_Packaging_Appx", "Win32_System_Com", "Win32_System_JobObjects", "Win32_System_LibraryLoader", "Win32_System_SystemInformation", "Win32_System_Pipes", "Win32_System_Threading", "Win32_System_WinRT", "Win32_UI_Notifications", "Win32_UI_HiDpi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_JobObjects", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 

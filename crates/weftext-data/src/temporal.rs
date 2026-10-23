@@ -1,11 +1,17 @@
 use crate::*;
-use chrono::{Datelike, Days, NaiveDate, Weekday};
+use chrono::{Datelike, Days, NaiveDate, Timelike, Weekday};
 use std::cmp::Ordering;
 
 fn member_text<'a>(v: &'a NativeValue, key: &str) -> Result<&'a str> {
-    v.member(key)
-        .and_then(NativeValue::text)
-        .ok_or_else(|| DataError(format!("{key}: required text")))
+    v.member(key).and_then(NativeValue::text).ok_or_else(|| {
+        DataError::new(
+            weftext_messages::UiMessage::error_data_temporal_required_text_member_missing(
+                weftext_messages::params::ErrorDataTemporalRequiredTextMemberMissing {
+                    member_key: (key).to_string(),
+                },
+            ),
+        )
+    })
 }
 fn date_string(d: NaiveDate) -> String {
     d.format("%Y-%m-%d").to_string()
@@ -24,18 +30,23 @@ fn native_range(start: NaiveDate, end: NaiveDate) -> NativeValue {
 }
 fn civil(year: i32, month: u32, day: u32) -> Result<NaiveDate> {
     if !(1..=9999).contains(&year) {
-        return Err(DataError("Gregorian year outside installed bounds".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_temporal_gregorian_year_outside_installed_bounds(),
+        ));
     }
-    NaiveDate::from_ymd_opt(year, month, day)
-        .ok_or_else(|| DataError("Invalid Gregorian civil date".into()))
+    NaiveDate::from_ymd_opt(year, month, day).ok_or_else(|| {
+        DataError::new(
+            weftext_messages::UiMessage::error_data_temporal_invalid_gregorian_civil_date(),
+        )
+    })
 }
 fn plus_days(date: NaiveDate, n: u64) -> Result<NaiveDate> {
-    let d = date
-        .checked_add_days(Days::new(n))
-        .ok_or_else(|| DataError("Civil date overflow".into()))?;
+    let d = date.checked_add_days(Days::new(n)).ok_or_else(|| {
+        DataError::new(weftext_messages::UiMessage::error_data_temporal_civil_date_overflow())
+    })?;
     if d.year() > 9999 {
-        return Err(DataError(
-            "Period endpoint outside installed Gregorian coverage".into(),
+        return Err(DataError::coverage(
+            weftext_messages::UiMessage::error_data_temporal_period_endpoint_outside_gregorian_coverage(),
         ));
     }
     Ok(d)
@@ -64,13 +75,19 @@ pub fn validate_period(period: &NativeValue, schema: &Schema) -> Cell {
             .and_then(NativeValue::text)
             .is_none_or(str::is_empty)
         {
-            return invalid(format!("{key}: required nonempty text"));
+            return invalid(
+                weftext_messages::UiMessage::error_data_temporal_nonempty_text_member_required(
+                    weftext_messages::params::ErrorDataTemporalNonemptyTextMemberRequired {
+                        member_key: (key).to_string(),
+                    },
+                ),
+            );
         }
     }
     match period_dates(period, schema) {
         Ok(_) => Cell::value(NativeValue::Bool(true)),
-        Err(e) if e.0.contains("unavailable") || e.0.contains("coverage") => issue(e.0),
-        Err(e) => invalid(e.0),
+        Err(e) if e.is_unavailable() => Cell::unavailable_error(e),
+        Err(e) => invalid_error(e),
     }
 }
 pub fn period_step(period: &NativeValue, steps: i32, schema: &Schema) -> Result<NativeValue> {
@@ -95,35 +112,47 @@ fn period_providers<'a>(
         .series_policies
         .iter()
         .find(|p| p.key == series)
-        .ok_or_else(|| DataError("Series policy unavailable".into()))?;
+        .ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_temporal_series_policy_unavailable(),
+            )
+        })?;
     let kind = member_text(period, "kind")?;
     if !policy.kinds.iter().any(|k| k == kind) || member_text(period, "rule")? != policy.rule {
-        return Err(DataError(
-            "Period kind/rule conflicts with series policy".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_temporal_period_kind_or_rule_conflicts_with_policy(),
         ));
     }
     let calendar = schema
         .providers
         .iter()
         .find(|p| p.id == policy.calendar)
-        .ok_or_else(|| DataError("Series calendar provider unavailable".into()))?;
+        .ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_temporal_series_calendar_provider_unavailable(),
+            )
+        })?;
     let zone = schema
         .providers
         .iter()
         .find(|p| p.id == policy.zone)
-        .ok_or_else(|| DataError("Series zone provider unavailable".into()))?;
+        .ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_temporal_series_zone_provider_unavailable(),
+            )
+        })?;
     if calendar.data["key"].as_str() != Some(member_text(period, "calendar")?)
         || zone.data["key"].as_str() != Some(member_text(period, "zone")?)
     {
-        return Err(DataError(
-            "Period calendar/zone keys conflict with series policy".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_temporal_period_calendar_zone_keys_conflict_with_policy(),
         ));
     }
     if calendar.data["version"].as_str() != Some(member_text(period, "calendar_version")?)
         || zone.data["version"].as_str() != Some(member_text(period, "zone_version")?)
     {
-        return Err(DataError(
-            "Period frozen provider versions unavailable under series policy".into(),
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_temporal_period_provider_versions_unavailable_under_policy(),
         ));
     }
     Ok((policy, calendar, zone))
@@ -137,57 +166,73 @@ fn period_dates(period: &NativeValue, schema: &Schema) -> Result<(NaiveDate, Nai
         return CalendarModel::new(calendar)?.table_period(kind, member_text(period, "key")?);
     }
     if calendar.implementation.id != "weftext.calendar.gregorian.v2" || policy.rule != "iso8601" {
-        return Err(DataError(
-            "Selected calendar period executor unavailable".into(),
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_temporal_calendar_period_executor_unavailable(),
         ));
     }
     let key = member_text(period, "key")?;
     if !key.is_ascii() {
-        return Err(DataError(
-            "Gregorian period key must be canonical ASCII".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_temporal_gregorian_period_key_requires_canonical_ascii(),
         ));
     }
     let bounds = match kind {
         "day" => {
-            let d = NaiveDate::parse_from_str(key, "%Y-%m-%d")
-                .map_err(|_| DataError("Invalid day period key".into()))?;
+            let d = NaiveDate::parse_from_str(key, "%Y-%m-%d").map_err(|_| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_invalid_day_period_key(),
+                )
+            })?;
             if date_string(d) != key {
-                return Err(DataError("Noncanonical day key".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_noncanonical_day_key(),
+                ));
             }
             (civil(d.year(), d.month(), d.day())?, plus_days(d, 1)?)
         }
         "week" => {
-            let (y, w) = key
-                .split_once("-W")
-                .ok_or_else(|| DataError("Expected YYYY-Www".into()))?;
-            let y = y
-                .parse::<i32>()
-                .map_err(|_| DataError("Invalid week year".into()))?;
-            let w = w
-                .parse::<u32>()
-                .map_err(|_| DataError("Invalid ISO week".into()))?;
+            let (y, w) = key.split_once("-W").ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_iso_week_key_format_required(),
+                )
+            })?;
+            let y = y.parse::<i32>().map_err(|_| {
+                DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_week_year())
+            })?;
+            let w = w.parse::<u32>().map_err(|_| {
+                DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_iso_week())
+            })?;
             if key != format!("{y:04}-W{w:02}") || !(1..=9999).contains(&y) {
-                return Err(DataError("Noncanonical ISO week key".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_noncanonical_iso_week_key(),
+                ));
             }
-            let start = NaiveDate::from_isoywd_opt(y, w, Weekday::Mon)
-                .ok_or_else(|| DataError("Invalid ISO week including week-53".into()))?;
+            let start = NaiveDate::from_isoywd_opt(y, w, Weekday::Mon).ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_invalid_iso_week_including_week53(),
+                )
+            })?;
             (
                 civil(start.year(), start.month(), start.day())?,
                 plus_days(start, 7)?,
             )
         }
         "month" => {
-            let (y, m) = key
-                .split_once('-')
-                .ok_or_else(|| DataError("Expected YYYY-MM".into()))?;
-            let y = y
-                .parse::<i32>()
-                .map_err(|_| DataError("Invalid year".into()))?;
-            let m = m
-                .parse::<u32>()
-                .map_err(|_| DataError("Invalid month".into()))?;
+            let (y, m) = key.split_once('-').ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_month_key_format_required(),
+                )
+            })?;
+            let y = y.parse::<i32>().map_err(|_| {
+                DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_year())
+            })?;
+            let m = m.parse::<u32>().map_err(|_| {
+                DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_month())
+            })?;
             if key != format!("{y:04}-{m:02}") {
-                return Err(DataError("Noncanonical month key".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_noncanonical_month_key(),
+                ));
             }
             let start = civil(y, m, 1)?;
             let end = if m == 12 {
@@ -198,17 +243,21 @@ fn period_dates(period: &NativeValue, schema: &Schema) -> Result<(NaiveDate, Nai
             (start, end)
         }
         "quarter" => {
-            let (y, q) = key
-                .split_once("-Q")
-                .ok_or_else(|| DataError("Expected YYYY-Qq".into()))?;
-            let y = y
-                .parse::<i32>()
-                .map_err(|_| DataError("Invalid year".into()))?;
-            let q = q
-                .parse::<u32>()
-                .map_err(|_| DataError("Invalid quarter".into()))?;
+            let (y, q) = key.split_once("-Q").ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_quarter_key_format_required(),
+                )
+            })?;
+            let y = y.parse::<i32>().map_err(|_| {
+                DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_year())
+            })?;
+            let q = q.parse::<u32>().map_err(|_| {
+                DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_quarter())
+            })?;
             if key != format!("{y:04}-Q{q}") || !(1..=4).contains(&q) {
-                return Err(DataError("Noncanonical quarter key".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_noncanonical_quarter_key(),
+                ));
             }
             let start = civil(y, (q - 1) * 3 + 1, 1)?;
             let end = if q == 4 {
@@ -219,21 +268,27 @@ fn period_dates(period: &NativeValue, schema: &Schema) -> Result<(NaiveDate, Nai
             (start, end)
         }
         "year" => {
-            let y = key
-                .parse::<i32>()
-                .map_err(|_| DataError("Invalid year key".into()))?;
+            let y = key.parse::<i32>().map_err(|_| {
+                DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_year_key())
+            })?;
             if key != format!("{y:04}") {
-                return Err(DataError("Noncanonical year key".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_noncanonical_year_key(),
+                ));
             }
             (civil(y, 1, 1)?, civil(y + 1, 1, 1)?)
         }
-        _ => return Err(DataError("Unknown period kind".into())),
+        _ => {
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_unknown_period_kind(),
+            ));
+        }
     };
     let min = calendar.data["min_year"].as_i64().unwrap_or(1);
     let max = calendar.data["max_year"].as_i64().unwrap_or(9999);
     if i64::from(bounds.0.year()) < min || i64::from(bounds.1.year()) > max {
-        return Err(DataError(
-            "Period crosses installed calendar coverage".into(),
+        return Err(DataError::coverage(
+            weftext_messages::UiMessage::error_data_temporal_period_outside_installed_calendar_coverage(),
         ));
     }
     // Civil bounds retain dates; the zone is a dependency, never an implicit
@@ -249,10 +304,15 @@ pub struct ExactInstant {
 }
 impl ExactInstant {
     pub fn canonical(&self) -> Result<String> {
-        let dt = chrono::DateTime::from_timestamp(self.utc_seconds, 0)
-            .ok_or_else(|| DataError("Instant outside supported bounds".into()))?;
+        let dt = chrono::DateTime::from_timestamp(self.utc_seconds, 0).ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_instant_outside_supported_bounds(),
+            )
+        })?;
         if !(1..=9999).contains(&dt.year()) {
-            return Err(DataError("Instant outside supported bounds".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_instant_outside_supported_bounds(),
+            ));
         }
         let fraction = self.fraction.spelling();
         let tail = fraction
@@ -269,23 +329,32 @@ impl ExactInstant {
             }
         ))
     }
+    /// Add whole seconds while preserving the exact fractional second.
+    pub fn shifted_seconds(&self, seconds: i64) -> Result<Self> {
+        self.shifted(seconds, &ExactDecimal::parse("0")?)
+    }
     pub(crate) fn shifted(&self, seconds: i64, fraction: &ExactDecimal) -> Result<Self> {
         let zero = ExactDecimal::parse("0")?;
         let one = ExactDecimal::parse("1")?;
-        let mut utc_seconds = self
-            .utc_seconds
-            .checked_add(seconds)
-            .ok_or_else(|| DataError("Instant arithmetic overflow".into()))?;
+        let mut utc_seconds = self.utc_seconds.checked_add(seconds).ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_instant_arithmetic_overflow(),
+            )
+        })?;
         let mut value = self.fraction.add(fraction);
         if value.compare(&zero).is_lt() {
-            utc_seconds = utc_seconds
-                .checked_sub(1)
-                .ok_or_else(|| DataError("Instant arithmetic overflow".into()))?;
+            utc_seconds = utc_seconds.checked_sub(1).ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_instant_arithmetic_overflow(),
+                )
+            })?;
             value = value.add(&one);
         } else if !value.compare(&one).is_lt() {
-            utc_seconds = utc_seconds
-                .checked_add(1)
-                .ok_or_else(|| DataError("Instant arithmetic overflow".into()))?;
+            utc_seconds = utc_seconds.checked_add(1).ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_instant_arithmetic_overflow(),
+                )
+            })?;
             value = value.add(&ExactDecimal::parse("-1")?);
         }
         let result = Self {
@@ -297,74 +366,105 @@ impl ExactInstant {
     }
     pub fn parse(s: &str) -> Result<Self> {
         if !s.is_ascii() || s.len() < 20 || s.ends_with("-00:00") {
-            return Err(DataError(
-                "Instant requires a known explicit RFC3339 offset".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_instant_requires_known_explicit_offset(),
             ));
         }
-        let (date, time) = s
-            .split_once('T')
-            .ok_or_else(|| DataError("Instant needs RFC3339 T".into()))?;
+        let (date, time) = s.split_once('T').ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_instant_requires_rfc3339_separator(
+                ),
+            )
+        })?;
         let date_text = date;
-        let date = NaiveDate::parse_from_str(date, "%Y-%m-%d")
-            .map_err(|_| DataError("Invalid instant civil date".into()))?;
+        let date = NaiveDate::parse_from_str(date, "%Y-%m-%d").map_err(|_| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_invalid_instant_civil_date(),
+            )
+        })?;
         if !(1..=9999).contains(&date.year()) || date_string(date) != date_text {
-            return Err(DataError(
-                "Instant date outside supported Gregorian bounds".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_instant_date_outside_gregorian_bounds(),
             ));
         }
         let (time, offset) = if let Some(t) = time.strip_suffix('Z') {
             (t, 0i64)
         } else {
             if time.len() < 14 {
-                return Err(DataError("Missing instant offset".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_instant_offset_missing(),
+                ));
             }
             let at = time.len() - 6;
             let (t, z) = time.split_at(at);
             let sign = match z.as_bytes()[0] {
                 b'+' => 1,
                 b'-' => -1,
-                _ => return Err(DataError("Invalid instant offset".into())),
+                _ => {
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_temporal_invalid_instant_offset(),
+                    ));
+                }
             };
             if z.as_bytes()[3] != b':'
                 || !z[1..3].bytes().all(|b| b.is_ascii_digit())
                 || !z[4..6].bytes().all(|b| b.is_ascii_digit())
             {
-                return Err(DataError("Invalid instant offset".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_invalid_instant_offset(),
+                ));
             }
-            let h = z[1..3]
-                .parse::<i64>()
-                .map_err(|_| DataError("Invalid offset hour".into()))?;
-            let m = z[4..6]
-                .parse::<i64>()
-                .map_err(|_| DataError("Invalid offset minute".into()))?;
+            let h = z[1..3].parse::<i64>().map_err(|_| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_invalid_offset_hour(),
+                )
+            })?;
+            let m = z[4..6].parse::<i64>().map_err(|_| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_invalid_offset_minute(),
+                )
+            })?;
             if h > 23 || m > 59 {
-                return Err(DataError("Invalid instant offset".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_invalid_instant_offset(),
+                ));
             }
             (t, sign * (h * 3600 + m * 60))
         };
         let (clock, fraction) = if let Some((clock, fraction)) = time.split_once('.') {
             if fraction.is_empty() || !fraction.bytes().all(|b| b.is_ascii_digit()) {
-                return Err(DataError("Invalid fractional seconds".into()));
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_invalid_fractional_seconds(),
+                ));
             }
             (clock, ExactDecimal::parse(&format!("0.{fraction}"))?)
         } else {
             (time, ExactDecimal::parse("0")?)
         };
         if clock.len() != 8 || clock.as_bytes()[2] != b':' || clock.as_bytes()[5] != b':' {
-            return Err(DataError("Invalid instant clock".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_invalid_instant_clock(),
+            ));
         }
-        let time = chrono::NaiveTime::parse_from_str(clock, "%H:%M:%S")
-            .map_err(|_| DataError("Invalid instant clock or leap second".into()))?;
+        let time = chrono::NaiveTime::parse_from_str(clock, "%H:%M:%S").map_err(|_| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_invalid_instant_clock_or_leap_second(),
+            )
+        })?;
         use chrono::Timelike;
         if time.second() > 59 || time.nanosecond() != 0 {
-            return Err(DataError("Leap seconds unsupported".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_leap_seconds_unsupported(),
+            ));
         }
         let utc_seconds = date
             .and_time(time)
             .and_utc()
             .timestamp()
             .checked_sub(offset)
-            .ok_or_else(|| DataError("Instant overflow".into()))?;
+            .ok_or_else(|| {
+                DataError::new(weftext_messages::UiMessage::error_data_temporal_instant_overflow())
+            })?;
         Ok(Self {
             utc_seconds,
             fraction,
@@ -389,12 +489,16 @@ enum Endpoint {
     },
     Instant(ExactInstant),
 }
-fn issue(message: impl Into<String>) -> Cell {
-    Cell::Unavailable {
-        reason: message.into(),
+fn issue(message: impl Into<ErrorDescription>) -> Cell {
+    Cell::unavailable(message)
+}
+fn invalid_error(error: DataError) -> Cell {
+    Cell::Invalid {
+        diagnostics: error.into_diagnostics(),
+        value: None,
     }
 }
-fn invalid(message: impl Into<String>) -> Cell {
+fn invalid(message: impl Into<ErrorDescription>) -> Cell {
     Cell::Invalid {
         diagnostics: vec![message.into()],
         value: None,
@@ -403,10 +507,13 @@ fn invalid(message: impl Into<String>) -> Cell {
 fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoint, Cell> {
     match value {
         NativeValue::Date(s) => {
-            let d = NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                .map_err(|_| invalid("Invalid civil date"))?;
+            let d = NaiveDate::parse_from_str(s, "%Y-%m-%d").map_err(|_| {
+                invalid(weftext_messages::UiMessage::error_data_temporal_invalid_civil_date())
+            })?;
             if !(1..=9999).contains(&d.year()) || date_string(d) != *s {
-                return Err(invalid("Civil date outside Gregorian bounds"));
+                return Err(invalid(
+                    weftext_messages::UiMessage::error_data_temporal_civil_date_outside_gregorian_bounds(),
+                ));
             }
             let ordinal = i64::from(d.num_days_from_ce());
             Ok(Endpoint::Civil {
@@ -420,24 +527,37 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
         }
         NativeValue::Text(s) => ExactInstant::parse(s)
             .map(Endpoint::Instant)
-            .map_err(|e| invalid(e.0)),
+            .map_err(invalid_error),
         NativeValue::Record(_) => {
             let calendar = value
                 .member("calendar")
                 .and_then(NativeValue::text)
-                .ok_or_else(|| invalid("CalendarDate calendar absent"))?;
+                .ok_or_else(|| {
+                    invalid(
+                        weftext_messages::UiMessage::error_data_temporal_calendar_date_calendar_absent(),
+                    )
+                })?;
             let version = value
                 .member("version")
                 .and_then(NativeValue::text)
-                .ok_or_else(|| invalid("CalendarDate version absent"))?;
+                .ok_or_else(|| {
+                    invalid(
+                        weftext_messages::UiMessage::error_data_temporal_calendar_date_version_absent(),
+                    )
+                })?;
             let precision = value
                 .member("precision")
                 .and_then(NativeValue::text)
-                .ok_or_else(|| invalid("CalendarDate precision absent"))?;
+                .ok_or_else(|| invalid(weftext_messages::UiMessage::error_data_temporal_calendar_date_precision_absent()))?;
             let year = value
                 .member("year")
                 .and_then(NativeValue::integer)
-                .ok_or_else(|| invalid("CalendarDate year absent"))?;
+                .ok_or_else(|| {
+                    invalid(
+                        weftext_messages::UiMessage::error_data_temporal_calendar_date_year_absent(
+                        ),
+                    )
+                })?;
             let month = value.member("month").and_then(NativeValue::integer);
             let day = value.member("day").and_then(NativeValue::integer);
             if value.member("month").is_some() && month.is_none()
@@ -446,7 +566,7 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
                     .member("leap_month")
                     .is_some_and(|v| !matches!(v, NativeValue::Bool(_)))
             {
-                return Err(invalid("Precision date component type mismatch"));
+                return Err(invalid(weftext_messages::UiMessage::error_data_temporal_precision_date_component_type_mismatch()));
             }
             let provider = schema
                 .providers
@@ -458,51 +578,68 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
                     ) && p.data["key"].as_str() == Some(calendar)
                         && p.data["version"].as_str() == Some(version)
                 })
-                .ok_or_else(|| issue("Exact calendar provider unavailable"))?;
+                .ok_or_else(|| issue(weftext_messages::UiMessage::error_data_temporal_exact_calendar_provider_unavailable()))?;
             if !matches!(precision, "year" | "month" | "day")
                 || precision == "year" && (month.is_some() || day.is_some())
                 || precision == "month" && (month.is_none() || day.is_some())
                 || precision == "day" && (month.is_none() || day.is_none())
             {
-                return Err(invalid("Precision/member mismatch"));
+                return Err(invalid(
+                    weftext_messages::UiMessage::error_data_temporal_precision_member_mismatch(),
+                ));
             }
             let (ordinal, lo, hi) = if provider.implementation.id == "weftext.calendar.gregorian.v2"
             {
-                let year = i32::try_from(year).map_err(|_| invalid("Calendar year overflow"))?;
+                let year = i32::try_from(year).map_err(|_| {
+                    invalid(
+                        weftext_messages::UiMessage::error_data_temporal_calendar_year_overflow(),
+                    )
+                })?;
                 let min = provider.data["min_year"].as_i64().unwrap_or(1);
                 let max = provider.data["max_year"].as_i64().unwrap_or(9999);
                 if i64::from(year) < min || i64::from(year) > max {
-                    return Err(issue("Calendar coverage unavailable"));
+                    return Err(Cell::unavailable_group(
+                        DataErrorKind::Coverage,
+                        weftext_messages::UiMessage::error_data_temporal_calendar_coverage_unavailable(),
+                        Vec::new(),
+                    ));
                 }
                 if value.member("leap_month") == Some(&NativeValue::Bool(true)) {
-                    return Err(invalid("Gregorian has no leap-month branch"));
+                    return Err(invalid(weftext_messages::UiMessage::error_data_temporal_gregorian_leap_month_unsupported()));
                 }
                 let (lo, hi, ordinal) = match precision {
                     "year" => (
-                        civil(year, 1, 1).map_err(|e| invalid(e.0))?,
-                        civil(year, 12, 31).map_err(|e| invalid(e.0))?,
+                        civil(year, 1, 1).map_err(invalid_error)?,
+                        civil(year, 12, 31).map_err(invalid_error)?,
                         i64::from(year),
                     ),
                     "month" => {
-                        let m =
-                            u32::try_from(month.unwrap()).map_err(|_| invalid("Invalid month"))?;
-                        let first = civil(year, m, 1).map_err(|e| invalid(e.0))?;
+                        let m = u32::try_from(month.unwrap()).map_err(|_| {
+                            invalid(
+                                weftext_messages::UiMessage::error_data_temporal_invalid_month(),
+                            )
+                        })?;
+                        let first = civil(year, m, 1).map_err(invalid_error)?;
                         let last = if m == 12 {
-                            civil(year, 12, 31).map_err(|e| invalid(e.0))?
+                            civil(year, 12, 31).map_err(invalid_error)?
                         } else {
                             civil(year, m + 1, 1)
-                                .map_err(|e| invalid(e.0))?
+                                .map_err(invalid_error)?
                                 .pred_opt()
                                 .unwrap()
                         };
                         (first, last, (i64::from(year) - 1) * 12 + i64::from(m) - 1)
                     }
                     _ => {
-                        let month =
-                            u32::try_from(month.unwrap()).map_err(|_| invalid("Invalid month"))?;
-                        let day =
-                            u32::try_from(day.unwrap()).map_err(|_| invalid("Invalid day"))?;
-                        let d = civil(year, month, day).map_err(|e| invalid(e.0))?;
+                        let month = u32::try_from(month.unwrap()).map_err(|_| {
+                            invalid(
+                                weftext_messages::UiMessage::error_data_temporal_invalid_month(),
+                            )
+                        })?;
+                        let day = u32::try_from(day.unwrap()).map_err(|_| {
+                            invalid(weftext_messages::UiMessage::error_data_temporal_invalid_day())
+                        })?;
+                        let d = civil(year, month, day).map_err(invalid_error)?;
                         (d, d, i64::from(d.num_days_from_ce()))
                     }
                 };
@@ -515,22 +652,25 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
                 let epoch = provider.data["epoch_date"]
                     .as_str()
                     .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-                    .ok_or_else(|| issue("Calendar table epoch unavailable"))?;
-                let years = provider.data["years"]
-                    .as_array()
-                    .ok_or_else(|| issue("Calendar table unavailable"))?;
+                    .ok_or_else(|| issue(weftext_messages::UiMessage::error_data_temporal_calendar_table_epoch_unavailable()))?;
+                let years = provider.data["years"].as_array().ok_or_else(|| {
+                    issue(
+                        weftext_messages::UiMessage::error_data_temporal_calendar_table_unavailable(
+                        ),
+                    )
+                })?;
                 let mut offset = 0i64;
                 let mut month_ordinal = 0i64;
                 let mut result = None;
                 for y in years {
                     let months = y["months"]
                         .as_array()
-                        .ok_or_else(|| invalid("Invalid calendar table months"))?;
+                        .ok_or_else(|| invalid(weftext_messages::UiMessage::error_data_temporal_invalid_calendar_table_months()))?;
                     let year_start = offset;
                     let year_length = months
                         .iter()
                         .try_fold(0i64, |sum, m| sum.checked_add(m["days"].as_i64()?))
-                        .ok_or_else(|| invalid("Calendar table day overflow"))?;
+                        .ok_or_else(|| invalid(weftext_messages::UiMessage::error_data_temporal_calendar_table_day_overflow()))?;
                     if y["year"].as_i64() == Some(year) && precision == "year" {
                         result = Some((
                             year,
@@ -542,7 +682,7 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
                         let length = m["days"]
                             .as_i64()
                             .filter(|n| *n > 0)
-                            .ok_or_else(|| invalid("Invalid calendar month length"))?;
+                            .ok_or_else(|| invalid(weftext_messages::UiMessage::error_data_temporal_invalid_calendar_month_length()))?;
                         if y["year"].as_i64() == Some(year)
                             && month == m["number"].as_i64()
                             && value.member("leap_month").map_or(Some(false), |v| {
@@ -559,7 +699,7 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
                             } else if precision == "day" {
                                 let d = day.unwrap();
                                 if !(1..=length).contains(&d) {
-                                    return Err(invalid("Day outside calendar month"));
+                                    return Err(invalid(weftext_messages::UiMessage::error_data_temporal_day_outside_calendar_month()));
                                 }
                                 Some((lo + d - 1, lo + d - 1, lo + d - 1))
                             } else {
@@ -568,13 +708,16 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
                         }
                         offset = offset
                             .checked_add(length)
-                            .ok_or_else(|| invalid("Calendar coverage overflow"))?;
+                            .ok_or_else(|| invalid(weftext_messages::UiMessage::error_data_temporal_calendar_coverage_overflow()))?;
                         month_ordinal += 1;
                     }
                 }
-                result.ok_or_else(|| issue("Date outside finite calendar coverage"))?
+                result.ok_or_else(|| Cell::unavailable_group(DataErrorKind::Coverage, weftext_messages::UiMessage::error_data_temporal_date_outside_finite_calendar_coverage(), Vec::new()))?
             } else {
-                return Err(issue("Calendar executor unavailable"));
+                return Err(issue(
+                    weftext_messages::UiMessage::error_data_temporal_calendar_executor_unavailable(
+                    ),
+                ));
             };
             Ok(Endpoint::Civil {
                 calendar: calendar.into(),
@@ -586,7 +729,7 @@ fn endpoint(value: &NativeValue, schema: &Schema) -> std::result::Result<Endpoin
             })
         }
         _ => Err(invalid(
-            "TemporalEndpoint requires civil date, precision date or offset instant",
+            weftext_messages::UiMessage::error_data_temporal_temporal_endpoint_type_unsupported(),
         )),
     }
 }
@@ -596,7 +739,9 @@ fn common_basis(endpoints: &[&Endpoint]) -> std::result::Result<(), Cell> {
         .iter()
         .any(|v| matches!(v, Endpoint::Civil { .. }));
     if instant && civil {
-        return Err(invalid("Civil/instant mixing needs explicit conversion"));
+        return Err(invalid(
+            weftext_messages::UiMessage::error_data_temporal_civil_instant_mixing_requires_conversion(),
+        ));
     }
     if civil {
         let mut bases = std::collections::BTreeSet::new();
@@ -615,7 +760,7 @@ fn common_basis(endpoints: &[&Endpoint]) -> std::result::Result<(), Cell> {
         }
         if bases.len() > 1 && !all_day {
             return Err(issue(
-                "Coarse cross-calendar/version endpoints have no common day basis",
+                weftext_messages::UiMessage::error_data_temporal_coarse_cross_calendar_day_basis_unavailable(),
             ));
         }
     }
@@ -721,7 +866,11 @@ pub fn compare_temporal(a: &NativeValue, b: &NativeValue, schema: &Schema) -> Ce
                 .into(),
             ))
         })
-        .unwrap_or_else(|| issue("Mixed-precision temporal order is undecided"))
+        .unwrap_or_else(|| {
+            issue(
+                weftext_messages::UiMessage::error_data_temporal_mixed_precision_order_undecided(),
+            )
+        })
 }
 pub fn validate_calendar_endpoint(value: &NativeValue, schema: &Schema) -> Cell {
     match endpoint(value, schema) {
@@ -739,19 +888,25 @@ fn interval(
     closed: bool,
 ) -> std::result::Result<Interval, Cell> {
     if value.record().is_none() {
-        return Err(invalid("Interval must be a record"));
+        return Err(invalid(
+            weftext_messages::UiMessage::error_data_temporal_interval_requires_record(),
+        ));
     }
     let start = value.member("start");
     let end = value.member(if closed { "end" } else { "end_exclusive" });
     if closed && (start.is_none() || end.is_none()) {
-        return Err(issue("During absent endpoints mean unknown"));
+        return Err(issue(
+            weftext_messages::UiMessage::error_data_temporal_during_absent_endpoints_unknown(),
+        ));
     }
     if !closed
         && (start.is_none() && end.is_none()
             || matches!(start, Some(NativeValue::None))
             || matches!(end, Some(NativeValue::None)))
     {
-        return Err(invalid("Range needs a finite endpoint; none is invalid"));
+        return Err(invalid(
+            weftext_messages::UiMessage::error_data_temporal_range_requires_finite_endpoint(),
+        ));
     }
     let read = |v: Option<&NativeValue>| -> std::result::Result<Option<Endpoint>, Cell> {
         match v {
@@ -766,8 +921,16 @@ fn interval(
     if let (Some(a), Some(b)) = (&start, &end) {
         match order(a, b, !closed) {
             Some(true) => {}
-            Some(false) => return Err(invalid("Reversed or empty temporal interval")),
-            None => return Err(issue("Interval endpoint order is undecided")),
+            Some(false) => {
+                return Err(invalid(
+                    weftext_messages::UiMessage::error_data_temporal_temporal_interval_empty_or_reversed(),
+                ));
+            }
+            None => {
+                return Err(issue(
+                    weftext_messages::UiMessage::error_data_temporal_interval_endpoint_order_undecided(),
+                ));
+            }
         }
     }
     Ok(Interval { start, end })
@@ -784,7 +947,7 @@ fn conjunction(a: Option<bool>, b: Option<bool>) -> Cell {
     } else if a == Some(true) && b == Some(true) {
         Cell::value(NativeValue::Bool(true))
     } else {
-        issue("Temporal boundary proof is undecided")
+        issue(weftext_messages::UiMessage::error_data_temporal_temporal_boundary_proof_undecided())
     }
 }
 pub fn contains_date(during: &NativeValue, point: &NativeValue, schema: &Schema) -> Cell {
@@ -848,7 +1011,9 @@ fn duration_interval(value: &NativeValue, schema: &Schema, closed: bool) -> Cell
         Err(e) => return e,
     };
     let (Some(a), Some(b)) = (interval.start, interval.end) else {
-        return issue("Open or unknown duration has no implicit now");
+        return issue(
+            weftext_messages::UiMessage::error_data_temporal_open_or_unknown_duration_has_no_implicit_now(),
+        );
     };
     match (a, b) {
         (Endpoint::Instant(a), Endpoint::Instant(b)) => {
@@ -907,7 +1072,7 @@ fn duration_interval(value: &NativeValue, schema: &Schema, closed: bool) -> Cell
                     "proleptic-gregorian.v1".into(),
                 )
             } else {
-                return issue("Duration needs equal grain or exact full-day common basis");
+                return issue(weftext_messages::UiMessage::error_data_temporal_duration_requires_equal_grain_or_full_day_basis());
             };
             Cell::value(NativeValue::Record(vec![
                 NativeMember {
@@ -928,7 +1093,9 @@ fn duration_interval(value: &NativeValue, schema: &Schema, closed: bool) -> Cell
                 },
             ]))
         }
-        _ => invalid("Temporal duration domains disagree"),
+        _ => invalid(
+            weftext_messages::UiMessage::error_data_temporal_temporal_duration_domains_disagree(),
+        ),
     }
 }
 pub fn range_duration(value: &NativeValue, schema: &Schema) -> Cell {
@@ -945,9 +1112,15 @@ pub fn next_civil_day(value: &NativeValue) -> Cell {
             .and_then(|d| plus_days(d, 1).ok())
         {
             Some(d) => Cell::value(NativeValue::Date(date_string(d))),
-            None => invalid("Civil day overflow/invalid date"),
+            None => invalid(
+                weftext_messages::UiMessage::error_data_temporal_civil_day_overflow_or_invalid_date(
+                ),
+            ),
         },
-        _ => invalid("nextCivilDay needs a complete civil date"),
+        _ => invalid(
+            weftext_messages::UiMessage::error_data_temporal_next_civil_day_requires_complete_date(
+            ),
+        ),
     }
 }
 
@@ -962,29 +1135,48 @@ pub fn period_for_date(
         .series_policies
         .iter()
         .find(|p| p.key == series_key)
-        .ok_or_else(|| DataError("Series policy unavailable".into()))?;
+        .ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_temporal_series_policy_unavailable(),
+            )
+        })?;
     if !policy.kinds.iter().any(|k| k == kind) {
-        return Err(DataError("Period kind conflicts with series policy".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_temporal_period_kind_conflicts_with_series_policy(),
+        ));
     }
     let calendar = schema
         .providers
         .iter()
         .find(|p| p.id == policy.calendar)
-        .ok_or_else(|| DataError("Series calendar provider unavailable".into()))?;
+        .ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_temporal_series_calendar_provider_unavailable(),
+            )
+        })?;
     let zone = schema
         .providers
         .iter()
         .find(|p| p.id == policy.zone)
-        .ok_or_else(|| DataError("Series zone provider unavailable".into()))?;
+        .ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_temporal_series_zone_provider_unavailable(),
+            )
+        })?;
     let NativeValue::Date(value) = date else {
-        return Err(DataError(
-            "Period selection needs explicit full Gregorian date".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_temporal_period_selection_requires_full_gregorian_date(),
         ));
     };
-    let date = NaiveDate::parse_from_str(value, "%Y-%m-%d")
-        .map_err(|_| DataError("Invalid Period selection date".into()))?;
+    let date = NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|_| {
+        DataError::new(
+            weftext_messages::UiMessage::error_data_temporal_invalid_period_selection_date(),
+        )
+    })?;
     if date_string(date) != *value {
-        return Err(DataError("Noncanonical Period selection date".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_temporal_noncanonical_period_selection_date(),
+        ));
     }
     let model = CalendarModel::new(calendar)?;
     let key = model.period_key(date, kind)?;
@@ -1044,12 +1236,18 @@ pub(crate) struct CalendarModel {
 impl CalendarModel {
     pub(crate) fn new(provider: &Provider) -> Result<Self> {
         if provider.implementation.id == "weftext.calendar.gregorian.v2" {
-            let min = provider.data["min_year"]
-                .as_i64()
-                .ok_or_else(|| DataError("Calendar coverage unavailable".into()))?;
-            let max = provider.data["max_year"]
-                .as_i64()
-                .ok_or_else(|| DataError("Calendar coverage unavailable".into()))?;
+            let min = provider.data["min_year"].as_i64().ok_or_else(|| {
+                DataError::coverage(
+                    weftext_messages::UiMessage::error_data_temporal_calendar_coverage_unavailable(
+                    ),
+                )
+            })?;
+            let max = provider.data["max_year"].as_i64().ok_or_else(|| {
+                DataError::coverage(
+                    weftext_messages::UiMessage::error_data_temporal_calendar_coverage_unavailable(
+                    ),
+                )
+            })?;
             return Ok(Self {
                 gregorian: true,
                 min_year: min,
@@ -1060,31 +1258,46 @@ impl CalendarModel {
             });
         }
         if provider.implementation.id != "weftext.calendar.table.v2" {
-            return Err(DataError("Calendar executor unavailable".into()));
+            return Err(DataError::unavailable(
+                weftext_messages::UiMessage::error_data_temporal_calendar_executor_unavailable(),
+            ));
         }
         let epoch = provider.data["epoch_date"]
             .as_str()
             .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
-            .ok_or_else(|| DataError("Calendar table epoch unavailable".into()))?;
-        let years = provider.data["years"]
-            .as_array()
-            .ok_or_else(|| DataError("Calendar table unavailable".into()))?;
+            .ok_or_else(|| {
+                DataError::unavailable(
+                    weftext_messages::UiMessage::error_data_temporal_calendar_table_epoch_unavailable(),
+                )
+            })?;
+        let years = provider.data["years"].as_array().ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_temporal_calendar_table_unavailable(),
+            )
+        })?;
         let mut months = vec![];
         let mut at = epoch;
         for year in years {
-            let y = year["year"]
-                .as_i64()
-                .ok_or_else(|| DataError("Invalid calendar year".into()))?;
+            let y = year["year"].as_i64().ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_invalid_calendar_year(),
+                )
+            })?;
             for (i, m) in year["months"]
                 .as_array()
-                .ok_or_else(|| DataError("Calendar months unavailable".into()))?
+                .ok_or_else(|| {
+                    DataError::unavailable(
+                        weftext_messages::UiMessage::error_data_temporal_calendar_months_unavailable(),
+                    )
+                })?
                 .iter()
                 .enumerate()
             {
-                let days = m["days"]
-                    .as_u64()
-                    .filter(|d| *d > 0)
-                    .ok_or_else(|| DataError("Invalid calendar month length".into()))?;
+                let days = m["days"].as_u64().filter(|d| *d > 0).ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_temporal_invalid_calendar_month_length(),
+                    )
+                })?;
                 let end = plus_days(at, days)?;
                 months.push(CalendarMonth {
                     year: y,
@@ -1092,19 +1305,21 @@ impl CalendarModel {
                     in_year: i + 1,
                     number: m["number"]
                         .as_i64()
-                        .ok_or_else(|| DataError("Invalid calendar month number".into()))?,
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_calendar_month_number()))?,
                     leap: m["leap"]
                         .as_bool()
-                        .ok_or_else(|| DataError("Invalid calendar month leap flag".into()))?,
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_calendar_month_leap_flag()))?,
                     start: at,
                     end,
                 });
                 at = end;
             }
         }
-        let first = months
-            .first()
-            .ok_or_else(|| DataError("Calendar table unavailable".into()))?;
+        let first = months.first().ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_temporal_calendar_table_unavailable(),
+            )
+        })?;
         let min_year = first.year;
         let max_year = months.last().unwrap().year;
         Ok(Self {
@@ -1119,7 +1334,10 @@ impl CalendarModel {
     pub(crate) fn parts(&self, date: NaiveDate) -> Result<CalendarParts> {
         if self.gregorian {
             if i64::from(date.year()) < self.min_year || i64::from(date.year()) > self.max_year {
-                return Err(DataError("Calendar coverage unavailable".into()));
+                return Err(DataError::coverage(
+                    weftext_messages::UiMessage::error_data_temporal_calendar_coverage_unavailable(
+                    ),
+                ));
             }
             let first = civil(date.year(), date.month(), 1)?;
             let days = if date.month() == 12 {
@@ -1140,7 +1358,7 @@ impl CalendarModel {
                 .months
                 .iter()
                 .find(|m| m.start <= date && date < m.end)
-                .ok_or_else(|| DataError("Calendar table coverage unavailable".into()))?;
+                .ok_or_else(|| DataError::coverage(weftext_messages::UiMessage::error_data_temporal_calendar_table_coverage_unavailable()))?;
             Ok(CalendarParts {
                 year: m.year,
                 month_ordinal: m.ordinal,
@@ -1164,7 +1382,11 @@ impl CalendarModel {
                 "month" => format!("{:04}-{:02}", date.year(), date.month()),
                 "quarter" => format!("{:04}-Q{}", date.year(), date.month0() / 3 + 1),
                 "year" => format!("{:04}", date.year()),
-                _ => return Err(DataError("Unknown period kind".into())),
+                _ => {
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_temporal_unknown_period_kind(),
+                    ));
+                }
             })
         } else {
             let m = &self.months[parts.month_ordinal as usize];
@@ -1174,7 +1396,11 @@ impl CalendarModel {
                 "month" => format!("Y{}-M{}", m.year, m.in_year),
                 "quarter" => format!("Y{}-Q{}", m.year, (m.in_year - 1) / 3 + 1),
                 "year" => format!("Y{}", m.year),
-                _ => return Err(DataError("Unknown period kind".into())),
+                _ => {
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_temporal_unknown_period_kind(),
+                    ));
+                }
             })
         }
     }
@@ -1182,35 +1408,51 @@ impl CalendarModel {
         self.start - chrono::Duration::days(i64::from(self.start.weekday().num_days_from_monday()))
     }
     fn canonical_int(value: &str) -> Result<i64> {
-        let n = value
-            .parse::<i64>()
-            .map_err(|_| DataError("Invalid table period key".into()))?;
+        let n = value.parse::<i64>().map_err(|_| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_invalid_table_period_key(),
+            )
+        })?;
         if n.to_string() != value {
-            return Err(DataError("Noncanonical table period key".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_noncanonical_table_period_key(),
+            ));
         }
         Ok(n)
     }
     fn table_period(&self, kind: &str, key: &str) -> Result<(NaiveDate, NaiveDate)> {
         let bounds = if kind == "week" {
-            let n = Self::canonical_int(
-                key.strip_prefix('W')
-                    .ok_or_else(|| DataError("Expected W<integer>".into()))?,
-            )?;
-            let days = n
-                .checked_mul(7)
-                .ok_or_else(|| DataError("Period key overflow".into()))?;
+            let n = Self::canonical_int(key.strip_prefix('W').ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_table_week_key_format_required(
+                    ),
+                )
+            })?)?;
+            let days = n.checked_mul(7).ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_period_key_overflow(),
+                )
+            })?;
             let start = self
                 .week_epoch()
-                .checked_add_signed(
-                    chrono::Duration::try_days(days)
-                        .ok_or_else(|| DataError("Period key overflow".into()))?,
-                )
-                .ok_or_else(|| DataError("Period key overflow".into()))?;
+                .checked_add_signed(chrono::Duration::try_days(days).ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_temporal_period_key_overflow(),
+                    )
+                })?)
+                .ok_or_else(|| {
+                    DataError::new(
+                        weftext_messages::UiMessage::error_data_temporal_period_key_overflow(),
+                    )
+                })?;
             (start, plus_days(start, 7)?)
         } else {
-            let key = key
-                .strip_prefix('Y')
-                .ok_or_else(|| DataError("Expected Y<integer>".into()))?;
+            let key = key.strip_prefix('Y').ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_table_year_key_format_required(
+                    ),
+                )
+            })?;
             let (year, suffix) = if let Some((year, suffix)) = key.split_once("-M") {
                 (Self::canonical_int(year)?, Some(("M", suffix)))
             } else if let Some((year, suffix)) = key.split_once("-Q") {
@@ -1220,53 +1462,72 @@ impl CalendarModel {
             };
             let months: Vec<_> = self.months.iter().filter(|m| m.year == year).collect();
             if months.is_empty() {
-                return Err(DataError("Calendar table coverage unavailable".into()));
+                return Err(DataError::coverage(weftext_messages::UiMessage::error_data_temporal_calendar_table_coverage_unavailable()));
             }
             match (kind, suffix) {
                 ("year", None) => (months[0].start, months.last().unwrap().end),
                 ("quarter", Some(("Q", n))) => {
                     let q = Self::canonical_int(n)?;
                     if q < 1 {
-                        return Err(DataError("Invalid table quarter".into()));
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_temporal_invalid_table_quarter(
+                            ),
+                        ));
                     }
                     let i = usize::try_from(q - 1)
                         .ok()
                         .and_then(|q| q.checked_mul(3))
-                        .ok_or_else(|| DataError("Quarter key overflow".into()))?;
-                    let m = months
-                        .get(i)
-                        .ok_or_else(|| DataError("Invalid table quarter".into()))?;
+                        .ok_or_else(|| {
+                            DataError::new(
+                                weftext_messages::UiMessage::error_data_temporal_quarter_key_overflow(),
+                            )
+                        })?;
+                    let m = months.get(i).ok_or_else(|| {
+                        DataError::new(
+                            weftext_messages::UiMessage::error_data_temporal_invalid_table_quarter(
+                            ),
+                        )
+                    })?;
                     (m.start, months[(i + 2).min(months.len() - 1)].end)
                 }
                 ("month", Some(("M", n))) | ("day", Some(("M", n))) => {
                     let (n, day) = n.split_once("-D").map_or((n, None), |(n, d)| (n, Some(d)));
                     let i = Self::canonical_int(n)?;
                     if i < 1 {
-                        return Err(DataError("Invalid table month ordinal".into()));
+                        return Err(DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_table_month_ordinal()));
                     }
                     let m = usize::try_from(i - 1)
                         .ok()
                         .and_then(|i| months.get(i))
-                        .ok_or_else(|| DataError("Invalid table month ordinal".into()))?;
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_table_month_ordinal()))?;
                     if kind == "month" && day.is_none() {
                         (m.start, m.end)
                     } else if kind == "day" && day.is_some() {
                         let d = Self::canonical_int(day.unwrap())?;
                         if d < 1 || d > (m.end - m.start).num_days() {
-                            return Err(DataError("Invalid table day".into()));
+                            return Err(DataError::new(
+                                weftext_messages::UiMessage::error_data_temporal_invalid_table_day(
+                                ),
+                            ));
                         }
                         let start = plus_days(m.start, (d - 1) as u64)?;
                         (start, plus_days(start, 1)?)
                     } else {
-                        return Err(DataError("Table key/kind mismatch".into()));
+                        return Err(DataError::new(
+                            weftext_messages::UiMessage::error_data_temporal_table_key_kind_mismatch(),
+                        ));
                     }
                 }
-                _ => return Err(DataError("Table key/kind mismatch".into())),
+                _ => {
+                    return Err(DataError::new(
+                        weftext_messages::UiMessage::error_data_temporal_table_key_kind_mismatch(),
+                    ));
+                }
             }
         };
         if bounds.0 < self.start || bounds.1 > self.end {
-            return Err(DataError(
-                "Period crosses calendar table coverage unavailable".into(),
+            return Err(DataError::coverage(
+                weftext_messages::UiMessage::error_data_temporal_period_outside_calendar_table_coverage(),
             ));
         }
         Ok(bounds)
@@ -1278,13 +1539,13 @@ impl CalendarModel {
                 .checked_add_signed(chrono::Duration::days(
                     i64::from(steps) * if kind == "week" { 7 } else { 1 },
                 ))
-                .ok_or_else(|| DataError("Period step overflow".into()))?,
+                .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_temporal_period_step_overflow()))?,
             "month" | "quarter" if self.gregorian => {
                 let ordinal =
                     parts.month_ordinal + i64::from(steps) * if kind == "quarter" { 3 } else { 1 };
                 civil(
                     i32::try_from(ordinal.div_euclid(12) + 1)
-                        .map_err(|_| DataError("Period step overflow".into()))?,
+                        .map_err(|_| DataError::new(weftext_messages::UiMessage::error_data_temporal_period_step_overflow()))?,
                     ordinal.rem_euclid(12) as u32 + 1,
                     1,
                 )?
@@ -1293,9 +1554,9 @@ impl CalendarModel {
                 self.months
                     .get(
                         usize::try_from(parts.month_ordinal + i64::from(steps))
-                            .map_err(|_| DataError("Period step coverage unavailable".into()))?,
+                            .map_err(|_| DataError::coverage(weftext_messages::UiMessage::error_data_temporal_period_step_coverage_unavailable()))?,
                     )
-                    .ok_or_else(|| DataError("Period step coverage unavailable".into()))?
+                    .ok_or_else(|| DataError::coverage(weftext_messages::UiMessage::error_data_temporal_period_step_coverage_unavailable()))?
                     .start
             }
             "quarter" => {
@@ -1307,25 +1568,25 @@ impl CalendarModel {
                 let ordinal = starts
                     .iter()
                     .position(|m| m.start == start)
-                    .ok_or_else(|| DataError("Invalid table quarter start".into()))?
+                    .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_temporal_invalid_table_quarter_start()))?
                     as i64;
                 starts
                     .get(
                         usize::try_from(ordinal + i64::from(steps))
-                            .map_err(|_| DataError("Period step coverage unavailable".into()))?,
+                            .map_err(|_| DataError::coverage(weftext_messages::UiMessage::error_data_temporal_period_step_coverage_unavailable()))?,
                     )
-                    .ok_or_else(|| DataError("Period step coverage unavailable".into()))?
+                    .ok_or_else(|| DataError::coverage(weftext_messages::UiMessage::error_data_temporal_period_step_coverage_unavailable()))?
                     .start
             }
             "year" => {
                 let year = parts
                     .year
                     .checked_add(i64::from(steps))
-                    .ok_or_else(|| DataError("Period step overflow".into()))?;
+                    .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_temporal_period_step_overflow()))?;
                 if self.gregorian {
                     civil(
                         i32::try_from(year)
-                            .map_err(|_| DataError("Period step overflow".into()))?,
+                            .map_err(|_| DataError::new(weftext_messages::UiMessage::error_data_temporal_period_step_overflow()))?,
                         1,
                         1,
                     )?
@@ -1333,11 +1594,11 @@ impl CalendarModel {
                     self.months
                         .iter()
                         .find(|m| m.year == year)
-                        .ok_or_else(|| DataError("Period step coverage unavailable".into()))?
+                        .ok_or_else(|| DataError::coverage(weftext_messages::UiMessage::error_data_temporal_period_step_coverage_unavailable()))?
                         .start
                 }
             }
-            _ => return Err(DataError("Unknown period kind".into())),
+            _ => return Err(DataError::new(weftext_messages::UiMessage::error_data_temporal_unknown_period_kind())),
         };
         self.parts(date)?;
         Ok(date)
@@ -1354,12 +1615,14 @@ pub(crate) struct FrozenZone {
 impl FrozenZone {
     pub(crate) fn new(provider: &Provider) -> Result<Self> {
         if provider.implementation.id != "weftext.zone.table.v1" {
-            return Err(DataError("Zone executor unavailable".into()));
+            return Err(DataError::unavailable(
+                weftext_messages::UiMessage::error_data_temporal_zone_executor_unavailable(),
+            ));
         }
         let parse = |key: &str| {
             provider.data[key]
                 .as_str()
-                .ok_or_else(|| DataError("Zone table coverage unavailable".into()))
+                .ok_or_else(|| DataError::coverage(weftext_messages::UiMessage::error_data_temporal_zone_table_coverage_unavailable()))
                 .and_then(ExactInstant::parse)
         };
         let from = parse("from")?;
@@ -1367,22 +1630,30 @@ impl FrozenZone {
         let mut at = from.clone();
         let mut offset = provider.data["initial_offset_seconds"]
             .as_i64()
-            .ok_or_else(|| DataError("Zone offset unavailable".into()))?;
+            .ok_or_else(|| {
+                DataError::unavailable(
+                    weftext_messages::UiMessage::error_data_temporal_zone_offset_unavailable(),
+                )
+            })?;
         let mut segments = vec![];
-        for transition in provider.data["transitions"]
-            .as_array()
-            .ok_or_else(|| DataError("Zone table transitions unavailable".into()))?
-        {
-            let next = ExactInstant::parse(
-                transition["at"]
-                    .as_str()
-                    .ok_or_else(|| DataError("Invalid zone transition".into()))?,
-            )?;
+        for transition in provider.data["transitions"].as_array().ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_temporal_zone_table_transitions_unavailable(
+                ),
+            )
+        })? {
+            let next = ExactInstant::parse(transition["at"].as_str().ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_invalid_zone_transition(),
+                )
+            })?)?;
             segments.push((at, next.clone(), offset));
             at = next;
-            offset = transition["offset_seconds"]
-                .as_i64()
-                .ok_or_else(|| DataError("Invalid zone offset".into()))?;
+            offset = transition["offset_seconds"].as_i64().ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_invalid_zone_offset(),
+                )
+            })?;
         }
         segments.push((at, until.clone(), offset));
         let max_offset = segments.iter().map(|s| s.2).max().unwrap();
@@ -1400,19 +1671,30 @@ impl FrozenZone {
             .segments
             .iter()
             .find(|(start, end, _)| !instant.compare(start).is_lt() && instant.compare(end).is_lt())
-            .ok_or_else(|| DataError("Zone coverage unavailable".into()))?
+            .ok_or_else(|| {
+                DataError::coverage(
+                    weftext_messages::UiMessage::error_data_temporal_zone_coverage_unavailable(),
+                )
+            })?
             .2;
         let local = chrono::DateTime::from_timestamp(
-            instant
-                .utc_seconds
-                .checked_add(offset)
-                .ok_or_else(|| DataError("Zone conversion overflow".into()))?,
+            instant.utc_seconds.checked_add(offset).ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_zone_conversion_overflow(),
+                )
+            })?,
             0,
         )
         .map(|d| d.naive_utc())
-        .ok_or_else(|| DataError("Zone conversion overflow".into()))?;
+        .ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_zone_conversion_overflow(),
+            )
+        })?;
         if !(1..=9999).contains(&local.year()) {
-            return Err(DataError("Local Gregorian coverage unavailable".into()));
+            return Err(DataError::coverage(
+                weftext_messages::UiMessage::error_data_temporal_local_gregorian_coverage_unavailable(),
+            ));
         }
         Ok(local)
     }
@@ -1423,8 +1705,25 @@ impl FrozenZone {
         fold: &str,
     ) -> Result<Option<ExactInstant>> {
         if !matches!(fold, "earlier" | "later") {
-            return Err(DataError("Explicit earlier/later fold required".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_explicit_fold_policy_required(),
+            ));
         }
+        let candidates = self.instant_candidates(local, fraction)?;
+        Ok(if fold == "earlier" {
+            candidates.first()
+        } else {
+            candidates.last()
+        }
+        .cloned())
+    }
+    /// All proven candidates, so a single-shot reminder never guesses a fold
+    /// or silently treats a skipped civil time as an absent reminder.
+    pub(crate) fn instant_candidates(
+        &self,
+        local: chrono::NaiveDateTime,
+        fraction: &ExactDecimal,
+    ) -> Result<Vec<ExactInstant>> {
         let seconds = local.and_utc().timestamp();
         let earliest = ExactInstant {
             utc_seconds: seconds - self.max_offset,
@@ -1435,8 +1734,8 @@ impl FrozenZone {
             fraction: fraction.clone(),
         };
         if earliest.compare(&self.from).is_lt() || !latest.compare(&self.until).is_lt() {
-            return Err(DataError(
-                "Zone coverage unavailable for complete local-time proof".into(),
+            return Err(DataError::coverage(
+                weftext_messages::UiMessage::error_data_temporal_complete_local_time_proof_coverage_unavailable(),
             ));
         }
         let mut candidates = self
@@ -1453,12 +1752,74 @@ impl FrozenZone {
             .collect::<Vec<_>>();
         candidates.sort_by(ExactInstant::compare);
         candidates.dedup_by(|a, b| a.compare(b).is_eq());
-        Ok(if fold == "earlier" {
-            candidates.first()
-        } else {
-            candidates.last()
+        Ok(candidates)
+    }
+    /// First proven exit from this exact civil minute after a selected fold.
+    /// A transition may end a minute early or keep the clock in it longer;
+    /// never extend a window under an offset which already stopped applying.
+    pub(crate) fn reminder_minute_end(
+        &self,
+        selected: &ExactInstant,
+        local: chrono::NaiveDateTime,
+    ) -> Result<ExactInstant> {
+        let zero = ExactDecimal::parse("0")?;
+        let local_start = local.and_utc().timestamp() - i64::from(local.second());
+        let local_end = ExactInstant {
+            utc_seconds: local_start + 60,
+            fraction: zero.clone(),
+        };
+        let local_start = ExactInstant {
+            utc_seconds: local_start,
+            fraction: zero.clone(),
+        };
+        let mut active = false;
+        for (start, end, offset) in &self.segments {
+            if !active {
+                if selected.compare(start).is_lt() || !selected.compare(end).is_lt() {
+                    continue;
+                }
+                active = true;
+            } else {
+                let after = ExactInstant {
+                    utc_seconds: start.utc_seconds.checked_add(*offset).ok_or_else(|| {
+                        DataError::new(UiMessage::error_data_task_reminder_minute_overflow())
+                    })?,
+                    fraction: start.fraction.clone(),
+                };
+                if after.compare(&local_start).is_lt() || !after.compare(&local_end).is_lt() {
+                    return Ok(start.clone());
+                }
+            }
+            let natural = ExactInstant {
+                utc_seconds: local_end.utc_seconds.checked_sub(*offset).ok_or_else(|| {
+                    DataError::new(UiMessage::error_data_task_reminder_minute_overflow())
+                })?,
+                fraction: zero.clone(),
+            };
+            if natural.compare(end).is_lt() {
+                return Ok(natural);
+            }
         }
-        .cloned())
+        Err(DataError::coverage(
+            UiMessage::error_data_task_reminder_minute_coverage_unavailable(),
+        ))
+    }
+}
+
+pub(crate) fn reminder_civil_day(
+    value: &NativeValue,
+    schema: &Schema,
+) -> std::result::Result<NaiveDate, Cell> {
+    match endpoint(value, schema)? {
+        Endpoint::Civil {
+            precision, lo, hi, ..
+        } if precision == "day" && lo == hi => i32::try_from(lo)
+            .ok()
+            .and_then(NaiveDate::from_num_days_from_ce_opt)
+            .ok_or_else(|| invalid(UiMessage::error_data_task_reminder_civil_day_out_of_bounds())),
+        _ => Err(invalid(
+            UiMessage::error_data_task_reminder_complete_civil_due_required(),
+        )),
     }
 }
 /// Converts civil Period bounds only with the exact series zone. A skipped gap
@@ -1474,7 +1835,9 @@ pub fn period_zoned_bounds(period: &NativeValue, fold: &str, schema: &Schema) ->
             let instant = zone
                 .instant(date.and_hms_opt(0, 0, 0).unwrap(), &zero, fold)?
                 .ok_or_else(|| {
-                    DataError("Period midnight falls in zone gap; bounds unavailable".into())
+                    DataError::unavailable(
+                        weftext_messages::UiMessage::error_data_temporal_period_midnight_in_zone_gap(),
+                    )
                 })?;
             members.push(NativeMember {
                 key: key.into(),
@@ -1485,8 +1848,8 @@ pub fn period_zoned_bounds(period: &NativeValue, fold: &str, schema: &Schema) ->
     })();
     match result {
         Ok(v) => Cell::value(v),
-        Err(e) if e.0.contains("unavailable") || e.0.contains("coverage") => issue(e.0),
-        Err(e) => invalid(e.0),
+        Err(e) if e.is_unavailable() => Cell::unavailable_error(e),
+        Err(e) => invalid_error(e),
     }
 }
 
@@ -1499,22 +1862,22 @@ fn frozen_zone(schema: &Schema, key: &str, version: &str) -> Result<FrozenZone> 
                 && p.data["key"].as_str() == Some(key)
                 && p.data["version"].as_str() == Some(version)
         })
-        .ok_or_else(|| DataError("Exact zone provider/version unavailable".into()))?;
+        .ok_or_else(|| DataError::unavailable(weftext_messages::UiMessage::error_data_temporal_exact_zone_provider_version_unavailable()))?;
     FrozenZone::new(provider)
 }
 /// Pure frozen-zone primitive. Native Typst local datetimes have whole seconds;
 /// a fractional instant requires the exact recurrence context and is not rounded.
 pub fn zone_to_civil(instant: &NativeValue, key: &str, version: &str, schema: &Schema) -> Cell {
     let result = (|| -> Result<NativeValue> {
-        let instant = ExactInstant::parse(
-            instant
-                .text()
-                .ok_or_else(|| DataError("toCivil needs an exact instant".into()))?,
-        )?;
+        let instant = ExactInstant::parse(instant.text().ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_to_civil_requires_exact_instant(),
+            )
+        })?)?;
         let zone = frozen_zone(schema, key, version)?;
         let local = zone.civil(&instant)?;
         if !instant.fraction.compare(&ExactDecimal::parse("0")?).is_eq() {
-            return Err(DataError("Fractional local time unavailable in native whole-second local_datetime; exact recurrence context preserves it".into()));
+            return Err(DataError::unavailable(weftext_messages::UiMessage::error_data_temporal_fractional_local_time_needs_exact_recurrence_context()));
         }
         Ok(NativeValue::LocalDatetime(
             local.format("%Y-%m-%dT%H:%M:%S").to_string(),
@@ -1522,8 +1885,8 @@ pub fn zone_to_civil(instant: &NativeValue, key: &str, version: &str, schema: &S
     })();
     match result {
         Ok(value) => Cell::value(value),
-        Err(e) if e.0.contains("unavailable") || e.0.contains("coverage") => issue(e.0),
-        Err(e) => invalid(e.0),
+        Err(e) if e.is_unavailable() => Cell::unavailable_error(e),
+        Err(e) => invalid_error(e),
     }
 }
 /// A skipped gap returns absent; ambiguity always requires earlier/later.
@@ -1537,17 +1900,25 @@ pub fn zone_to_instant(
 ) -> Cell {
     let result = (|| -> Result<Option<NativeValue>> {
         if gap != "skip" {
-            return Err(DataError("Explicit gap=skip required".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_explicit_gap_skip_required(),
+            ));
         }
         let NativeValue::LocalDatetime(value) = local else {
-            return Err(DataError("toInstant needs native local_datetime".into()));
+            return Err(DataError::new(weftext_messages::UiMessage::error_data_temporal_to_instant_requires_native_local_datetime()));
         };
-        let local = chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S")
-            .map_err(|_| DataError("Invalid local_datetime".into()))?;
+        let local =
+            chrono::NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S").map_err(|_| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_temporal_invalid_local_datetime(),
+                )
+            })?;
         if local.format("%Y-%m-%dT%H:%M:%S").to_string() != *value
             || !(1..=9999).contains(&local.year())
         {
-            return Err(DataError("Noncanonical local_datetime".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_temporal_noncanonical_local_datetime(),
+            ));
         }
         let zone = frozen_zone(schema, key, version)?;
         zone.instant(local, &ExactDecimal::parse("0")?, fold)?
@@ -1557,7 +1928,7 @@ pub fn zone_to_instant(
     match result {
         Ok(Some(value)) => Cell::value(value),
         Ok(None) => Cell::Absent,
-        Err(e) if e.0.contains("unavailable") || e.0.contains("coverage") => issue(e.0),
-        Err(e) => invalid(e.0),
+        Err(e) if e.is_unavailable() => Cell::unavailable_error(e),
+        Err(e) => invalid_error(e),
     }
 }

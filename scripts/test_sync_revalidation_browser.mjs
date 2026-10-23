@@ -1,6 +1,8 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { createdDocument } from './_creation_result.mjs';
 // Actual semantic-review UI, original pending operation, owned replicas and headless Chrome.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile, appendFile, stat, rename, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -28,18 +30,14 @@ async function until(read, predicate, label, milliseconds = 30000) {
   throw new Error(`${label} timeout; last=${JSON.stringify(value)}`);
 }
 async function start(s, label, args) {
-  const child = spawn(exe, ['--no-browser', ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawnServe(exe, [...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   const server = { child, label, folder: s.folder, stdout: '', stderr: '' }; servers.push(server);
   child.stdout.on('data', value => server.stdout += value); child.stderr.on('data', value => server.stderr += value);
-  await until(() => server.stdout, value => /http:\/\/127\.0\.0\.1:\d+\/#token=\w+/.test(value), `${label} startup`);
-  const match = server.stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-  return Object.assign(server, { base: match[1], token: match[2], port: new URL(match[1]).port });
+  await until(() => serveReady(child), Boolean, `${label} startup`);
+  const match = serveReady(child);
+  return Object.assign(server, { base: match.base, token: match.token, port: new URL(match.base).port });
 }
-async function stop(server) {
-  if (!server || server.child.exitCode !== null || server.child.signalCode !== null) return;
-  server.child.kill();
-  await until(() => server.child.exitCode !== null || server.child.signalCode !== null, Boolean, `${server.label} owned process close`, 15000);
-}
+async function stop(server) { await stopServe(server?.child); }
 async function api(s, server, route, request, expected = 200) {
   const nativeCall = route === '/api/sync/revalidation-review' || route === '/api/query/run' || route === '/api/query/definition/run' || route === '/api/operations/prepare' && ['revalidateSync', 'adoptSyncExternal'].includes(request.intent?.kind);
   const response = await fetch(server.base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': server.token }, body: JSON.stringify(request), signal: AbortSignal.timeout(nativeCall ? 90000 : 45000) });
@@ -85,7 +83,7 @@ async function setup(id) {
   const s = { id, folder, ra: path.join(folder, 'a'), rb: path.join(folder, 'b'), da: path.join(folder, 'sa'), db: path.join(folder, 'sb'), transfer: 0, requests: [], responses: [], observations: [] }; active = s;
   s.a = await start(s, 'a', ['--data-dir', s.da]); s.b = await start(s, 'b-initial', ['--data-dir', s.db]);
   await api(s, s.a, '/api/library/create', { path: s.ra, operationId: randomUUID() }); await saveSchema(s, s.a, s.ra, 'semantic_baseline_title');
-  const note = await api(s, s.a, '/api/note/create', { root: s.ra, parent: s.ra, name: 'Note', operationId: randomUUID() }); s.nodeId = note.nodeId; s.key = { kind: 'node', id: note.nodeId };
+  const note = createdDocument(await api(s, s.a, '/api/note/create', { root: s.ra, parent: s.ra, name: 'Note', operationId: randomUUID() })); s.nodeId = note.nodeId; s.key = { kind: 'node', id: note.nodeId };
   const binding = await api(s, s.a, '/api/sync/enable', { root: s.ra, operationId: randomUUID() }); s.identity = binding.identity;
   await transfer(s, s.a, s.ra, s.b, binding.installedObjects);
   await commit(s, s.b, await api(s, s.b, '/api/operations/prepare', { root: s.rb, operationId: randomUUID(), intent: { kind: 'cloneSync', identity: s.identity, objects: binding.installedObjects } }));
@@ -101,7 +99,7 @@ async function setup(id) {
   s.originalPhysical = { directory: await physical(path.join(s.rb, 'Note')), source: await physical(path.join(s.rb, 'Note', 'Note.typ')) };
   if (id === 11 || id === 12) return setupRemovedMember(s);
   if (id >= 6) {
-    const task = await api(s, s.a, '/api/note/create', { root: s.ra, parent: s.ra, name: 'Task', operationId: randomUUID() });
+    const task = createdDocument(await api(s, s.a, '/api/note/create', { root: s.ra, parent: s.ra, name: 'Task', operationId: randomUUID() }));
     s.nativeKey = { kind: 'node', id: task.nodeId };
     const body = id === 7 ? nativeGood.replace('精确标题', '错误标题') : nativeGood;
     s.nativeSource = `#metadata((id: "${task.nodeId}", types: ("task",), status: "open")) <weftext>\n${body}${id === 8 ? '\n#include "../shared.typ"\n' : ''}`;
@@ -593,5 +591,5 @@ finally {
   await browser?.close(); for (const server of servers) await stop(server);
   result.ownedProcessesClosed = servers.every(server => server.child.exitCode !== null || server.child.signalCode !== null) && !browser?.isConnected(); result.serverStderrBytes = servers.reduce((sum, server) => sum + Buffer.byteLength(server.stderr), 0);
   for (const [index, server] of servers.entries()) { await writeFile(path.join(server.folder, `server-${index}-${server.label}.stdout.log`), server.stdout); await writeFile(path.join(server.folder, `server-${index}-${server.label}.stderr.log`), server.stderr); }
-  await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, pageErrors: result.pageErrors, routeErrors: result.routeErrors, ownedProcessesClosed: result.ownedProcessesClosed }));
+  await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, pageErrors: result.pageErrors, routeErrors: result.routeErrors, ownedProcessesClosed: result.ownedProcessesClosed }));
 }

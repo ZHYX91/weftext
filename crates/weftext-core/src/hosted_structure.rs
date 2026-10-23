@@ -6,6 +6,7 @@ use crate::operations::{
     sorted_entries,
 };
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 
 /// Captured only after the host authorizes complete subtree read/export AND
 /// schema use. No portable path, source-read grant or copy action is that grant.
@@ -91,22 +92,45 @@ impl Core {
         path: &Path,
         resource: &str,
     ) -> Result<QualifiedQueryNode> {
+        self.backend.check_path(&self.data_dir)?;
         valid_resource(resource)?;
         let root = absolute_path(root)?;
         let path = absolute_path(path)?;
         let workspace = self.require_workspace(&root)?;
         self.check_pending(&path)?;
-        let identity = stamp(&ParentGuard::acquire(&path)?.open_placement_file()?)?.identity;
+        let identity = {
+            let file = ParentGuard::acquire(&self.backend, &path)?.open_placement_file()?;
+            stamp(&file)?.identity
+        };
         self.check_pending_identity(&identity)?;
         let mut expected = None;
-        for plan in self.operations.values().filter(|plan| {
-            self.committed(&plan.operation_id)
-                && plan.workspace_id.as_deref() == Some(&workspace.workspace_id)
-        }) {
+        for plan in self
+            .operations
+            .values()
+            .map(|plan| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&plan.operation_id)?
+                            && plan.workspace_id.as_deref() == Some(&workspace.workspace_id)
+                    } {
+                        Some(plan)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
-            if transaction.hosted_destination.as_deref() != Some(resource) {
+            if !transaction
+                .hosted_destination
+                .as_ref()
+                .is_some_and(|d| d.is_fixed_slot(resource))
+            {
                 continue;
             }
             let node = match (&transaction.request.intent, &transaction.mutation) {
@@ -162,7 +186,7 @@ impl Core {
                 if expected.as_ref().is_some_and(|prior| prior != &found) {
                     return Err(CoreError::new(
                         "identityPending",
-                        "Structural slot producer is ambiguous",
+                        UiMessage::error_core_hosted_structure_structural_slot_producer_ambiguous(),
                     ));
                 }
                 expected = Some(found);
@@ -174,7 +198,7 @@ impl Core {
             &expected.ok_or_else(|| {
                 CoreError::new(
                     "identityPending",
-                    "This slot has no exact committed structural producer",
+                    UiMessage::error_core_hosted_structure_slot_has_no_exact_committed_structural_producer(),
                 )
             })?,
             "live",
@@ -190,16 +214,23 @@ impl Core {
         expected: &weftext_knowledge::NodeRef,
     ) -> Result<FeatureTreeWitness> {
         let root = absolute_path(root)?;
-        let root_coordinate = ParentGuard::acquire(&root.join(".feature-root-prospective"))?
-            .directory_coordinates()?;
-        let source_coordinate =
-            ParentGuard::acquire(&source_directory.join(".feature-tree-prospective"))?
+        let root_coordinate =
+            ParentGuard::acquire(&self.backend, &root.join(".feature-root-prospective"))?
                 .directory_coordinates()?;
+        let source_coordinate = ParentGuard::acquire(
+            &self.backend,
+            &source_directory.join(".feature-tree-prospective"),
+        )?
+        .directory_coordinates()?;
         let source = root.join(
             source_coordinate
                 .strip_prefix(&root_coordinate)
                 .map_err(|_| {
-                    CoreError::new("outsideRoot", "Selected tree is outside the physical root")
+                    CoreError::new(
+                        "outsideRoot",
+                        UiMessage::error_core_hosted_structure_selected_tree_outside_physical_root(
+                        ),
+                    )
                 })?,
         );
         let leaf = source.join(format!(
@@ -210,11 +241,11 @@ impl Core {
         self.check_subtree_boundary(&root, &source)?;
         let mut files = vec![];
         let mut directories = vec![];
-        snapshot_tree(&source, &mut files, &mut directories, false)?;
+        snapshot_tree(&self.backend, &source, &mut files, &mut directories, false)?;
         if files.len() + directories.len() > 5000 {
             return Err(CoreError::new(
                 "budget",
-                "Tree capability exceeds 5000 members",
+                UiMessage::error_core_hosted_structure_tree_capability_exceeds5000_members(),
             ));
         }
         if !files
@@ -223,7 +254,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "scopeChanged",
-                "Selected owner changed during tree capture",
+                UiMessage::error_core_hosted_structure_selected_owner_changed_during_tree_capture(),
             ));
         }
         let mut dependencies = vec![];
@@ -250,8 +281,8 @@ impl Core {
     }
     fn feature_file_witness(&self, path: &Path) -> Result<SnapshotWitness> {
         self.check_pending(path)?;
-        let guard = ParentGuard::acquire(path)?;
-        let captured = capture_optional(path)?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
+        let captured = capture_optional(&self.backend, path)?;
         if let Some(f) = &captured {
             check_size(&f.bytes)?;
             self.check_pending_identity(&f.stamp.identity)?;
@@ -272,7 +303,7 @@ impl Core {
         if !same_path(&absolute_path(root)?, &witness.root) {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Tree capability belongs to another root",
+                UiMessage::error_core_hosted_structure_tree_capability_belongs_to_another_root(),
             ));
         }
         self.validate_query_node_witness(root, &witness.owner.witness)?;
@@ -285,25 +316,30 @@ impl Core {
         }
         for f in &witness.files {
             self.check_pending(Path::new(&f.path))?;
-            let actual = capture_optional(Path::new(&f.path))?.ok_or_else(|| {
-                CoreError::new("scopeChanged", "Authorized tree member disappeared")
+            let actual = capture_optional(&self.backend, Path::new(&f.path))?.ok_or_else(|| {
+                CoreError::new(
+                    "scopeChanged",
+                    UiMessage::error_core_hosted_structure_authorized_tree_member_disappeared(),
+                )
             })?;
             if actual.stamp != f.stamp || actual.bytes != f.bytes {
                 return Err(CoreError::new(
                     "staleBase",
-                    "Authorized tree member changed",
+                    UiMessage::error_core_hosted_structure_authorized_tree_member_changed(),
                 ));
             }
         }
         for d in &witness.directories {
-            let guard =
-                ParentGuard::acquire(&Path::new(&d.path).join(".feature-tree-prospective"))?;
+            let guard = ParentGuard::acquire(
+                &self.backend,
+                &Path::new(&d.path).join(".feature-tree-prospective"),
+            )?;
             let (entries, complete) = guard.directory_entries(5000)?;
             let entries = sorted_entries(entries, Path::new(&d.path));
             if !complete || guard.directory_identity()? != d.identity || entries != d.entries {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Authorized tree membership changed",
+                    UiMessage::error_core_hosted_structure_authorized_tree_membership_changed(),
                 ));
             }
         }
@@ -334,16 +370,16 @@ impl Core {
                 if original.stamp != f.stamp || original.bytes != f.bytes {
                     return Err(CoreError::new(
                         "staleBase",
-                        "Competing captured canonical versions",
+                        UiMessage::error_core_hosted_structure_competing_captured_canonical_versions(),
                     ));
                 }
                 continue;
             }
             seen_files.push(f);
-            let birth = self.admitted_binding(&f.stamp.identity).ok_or_else(|| {
+            let birth = self.admitted_binding(&f.stamp.identity)?.ok_or_else(|| {
                 CoreError::new(
                     "identityConflict",
-                    "Captured canonical source is not physically admitted",
+                    UiMessage::error_core_hosted_structure_captured_canonical_source_not_physically_admitted(),
                 )
             })?;
             if birth.workspace_id != workspace.workspace_id
@@ -355,7 +391,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "Captured source declaration or identity is ambiguous",
+                    UiMessage::error_core_hosted_structure_captured_source_declaration_or_identity_ambiguous(),
                 ));
             }
             let places = self.node_placement_paths(&birth)?;
@@ -366,7 +402,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityConflict",
-                    "Captured source lacks exact committed placement",
+                    UiMessage::error_core_hosted_structure_captured_source_lacks_exact_committed_placement(),
                 ));
             }
             let path = Path::new(&f.path);
@@ -375,7 +411,7 @@ impl Core {
                 relative_path: path
                     .strip_prefix(root)
                     .map_err(|_| {
-                        CoreError::new("outsideRoot", "Captured source belongs outside root")
+                        CoreError::new("outsideRoot", UiMessage::error_core_hosted_structure_captured_source_belongs_outside_root())
                     })?
                     .to_string_lossy()
                     .into_owned(),
@@ -403,6 +439,7 @@ impl Core {
         resource: &str,
         operation: &str,
     ) -> Result<Option<ActorStructureReceipt>> {
+        self.backend.check_path(&self.data_dir)?;
         let Some(record) = self.actor_feature_record(resource, operation)? else {
             return Ok(None);
         };
@@ -428,7 +465,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "identityPending",
-                            "Original producer birth evidence is unavailable",
+                            UiMessage::error_core_hosted_structure_original_producer_birth_evidence_unavailable(),
                         ));
                     }
                     nodes.push(ActorStructureNode {
@@ -458,7 +495,8 @@ impl Core {
             _ => {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "Original feature is not a structural producer",
+                    UiMessage::error_core_hosted_structure_original_feature_not_structural_producer(
+                    ),
                 ));
             }
         };
@@ -477,12 +515,13 @@ impl Core {
         operation: &str,
         expected: &weftext_knowledge::NodeRef,
     ) -> Result<QualifiedQueryNode> {
+        self.backend.check_path(&self.data_dir)?;
         let receipt = self
             .actor_feature_structure_receipt(resource, operation)?
             .ok_or_else(|| {
                 CoreError::new(
                     "operationMissing",
-                    "Original structural operation is not committed",
+                    UiMessage::error_core_hosted_structure_original_structural_operation_not_committed(),
                 )
             })?;
         if !same_path(root, &receipt.root) {
@@ -496,8 +535,11 @@ impl Core {
         let qualified = self.qualified_query_node_at(root, path, expected, &node.lifecycle)?;
         let record = self.actor_feature_record(resource, operation)?.unwrap();
         let plan = &self.operations[&record.core_operation_id];
-        let guard = ParentGuard::acquire(path)?;
-        let identity = stamp(&guard.open_placement_file()?)?.identity;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
+        let identity = {
+            let file = guard.open_placement_file()?;
+            stamp(&file)?.identity
+        };
         let original = match &plan.transaction.as_ref().unwrap().mutation {
             Mutation::CreateTree { .. } => {
                 self.read_births(&record.core_operation_id)?
@@ -514,7 +556,7 @@ impl Core {
         if !original {
             return Err(CoreError::new(
                 "identityPending",
-                "Current owner is not the original physical receipt object",
+                UiMessage::error_core_hosted_structure_current_owner_not_original_physical_receipt_object(),
             ));
         }
         Ok(qualified)

@@ -9,6 +9,7 @@ real HTTP request, local identities, resources, drafts and restart consumers.
 Run: python scripts/test_sync_placement.py EXE [exact_test_name ...]
 Set WEFTEXT_SYNC_EVIDENCE_DIR to a fresh owned output directory.
 """
+from _creation_result import created_document
 import hashlib
 import json
 import os
@@ -34,8 +35,8 @@ class SyncPlacement(SyncCompound):
         self.nested = 'child' in self.placement_test_name
         names = ['Still']
         if self.nested:
-            doc = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra / 'Left'),
-                            name='Child', operationId=uid())
+            doc = created_document(self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra / 'Left'),
+                            name='Child', operationId=uid()))
             self.docs['Child'] = doc
             self.keys['Child'] = {'kind': 'node', 'id': doc['nodeId']}
             self.save(self.a, self.ra, Path('Left/Child/Child.typ'), 'Initial child source 中文😀')
@@ -326,7 +327,7 @@ def browser_fixture(output):
         case.layout = 'exchange'
         case.produce(case.layout)
         case.close_server(case.b)
-        case.b = case.start_server(['--no-browser', '--data-dir', str(case.folder / 'state-b'),
+        case.b = case.start_server([ '--data-dir', str(case.folder / 'state-b'),
                                    '--open', str(case.rb / 'Left/Left.typ'), '--root', str(case.rb)], 'B-ui')
         base = case.open(case.b, case.rb, Path('Left/Left.typ'))
         fixture = {'folder': str(case.folder), 'root': str(case.rb), 'url': case.b.url, 'token': case.b.token,

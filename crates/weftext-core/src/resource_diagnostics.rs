@@ -10,11 +10,6 @@ fn enabled_value(value: Option<&std::ffi::OsStr>) -> bool {
     value == Some(std::ffi::OsStr::new("1"))
 }
 
-fn os_error(message: &str) -> Option<i32> {
-    let tail = message.rsplit_once("(os error ")?.1;
-    tail.strip_suffix(')')?.parse().ok()
-}
-
 fn record(phase: &str, token: &str, code: &str, os: Option<i32>) -> serde_json::Value {
     let safe = |text: &str| {
         text.chars()
@@ -37,11 +32,7 @@ fn emit(phase: &str, token: &str, code: &str, os: Option<i32>) {
 }
 
 pub(crate) fn error(phase: &str, token: &str, error: &CoreError) {
-    emit(phase, token, &error.code, os_error(&error.message));
-}
-
-pub(crate) fn io_error(phase: &str, token: &str, error: &std::io::Error) {
-    emit(phase, token, "io", error.raw_os_error());
+    emit(phase, token, &error.code, error.os_error());
 }
 
 pub(crate) fn branch(phase: &str, token: &str, code: &str) {
@@ -49,14 +40,7 @@ pub(crate) fn branch(phase: &str, token: &str, code: &str) {
 }
 
 pub(crate) fn stamp_token(stamp: &FileStamp) -> String {
-    format!(
-        "{}:{}:{}:{}:{}",
-        stamp.identity.volume,
-        stamp.identity.index,
-        stamp.identity.created,
-        stamp.modified,
-        stamp.size
-    )
+    format!("{:?}:{}:{}", stamp.identity, stamp.modified, stamp.size)
 }
 
 #[cfg(test)]
@@ -85,10 +69,8 @@ mod tests {
                 .len(),
             16
         );
-        assert_eq!(
-            os_error("Windows file protection failed: text (os error 32)"),
-            Some(32)
-        );
-        assert_eq!(os_error("private message without an OS error"), None);
+        let original = std::io::Error::from_raw_os_error(32);
+        let error = CoreError::from(original);
+        assert_eq!(error.os_error(), Some(32));
     }
 }

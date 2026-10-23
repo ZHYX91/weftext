@@ -4,12 +4,13 @@ use super::*;
 use journal::{Plan, RecoveryBlob, RecoveryIdentity, RecoveryMember};
 use operations::{FileChange, Mutation, read_blob, write_blob};
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 
 pub(crate) struct RecoveryCapture {
     pub(crate) members: Vec<RecoveryMember>,
     pub(crate) guards: Vec<ParentGuard>,
-    pub(crate) files: Vec<(usize, File)>,
-    pub(crate) placement_files: Vec<File>,
+    pub(crate) files: Vec<(usize, backend::BoundFile)>,
+    pub(crate) placement_files: Vec<backend::BoundFile>,
     pub(crate) changes: Vec<FileChange>,
     pub(crate) coherence: String,
     pub(crate) compound: Option<operations::compound::CompoundCapture>,
@@ -36,10 +37,12 @@ impl Core {
         }
         let t = plan.transaction.as_ref().unwrap();
         let capture = self.capture_transaction_recovery(plan, false)?;
-        let installing = self.journal_path(&plan.operation_id, "install").exists();
-        let status = if self.committed(&plan.operation_id) {
+        let installing = self
+            .backend
+            .entry_exists(self.journal_path(&plan.operation_id, "install"))?;
+        let status = if self.committed(&plan.operation_id)? {
             "committed"
-        } else if self.resolved(&plan.operation_id) {
+        } else if self.resolved(&plan.operation_id)? {
             "resolved"
         } else if !installing {
             "prepared"
@@ -53,7 +56,7 @@ impl Core {
             }
         };
         let mut allowed_actions = Vec::new();
-        if !self.committed(&plan.operation_id) && !self.resolved(&plan.operation_id) {
+        if !self.committed(&plan.operation_id)? && !self.resolved(&plan.operation_id)? {
             if capture.coherence == "knownBefore" {
                 allowed_actions.push("keepCurrent".into());
             }
@@ -76,10 +79,12 @@ impl Core {
             before_source: None,
             after_source: String::new(),
             current_source: None,
-            message: format!(
-                "Original frozen plan {} retained. Every member must keep its recorded object binding and exact before/after bytes; third states cannot be overwritten or accepted as coherent.",
-                t.preview.plan_id
-            ),
+            description: UiMessage::recovery_frozen_plan_retained(
+                weftext_messages::params::RecoveryFrozenPlanRetained {
+                    plan_id: t.preview.plan_id.clone(),
+                },
+            )
+            .into(),
             coherence: capture.coherence,
             members: capture.members,
             allowed_actions,
@@ -99,22 +104,24 @@ impl Core {
         ) {
             return Err(CoreError::new(
                 "unsupportedRecovery",
-                "Choose an action permitted by the inspected original plan",
+                UiMessage::error_core_transaction_recovery_choose_action_permitted_by_inspected_original_plan(),
             ));
         }
-        if self.committed(&plan.operation_id) || self.resolved(&plan.operation_id) {
+        if self.committed(&plan.operation_id)? || self.resolved(&plan.operation_id)? {
             return self.inspect_transaction_recovery(plan);
         }
         let t = plan.transaction.as_ref().unwrap();
         let mut capture =
             self.capture_transaction_recovery(plan, action == "resumeOriginalPlan")?;
         let _private_capture = self.validate_owner_backup_private(plan, true)?;
-        let installing = self.journal_path(&plan.operation_id, "install").exists();
+        let installing = self
+            .backend
+            .entry_exists(self.journal_path(&plan.operation_id, "install"))?;
         if action == "keepCurrent" {
             if capture.coherence != "knownBefore" {
                 return Err(CoreError::new(
                     "recoveryConflict",
-                    "Keeping current is permitted only when all original members are coherently at their verified before state",
+                    UiMessage::error_core_transaction_recovery_keeping_current_permitted_only_when_all_original_members_coherently_at_their_verified_before_state(),
                 ));
             }
             self.resolve_record(&plan.operation_id, action)?;
@@ -133,7 +140,7 @@ impl Core {
             if !eligible {
                 return Err(CoreError::new(
                     "recoveryConflict",
-                    "The original plan has unavailable, changed or incoherent members; preserve current and original before/after images for explicit repair",
+                    UiMessage::error_core_transaction_recovery_original_plan_has_unavailable_changed_or_incoherent_members_preserve_current_and_original_before_after_images_for_explicit_repair(),
                 ));
             }
             if matches!(t.request.intent, OperationIntent::CloneSync { .. }) {
@@ -148,20 +155,20 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "recoveryConflict",
-                        "Replica setup binding is unavailable",
+                        UiMessage::error_core_transaction_recovery_replica_setup_binding_unavailable(),
                     ));
                 }
             } else {
                 let workspace = self.workspace(Path::new(&t.request.root))?.ok_or_else(|| {
                     CoreError::new(
                         "recoveryConflict",
-                        "The original committed workspace binding is unavailable",
+                        UiMessage::error_core_transaction_recovery_original_committed_workspace_binding_unavailable(),
                     )
                 })?;
                 if plan.workspace_id.as_ref() != Some(&workspace.workspace_id) {
                     return Err(CoreError::new(
                         "recoveryConflict",
-                        "The original workspace identity changed",
+                        UiMessage::error_core_transaction_recovery_original_workspace_identity_changed(),
                     ));
                 }
             }
@@ -181,7 +188,7 @@ impl Core {
                         .iter()
                         .position(|m| m.role == "write" && m.path == change.path)
                         .ok_or_else(|| {
-                            CoreError::new("invalidPlan", "A frozen change lacks a recovery member")
+                            CoreError::new("invalidPlan", UiMessage::error_core_transaction_recovery_frozen_change_lacks_recovery_member())
                         })?;
                     if capture.members[index].matches_after {
                         continue;
@@ -198,7 +205,8 @@ impl Core {
                         let mut file = if let Some(file) = compound_file {
                             file
                         } else {
-                            let guard = ParentGuard::acquire(Path::new(&change.path))?;
+                            let guard =
+                                ParentGuard::acquire(&self.backend, Path::new(&change.path))?;
                             let file = guard
                                 .open_file(true, true)
                                 .map_err(|e| recovery_failure(plan, e))?;
@@ -237,13 +245,13 @@ impl Core {
                         .ok_or_else(|| {
                             CoreError::new(
                                 "invalidPlan",
-                                "A recovery write has no exact after image",
+                                UiMessage::error_core_transaction_recovery_recovery_write_has_no_exact_after_image(),
                             )
                         })?;
                     if read_blob(file)? != change.after {
                         return Err(CoreError::new(
                             "recoveryConflict",
-                            "After verification changed before the original decision",
+                            UiMessage::error_core_transaction_recovery_after_verification_changed_before_original_decision(),
                         ));
                     }
                     materialized.push((member.path.clone(), stamp(file)?));
@@ -282,8 +290,8 @@ impl Core {
             coherence: String::new(),
             compound: None,
         };
-        if !self.committed(&plan.operation_id)
-            && !self.resolved(&plan.operation_id)
+        if !self.committed(&plan.operation_id)?
+            && !self.resolved(&plan.operation_id)?
             && let Err(error) = self.validate_operation_pending(plan)
         {
             capture.members.push(RecoveryMember {
@@ -300,12 +308,12 @@ impl Core {
                 identity_binding: "unavailable".into(),
                 expected_identity: None,
                 current_identity: None,
-                message: error.message,
+                description: Some(error.into()),
             });
         }
         if plan.sync_application.is_some()
-            && !self.committed(&plan.operation_id)
-            && !self.resolved(&plan.operation_id)
+            && !self.committed(&plan.operation_id)?
+            && !self.resolved(&plan.operation_id)?
             && let Err(error) = self.validate_sync_recovery_cut(plan)
         {
             capture.members.push(RecoveryMember {
@@ -322,7 +330,14 @@ impl Core {
                 identity_binding: "unavailable".into(),
                 expected_identity: None,
                 current_identity: None,
-                message: format!("Original replica cut no longer qualifies: {}", error.code),
+                description: Some(
+                    CoreError::new(
+                        "syncCutUnavailable",
+                        UiMessage::recovery_replica_cut_unqualified(),
+                    )
+                    .caused_by(error)
+                    .into(),
+                ),
             });
         }
         if let Err(error) = self.validate_tag_plan_changes(plan) {
@@ -343,7 +358,14 @@ impl Core {
                 identity_binding: "mismatch".into(),
                 expected_identity: None,
                 current_identity: None,
-                message: format!("Original Tags role no longer qualifies: {}", error.code),
+                description: Some(
+                    CoreError::new(
+                        "tagRoleUnavailable",
+                        UiMessage::recovery_tags_role_unqualified(),
+                    )
+                    .caused_by(error)
+                    .into(),
+                ),
             });
         }
         if let Err(error) = self.validate_recovery_scope(t) {
@@ -367,7 +389,7 @@ impl Core {
                 identity_binding: if third { "mismatch" } else { "unavailable" }.into(),
                 expected_identity: None,
                 current_identity: None,
-                message: error.message,
+                description: Some(error.into()),
             });
         }
         match self.validate_owner_backup_private(plan, false) {
@@ -395,7 +417,7 @@ impl Core {
                     identity_binding: "mismatch".into(),
                     expected_identity: None,
                     current_identity: None,
-                    message: error.message,
+                    description: Some(error.into()),
                 });
             }
         }
@@ -420,7 +442,7 @@ impl Core {
                         identity_binding: "unavailable".into(),
                         expected_identity: None,
                         current_identity: None,
-                        message: error.message,
+                        description: Some(error.into()),
                     });
                     capture.compound = None;
                     capture.complete();
@@ -457,7 +479,10 @@ impl Core {
         }
         for (path, expected_parent) in &t.write_parents {
             let parent = Path::new(path).parent().ok_or_else(|| {
-                CoreError::new("invalidPlan", "A frozen write target lacks a parent")
+                CoreError::new(
+                    "invalidPlan",
+                    UiMessage::error_core_transaction_recovery_frozen_write_target_lacks_parent(),
+                )
             })?;
             self.capture_bound_directory(&display(parent), expected_parent, &mut capture)?;
         }
@@ -477,11 +502,20 @@ impl Core {
                     if change.before.is_none() && created_directories.iter().any(|directory| Path::new(directory) == Path::new(&change.path).parent().unwrap()));
             if !is_created_output && !t.write_parents.iter().any(|(path, _)| path == &change.path) {
                 capture.members.push(RecoveryMember {
-                    kind: "barrier".into(), role: "readDependency".into(), path: change.path.clone(), target_path: None,
-                    before: RecoveryBlob::from_bytes(None), after: RecoveryBlob::from_bytes(None), current: RecoveryBlob::from_bytes(None),
-                    state: "unavailable".into(), matches_before: false, matches_after: false,
-                    identity_binding: "unavailable".into(), expected_identity: None, current_identity: None,
-                    message: "The original plan has no durable write-parent binding; path names or equal leaf bytes cannot supply it".into(),
+                    kind: "barrier".into(),
+                    role: "readDependency".into(),
+                    path: change.path.clone(),
+                    target_path: None,
+                    before: RecoveryBlob::from_bytes(None),
+                    after: RecoveryBlob::from_bytes(None),
+                    current: RecoveryBlob::from_bytes(None),
+                    state: "unavailable".into(),
+                    matches_before: false,
+                    matches_after: false,
+                    identity_binding: "unavailable".into(),
+                    expected_identity: None,
+                    current_identity: None,
+                    description: Some(UiMessage::recovery_write_parent_binding_missing().into()),
                 });
             }
         }
@@ -543,21 +577,32 @@ impl Core {
                     &mut capture,
                 )?;
                 let member = capture.members.last_mut().unwrap();
-                if let Ok(guard) = ParentGuard::acquire(Path::new(&absent.path)) {
-                    if guard.directory_identity()? != absent.parent {
-                        member.state = "thirdState".into();
+                match ParentGuard::acquire(&self.backend, Path::new(&absent.path)) {
+                    Ok(guard) => {
+                        if guard.directory_identity()? != absent.parent {
+                            member.state = "thirdState".into();
+                            member.matches_before = false;
+                            member.matches_after = false;
+                            member.identity_binding = "mismatch".into();
+                            member.description =
+                                Some(UiMessage::recovery_absent_parent_replaced().into());
+                        }
+                        capture.guards.push(guard);
+                    }
+                    Err(error) => {
+                        member.state = "unavailable".into();
                         member.matches_before = false;
                         member.matches_after = false;
-                        member.identity_binding = "mismatch".into();
-                        member.message = "Original absent dependency parent was replaced".into();
+                        member.identity_binding = "unavailable".into();
+                        member.description = Some(
+                            CoreError::new(
+                                "dependencyParentUnavailable",
+                                UiMessage::recovery_absent_parent_unavailable(),
+                            )
+                            .caused_by(error)
+                            .into(),
+                        );
                     }
-                    capture.guards.push(guard);
-                } else {
-                    member.state = "unavailable".into();
-                    member.matches_before = false;
-                    member.matches_after = false;
-                    member.identity_binding = "unavailable".into();
-                    member.message = "Original absent dependency parent is unavailable".into();
                 }
             }
         }
@@ -579,7 +624,10 @@ impl Core {
                 Some(&directory.identity),
                 Some(&directory.identity),
             );
-            match ParentGuard::acquire(&Path::new(&directory.path).join(".recovery-prospective")) {
+            match ParentGuard::acquire(
+                &self.backend,
+                &Path::new(&directory.path).join(".recovery-prospective"),
+            ) {
                 Ok(guard) => {
                     let identity = guard.directory_identity()?;
                     let (entries, complete) = guard.directory_entries(5000)?;
@@ -606,17 +654,19 @@ impl Core {
                         "mismatch"
                     }
                     .into();
-                    member.message = if same {
-                        "Original guarded directory object and complete entries match"
-                    } else {
-                        "Frozen directory object or complete membership changed"
-                    }
-                    .into();
+                    member.description = Some(
+                        if same {
+                            UiMessage::recovery_directory_matches()
+                        } else {
+                            UiMessage::recovery_directory_changed()
+                        }
+                        .into(),
+                    );
                     capture.guards.push(guard);
                 }
                 Err(e) => {
                     member.state = "unavailable".into();
-                    member.message = e.message;
+                    member.description = Some(e.into());
                 }
             }
             capture.members.push(member);
@@ -652,9 +702,9 @@ impl Core {
             identity_binding: "unavailable".into(),
             expected_identity: expected.map(RecoveryIdentity::from),
             current_identity: None,
-            message: String::new(),
+            description: None,
         };
-        match ParentGuard::acquire(Path::new(path)) {
+        match ParentGuard::acquire(&self.backend, Path::new(path)) {
             Ok(guard) => {
                 let opened = if !write
                     && plan.transaction.as_ref().is_some_and(|t| {
@@ -717,9 +767,16 @@ impl Core {
                                     "thirdState"
                                 }
                                 .into();
-                                member.message = if bound { "Exact current bytes read through the retained original object guard" } else { "Existing object has no matching original or create-only materialization record" }.into();
+                                member.description = Some(
+                                    if bound {
+                                        UiMessage::recovery_current_bytes_guarded()
+                                    } else {
+                                        UiMessage::recovery_object_binding_unproven()
+                                    }
+                                    .into(),
+                                );
                             }
-                            Err(e) => member.message = e.message,
+                            Err(e) => member.description = Some(e.into()),
                         }
                         capture.files.push((capture.members.len(), file));
                     }
@@ -736,11 +793,16 @@ impl Core {
                         }
                         .into();
                         member.identity_binding = "missing".into();
-                        member.message = if materialized.is_some() && original.is_none() {
-                            "The original materialized object is now missing; a new object cannot replace its retained binding"
-                        } else { "Actual protected parent has no member with this name" }.into();
+                        member.description = Some(
+                            if materialized.is_some() && original.is_none() {
+                                UiMessage::recovery_materialized_object_missing()
+                            } else {
+                                UiMessage::recovery_parent_has_no_member()
+                            }
+                            .into(),
+                        );
                     }
-                    Err(e) => member.message = e.message,
+                    Err(e) => member.description = Some(e.into()),
                 }
                 capture.guards.push(guard);
             }
@@ -759,11 +821,9 @@ impl Core {
                 }
                 .into();
                 member.identity_binding = "missing".into();
-                member.message =
-                    "Planned member parent is absent; the root before-state must also be verified"
-                        .into();
+                member.description = Some(UiMessage::recovery_member_parent_absent().into());
             }
-            Err(e) => member.message = e.message,
+            Err(e) => member.description = Some(e.into()),
         }
         capture.members.push(member);
         Ok(())
@@ -781,7 +841,10 @@ impl Core {
                 b"{\"kind\":\"directory\",\"identity\":\"allocatedByCreateOnly\"}",
             ));
         }
-        match ParentGuard::acquire(&Path::new(path).join(".recovery-prospective")) {
+        match ParentGuard::acquire(
+            &self.backend,
+            &Path::new(path).join(".recovery-prospective"),
+        ) {
             Ok(guard) => {
                 let identity = guard.directory_identity()?;
                 let bound = expected.as_ref() == Some(&identity);
@@ -790,8 +853,8 @@ impl Core {
                 member.matches_after = bound;
                 member.state = if bound { "knownAfter" } else { "thirdState" }.into();
                 member.identity_binding = if bound { "materialized" } else { "mismatch" }.into();
-                member.message =
-                    "Created directory must match its durable create-only object record".into();
+                member.description =
+                    Some(UiMessage::recovery_created_directory_binding_required().into());
                 capture.guards.push(guard);
             }
             Err(e) if e.code == "missing" => {
@@ -803,12 +866,19 @@ impl Core {
                 }
                 .into();
                 member.identity_binding = "missing".into();
-                member.message = if expected.is_none() { "Planned directory is absent" } else { "The originally materialized directory is missing; replacement cannot supply its original binding" }.into();
-                if let Ok(parent) = ParentGuard::acquire(Path::new(path)) {
+                member.description = Some(
+                    if expected.is_none() {
+                        UiMessage::recovery_planned_directory_absent()
+                    } else {
+                        UiMessage::recovery_materialized_directory_missing()
+                    }
+                    .into(),
+                );
+                if let Ok(parent) = ParentGuard::acquire(&self.backend, Path::new(path)) {
                     capture.guards.push(parent);
                 }
             }
-            Err(e) => member.message = e.message,
+            Err(e) => member.description = Some(e.into()),
         }
         capture.members.push(member);
         Ok(())
@@ -840,7 +910,10 @@ impl Core {
             .iter()
             .find(|f| Path::new(&f.path) == Path::new(source).join(old_leaf))
             .ok_or_else(|| {
-                CoreError::new("invalidPlan", "Missing relocation canonical preimage")
+                CoreError::new(
+                    "invalidPlan",
+                    UiMessage::error_core_transaction_recovery_missing_relocation_canonical_preimage(),
+                )
             })?;
         if source == target {
             self.capture_bound_directory(source, source_identity, capture)?;
@@ -922,18 +995,20 @@ impl Core {
                 Some(&member.identity),
             );
             fact.kind = "file".into();
-            match ParentGuard::acquire(&locator).and_then(|g| {
+            match ParentGuard::acquire(&self.backend, &locator).and_then(|g| {
                 if g.directory_identity()? != member.parent {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Placement member parent changed",
+                        UiMessage::error_core_transaction_recovery_placement_member_parent_changed(
+                        ),
                     ));
                 }
                 let h = g.open_placement_file()?;
                 if stamp(&h)?.identity != member.identity {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Placement member object changed",
+                        UiMessage::error_core_transaction_recovery_placement_member_object_changed(
+                        ),
                     ));
                 }
                 Ok((g, h))
@@ -953,7 +1028,7 @@ impl Core {
                         "unavailable"
                     }
                     .into();
-                    fact.message = e.message;
+                    fact.description = Some(e.into());
                 }
             }
             capture.members.push(fact);
@@ -965,7 +1040,13 @@ impl Core {
         {
             let relative = Path::new(&directory.path)
                 .strip_prefix(source)
-                .map_err(|_| CoreError::new("invalidPlan", "Directory outside original move"))?;
+                .map_err(|_| {
+                    CoreError::new(
+                        "invalidPlan",
+                        UiMessage::error_core_transaction_recovery_directory_outside_original_move(
+                        ),
+                    )
+                })?;
             let destination = Path::new(target).join(relative);
             self.capture_namespace_directory(
                 &directory.path,
@@ -1062,14 +1143,15 @@ impl Core {
                 capture,
             )?;
             let intermediate = capture.members.last_mut().unwrap();
-            if intermediate.current_identity.as_ref().is_some_and(|i| {
-                i.volume == leaf_identity.volume
-                    && i.index == leaf_identity.index.to_string()
-                    && i.created == leaf_identity.created.to_string()
-            }) && intermediate.current.sha256.as_deref() == Some(hash(&canonical.bytes).as_str())
+            if intermediate
+                .current_identity
+                .as_ref()
+                .is_some_and(|i| i == &RecoveryIdentity::from(leaf_identity))
+                && intermediate.current.sha256.as_deref() == Some(hash(&canonical.bytes).as_str())
             {
                 intermediate.state = "knownIntermediate".into();
-                intermediate.message = "Canonical leaf rename exists but namespace move is not complete; no replay is permitted".into();
+                intermediate.description =
+                    Some(UiMessage::recovery_canonical_rename_intermediate().into());
             }
         }
         Ok(())
@@ -1085,7 +1167,10 @@ impl Core {
     ) -> Result<()> {
         let expected = before.or(after).unwrap();
         let mut member = directory_member(path, "namespace", before, after);
-        match ParentGuard::acquire(&Path::new(path).join(".recovery-prospective")) {
+        match ParentGuard::acquire(
+            &self.backend,
+            &Path::new(path).join(".recovery-prospective"),
+        ) {
             Ok(guard) => {
                 let identity = guard.directory_identity()?;
                 member.current = directory_blob(Some(&identity));
@@ -1115,9 +1200,8 @@ impl Core {
                         member.matches_before = false;
                         member.matches_after = false;
                         member.state = "thirdState".into();
-                        member.message =
-                            "Relocation directory membership differs from the original frozen tree"
-                                .into();
+                        member.description =
+                            Some(UiMessage::recovery_relocation_membership_changed().into());
                     }
                 }
                 capture.guards.push(guard);
@@ -1132,11 +1216,11 @@ impl Core {
                 }
                 .into();
                 member.identity_binding = "missing".into();
-                if let Ok(parent) = ParentGuard::acquire(Path::new(path)) {
+                if let Ok(parent) = ParentGuard::acquire(&self.backend, Path::new(path)) {
                     capture.guards.push(parent);
                 }
             }
-            Err(e) => member.message = e.message,
+            Err(e) => member.description = Some(e.into()),
         }
         capture.members.push(member);
         Ok(())
@@ -1148,7 +1232,10 @@ impl Core {
         capture: &mut RecoveryCapture,
     ) -> Result<()> {
         let mut member = directory_member(path, "readDependency", Some(expected), Some(expected));
-        match ParentGuard::acquire(&Path::new(path).join(".recovery-prospective")) {
+        match ParentGuard::acquire(
+            &self.backend,
+            &Path::new(path).join(".recovery-prospective"),
+        ) {
             Ok(guard) => {
                 let identity = guard.directory_identity()?;
                 let bound = &identity == expected;
@@ -1160,7 +1247,7 @@ impl Core {
                 member.identity_binding = if bound { "original" } else { "mismatch" }.into();
                 capture.guards.push(guard);
             }
-            Err(e) => member.message = e.message,
+            Err(e) => member.description = Some(e.into()),
         }
         capture.members.push(member);
         Ok(())
@@ -1197,11 +1284,13 @@ fn directory_blob(identity: Option<&FileIdentity>) -> RecoveryBlob {
 fn recovery_failure(plan: &Plan, error: CoreError) -> CoreError {
     CoreError::new(
         "recoveryPending",
-        format!(
-            "Original operation {} remains unresolved after continuation; preserve its plan and inspect its members. Underlying {}: {}",
-            plan.operation_id, error.code, error.message
+        UiMessage::recovery_operation_unresolved(
+            weftext_messages::params::RecoveryOperationUnresolved {
+                operation_id: plan.operation_id.clone(),
+            },
         ),
     )
+    .caused_by(error)
 }
 fn directory_member(
     path: &str,
@@ -1227,6 +1316,6 @@ fn directory_member(
         identity_binding: "unavailable".into(),
         expected_identity: before.or(after).map(RecoveryIdentity::from),
         current_identity: None,
-        message: String::new(),
+        description: None,
     }
 }

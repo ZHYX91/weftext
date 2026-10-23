@@ -209,17 +209,38 @@ fn decode_component(value: &str) -> Result<String> {
     let mut pos = 0;
     while pos < input.len() {
         if input[pos] == b'%' {
-            let hex = input
-                .get(pos + 1..pos + 3)
-                .ok_or_else(|| KnowledgeError::new("invalidUri", "Malformed percent escape"))?;
-            let pair = std::str::from_utf8(hex)
-                .map_err(|_| KnowledgeError::new("invalidUri", "Malformed escape"))?;
-            let b = u8::from_str_radix(pair, 16)
-                .map_err(|_| KnowledgeError::new("invalidUri", "Malformed percent escape"))?;
+            let hex = input.get(pos + 1..pos + 3).ok_or_else(|| {
+                KnowledgeError::new(
+                    "invalidUri",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_percent_escape_malformed(
+                        ),
+                    ),
+                )
+            })?;
+            let pair = std::str::from_utf8(hex).map_err(|_| {
+                KnowledgeError::new(
+                    "invalidUri",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_escape_malformed(),
+                    ),
+                )
+            })?;
+            let b = u8::from_str_radix(pair, 16).map_err(|_| {
+                KnowledgeError::new(
+                    "invalidUri",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_percent_escape_malformed(
+                        ),
+                    ),
+                )
+            })?;
             if b == b'/' || b == b'\\' {
                 return Err(KnowledgeError::new(
                     "invalidUri",
-                    "Encoded separators are forbidden",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_encoded_separator_forbidden(),
+                    ),
                 ));
             }
             bytes.push(b);
@@ -229,12 +250,20 @@ fn decode_component(value: &str) -> Result<String> {
             pos += 1;
         }
     }
-    let result = String::from_utf8(bytes)
-        .map_err(|_| KnowledgeError::new("invalidUri", "URI component is not UTF-8"))?;
+    let result = String::from_utf8(bytes).map_err(|_| {
+        KnowledgeError::new(
+            "invalidUri",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_links_component_encoding_invalid(),
+            ),
+        )
+    })?;
     if result.chars().any(char::is_control) || result.contains('\\') {
         return Err(KnowledgeError::new(
             "invalidUri",
-            "Controls and backslashes are forbidden",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_links_controls_or_backslashes_forbidden(),
+            ),
         ));
     }
     Ok(result)
@@ -258,7 +287,9 @@ fn canonical_library_path(value: &str) -> Result<Vec<String>> {
     if parts.iter().any(|p| p.is_empty() || p == "." || p == "..") {
         return Err(KnowledgeError::new(
             "invalidUri",
-            "Inventory paths must be canonical",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_links_inventory_path_noncanonical(),
+            ),
         ));
     }
     Ok(parts)
@@ -268,7 +299,10 @@ fn fragment_split(raw: &str) -> Result<(&str, Option<String>)> {
         if fragment.contains('#') {
             return Err(KnowledgeError::new(
                 "invalidUri",
-                "Fragment contains an unencoded separator",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_links_fragment_separator_unencoded(
+                    ),
+                ),
             ));
         }
         Ok((address, Some(decode_component(fragment)?)))
@@ -505,11 +539,18 @@ pub fn resolve_link(
             let [workspace, node] = parts.as_slice() else {
                 return Err(KnowledgeError::new(
                     "invalidUri",
-                    "ID links require full workspace and node IDs",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_full_node_identity_required(),
+                    ),
                 ));
             };
             if uuid::Uuid::parse_str(workspace).is_err() || uuid::Uuid::parse_str(node).is_err() {
-                return Err(KnowledgeError::new("invalidUri", "IDs must be UUIDs"));
+                return Err(KnowledgeError::new(
+                    "invalidUri",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_uuid_required(),
+                    ),
+                ));
             }
             return Ok(node_resolution(
                 inventory
@@ -527,14 +568,16 @@ pub fn resolve_link(
             let [workspace, resource] = parts.as_slice() else {
                 return Err(KnowledgeError::new(
                     "invalidUri",
-                    "Resource addresses require a full workspace and resource identity",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_full_resource_identity_required()),
                 ));
             };
             if uuid::Uuid::parse_str(workspace).is_err() || uuid::Uuid::parse_str(resource).is_err()
             {
                 return Err(KnowledgeError::new(
                     "invalidUri",
-                    "Resource identity is invalid",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_resource_identity_invalid(),
+                    ),
                 ));
             }
             let key = format!("weftext-resource://{workspace}/{resource}");
@@ -551,13 +594,21 @@ pub fn resolve_link(
         }
         if let Some(rest) = address.strip_prefix("weftext-workspace://") {
             let (workspace, path) = rest.split_once('/').ok_or_else(|| {
-                KnowledgeError::new("invalidUri", "Workspace links require a path")
+                KnowledgeError::new(
+                    "invalidUri",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_workspace_path_required(
+                        ),
+                    ),
+                )
             })?;
             let workspace = decode_component(workspace)?;
             if uuid::Uuid::parse_str(&workspace).is_err() {
                 return Err(KnowledgeError::new(
                     "invalidUri",
-                    "Unknown workspace authority",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_workspace_authority_unknown(),
+                    ),
                 ));
             }
             let path = canonical_library_path(path)?.join("/");
@@ -596,22 +647,31 @@ pub fn resolve_link(
             ));
         }
         if address.starts_with("file:") {
-            let url = Url::parse(address)
-                .map_err(|_| KnowledgeError::new("invalidUri", "Invalid platform file URL"))?;
+            let url = Url::parse(address).map_err(|_| {
+                KnowledgeError::new(
+                    "invalidUri",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_platform_file_url_invalid(),
+                    ),
+                )
+            })?;
             if url.scheme() != "file"
                 || url.host_str().is_some_and(|host| !host.is_empty())
                 || url.query().is_some()
             {
                 return Err(KnowledgeError::new(
                     "invalidUri",
-                    "Only local platform file URLs are supported",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_local_file_url_required(
+                        ),
+                    ),
                 ));
             }
             for component in address.split('/') {
                 if matches!(decode_component(component)?.as_str(), "." | "..") {
                     return Err(KnowledgeError::new(
                         "invalidUri",
-                        "File URL aliases require Core canonicalization",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_file_alias_canonicalization_required()),
                     ));
                 }
             }
@@ -623,11 +683,17 @@ pub fn resolve_link(
             {
                 return Err(KnowledgeError::new(
                     "invalidUri",
-                    "File URL aliases require Core canonicalization",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_file_alias_canonicalization_required()),
                 ));
             }
             let requested_path = url.to_file_path().map_err(|_| {
-                KnowledgeError::new("invalidUri", "File URL does not form a local platform path")
+                KnowledgeError::new(
+                    "invalidUri",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_file_url_not_local_path(
+                        ),
+                    ),
+                )
             })?;
             let same_path = |candidate: &str| {
                 Url::parse(candidate)
@@ -687,7 +753,9 @@ pub fn resolve_link(
         if address.starts_with('/') || address.contains('?') || address.is_empty() {
             return Err(KnowledgeError::new(
                 "invalidUri",
-                "Relative links require a nonempty local source-relative path",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_links_relative_path_required(),
+                ),
             ));
         }
         let mut source_parts: Vec<_> = source.library_path.split('/').map(str::to_owned).collect();
@@ -699,11 +767,19 @@ pub fn resolve_link(
                     if source_parts.pop().is_none() {
                         return Err(KnowledgeError::new(
                             "outsideRoot",
-                            "Relative link escapes the library",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_relative_path_escapes_library()),
                         ));
                     }
                 }
-                "" => return Err(KnowledgeError::new("invalidUri", "Empty path component")),
+                "" => {
+                    return Err(KnowledgeError::new(
+                        "invalidUri",
+                        weftext_messages::ErrorDescription::new(
+                            weftext_messages::UiMessage::error_knowledge_links_path_component_empty(
+                            ),
+                        ),
+                    ));
+                }
                 _ => source_parts.push(component),
             }
         }
@@ -770,7 +846,9 @@ pub fn target_address(
             let parsed = Url::parse(&target.path).map_err(|_| {
                 KnowledgeError::new(
                     "invalidPath",
-                    "Core must provide a canonical platform file URL",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_canonical_file_url_required(),
+                    ),
                 )
             })?;
             if parsed.scheme() != "file"
@@ -780,7 +858,9 @@ pub fn target_address(
             {
                 return Err(KnowledgeError::new(
                     "invalidPath",
-                    "Not a canonical local file URL",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_local_file_url_noncanonical(),
+                    ),
                 ));
             }
             target.path.clone()
@@ -789,7 +869,7 @@ pub fn target_address(
             if source.owner.workspace_id != target.owner.workspace_id {
                 return Err(KnowledgeError::new(
                     "unconnectedLibrary",
-                    "A source-relative path cannot cross libraries",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_relative_path_cross_library_forbidden()),
                 ));
             }
             let mut from: Vec<_> = source.library_path.split('/').collect();
@@ -820,7 +900,7 @@ pub fn resource_address(
             resource_workspace(resource).ok_or_else(|| {
                 KnowledgeError::new(
                     "resourceIdentity",
-                    "The resource has no admitted full identity",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_admitted_resource_identity_missing()),
                 )
             })?;
             resource.key.clone()
@@ -829,7 +909,7 @@ pub fn resource_address(
             let parsed = Url::parse(&resource.path).map_err(|_| {
                 KnowledgeError::new(
                     "invalidPath",
-                    "Core must provide a canonical resource file URL",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_canonical_resource_url_required()),
                 )
             })?;
             if parsed.scheme() != "file"
@@ -840,7 +920,9 @@ pub fn resource_address(
             {
                 return Err(KnowledgeError::new(
                     "invalidPath",
-                    "The resource has no canonical local file URL",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_knowledge_links_resource_local_url_missing(),
+                    ),
                 ));
             }
             resource.path.clone()
@@ -849,13 +931,13 @@ pub fn resource_address(
             let workspace = resource_workspace(resource).ok_or_else(|| {
                 KnowledgeError::new(
                     "resourceIdentity",
-                    "The resource has no full workspace identity",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_resource_workspace_identity_missing()),
                 )
             })?;
             let path = resource_library_path(resource, inventory).ok_or_else(|| {
                 KnowledgeError::new(
                     "unavailable",
-                    "A canonical admitted library root does not qualify the resource path",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_resource_path_not_qualified_by_root()),
                 )
             })?;
             format!(
@@ -867,7 +949,7 @@ pub fn resource_address(
             )
         }
         LinkForm::Relative => {
-            let path=resource_library_path_from(source,resource).ok_or_else(||KnowledgeError::new("unavailable","The source and resource have no qualified path within the same admitted library"))?;
+            let path=resource_library_path_from(source,resource).ok_or_else(||KnowledgeError::new("unavailable",weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_same_library_paths_unqualified())))?;
             let mut from: Vec<_> = source.library_path.split('/').collect();
             from.pop();
             let to: Vec<_> = path.split('/').collect();
@@ -909,7 +991,9 @@ pub fn convert_link_with_resource_fragments(
     let [link] = links.as_slice() else {
         return Err(KnowledgeError::new(
             "unmapped",
-            "Select one exact authored native link",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_links_exact_authored_link_required(),
+            ),
         ));
     };
     let resolution =
@@ -917,7 +1001,9 @@ pub fn convert_link_with_resource_fragments(
     if resolution.status != "resolved" {
         return Err(KnowledgeError::new(
             &resolution.status,
-            "The current link target or fragment is not uniquely resolved",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_links_target_or_fragment_ambiguous(),
+            ),
         ));
     }
     let mut address = if let Some(target) = &resolution.target {
@@ -926,7 +1012,7 @@ pub fn convert_link_with_resource_fragments(
             .iter()
             .find(|n| &n.owner == target)
             .ok_or_else(|| {
-                KnowledgeError::new("unavailable", "The resolved node left the frozen inventory")
+                KnowledgeError::new("unavailable", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_resolved_node_left_inventory()))
             })?;
         target_address(source, target, None, form)?
     } else if let Some(resource) = &resolution.resource {
@@ -937,14 +1023,16 @@ pub fn convert_link_with_resource_fragments(
             .ok_or_else(|| {
                 KnowledgeError::new(
                     "unavailable",
-                    "The resolved resource left the frozen inventory",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_links_resolved_resource_left_inventory()),
                 )
             })?;
         resource_address(source, resource, None, form, inventory)?
     } else {
         return Err(KnowledgeError::new(
             "unavailable",
-            "The target has no admitted node or resource identity",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_links_target_identity_not_admitted(),
+            ),
         ));
     };
     // Address form changes do not canonicalize or alter the authored fragment
@@ -962,19 +1050,28 @@ pub fn convert_link_with_resource_fragments(
     {
         return Err(KnowledgeError::new(
             "roundtrip",
-            "Converted address did not resolve to the identical target and fragment",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_links_converted_target_mismatch(),
+            ),
         ));
     }
     let (slot, encoded) = destination_patch(&source.source, link, &address)?;
     let patch = SourcePatch::new(&source.source, slot, encoded)?;
     let after = native_links(&patch.after);
     let rewritten = after.iter().find(|l| l.from == link.from).ok_or_else(|| {
-        KnowledgeError::new("roundtrip", "Native link disappeared after parser readback")
+        KnowledgeError::new(
+            "roundtrip",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_links_link_missing_after_readback(),
+            ),
+        )
     })?;
     if rewritten.target != address {
         return Err(KnowledgeError::new(
             "roundtrip",
-            "Native parser readback changed the destination",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_links_destination_changed_after_readback(),
+            ),
         ));
     }
     Ok(patch)
@@ -988,17 +1085,19 @@ pub(crate) fn destination_patch(
     let slot = link.destination_slot.clone().ok_or_else(|| {
         KnowledgeError::new(
             "sourceEntry",
-            "This native URL needs an explicit source edit",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_knowledge_links_explicit_source_edit_required(),
+            ),
         )
     })?;
     let encoded = weftext_engine::encode_string(address)
-        .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?;
+        .map_err(|e| KnowledgeError::from_engine("encoding", e))?;
     if link.body_explicit {
         return Ok((slot, encoded));
     }
     let range = ExactRange::new(source, link.from, link.to)?;
     let display = weftext_engine::encode_literal(&link.target)
-        .map_err(|e| KnowledgeError::new("encoding", e.to_string()))?;
+        .map_err(|e| KnowledgeError::from_engine("encoding", e))?;
     let replacement = format!(
         "{}{}{}[{display}]",
         &source[range.from..slot.from],

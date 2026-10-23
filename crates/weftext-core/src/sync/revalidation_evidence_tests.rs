@@ -25,7 +25,7 @@ impl Fixture {
         let root = temp.path().join("Library");
         let mut core = Core::new(temp.path().join("private")).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let source = PathBuf::from(note.path);
         let owner = NodeRef {
             workspace_id: core.require_workspace(&root).unwrap().workspace_id,
@@ -306,7 +306,7 @@ fn original_node_and_negative_schema_return_real_read_bindings() {
         .unwrap();
     // This producer has no separate accepted Rules observation. Its portable
     // revision is an actual immutable enable_sync genesis binding, not None.
-    assert!(f.core.accepted_revision(original_rules).is_none());
+    assert!(f.core.accepted_revision(original_rules).unwrap().is_none());
     assert!(
         f.local[&ObjectKey::Rules]
             .state
@@ -440,7 +440,10 @@ fn missing_annotation_target_preserves_discussion_and_reports_unavailable_withou
 #[test]
 fn public_node_descriptor_cannot_rebind_another_opaque_qualification() {
     let mut f = Fixture::new();
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     let other_owner = NodeRef {
         workspace_id: f.owner.workspace_id.clone(),
         node_id: other.node_id.unwrap(),
@@ -691,13 +694,16 @@ fn registered_directory_requires_its_original_marker_scope_and_physical_cut() {
         .unwrap();
     assert!(reads.read_objects.contains(&object));
     let mut forged = setup.physical_bindings.clone();
-    forged
+    let identity = &mut forged
         .iter_mut()
         .find(|entry| entry.object == object && entry.relative_path == "weftext.directory.json")
         .unwrap()
         .stamp
-        .identity
-        .index ^= 1;
+        .identity;
+    match identity {
+        crate::FileIdentity::Windows { index, .. } => *index ^= 1,
+        crate::FileIdentity::Linux { handle, .. } => handle[0] ^= 1,
+    }
     let bad_cut = SuppliedEvidenceCut {
         physical: &forged,
         ..cut

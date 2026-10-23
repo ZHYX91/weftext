@@ -2,6 +2,7 @@
 use super::*;
 use operations::Mutation;
 use weftext_knowledge::NodeRef;
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -45,7 +46,7 @@ impl Core {
         if !content_import(&request.intent) {
             return Err(CoreError::new(
                 "unsupportedIntent",
-                "Content import requires a native or bibliography producer",
+                UiMessage::error_core_hosted_content_import_content_import_requires_native_or_bibliography_producer(),
             ));
         }
         feature::valid_resource(destination_slot)?;
@@ -59,7 +60,7 @@ impl Core {
             witnesses,
             &[],
             None,
-            Some(destination_slot),
+            Some(&HostedDestination::fixed(destination_slot)),
         )
     }
 
@@ -94,7 +95,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "privateEvidence",
-                    "Original import birth evidence is unavailable",
+                    UiMessage::error_core_hosted_content_import_original_import_birth_evidence_unavailable(),
                 ));
             }
             let relative =
@@ -114,7 +115,7 @@ impl Core {
             if members.len() == 5000 || metadata > MAX_SOURCE_BYTES {
                 return Err(CoreError::new(
                     "budget",
-                    "Import member metadata exceeds its budget",
+                    UiMessage::error_core_hosted_content_import_import_member_metadata_exceeds_budget(),
                 ));
             }
             members.push(ContentImportMember {
@@ -133,6 +134,7 @@ impl Core {
         resource: &str,
         operation: &str,
     ) -> Result<Option<ActorContentImportReceipt>> {
+        self.backend.check_path(&self.data_dir)?;
         let Some(record) = self.actor_feature_record(resource, operation)? else {
             return Ok(None);
         };
@@ -149,7 +151,7 @@ impl Core {
         ) {
             return Err(feature::conflict());
         }
-        if !self.committed(&record.core_operation_id) {
+        if !self.committed(&record.core_operation_id)? {
             return Ok(None);
         }
         Ok(Some(ActorContentImportReceipt {
@@ -167,27 +169,46 @@ impl Core {
         target: &Path,
         slot: &str,
     ) -> Result<Vec<ContentImportMember>> {
+        self.backend.check_path(&self.data_dir)?;
         feature::valid_resource(slot)?;
         let root = absolute_path(root)?;
         let target = absolute_path(target)?;
         if crate::history::history_relative_path(&target, &root).is_none() {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Import slot is outside its configured root",
+                UiMessage::error_core_hosted_content_import_import_slot_outside_configured_root(),
             ));
         }
         let workspace = self.require_workspace(&root)?;
         let mut members = Vec::new();
         let mut producers = 0usize;
         let mut metadata = 0usize;
-        for plan in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id)
-                && p.workspace_id.as_ref() == Some(&workspace.workspace_id)
-        }) {
+        for plan in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_ref() == Some(&workspace.workspace_id)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
-            if transaction.hosted_destination.as_deref() != Some(slot)
+            if !transaction
+                .hosted_destination
+                .as_ref()
+                .is_some_and(|d| d.is_fixed_slot(slot))
                 || !content_import(&transaction.request.intent)
             {
                 continue;
@@ -220,23 +241,19 @@ impl Core {
                 if members.len() == 5000 || metadata > MAX_SOURCE_BYTES {
                     return Err(CoreError::new(
                         "budget",
-                        "Import slot members exceed their budget",
+                        UiMessage::error_core_hosted_content_import_import_slot_members_exceed_their_budget(),
                     ));
                 }
                 members.push(member);
             }
         }
         if producers == 0 {
-            let _guard = ParentGuard::acquire(&target)?;
-            match fs::symlink_metadata(&target) {
-                Ok(_) => {
-                    return Err(CoreError::new(
+            let _guard = ParentGuard::acquire(&self.backend, &target)?;
+            if self.backend.entry_exists(&target)? {
+                return Err(CoreError::new(
                         "slotUnavailable",
-                        "An unrelated object occupies the future import slot",
+                        UiMessage::error_core_hosted_content_import_unrelated_object_occupies_future_import_slot(),
                     ));
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => return Err(e.into()),
             }
         }
         members.sort_by(|a, b| {
@@ -257,23 +274,42 @@ impl Core {
         slot: &str,
         node_id: &str,
     ) -> Result<QualifiedQueryNode> {
+        self.backend.check_path(&self.data_dir)?;
         feature::valid_resource(slot)?;
         valid_operation_id(node_id)?;
         let root = absolute_path(root)?;
         let path = absolute_path(source_path)?;
         let workspace = self.require_workspace(&root)?;
-        let placement_guard = ParentGuard::acquire(&path)?;
+        let placement_guard = ParentGuard::acquire(&self.backend, &path)?;
         let placement_file = placement_guard.open_placement_file()?;
         let identity = stamp(&placement_file)?.identity;
         let mut owner = None;
-        for plan in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id)
-                && p.workspace_id.as_ref() == Some(&workspace.workspace_id)
-        }) {
+        for plan in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_ref() == Some(&workspace.workspace_id)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
-            if transaction.hosted_destination.as_deref() != Some(slot)
+            if !transaction
+                .hosted_destination
+                .as_ref()
+                .is_some_and(|d| d.is_fixed_slot(slot))
                 || !content_import(&transaction.request.intent)
             {
                 continue;
@@ -318,7 +354,7 @@ impl Core {
             &owner.ok_or_else(|| {
                 CoreError::new(
                     "identityPending",
-                    "This member has no original committed hosted import producer",
+                    UiMessage::error_core_hosted_content_import_member_has_no_original_committed_hosted_import_producer(),
                 )
             })?,
             "live",

@@ -73,6 +73,7 @@ pub fn convert_to_nodes<'a>(
         trailing: None,
         text_css: None,
         text_lang: None,
+        text_warning: None,
     };
 
     for (child, styles) in children {
@@ -109,10 +110,10 @@ fn handle(converter: &mut Converter, child: &Content, styles: StyleChain) -> Sou
             styles.get_ref(TextElem::fill),
             typst_library::visualize::Paint::Solid(_)
         ) {
-            converter.engine.sink.warn(warning!(
-                elem.span(),
-                "non-solid text paint has no flow style adapter; use paged preview"
-            ));
+            converter.text_warning = Some(crate::WeftextFlowWarning {
+                kind: crate::WeftextFlowWarningKind::NonSolidTextPaint,
+                span: elem.span(),
+            });
         }
         let text = if let Some(case) = styles.get(TextElem::case) {
             case.apply(&elem.text).into()
@@ -122,6 +123,7 @@ fn handle(converter: &mut Converter, child: &Content, styles: StyleChain) -> Sou
         converter.text_css = Some(crate::weftext_styles::text_css(styles));
         converter.text_lang = Some(native_language(styles));
         handle_text(converter, text, elem.span());
+        converter.text_warning = None;
         converter.text_css = None;
         converter.text_lang = None;
     } else if let Some(elem) = child.to_packed::<HElem>()
@@ -600,6 +602,7 @@ struct Converter<'a, 'y, 'z> {
     trailing: Option<TrailingWhitespace>,
     text_css: Option<css::Properties>,
     text_lang: Option<EcoString>,
+    text_warning: Option<crate::WeftextFlowWarning>,
 }
 
 /// Keeps track of a trailing whitespace in the output.
@@ -650,8 +653,13 @@ impl Converter<'_, '_, '_> {
     fn push_text(&mut self, text: impl Into<EcoString>, span: Span) {
         let text = text.into();
         if let Some(css) = &self.text_css {
+            let warnings = self.text_warning.take().into_iter().collect();
             self.push(
                 HtmlElement::new(tag::span)
+                    .with_weftext(crate::WeftextHtmlSemantics {
+                        warnings,
+                        ..Default::default()
+                    })
                     .with_attr(attr::lang, self.text_lang.clone().unwrap_or_default())
                     .with_attr(
                         crate::HtmlAttr::intern("data-weftext-text").unwrap(),

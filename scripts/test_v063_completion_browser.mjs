@@ -1,8 +1,10 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { createdDocument } from './_creation_result.mjs';
 // Actual final-candidate daily task chain. Every product view comes from the
 // supplied executable's embedded frontend and actual HTTP/Core fixture data.
 // Headless keyboard/text events are not OS IME or reference-host acceptance.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile, realpath } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -39,13 +41,11 @@ async function until(check, label = 'condition', timeout = 30000) {
   throw last ?? new Error('Timed out: ' + label);
 }
 async function start(args = []) {
-  child = spawn(exe, ['--no-browser', '--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawnServe(exe, ['--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes);
-  await until(() => { const match = stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/); if (match) { base = match[1]; token = match[2]; return true; } if (child.exitCode !== null) throw new Error('Owned candidate exited: ' + stderr); return false; }, 'owned local candidate start');
+  await until(() => { const match = serveReady(child); if (match) { base = match.base; token = match.token; return true; } if (child.exitCode !== null) throw new Error('Owned candidate exited: ' + stderr); return false; }, 'owned local candidate start');
 }
-async function stop() {
-  if (child?.exitCode === null && child.signalCode === null) { const done = new Promise(resolve => child.once('exit', resolve)); child.kill(); await done; }
-}
+async function stop() { await stopServe(child); }
 async function api(route, body) {
   const response = await fetch(base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': token }, body: JSON.stringify(body) });
   const value = await response.json(); assert.equal(response.status, 200, `${route}: ${JSON.stringify(value)}`); return value;
@@ -60,7 +60,7 @@ async function save(doc, source) {
   return api('/api/open', { root, path: doc.path });
 }
 async function note(name, container = root, body = '') {
-  const doc = await api('/api/note/create', { root, parent: container, name, operationId: randomUUID() });
+  const doc = createdDocument(await api('/api/note/create', { root, parent: container, name, operationId: randomUUID() }));
   return save(doc, doc.source + '\n\n' + body);
 }
 // Same small owned PNG geometry as the existing product HTTP fixtures.
@@ -132,7 +132,7 @@ async function knowledgeCommand(label, tab) { await command(label); await until(
 async function quick(name) { await page.keyboard.press('Control+p'); const dialog = page.getByRole('dialog', { name: '快捷打开', exact: true }); await dialog.getByRole('searchbox').fill(name.endsWith('.typ') ? name : name + '.typ'); await dialog.getByRole('searchbox').press('Enter'); }
 async function panelDetails(label, host = queryPanel()) { const summary = host.getByText(label, { exact: true }); const details = summary.locator('..'); if (!await details.evaluate(element => element.open)) await summary.click(); return details; }
 async function showQuery() { if (!await queryPanel().isVisible()) await click('查询与视图'); }
-async function pass(message) { const now = performance.now(); result.cases.push({ phase, message, elapsedMs: Math.round((now - caseStartedAt) * 100) / 100, input: 'Actual DOM mouse and keyboard; automation and observable waits included' }); caseStartedAt = now; await writeFile(path.join(out, 'progress.json'), JSON.stringify(result, null, 2)); console.log('PASS', message); }
+async function pass(message) { const now = performance.now(); result.cases.push({ phase, message, elapsedMs: Math.round((now - caseStartedAt) * 100) / 100, input: 'Actual DOM mouse and keyboard; automation and observable waits included' }); caseStartedAt = now; await writeFile(path.join(out, 'progress.json'), stringifyServeJson(result, 2)); console.log('PASS', message); }
 async function createTag(name, parentRef = '', assign = false) {
   const navigation = await panelDetails('登记标签与目录入口');
   await click('读取登记标签', navigation); await navigation.getByLabel('新标签父级', { exact: true }).waitFor();
@@ -498,6 +498,6 @@ try {
   await browser?.close(); await stop(); result.finishedAt = new Date().toISOString();
   result.ownedProcessesClosed = (!child || child.exitCode !== null || child.signalCode !== null) && (!browser || !browser.isConnected());
   result.previewRequests = previewRequests; result.mutations = mutations; result.queryReceipts = queryReceipts; result.knowledgeReceipts = knowledgeReceipts;
-  await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr);
+  await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr);
   console.log(JSON.stringify({ out, completed: result.completed, failedPhase: result.failedPhase, cases: result.cases.length, ownedProcessesClosed: result.ownedProcessesClosed }));
 }

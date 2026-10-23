@@ -1,6 +1,8 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { createdDocument } from './_creation_result.mjs';
 // Actual local stage-three UI, in owned headless Chrome. Synthetic events are not OS IME acceptance.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -10,10 +12,10 @@ const require=createRequire(import.meta.url),{chromium}=require(process.env.WEFT
 const exe=path.resolve(process.argv[2]),out=path.resolve(process.argv[3]); await mkdir(out,{recursive:false});
 const result={exe,sha256:createHash('sha256').update(await readFile(exe)).digest('hex'),version:execFileSync(exe,['--version'],{windowsHide:true}).toString().trim(),cases:[],pageErrors:[],completed:false};
 const root=path.join(out,'library'),data=path.join(out,'state'),pause=ms=>new Promise(r=>setTimeout(r,ms));let child,browser,page,vite,base,token,stderr='';
-async function start(args=[]){child=spawn(exe,['--no-browser','--data-dir',data,...args],{windowsHide:true,stdio:['ignore','pipe','pipe']});let stdout='';child.stdout.on('data',b=>stdout+=b);child.stderr.on('data',b=>stderr+=b);for(let i=0;i<300;i++){const m=stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);if(m){base=m[1];token=m[2];return;}if(child.exitCode!==null)throw Error(stderr);await pause(100);}throw Error('startup timeout');}
-async function stop(){if(child?.exitCode===null&&child.signalCode===null){const done=new Promise(r=>child.once('exit',r));child.kill();await done;}}
+async function start(args=[]){child=spawnServe(exe,['--data-dir',data,...args],{windowsHide:true,stdio:['ignore','pipe','pipe']});let stdout='';child.stdout.on('data',b=>stdout+=b);child.stderr.on('data',b=>stderr+=b);for(let i=0;i<300;i++){const m=serveReady(child);if(m){base=m.base;token=m.token;return;}if(child.exitCode!==null)throw Error(stderr);await pause(100);}throw Error('startup timeout');}
+async function stop(){ await stopServe(child); }
 async function api(route,body){const response=await fetch(base+route,{method:'POST',headers:{'Content-Type':'application/json','X-Weftext-Token':token},body:JSON.stringify(body)});const value=await response.json();assert.equal(response.status,200,JSON.stringify(value));return value;}
-async function note(name,body){const doc=await api('/api/note/create',{root,parent:root,name,operationId:randomUUID()});await api('/api/save',{sessionId:doc.sessionId,baseId:doc.baseId,source:doc.source+'\n\n'+body,operationId:randomUUID()});return api('/api/open',{root,path:doc.path});}
+async function note(name,body){const doc=createdDocument(await api('/api/note/create',{root,parent:root,name,operationId:randomUUID()}));await api('/api/save',{sessionId:doc.sessionId,baseId:doc.baseId,source:doc.source+'\n\n'+body,operationId:randomUUID()});return api('/api/open',{root,path:doc.path});}
 const click=(name,scope=page)=>scope.getByRole('button',{name,exact:true}).click();
 const cm=()=>page.locator('.source-host .cm-content');
 async function source(){return cm().evaluate(e=>e.cmTile.root.view.state.doc.toString());}
@@ -51,4 +53,4 @@ try{
  await panel().getByRole('tab',{name:'关系',exact:true}).click();await refresh();const search=relations().getByLabel('搜索关系诊断',{exact:true});await search.fill('TEST');await search.focus();await refresh();await search.fill('TEST-sou');const focused=await search.evaluate(e=>e===document.activeElement);assert.ok(focused);assert.equal(await search.inputValue(),'TEST-sou');pass('Refreshing the current authorized snapshot retains diagnostic search input and focus');
  await page.screenshot({path:path.join(out,'success-diagnostics.png'),fullPage:true});assert.deepEqual(result.pageErrors,[]);result.completed=true;
 }catch(error){result.failure=String(error.stack??error);if(page){await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});await writeFile(path.join(out,'failure.html'),await page.content().catch(()=>''));}throw error;}
-finally{await browser?.close();await vite?.close();await stop();result.ownedProcessesClosed=(!child||child.exitCode!==null||child.signalCode!==null)&&(!browser||!browser.isConnected());await writeFile(path.join(out,'results.json'),JSON.stringify(result,null,2));await writeFile(path.join(out,'server.stderr.log'),stderr);console.log(JSON.stringify({out,completed:result.completed,cases:result.cases}));}
+finally{await browser?.close();await vite?.close();await stop();result.ownedProcessesClosed=(!child||child.exitCode!==null||child.signalCode!==null)&&(!browser||!browser.isConnected());await writeFile(path.join(out,'results.json'),stringifyServeJson(result, 2));await writeFile(path.join(out,'server.stderr.log'),stderr);console.log(JSON.stringify({out,completed:result.completed,cases:result.cases}));}

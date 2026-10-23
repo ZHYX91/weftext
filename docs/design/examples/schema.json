@@ -3219,6 +3219,168 @@
       },
       "unknown": "preserve",
       "constraints": []
+    },
+    "ReminderClock": {
+      "kind": "record",
+      "members": {
+        "time": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "time"
+          },
+          "required": true,
+          "nullable": false
+        },
+        "fraction": {
+          "shape": {
+            "kind": "scalar",
+            "semantic": "exact_decimal"
+          },
+          "required": false,
+          "nullable": false
+        }
+      },
+      "unknown": "reject",
+      "constraints": []
+    },
+    "TaskReminder": {
+      "kind": "union",
+      "variants": [
+        {
+          "kind": "record",
+          "members": {
+            "id": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "kind": {
+              "shape": {
+                "kind": "enum",
+                "values": [
+                  "absolute"
+                ],
+                "open": false
+              },
+              "required": true,
+              "nullable": false
+            },
+            "at": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "instant"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        },
+        {
+          "kind": "record",
+          "members": {
+            "id": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "kind": {
+              "shape": {
+                "kind": "enum",
+                "values": [
+                  "due_before"
+                ],
+                "open": false
+              },
+              "required": true,
+              "nullable": false
+            },
+            "before": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "exact_seconds"
+              },
+              "required": true,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        },
+        {
+          "kind": "record",
+          "members": {
+            "id": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "kind": {
+              "shape": {
+                "kind": "enum",
+                "values": [
+                  "due_day"
+                ],
+                "open": false
+              },
+              "required": true,
+              "nullable": false
+            },
+            "clock": {
+              "shape": {
+                "kind": "use",
+                "name": "ReminderClock"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "zone": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "zone_version": {
+              "shape": {
+                "kind": "scalar",
+                "semantic": "nonempty_text"
+              },
+              "required": true,
+              "nullable": false
+            },
+            "fold": {
+              "shape": {
+                "kind": "enum",
+                "values": [
+                  "earlier",
+                  "later"
+                ],
+                "open": false
+              },
+              "required": false,
+              "nullable": false
+            }
+          },
+          "unknown": "reject",
+          "constraints": []
+        }
+      ],
+      "discriminator": {
+        "kind": "tag",
+        "key": "kind"
+      }
     }
   },
   "fields": [
@@ -4112,6 +4274,18 @@
       "default": {
         "kind": "absent"
       }
+    },
+    {
+      "id": "tasks/reminder",
+      "key": "reminder",
+      "shape": {
+        "kind": "use",
+        "name": "TaskReminder"
+      },
+      "nullable": false,
+      "default": {
+        "kind": "absent"
+      }
     }
   ],
   "types": [
@@ -4388,11 +4562,32 @@
         {
           "id": "tasks/project",
           "required": false
+        },
+        {
+          "id": "tasks/reminder",
+          "required": false
         }
       ],
       "requires": [],
       "conflicts": [],
-      "constraints": []
+      "constraints": [
+        {
+          "validator": "temporal/task-reminder",
+          "inputs": {
+            "reminder": {
+              "kind": "field",
+              "id": "tasks/reminder",
+              "path": []
+            },
+            "due": {
+              "kind": "field",
+              "id": "tasks/due",
+              "path": []
+            }
+          },
+          "parameters": {}
+        }
+      ]
     },
     {
       "id": "library/work",
@@ -5760,12 +5955,27 @@
         "constraints": []
       },
       "result": "valid-invalid-unavailable"
+    },
+    {
+      "id": "temporal/task-reminder",
+      "provider": "temporal/rules",
+      "operation": "task-reminder",
+      "inputs": {
+        "reminder": "record-or-absent",
+        "due": "temporal-endpoint-or-absent"
+      },
+      "parameters": {
+        "kind": "record",
+        "members": {},
+        "unknown": "reject",
+        "constraints": []
+      },
+      "result": "valid-invalid-unavailable"
     }
   ],
   "providers": [
     {
       "id": "core/rules",
-      "family": "validation",
       "implementation": {
         "kind": "builtin",
         "id": "weftext.core.rules.v1",
@@ -5774,6 +5984,12 @@
       "data": {
         "kind": "none"
       },
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      },
+      "family": "validation",
       "exports": [
         {
           "name": "int-range",
@@ -5815,16 +6031,10 @@
           "effect": "pure",
           "query_name": null
         }
-      ],
-      "limits": {
-        "max_steps": 1000000,
-        "max_bytes": 8388608,
-        "max_expansion": 10000
-      }
+      ]
     },
     {
       "id": "temporal/rules",
-      "family": "temporal",
       "implementation": {
         "kind": "builtin",
         "id": "weftext.temporal.rules.v2",
@@ -5833,6 +6043,12 @@
       "data": {
         "kind": "none"
       },
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      },
+      "family": "temporal",
       "exports": [
         {
           "name": "month-day",
@@ -5998,17 +6214,22 @@
           "result": "exact-duration-cell",
           "effect": "pure",
           "query_name": "duringDuration"
+        },
+        {
+          "name": "task-reminder",
+          "inputs": [
+            "cells",
+            "parameters",
+            "installed-calendar-zone-series"
+          ],
+          "result": "validation",
+          "effect": "pure",
+          "query_name": null
         }
-      ],
-      "limits": {
-        "max_steps": 1000000,
-        "max_bytes": 8388608,
-        "max_expansion": 10000
-      }
+      ]
     },
     {
       "id": "units/rules",
-      "family": "quantity",
       "implementation": {
         "kind": "builtin",
         "id": "weftext.units.rules.v1",
@@ -6036,6 +6257,12 @@
           }
         ]
       },
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      },
+      "family": "quantity",
       "exports": [
         {
           "name": "quantity",
@@ -6057,16 +6284,10 @@
           "effect": "pure",
           "query_name": null
         }
-      ],
-      "limits": {
-        "max_steps": 1000000,
-        "max_bytes": 8388608,
-        "max_expansion": 10000
-      }
+      ]
     },
     {
       "id": "calendars/gregorian",
-      "family": "calendar",
       "implementation": {
         "kind": "builtin",
         "id": "weftext.calendar.gregorian.v2",
@@ -6079,6 +6300,12 @@
         "min_year": 1,
         "max_year": 9999
       },
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      },
+      "family": "calendar",
       "exports": [
         {
           "name": "validateDate",
@@ -6118,16 +6345,10 @@
           "effect": "pure",
           "query_name": null
         }
-      ],
-      "limits": {
-        "max_steps": 1000000,
-        "max_bytes": 8388608,
-        "max_expansion": 10000
-      }
+      ]
     },
     {
       "id": "zones/utc",
-      "family": "time-zone",
       "implementation": {
         "kind": "builtin",
         "id": "weftext.zone.table.v1",
@@ -6142,6 +6363,12 @@
         "initial_offset_seconds": 0,
         "transitions": []
       },
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      },
+      "family": "time-zone",
       "exports": [
         {
           "name": "toCivil",
@@ -6163,16 +6390,10 @@
           "effect": "pure",
           "query_name": null
         }
-      ],
-      "limits": {
-        "max_steps": 1000000,
-        "max_bytes": 8388608,
-        "max_expansion": 10000
-      }
+      ]
     },
     {
       "id": "calendars/test",
-      "family": "calendar",
       "implementation": {
         "kind": "builtin",
         "id": "weftext.calendar.table.v2",
@@ -6201,6 +6422,12 @@
           }
         ]
       },
+      "limits": {
+        "max_steps": 1000000,
+        "max_bytes": 8388608,
+        "max_expansion": 10000
+      },
+      "family": "calendar",
       "exports": [
         {
           "name": "validateDate",
@@ -6240,12 +6467,7 @@
           "effect": "pure",
           "query_name": null
         }
-      ],
-      "limits": {
-        "max_steps": 1000000,
-        "max_bytes": 8388608,
-        "max_expansion": 10000
-      }
+      ]
     }
   ],
   "series_policies": [

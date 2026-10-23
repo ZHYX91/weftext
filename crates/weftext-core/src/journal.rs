@@ -1,15 +1,89 @@
 use super::*;
+use weftext_messages::UiMessage;
+
+const MAX_RESOLUTION_BYTES: u64 = 4096;
+
+/// A decision in the original journal, never an author participant or a second
+/// operation ledger. A missing Plan can only have an attempt cancellation.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct ResolutionRecord {
+    pub operation_id: String,
+    pub action: String,
+    /// Original historical summary only. New decisions derive their UI
+    /// description from typed action/facts and do not write display prose.
+    #[serde(rename = "message", default, skip_serializing_if = "Option::is_none")]
+    pub historical_message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attempt: Option<AttemptFence>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct AttemptFence {
+    pub request_kind: String,
+    pub wire_digest: String,
+}
+
+pub(crate) fn decode_resolution(id: &str, bytes: &[u8]) -> Result<ResolutionRecord> {
+    valid_operation_id(id)?;
+    if bytes.len() as u64 > MAX_RESOLUTION_BYTES {
+        return Err(CoreError::new(
+            "resolutionUnavailable",
+            UiMessage::error_core_journal_resolution_metadata_exceeds_bounded_budget(),
+        ));
+    }
+    let record: ResolutionRecord = serde_json::from_slice(bytes).map_err(|error| {
+        CoreError::new(
+            "resolutionUnavailable",
+            UiMessage::error_core_journal_original_resolution_metadata_invalid_preserve_it_without_retrying_operation(),
+        ).diagnostic(DiagnosticOrigin::Json, error.to_string())
+    })?;
+    if record.operation_id != id
+        || !matches!(
+            record.action.as_str(),
+            "keepCurrent" | "createRejected" | "cancelPrepared"
+        )
+        || record
+            .historical_message
+            .as_ref()
+            .is_some_and(|text| text.len() > 2048)
+        || record.attempt.as_ref().is_some_and(|attempt| {
+            record.action != "cancelPrepared"
+                || !matches!(
+                    attempt.request_kind.as_str(),
+                    "save"
+                        | "saveAs"
+                        | "newNode"
+                        | "capture"
+                        | "period"
+                        | "operation"
+                        | "createLibrary"
+                )
+                || attempt.wire_digest.len() != 64
+                || !attempt.wire_digest.bytes().all(|b| b.is_ascii_hexdigit())
+        })
+    {
+        return Err(CoreError::new(
+            "resolutionUnavailable",
+            UiMessage::error_core_journal_resolution_identity_action_or_request_binding_invalid(),
+        ));
+    }
+    Ok(record)
+}
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct Plan {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_save: Option<FileSaveData>,
+    pub identity: Option<FileIdentity>,
     pub operation_id: String,
     pub fingerprint: String,
     pub path: String,
     pub kind: String,
     pub before: Option<Vec<u8>>,
     pub after: Vec<u8>,
-    pub identity: Option<FileIdentity>,
     pub receipt: Option<Receipt>,
     pub files: Vec<(String, Vec<u8>)>,
     pub node_id: Option<String>,
@@ -49,6 +123,7 @@ impl Plan {
             files: Vec::new(),
             node_id: None,
             workspace_id: None,
+            file_save: None,
             transaction: None,
             history_restore: None,
             sync_setup: None,
@@ -67,7 +142,7 @@ pub struct RecoveryInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub before_source: Option<String>,
     pub after_source: String,
-    pub message: String,
+    pub description: CoreDescription,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub current_source: Option<String>,
     pub coherence: String,
@@ -106,19 +181,41 @@ impl RecoveryBlob {
         }
     }
 }
-#[derive(Clone, Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RecoveryIdentity {
-    pub volume: u32,
-    pub index: String,
-    pub created: String,
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(tag = "platform", rename_all = "camelCase")]
+pub enum RecoveryIdentity {
+    Windows {
+        volume: u32,
+        index: String,
+        created: String,
+    },
+    Linux {
+        filesystem: [i32; 2],
+        handle_type: i32,
+        handle: Vec<u8>,
+    },
 }
 impl From<&FileIdentity> for RecoveryIdentity {
     fn from(identity: &FileIdentity) -> Self {
-        Self {
-            volume: identity.volume,
-            index: identity.index.to_string(),
-            created: identity.created.to_string(),
+        match identity {
+            FileIdentity::Windows {
+                volume,
+                index,
+                created,
+            } => Self::Windows {
+                volume: *volume,
+                index: index.to_string(),
+                created: created.to_string(),
+            },
+            FileIdentity::Linux {
+                filesystem,
+                handle_type,
+                handle,
+            } => Self::Linux {
+                filesystem: *filesystem,
+                handle_type: *handle_type,
+                handle: handle.clone(),
+            },
         }
     }
 }
@@ -139,7 +236,8 @@ pub struct RecoveryMember {
     pub identity_binding: String,
     pub expected_identity: Option<RecoveryIdentity>,
     pub current_identity: Option<RecoveryIdentity>,
-    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<CoreDescription>,
 }
 fn encode_base64(bytes: &[u8]) -> String {
     const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -163,6 +261,37 @@ fn encode_base64(bytes: &[u8]) -> String {
     }
     encoded
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct CommitRecord {
+    operation_id: String,
+    fingerprint: String,
+    receipt: Option<Receipt>,
+    file_save: Option<FileSaveData>,
+    storage_profile: String,
+    #[serde(rename = "savedAtUnixMs")]
+    _saved_at_unix_ms: Option<u64>,
+    commit_sequence: u64,
+}
+
+fn decode_journal_plan(path: &Path, bytes: &[u8]) -> Result<Plan> {
+    let plan: Plan = serde_json::from_slice(bytes)?;
+    valid_operation_id(&plan.operation_id)?;
+    if path.file_name().and_then(|n| n.to_str())
+        != Some(format!("{}.plan.json", plan.operation_id).as_str())
+    {
+        return Err(CoreError::new(
+            "resolutionUnavailable",
+            UiMessage::error_core_journal_journal_plan_filename_and_original_identity_differ(),
+        ));
+    }
+    if plan.kind == "cancelLibraryCreation" && !library_creation::is_cancellation(&plan) {
+        return Err(CoreError::new("resolutionUnavailable",
+            UiMessage::error_core_journal_retained_library_cancellation_has_author_participants_or_invalid_request()));
+    }
+    Ok(plan)
+}
+
 impl Core {
     pub(crate) fn journal_path(&self, id: &str, suffix: &str) -> PathBuf {
         self.data_dir
@@ -170,124 +299,339 @@ impl Core {
             .join(format!("{id}.{suffix}.json"))
     }
     pub(crate) fn load_journals(&mut self) -> Result<()> {
-        for entry in fs::read_dir(self.data_dir.join("journal"))? {
+        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
             let path = entry?.path();
             if path
                 .file_name()
                 .is_some_and(|n| n.to_string_lossy().ends_with(".plan.json"))
             {
-                let bytes = fs::read(&path)?;
-                let plan: Plan = serde_json::from_slice(&bytes)?;
-                valid_operation_id(&plan.operation_id)?;
+                let plan = self.read_journal_plan(&path)?;
                 self.operations.insert(plan.operation_id.clone(), plan);
             }
         }
-        Ok(())
+        // All committed decisions must have their original Plan, even if no
+        // caller happens to query that operation during this process lifetime.
+        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
+            let name = entry?.file_name();
+            if let Some(id) = name
+                .to_str()
+                .and_then(|name| name.strip_suffix(".commit.json"))
+            {
+                self.committed_record(id)?;
+            }
+        }
+        self.validate_resolution_namespace()
+    }
+    pub(crate) fn read_journal_plan(&self, path: &Path) -> Result<Plan> {
+        let bytes = self.backend.read_bytes(path)?;
+        decode_journal_plan(path, &bytes)
+    }
+    pub(crate) fn read_original_file_save_plan(&self, expected: &Plan) -> Result<Plan> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Metadata {
+            file_save: FileSaveData,
+            identity: FileIdentity,
+        }
+        let invalid = || {
+            CoreError::new(
+                "privateEvidence",
+                UiMessage::error_core_original_scope_save_plan_participants_or_receipt_invalid(),
+            )
+        };
+        let path = self.journal_path(&expected.operation_id, "plan");
+        let mut file = self.backend.open_read(&path)?;
+        let (_, bytes) = hosted::read_qualified_private_record(&mut file, |file| {
+            let fields = hosted::read_metadata_prefix(
+                file,
+                &[("fileSave", false), ("identity", false)],
+                4096,
+            )?
+            .ok_or_else(invalid)?;
+            let metadata: Metadata = hosted::decode_metadata(fields)?;
+            if Some(&metadata.file_save) != expected.file_save.as_ref()
+                || Some(&metadata.identity) != expected.identity.as_ref()
+            {
+                return Err(invalid());
+            }
+            self.validate_original_input_scope(&metadata.file_save.scope)?;
+            Ok(Some(((), 8 * MAX_SOURCE_BYTES + 65536)))
+        })?
+        .ok_or_else(invalid)?;
+        decode_journal_plan(&path, &bytes)
     }
     pub(crate) fn stage(&mut self, mut plan: Plan) -> Result<()> {
-        if !self.operations.contains_key(&plan.operation_id) && self.resolved(&plan.operation_id) {
+        if !self.operations.contains_key(&plan.operation_id) && self.resolved(&plan.operation_id)? {
             return Err(CoreError::new(
                 "operationCancelled",
-                "The original operation was cancelled before preparation",
+                UiMessage::error_core_journal_original_operation_was_cancelled_before_preparation(),
             ));
         }
         self.validate_operation_pending(&plan)?;
         self.freeze_sync_publication(&mut plan)?;
         // A plan contains complete exact preimage/afterimage before any user write.
         private_create(
+            &self.backend,
             &self.journal_path(&plan.operation_id, "plan"),
             &serde_json::to_vec(&plan)?,
         )?;
         self.operations.insert(plan.operation_id.clone(), plan);
         Ok(())
     }
+    fn committed_record(&self, id: &str) -> Result<Option<CommitRecord>> {
+        valid_operation_id(id)?;
+        let bytes = match self.backend.read_bytes(self.journal_path(id, "commit")) {
+            Ok(bytes) => bytes,
+            Err(error) if error.code == "missing" => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let original_plan = self.operations.get(id).ok_or_else(|| {
+            CoreError::new(
+                "invalidState",
+                UiMessage::error_core_journal_original_commit_evidence_invalid(),
+            )
+        })?;
+        let record = decode_original_commit(original_plan, &bytes)?;
+        Ok(Some(record))
+    }
     pub(crate) fn commit(&self, plan: &Plan) -> Result<()> {
-        // One Core instance owns this directory. Sequence records the durable
-        // decision order independently of the display clock (which may move
-        // backwards); legacy records deliberately have neither field.
-        let sequence = self
-            .operations
-            .values()
-            .filter_map(|p| {
-                let bytes = fs::read(self.journal_path(&p.operation_id, "commit")).ok()?;
-                let fact: serde_json::Value = serde_json::from_slice(&bytes).ok()?;
-                (fact["operationId"] == p.operation_id
-                    && fact["fingerprint"] == p.fingerprint
-                    && fact["storageProfile"] == STORAGE_PROFILE)
-                    .then(|| fact["commitSequence"].as_u64())
-                    .flatten()
-            })
-            .max()
-            .unwrap_or(0)
-            .checked_add(1)
-            .ok_or_else(|| CoreError::new("invalidState", "Commit sequence exhausted"))?;
+        let mut maximum = 0;
+        for candidate in self.operations.values() {
+            if let Some(record) = self.committed_record(&candidate.operation_id)? {
+                maximum = maximum.max(record.commit_sequence);
+            }
+        }
+        let sequence = maximum.checked_add(1).ok_or_else(|| {
+            CoreError::new(
+                "invalidState",
+                UiMessage::error_core_journal_commit_sequence_exhausted(),
+            )
+        })?;
         let saved_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .ok()
-            .and_then(|d| u64::try_from(d.as_millis()).ok());
+            .and_then(|duration| u64::try_from(duration.as_millis()).ok());
         private_create(
+            &self.backend,
             &self.journal_path(&plan.operation_id, "commit"),
             &serde_json::to_vec(
-                &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint,"receipt":plan.receipt,"storageProfile":STORAGE_PROFILE,"savedAtUnixMs":saved_at,"commitSequence":sequence}),
+                &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint,"receipt":plan.receipt,"fileSave":plan.file_save,"storageProfile":STORAGE_PROFILE,"savedAtUnixMs":saved_at,"commitSequence":sequence}),
             )?,
         )
     }
-    pub(crate) fn committed(&self, id: &str) -> bool {
-        let Some(plan) = self.operations.get(id) else {
-            return false;
-        };
-        fs::read(self.journal_path(id, "commit"))
-            .inspect_err(|error| resource_diagnostics::io_error("committed.read", id, error))
-            .ok()
-            .and_then(|b| {
-                serde_json::from_slice::<serde_json::Value>(&b)
-                    .inspect_err(|_| {
-                        resource_diagnostics::branch("committed.parse", id, "invalidState")
-                    })
-                    .ok()
-            })
-            .is_some_and(|c| {
-                let matches = c["operationId"] == id
-                    && c["fingerprint"] == plan.fingerprint
-                    && c["storageProfile"] == STORAGE_PROFILE;
-                if !matches {
-                    resource_diagnostics::branch("committed.match", id, "recordMismatch");
-                }
-                matches
+    pub(crate) fn commit_sequence(&self, id: &str) -> Result<u64> {
+        self.committed_record(id)?
+            .map(|record| record.commit_sequence)
+            .ok_or_else(|| {
+                CoreError::new(
+                    "identityPending",
+                    weftext_messages::UiMessage::error_core_backend_accepted_decision_missing(),
+                )
             })
     }
-    pub(crate) fn resolved(&self, id: &str) -> bool {
-        if self
-            .operations
-            .get(id)
-            .is_some_and(library_creation::is_cancellation)
-        {
-            return true;
+    pub(crate) fn committed(&self, id: &str) -> Result<bool> {
+        Ok(self.committed_record(id)?.is_some())
+    }
+    pub(crate) fn committed_plans(&self) -> Result<Vec<&Plan>> {
+        self.backend.check_path(&self.data_dir)?;
+        let mut plans = Vec::new();
+        for plan in self.operations.values() {
+            if self.committed(&plan.operation_id)? {
+                plans.push(plan);
+            }
         }
-        fs::read(self.journal_path(id, "resolution"))
-            .ok()
-            .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
-            .is_some_and(|r| {
-                r["operationId"] == id
-                    && matches!(
-                        r["action"].as_str(),
-                        Some("keepCurrent" | "createRejected" | "cancelPrepared")
+        Ok(plans)
+    }
+    pub(crate) fn resolution_record(&self, id: &str) -> Result<Option<ResolutionRecord>> {
+        valid_operation_id(id)?;
+        let mut file = match self.backend.open_read(self.journal_path(id, "resolution")) {
+            Ok(file) => file,
+            Err(error) if error.code == "missing" => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        let mut bytes = Vec::new();
+        Read::by_ref(&mut file)
+            .take(MAX_RESOLUTION_BYTES + 1)
+            .read_to_end(&mut bytes)?;
+        let record = decode_resolution(id, &bytes)?;
+        if !self.operations.contains_key(id) {
+            if record.action != "cancelPrepared" {
+                return Err(CoreError::new(
+                    "resolutionUnavailable",
+                    UiMessage::error_core_journal_unregistered_attempt_cannot_carry_author_recovery_decision(),
+                ));
+            }
+            self.validate_unregistered_fence_namespace(id)?;
+        } else if record.attempt.is_some() {
+            return Err(CoreError::new(
+                "resolutionUnavailable",
+                UiMessage::error_core_journal_unregistered_attempt_fence_cannot_also_own_author_plan(),
+            ));
+        }
+        Ok(Some(record))
+    }
+    pub(crate) fn validate_unregistered_fence_namespace(&self, id: &str) -> Result<()> {
+        self.unregistered_attempt_library(id, true, &[]).map(|_| ())
+    }
+    /// Only typed allocations produced before an author Plan may accompany a
+    /// missing-attempt decision. Body reads can be omitted for foreign backup
+    /// routing; selected payloads are validated from their actual guarded file.
+    pub(crate) fn unregistered_attempt_library(
+        &self,
+        id: &str,
+        full: bool,
+        protected: &[operations::CapturedFile],
+    ) -> Result<Option<hosted::ActorLibraryBinding>> {
+        valid_operation_id(id)?;
+        let mut scope = None;
+        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name = name.to_str().ok_or_else(|| {
+                CoreError::new(
+                    "resolutionUnavailable",
+                    UiMessage::error_core_journal_invalid_journal_leaf(),
+                )
+            })?;
+            let prefix = format!("{id}.");
+            if !name
+                .get(..prefix.len())
+                .is_some_and(|p| p.eq_ignore_ascii_case(&prefix))
+            {
+                continue;
+            }
+            let suffix = name
+                .strip_prefix(&prefix)
+                .and_then(|name| name.strip_suffix(".json"))
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "resolutionUnavailable",
+                        UiMessage::error_core_journal_journal_alias_or_partial_evidence_retained(),
                     )
-            })
+                })?;
+            if suffix == "resolution" {
+                continue;
+            }
+            if !matches!(
+                suffix,
+                "definition-reservation"
+                    | "revision-reservation"
+                    | "tag-reservation"
+                    | "directory-reservation"
+            ) {
+                return Err(CoreError::new(
+                    "resolutionUnavailable",
+                    UiMessage::error_core_journal_unregistered_attempt_has_installation_or_unknown_retained_evidence(),
+                ));
+            }
+            let path = entry.path();
+            let binding = if let Some(original) =
+                protected.iter().find(|file| Path::new(&file.path) == path)
+            {
+                let mut cursor = std::io::Cursor::new(&original.bytes);
+                match hosted::read_actor_library_header(&mut cursor)? {
+                    hosted::ActorLibraryHeader::Bound(binding) => binding,
+                    _ => {
+                        return Err(CoreError::new(
+                            "resolutionUnavailable",
+                            UiMessage::error_core_journal_unbound_reservation_preserved_for_inspection(),
+                        ));
+                    }
+                }
+            } else {
+                let mut file = self.backend.open_read(&path)?;
+                let binding = match hosted::read_actor_library_header(&mut file)? {
+                    hosted::ActorLibraryHeader::Bound(binding) => binding,
+                    _ => {
+                        return Err(CoreError::new(
+                            "resolutionUnavailable",
+                            UiMessage::error_core_journal_unbound_reservation_preserved_for_inspection(),
+                        ));
+                    }
+                };
+                if full {
+                    file.seek(SeekFrom::Start(0))?;
+                    let mut bytes = Vec::new();
+                    Read::by_ref(&mut file)
+                        .take((8 * MAX_SOURCE_BYTES + 65537) as u64)
+                        .read_to_end(&mut bytes)?;
+                    if bytes.len() > 8 * MAX_SOURCE_BYTES + 65536 {
+                        return Err(CoreError::new(
+                            "resolutionUnavailable",
+                            UiMessage::error_core_journal_reservation_exceeds_bounded_retained_budget(),
+                        ));
+                    }
+                    if self.validate_preplan_reservation(id, suffix, &bytes)? != binding {
+                        return Err(CoreError::new(
+                            "resolutionUnavailable",
+                            UiMessage::error_core_journal_reservation_library_header_differs(),
+                        ));
+                    }
+                }
+                binding
+            };
+            if scope.as_ref().is_some_and(|original| original != &binding) {
+                return Err(CoreError::new(
+                    "resolutionUnavailable",
+                    UiMessage::error_core_journal_one_attempt_has_competing_original_library_scopes(
+                    ),
+                ));
+            }
+            scope = Some(binding);
+        }
+        Ok(scope)
+    }
+    fn validate_resolution_namespace(&self) -> Result<()> {
+        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
+            let entry = entry?;
+            let name = entry.file_name();
+            let name = name.to_str().ok_or_else(|| {
+                CoreError::new(
+                    "resolutionUnavailable",
+                    UiMessage::error_core_journal_journal_filename_invalid(),
+                )
+            })?;
+            if let Some(id) = name.strip_suffix(".resolution.json") {
+                self.resolution_record(id)?;
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn resolved(&self, id: &str) -> Result<bool> {
+        let resolution = self.resolution_record(id)?;
+        Ok(resolution.is_some()
+            || self
+                .operations
+                .get(id)
+                .is_some_and(library_creation::is_cancellation))
     }
     pub(crate) fn resolve_record(&self, id: &str, action: &str) -> Result<()> {
         let path = self.journal_path(id, "resolution");
-        if self.resolved(id) {
+        if self.resolved(id)? {
             return Ok(());
         }
-        private_replace(
+        if !self.operations.contains_key(id) {
+            if action != "cancelPrepared" {
+                return Err(CoreError::new(
+                    "resolutionUnavailable",
+                    UiMessage::error_core_journal_only_attempt_cancellation_can_terminate_unregistered_operation(),
+                ));
+            }
+            self.validate_unregistered_fence_namespace(id)?;
+        }
+        private_create(
+            &self.backend,
             &path,
-            &serde_json::to_vec(
-                &serde_json::json!({"operationId":id,"action":action,"message":"Current files were preserved; original plan remains retained"}),
-            )?,
+            &serde_json::to_vec(&ResolutionRecord {
+                operation_id: id.into(),
+                action: action.into(),
+                historical_message: None,
+                attempt: None,
+            })?,
         )
     }
     pub(crate) fn check_pending(&self, path: &Path) -> Result<()> {
+        self.backend.check_path(path)?;
         self.check_pending_except(path, None)
     }
     pub(crate) fn check_pending_except(&self, path: &Path, except: Option<&str>) -> Result<()> {
@@ -301,18 +645,20 @@ impl Core {
             let affects = a == b
                 || (p.kind == "createLibrary" && b.starts_with(&(a + "\\")))
                 || p.transaction.as_ref().is_some_and(|t| t.affects(path));
-            let installing =
-                p.transaction.is_none() || self.journal_path(&p.operation_id, "install").exists();
-            if affects
-                && installing
-                && !self.committed(&p.operation_id)
-                && !self.resolved(&p.operation_id)
-            {
+            if !affects {
+                continue;
+            }
+            let installing = p.transaction.is_none()
+                || self
+                    .backend
+                    .entry_exists(self.journal_path(&p.operation_id, "install"))?;
+            if installing && !self.committed(&p.operation_id)? && !self.resolved(&p.operation_id)? {
                 return Err(CoreError::new(
                     "recoveryPending",
-                    format!(
-                        "Operation {} is unresolved; inspect its before/after recovery record and explicitly keep the current file before reopening",
-                        p.operation_id
+                    UiMessage::recovery_operation_pending(
+                        weftext_messages::params::RecoveryOperationPending {
+                            operation_id: p.operation_id.clone(),
+                        },
                     ),
                 ));
             }
@@ -337,13 +683,15 @@ impl Core {
                     .as_ref()
                     .is_some_and(|t| t.has_identity(identity)))
                 && (plan.transaction.is_none()
-                    || self.journal_path(&plan.operation_id, "install").exists())
-                && !self.committed(&plan.operation_id)
-                && !self.resolved(&plan.operation_id)
+                    || self
+                        .backend
+                        .entry_exists(self.journal_path(&plan.operation_id, "install"))?)
+                && !self.committed(&plan.operation_id)?
+                && !self.resolved(&plan.operation_id)?
             {
                 return Err(CoreError::new(
                     "recoveryPending",
-                    "This file object has an unresolved operation; path aliases do not bypass recovery",
+                    UiMessage::error_core_journal_file_object_has_unresolved_operation_path_aliases_do_not_bypass_recovery(),
                 ));
             }
         }
@@ -351,41 +699,44 @@ impl Core {
     }
     pub(crate) fn retry(&self, id: &str, fingerprint: &str) -> Result<Option<Receipt>> {
         if let Some(plan) = self.operations.get(id) {
+            self.validate_file_save_plan(plan)?;
             if plan.fingerprint != fingerprint {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This operationId already belongs to different input",
+                    UiMessage::error_core_journal_operation_id_already_belongs_to_different_input(),
                 ));
             }
-            if self.committed(id) {
+            if self.committed(id)? {
                 return Ok(plan.receipt.clone());
             }
             return Err(CoreError::new(
                 "recoveryPending",
-                "The original operation remains retained; inspect it rather than executing again",
+                UiMessage::error_core_journal_original_operation_remains_retained_inspect_it_rather_than_executing_again(),
             ));
         }
         Ok(None)
     }
     pub fn recoveries(&self) -> Result<Vec<RecoveryInfo>> {
-        let mut entries = self
-            .operations
-            .values()
-            .filter(|p| {
-                !self.committed(&p.operation_id)
-                    && !self.resolved(&p.operation_id)
-                    && (p.transaction.is_none()
-                        || self.journal_path(&p.operation_id, "install").exists())
-            })
-            .map(|p| self.inspect_recovery(&p.operation_id))
-            .collect::<Result<Vec<_>>>()?;
+        self.backend.check_path(&self.data_dir)?;
+        let mut entries = Vec::new();
+        for p in self.operations.values() {
+            if !self.committed(&p.operation_id)?
+                && !self.resolved(&p.operation_id)?
+                && (p.transaction.is_none()
+                    || self
+                        .backend
+                        .entry_exists(self.journal_path(&p.operation_id, "install"))?)
+            {
+                entries.push(self.inspect_recovery(&p.operation_id)?);
+            }
+        }
         entries.sort_by(|a, b| a.operation_id.cmp(&b.operation_id));
         Ok(entries)
     }
     fn recovery_info(
         plan: &Plan,
         status: &str,
-        message: &str,
+        description: impl Into<CoreDescription>,
         current: Option<String>,
     ) -> RecoveryInfo {
         RecoveryInfo {
@@ -397,7 +748,7 @@ impl Core {
                 .as_ref()
                 .and_then(|x| String::from_utf8(x.clone()).ok()),
             after_source: String::from_utf8(plan.after.clone()).unwrap_or_default(),
-            message: message.into(),
+            description: description.into(),
             current_source: current,
             coherence: match status {
                 "before" => "knownBefore",
@@ -415,16 +766,34 @@ impl Core {
         }
     }
     pub fn inspect_recovery(&self, operation_id: &str) -> Result<RecoveryInfo> {
+        self.backend.check_path(&self.data_dir)?;
         self.check_sync_operation_access(operation_id)?;
         valid_operation_id(operation_id)?;
-        let plan = self.operations.get(operation_id).ok_or_else(|| {
-            CoreError::new("operationMissing", "No retained operation has this ID")
-        })?;
+        let Some(plan) = self.operations.get(operation_id) else {
+            if self.resolved(operation_id)? {
+                return Ok(RecoveryInfo {
+                    operation_id: operation_id.into(),
+                    path: String::new(),
+                    status: "resolved".into(),
+                    before_source: None,
+                    after_source: String::new(),
+                    description: UiMessage::recovery_attempt_fenced().into(),
+                    current_source: None,
+                    coherence: "unavailable".into(),
+                    members: Vec::new(),
+                    allowed_actions: Vec::new(),
+                });
+            }
+            return Err(CoreError::new(
+                "operationMissing",
+                UiMessage::error_core_journal_no_retained_operation_has_i_d(),
+            ));
+        };
         if library_creation::is_cancellation(plan) {
             return Ok(Self::recovery_info(
                 plan,
                 "resolved",
-                "The exact original creation request was durably canceled; no author path was inspected or activated",
+                UiMessage::recovery_creation_canceled(),
                 None,
             ));
         }
@@ -434,19 +803,19 @@ impl Core {
         if plan.transaction.is_some() {
             return self.inspect_transaction_recovery(plan);
         }
-        if self.committed(operation_id) {
+        if self.committed(operation_id)? {
             return Ok(Self::recovery_info(
                 plan,
                 "committed",
-                "The durable original decision exists; this operation must not be executed again",
+                UiMessage::recovery_original_decision_exists(),
                 None,
             ));
         }
-        if self.resolved(operation_id) {
+        if self.resolved(operation_id)? {
             return Ok(Self::recovery_info(
                 plan,
                 "resolved",
-                "The current file was explicitly retained; original before/after are preserved",
+                UiMessage::recovery_current_file_retained(),
                 None,
             ));
         }
@@ -454,13 +823,13 @@ impl Core {
             return Ok(Self::recovery_info(
                 plan,
                 "pending",
-                "An incomplete library creation is retained. No automatic activation, cleanup or rollback is performed",
+                UiMessage::recovery_library_creation_incomplete(),
                 None,
             ));
         }
-        let guard = match ParentGuard::acquire(Path::new(&plan.path)) {
+        let guard = match ParentGuard::acquire(&self.backend, Path::new(&plan.path)) {
             Ok(g) => g,
-            Err(e) => return Ok(Self::recovery_info(plan, "unavailable", &e.message, None)),
+            Err(e) => return Ok(Self::recovery_info(plan, "unavailable", e, None)),
         };
         let mut file = match guard.open_file(false, false) {
             Ok(f) => f,
@@ -468,11 +837,11 @@ impl Core {
                 return Ok(Self::recovery_info(
                     plan,
                     "before",
-                    "The create-only target is absent; the plan remains retained",
+                    UiMessage::recovery_create_target_absent(),
                     None,
                 ));
             }
-            Err(e) => return Ok(Self::recovery_info(plan, "unavailable", &e.message, None)),
+            Err(e) => return Ok(Self::recovery_info(plan, "unavailable", e, None)),
         };
         let bytes = read_source(&mut file)?;
         let identity = stamp(&file)?.identity;
@@ -489,7 +858,7 @@ impl Core {
         Ok(Self::recovery_info(
             plan,
             status,
-            "Matching bytes are an observation, not proof that a crashed operation owns the current object. No automatic write is permitted",
+            UiMessage::recovery_bytes_observation_only(),
             String::from_utf8(bytes).ok(),
         ))
     }
@@ -497,7 +866,10 @@ impl Core {
         self.check_sync_operation_access(operation_id)?;
         valid_operation_id(operation_id)?;
         let plan = self.operations.get(operation_id).cloned().ok_or_else(|| {
-            CoreError::new("operationMissing", "No retained operation has this ID")
+            CoreError::new(
+                "operationMissing",
+                UiMessage::error_core_journal_no_retained_operation_has_i_d(),
+            )
         })?;
         if plan.kind == "createLibrary" && plan.transaction.is_some() {
             return self.resolve_library_creation_recovery(&plan, action);
@@ -508,7 +880,7 @@ impl Core {
         if action != "keepCurrent" {
             return Err(CoreError::new(
                 "unsupportedRecovery",
-                "This MVP only supports explicitly keeping current files; merge or save recovered text to a new file",
+                UiMessage::error_core_journal_m_v_p_only_supports_explicitly_keeping_current_files_merge_or_save_recovered_text_to_new_file(),
             ));
         }
         let inspected = self.inspect_recovery(operation_id)?;
@@ -519,42 +891,248 @@ impl Core {
         self.resolve_record(operation_id, action)?;
         let mut result = inspected;
         result.status = "resolved".into();
-        result.message = "Current files retained. Full original before/after and the unresolved proposal remain in the private journal".into();
+        result.description = UiMessage::recovery_current_files_retained().into();
         Ok(result)
     }
     pub fn operation_status(&self, operation_id: &str) -> Result<RecoveryInfo> {
         self.inspect_recovery(operation_id)
     }
-    pub(crate) fn write_birth(&self, id: &str, birth: &Birth) -> Result<()> {
-        private_create(&self.journal_path(id, "birth"), &serde_json::to_vec(birth)?)
-    }
     pub(crate) fn read_birth(&self, id: &str) -> Result<Option<Birth>> {
-        match fs::read(self.journal_path(id, "birth")) {
+        match self.backend.read_bytes(self.journal_path(id, "birth")) {
             Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            Err(e) => Err(e.into()),
+            Err(e) if e.code == "missing" => Ok(None),
+            Err(e) => Err(e),
         }
     }
     pub(crate) fn read_births(&self, id: &str) -> Result<Vec<Birth>> {
         let mut births = self.read_birth(id)?.into_iter().collect::<Vec<_>>();
-        match fs::read(self.journal_path(id, "births")) {
+        match self.backend.read_bytes(self.journal_path(id, "births")) {
             Ok(bytes) => births.extend(serde_json::from_slice::<Vec<Birth>>(&bytes)?),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(e.into()),
+            Err(e) if e.code == "missing" => {}
+            Err(e) => return Err(e),
+        }
+        self.validate_original_births(id, births, || self.committed(id))
+    }
+    pub(crate) fn decode_committed_births_in_cut(
+        &self,
+        id: &str,
+        single: Option<&[u8]>,
+        multiple: Option<&[u8]>,
+    ) -> Result<Vec<Birth>> {
+        let mut births = single
+            .map(serde_json::from_slice::<Birth>)
+            .transpose()?
+            .into_iter()
+            .collect::<Vec<_>>();
+        if let Some(bytes) = multiple {
+            births.extend(serde_json::from_slice::<Vec<Birth>>(bytes)?);
+        }
+        self.validate_original_births(id, births, || Ok(true))
+    }
+    fn validate_original_births(
+        &self,
+        id: &str,
+        births: Vec<Birth>,
+        committed: impl FnOnce() -> Result<bool>,
+    ) -> Result<Vec<Birth>> {
+        if let Some(plan) = self.operations.get(id) {
+            let mut expected = std::collections::BTreeSet::new();
+            if plan.kind == "newNode" {
+                if let Some(node) = &plan.node_id {
+                    expected.insert(node.clone());
+                } else {
+                    return Err(CoreError::new(
+                        "identityPending",
+                        weftext_messages::UiMessage::error_core_backend_committed_node_identity_missing(),
+                    ));
+                }
+            }
+            if let Some(transaction) = &plan.transaction {
+                expected.extend(
+                    transaction
+                        .births()
+                        .iter()
+                        .map(|birth| birth.node_id.clone()),
+                );
+            }
+            if !expected.is_empty() && committed()? {
+                let actual: std::collections::BTreeSet<_> =
+                    births.iter().map(|birth| birth.node_id.clone()).collect();
+                if actual != expected
+                    || births.len() != expected.len()
+                    || births
+                        .iter()
+                        .any(|birth| Some(&birth.workspace_id) != plan.workspace_id.as_ref())
+                {
+                    return Err(CoreError::new(
+                        "identityPending",
+                        weftext_messages::UiMessage::error_core_backend_committed_birth_incomplete(
+                        ),
+                    ));
+                }
+            }
         }
         Ok(births)
     }
 }
-pub(crate) fn private_create(path: &Path, bytes: &[u8]) -> Result<()> {
+pub(crate) fn validate_original_commit_bytes(plan: &Plan, bytes: &[u8]) -> Result<()> {
+    decode_original_commit(plan, bytes).map(|_| ())
+}
+fn decode_original_commit(plan: &Plan, bytes: &[u8]) -> Result<CommitRecord> {
+    let invalid = || {
+        CoreError::new(
+            "invalidState",
+            UiMessage::error_core_journal_original_commit_evidence_invalid(),
+        )
+    };
+    if bytes.len() > 65536 {
+        return Err(invalid());
+    }
+    let fact: CommitRecord = serde_json::from_slice(bytes)
+        .map_err(|error| invalid().caused_by(CoreError::from(error)))?;
+    if fact.operation_id != plan.operation_id
+        || fact.fingerprint != plan.fingerprint
+        || fact.storage_profile != STORAGE_PROFILE
+        || serde_json::to_value(&fact.receipt)? != serde_json::to_value(&plan.receipt)?
+        || serde_json::to_value(&fact.file_save)? != serde_json::to_value(&plan.file_save)?
+        || fact.commit_sequence == 0
+    {
+        return Err(invalid());
+    }
+    Ok(fact)
+}
+pub(crate) fn private_create(
+    backend: &crate::BackendContext,
+    path: &Path,
+    bytes: &[u8],
+) -> Result<()> {
     let temporary = path.with_extension(format!("{}.pending", fresh()));
-    let mut file = OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&temporary)?;
+    let guard = ParentGuard::acquire(backend, &temporary)?;
+    let mut file = guard.open_file(true, true)?;
     file.write_all(bytes)?;
     file.sync_all()?;
     drop(file);
     // Public record names appear only after the complete payload is flushed.
-    backend::publish_private_create(&temporary, path)?;
+    backend::publish_private_create(backend, &temporary, path)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod description_tests {
+    use super::*;
+
+    fn original_file_commit_plan() -> Plan {
+        let mut plan = Plan::file(
+            fresh(),
+            hash(b"original frozen file intent"),
+            Path::new("ordinary.typ"),
+            None,
+            "author 原文\0😀".as_bytes().to_vec(),
+            None,
+            "save",
+        );
+        plan.file_save = Some(FileSaveData::new(
+            fresh(),
+            Some(fresh()),
+            QualifiedInputScope::DeviceUnassigned,
+            fresh(),
+        ));
+        plan
+    }
+
+    fn original_commit_json(plan: &Plan) -> serde_json::Value {
+        serde_json::json!({
+            "operationId": plan.operation_id,
+            "fingerprint": plan.fingerprint,
+            "receipt": plan.receipt,
+            "fileSave": plan.file_save,
+            "storageProfile": STORAGE_PROFILE,
+            "savedAtUnixMs": 1234,
+            "commitSequence": 1,
+        })
+    }
+
+    #[test]
+    fn malformed_original_commit_keeps_its_raw_json_cause_and_frozen_author_input() {
+        let plan = original_file_commit_plan();
+        let retained_plan = serde_json::to_vec(&plan).unwrap();
+        let bytes = b"{ malformed original commit";
+        let expected_raw = serde_json::from_slice::<serde_json::Value>(bytes)
+            .unwrap_err()
+            .to_string();
+        let error = validate_original_commit_bytes(&plan, bytes).unwrap_err();
+        assert_eq!(error.code, "invalidState");
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_core_journal_original_commit_evidence_invalid()
+        );
+        assert!(error.diagnostics.is_empty());
+        let causes = error.causes.as_slice();
+        assert_eq!(causes.len(), 1);
+        assert_eq!(causes[0].code, "invalidState");
+        assert_eq!(causes[0].explanation, UiMessage::error_core_json_failure());
+        assert_eq!(
+            causes[0].diagnostics,
+            vec![RawDiagnostic {
+                origin: DiagnosticOrigin::Json,
+                text: expected_raw,
+            }]
+        );
+        let wire = serde_json::to_value(&error).unwrap();
+        assert!(wire.get("message").is_none());
+        let _ = error.explanation.render(weftext_messages::UiLocale::ZhCn);
+        let _ = error.explanation.render(weftext_messages::UiLocale::EnUs);
+        assert_eq!(serde_json::to_value(&error).unwrap(), wire);
+        assert_eq!(serde_json::to_vec(&plan).unwrap(), retained_plan);
+    }
+
+    #[test]
+    fn original_commit_scope_mismatch_and_budget_are_product_facts_without_fabricated_raw_text() {
+        let plan = original_file_commit_plan();
+        let retained_plan = serde_json::to_vec(&plan).unwrap();
+        let original = original_commit_json(&plan);
+        validate_original_commit_bytes(&plan, &serde_json::to_vec(&original).unwrap()).unwrap();
+
+        let mut changed = original.clone();
+        changed["fileSave"]["sessionId"] = fresh().into();
+        let mismatch =
+            validate_original_commit_bytes(&plan, &serde_json::to_vec(&changed).unwrap())
+                .unwrap_err();
+        assert_eq!(mismatch.code, "invalidState");
+        assert_eq!(
+            mismatch.explanation,
+            UiMessage::error_core_journal_original_commit_evidence_invalid()
+        );
+        assert!(mismatch.diagnostics.is_empty());
+        assert!(mismatch.causes.as_slice().is_empty());
+
+        let oversized = vec![b' '; 65537];
+        let budget = validate_original_commit_bytes(&plan, &oversized).unwrap_err();
+        assert_eq!(budget.code, "invalidState");
+        assert_eq!(budget.explanation, mismatch.explanation);
+        assert!(budget.diagnostics.is_empty());
+        assert!(budget.causes.as_slice().is_empty());
+        assert_eq!(serde_json::to_vec(&plan).unwrap(), retained_plan);
+    }
+
+    #[test]
+    fn invalid_resolution_keeps_original_json_diagnostic_separate_from_product_text() {
+        let bytes = b"{ malformed original resolution";
+        let error = decode_resolution(&fresh(), bytes).unwrap_err();
+        assert_eq!(error.code, "resolutionUnavailable");
+        assert_eq!(
+            error.explanation.key(),
+            "error.core.journal.originalResolutionMetadataInvalidPreserveItWithoutRetryingOperation"
+        );
+        assert!(
+            error
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.origin == DiagnosticOrigin::Json
+                    && !diagnostic.text.is_empty())
+        );
+        let wire = serde_json::to_value(&error).unwrap();
+        assert!(wire.get("message").is_none());
+        assert!(wire["explanation"].is_object());
+    }
 }

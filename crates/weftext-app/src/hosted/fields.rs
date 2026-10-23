@@ -38,7 +38,7 @@ fn retained_query<'a>(
             ApiError::new(
                 StatusCode::GONE,
                 "queryExpired",
-                "原查询结果已失效，请明确重新执行查询",
+                UiMessage::error_api_hosted_fields_original_query_expired(),
             )
         })
 }
@@ -68,7 +68,7 @@ pub(super) fn frozen_query(
         query
             .result
             .diagnostics
-            .push("标签结构已变化；此结果仍保留原冻结树，请明确重新执行查询。".into());
+            .push(UiMessage::error_api_hosted_fields_tag_structure_changed().into());
     }
     Ok(query)
 }
@@ -156,7 +156,7 @@ pub(super) fn retain_query(
 }
 fn cache_evictions(store: &Store, actor: &str, new_bytes: usize) -> Result<Vec<String>, ApiError> {
     const MAX_BYTES: usize = 32 * 1024 * 1024;
-    let full = || ApiError::bad("冻结查询结果超出缓存容量，请缩小范围或稍后再试");
+    let full = || ApiError::bad(UiMessage::error_api_hosted_fields_frozen_query_cache_budget());
     if new_bytes > MAX_BYTES {
         return Err(full());
     }
@@ -381,21 +381,21 @@ fn conflict() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "fieldBasisChanged",
-        "字段或校验依据已变化，请保留输入并重新读取核对。",
+        UiMessage::error_api_hosted_fields_field_basis_changed(),
     )
 }
 fn profile_unavailable() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "fieldUnavailable",
-        "字段当前无法限定，输入已保留；请核对当前文档、Schema 及校验依赖。",
+        UiMessage::error_api_hosted_fields_field_qualification_unavailable(),
     )
 }
 fn operation_error(_: CoreError) -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "fieldOperation",
-        "原字段操作未完成或编号已绑定其他提案；请核对原操作状态。",
+        UiMessage::error_api_hosted_fields_field_operation_unresolved(),
     )
 }
 
@@ -498,7 +498,7 @@ async fn list(State(state): State<HostedState>, Extension(auth): Extension<Auth>
 async fn read(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Select>,
+    RequestJson(req): RequestJson<Select>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
@@ -523,7 +523,7 @@ async fn read(
         })?;
         let basis = if let Some((fields, witness, versions)) = writable {
             if inner.fields.bases.len() >= 1024 || inner.fields.bases.values().filter(|b| b.actor == actor).count() >= 128 {
-                return Err(ApiError::bad("字段依据已达上限，请稍后重新读取"));
+                return Err(ApiError::bad(UiMessage::error_api_hosted_fields_field_basis_capacity()));
             }
             let id = uuid::Uuid::new_v4().to_string();
             inner.fields.bases.insert(id.clone(), Basis {
@@ -547,7 +547,7 @@ pub(super) async fn test_read_assignment_field(
     read(
         State(state),
         Extension(auth),
-        Json(Select {
+        crate::RequestJson(Select {
             resource: resource.into(),
             field_id: field_id.into(),
         }),
@@ -558,7 +558,7 @@ pub(super) async fn test_read_assignment_field(
 async fn write(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Write>,
+    RequestJson(req): RequestJson<Write>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -675,7 +675,7 @@ async fn write(
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let actor = inner.actor(&auth)?;
@@ -691,7 +691,7 @@ async fn operation(
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {

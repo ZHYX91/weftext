@@ -14,40 +14,42 @@ impl Core {
         resource: &str,
         operation: &str,
     ) -> Result<()> {
+        self.backend.check_path(&self.data_dir)?;
         let fail = |message| CoreError::new("staleBase", message);
         let record = self
             .actor_feature_record(resource, operation)?
-            .ok_or_else(|| fail("Original actor feature is unavailable"))?;
+            .ok_or_else(|| fail(UiMessage::error_core_actor_feature_unavailable()))?;
         let library = record
             .library
             .as_ref()
-            .ok_or_else(|| fail("Original actor library is unbound"))?;
+            .ok_or_else(|| fail(UiMessage::error_core_actor_library_unbound()))?;
         let plan = self
             .operations
             .get(&record.core_operation_id)
-            .filter(|plan| {
-                !record.cancelled
-                    && !self.committed(&plan.operation_id)
-                    && !self.resolved(&plan.operation_id)
-                    && !self.journal_path(&plan.operation_id, "install").exists()
-            })
-            .ok_or_else(|| fail("Original actor feature is no longer prepared"))?;
+            .ok_or_else(|| fail(UiMessage::error_core_actor_feature_not_prepared()))?;
+        if record.cancelled
+            || self.committed(&plan.operation_id)?
+            || self.resolved(&plan.operation_id)?
+            || self
+                .backend
+                .entry_exists(self.journal_path(&plan.operation_id, "install"))?
+        {
+            return Err(fail(UiMessage::error_core_actor_feature_not_prepared()));
+        }
         let transaction = plan
             .transaction
             .as_ref()
-            .ok_or_else(|| fail("Original feature Plan is unavailable"))?;
+            .ok_or_else(|| fail(UiMessage::error_core_actor_feature_plan_unavailable()))?;
         let root = absolute_path(Path::new(&transaction.request.root))?;
         if plan.workspace_id != library.workspace_id {
             return Err(fail(
-                "Original feature workspace differs from its actor library",
+                UiMessage::error_core_actor_feature_workspace_mismatch(),
             ));
         }
         self.actor_library_for_root(&root)?;
         let workspace = self.require_workspace(&root)?;
         if library.workspace_id.as_ref() != Some(&workspace.workspace_id) {
-            return Err(fail(
-                "Current workspace differs from the original actor library",
-            ));
+            return Err(fail(UiMessage::error_core_actor_library_workspace_changed()));
         }
         // This is one closed Core configuration role, never an HTTP-selected
         // filename or a path/exclusion supplied by the caller.
@@ -56,14 +58,15 @@ impl Core {
         for file in &transaction.files {
             if namespace_path_compare(Path::new(&file.path), &path)?.is_eq() {
                 if original.is_some() {
-                    return Err(fail("Original Plan has competing settings inputs"));
+                    return Err(fail(UiMessage::error_core_competing_settings_inputs()));
                 }
                 original = Some(file);
             }
         }
-        let original = original.ok_or_else(|| fail("Original Plan has no settings dependency"))?;
+        let original =
+            original.ok_or_else(|| fail(UiMessage::error_core_missing_settings_dependency()))?;
         self.check_pending_except(&path, Some(&plan.operation_id))?;
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut file = guard.open_read_guard_file()?;
         if namespace_path_compare(&guard.directory_coordinates()?, Path::new(&library.root))?
             .is_ne()
@@ -71,9 +74,7 @@ impl Core {
             || stamp(&file)? != original.stamp
             || read_blob(&mut file)? != original.bytes
         {
-            return Err(fail(
-                "Original settings object, parent, stamp or bytes changed",
-            ));
+            return Err(fail(UiMessage::error_core_original_settings_changed()));
         }
         Ok(())
     }
@@ -90,7 +91,7 @@ mod tests {
         let root = temp.path().join("library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let settings = root.join(".weftext-settings.json");
         fs::write(&settings, br#"{"version":1,"processing":{"fixture":1}}"#).unwrap();
         let config = core

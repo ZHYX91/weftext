@@ -10,6 +10,14 @@ fn selected() -> BTreeSet<String> {
     BTreeSet::from(["tasks/status".into()])
 }
 
+fn assert_narrow_unavailable(error: DataError) {
+    assert_eq!(error.kind(), DataErrorKind::Unavailable);
+    assert_eq!(
+        error.description().explanation,
+        weftext_messages::UiMessage::error_data_narrow_narrow_field_profile_unavailable()
+    );
+}
+
 #[test]
 fn narrow_static_field_allows_arbitrary_legal_body_and_hidden_computed_invalid_values() {
     let schema = Schema::bundled().unwrap();
@@ -124,13 +132,222 @@ fn affected_constraint_requires_authorized_input_closure_before_values() {
     let fields = BTreeSet::from([id.clone()]);
     let needed = narrow_write_fields(source, &schema, &id).unwrap();
     assert!(needed.len() > 1);
-    let error = narrow_profile(source, &schema, &fields, Some(&id))
-        .err()
-        .unwrap()
-        .to_string();
-    assert_eq!(error, "Narrow field profile unavailable");
+    assert_narrow_unavailable(
+        narrow_profile(source, &schema, &fields, Some(&id))
+            .err()
+            .unwrap(),
+    );
     assert!(narrow_profile(source, &schema, &fields, None).is_ok());
     assert!(patch_narrow_field(source, &schema, &needed, &id, &NativeValue::None).is_err());
+}
+
+#[test]
+fn reminder_write_closure_is_static_and_required_before_hidden_values() {
+    let schema = Schema::bundled().unwrap();
+    let fields = BTreeSet::from(["tasks/due".into(), "tasks/reminder".into()]);
+    for reminder in [
+        "",
+        ", reminder: none",
+        ", reminder: read(\"SECRET_REMINDER\")",
+        ", reminder: (id: \"a0358e3e-5784-4a8b-8e5f-146029b70dbd\", kind: \"absolute\", at: \"2026-10-23T09:00:00Z\")",
+    ] {
+        let original = source(
+            &format!(", due: datetime(year: 2026, month: 10, day: 23){reminder}"),
+            "#context query(heading)",
+        );
+        for selected in ["tasks/due", "tasks/reminder"] {
+            assert_eq!(
+                narrow_write_fields(&original, &schema, selected).unwrap(),
+                fields
+            );
+            assert_narrow_unavailable(
+                narrow_profile(
+                    &original,
+                    &schema,
+                    &BTreeSet::from([selected.into()]),
+                    Some(selected),
+                )
+                .err()
+                .unwrap(),
+            );
+        }
+        assert!(
+            narrow_profile(
+                &original,
+                &schema,
+                &BTreeSet::from(["tasks/due".into()]),
+                None
+            )
+            .is_ok()
+        );
+    }
+}
+
+fn due_day_source() -> String {
+    source(
+        ", due: datetime(year: 2026, month: 10, day: 23), reminder: (id: \"a0358e3e-5784-4a8b-8e5f-146029b70dbd\", kind: \"due_day\", clock: (time: datetime(hour: 9, minute: 0, second: 0)), zone: \"UTC\", zone_version: \"fixed-utc.v1\")",
+        "#context query(heading)",
+    )
+}
+
+#[test]
+fn reminder_authorized_patch_revalidates_due_and_exact_dependencies() {
+    let schema = Schema::bundled().unwrap();
+    let original = due_day_source();
+    let fields = narrow_write_fields(&original, &schema, "tasks/due").unwrap();
+    let before = narrow_profile(&original, &schema, &fields, Some("tasks/due"))
+        .unwrap()
+        .witness;
+    let replacement = decode_native_expression("datetime(year: 2026, month: 10, day: 24)").unwrap();
+    let patch = patch_narrow_field(&original, &schema, &fields, "tasks/due", &replacement).unwrap();
+    assert_eq!(patch.source, original.replacen("day: 23", "day: 24", 1));
+    // A valid due endpoint which cannot supply due_day's complete civil day.
+    // This must reach the Type validator, rather than fail the Field shape.
+    let incompatible = NativeValue::Text("2026-10-23T09:00:00Z".into());
+    let due = schema.fields.iter().find(|f| f.id == "tasks/due").unwrap();
+    assert!(schema.validate(&due.shape, &incompatible).is_valid());
+    let error = patch_narrow_field(&original, &schema, &fields, "tasks/due", &incompatible)
+        .err()
+        .unwrap();
+    assert_eq!(error.kind(), DataErrorKind::Invalid);
+    assert_eq!(
+        error.description().explanation,
+        UiMessage::error_data_narrow_selected_field_constraint_rejected_proposal()
+    );
+    assert_ne!(
+        before,
+        narrow_profile(
+            &original.replace("hour: 9", "hour: 10"),
+            &schema,
+            &fields,
+            Some("tasks/due")
+        )
+        .unwrap()
+        .witness
+    );
+    let mut unrelated = schema.clone();
+    unrelated
+        .providers
+        .iter_mut()
+        .find(|p| p.id == "units/rules")
+        .unwrap()
+        .limits
+        .max_expansion = 9999;
+    assert_eq!(
+        before,
+        narrow_profile(&original, &unrelated, &fields, Some("tasks/due"))
+            .unwrap()
+            .witness
+    );
+    let mut changed = schema;
+    changed
+        .providers
+        .iter_mut()
+        .find(|p| p.data["kind"] == "zone-table" && p.data["key"] == "UTC")
+        .unwrap()
+        .limits
+        .max_steps -= 1;
+    assert_ne!(
+        before,
+        narrow_profile(&original, &changed, &fields, Some("tasks/due"))
+            .unwrap()
+            .witness
+    );
+}
+
+#[test]
+fn narrow_write_discovery_and_preflight_reject_non_field_or_unsupported_constraints() {
+    let schema = Schema::bundled().unwrap();
+    let original = due_day_source();
+    let fields = narrow_write_fields(&original, &schema, "tasks/due").unwrap();
+    let mut unsupported = schema.clone();
+    unsupported
+        .validators
+        .iter_mut()
+        .find(|v| v.id == "temporal/task-reminder")
+        .unwrap()
+        .operation = "owned-resources".into();
+    let mut missing = schema.clone();
+    missing
+        .validators
+        .retain(|v| v.id != "temporal/task-reminder");
+    let mut schemas = vec![unsupported, missing];
+    for selector in [
+        Selector::Context {
+            name: "owner".into(),
+        },
+        Selector::Local { path: vec![] },
+    ] {
+        let mut changed = schema.clone();
+        changed
+            .types
+            .iter_mut()
+            .flat_map(|t| &mut t.constraints)
+            .find(|c| c.validator == "temporal/task-reminder")
+            .unwrap()
+            .inputs
+            .insert("reminder".into(), selector);
+        schemas.push(changed);
+    }
+    for changed in schemas {
+        assert_narrow_unavailable(
+            narrow_write_fields(&original, &changed, "tasks/due")
+                .err()
+                .unwrap(),
+        );
+        assert_narrow_unavailable(
+            narrow_profile(&original, &changed, &fields, Some("tasks/due"))
+                .err()
+                .unwrap(),
+        );
+    }
+}
+
+#[test]
+fn reminder_narrow_patch_keeps_selector_cardinality_validation() {
+    let mut schema = Schema::bundled().unwrap();
+    let field = schema
+        .fields
+        .iter_mut()
+        .find(|f| f.id == "tasks/reminder")
+        .unwrap();
+    field.shape = Shape::List {
+        items: Box::new(field.shape.clone()),
+        min: 0,
+        max: None,
+    };
+    schema
+        .types
+        .iter_mut()
+        .flat_map(|t| &mut t.constraints)
+        .find(|c| c.validator == "temporal/task-reminder")
+        .unwrap()
+        .inputs
+        .insert(
+            "reminder".into(),
+            Selector::Field {
+                id: "tasks/reminder".into(),
+                path: vec![SchemaPath::Each],
+            },
+        );
+    let schema = Schema::from_author_json(&serde_json::to_string(&schema).unwrap()).unwrap();
+    let reminder = "(id: \"a0358e3e-5784-4a8b-8e5f-146029b70dbd\", kind: \"absolute\", at: \"2026-10-23T09:00:00Z\")";
+    let original = source(
+        &format!(
+            ", due: datetime(year: 2026, month: 10, day: 23), reminder: ({reminder}, {reminder})"
+        ),
+        "body",
+    );
+    let fields = narrow_write_fields(&original, &schema, "tasks/due").unwrap();
+    let replacement = decode_native_expression("datetime(year: 2026, month: 10, day: 24)").unwrap();
+    let error = patch_narrow_field(&original, &schema, &fields, "tasks/due", &replacement)
+        .err()
+        .unwrap();
+    assert_eq!(error.kind(), DataErrorKind::Invalid);
+    assert_eq!(
+        error.description().explanation,
+        UiMessage::error_data_narrow_selected_field_constraint_rejected_proposal()
+    );
 }
 
 #[test]
@@ -437,7 +654,11 @@ fn authorized_calendar_value_binds_only_its_exact_provider() {
         ", due: (calendar: \"secretcal\", version: \"v1\", precision: \"day\", year: 1, month: 1, day: 1)",
         "body",
     );
-    let fields = BTreeSet::from(["tasks/due".into()]);
+    let fields = narrow_write_fields(&source, &schema, "tasks/due").unwrap();
+    assert_eq!(
+        fields,
+        BTreeSet::from(["tasks/due".into(), "tasks/reminder".into()])
+    );
     let before = narrow_profile(&source, &schema, &fields, Some("tasks/due"))
         .unwrap()
         .witness;

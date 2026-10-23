@@ -21,26 +21,111 @@ pub use proofreading::*;
 pub use relationship_graph::*;
 
 use serde::{Deserialize, Serialize};
+use weftext_messages::{ErrorDescription, UiMessage};
 
 pub type Result<T> = std::result::Result<T, KnowledgeError>;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct KnowledgeError {
     pub code: String,
-    pub message: String,
+    #[serde(flatten)]
+    pub description: Box<ErrorDescription>,
+    pub product_diagnostics: Vec<ErrorDescription>,
 }
 impl KnowledgeError {
-    pub fn new(code: &str, message: impl Into<String>) -> Self {
+    pub fn new(code: &str, description: impl Into<ErrorDescription>) -> Self {
         Self {
             code: code.into(),
-            message: message.into(),
+            description: Box::new(description.into()),
+            product_diagnostics: Vec::new(),
         }
+    }
+    pub fn into_parts(self) -> (ErrorDescription, Vec<ErrorDescription>) {
+        (*self.description, self.product_diagnostics)
+    }
+    pub fn with_diagnostics(mut self, diagnostics: Vec<ErrorDescription>) -> Self {
+        self.product_diagnostics.extend(diagnostics);
+        self
+    }
+    pub fn from_engine(code: &str, error: weftext_engine::EngineError) -> Self {
+        let (description, diagnostics) = error.into_parts();
+        Self::new(code, description).with_diagnostics(diagnostics)
+    }
+    pub fn from_data(code: &str, error: weftext_data::DataError) -> Self {
+        let (kind, description, details) = error.into_parts();
+        let source_code = match kind {
+            weftext_data::DataErrorKind::Invalid => "dataInvalid",
+            weftext_data::DataErrorKind::Unavailable => "dataUnavailable",
+            weftext_data::DataErrorKind::Coverage => "dataCoverage",
+            weftext_data::DataErrorKind::Budget => "dataBudget",
+            weftext_data::DataErrorKind::NativeBudget => "dataNativeBudget",
+            weftext_data::DataErrorKind::ClosedExpressionUnavailable => {
+                "dataClosedExpressionUnavailable"
+            }
+        };
+        Self::with_cause(
+            code,
+            UiMessage::error_knowledge_data_qualification(),
+            source_code,
+            description,
+            details
+                .map(weftext_data::DataErrorDetails::into_diagnostics)
+                .unwrap_or_default(),
+        )
+    }
+    pub(crate) fn with_cause(
+        code: &str,
+        explanation: UiMessage,
+        source_code: &str,
+        cause: ErrorDescription,
+        mut diagnostics: Vec<ErrorDescription>,
+    ) -> Self {
+        let description = match ErrorDescription::new(explanation).try_caused_by(source_code, cause)
+        {
+            Ok(description) => description,
+            Err(boundary) => {
+                let header = ErrorDescription::new(boundary.original.explanation.clone());
+                diagnostics.insert(0, boundary.original);
+                boundary
+                    .outer
+                    .try_caused_by(boundary.code, header)
+                    .expect("a fresh product header and one shallow cause fit the fixed budget")
+            }
+        };
+        Self {
+            code: code.into(),
+            description: Box::new(description),
+            product_diagnostics: diagnostics,
+        }
+    }
+    pub fn from_losses(code: &str, losses: Vec<Loss>) -> Self {
+        let mut diagnostics = Vec::new();
+        for loss in losses {
+            let item = Self::with_cause(
+                "copyLoss",
+                UiMessage::error_knowledge_copy_loss_at_path(
+                    weftext_messages::params::ErrorKnowledgeCopyLossAtPath { path: loss.path },
+                ),
+                &loss.code,
+                loss.description,
+                loss.product_diagnostics,
+            );
+            let (description, related) = item.into_parts();
+            diagnostics.push(description);
+            diagnostics.extend(related);
+        }
+        Self::new(code, UiMessage::error_knowledge_copy_losses_declined())
+            .with_diagnostics(diagnostics)
     }
 }
 impl std::fmt::Display for KnowledgeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.code, self.message)
+        write!(f, "{}: {}", self.code, self.description)?;
+        for diagnostic in &self.product_diagnostics {
+            write!(f, "\n{diagnostic}")?;
+        }
+        Ok(())
     }
 }
 impl std::error::Error for KnowledgeError {}
@@ -110,7 +195,9 @@ impl ExactRange {
         let raw = source.get(from..to).ok_or_else(|| {
             KnowledgeError::new(
                 "invalidRange",
-                "The source range is not an exact UTF-8 range",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_source_edit_utf_eight_range_invalid(),
+                ),
             )
         })?;
         Ok(Self {
@@ -138,7 +225,9 @@ impl SourcePatch {
         if !range.verify(source) {
             return Err(KnowledgeError::new(
                 "conflict",
-                "The exact source preimage changed",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_source_edit_source_preimage_changed(),
+                ),
             ));
         }
         let after = format!(
@@ -151,7 +240,9 @@ impl SourcePatch {
         if !parsed.root().errors_and_warnings().0.is_empty() {
             return Err(KnowledgeError::new(
                 "invalidSource",
-                "The proposed native source does not parse",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_knowledge_source_edit_proposed_source_invalid(),
+                ),
             ));
         }
         Ok(Self {
@@ -217,9 +308,11 @@ pub struct PlannedFile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Loss {
     pub path: String,
     pub code: String,
-    pub detail: String,
+    #[serde(flatten)]
+    pub description: ErrorDescription,
+    pub product_diagnostics: Vec<ErrorDescription>,
 }

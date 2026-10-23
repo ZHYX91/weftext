@@ -1,7 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { createdDocument } from './_creation_result.mjs';
 // An ordinary Directory moves through real public producers, then the real
 // receiver Sync UI. No synthetic Plan, response, editor state or private record.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile, appendFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -22,18 +24,14 @@ async function until(read, predicate, label, ms = 30000) {
   throw new Error(`${label} timeout: ${JSON.stringify(last)}`);
 }
 async function start(label, args) {
-  const child = spawn(exe, ['--no-browser', ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawnServe(exe, [...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   const server = { label, child, stdout: '', stderr: '' }; servers.push(server);
   child.stdout.on('data', bytes => server.stdout += bytes); child.stderr.on('data', bytes => server.stderr += bytes);
-  await until(() => server.stdout, text => /http:\/\/127\.0\.0\.1:\d+\/#token=\w+/.test(text), `${label} start`);
-  const match = server.stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-  return Object.assign(server, { base: match[1], token: match[2] });
+  await until(() => serveReady(child), Boolean, `${label} start`);
+  const match = serveReady(child);
+  return Object.assign(server, { base: match.base, token: match.token });
 }
-async function stop(server) {
-  if (!server || server.child.exitCode !== null || server.child.signalCode !== null) return;
-  server.child.kill();
-  await until(() => server.child.exitCode !== null || server.child.signalCode !== null, Boolean, `${server.label} close`, 15000);
-}
+async function stop(server) { await stopServe(server?.child); }
 async function api(server, route, request) {
   const response = await fetch(server.base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': server.token }, body: JSON.stringify(request), signal: AbortSignal.timeout(45000) });
   const body = await response.json();
@@ -72,10 +70,10 @@ try {
   await commit(a, admitted.preview);
   const marker = JSON.parse(await readFile(path.join(folder, 'weftext.directory.json'), 'utf8'));
   const directoryKey = { kind: 'directory', id: marker.directoryId };
-  const child = await api(a, '/api/note/create', { root: ra, parent: folder, name: 'Child', operationId: randomUUID() });
+  const child = createdDocument(await api(a, '/api/note/create', { root: ra, parent: folder, name: 'Child', operationId: randomUUID() }));
   const savedSource = child.source + '\n= 目录子笔记\n原始正文 中文😀\n';
   await api(a, '/api/save', { sessionId: child.sessionId, baseId: child.baseId, source: savedSource, operationId: randomUUID() });
-  const container = await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Container', operationId: randomUUID() });
+  const container = createdDocument(await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Container', operationId: randomUUID() }));
   const childKey = { kind: 'node', id: child.nodeId }, containerKey = { kind: 'node', id: container.nodeId };
   const binding = await api(a, '/api/sync/enable', { root: ra, operationId: randomUUID() }), identity = binding.identity;
   const objects = [directoryKey, childKey, containerKey];
@@ -166,7 +164,7 @@ try {
     await writeFile(path.join(out, `${index}-${server.label}.stderr.log`), server.stderr);
   }
   await writeFile(path.join(out, 'browser-requests.json'), JSON.stringify(calls, null, 2));
-  await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2));
+  await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2));
   console.log(JSON.stringify(result));
   if (result.completed) {
     assert.equal(result.ownedProcessesClosed, true);

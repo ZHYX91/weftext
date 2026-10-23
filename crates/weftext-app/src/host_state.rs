@@ -1,0 +1,945 @@
+//! Mutable private activation routing, separate from immutable build artifacts
+//! and from every Core profile. It carries locators/identity metadata, never
+//! author input, bearer credentials, delivery outcomes or a second Core journal.
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::BTreeSet,
+    fs::{File, OpenOptions},
+    io::{self, Read, Write},
+    os::windows::{
+        fs::{MetadataExt, OpenOptionsExt},
+        io::AsRawHandle,
+    },
+    path::{Path, PathBuf},
+};
+use windows::{
+    Win32::{
+        Foundation::{HANDLE, HLOCAL, LocalFree},
+        Security::{
+            Authorization::{
+                ConvertSecurityDescriptorToStringSecurityDescriptorW,
+                ConvertStringSecurityDescriptorToSecurityDescriptorW, GetSecurityInfo,
+                SE_FILE_OBJECT,
+            },
+            DACL_SECURITY_INFORMATION, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR,
+            SECURITY_ATTRIBUTES,
+        },
+        Storage::FileSystem::{
+            CreateDirectoryW, FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT,
+            FILE_SHARE_READ, FILE_SHARE_WRITE, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+            MoveFileExW, READ_CONTROL,
+        },
+    },
+    core::{HSTRING, PWSTR},
+};
+
+const LIMIT: usize = 16 * 1024 * 1024;
+const LEAF: &str = "host-routing.json";
+fn invalid() -> io::Error {
+    io::Error::new(
+        io::ErrorKind::PermissionDenied,
+        "The private activation routing evidence is not qualified",
+    )
+}
+struct Descriptor(PSECURITY_DESCRIPTOR);
+impl Drop for Descriptor {
+    fn drop(&mut self) {
+        unsafe {
+            let _ = LocalFree(Some(HLOCAL(self.0.0)));
+        }
+    }
+}
+fn descriptor(text: &str) -> io::Result<Descriptor> {
+    let mut value = PSECURITY_DESCRIPTOR::default();
+    unsafe {
+        ConvertStringSecurityDescriptorToSecurityDescriptorW(
+            &HSTRING::from(text),
+            1,
+            &mut value,
+            None,
+        )
+    }
+    .map_err(io::Error::other)?;
+    Ok(Descriptor(value))
+}
+fn sddl(value: PSECURITY_DESCRIPTOR) -> io::Result<String> {
+    let mut text = PWSTR::null();
+    unsafe {
+        ConvertSecurityDescriptorToStringSecurityDescriptorW(
+            value,
+            1,
+            OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+            &mut text,
+            None,
+        )
+    }
+    .map_err(io::Error::other)?;
+    let result = unsafe { text.to_string() }.map_err(io::Error::other);
+    unsafe {
+        let _ = LocalFree(Some(HLOCAL(text.0.cast())));
+    }
+    result
+}
+pub(crate) struct Root {
+    pub profile: weftext_core::QualifiedProfile,
+    _directory: File,
+}
+impl Root {
+    pub fn qualify(create: bool) -> io::Result<Self> {
+        Self::at(crate::host_paths::host_state_dir()?, create)
+    }
+    fn at(path: PathBuf, create: bool) -> io::Result<Self> {
+        let sid = crate::broker::security::current_sid()?;
+        let expected = descriptor(&format!("O:{sid}D:P(A;OICI;FA;;;{sid})"))?;
+        if create {
+            let parent = path.parent().ok_or_else(invalid)?;
+            let _parent = weftext_core::qualify_profile(parent).map_err(io::Error::other)?;
+            let attributes = SECURITY_ATTRIBUTES {
+                nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: expected.0.0,
+                bInheritHandle: false.into(),
+            };
+            match unsafe { CreateDirectoryW(&HSTRING::from(path.as_os_str()), Some(&attributes)) } {
+                Ok(()) => {}
+                Err(error) if error.code().0 == 0x800700b7u32 as i32 => {}
+                Err(error) => return Err(io::Error::other(error)),
+            }
+        }
+        let profile = weftext_core::qualify_existing_profile(&path).map_err(io::Error::other)?;
+        let directory = OpenOptions::new()
+            .access_mode(READ_CONTROL.0)
+            .share_mode(FILE_SHARE_READ.0)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS.0 | FILE_FLAG_OPEN_REPARSE_POINT.0)
+            .open(profile.path())?;
+        if directory.metadata()?.file_attributes() & 0x400 != 0 {
+            return Err(invalid());
+        }
+        let mut actual = PSECURITY_DESCRIPTOR::default();
+        unsafe {
+            GetSecurityInfo(
+                HANDLE(directory.as_raw_handle()),
+                SE_FILE_OBJECT,
+                OWNER_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                None,
+                None,
+                None,
+                None,
+                Some(&mut actual),
+            )
+        }
+        .ok()
+        .map_err(io::Error::other)?;
+        let actual = Descriptor(actual);
+        // Existing unqualified directories are retained. This code never fixes
+        // their ACL/owner or adopts an arbitrary preexisting host-state tree.
+        if sddl(actual.0)? != sddl(expected.0)? {
+            return Err(invalid());
+        }
+        let mut members = 0;
+        for member in std::fs::read_dir(profile.path())? {
+            members += 1;
+            if members > 256 {
+                return Err(invalid());
+            }
+            let member = member?;
+            let name = member.file_name();
+            let name = name.to_str().ok_or_else(invalid)?;
+            let staged = name
+                .strip_prefix(".host-routing.")
+                .and_then(|name| name.strip_suffix(".pending"))
+                .is_some_and(crate::broker::canonical_uuid);
+            if name != LEAF && name != ".host-routing.lock" && !staged {
+                return Err(invalid());
+            }
+            let metadata = member.metadata()?;
+            if !metadata.is_file()
+                || metadata.file_attributes() & (0x10 | 0x400) != 0
+                || metadata.len() > LIMIT as u64
+            {
+                return Err(invalid());
+            }
+        }
+        Ok(Self {
+            profile,
+            _directory: directory,
+        })
+    }
+    pub fn separate(&self, profile: &weftext_core::QualifiedProfile) -> io::Result<()> {
+        if self
+            .profile
+            .contains_profile(profile)
+            .map_err(io::Error::other)?
+            || profile
+                .contains_profile(&self.profile)
+                .map_err(io::Error::other)?
+        {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Core and host-state must be separate physical directory trees",
+            ))
+        } else {
+            Ok(())
+        }
+    }
+    fn locked(&self) -> io::Result<Locked<'_>> {
+        let path = self.profile.path().join(".host-routing.lock");
+        let file = match file_options()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                file_options().read(true).write(true).open(&path)?
+            }
+            Err(error) => return Err(error),
+        };
+        ordinary(&file)?;
+        if file.metadata()?.len() != 0 {
+            return Err(invalid());
+        }
+        file.try_lock().map_err(io::Error::other)?;
+        for member in std::fs::read_dir(self.profile.path())? {
+            let member = member?;
+            if member.file_name().to_str().is_some_and(|name| {
+                name.starts_with(".host-routing.") && name.ends_with(".pending")
+            }) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "An original host routing publication remains unresolved; its bytes were retained",
+                ));
+            }
+        }
+        Ok(Locked {
+            root: self,
+            _lock: file,
+        })
+    }
+    pub fn register(
+        &self,
+        profile: &weftext_core::QualifiedProfile,
+        device: &weftext_core::DeviceIdentity,
+        opaque: &str,
+        execution_key: &str,
+        app_id: &str,
+    ) -> io::Result<()> {
+        self.separate(profile)?;
+        if !device.is_current
+            || !crate::broker::canonical_uuid(&device.id)
+            || !crate::broker::canonical_uuid(opaque)
+            || !sha(execution_key)
+            || !application_id(app_id)
+        {
+            return Err(invalid());
+        }
+        let mut locked = self.locked()?;
+        let mut catalog = locked.read()?.unwrap_or_else(Catalog::empty);
+        let profile = Profile {
+            physical_identity: profile.physical_identity().into(),
+            locator: profile.path().to_str().ok_or_else(invalid)?.into(),
+            device_id: device.id.clone(),
+        };
+        let changed = catalog.remember_profile(&profile)?;
+        let activation = Activation {
+            opaque: opaque.into(),
+            physical_identity: profile.physical_identity,
+            device_id: device.id.clone(),
+            execution_key: execution_key.into(),
+            app_id: app_id.into(),
+            build_id: crate::artifact_catalog::Catalog::get()?.build_id().into(),
+        };
+        match catalog.activations.iter().find(|old| old.opaque == opaque) {
+            Some(old) if old == &activation => {
+                if !changed {
+                    return Ok(());
+                }
+            }
+            Some(_) => return Err(invalid()),
+            None => catalog.activations.push(activation),
+        }
+        catalog.revision = catalog.revision.checked_add(1).ok_or_else(invalid)?;
+        locked.publish(&catalog)
+    }
+    pub fn lookup(&self, opaque: &str) -> io::Result<Route> {
+        if !crate::broker::canonical_uuid(opaque) {
+            return Err(invalid());
+        }
+        let locked = self.locked()?;
+        let catalog = locked.read()?.ok_or_else(invalid)?;
+        let activation = catalog
+            .activations
+            .iter()
+            .find(|entry| entry.opaque == opaque)
+            .ok_or_else(invalid)?;
+        if activation.build_id != crate::artifact_catalog::Catalog::get()?.build_id() {
+            return Err(invalid());
+        }
+        let profile = catalog
+            .profiles
+            .iter()
+            .find(|entry| {
+                entry.physical_identity == activation.physical_identity
+                    && entry.device_id == activation.device_id
+            })
+            .ok_or_else(invalid)?;
+        let actual =
+            weftext_core::qualify_existing_profile(&profile.locator).map_err(io::Error::other)?;
+        if actual.physical_identity() != profile.physical_identity {
+            return Err(invalid());
+        }
+        self.separate(&actual)?;
+        Ok(Route {
+            profile: actual,
+            device_id: profile.device_id.clone(),
+            execution_key: activation.execution_key.clone(),
+            app_id: activation.app_id.clone(),
+        })
+    }
+
+    /// A single application-wide startup task selects one existing Core. This
+    /// locator is not OS enablement and never substitutes for Core's intent.
+    pub fn change_startup<T>(
+        &self,
+        profile: &weftext_core::QualifiedProfile,
+        device: &weftext_core::DeviceIdentity,
+        enabled: bool,
+        request: impl FnOnce() -> io::Result<T>,
+    ) -> io::Result<Option<T>> {
+        self.separate(profile)?;
+        if !device.is_current || !crate::broker::canonical_uuid(&device.id) {
+            return Err(invalid());
+        }
+        let profile = Profile {
+            physical_identity: profile.physical_identity().into(),
+            locator: profile.path().to_str().ok_or_else(invalid)?.into(),
+            device_id: device.id.clone(),
+        };
+        let mut locked = self.locked()?;
+        let mut catalog = locked.read()?.unwrap_or_else(Catalog::empty);
+        let startup = Startup {
+            physical_identity: profile.physical_identity.clone(),
+            device_id: profile.device_id.clone(),
+        };
+        if enabled {
+            let changed = catalog.remember_profile(&profile)?;
+            if changed || catalog.startup.as_ref() != Some(&startup) {
+                catalog.startup = Some(startup);
+                catalog.revision = catalog.revision.checked_add(1).ok_or_else(invalid)?;
+                locked.publish(&catalog)?;
+            }
+        } else if catalog.startup.as_ref() != Some(&startup) {
+            // Another physical profile owns the application-wide registration.
+            // In particular, never run Disable after releasing this selection
+            // check: another owner could select its profile in that interval.
+            return Ok(None);
+        }
+        // The same OS lock covers the durable choice and the one OS request.
+        // This is called outside the Core lock on an accepted WinRT worker.
+        // Failure retains the original choice; it never implies no OS effect.
+        request().map(Some)
+    }
+
+    pub fn startup_profile(&self) -> io::Result<Option<ExistingProfile>> {
+        let locked = self.locked()?;
+        let Some(catalog) = locked.read()? else {
+            return Ok(None);
+        };
+        let Some(startup) = &catalog.startup else {
+            return Ok(None);
+        };
+        let record = catalog
+            .profiles
+            .iter()
+            .find(|profile| {
+                profile.physical_identity == startup.physical_identity
+                    && profile.device_id == startup.device_id
+            })
+            .ok_or_else(invalid)?;
+        let profile =
+            weftext_core::qualify_existing_profile(&record.locator).map_err(io::Error::other)?;
+        self.separate(&profile)?;
+        if profile.physical_identity() != record.physical_identity {
+            return Err(invalid());
+        }
+        Ok(Some(ExistingProfile {
+            profile,
+            device_id: record.device_id.clone(),
+        }))
+    }
+
+    /// Reserve a stable browser origin without creating a device identity.
+    /// The listener stays unexposed until Core/router qualification succeeds.
+    pub fn bind_local(
+        &self,
+        profile: &weftext_core::QualifiedProfile,
+        requested: u16,
+    ) -> io::Result<std::net::TcpListener> {
+        self.bind_local_at(
+            profile,
+            requested,
+            &crate::host_paths::user_data_path(profile)?,
+        )
+    }
+    fn bind_local_at(
+        &self,
+        profile: &weftext_core::QualifiedProfile,
+        requested: u16,
+        user_data: &Path,
+    ) -> io::Result<std::net::TcpListener> {
+        self.separate(profile)?;
+        let locator = std::fs::canonicalize(profile.path())?
+            .to_str()
+            .ok_or_else(invalid)?
+            .to_owned();
+        let mut locked = self.locked()?;
+        let mut catalog = locked.read()?.unwrap_or_else(Catalog::empty);
+        let identity = profile.physical_identity();
+        let found = catalog
+            .origins
+            .iter()
+            .position(|origin| origin.physical_identity == identity);
+        // A prior browser/UDF is original author-recovery evidence. Losing its
+        // origin metadata never authorizes a fresh origin in the same profile.
+        let retained_user_data = match weftext_core::qualify_existing_profile(user_data) {
+            Ok(qualified) => Some(qualified),
+            Err(error) if error.code == "missing" => None,
+            Err(error) => return Err(io::Error::other(error)),
+        };
+        if found.is_none() && retained_user_data.is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "The original browser data remains but its retained local origin is missing",
+            ));
+        }
+        if catalog.origins.iter().any(|origin| {
+            origin.physical_identity != identity && same_locator(&origin.locator, &locator)
+        }) {
+            return Err(invalid());
+        }
+        let listener = if let Some(index) = found {
+            let origin = &catalog.origins[index];
+            if requested != 0 && requested != origin.port {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "This physical profile already has a different retained local origin",
+                ));
+            }
+            // Occupied/unknown does not change origin or discover an owner.
+            std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, origin.port))?
+        } else {
+            if requested != 0
+                && catalog
+                    .origins
+                    .iter()
+                    .any(|origin| origin.port == requested)
+            {
+                return Err(invalid());
+            }
+            let mut selected = None;
+            for _ in 0..32 {
+                let candidate =
+                    std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, requested))?;
+                let port = candidate.local_addr()?.port();
+                if !catalog.origins.iter().any(|origin| origin.port == port) {
+                    selected = Some(candidate);
+                    break;
+                }
+                // First-start ephemeral collision, before router/author use.
+                drop(candidate);
+            }
+            selected.ok_or_else(invalid)?
+        };
+        let port = listener.local_addr()?.port();
+        let changed = if let Some(index) = found {
+            let old = &mut catalog.origins[index];
+            if old.locator == locator {
+                false
+            } else {
+                old.locator = locator;
+                true
+            }
+        } else {
+            catalog.origins.push(Origin {
+                physical_identity: identity.into(),
+                locator,
+                port,
+            });
+            true
+        };
+        if changed {
+            catalog.revision = catalog.revision.checked_add(1).ok_or_else(invalid)?;
+            locked.publish(&catalog)?;
+        }
+        listener.set_nonblocking(true)?;
+        Ok(listener)
+    }
+}
+pub(crate) struct Route {
+    pub profile: weftext_core::QualifiedProfile,
+    pub device_id: String,
+    pub execution_key: String,
+    pub app_id: String,
+}
+pub(crate) struct ExistingProfile {
+    pub profile: weftext_core::QualifiedProfile,
+    pub device_id: String,
+}
+impl Route {
+    pub fn into_existing(self) -> ExistingProfile {
+        ExistingProfile {
+            profile: self.profile,
+            device_id: self.device_id,
+        }
+    }
+}
+fn file_options() -> OpenOptions {
+    let mut options = OpenOptions::new();
+    options
+        .share_mode(FILE_SHARE_READ.0 | FILE_SHARE_WRITE.0)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0);
+    options
+}
+fn ordinary(file: &File) -> io::Result<()> {
+    let metadata = file.metadata()?;
+    if !metadata.is_file() || metadata.file_attributes() & (0x10 | 0x400) != 0 {
+        Err(invalid())
+    } else {
+        Ok(())
+    }
+}
+fn sha(value: &str) -> bool {
+    value.len() == 64
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+fn application_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.bytes().all(|byte| (0x21..=0x7e).contains(&byte))
+}
+fn same_locator(left: &str, right: &str) -> bool {
+    let left: Vec<u16> = left.encode_utf16().collect();
+    let right: Vec<u16> = right.encode_utf16().collect();
+    (unsafe { windows::Win32::Globalization::CompareStringOrdinal(&left, &right, true) })
+        == windows::Win32::Globalization::CSTR_EQUAL
+}
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Origin {
+    physical_identity: String,
+    locator: String,
+    port: u16,
+}
+#[derive(Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Startup {
+    physical_identity: String,
+    device_id: String,
+}
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Profile {
+    physical_identity: String,
+    locator: String,
+    device_id: String,
+}
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Activation {
+    opaque: String,
+    physical_identity: String,
+    device_id: String,
+    execution_key: String,
+    app_id: String,
+    build_id: String,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct Catalog {
+    schema_version: u32,
+    revision: u64,
+    profiles: Vec<Profile>,
+    activations: Vec<Activation>,
+    origins: Vec<Origin>,
+    startup: Option<Startup>,
+}
+impl Catalog {
+    fn empty() -> Self {
+        Self {
+            schema_version: 1,
+            revision: 0,
+            profiles: Vec::new(),
+            activations: Vec::new(),
+            origins: Vec::new(),
+            startup: None,
+        }
+    }
+    fn validate(&self) -> io::Result<()> {
+        if self.schema_version != 1
+            || self.revision == 0
+            || self.profiles.len() > 128
+            || self.activations.len() > 32768
+            || self.origins.len() > 4096
+        {
+            return Err(invalid());
+        }
+        let mut profiles = BTreeSet::new();
+        let mut activations = BTreeSet::new();
+        let mut origins = BTreeSet::new();
+        let mut ports = BTreeSet::new();
+        for origin in &self.origins {
+            if origin.physical_identity.is_empty()
+                || origin.physical_identity.len() > 256
+                || !origins.insert(&origin.physical_identity)
+                || origin.port == 0
+                || !ports.insert(origin.port)
+                || origin.locator.is_empty()
+                || origin.locator.len() > 32768
+                || origin.locator.contains('\0')
+                || !Path::new(&origin.locator).is_absolute()
+            {
+                return Err(invalid());
+            }
+        }
+        for profile in &self.profiles {
+            if profile.physical_identity.is_empty()
+                || profile.physical_identity.len() > 256
+                || !profiles.insert(&profile.physical_identity)
+                || !crate::broker::canonical_uuid(&profile.device_id)
+                || profile.locator.is_empty()
+                || profile.locator.len() > 32768
+                || profile.locator.contains('\0')
+                || !Path::new(&profile.locator).is_absolute()
+            {
+                return Err(invalid());
+            }
+        }
+        for activation in &self.activations {
+            if !crate::broker::canonical_uuid(&activation.opaque)
+                || !activations.insert(&activation.opaque)
+                || !sha(&activation.execution_key)
+                || !sha(&activation.build_id)
+                || !application_id(&activation.app_id)
+                || !self.profiles.iter().any(|profile| {
+                    profile.physical_identity == activation.physical_identity
+                        && profile.device_id == activation.device_id
+                })
+            {
+                return Err(invalid());
+            }
+        }
+        if self.startup.as_ref().is_some_and(|startup| {
+            !self.profiles.iter().any(|profile| {
+                profile.physical_identity == startup.physical_identity
+                    && profile.device_id == startup.device_id
+            })
+        }) {
+            return Err(invalid());
+        }
+        Ok(())
+    }
+    fn remember_profile(&mut self, profile: &Profile) -> io::Result<bool> {
+        match self
+            .profiles
+            .iter_mut()
+            .find(|old| old.physical_identity == profile.physical_identity)
+        {
+            Some(old) if old.device_id != profile.device_id => Err(invalid()),
+            Some(old) => {
+                if old.locator == profile.locator {
+                    Ok(false)
+                } else {
+                    old.locator = profile.locator.clone();
+                    Ok(true)
+                }
+            }
+            None => {
+                self.profiles.push(profile.clone());
+                Ok(true)
+            }
+        }
+    }
+}
+struct Locked<'a> {
+    root: &'a Root,
+    _lock: File,
+}
+impl Locked<'_> {
+    fn read(&self) -> io::Result<Option<Catalog>> {
+        let mut file = match file_options()
+            .read(true)
+            .open(self.root.profile.path().join(LEAF))
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+        };
+        ordinary(&file)?;
+        let metadata = file.metadata()?;
+        if metadata.len() > LIMIT as u64 {
+            return Err(invalid());
+        }
+        let mut bytes = Vec::new();
+        Read::by_ref(&mut file)
+            .take(LIMIT as u64 + 1)
+            .read_to_end(&mut bytes)?;
+        if bytes.len() > LIMIT
+            || file.metadata()?.len() != metadata.len()
+            || file.metadata()?.modified()? != metadata.modified()?
+        {
+            return Err(invalid());
+        }
+        let catalog: Catalog = serde_json::from_slice(&bytes).map_err(io::Error::other)?;
+        catalog.validate()?;
+        Ok(Some(catalog))
+    }
+    fn publish(&mut self, catalog: &Catalog) -> io::Result<()> {
+        catalog.validate()?;
+        let bytes = serde_json::to_vec(catalog).map_err(io::Error::other)?;
+        if bytes.len() > LIMIT {
+            return Err(invalid());
+        }
+        let temporary = self
+            .root
+            .profile
+            .path()
+            .join(format!(".host-routing.{}.pending", uuid::Uuid::new_v4()));
+        let mut file = file_options()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        ordinary(&file)?;
+        file.write_all(&bytes)?;
+        file.sync_all()?;
+        drop(file);
+        // Only same-volume exact-name publication. Failure keeps the candidate;
+        // no delete, ACL repair, cross-volume copy or retry fallback is used.
+        unsafe {
+            MoveFileExW(
+                &HSTRING::from(temporary.as_os_str()),
+                &HSTRING::from(self.root.profile.path().join(LEAF).as_os_str()),
+                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+            )
+        }
+        .map_err(io::Error::other)?;
+        let actual = self.read()?.ok_or_else(invalid)?;
+        if serde_json::to_vec(&actual).map_err(io::Error::other)? != bytes {
+            return Err(invalid());
+        }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn bind(
+        root: &Root,
+        profile: &weftext_core::QualifiedProfile,
+        port: u16,
+    ) -> io::Result<std::net::TcpListener> {
+        root.bind_local_at(
+            profile,
+            port,
+            &profile.path().with_extension("test-webview2"),
+        )
+    }
+
+    fn bytes(root: &Root) -> Vec<u8> {
+        std::fs::read(root.profile.path().join(LEAF)).unwrap()
+    }
+
+    #[test]
+    fn local_origin_survives_reopen_without_creating_device_records() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
+        let first = bind(&root, &profile, 0).unwrap();
+        let port = first.local_addr().unwrap().port();
+        let original = bytes(&root);
+        assert!(!profile.path().join("device-state").exists());
+        let stored: Catalog = serde_json::from_slice(&original).unwrap();
+        assert!(stored.profiles.is_empty());
+        assert!(stored.activations.is_empty());
+        assert_eq!(stored.origins.len(), 1);
+        assert_eq!(stored.origins[0].port, port);
+        drop(first);
+        drop(root);
+        let reopened = Root::at(temp.path().join("host-state"), false).unwrap();
+        let second = bind(&reopened, &profile, 0).unwrap();
+        assert_eq!(second.local_addr().unwrap().port(), port);
+        assert_eq!(bytes(&reopened), original);
+    }
+
+    #[test]
+    fn occupied_retained_port_and_explicit_change_keep_original_metadata() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
+        let listener = bind(&root, &profile, 0).unwrap();
+        let original = bytes(&root);
+        assert!(bind(&root, &profile, 0).is_err());
+        let different = if listener.local_addr().unwrap().port() == 1 {
+            2
+        } else {
+            1
+        };
+        assert!(bind(&root, &profile, different).is_err());
+        assert_eq!(bytes(&root), original);
+    }
+
+    #[test]
+    fn other_profile_cannot_take_a_retained_origin_after_its_listener_stops() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let first = weftext_core::qualify_profile(temp.path().join("first")).unwrap();
+        let listener = bind(&root, &first, 0).unwrap();
+        let reserved = listener.local_addr().unwrap().port();
+        drop(listener);
+        let second = weftext_core::qualify_profile(temp.path().join("second")).unwrap();
+        let original = bytes(&root);
+        assert!(bind(&root, &second, reserved).is_err());
+        assert_eq!(bytes(&root), original);
+        let allocated = bind(&root, &second, 0).unwrap();
+        assert_ne!(allocated.local_addr().unwrap().port(), reserved);
+    }
+
+    #[test]
+    fn replaced_physical_profile_does_not_get_a_new_origin_at_the_old_locator() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let path = temp.path().join("core");
+        {
+            let original = weftext_core::qualify_profile(&path).unwrap();
+            drop(bind(&root, &original, 0).unwrap());
+        }
+        let metadata = bytes(&root);
+        std::fs::rename(&path, temp.path().join("retained-original")).unwrap();
+        let replacement = weftext_core::qualify_profile(&path).unwrap();
+        assert!(bind(&root, &replacement, 0).is_err());
+        assert_eq!(bytes(&root), metadata);
+    }
+
+    #[test]
+    fn corrupt_origin_evidence_is_retained_without_binding_fallback() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
+        drop(bind(&root, &profile, 0).unwrap());
+        let bad = b"{\"schemaVersion\":1,\"revision\":1,\"origins\":[],\"unexpected\":true}";
+        std::fs::write(root.profile.path().join(LEAF), bad).unwrap();
+        assert!(bind(&root, &profile, 0).is_err());
+        assert_eq!(bytes(&root), bad);
+    }
+
+    #[test]
+    fn strict_host_state_rejects_unknown_members_and_both_overlap_directions() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("host-state");
+        let root = Root::at(path.clone(), true).unwrap();
+        let nested = weftext_core::qualify_profile(path.join("invalid-core")).unwrap();
+        let ancestor = weftext_core::qualify_existing_profile(temp.path()).unwrap();
+        assert!(root.separate(&nested).is_err());
+        assert!(root.separate(&ancestor).is_err());
+        drop(nested);
+        let original = b"retained unknown evidence";
+        std::fs::write(path.join("unknown.bin"), original).unwrap();
+        assert!(Root::at(path.clone(), false).is_err());
+        assert_eq!(std::fs::read(path.join("unknown.bin")).unwrap(), original);
+    }
+
+    #[test]
+    fn missing_origin_with_existing_user_data_keeps_both_originals() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
+        let user_data = profile.path().with_extension("test-webview2");
+        std::fs::create_dir(&user_data).unwrap();
+        std::fs::write(user_data.join("retained-input"), b"original input").unwrap();
+        assert!(bind(&root, &profile, 0).is_err());
+        assert!(!root.profile.path().join(LEAF).exists());
+        assert_eq!(
+            std::fs::read(user_data.join("retained-input")).unwrap(),
+            b"original input"
+        );
+    }
+
+    #[test]
+    fn unresolved_publication_cannot_be_bypassed_by_a_later_bind() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
+        drop(bind(&root, &profile, 0).unwrap());
+        let original = bytes(&root);
+        let pending = root
+            .profile
+            .path()
+            .join(format!(".host-routing.{}.pending", uuid::Uuid::new_v4()));
+        let partial = b"retained incomplete publication";
+        std::fs::write(&pending, partial).unwrap();
+        assert!(bind(&root, &profile, 0).is_err());
+        assert_eq!(bytes(&root), original);
+        assert_eq!(std::fs::read(pending).unwrap(), partial);
+    }
+
+    #[test]
+    fn startup_selection_and_os_request_hold_one_physical_lock() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let other = Root::at(temp.path().join("host-state"), false).unwrap();
+        let mut core = weftext_core::Core::new(temp.path().join("core")).unwrap();
+        let device = core.device_identity().unwrap();
+        let profile = weftext_core::qualify_existing_profile(temp.path().join("core")).unwrap();
+        let value = root
+            .change_startup(&profile, &device, true, || {
+                // A concurrent route request fails qualification while the
+                // exact accepted request owns the application-wide OS effect.
+                assert!(other.locked().is_err());
+                let catalog: Catalog = serde_json::from_slice(&bytes(&root)).unwrap();
+                assert_eq!(
+                    catalog.startup.as_ref().unwrap().physical_identity,
+                    profile.physical_identity()
+                );
+                Ok(23)
+            })
+            .unwrap();
+        assert_eq!(value, Some(23));
+        assert!(other.locked().is_ok());
+        let original = bytes(&root);
+        let error = root.change_startup(&profile, &device, true, || {
+            Err::<(), _>(io::Error::other("unconfirmed one OS request"))
+        });
+        assert!(error.is_err());
+        assert_eq!(bytes(&root), original);
+    }
+
+    #[test]
+    fn disabling_an_unselected_profile_cannot_call_the_application_wide_os_task() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let mut first_core = weftext_core::Core::new(temp.path().join("first")).unwrap();
+        let mut second_core = weftext_core::Core::new(temp.path().join("second")).unwrap();
+        let first_device = first_core.device_identity().unwrap();
+        let second_device = second_core.device_identity().unwrap();
+        let first = weftext_core::qualify_existing_profile(temp.path().join("first")).unwrap();
+        let second = weftext_core::qualify_existing_profile(temp.path().join("second")).unwrap();
+        root.change_startup(&first, &first_device, true, || Ok(()))
+            .unwrap();
+        let original = bytes(&root);
+        let result = root.change_startup(&second, &second_device, false, || {
+            panic!("another profile's startup task must not be disabled")
+        });
+        assert_eq!(result.unwrap(), None::<()>);
+        assert_eq!(bytes(&root), original);
+        assert_eq!(
+            root.startup_profile()
+                .unwrap()
+                .unwrap()
+                .profile
+                .physical_identity(),
+            first.physical_identity()
+        );
+    }
+}

@@ -2,15 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { legacyBackendChoices, selectedCaptionOptions, type CaptionChoice } from "./office-import-options";
 import type { DocxImportAnalysis, LegacyCapabilities } from "./export-state";
+import { message, uiTextValue } from "./ui-locale";
 
 const analysis: DocxImportAnalysis = { contentHash: "a".repeat(64), captions: [{ blockIndex: 1, sequence: "图", text: "图 1 示例", suggestedText: "示例" }, { blockIndex: 4, sequence: "图", text: "图 2 后图", suggestedText: "后图" }], objects: [{ blockIndex: 0, kind: "figure" }, { blockIndex: 3, kind: "table" }] };
 const choice = (overrides: Partial<CaptionChoice> = {}): CaptionChoice => ({ enabled: true, captionBlock: 1, objectBlock: "0", kind: "figure", captionText: "已核对示例", position: "bottom", ...overrides });
 
 test("legacy software choices are isolated by format and conversion direction", () => {
-  const capabilities: LegacyCapabilities = { ordinaryDocxRequiresOffice: false, backends: [{ id: "word", version: "16", directions: [{ direction: "docxToDoc", available: true, contentRoundtripVerified: false, reason: "" }, { direction: "docToDocx", available: false, contentRoundtripVerified: false, reason: "missing" }] }, { id: "wps", directions: [{ direction: "wpsToDocx", available: true, contentRoundtripVerified: false, reason: "" }] }] };
-  assert.deepEqual(legacyBackendChoices(capabilities, "doc", false), [["word", "Microsoft Word · 16"]]);
+  const description={explanation:message("common.unavailable"),diagnostics:[],causes:[]};
+  const capabilities: LegacyCapabilities = { executionLocation:"local", ordinaryDocxRequiresOffice: false, backends: [{ id: "word", version: "16", directions: [{ direction: "docxToDoc", available: true, contentRoundtripVerified: false, ...description }, { direction: "docToDocx", available: false, contentRoundtripVerified: false, ...description }] }, { id: "wps",version:null, directions: [{ direction: "wpsToDocx", available: true, contentRoundtripVerified: false, ...description }] }] };
+  assert.deepEqual(legacyBackendChoices(capabilities, "doc", false).map(([id, label]) => [id, uiTextValue(label)]), [["word", "Microsoft Word · 16"]]);
   assert.deepEqual(legacyBackendChoices(capabilities, "doc", true), []);
-  assert.deepEqual(legacyBackendChoices(capabilities, "wps", true), [["wps", "WPS Office"]]);
+  assert.deepEqual(legacyBackendChoices(capabilities, "wps", true).map(([id, label]) => [id, uiTextValue(label)]), [["wps", "WPS Office"]]);
   assert.deepEqual(legacyBackendChoices(capabilities, "wps", false), []);
   assert.deepEqual(legacyBackendChoices(null, "doc", true), []);
   assert.deepEqual(legacyBackendChoices(capabilities, "docx", true), []);

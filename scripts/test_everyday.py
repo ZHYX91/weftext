@@ -2,6 +2,7 @@
 
 Own fixtures are retained; no foreground input, real libraries or cleanup.
 """
+from _creation_result import created_document
 import json
 import base64
 import hashlib
@@ -20,9 +21,9 @@ class Everyday(unittest.TestCase):
         self.folder = Path(tempfile.mkdtemp(prefix='weftext-everyday-'))
         self.root = self.folder/'library'
         self.data = self.folder/'state'
-        self.server = Server(['--no-browser','--data-dir',str(self.data)])
+        self.server = Server(['--data-dir',str(self.data)])
         self.call('/api/library/create',{'path':str(self.root),'operationId':uid()})
-        self.doc = self.call('/api/note/create',{'root':str(self.root),'parent':str(self.root),'name':'TEST-note','operationId':uid()})
+        self.doc = created_document(self.call('/api/note/create',{'root':str(self.root),'parent':str(self.root),'name':'TEST-note','operationId':uid()}))
         self.serial = 0
         print('Everyday evidence:',self.folder,flush=True)
     def tearDown(self): self.server.close()
@@ -62,7 +63,7 @@ class Everyday(unittest.TestCase):
         self.assertTrue(proposal['draftOnly']);self.assertEqual(Path(self.doc['path']).read_bytes(),original)
         pending=self.call('/api/query/definition/pending',self.basis(proposal['source']))
         self.assertEqual(pending['operationId'],request['operationId'])
-        self.server.close();self.server=Server(['--no-browser','--data-dir',str(self.data)])
+        self.server.close();self.server=Server(['--data-dir',str(self.data)])
         self.doc=self.call('/api/open',{'path':self.doc['path'],'root':str(self.root)});self.serial=0
         pending=self.call('/api/query/definition/pending',self.basis(proposal['source']))
         self.assertEqual(pending['operationId'],request['operationId'])

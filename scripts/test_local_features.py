@@ -6,6 +6,8 @@ workspace cleanup. No caller-supplied library or private data directory is used.
 This checks server behavior; IME, accessibility and shared client Undo require
 the separate client acceptance and are not established by these tests.
 """
+from _cli_serve import launch_serve
+from _creation_result import created_document
 import argparse
 import base64
 import ctypes
@@ -13,13 +15,9 @@ import hashlib
 import io
 import json
 from pathlib import Path
-import queue
-import re
 import struct
-import subprocess
 import sys
 import tempfile
-import threading
 import unittest
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
@@ -79,49 +77,18 @@ class LocalFeatures(unittest.TestCase):
     def setUpClass(cls):
         cls.root = Path(tempfile.mkdtemp(prefix='weftext-features-', dir=ARTIFACT_PARENT))
         cls.data_dir = cls.root / 'private-state'
-        cls.stderr = (cls.root / 'server.stderr.log').open('w', encoding='utf-8')
-        cls.stdout = (cls.root / 'server.stdout.log').open('w', encoding='utf-8')
-        cls.process = subprocess.Popen(
-            [str(EXE), '--no-browser', '--data-dir', str(cls.data_dir)],
-            stdout=subprocess.PIPE, stderr=cls.stderr, text=True, encoding='utf-8',
-            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        lines = queue.Queue()
-
-        def read_lines():
-            for line in cls.process.stdout:
-                # The token is deliberately omitted from the retained log.
-                cls.stdout.write(re.sub(r'#token=\w+', '#token=<redacted>', line))
-                cls.stdout.flush()
-                lines.put(line)
-            lines.put(None)
-
-        cls.reader = threading.Thread(target=read_lines, daemon=True)
-        cls.reader.start()
         try:
-            while True:
-                line = lines.get(timeout=40)
-                if line is None:
-                    raise RuntimeError('Application exited before printing its local URL')
-                match = re.search(r'(http://127\.0\.0\.1:\d+)/#token=(\w+)', line)
-                if match:
-                    cls.url, cls.token = match.groups()
-                    break
+            cls.owner = launch_serve(EXE, ['--data-dir', str(cls.data_dir)], log_prefix=cls.root / 'server')
+            cls.process = cls.owner.process
+            cls.url, cls.token = cls.owner.ready['base'], cls.owner.ready['token']
         except Exception:
-            cls.process.terminate()
-            cls.process.wait(timeout=10)
-            cls.stderr.close()
-            cls.stdout.close()
             print(f'Retained failed startup fixtures: {cls.root}', file=sys.stderr)
             raise
         print(f'Acceptance fixtures (retained): {cls.root}', flush=True)
 
     @classmethod
     def tearDownClass(cls):
-        cls.process.terminate()
-        cls.process.wait(timeout=15)
-        cls.reader.join(timeout=2)
-        cls.stderr.close()
-        cls.stdout.close()
+        cls.owner.stop()
         print(f'Retained acceptance fixtures: {cls.root}', flush=True)
 
     def raw(self, path, data=None, status=200, headers=None, token=True):
@@ -151,8 +118,8 @@ class LocalFeatures(unittest.TestCase):
         return root, library
 
     def note(self, root, name, source=None, parent=None):
-        doc = self.api('/api/note/create', {'root': str(root), 'parent': str(parent or root),
-                                          'name': name, 'operationId': uid()})
+        doc = created_document(self.api('/api/note/create', {'root': str(root), 'parent': str(parent or root),
+                                          'name': name, 'operationId': uid()}))
         if source is not None:
             metadata = doc['source'].split('\n', 1)[0]
             doc = self.saved(doc, metadata + '\n\n' + source, root)
@@ -163,7 +130,13 @@ class LocalFeatures(unittest.TestCase):
                                          'operationId': uid(), 'source': source})
         self.assertEqual(receipt['status'], 'saved')
         self.assertEqual(Path(doc['path']).read_bytes(), source.encode())
-        return self.api('/api/open', {'path': doc['path'], **({'root': str(root)} if root else {})})
+        self.assertNotIn('documentError', receipt)
+        self.assertTrue(receipt['documentSourceMatchesCommit'])
+        current = receipt['document']
+        self.assertEqual(current['sessionId'], doc['sessionId'])
+        self.assertEqual(current['source'], source)
+        self.assertEqual(current['baseId'], receipt['baseId'])
+        return current
 
     def ordinary(self, source):
         folder = self.root / uid()
@@ -180,6 +153,12 @@ class LocalFeatures(unittest.TestCase):
     def context(self, doc, source=None, serial=1, dirty=False):
         return {'sessionId': doc['sessionId'], 'source': doc['source'] if source is None else source,
                 'serial': serial, 'baseId': doc['baseId'], 'dirty': dirty}
+
+    def map_source(self, doc, source, *, serial):
+        mapping = self.api('/api/editor-map', self.snapshot(doc, source, serial))
+        self.assertEqual(mapping['serial'], serial)
+        self.assertEqual(mapping['sourceHash'], sha(source))
+        return mapping
 
     def assert_range(self, source, address):
         raw = source.encode()[address['from']:address['to']].decode()
@@ -360,7 +339,7 @@ class LocalFeatures(unittest.TestCase):
         self.assertGreater(len(pdf), 2000)
         (Path(doc['path']).parent / 'actual-native.pdf').write_bytes(pdf)
         self.assertTrue(any('Noto Serif CJK' in f for f in paged['fontFamilies']))
-        self.assertFalse(any('missing glyph' in d['message'].lower() for d in paged['diagnostics']))
+        self.assertFalse(any('missing glyph' in raw['text'].lower() for d in paged['diagnostics'] for raw in d['diagnostics']))
         self.assertEqual(Path(doc['path']).read_bytes(), source.encode())
 
     def test_05_styles_review_apply_render_override_and_conflict(self):
@@ -447,7 +426,7 @@ class LocalFeatures(unittest.TestCase):
     def capture(self, root, name, types, fields, body='真实正文🌿', title=None, operation_id=None):
         request = {'root': str(root), 'parent': str(root), 'name': name, 'types': types,
                    'fields': fields, 'body': body, 'title': title, 'operationId': operation_id or uid()}
-        return self.api('/api/data/capture', request), request
+        return created_document(self.api('/api/data/capture', request)), request
 
     def test_06_schema_capture_fields_query_exact_values_and_same_item(self):
         root, _ = self.library()
@@ -455,8 +434,8 @@ class LocalFeatures(unittest.TestCase):
         amount = {'kind': 'decimal', 'value': '9007199254740993.01'}
         due = {'kind': 'date', 'value': '2026-10-13'}
         doc, request = self.capture(root, '精确任务', ['task'],
-                                    {'status': text('open'), 'amount': amount, 'due': due})
-        retry = self.api('/api/data/capture', request)
+                                    {'tasks/status': text('open'), 'acceptance/amount': amount, 'tasks/due': due})
+        retry = created_document(self.api('/api/data/capture', request))
         self.assertEqual(retry['nodeId'], doc['nodeId'])
         self.assertEqual(retry['path'], doc['path'])
         self.assertIn('真实正文🌿', Path(doc['path']).read_text(encoding='utf-8'))
@@ -485,15 +464,16 @@ class LocalFeatures(unittest.TestCase):
         self.assertFalse(query['access']['resultGrantsWriteAccess'])
         self.api('/api/query/run', {'root': str(root), 'plan': {
                  'where': 'amount > 9007199254740993.0'}}, status=400)
-        self.api('/api/data/capture', {**request, 'operationId': uid(), 'name': '缺少状态',
-                 'fields': {'amount': amount}}, status=409)
+        refusal = self.api('/api/data/capture', {**request, 'operationId': uid(), 'name': '缺少状态',
+                 'fields': {'acceptance/amount': amount}}, status=409)
+        self.assertEqual(refusal['error']['explanation'], {'key': 'error.data.projection.requiredCaptureFieldMissing', 'params': {'fieldKey': 'status'}})
         self.assertFalse((root / '缺少状态').exists())
         good = array(record(number=text('001-010'), label=text('work'), note=text('first')),
                      record(number=text('001-010'), label=text('work'), note=text('duplicate')))
         bad = array(record(number=text('001-010'), label=text('personal')),
                     record(number=text('999'), label=text('work')))
-        person, _ = self.capture(root, '同项匹配', ['person'], {'phones': good})
-        self.capture(root, '跨项不匹配', ['person'], {'phones': bad})
+        person, _ = self.capture(root, '同项匹配', ['person'], {'contacts/phones': good})
+        self.capture(root, '跨项不匹配', ['person'], {'contacts/phones': bad})
         projection = self.api('/api/data/project', self.snapshot(person))['projection']
         phones = next(f for f in projection['fields'] if f['key'] == 'phones')
         self.assertEqual(phones['cell']['value'], good)
@@ -533,8 +513,9 @@ class LocalFeatures(unittest.TestCase):
         self.assertEqual(Path(doc['path']).read_text(encoding='utf-8'), doc['source'])
         self.api('/api/knowledge/prepare', {'context': context, 'operationId': uid(),
                  'intent': {**intent, 'target': {'workspaceId': lib['workspaceId'], 'nodeId': uid()}}}, status=409)
+        self.map_source(doc, preview['source'], serial=2)
         doc = self.saved(doc, preview['source'], root)
-        context = self.context(doc)
+        context = self.context(doc, serial=2)
         current = self.api('/api/knowledge/read', {'context': context})
         edge = current['links']['outgoing'][0]
         self.assertEqual(edge['resolution']['target']['nodeId'], second['nodeId'])
@@ -920,8 +901,9 @@ class LocalFeatures(unittest.TestCase):
         self.assertEqual(len(resource['metadata']['pages']), 2)
         self.assertIsNotNone(resource['revision'])
         source = doc['source'] + f'\n#link("{resource["resource"]}#page=2")[准确第二页]\n'
+        self.map_source(doc, source, serial=2)
         doc = self.saved(doc, source, root)
-        context = self.context(doc)
+        context = self.context(doc, serial=2)
         graph = self.api('/api/knowledge/read', {'context': context})
         occurrence = graph['links']['outgoing'][0]['occurrence']
         addresses = {}

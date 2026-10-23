@@ -5,18 +5,17 @@ libraries are created; originals, personal Drafts, settings and logs are retaine
 This script does not establish browser Undo, IME, Office or platform acceptance.
 The explicit suite includes only the new tests, never inherited harness suites.
 """
+from _cli_serve import launch_serve
 import argparse
 import copy
 import hashlib
 import json
 from pathlib import Path
-import queue
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 import test_hosted as hosted_harness
 import test_local_features as local_harness
 from test_hosted_library import HostedLibrary
+from _creation_result import library_fact
 
 
 ARTIFACT_PARENT = None
@@ -45,43 +45,12 @@ class LocalProcessing(local_harness.LocalFeatures):
     @classmethod
     def restart_same_state(cls):
         """Restart the owned process, retaining its exact data directory and logs."""
-        cls.process.terminate()
-        cls.process.wait(timeout=15)
-        cls.reader.join(timeout=2)
-        cls.stderr.close()
-        cls.stdout.close()
+        cls.owner.stop()
         cls.restart_number = getattr(cls, 'restart_number', 0) + 1
         prefix = cls.root / f'server.restart-{cls.restart_number}'
-        cls.stderr = Path(str(prefix) + '.stderr.log').open('w', encoding='utf-8')
-        cls.stdout = Path(str(prefix) + '.stdout.log').open('w', encoding='utf-8')
-        cls.process = subprocess.Popen(
-            [str(local_harness.EXE), '--no-browser', '--data-dir', str(cls.data_dir)],
-            stdout=subprocess.PIPE, stderr=cls.stderr, text=True, encoding='utf-8',
-            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        lines = queue.Queue()
-
-        def read_lines():
-            for line in cls.process.stdout:
-                cls.stdout.write(re.sub(r'#token=\w+', '#token=<redacted>', line))
-                cls.stdout.flush()
-                lines.put(line)
-            lines.put(None)
-
-        cls.reader = threading.Thread(target=read_lines, daemon=True)
-        cls.reader.start()
-        try:
-            while True:
-                line = lines.get(timeout=40)
-                if line is None:
-                    raise RuntimeError('Owned application exited during same-state restart')
-                match = re.search(r'(http://127\.0\.0\.1:\d+)/#token=(\w+)', line)
-                if match:
-                    cls.url, cls.token = match.groups()
-                    return
-        except Exception:
-            cls.process.terminate()
-            cls.process.wait(timeout=10)
-            raise
+        cls.owner = launch_serve(local_harness.EXE, ['--data-dir', str(cls.data_dir)], log_prefix=prefix)
+        cls.process = cls.owner.process
+        cls.url, cls.token = cls.owner.ready['base'], cls.owner.ready['token']
 
     def processing_read(self, root):
         return self.api('/api/processing/read', {'root': str(root)})
@@ -142,13 +111,13 @@ class LocalProcessing(local_harness.LocalFeatures):
         admitted = self.api('/api/open', {'path': str(root / 'Styles' / 'Styles.typ'), 'root': str(root)})
         self.assertEqual(admitted['kind'], 'managed')
         self.assertEqual(admitted['workspaceId'], receipt['workspaceId'])
-        self.assertEqual(self.api('/api/library/create', request), receipt)
+        self.assertEqual(library_fact(self.api('/api/library/create', request)), library_fact(receipt))
         changed = copy.deepcopy(request)
         changed['options']['initialStyle']['source'] += '\n// changed frozen input'
         self.assertEqual(self.api('/api/library/create', changed, 409)['error']['code'], 'operationConflict')
         self.assertEqual(style.read_bytes(), request['options']['initialStyle']['source'].encode())
         self.restart_same_state()
-        self.assertEqual(self.api('/api/library/create', request), receipt)
+        self.assertEqual(library_fact(self.api('/api/library/create', request)), library_fact(receipt))
         doc = self.note(root, '初始化语言', 'English colour. #text(lang: "zh", region: "CN")[中文局部]\n')
         current = self.api('/api/styles/read', {'sessionId': doc['sessionId']})
         self.assertEqual(current['source'], request['options']['initialStyle']['source'])
@@ -177,12 +146,18 @@ class LocalProcessing(local_harness.LocalFeatures):
                 ended = self.api('/api/library/create-cancel', request)
                 self.assertEqual(ended['operationId'], request['operationId'])
                 self.assertEqual(ended['status'], 'resolved')
-                terminal_path = self.data_dir / 'journal' / (request['operationId'] + '.plan.json')
-                terminal = json.loads(terminal_path.read_text('utf-8'))
-                self.assertEqual(terminal['kind'], 'cancelLibraryCreation')
-                self.assertFalse((self.data_dir / 'journal' / (request['operationId'] + '.resolution.json')).exists())
-                self.assertFalse(terminal['files'])
-                self.assertIsNone(terminal['transaction'])
+                journal = self.data_dir / 'journal'
+                terminal_path = journal / (request['operationId'] + '.resolution.json')
+                terminal_bytes = terminal_path.read_bytes()
+                terminal = json.loads(terminal_bytes)
+                self.assertEqual(set(terminal), {'operationId', 'action', 'attempt'})
+                self.assertEqual(terminal['operationId'], request['operationId'])
+                self.assertEqual(terminal['action'], 'cancelPrepared')
+                self.assertNotIn('message', terminal)
+                self.assertEqual(set(terminal['attempt']), {'requestKind', 'wireDigest'})
+                self.assertEqual(terminal['attempt']['requestKind'], 'createLibrary')
+                self.assertIsNotNone(re.fullmatch(r'[0-9a-f]{64}', terminal['attempt']['wireDigest']))
+                self.assertEqual(list(journal.glob(request['operationId'] + '.*.json')), [terminal_path])
                 self.restart_same_state()
                 self.assertEqual(self.api('/api/recovery/inspect', {'operationId': request['operationId']})['status'], 'resolved')
                 self.assertEqual(self.api('/api/library/create', request, 409)['error']['code'], 'operationCanceled')
@@ -190,6 +165,8 @@ class LocalProcessing(local_harness.LocalFeatures):
                 changed = copy.deepcopy(request)
                 changed['options']['initialStyle']['enabled'] = False
                 self.assertEqual(self.api('/api/library/create-cancel', changed, 409)['error']['code'], 'operationConflict')
+                self.assertEqual(terminal_path.read_bytes(), terminal_bytes)
+                self.assertEqual(list(journal.glob(request['operationId'] + '.*.json')), [terminal_path])
                 if original:
                     self.assertEqual(original.read_bytes(), b'preserve exact original user bytes\x00')
                     self.assertEqual(list(root.iterdir()), [original])
@@ -208,7 +185,11 @@ class LocalProcessing(local_harness.LocalFeatures):
         root.rename(retained)
         shutil.copytree(retained, root)
         self.assertNotEqual(root.stat().st_ino, retained.stat().st_ino)
-        self.assertEqual(self.api('/api/library/create', request, 409)['error']['code'], 'committedResultUnavailable')
+        unavailable = self.api('/api/library/create', request)
+        self.assertEqual(library_fact(unavailable), library_fact(receipt))
+        self.assertIn('deliveryError', unavailable)
+        self.assertNotIn('library', unavailable)
+        self.assertNotIn('rootDocument', unavailable)
         self.assertEqual({p.relative_to(root).as_posix(): p.read_bytes() for p in root.rglob('*') if p.is_file()}, original)
         self.assertEqual({p.relative_to(retained).as_posix(): p.read_bytes() for p in retained.rglob('*') if p.is_file()}, original)
 
@@ -343,12 +324,18 @@ class LocalProcessing(local_harness.LocalFeatures):
                     self.api('/api/processing/read', {'root': str(root)}, 400)
                 else:
                     before = self.processing_read(root)
-                    self.assertIsInstance(before['warning'], str)
+                    self.assertEqual(before['warning'], {
+                        'code': 'invalid_request',
+                        'explanation': {'key': 'error.api.processing.settingsObjectVersion', 'params': {}},
+                        'diagnostics': [], 'causes': []})
                     self.api('/api/processing/prepare', self.processing_request(root, before=before), 400)
                 self.assertEqual(path.read_text('utf-8'), source)
         retained_json(path, {'version': 1, 'custom': {'keep': '未知成员'}, 'processing': {'futureVersion': 999}})
         before = self.processing_read(root)
-        self.assertIsInstance(before['warning'], str)
+        self.assertEqual(before['warning'], {
+            'code': 'invalid_request',
+            'explanation': {'key': 'error.api.processing.invalidDefaultsOrVocabulary', 'params': {}},
+            'diagnostics': [], 'causes': []})
         self.assertEqual(before['processing'], {'futureVersion': 999})
         invalid = processing()
         invalid['defaults']['languages'][0]['region'] = 'not-a-region'
@@ -373,7 +360,8 @@ class LocalProcessing(local_harness.LocalFeatures):
             'source': doc['source'], 'serial': 1})['ok'])
         legacy = self.api('/api/knowledge/proofread', {'context': context, 'options': options})
         self.assertEqual(legacy['coverage'], 'partial')
-        self.assertTrue(any('确认' in warning for warning in legacy['warnings']))
+        self.assertIn({'key': 'error.knowledge.proofreading.legacyLanguageScopeUnconfirmed', 'params': {}},
+                      legacy['warnings'])
         self.assertFalse(any(item['ruleId'] == 'owned.legacy.unscoped' for item in legacy['findings']))
         self.assertTrue(any(['owned.legacy.unscoped', 'unknown'] in item['skippedRules']
                             for item in legacy['fragments']))
@@ -442,10 +430,8 @@ class LoggedHostedServer(hosted_harness.Server):
     def close(self):
         if self.closed:
             return
+        stdout, stderr = super().close()
         self.closed = True
-        if self.process.poll() is None:
-            self.process.terminate()
-        stdout, stderr = self.process.communicate(timeout=15)
         self.log_prefix.with_suffix('.stdout.log').write_text(stdout, encoding='utf-8')
         self.log_prefix.with_suffix('.stderr.log').write_text(stderr, encoding='utf-8')
 
@@ -459,7 +445,7 @@ class HostedProcessing(HostedLibrary):
     def start(self):
         retained_json(self.config_path, self.config)
         self.start_number = getattr(self, 'start_number', 0) + 1
-        self.server = LoggedHostedServer(['--no-browser', '--data-dir', str(self.data),
+        self.server = LoggedHostedServer([ '--data-dir', str(self.data),
             '--server-config', str(self.config_path)], self.folder / f'hosted-{self.start_number:02d}')
 
     def test_v061_hosted_processing_settings_use_original_role_operation_and_personal_draft(self):

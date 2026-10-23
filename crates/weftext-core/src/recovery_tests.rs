@@ -65,6 +65,7 @@ fn pair_plan_inner(
     }
     .unwrap();
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -78,7 +79,7 @@ fn source_annotation_mixed_restart_resumes_only_original_remaining_member() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, true);
     fs::write(&note.path, &after_source).unwrap();
     let source_modified = fs::metadata(&note.path).unwrap().modified().unwrap();
@@ -151,7 +152,7 @@ fn mixed_restart_creates_only_original_absent_sidecar_and_records_real_object() 
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, false);
     fs::write(&note.path, &after_source).unwrap();
     drop(core);
@@ -166,7 +167,7 @@ fn mixed_restart_creates_only_original_absent_sidecar_and_records_real_object() 
     restarted
         .resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
         .unwrap();
-    let actual = ParentGuard::acquire(&sidecar)
+    let actual = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), &sidecar)
         .unwrap()
         .open_file(false, false)
         .unwrap();
@@ -185,7 +186,7 @@ fn third_bytes_or_same_bytes_replacement_never_unblock_mixed_pair() {
         let root = temp.path().join("library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, true);
         fs::write(&note.path, &after_source).unwrap();
         if replace {
@@ -211,7 +212,7 @@ fn third_bytes_or_same_bytes_replacement_never_unblock_mixed_pair() {
             );
         }
         assert_eq!(fs::read(&sidecar).unwrap(), external);
-        assert!(!restarted.committed(&preview.operation_id));
+        assert!(!restarted.committed(&preview.operation_id).unwrap());
         assert_eq!(
             restarted.open(&note.path, Some(root)).unwrap_err().code,
             "recoveryPending"
@@ -225,7 +226,7 @@ fn binary_members_report_exact_base64_and_refuse_unowned_after_image() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, false);
     fs::write(&note.path, after_source).unwrap();
     fs::write(&sidecar, [0xff, 0, 0x80]).unwrap();
@@ -248,7 +249,7 @@ fn restart_before_ui_rebind_preserves_draft_through_rename_move_trash_restore() 
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Original").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Original").unwrap();
     core.persist_draft(&note.session_id, "unsaved original draft")
         .unwrap();
     operate(
@@ -307,8 +308,10 @@ fn nested_node_and_ordinary_drafts_follow_actual_moved_root_on_restart() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    core.create_note(&root, &root, "A").unwrap();
-    let nested = core.create_note(&root, root.join("A"), "B").unwrap();
+    core.create_note_fixture(&root, &root, "A").unwrap();
+    let nested = core
+        .create_note_fixture(&root, root.join("A"), "B")
+        .unwrap();
     core.persist_draft(&nested.session_id, "nested node draft")
         .unwrap();
     fs::write(root.join("A/raw.typ"), "raw base").unwrap();
@@ -358,95 +361,33 @@ fn replacement_at_old_draft_path_never_inherits_original_object_draft() {
     assert_eq!(fs::read(original_draft_path).unwrap(), original_draft_bytes);
 }
 #[test]
-fn relocated_competing_drafts_preserve_both_and_require_explicit_resolution() {
+fn old_unqualified_primary_is_retained_and_never_upgraded_or_overwritten() {
     let temp = tempfile::tempdir().unwrap();
-    let data = temp.path().join("private");
     let root = temp.path().join("library");
-    let mut core = Core::new(&data).unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Original").unwrap();
-    core.persist_draft(&note.session_id, "first unsaved proposal")
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+    core.persist_draft(&note.session_id, "original private proposal")
         .unwrap();
-    // Reproduce an original pathname record. The new primary must consume this
-    // exact legacy proposal without replacing or deleting its original bytes.
-    fs::rename(
-        core.draft_path(Path::new(&note.path)),
-        core.legacy_draft_path(Path::new(&note.path)),
-    )
-    .unwrap();
-    let destination = root.join("Moved/Moved.typ");
-    let mut second = core.read_draft(Path::new(&note.path)).unwrap().unwrap();
-    second.path = display(&destination);
-    second.source = "second unsaved proposal".into();
-    private_replace(
-        &core.draft_path(&destination),
-        &serde_json::to_vec(&second).unwrap(),
-    )
-    .unwrap();
-    operate(
-        &mut core,
-        &root,
-        OperationIntent::RenameNode {
-            source: display(&root.join("Original")),
-            name: "Moved".into(),
-        },
-    );
-    drop(core);
-    let mut restarted = Core::new(&data).unwrap();
-    let opened = restarted.open(&destination, Some(root.clone())).unwrap();
-    assert!(opened.recovered_draft_conflict);
+    let path = core.draft_path(Path::new(&note.path));
+    let mut old: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    old.as_object_mut().unwrap().remove("scope");
+    let bytes = serde_json::to_vec(&old).unwrap();
+    fs::write(&path, &bytes).unwrap();
     assert_eq!(
-        opened.recovered_draft.as_deref(),
-        Some("second unsaved proposal")
-    );
-    assert!(
-        opened
-            .recovered_draft_variants
-            .iter()
-            .any(|v| v.source == "first unsaved proposal" && v.base_source == note.source)
+        core.open(&note.path, Some(root.clone())).unwrap_err().code,
+        "unsupportedInputScope"
     );
     assert_eq!(
-        opened.recovered_draft_base_source.as_deref(),
-        Some(note.source.as_str())
+        core.persist_draft(&note.session_id, "new Y retained in editor")
+            .unwrap_err()
+            .code,
+        "unsupportedInputScope"
     );
-    restarted
-        .persist_draft(&opened.session_id, "first unsaved proposal")
-        .unwrap();
-    drop(restarted);
-    let mut restarted = Core::new(&data).unwrap();
-    let opened = restarted.open(&destination, Some(root.clone())).unwrap();
-    assert_eq!(
-        opened.recovered_draft.as_deref(),
-        Some("first unsaved proposal")
-    );
-    assert!(opened.recovered_draft_conflict);
-    assert!(
-        opened
-            .recovered_draft_variants
-            .iter()
-            .any(|v| v.source == "second unsaved proposal" && v.base_source == note.source)
-    );
-    restarted
-        .resolve_draft(
-            &opened.session_id,
-            "mergeRecovered",
-            Some("explicit merged proposal"),
-        )
-        .unwrap();
-    drop(restarted);
-    let mut after_resolution = Core::new(&data).unwrap();
-    let opened = after_resolution.open(&destination, Some(root)).unwrap();
-    assert_eq!(
-        opened.recovered_draft.as_deref(),
-        Some("explicit merged proposal")
-    );
-    assert!(opened.recovered_draft_variants.is_empty());
-    assert!(!opened.recovered_draft_conflict);
-    assert!(
-        after_resolution.draft_path(Path::new(&note.path)).exists(),
-        "original draft retained independently of migration"
-    );
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert_eq!(fs::read_to_string(&note.path).unwrap(), note.source);
 }
+
 #[test]
 fn after_image_adoption_uses_original_create_only_objects_and_original_births() {
     let temp = tempfile::tempdir().unwrap();
@@ -476,11 +417,13 @@ fn after_image_adoption_uses_original_create_only_objects_and_original_births() 
         panic!("expected frozen create");
     };
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
     .unwrap();
-    let guard = ParentGuard::acquire(Path::new(target)).unwrap();
+    let guard =
+        ParentGuard::acquire(&crate::BackendContext::local().unwrap(), Path::new(target)).unwrap();
     let directory = guard.create_directory().unwrap();
     core.record_materialized(&preview.operation_id, Path::new(target), &directory)
         .unwrap();
@@ -552,7 +495,7 @@ fn intermediate_leaf_rename_is_visible_and_namespace_is_never_replayed() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Original").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Original").unwrap();
     let preview = core
         .prepare_operation(OperationRequest {
             operation_id: fresh(),
@@ -564,6 +507,7 @@ fn intermediate_leaf_rename_is_visible_and_namespace_is_never_replayed() {
         })
         .unwrap();
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -600,7 +544,7 @@ fn moved_original_files_in_replaced_parent_do_not_qualify_for_resume() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, true);
     fs::write(&note.path, &after_source).unwrap();
     let retained = root.join("RetainedParent");
@@ -653,7 +597,7 @@ fn strong_frozen_recovery_refuses_new_committed_membership() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let sidecar = Path::new(&note.path)
         .parent()
         .unwrap()
@@ -691,12 +635,14 @@ fn strong_frozen_recovery_refuses_new_committed_membership() {
         )
         .unwrap();
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
     .unwrap();
     fs::write(&note.path, &after_source).unwrap();
-    core.create_note(&root, &root, "LaterMember").unwrap();
+    core.create_note_fixture(&root, &root, "LaterMember")
+        .unwrap();
     drop(core);
     let mut restarted = Core::new(&data).unwrap();
     let before_sidecar = fs::read(&sidecar).unwrap();
@@ -710,7 +656,7 @@ fn strong_frozen_recovery_refuses_new_committed_membership() {
         "recoveryConflict"
     );
     assert_eq!(fs::read(&sidecar).unwrap(), before_sidecar);
-    assert!(!restarted.committed(&preview.operation_id));
+    assert!(!restarted.committed(&preview.operation_id).unwrap());
 }
 #[test]
 fn strong_frozen_recovery_resumes_original_pair_when_membership_is_unchanged() {
@@ -719,7 +665,7 @@ fn strong_frozen_recovery_resumes_original_pair_when_membership_is_unchanged() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan_inner(&mut core, &root, &note, true, true);
     fs::write(&note.path, &after_source).unwrap();
     drop(core);
@@ -735,7 +681,7 @@ fn strong_frozen_recovery_resumes_original_pair_when_membership_is_unchanged() {
     restarted
         .resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
         .unwrap();
-    assert!(restarted.committed(&preview.operation_id));
+    assert!(restarted.committed(&preview.operation_id).unwrap());
     assert_eq!(
         fs::read(&sidecar).unwrap(),
         b"{\"version\":1,\"annotations\":[],\"recovered\":true}"
@@ -748,10 +694,10 @@ fn missing_materialized_participant_never_gets_replaced_by_a_new_object() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, false);
     fs::write(&note.path, after_source).unwrap();
-    let guard = ParentGuard::acquire(&sidecar).unwrap();
+    let guard = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), &sidecar).unwrap();
     let mut created = guard.open_file(true, true).unwrap();
     core.record_materialized(&preview.operation_id, &sidecar, &created)
         .unwrap();
@@ -778,12 +724,12 @@ fn missing_materialized_participant_never_gets_replaced_by_a_new_object() {
     );
     assert!(!sidecar.exists());
     assert!(retained.exists());
-    assert!(!restarted.committed(&preview.operation_id));
+    assert!(!restarted.committed(&preview.operation_id).unwrap());
     fs::rename(&retained, &sidecar).unwrap();
     restarted
         .resolve_recovery(&preview.operation_id, "adoptAfterImages")
         .unwrap();
-    assert!(restarted.committed(&preview.operation_id));
+    assert!(restarted.committed(&preview.operation_id).unwrap());
 }
 #[test]
 fn completed_namespace_after_state_adopts_only_original_directory_and_leaf() {
@@ -792,7 +738,7 @@ fn completed_namespace_after_state_adopts_only_original_directory_and_leaf() {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Original").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Original").unwrap();
     let preview = core
         .prepare_operation(OperationRequest {
             operation_id: fresh(),
@@ -804,6 +750,7 @@ fn completed_namespace_after_state_adopts_only_original_directory_and_leaf() {
         })
         .unwrap();
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -856,9 +803,9 @@ fn mixed_original_recovery_keeps_readonly_noop_dependency_guarded_with_read_acce
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let dependency = core
-        .create_note(&root, &root, "ReadonlyDependency")
+        .create_note_fixture(&root, &root, "ReadonlyDependency")
         .unwrap();
     let sidecar = Path::new(&note.path)
         .parent()
@@ -910,6 +857,7 @@ fn mixed_original_recovery_keeps_readonly_noop_dependency_guarded_with_read_acce
     fs::set_permissions(&dependency.path, permission).unwrap();
     let dependency_modified = fs::metadata(&dependency.path).unwrap().modified().unwrap();
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &core.journal_path(&preview.operation_id, "install"),
         b"{\"testInterruption\":true}",
     )
@@ -928,7 +876,7 @@ fn mixed_original_recovery_keeps_readonly_noop_dependency_guarded_with_read_acce
     restarted
         .resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
         .unwrap();
-    assert!(restarted.committed(&preview.operation_id));
+    assert!(restarted.committed(&preview.operation_id).unwrap());
     assert_eq!(fs::read(&note.path).unwrap(), after_source);
     assert_eq!(
         fs::read(&sidecar).unwrap(),
@@ -952,19 +900,20 @@ fn relocated_bound_primary_does_not_adopt_or_hide_an_unbound_legacy_competitor()
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Original").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Original").unwrap();
     core.persist_draft(&note.session_id, "bound original proposal")
         .unwrap();
     let destination = root.join("Moved/Moved.typ");
     // Exact old-format input: the original FI is known, but no library binding
     // was retained. It must not gain a binding by colliding with this primary.
     let mut legacy = core.read_draft(Path::new(&note.path)).unwrap().unwrap();
-    legacy.library = None;
     legacy.path = display(&destination);
     legacy.source = "unbound retained competitor".into();
     let legacy_path = core.legacy_draft_path(&destination);
-    let legacy_bytes = serde_json::to_vec(&legacy).unwrap();
-    private_replace(&legacy_path, &legacy_bytes).unwrap();
+    let mut legacy_value = serde_json::to_value(&legacy).unwrap();
+    legacy_value.as_object_mut().unwrap().remove("scope");
+    let legacy_bytes = serde_json::to_vec(&legacy_value).unwrap();
+    private_replace(&core.backend, &legacy_path, &legacy_bytes).unwrap();
     operate(
         &mut core,
         &root,
@@ -985,7 +934,7 @@ fn relocated_bound_primary_does_not_adopt_or_hide_an_unbound_legacy_competitor()
         );
         assert!(opened.recovered_draft_variants.is_empty());
         let draft = core.read_draft(&destination).unwrap().unwrap();
-        assert!(draft.library.is_some());
+        assert!(matches!(draft.scope, QualifiedInputScope::Library { .. }));
         assert_eq!(fs::read(&legacy_path).unwrap(), legacy_bytes);
     }
     let opened = core.open(&destination, Some(root.clone())).unwrap();
@@ -1019,6 +968,8 @@ fn draft_complete_record_budget_rejection_preserves_readable_primary_and_origina
             base_source: "original source".into(),
             source: format!("{index}{}", "x".repeat(MAX_SOURCE_BYTES - 1)),
             base_known: true,
+            producer_id: None,
+            role: DraftRole::Proposal,
         })
         .collect();
     assert_eq!(core.store_draft(&draft).unwrap_err().code, "budget");
@@ -1029,4 +980,78 @@ fn draft_complete_record_budget_rejection_preserves_readable_primary_and_origina
         reopened.recovered_draft.as_deref(),
         Some("retained original proposal")
     );
+}
+
+#[test]
+fn recovery_descriptions_preserve_original_plan_and_author_participants() {
+    let temp = tempfile::tempdir().unwrap();
+    let data = temp.path().join("private");
+    let root = temp.path().join("library");
+    let mut core = Core::new(&data).unwrap();
+    core.create_library(&root).unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+    let (preview, sidecar, _) = pair_plan(&mut core, &root, &note, true);
+    let plan_path = core.journal_path(&preview.operation_id, "plan");
+    let original_plan = fs::read(&plan_path).unwrap();
+    let original_source = fs::read(&note.path).unwrap();
+    let original_sidecar = fs::read(&sidecar).unwrap();
+    let recovery = core.inspect_recovery(&preview.operation_id).unwrap();
+    assert_eq!(
+        recovery.description.explanation.key(),
+        "recovery.frozenPlanRetained"
+    );
+    let wire = serde_json::to_value(&recovery).unwrap();
+    assert!(wire.get("message").is_none());
+    assert!(wire["description"]["explanation"].is_object());
+    assert!(wire["members"].as_array().unwrap().iter().all(|member| {
+        member.get("message").is_none()
+            && member
+                .get("description")
+                .is_none_or(|description| description["explanation"].is_object())
+    }));
+    assert_eq!(fs::read(&plan_path).unwrap(), original_plan);
+    assert_eq!(fs::read(&note.path).unwrap(), original_source);
+    assert_eq!(fs::read(&sidecar).unwrap(), original_sidecar);
+}
+
+#[test]
+fn resolution_stops_writing_display_prose_and_preserves_historical_original_bytes() {
+    let temp = tempfile::tempdir().unwrap();
+    let data = temp.path().join("private");
+    let root = temp.path().join("library");
+    let mut core = Core::new(&data).unwrap();
+    core.create_library(&root).unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+    let (preview, _, _) = pair_plan(&mut core, &root, &note, true);
+    core.resolve_recovery(&preview.operation_id, "keepCurrent")
+        .unwrap();
+    let resolution_path = core.journal_path(&preview.operation_id, "resolution");
+    let mut historical: serde_json::Value =
+        serde_json::from_slice(&fs::read(&resolution_path).unwrap()).unwrap();
+    assert!(historical.get("message").is_none());
+    // This is retained display prose in the original format, not a new fact
+    // or an instruction from which recovery authority may be inferred.
+    historical["message"] = "historical original 原始摘要 {literal}".into();
+    let original_bytes = serde_json::to_vec(&historical).unwrap();
+    private_replace(&core.backend, &resolution_path, &original_bytes).unwrap();
+    let record = journal::decode_resolution(&preview.operation_id, &original_bytes).unwrap();
+    assert_eq!(
+        record.historical_message.as_deref(),
+        Some("historical original 原始摘要 {literal}")
+    );
+    let recovery = core.inspect_recovery(&preview.operation_id).unwrap();
+    assert_eq!(recovery.status, "resolved");
+    assert_eq!(
+        recovery.description.explanation.key(),
+        "recovery.frozenPlanRetained"
+    );
+    assert!(
+        !serde_json::to_string(&recovery)
+            .unwrap()
+            .contains("historical original")
+    );
+    core.resolve_recovery(&preview.operation_id, "keepCurrent")
+        .unwrap();
+    assert_eq!(fs::read(&resolution_path).unwrap(), original_bytes);
+    assert_eq!(fs::read_to_string(&note.path).unwrap(), note.source);
 }

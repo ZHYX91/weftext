@@ -2,6 +2,7 @@
 //! decoders participate in Core's identity and current-version qualification.
 use super::*;
 use operations::{CapturedFile, SnapshotBinding, read_blob, resource_path};
+use weftext_messages::UiMessage;
 
 pub struct QualifiedResource {
     pub owner: weftext_knowledge::NodeRef,
@@ -109,7 +110,7 @@ impl Core {
             QualifiedResourceInput::Present(resource) => Ok(*resource),
             QualifiedResourceInput::Missing(_) => Err(CoreError::new(
                 "resourceMissing",
-                "The selected resource is missing",
+                UiMessage::error_core_resource_selected_resource_missing(),
             )),
         }
     }
@@ -153,7 +154,7 @@ impl Core {
         let id = resource_ref.strip_prefix(&prefix).ok_or_else(|| {
             CoreError::new(
                 "resourceIdentity",
-                "The selected ResourceRef belongs to another workspace",
+                UiMessage::error_core_resource_selected_resource_ref_belongs_to_another_workspace(),
             )
         })?;
         valid_operation_id(id)?;
@@ -161,11 +162,11 @@ impl Core {
         let directory = owner_path.parent().unwrap();
         let manifest_path = directory.join("weftext.resources.json");
         self.check_pending(&manifest_path)?;
-        let manifest_guard = ParentGuard::acquire(&manifest_path)?;
+        let manifest_guard = ParentGuard::acquire(&self.backend, &manifest_path)?;
         if manifest_guard.directory_coordinates()? != owner.coordinate.parent().unwrap() {
             return Err(CoreError::new(
                 "staleBase",
-                "The resource owner's actual directory changed",
+                UiMessage::error_core_resource_resource_owner_s_actual_directory_changed(),
             ));
         }
         let mut manifest_handle = manifest_guard.open_file(false, false)?;
@@ -177,12 +178,15 @@ impl Core {
             .as_array()
             .filter(|_| document["version"] == 1)
             .ok_or_else(|| {
-                CoreError::new("resourceManifest", "Unsupported owned resource manifest")
+                CoreError::new(
+                    "resourceManifest",
+                    UiMessage::error_core_resource_unsupported_owned_resource_manifest(),
+                )
             })?;
         if records.len() > 64 {
             return Err(CoreError::new(
                 "budget",
-                "At most 64 registered resource descriptors",
+                UiMessage::error_core_operations_at_most64_registered_resource_descriptors(),
             ));
         }
         // Unknown or damaged sibling descriptors do not cause their files to
@@ -191,19 +195,19 @@ impl Core {
         let record = selected.next().ok_or_else(|| {
             CoreError::new(
                 "resourceMissing",
-                "The selected ResourceRef is not registered by this owner",
+                UiMessage::error_core_resource_selected_resource_ref_not_registered_by_owner(),
             )
         })?;
         if selected.next().is_some() {
             return Err(CoreError::new(
                 "resourceManifest",
-                "The selected resource has ambiguous registration",
+                UiMessage::error_core_resource_selected_resource_has_ambiguous_registration(),
             ));
         }
         let name = record["path"].as_str().ok_or_else(|| {
             CoreError::new(
                 "resourcePath",
-                "The selected resource has no exact relative locator",
+                UiMessage::error_core_resource_selected_resource_has_no_exact_relative_locator(),
             )
         })?;
         let declared = resource_path(directory, name)?;
@@ -212,11 +216,11 @@ impl Core {
         {
             return Err(CoreError::new(
                 "resourcePath",
-                "The configured resource locator differs from its selected registration",
+                UiMessage::error_core_resource_configured_resource_locator_differs_from_selected_registration(),
             ));
         }
         self.check_pending(&resource_path_input)?;
-        let resource_guard = ParentGuard::acquire(&resource_path_input)?;
+        let resource_guard = ParentGuard::acquire(&self.backend, &resource_path_input)?;
         let mut resource_handle = match resource_guard.open_file(false, false) {
             Ok(handle) => handle,
             Err(error) if allow_missing && error.code == "missing" => {
@@ -232,17 +236,17 @@ impl Core {
                     },
                 };
                 let manifest_revision = self
-                    .accepted_revision(manifest.binding.captured.as_ref().unwrap())
+                    .accepted_revision(manifest.binding.captured.as_ref().unwrap())?
                     .ok_or_else(|| {
                         CoreError::new(
                             "resourceManifest",
-                            "Missing input requires a currently accepted exact registration",
+                            UiMessage::error_core_resource_missing_input_requires_currently_accepted_exact_registration(),
                         )
                     })?;
-                if !self.resource_owner_birth_known(id, expected_owner) {
+                if !self.resource_owner_birth_known(id, expected_owner)? {
                     return Err(CoreError::new(
                         "resourceUnadmitted",
-                        "Missing input has no original committed owner-bound resource birth",
+                        UiMessage::error_core_resource_missing_input_has_no_original_committed_owner_bound_resource_birth(),
                     ));
                 }
                 self.validate_query_node_witness(&root, &owner.witness)?;
@@ -276,7 +280,7 @@ impl Core {
             .map_err(|_| {
                 CoreError::new(
                     "resourceOwner",
-                    "The actual resource is outside its qualified owner directory",
+                    UiMessage::error_core_resource_actual_resource_outside_qualified_owner_directory(),
                 )
             })?;
         let declared_relative = declared.strip_prefix(directory).unwrap();
@@ -285,7 +289,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "resourcePath",
-                "The actual resource does not occupy its registered locator",
+                UiMessage::error_core_resource_actual_resource_does_not_occupy_registered_locator(),
             ));
         }
         if !self.admitted_resource(
@@ -293,10 +297,10 @@ impl Core {
             &expected_owner.workspace_id,
             &expected_owner.node_id,
             &resource_stamp.identity,
-        ) {
+        )? {
             return Err(CoreError::new(
                 "resourceUnadmitted",
-                "The resource object has no original owner-bound Core birth",
+                UiMessage::error_core_resource_resource_object_has_no_original_owner_bound_core_birth(),
             ));
         }
         let bytes = read_blob(&mut resource_handle)?;
@@ -305,11 +309,11 @@ impl Core {
             bytes,
             stamp: resource_stamp,
         };
-        let revision = self.accepted_revision(&captured);
+        let revision = self.accepted_revision(&captured)?;
         if expected_revision.is_some_and(|v| revision.as_deref() != Some(v)) {
             return Err(CoreError::new(
                 "resourceVersion",
-                "The exact original resource version is no longer current; no latest or historical fallback was used",
+                UiMessage::error_core_resource_exact_original_resource_version_no_longer_current_no_latest_or_historical_fallback_was_used(),
             ));
         }
         let content_hash = hash(&captured.bytes);
@@ -354,36 +358,13 @@ impl Core {
             },
         )))
     }
+
     pub(crate) fn resource_owner_birth_known(
         &self,
         id: &str,
         owner: &weftext_knowledge::NodeRef,
-    ) -> bool {
-        self.operations
-            .values()
-            .filter(|plan| self.committed(&plan.operation_id))
-            .any(|plan| {
-                fs::read(self.journal_path(&plan.operation_id, "resource-births"))
-                    .ok()
-                    .and_then(|bytes| serde_json::from_slice::<Vec<serde_json::Value>>(&bytes).ok())
-                    .is_some_and(|births| {
-                        births.iter().any(|birth| {
-                            birth["resource_id"] == id
-                                && birth["workspace_id"] == owner.workspace_id
-                                && birth["node_id"] == owner.node_id
-                                && serde_json::from_value::<FileIdentity>(birth["identity"].clone())
-                                    .ok()
-                                    .is_some_and(|identity| {
-                                        self.admitted_resource(
-                                            id,
-                                            &owner.workspace_id,
-                                            &owner.node_id,
-                                            &identity,
-                                        )
-                                    })
-                        })
-                    })
-            })
+    ) -> Result<bool> {
+        self.resource_owner_born(id, owner)
     }
     pub fn validate_missing_resource_witness(
         &self,
@@ -393,20 +374,21 @@ impl Core {
         if absolute_path(root)? != witness.root {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Missing resource evidence belongs to another configured root",
+                UiMessage::error_core_resource_missing_resource_evidence_belongs_to_another_configured_root(),
             ));
         }
         self.validate_query_node_witness(root, &witness.owner_witness)?;
         self.validate_snapshot_witness(root, &witness.manifest.binding.path, &witness.manifest)?;
         self.validate_snapshot_witness(root, &witness.resource.binding.path, &witness.resource)?;
         if self
-            .accepted_revision(witness.manifest.binding.captured.as_ref().unwrap())
+            .accepted_revision(witness.manifest.binding.captured.as_ref().unwrap())?
             .as_deref()
             != Some(witness.manifest_revision.as_str())
         {
             return Err(CoreError::new(
                 "resourceManifest",
-                "The original registration revision qualification changed",
+                UiMessage::error_core_resource_original_registration_revision_qualification_changed(
+                ),
             ));
         }
         Ok(())
@@ -415,7 +397,8 @@ impl Core {
         if absolute_path(root)? != witness.root {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Resource evidence belongs to another configured root",
+                UiMessage::error_core_resource_resource_evidence_belongs_to_another_configured_root(
+                ),
             ));
         }
         self.validate_query_node_witness(root, &witness.owner_witness)?;
@@ -425,10 +408,10 @@ impl Core {
         // the same physical object, stamp and bytes. Preserve the original
         // qualification, including an observed None becoming accepted Some.
         let captured = witness.resource.binding.captured.as_ref().unwrap();
-        if self.accepted_revision(captured) != witness.revision {
+        if self.accepted_revision(captured)? != witness.revision {
             return Err(CoreError::new(
                 "resourceVersion",
-                "The original resource revision qualification changed",
+                UiMessage::error_core_resource_original_resource_revision_qualification_changed(),
             ));
         }
         Ok(())

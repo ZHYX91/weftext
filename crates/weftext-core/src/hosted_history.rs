@@ -2,6 +2,7 @@
 //! ordinary source save. Status facts never require ambient owner discovery.
 use super::*;
 use weftext_knowledge::NodeRef;
+use weftext_messages::UiMessage;
 
 const MAX_RECORD_BYTES: usize = 16 * 1024 * 1024;
 
@@ -13,6 +14,8 @@ pub struct ActorHistoryRestoreStatus {
     pub status: String,
     pub result: Option<HistoryRestoreResult>,
     pub result_status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result_error: Option<RecoveryIssue>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -20,6 +23,12 @@ pub struct ActorHistoryRestoreStatus {
 pub(super) struct HistoryOperation {
     original: Option<OriginalHistoryRestore>,
 }
+impl HistoryOperation {
+    pub(super) fn input_owner(&self) -> Option<&NodeRef> {
+        self.original.as_ref().map(|original| &original.owner)
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct OriginalHistoryRestore {
@@ -34,7 +43,7 @@ struct OriginalHistoryRestore {
 fn conflict() -> CoreError {
     CoreError::new(
         "operationConflict",
-        "The original actor history operation or owner differs",
+        UiMessage::error_core_hosted_history_original_actor_history_operation_or_owner_differs(),
     )
 }
 fn valid_fingerprint(fingerprint: &str) -> Result<()> {
@@ -45,7 +54,7 @@ fn valid_fingerprint(fingerprint: &str) -> Result<()> {
     {
         return Err(CoreError::new(
             "invalidIntent",
-            "A service-owned lowercase SHA-256 intent fingerprint is required",
+            UiMessage::error_core_hosted_history_service_owned_lowercase_s_h_a256_intent_fingerprint_required(),
         ));
     }
     Ok(())
@@ -54,7 +63,7 @@ fn valid_resource(resource: &str) -> Result<()> {
     if resource.is_empty() || resource.len() > 256 || resource.chars().any(char::is_control) {
         return Err(CoreError::new(
             "invalidResource",
-            "A bounded configured resource is required",
+            UiMessage::error_core_hosted_history_bounded_configured_resource_required(),
         ));
     }
     Ok(())
@@ -93,25 +102,12 @@ impl Core {
         if Uuid::parse_str(operation).unwrap().to_string() != operation {
             return Err(CoreError::new(
                 "invalidOperationId",
-                "A canonical history operation UUID is required",
+                UiMessage::error_core_hosted_history_canonical_history_operation_u_u_i_d_required(),
             ));
         }
-        let file = match File::open(self.actor_record(operation)?) {
-            Ok(file) => file,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-            Err(e) => return Err(e.into()),
+        let Some(record) = self.read_actor_operation(operation, resource, MAX_RECORD_BYTES)? else {
+            return Ok(None);
         };
-        let mut bytes = vec![];
-        file.take((MAX_RECORD_BYTES + 1) as u64)
-            .read_to_end(&mut bytes)?;
-        if bytes.len() > MAX_RECORD_BYTES {
-            return Err(CoreError::new(
-                "budget",
-                "The retained history request exceeds 16 MiB",
-            ));
-        }
-        let record: ActorOperation = serde_json::from_slice(&bytes)?;
-        self.check_actor_library(&record.library)?;
         if self.actor.as_ref() != Some(&record.actor)
             || record.resource != resource
             || record.history.is_none()
@@ -163,6 +159,11 @@ impl Core {
         {
             return Err(conflict());
         }
+        self.validate_actor_file_input(record)?;
+        if !matches!(&plan.file_save.as_ref().unwrap().scope, QualifiedInputScope::Library { binding } if binding.workspace_id == original.owner.workspace_id)
+        {
+            return Err(conflict());
+        }
         Ok(Some(plan))
     }
 
@@ -178,9 +179,9 @@ impl Core {
         };
         let plan = self.actor_history_plan(&record)?;
         let state = if let Some(plan) = plan {
-            if self.committed(&plan.operation_id) {
+            if self.committed(&plan.operation_id)? {
                 "committed"
-            } else if self.resolved(&plan.operation_id) {
+            } else if self.resolved(&plan.operation_id)? {
                 "resolved"
             } else {
                 "recoveryPending"
@@ -195,6 +196,7 @@ impl Core {
             resource: resource.into(),
             status: state.into(),
             result: None,
+            result_error: None,
             result_status: if state == "committed" {
                 "notRequested"
             } else {
@@ -204,22 +206,23 @@ impl Core {
         }))
     }
 
-    pub fn actor_history_restore_retry(
+    pub fn actor_history_restore_for_request(
         &self,
         resource: &str,
-        operation: &str,
+        request: &HistoryRestoreRequest,
         intent_fingerprint: &str,
     ) -> Result<Option<ActorHistoryRestoreStatus>> {
         valid_fingerprint(intent_fingerprint)?;
-        let Some(record) = self.actor_history_record(resource, operation)? else {
+        let Some(record) = self.actor_history_record(resource, &request.operation_id)? else {
             return Ok(None);
         };
         if let Some(original) = record.history.as_ref().unwrap().original.as_ref()
-            && original.intent_fingerprint != intent_fingerprint
+            && (original.intent_fingerprint != intent_fingerprint
+                || serde_json::to_value(&original.request)? != serde_json::to_value(request)?)
         {
             return Err(conflict());
         }
-        self.actor_history_restore_status(resource, operation)
+        self.actor_history_restore_status(resource, &request.operation_id)
     }
 
     /// Qualify only the current configured path against the original owner. A
@@ -236,7 +239,7 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "operationMissing",
-                    "The original history operation is unavailable",
+                    UiMessage::error_core_hosted_history_original_history_operation_unavailable(),
                 )
             })?;
         let Some(original) = record.history.as_ref().unwrap().original.as_ref() else {
@@ -246,7 +249,7 @@ impl Core {
         if current.owner != original.owner || current.identity != original.identity {
             return Err(CoreError::new(
                 "identityPending",
-                "The configured object differs from the original restore owner",
+                UiMessage::error_core_hosted_history_configured_object_differs_from_original_restore_owner(),
             ));
         }
         Ok(())
@@ -264,19 +267,19 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "operationMissing",
-                    "The original history operation is unavailable",
+                    UiMessage::error_core_hosted_history_original_history_operation_unavailable(),
                 )
             })?;
         let plan = self.actor_history_plan(&record)?.ok_or_else(|| {
             CoreError::new(
                 "notCommitted",
-                "The original restore has no source save plan",
+                UiMessage::error_core_hosted_history_original_restore_has_no_source_save_plan(),
             )
         })?;
-        if !self.committed(&plan.operation_id) {
+        if !self.committed(&plan.operation_id)? {
             return Err(CoreError::new(
                 "recoveryPending",
-                "The original restore is not committed",
+                UiMessage::error_core_hosted_history_original_restore_not_committed(),
             ));
         }
         self.actor_history_restore_owner_at(resource, root, path, operation)?;
@@ -298,19 +301,19 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "operationMissing",
-                    "The original history operation is unavailable",
+                    UiMessage::error_core_hosted_history_original_history_operation_unavailable(),
                 )
             })?;
         let plan = self.actor_history_plan(&record)?.ok_or_else(|| {
             CoreError::new(
                 "notCommitted",
-                "The original restore has no source save plan",
+                UiMessage::error_core_hosted_history_original_restore_has_no_source_save_plan(),
             )
         })?;
-        if !self.committed(&plan.operation_id) {
+        if !self.committed(&plan.operation_id)? {
             return Err(CoreError::new(
                 "recoveryPending",
-                "The original restore is not committed",
+                UiMessage::error_core_hosted_history_original_restore_not_committed(),
             ));
         }
         let original = record.history.as_ref().unwrap().original.as_ref().unwrap();
@@ -318,7 +321,7 @@ impl Core {
         if current.owner != original.owner || current.identity != original.identity {
             return Err(CoreError::new(
                 "identityPending",
-                "The configured object differs from the original restore owner",
+                UiMessage::error_core_hosted_history_configured_object_differs_from_original_restore_owner(),
             ));
         }
         Ok(self.current_saved_history_operation(&current)?.as_deref()
@@ -338,16 +341,8 @@ impl Core {
         self.actor_library_for_root(root)?;
         valid_fingerprint(intent_fingerprint)?;
         if let Some(mut status) =
-            self.actor_history_restore_retry(resource, &request.operation_id, intent_fingerprint)?
+            self.actor_history_restore_for_request(resource, &request, intent_fingerprint)?
         {
-            let record = self
-                .actor_history_record(resource, &request.operation_id)?
-                .unwrap();
-            if let Some(original) = record.history.as_ref().unwrap().original.as_ref()
-                && serde_json::to_value(&original.request)? != serde_json::to_value(&request)?
-            {
-                return Err(conflict());
-            }
             if status.status == "committed" {
                 match self.actor_history_restore_result_at(
                     resource,
@@ -358,8 +353,12 @@ impl Core {
                     Ok(result) => {
                         status.result = Some(result);
                         status.result_status = "available".into();
+                        status.result_error = None;
                     }
-                    Err(_) => status.result_status = "unavailable".into(),
+                    Err(error) => {
+                        status.result_status = "unavailable".into();
+                        status.result_error = Some(error);
+                    }
                 }
             }
             return Ok(status);
@@ -367,7 +366,7 @@ impl Core {
         if !matches!(request.draft_action.as_str(), "retain" | "none") {
             return Err(CoreError::new(
                 "invalidDraftAction",
-                "Choose retain or none explicitly",
+                UiMessage::error_core_history_choose_retain_or_none_explicitly(),
             ));
         }
         if let Some(source) = &request.draft_source {
@@ -388,6 +387,9 @@ impl Core {
         };
         let core_operation_id = fresh();
         let record = ActorOperation {
+            scope: ActorInputScope::Qualified {
+                scope: self.draft_session_scope(&request.session_id)?,
+            },
             library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
@@ -408,26 +410,41 @@ impl Core {
             }),
             owner_backup: None,
         };
-        let bytes = Self::actor_operation_bytes(&record)?;
+        let bytes = self.actor_operation_bytes(&record)?;
         if bytes.len() > MAX_RECORD_BYTES {
             return Err(CoreError::new(
                 "budget",
-                "The history request exceeds its durable budget",
+                UiMessage::error_core_hosted_history_history_request_exceeds_durable_budget(),
             ));
         }
-        journal::private_create(&self.actor_record(&request.operation_id)?, &bytes)?;
+        journal::private_create(
+            &self.backend,
+            &self.actor_record(&request.operation_id)?,
+            &bytes,
+        )?;
         #[cfg(all(test, windows))]
         definition_test_failpoint("historyActorDurable")?;
-        self.restore_history_at(root, path, internal_request(&record)?)?;
+        let restored = match self.restore_history_at(root, path, internal_request(&record)?) {
+            Ok(mut result) => {
+                result.receipt.operation_id = request.operation_id.clone();
+                Some(result)
+            }
+            Err(error) => {
+                let status =
+                    self.actor_history_restore_for_request(resource, &request, intent_fingerprint)?;
+                if status
+                    .as_ref()
+                    .is_some_and(|status| status.status == "committed")
+                {
+                    return Ok(status.unwrap());
+                }
+                return Err(error);
+            }
+        };
         let mut status = self
             .actor_history_restore_status(resource, &request.operation_id)?
             .ok_or_else(conflict)?;
-        status.result = Some(self.actor_history_restore_result_at(
-            resource,
-            root,
-            path,
-            &request.operation_id,
-        )?);
+        status.result = restored;
         status.result_status = "available".into();
         Ok(status)
     }
@@ -442,6 +459,7 @@ impl Core {
         let mut record = match self.actor_history_record(resource, operation)? {
             Some(record) => record,
             None => ActorOperation {
+                scope: self.actor_attempt_input_scope()?,
                 library: self.actor_library.clone(),
                 actor: self.actor.clone().unwrap(),
                 resource: resource.into(),
@@ -462,9 +480,9 @@ impl Core {
                 return Ok(status);
             }
             record.cancelled = true;
-            private_replace(&path, &Self::actor_operation_bytes(&record)?)?;
+            private_replace(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&path, &Self::actor_operation_bytes(&record)?)?;
+            journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_history_restore_status(resource, operation)?
             .ok_or_else(conflict)

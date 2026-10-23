@@ -1,6 +1,8 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { createdDocument } from './_creation_result.mjs';
 // Headless, owned fixtures, two independent actual programs. No desktop input.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -13,16 +15,16 @@ const result = { exe, sha256: createHash('sha256').update(await readFile(exe)).d
 const servers = []; let browser, pageA, pageB, stderr = '';
 const pause = ms => new Promise(r => setTimeout(r, ms));
 async function start(args) {
-  const child = spawn(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); servers.push(child);
+  const child = spawnServe(exe, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); servers.push(child);
   let output = ''; child.stdout.on('data', b => output += b); child.stderr.on('data', b => stderr += b);
   for (let i = 0; i < 300; i++) {
-    const m = output.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (m) return { child, base: m[1], token: m[2] };
+    const m = serveReady(child);
+    if (m) return { child, base: m.base, token: m.token };
     if (child.exitCode !== null) throw new Error(stderr); await pause(100);
   }
   throw new Error('startup timeout');
 }
-async function stop(child) { if (child && child.exitCode === null && child.signalCode === null) { const exited = new Promise(r => child.once('exit', r)); child.kill(); await exited; } }
+async function stop(child) { await stopServe(child); }
 async function api(server, route, data) {
   const response = await fetch(server.base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': server.token }, body: JSON.stringify(data) });
   const body = await response.json(); assert.ok(response.ok, JSON.stringify(body)); return body;
@@ -35,12 +37,12 @@ async function click(panel, name) {
 async function close(panel) { await panel.getByRole('button', { name: '关闭同步', exact: true }).click(); }
 try {
   const ra = path.join(out, 'library-a'), rb = path.join(out, 'library-b'), da = path.join(out, 'state-a'), db = path.join(out, 'state-b'), exchange = path.join(out, 'exchange');
-  let a = await start(['--no-browser', '--data-dir', da]);
+  let a = await start(['--data-dir', da]);
   await api(a, '/api/library/create', { path: ra, operationId: randomUUID() });
-  const note = await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Note', operationId: randomUUID() });
+  const note = createdDocument(await api(a, '/api/note/create', { root: ra, parent: ra, name: 'Note', operationId: randomUUID() }));
   await stop(a.child);
-  a = await start(['--no-browser', '--data-dir', da, '--open', note.path, '--root', ra]);
-  const b = await start(['--no-browser', '--data-dir', db]);
+  a = await start(['--data-dir', da, '--open', note.path, '--root', ra]);
+  const b = await start(['--data-dir', db]);
   browser = await chromium.launch({ channel: 'chrome', headless: true }); result.browser = browser.version();
   const ca = await browser.newContext({ viewport: { width: 1440, height: 1000 } }), cb = await browser.newContext({ viewport: { width: 1280, height: 960 } });
   pageA = await ca.newPage(); pageB = await cb.newPage();
@@ -113,11 +115,11 @@ try {
   assert.deepEqual(result.pageErrors, []); result.completed = true;
 } catch (e) {
   result.failure = String(e.stack ?? e);
-  await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2));
+  await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2));
   for (const [name, p] of [['a', pageA], ['b', pageB]]) if (p) await p.screenshot({ path: path.join(out, `failure-${name}.png`), fullPage: true }).catch(() => {});
   throw e;
 } finally {
   await browser?.close(); for (const server of servers) await stop(server);
-  await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr);
+  await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr);
   console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, pageErrors: result.pageErrors }));
 }

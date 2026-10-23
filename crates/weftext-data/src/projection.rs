@@ -10,7 +10,7 @@ use typst_syntax::{
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(tag = "state", rename_all = "camelCase")]
+#[serde(tag = "state", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Cell {
     Value {
         value: NativeValue,
@@ -18,14 +18,68 @@ pub enum Cell {
     Absent,
     Null,
     Invalid {
-        diagnostics: Vec<String>,
+        diagnostics: Vec<ErrorDescription>,
         value: Option<NativeValue>,
     },
     Unavailable {
-        reason: String,
+        kind: DataErrorKind,
+        reason: ErrorDescription,
+        diagnostics: Vec<ErrorDescription>,
     },
 }
 impl Cell {
+    pub fn error_diagnostics(&self) -> Vec<ErrorDescription> {
+        match self {
+            Self::Invalid { diagnostics, .. } => diagnostics.clone(),
+            Self::Unavailable {
+                reason,
+                diagnostics,
+                ..
+            } => {
+                let mut all = vec![reason.clone()];
+                all.extend(diagnostics.iter().cloned());
+                all
+            }
+            _ => Vec::new(),
+        }
+    }
+    pub fn is_native_budget(&self) -> bool {
+        matches!(
+            self,
+            Self::Unavailable {
+                kind: DataErrorKind::NativeBudget,
+                ..
+            }
+        )
+    }
+    pub fn unavailable(reason: impl Into<ErrorDescription>) -> Self {
+        Self::Unavailable {
+            kind: DataErrorKind::Unavailable,
+            reason: reason.into(),
+            diagnostics: Vec::new(),
+        }
+    }
+    pub fn unavailable_error(error: DataError) -> Self {
+        let (kind, reason, details) = error.into_parts();
+        Self::Unavailable {
+            kind,
+            reason,
+            diagnostics: details
+                .map(DataErrorDetails::into_diagnostics)
+                .unwrap_or_default(),
+        }
+    }
+    pub fn unavailable_group(
+        kind: DataErrorKind,
+        reason: impl Into<ErrorDescription>,
+        diagnostics: Vec<ErrorDescription>,
+    ) -> Self {
+        Self::Unavailable {
+            kind,
+            reason: reason.into(),
+            diagnostics,
+        }
+    }
     pub fn value(value: NativeValue) -> Self {
         Self::Value { value }
     }
@@ -75,7 +129,8 @@ pub struct NoteProjection {
     pub resolved_types: Vec<String>,
     pub fields: Vec<FieldProjection>,
     pub unknown_fields: Vec<UnknownField>,
-    pub diagnostics: Vec<String>,
+    pub diagnostics: Vec<ErrorDescription>,
+    pub budget_exhausted: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,7 +155,9 @@ pub struct TypedRefSlot {
 pub struct TypedRefClosure {
     pub slots: Vec<TypedRefSlot>,
     pub complete: bool,
-    pub reasons: Vec<String>,
+    /// The strict full-copy proof after excluding only unbound root members.
+    pub complete_without_unbound_root_fields: bool,
+    pub reasons: Vec<ErrorDescription>,
 }
 /// References proved inside the declared field Shapes only. Unbound author
 /// members are preserved outside this claim, even if they contain URI text.
@@ -111,7 +168,7 @@ pub struct TypedRefClosure {
 pub struct DeclaredTypedRefClosure {
     pub slots: Vec<TypedRefSlot>,
     pub complete: bool,
-    pub reasons: Vec<String>,
+    pub reasons: Vec<ErrorDescription>,
     pub unbound: Vec<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -119,7 +176,7 @@ pub struct DeclaredTypedRefClosure {
 pub struct SearchTerms {
     pub terms: Vec<String>,
     pub complete: bool,
-    pub reasons: Vec<String>,
+    pub reasons: Vec<ErrorDescription>,
 }
 /// Project the installed name/alias semantics into mention dictionary terms.
 /// Permanent FieldIds select the semantics; author keys, roles and source text
@@ -133,8 +190,11 @@ pub fn search_terms(source: &str, schema: &Schema) -> SearchTerms {
         reasons: projection.diagnostics.clone(),
     };
     if projection.qualification != "qualified" {
-        out.reasons
-            .push("Name dictionary control unavailable".into());
+        out.reasons.push(
+            weftext_messages::UiMessage::error_data_projection_name_dictionary_control_unavailable(
+            )
+            .into(),
+        );
         return out;
     }
     let mut seen = BTreeSet::new();
@@ -159,8 +219,12 @@ pub fn search_terms(source: &str, schema: &Schema) -> SearchTerms {
         };
         if !recognized_shape {
             out.complete = false;
-            out.reasons
-                .push(format!("{field_id}: installed name semantics unavailable"));
+            out.reasons.push(
+                weftext_messages::UiMessage::error_data_projection_installed_name_semantics_unavailable(weftext_messages::params::ErrorDataProjectionInstalledNameSemanticsUnavailable {
+                    field_id: (field_id).to_string(),
+                })
+                .into(),
+            );
             continue;
         }
         match &projected.cell {
@@ -179,13 +243,18 @@ pub fn search_terms(source: &str, schema: &Schema) -> SearchTerms {
                 if !projected.unbound.is_empty() {
                     out.complete = false;
                     out.reasons
-                        .push(format!("{field_id}: unknown name members preserved"));
+                        .push(weftext_messages::UiMessage::error_data_projection_unknown_name_members_preserved(weftext_messages::params::ErrorDataProjectionUnknownNameMembersPreserved {field_id: (field_id).to_string()}).into());
                 }
             }
             Cell::Invalid { .. } | Cell::Unavailable { .. } => {
                 out.complete = false;
-                out.reasons
-                    .push(format!("{field_id}: name field {}", projected.cell.state()));
+                out.reasons.push(
+                    weftext_messages::UiMessage::error_data_projection_name_field_state_unavailable(weftext_messages::params::ErrorDataProjectionNameFieldStateUnavailable {
+                        field_id: (field_id).to_string(),
+                        cell_state: (projected.cell.state()).to_string(),
+                    })
+                    .into(),
+                );
             }
         }
     }
@@ -212,24 +281,51 @@ pub fn validate_note(source: &str, schema: &Schema, context: &ValidationContext)
     let projection = project(source, schema);
     let mut out = Validation::valid();
     if projection.qualification != "qualified" {
-        out.unavailable.push("root control unavailable".into());
+        out.unavailable.push(
+            weftext_messages::UiMessage::error_data_projection_root_control_unavailable().into(),
+        );
         return out;
     }
     out.diagnostics.extend(projection.diagnostics.clone());
     for field in &projection.fields {
         if field.required && matches!(field.cell, Cell::Absent) {
-            out.diagnostics
-                .push(format!("{}: required field absent", field.field_id));
+            out.diagnostics.push(
+                weftext_messages::UiMessage::error_data_projection_required_field_absent(
+                    weftext_messages::params::ErrorDataProjectionRequiredFieldAbsent {
+                        field_id: (field.field_id).to_string(),
+                    },
+                )
+                .into(),
+            );
         }
         match &field.cell {
-            Cell::Invalid { diagnostics, .. } => out.diagnostics.extend(
-                diagnostics
-                    .iter()
-                    .map(|d| format!("{}: {d}", field.field_id)),
-            ),
-            Cell::Unavailable { reason } => out
-                .unavailable
-                .push(format!("{}: {reason}", field.field_id)),
+            Cell::Invalid { diagnostics, .. } => {
+                out.diagnostics.push(
+                    UiMessage::error_data_projection_field_value_invalid(
+                        weftext_messages::params::ErrorDataProjectionFieldValueInvalid {
+                            field: field.field_id.clone(),
+                        },
+                    )
+                    .into(),
+                );
+                out.diagnostics.extend(diagnostics.iter().cloned());
+            }
+            Cell::Unavailable {
+                reason,
+                diagnostics,
+                ..
+            } => {
+                out.unavailable.push(
+                    UiMessage::error_data_projection_field_value_unavailable(
+                        weftext_messages::params::ErrorDataProjectionFieldValueUnavailable {
+                            field: field.field_id.clone(),
+                        },
+                    )
+                    .into(),
+                );
+                out.unavailable.push(reason.clone());
+                out.unavailable.extend(diagnostics.iter().cloned());
+            }
             _ => {}
         }
     }
@@ -263,22 +359,31 @@ pub fn validate_field_change(
         || original.types != proposed.types
     {
         out.unavailable
-            .push("Field edit must retain qualified control identity/types".into());
+            .push(weftext_messages::UiMessage::error_data_projection_field_edit_must_preserve_qualified_controls().into());
         return out;
     }
     let Some(field) = schema.fields.iter().find(|f| f.id == field_id) else {
-        out.unavailable
-            .push("Selected FieldId is not installed".into());
+        out.unavailable.push(
+            weftext_messages::UiMessage::error_data_projection_selected_field_id_not_installed()
+                .into(),
+        );
         return out;
     };
     let Some(value) = proposed.fields.iter().find(|f| f.field_id == field.id) else {
         out.unavailable
-            .push("Selected field is not contributed by current types".into());
+            .push(weftext_messages::UiMessage::error_data_projection_selected_field_not_contributed_by_current_types().into());
         return out;
     };
     match &value.cell {
         Cell::Invalid { diagnostics, .. } => out.diagnostics.extend(diagnostics.clone()),
-        Cell::Unavailable { reason } => out.unavailable.push(reason.clone()),
+        Cell::Unavailable {
+            reason,
+            diagnostics,
+            ..
+        } => {
+            out.unavailable.push(reason.clone());
+            out.unavailable.extend(diagnostics.iter().cloned());
+        }
         _ => {}
     }
     for t in schema
@@ -333,15 +438,19 @@ fn constraint_values<'a>(
     c: &Constraint,
     slot: &str,
     projection: &'a NoteProjection,
-) -> std::result::Result<Vec<&'a NativeValue>, String> {
+) -> std::result::Result<Vec<&'a NativeValue>, ErrorDescription> {
     let Some(Selector::Field { id, path }) = c.inputs.get(slot) else {
-        return Err("Type constraint requires an installed Field selector".into());
+        return Err(UiMessage::error_data_projection_constraint_field_selector_required().into());
     };
     let field = projection
         .fields
         .iter()
         .find(|f| &f.field_id == id)
-        .ok_or_else(|| "Missing constraint Field closure".to_string())?;
+        .ok_or_else(|| {
+            ErrorDescription::new(
+                UiMessage::error_data_projection_constraint_field_closure_missing(),
+            )
+        })?;
     match &field.cell {
         Cell::Absent => Ok(vec![]),
         Cell::Value { value } => {
@@ -349,7 +458,12 @@ fn constraint_values<'a>(
             select_values(value, path, &mut out);
             Ok(out)
         }
-        _ => Err(format!("Constraint input {id} is not a value")),
+        _ => Err(UiMessage::error_data_projection_constraint_input_not_value(
+            weftext_messages::params::ErrorDataProjectionConstraintInputNotValue {
+                field: id.clone(),
+            },
+        )
+        .into()),
     }
 }
 fn validate_type_constraint(
@@ -360,7 +474,8 @@ fn validate_type_constraint(
 ) -> Validation {
     let mut out = Validation::valid();
     let Some(v) = schema.validators.iter().find(|v| v.id == c.validator) else {
-        out.unavailable.push("Missing validator".into());
+        out.unavailable
+            .push(weftext_messages::UiMessage::error_data_projection_validator_missing().into());
         return out;
     };
     match v.operation.as_str() {
@@ -375,7 +490,7 @@ fn validate_type_constraint(
             for value in values {
                 let Some(reference) = value.text() else {
                     out.diagnostics
-                        .push("Resource selector not a scalar ref".into());
+                        .push(weftext_messages::UiMessage::error_data_projection_resource_selector_not_scalar_ref().into());
                     continue;
                 };
                 let metadata = context
@@ -386,27 +501,60 @@ fn validate_type_constraint(
                 if metadata.len() != 1 {
                     if context.resources_complete {
                         out.diagnostics
-                            .push("Required resource is not an exact live admitted object".into());
+                            .push(weftext_messages::UiMessage::error_data_projection_required_resource_not_exact_live_admitted_object().into());
                     } else {
                         out.unavailable
-                            .push("resource_metadata slot unavailable".into());
+                            .push(weftext_messages::UiMessage::error_data_projection_resource_metadata_slot_unavailable().into());
                     }
                     continue;
                 }
                 if metadata[0].lifecycle != "live" {
-                    out.diagnostics.push("Resource is not live".into());
+                    out.diagnostics.push(
+                        weftext_messages::UiMessage::error_data_projection_resource_not_live().into(),
+                    );
                 }
                 if c.parameters["owner_required"].as_bool() == Some(true) {
                     match &context.owner {
                         Some(owner) if &metadata[0].owner == owner => {}
                         Some(_) => out
                             .diagnostics
-                            .push("Resource belongs to another author owner".into()),
+                            .push(weftext_messages::UiMessage::error_data_projection_resource_belongs_to_different_author_owner().into()),
                         None => out
                             .unavailable
-                            .push("owner context slot unavailable".into()),
+                            .push(weftext_messages::UiMessage::error_data_projection_owner_context_slot_unavailable().into()),
                     }
                 }
+            }
+        }
+        "task-reminder" => {
+            let reminder = match constraint_values(c, "reminder", p) {
+                Ok(v) => v,
+                Err(e) => {
+                    out.unavailable.push(e);
+                    return out;
+                }
+            };
+            let due = match constraint_values(c, "due", p) {
+                Ok(v) => v,
+                Err(e) => {
+                    out.unavailable.push(e);
+                    return out;
+                }
+            };
+            if reminder.len() > 1 || due.len() > 1 {
+                out.diagnostics
+                    .push(UiMessage::error_data_task_reminder_selector_cardinality().into());
+                return out;
+            }
+            let resolution = crate::resolve_task_reminder(
+                reminder.first().copied(),
+                due.first().copied(),
+                schema,
+            );
+            match resolution.validation() {
+                Cell::Invalid { diagnostics, .. } => out.diagnostics.extend(diagnostics),
+                Cell::Unavailable { reason, diagnostics, .. } => { out.unavailable.push(reason); out.unavailable.extend(diagnostics); },
+                _ => {}
             }
         }
         "event" => {
@@ -426,18 +574,26 @@ fn validate_type_constraint(
             };
             if range.len() != 1 {
                 out.unavailable
-                    .push("Required event range unavailable".into());
+                    .push(weftext_messages::UiMessage::error_data_projection_required_event_range_unavailable().into());
                 return out;
             }
             match crate::validate_event(range[0], recurrence.first().copied(), schema) {
                 Cell::Invalid { diagnostics, .. } => out.diagnostics.extend(diagnostics),
-                Cell::Unavailable { reason } => out.unavailable.push(reason),
+                Cell::Unavailable {
+                    reason,
+                    diagnostics,
+                    ..
+                } => {
+                    out.unavailable.push(reason);
+                    out.unavailable.extend(diagnostics);
+                }
                 _ => {}
             }
         }
-        _ => out
-            .unavailable
-            .push("Unsupported Type validator invocation".into()),
+        _ => out.unavailable.push(
+            weftext_messages::UiMessage::error_data_projection_unsupported_type_validator_invocation()
+                .into(),
+        ),
     }
     out
 }
@@ -454,11 +610,13 @@ fn declaration_selected(
     selected: Option<&BTreeSet<String>>,
 ) -> Result<Declaration> {
     if source.len() > native::NATIVE_MAX_BYTES {
-        return Err(DataError("Structured source byte budget exceeded".into()));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_projection_structured_source_byte_budget_exceeded(),
+        ));
     }
     let certified =
         weftext_engine::certify_metadata_declaration(source, label).ok_or_else(|| {
-            DataError("Direct metadata declaration/binding unavailable or ambiguous".into())
+            DataError::unavailable(weftext_messages::UiMessage::error_data_projection_direct_metadata_binding_unavailable_or_ambiguous())
         })?;
     let parsed = Source::detached(source);
     let call = parsed
@@ -470,15 +628,23 @@ fn declaration_selected(
                 .find(c.to_untyped().span())
                 .is_some_and(|n| n.range().start == certified.from)
         })
-        .ok_or_else(|| DataError("Certified AST declaration missing".into()))?;
+        .ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_projection_certified_ast_declaration_missing(),
+            )
+        })?;
     let args: Vec<_> = call.args().items().collect();
     let [ast::Arg::Pos(e)] = args.as_slice() else {
-        return Err(DataError("Root metadata requires one dictionary".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_projection_root_metadata_requires_one_dictionary(),
+        ));
     };
-    let dict = e
-        .to_untyped()
-        .cast::<ast::Dict>()
-        .ok_or_else(|| DataError("Root metadata is not a direct dictionary".into()))?;
+    let dict = e.to_untyped().cast::<ast::Dict>().ok_or_else(|| {
+        DataError::new(
+            weftext_messages::UiMessage::error_data_projection_root_metadata_not_direct_dictionary(
+            ),
+        )
+    })?;
     let mut seen = BTreeSet::new();
     let mut children = vec![];
     for item in dict.items() {
@@ -488,15 +654,25 @@ fn declaration_selected(
                 n.key()
                     .to_untyped()
                     .cast::<ast::Str>()
-                    .ok_or_else(|| DataError("Dynamic dictionary key".into()))?
+                    .ok_or_else(|| {
+                        DataError::new(
+                            weftext_messages::UiMessage::error_data_projection_dynamic_dictionary_key(),
+                        )
+                    })?
                     .get()
                     .to_string(),
                 n.expr(),
             ),
-            _ => return Err(DataError("Root metadata spread unsupported".into())),
+            _ => {
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_projection_root_metadata_spread_unsupported(),
+                ));
+            }
         };
         if !seen.insert(k.clone()) {
-            return Err(DataError("Duplicate decoded root dictionary key".into()));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_projection_duplicate_decoded_root_key(),
+            ));
         }
         // A narrow producer inspects root keys/control bindings, but does not
         // decode, validate, or evaluate unselected author values.
@@ -518,6 +694,7 @@ fn declaration_selected(
         },
         children,
         reason: None,
+        reason_kind: None,
         commas: vec![],
         frame: None,
         entries: vec![],
@@ -541,7 +718,11 @@ fn controls(d: &Declaration) -> Result<(String, Vec<String>)> {
         .and_then(|n| n.value.as_ref())
         .and_then(NativeValue::text)
         .filter(|s| uuid_v4(s))
-        .ok_or_else(|| DataError("id must be direct lowercase UUIDv4 string".into()))?;
+        .ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_projection_id_requires_direct_lowercase_uuid_v4(),
+            )
+        })?;
     let types = match root_field(d, "types") {
         None => vec![],
         Some(n) => {
@@ -550,19 +731,19 @@ fn controls(d: &Declaration) -> Result<(String, Vec<String>)> {
                     .iter()
                     .any(|(_, n)| n.kind != typst_syntax::SyntaxKind::Str)
             {
-                return Err(DataError(
-                    "types requires a direct array of direct strings".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_projection_types_requires_direct_array_and_strings(),
                 ));
             }
             n.value
                 .as_ref()
                 .and_then(NativeValue::array)
-                .ok_or_else(|| DataError("types must be a direct string array".into()))?
+                .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_projection_types_requires_direct_string_array()))?
                 .iter()
                 .map(|v| {
                     v.text()
                         .map(str::to_owned)
-                        .ok_or_else(|| DataError("types must contain strings".into()))
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_projection_types_contains_non_string()))
                 })
                 .collect::<Result<Vec<_>>>()?
         }
@@ -588,7 +769,11 @@ fn project_selected(
                 resolved_types: vec![],
                 fields: vec![],
                 unknown_fields: vec![],
-                diagnostics: vec![e.0],
+                budget_exhausted: matches!(
+                    e.kind(),
+                    DataErrorKind::NativeBudget | DataErrorKind::Budget
+                ),
+                diagnostics: e.into_diagnostics(),
             };
         }
     };
@@ -602,7 +787,11 @@ fn project_selected(
                 resolved_types: vec![],
                 fields: vec![],
                 unknown_fields: vec![],
-                diagnostics: vec![e.0],
+                budget_exhausted: matches!(
+                    e.kind(),
+                    DataErrorKind::NativeBudget | DataErrorKind::Budget
+                ),
+                diagnostics: e.into_diagnostics(),
             };
         }
     };
@@ -620,10 +809,11 @@ fn project_selected(
                 None => Cell::Absent,
                 Some(n) => match &n.value {
                     None => Cell::Unavailable {
-                        reason: n
-                            .reason
-                            .clone()
-                            .unwrap_or_else(|| "computed-expression".into()),
+                        kind: n.reason_kind.unwrap_or(DataErrorKind::Unavailable),
+                        reason: n.reason.clone().unwrap_or_else(|| {
+                            UiMessage::error_data_native_expression_computed().into()
+                        }),
+                        diagnostics: vec![],
                     },
                     Some(NativeValue::None) if field.nullable => Cell::Null,
                     Some(value) => {
@@ -635,9 +825,11 @@ fn project_selected(
                                 value: Some(value.clone()),
                             }
                         } else if !validation.unavailable.is_empty() {
-                            Cell::Unavailable {
-                                reason: validation.unavailable.join("; "),
-                            }
+                            Cell::unavailable_group(
+                                DataErrorKind::Unavailable,
+                                UiMessage::error_data_projection_validation_unavailable(),
+                                validation.unavailable,
+                            )
                         } else {
                             Cell::value(value.clone())
                         }
@@ -658,6 +850,7 @@ fn project_selected(
             }
         })
         .collect::<Vec<_>>();
+    let budget_exhausted = fields.iter().any(|field| field.cell.is_native_budget());
     let known: BTreeSet<_> = fields.iter().map(|f| f.key.as_str()).collect();
     let unknown_fields = d
         .node
@@ -686,6 +879,7 @@ fn project_selected(
         fields,
         unknown_fields,
         diagnostics,
+        budget_exhausted,
     }
 }
 fn node_at<'a>(node: &'a NativeNode, path: &[ValuePath]) -> Option<&'a NativeNode> {
@@ -714,18 +908,18 @@ fn patch_field_selected(
 ) -> Result<FieldPatch> {
     let projection = project_selected(source, schema, selected);
     if projection.qualification != "qualified" || !projection.diagnostics.is_empty() {
-        return Err(DataError(
-            "Cannot edit unqualified/conflicting control types".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_projection_control_types_unqualified_or_conflicting(),
         ));
     }
     let field = projection
         .fields
         .iter()
         .find(|f| f.field_id == key || selected.is_none() && f.key == key)
-        .ok_or_else(|| DataError("Field is not contributed by current types".into()))?;
+        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_projection_field_not_contributed_by_current_types()))?;
     if !field.writable {
-        return Err(DataError(
-            "Computed or provider-unavailable field is read-only".into(),
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_projection_computed_or_provider_unavailable_field_read_only(),
         ));
     }
     let d = declaration_selected(source, "weftext", selected)?;
@@ -748,14 +942,17 @@ fn patch_field_selected(
     // Reparse writer output through the official AST rather than trusting DTOs.
     let readback = decode_native_expression(&text)?;
     if &readback != replacement && !native_equal(&readback, replacement) {
-        return Err(DataError("Native writer failed exact readback".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_projection_native_writer_exact_readback_failed(
+            ),
+        ));
     }
     let (from, to, text) = match root_field(&d, &field.key) {
         Some(n) => {
             let selected = node_at(n, path)
-                .ok_or_else(|| DataError("Value path has no exact author expression".into()))?;
+                .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_projection_value_path_has_no_exact_author_expression()))?;
             if selected.value.is_none() {
-                return Err(DataError("Computed value cannot be overwritten".into()));
+                return Err(DataError::new(weftext_messages::UiMessage::error_data_projection_computed_value_overwrite_forbidden()));
             }
             let selected_shape = editable_shape_at(
                 schema,
@@ -786,8 +983,8 @@ fn patch_field_selected(
             )
         }
         _ => {
-            return Err(DataError(
-                "Missing nested member is not a writable source slot".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_projection_missing_nested_member_not_writable_slot(),
             ));
         }
     };
@@ -797,7 +994,10 @@ fn patch_field_selected(
         || after.id != projection.id
         || after.types != projection.types
     {
-        return Err(DataError("Field edit changed control authority".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_projection_field_edit_changed_control_authority(
+            ),
+        ));
     }
     let checked = after
         .fields
@@ -808,10 +1008,20 @@ fn patch_field_selected(
         checked.cell,
         Cell::Invalid { .. } | Cell::Unavailable { .. }
     ) {
-        return Err(DataError(format!(
-            "Field edit failed full validation: {:?}",
-            checked.cell
-        )));
+        let kind = match &checked.cell {
+            Cell::Unavailable { kind, .. } => *kind,
+            _ => DataErrorKind::Invalid,
+        };
+        return Err(DataError::with_kind(
+            kind,
+            UiMessage::error_data_projection_field_edit_validation_failed(
+                weftext_messages::params::ErrorDataProjectionFieldEditValidationFailed {
+                    field: field.field_id.clone(),
+                    state: checked.cell.state().into(),
+                },
+            ),
+        )
+        .with_diagnostics(checked.cell.error_diagnostics()));
     }
     let exact = checked
         .cell
@@ -822,8 +1032,8 @@ fn patch_field_selected(
             && matches!(checked.cell, Cell::Null)
             && matches!(replacement, NativeValue::None);
     if !exact {
-        return Err(DataError(
-            "Field patch readback differs from requested native value/order".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_projection_field_patch_native_value_or_order_mismatch(),
         ));
     }
     Ok(FieldPatch {
@@ -886,8 +1096,8 @@ fn preserving_writer(
                 ..
             } = new_shape
             else {
-                return Err(DataError(
-                    "Record branch change requires a record target".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_projection_record_branch_requires_record_target(),
                 ));
             };
             preserving_record(node, before, after, members, new_members, schema, source)
@@ -901,9 +1111,8 @@ fn preserving_writer(
             Some(NativeValue::Record(_) | NativeValue::Array(_)),
             NativeValue::Record(_) | NativeValue::Array(_),
             _,
-        ) => Err(DataError(
-            "Structural edit cannot preserve every untouched source slot; edit source explicitly"
-                .into(),
+        ) => Err(DataError::new(
+            weftext_messages::UiMessage::error_data_projection_structural_edit_cannot_preserve_untouched_slots(),
         )),
         _ => replacement.to_typst(),
     }
@@ -940,8 +1149,8 @@ fn preserving_record(
         .map(|m| &m.key)
         .collect::<Vec<_>>();
     if existing != original_order {
-        return Err(DataError(
-            "Record member reorder requires an explicit source edit".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_projection_record_member_reorder_requires_source_edit(),
         ));
     }
     let removed = before
@@ -951,8 +1160,9 @@ fn preserving_record(
     let mut changes = vec![];
     for (index, old) in before.iter().enumerate() {
         if removed[index] && !members.contains_key(&old.key) {
-            return Err(DataError(
-                "Unknown author members are read-only in typed forms".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_projection_unknown_author_members_read_only(
+                ),
             ));
         }
         let Some(new) = after.iter().find(|new| new.key == old.key) else {
@@ -962,13 +1172,16 @@ fn preserving_record(
             continue;
         }
         if !members.contains_key(&old.key) {
-            return Err(DataError(
-                "Unknown author members are read-only in typed forms".into(),
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_projection_unknown_author_members_read_only(
+                ),
             ));
         }
-        let member = new_members
-            .get(&old.key)
-            .ok_or_else(|| DataError("New branch does not declare changed member".into()))?;
+        let member = new_members.get(&old.key).ok_or_else(|| {
+            DataError::new(
+                weftext_messages::UiMessage::error_data_projection_changed_member_absent_from_new_branch(),
+            )
+        })?;
         let child = &node
             .children
             .iter()
@@ -999,7 +1212,7 @@ fn preserving_record(
                     .iter()
                     .rev()
                     .find(|c| c.to <= from)
-                    .ok_or_else(|| DataError("No certified member separator".into()))?,
+                    .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_projection_certified_member_separator_missing()))?,
             )
         } else {
             None
@@ -1017,14 +1230,14 @@ fn preserving_record(
         .map(|new| {
             let member = new_members
                 .get(&new.key)
-                .ok_or_else(|| DataError("Cannot add unbound member in a typed form".into()))?;
+                .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_projection_unbound_member_addition_forbidden()))?;
             if !schema
                 .validate(&member.shape, &new.value)
                 .unbound
                 .is_empty()
             {
-                return Err(DataError(
-                    "Cannot create unbound nested members in a typed form".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_projection_unbound_nested_member_creation_forbidden(),
                 ));
             }
             Ok((
@@ -1106,8 +1319,8 @@ fn preserving_array(
     source: &str,
 ) -> Result<String> {
     if before.len().saturating_mul(after.len()) > 1_000_000 {
-        return Err(DataError(
-            "Array transformation work budget exceeded".into(),
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_projection_array_transformation_work_budget_exceeded(),
         ));
     }
     let mut consumed = BTreeSet::new();
@@ -1153,9 +1366,8 @@ fn preserving_array(
             texts.push(text);
         } else {
             if !candidates.is_empty() {
-                return Err(DataError(
-                    "Array transformation has no certified preservation basis for an existing item"
-                        .into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_projection_array_item_preservation_basis_uncertified(),
                 ));
             }
             if !schema.validate(items, value).unbound.is_empty()
@@ -1163,8 +1375,8 @@ fn preserving_array(
                     .iter()
                     .any(|index| !schema.validate(items, &before[*index]).unbound.is_empty())
             {
-                return Err(DataError(
-                    "Array transformation cannot overwrite or invent unknown author members".into(),
+                return Err(DataError::new(
+                    weftext_messages::UiMessage::error_data_projection_array_cannot_overwrite_or_invent_unknown_members(),
                 ));
             }
             texts.push(value.to_typst()?);
@@ -1257,21 +1469,25 @@ fn editable_shape_at<'a>(
         (Shape::Record { members, .. }, ValuePath::Member { key }) => {
             let member = members
                 .get(key)
-                .ok_or_else(|| DataError("Unbound author members have no typed writer".into()))?;
-            let value = value
-                .member(key)
-                .ok_or_else(|| DataError("Missing nested source member".into()))?;
+                .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_projection_unbound_author_member_writer_unavailable()))?;
+            let value = value.member(key).ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_projection_nested_source_member_missing(
+                    ),
+                )
+            })?;
             editable_shape_at(schema, &member.shape, value, &path[1..])
         }
         (Shape::List { items, .. }, ValuePath::Index { index }) => {
-            let value = value
-                .array()
-                .and_then(|a| a.get(*index))
-                .ok_or_else(|| DataError("Invalid item ordinal".into()))?;
+            let value = value.array().and_then(|a| a.get(*index)).ok_or_else(|| {
+                DataError::new(
+                    weftext_messages::UiMessage::error_data_projection_invalid_item_ordinal(),
+                )
+            })?;
             editable_shape_at(schema, items, value, &path[1..])
         }
-        _ => Err(DataError(
-            "Typed path does not match installed schema".into(),
+        _ => Err(DataError::new(
+            weftext_messages::UiMessage::error_data_projection_typed_path_schema_mismatch(),
         )),
     }
 }
@@ -1295,7 +1511,9 @@ fn native_equal(a: &NativeValue, b: &NativeValue) -> bool {
 pub fn patch_types(source: &str, schema: &Schema, types: &[String]) -> Result<FieldPatch> {
     let (_, validation) = schema.expand_types(types);
     if !validation.is_valid() {
-        return Err(DataError("Invalid or conflicting type composition".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_projection_type_composition_invalid_or_conflicting(),
+        ));
     }
     let d = declaration(source, "weftext")?;
     let (id, _) = controls(&d)?;
@@ -1304,7 +1522,11 @@ pub fn patch_types(source: &str, schema: &Schema, types: &[String]) -> Result<Fi
     let (from, to, text) = match root_field(&d, "types") {
         Some(n) if n.value.is_some() => (n.range.from, n.range.to, text),
         None => (d.close, d.close, format!(", types: {text}")),
-        _ => return Err(DataError("Computed types".into())),
+        _ => {
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_projection_computed_types(),
+            ));
+        }
     };
     let patched = format!("{}{}{}", &source[..from], text, &source[to..]);
     let after = project(&patched, schema);
@@ -1313,8 +1535,8 @@ pub fn patch_types(source: &str, schema: &Schema, types: &[String]) -> Result<Fi
             matches!(f.cell, Cell::Invalid { .. }) || f.required && matches!(f.cell, Cell::Absent)
         })
     {
-        return Err(DataError(
-            "Type change requires missing/invalid fields to be repaired in the same draft".into(),
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_projection_type_change_requires_same_draft_field_repair(),
         ));
     }
     Ok(FieldPatch {
@@ -1328,10 +1550,10 @@ pub fn patch_types(source: &str, schema: &Schema, types: &[String]) -> Result<Fi
 pub fn typed_ref_slots(source: &str, schema: &Schema) -> Result<Vec<TypedRefSlot>> {
     let closure = typed_ref_closure(source, schema)?;
     if !closure.complete {
-        return Err(DataError(format!(
-            "Typed reference closure incomplete: {}",
-            closure.reasons.join("; ")
-        )));
+        return Err(DataError::unavailable(
+            UiMessage::error_data_projection_typed_reference_closure_incomplete(),
+        )
+        .with_diagnostics(closure.reasons));
     }
     Ok(closure.slots)
 }
@@ -1340,37 +1562,56 @@ pub fn typed_ref_closure(source: &str, schema: &Schema) -> Result<TypedRefClosur
     let (_, tokens) = controls(&d)?;
     let (types, validation) = schema.expand_types(&tokens);
     if !validation.is_valid() {
-        return Err(DataError("Type closure unavailable".into()));
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_projection_type_closure_unavailable(),
+        ));
     }
     let mut out = vec![];
     let mut reasons = vec![];
+    let mut complete_without_unbound_root_fields = true;
     let projection = project(source, schema);
     if !projection.unknown_fields.is_empty() {
-        reasons.push("unbound root fields are outside the installed typed closure".into());
+        reasons.push(
+            weftext_messages::UiMessage::error_data_projection_unbound_root_outside_typed_closure()
+                .into(),
+        );
     }
     for (field, _) in schema.applicable_fields(&types) {
         if let Some(n) = root_field(&d, &field.key) {
             if let Some(v) = &n.value {
                 let check = schema.validate(&field.shape, v);
                 if !check.is_valid() {
-                    reasons.push(format!("{}: invalid/unavailable typed value", field.id));
+                    complete_without_unbound_root_fields = false;
+                    reasons.push(weftext_messages::UiMessage::error_data_projection_field_typed_value_unavailable(weftext_messages::params::ErrorDataProjectionFieldTypedValueUnavailable {field: field.id.clone()}).into());
                     continue;
                 }
                 if !check.unbound.is_empty() {
-                    reasons.push(format!("{}: unbound author members", field.id));
+                    complete_without_unbound_root_fields = false;
+                    reasons.push(
+                        weftext_messages::UiMessage::error_data_projection_field_author_members_unbound(weftext_messages::params::ErrorDataProjectionFieldAuthorMembersUnbound {
+                            field: field.id.clone(),
+                        })
+                        .into(),
+                    );
                 }
                 ref_walk(schema, &field.shape, n, &field.id, &mut vec![], &mut out)?;
             } else {
-                reasons.push(format!(
-                    "{}: computed field ref closure unavailable",
-                    field.id
-                ));
+                complete_without_unbound_root_fields = false;
+                reasons.push(
+                    weftext_messages::UiMessage::error_data_projection_field_ref_closure_computed(
+                        weftext_messages::params::ErrorDataProjectionFieldRefClosureComputed {
+                            field: field.id.clone(),
+                        },
+                    )
+                    .into(),
+                );
             }
         }
     }
     Ok(TypedRefClosure {
         slots: out,
         complete: reasons.is_empty(),
+        complete_without_unbound_root_fields,
         reasons,
     })
 }
@@ -1387,13 +1628,15 @@ pub fn declared_typed_ref_closure(
     let (_, tokens) = controls(&d)?;
     let (types, validation) = schema.expand_types(&tokens);
     if !validation.is_valid() {
-        return Err(DataError("Type closure unavailable".into()));
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_projection_type_closure_unavailable(),
+        ));
     }
     let projection = project(source, schema);
     let mut unbound = projection
         .unknown_fields
         .iter()
-        .map(|field| format!("unbound root field: {}", field.key))
+        .map(|field| field.key.clone())
         .collect::<Vec<_>>();
     let mut slots = vec![];
     let mut reasons = vec![];
@@ -1402,10 +1645,14 @@ pub fn declared_typed_ref_closure(
             continue;
         };
         let Some(value) = node.value.as_ref() else {
-            reasons.push(format!(
-                "{}: computed field ref closure unavailable",
-                field.id
-            ));
+            reasons.push(
+                weftext_messages::UiMessage::error_data_projection_field_ref_closure_computed(
+                    weftext_messages::params::ErrorDataProjectionFieldRefClosureComputed {
+                        field: field.id.clone(),
+                    },
+                )
+                .into(),
+            );
             continue;
         };
         if field.nullable && matches!(value, NativeValue::None) {
@@ -1416,10 +1663,17 @@ pub fn declared_typed_ref_closure(
             validation
                 .unbound
                 .iter()
-                .map(|path| format!("{}: {path}", field.id)),
+                .map(|path| format!("{}.{path}", field.id)),
         );
         if !validation.is_valid() {
-            reasons.push(format!("{}: invalid/unavailable typed value", field.id));
+            reasons.push(
+                weftext_messages::UiMessage::error_data_projection_field_typed_value_unavailable(
+                    weftext_messages::params::ErrorDataProjectionFieldTypedValueUnavailable {
+                        field: field.id.clone(),
+                    },
+                )
+                .into(),
+            );
             continue;
         }
         ref_walk(
@@ -1497,6 +1751,7 @@ fn ref_walk(
 }
 /// Build explicit creation source with Core-supplied identity. No default is
 /// fabricated on read, and this function cannot allocate/admit an identity.
+/// Inputs are exact FieldIds; native keys are only output addresses.
 pub fn capture_source(
     id: &str,
     types: &[String],
@@ -1505,11 +1760,15 @@ pub fn capture_source(
     schema: &Schema,
 ) -> Result<String> {
     if !uuid_v4(id) {
-        return Err(DataError("Core must allocate a UUIDv4".into()));
+        return Err(DataError::new(
+            weftext_messages::UiMessage::error_data_projection_core_allocated_uuid_v4_required(),
+        ));
     }
     let (resolved, validation) = schema.expand_types(types);
     if !validation.is_valid() {
-        return Err(DataError("Type composition unavailable".into()));
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_projection_type_composition_unavailable(),
+        ));
     }
     let applicable = schema.applicable_fields(&resolved);
     let mut entries = vec![
@@ -1521,23 +1780,17 @@ pub fn capture_source(
         ),
     ];
     for key in fields.keys() {
-        if !applicable
-            .iter()
-            .any(|(f, _)| f.key == *key || f.id == *key)
-        {
-            return Err(DataError(format!("Unbound capture field {key}")));
+        if !applicable.iter().any(|(f, _)| f.id == *key) {
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_projection_capture_field_unbound(
+                    weftext_messages::params::ErrorDataProjectionCaptureFieldUnbound {
+                        field_key: (key).to_string(),
+                    },
+                ),
+            ));
         }
     }
     for (field, required) in applicable {
-        if field.key != field.id
-            && fields.contains_key(&field.key)
-            && fields.contains_key(&field.id)
-        {
-            return Err(DataError(format!(
-                "Capture Field {} supplied twice by key and ID",
-                field.id
-            )));
-        }
         let default = field
             .default
             .as_ref()
@@ -1546,25 +1799,34 @@ pub fn capture_source(
                 crate::decode_native_expression(
                     d["source"]
                         .as_str()
-                        .ok_or_else(|| DataError("Native default source missing".into()))?,
+                        .ok_or_else(|| DataError::new(weftext_messages::UiMessage::error_data_projection_native_default_source_missing()))?,
                 )
             })
             .transpose()?;
-        let value = fields
-            .get(&field.key)
-            .or_else(|| fields.get(&field.id))
-            .or(default.as_ref());
+        let value = fields.get(&field.id).or(default.as_ref());
         if let Some(v) = value {
             let check = schema.validate(&field.shape, v);
             if !check.is_valid() && !(field.nullable && matches!(v, NativeValue::None)) {
-                return Err(DataError(format!(
-                    "Capture field {}: {:?}",
-                    field.key, check
-                )));
+                let mut diagnostics = check.diagnostics;
+                diagnostics.extend(check.unavailable);
+                return Err(DataError::new(
+                    UiMessage::error_data_projection_capture_field_validation_failed(
+                        weftext_messages::params::ErrorDataProjectionCaptureFieldValidationFailed {
+                            field: field.key.clone(),
+                        },
+                    ),
+                )
+                .with_diagnostics(diagnostics));
             }
             entries.push(format!("{}: {}", typst_string(&field.key), v.to_typst()?));
         } else if required {
-            return Err(DataError(format!("Required capture field {}", field.key)));
+            return Err(DataError::new(
+                weftext_messages::UiMessage::error_data_projection_required_capture_field_missing(
+                    weftext_messages::params::ErrorDataProjectionRequiredCaptureFieldMissing {
+                        field_key: (field.key).to_string(),
+                    },
+                ),
+            ));
         }
     }
     Ok(format!(
@@ -1583,12 +1845,67 @@ pub fn capture_template(
     let validation_id = "00000000-0000-4000-8000-000000000000";
     let source = capture_source(validation_id, types, fields, body, schema)?;
     let prefix = format!("#metadata((id: {}, ", typst_string(validation_id));
-    let tail = source
-        .strip_prefix(&prefix)
-        .ok_or_else(|| DataError("Creation template writer mismatch".into()))?;
+    let tail = source.strip_prefix(&prefix).ok_or_else(|| {
+        DataError::new(
+            weftext_messages::UiMessage::error_data_projection_creation_template_writer_mismatch(),
+        )
+    })?;
     Ok(format!("#metadata(({tail}"))
 }
 
 #[path = "narrow.rs"]
 mod narrow;
 pub use narrow::*;
+
+#[cfg(test)]
+mod reminder_constraint_tests {
+    use super::*;
+    #[test]
+    fn reminder_constraint_rejects_multi_value_selector_instead_of_ignoring_later_input() {
+        let schema = Schema::bundled().unwrap();
+        let mut constraint = schema
+            .types
+            .iter()
+            .find(|t| t.id == "tasks/task")
+            .unwrap()
+            .constraints
+            .iter()
+            .find(|c| c.validator == "temporal/task-reminder")
+            .unwrap()
+            .clone();
+        constraint.inputs.insert(
+            "due".into(),
+            Selector::Field {
+                id: "tasks/due".into(),
+                path: vec![SchemaPath::Each],
+            },
+        );
+        let source = "#metadata((id: \"6fc0e4b4-8a30-4dfe-b093-0d334f24d8ad\", types: (\"task\",), status: \"open\")) <weftext>";
+        let mut projection = project(source, &schema);
+        projection
+            .fields
+            .iter_mut()
+            .find(|f| f.field_id == "tasks/due")
+            .unwrap()
+            .cell = Cell::Value {
+            value: NativeValue::Array(vec![
+                NativeValue::Text("2026-10-23T09:00:00Z".into()),
+                NativeValue::Text("invalid later due".into()),
+            ]),
+        };
+        let result = validate_type_constraint(
+            &constraint,
+            &projection,
+            &schema,
+            &ValidationContext::default(),
+        );
+        assert!(
+            result
+                .diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic.explanation
+                    == UiMessage::error_data_task_reminder_selector_cardinality()),
+            "{result:?}"
+        );
+    }
+}

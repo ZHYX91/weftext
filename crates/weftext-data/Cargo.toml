@@ -5,10 +5,11 @@ edition = "2024"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
+weftext-messages = { path = "../weftext-messages" }
 weftext-engine = { path = "../weftext-engine" }
 typst-syntax = "=0.15.1"
 serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1", features = ["preserve_order"] }
+serde_json = { workspace = true, features = ["preserve_order"] }
 sha2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 rust_decimal = "1.43"

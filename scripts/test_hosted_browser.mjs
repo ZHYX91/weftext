@@ -1,7 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { createdDocument } from './_creation_result.mjs';
 // Optional real-browser acceptance. Supply a qualified Playwright installation
 // through WEFTEXT_PLAYWRIGHT_MODULE, plus EXE and a new owned evidence directory.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
@@ -16,10 +18,10 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
 let local,server,browser,page,base,localToken,config,stderr='';
 const token={alice:randomBytes(32).toString('hex'),bob:randomBytes(32).toString('hex'),admin:randomBytes(32).toString('hex')};
 async function start(args,hosted=false){
- const p=spawn(exe,args,{windowsHide:true,stdio:['ignore','pipe','pipe']});let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>stderr+=b);
- for(let i=0;i<300;i++){const match=text.match(hosted?/(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/:/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);if(match){base=match[1];localToken=match[2];return p;}if(p.exitCode!==null)throw new Error(stderr);await pause(100);}p.kill();throw new Error('startup timeout');
+ const p=spawnServe(exe,args,{windowsHide:true,stdio:['ignore','pipe','pipe']});let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>stderr+=b);
+ for(let i=0;i<300;i++){const match=serveReady(p);if(match){base=match.base;localToken=match.token;return p;}if(p.exitCode!==null)throw new Error(stderr);await pause(100);}await stopServe(p);throw new Error('startup timeout');
 }
-async function stop(p){if(p && p.exitCode===null && p.signalCode===null){const done=new Promise(resolve=>p.once('exit',resolve));p.kill();await done;}}
+async function stop(p){ await stopServe(p); }
 async function api(route,data,actor){
  const r=await fetch(base+route,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(actor?{Authorization:'Bearer '+token[actor]}:{'X-Weftext-Token':localToken})},body:data===undefined?undefined:JSON.stringify(data)});const body=await r.json();assert.ok(r.ok,JSON.stringify(body));return body;
 }
@@ -30,16 +32,16 @@ async function sourceValue(p){return (await p.locator('#source .cm-line').allTex
 async function save(p){const response=p.waitForResponse(r=>r.url().endsWith('/api/hosted/save'));await p.getByRole('button',{name:'保存',exact:true}).click();return (await response).status();}
 try{
  const data=path.join(out,'state'), root=path.join(out,'library');
- local=await start(['--no-browser','--data-dir',data]);
+ local=await start(['--data-dir',data]);
  await api('/api/library/create',{path:root,operationId:randomUUID()});
- const note=await api('/api/note/create',{root,parent:root,name:'Shared',operationId:randomUUID()});
+ const note=createdDocument(await api('/api/note/create',{root,parent:root,name:'Shared',operationId:randomUUID()}));
  const initial=note.source+'\n中文远端测试😀\n';
  await api('/api/save',{sessionId:note.sessionId,baseId:note.baseId,source:initial,operationId:randomUUID()});
  await stop(local);local=null;
  const rights={read:true,write:true,history:true,download:true};
  config={deployment:'browser-test',bind:'127.0.0.1:0',root,adminTokenSha256:sha(token.admin),files:{shared:{path:'Shared/Shared.typ',title:'共同文档',editable:true}},users:Object.fromEntries(['alice','bob'].map(id=>[id,{enabled:true,tokenSha256:sha(token[id]),grants:{shared:rights}}]))};
  const configPath=path.join(out,'server.json');await writeFile(configPath,JSON.stringify(config,null,2));
- server=await start(['--no-browser','--data-dir',data,'--server-config',configPath],true);
+ server=await start(['--data-dir',data,'--server-config',configPath],true);
  browser=await chromium.launch({channel:'chrome',headless:true});result.browser=browser.version();
  const contextA=await browser.newContext({viewport:{width:1440,height:1000},acceptDownloads:true});
  const contextB=await browser.newContext({viewport:{width:1280,height:900}});
@@ -157,4 +159,4 @@ try{
  result.cases.push('revoked actor display/preview/cache cleared, late rich edit cannot restore the old draft, and other actor draft survives');
  assert.deepEqual(result.pageErrors,[]);result.completed=true;
 }catch(e){result.failure=String(e.stack??e);if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});throw e;}
-finally{await browser?.close();await stop(local);await stop(server);await writeFile(path.join(out,'results.json'),JSON.stringify(result,null,2));await writeFile(path.join(out,'server.stderr.log'),stderr);console.log(JSON.stringify({out,cases:result.cases,completed:result.completed,pageErrors:result.pageErrors}));}
+finally{await browser?.close();await stop(local);await stop(server);await writeFile(path.join(out,'results.json'),stringifyServeJson(result, 2));await writeFile(path.join(out,'server.stderr.log'),stderr);console.log(JSON.stringify({out,cases:result.cases,completed:result.completed,pageErrors:result.pageErrors}));}

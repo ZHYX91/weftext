@@ -28,6 +28,7 @@ pub fn inspect(source: &str) -> SourceInfo {
         syntax_tokens: vec![],
         body_insertion: None,
         writer_status: "complex-source-readonly".into(),
+        writer_reason: None,
         notes: crate::inspect_notes_source(source),
     };
     walk(&root, &offsets, &mut out);

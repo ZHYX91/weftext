@@ -1,6 +1,8 @@
 //! Core allocates definition identities; proposals only edit the original Draft.
 //! Admission uses the ordinary actor source save with explicit original IDs.
 use super::*;
+#[cfg(test)]
+use crate::CoreTestFixture;
 use weftext_core::{
     ActorDefinitionProposal, ActorDefinitionStatus, ActorSaveStatus, HostedSaveRequest,
 };
@@ -44,7 +46,7 @@ fn conflict() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "definitionUnavailable",
-        "原定义提案、对象、准确基线或调用依据不可用；草稿已保留，请核对原操作。",
+        UiMessage::error_api_hosted_definition_definition_basis_unavailable(),
     )
 }
 fn core_error(error: CoreError) -> ApiError {
@@ -81,7 +83,9 @@ fn valid_id(id: &str) -> Result<(), ApiError> {
     if uuid::Uuid::parse_str(id).is_ok_and(|id_value| id_value.to_string() == id) {
         Ok(())
     } else {
-        Err(ApiError::bad("原操作编号须为规范 UUID"))
+        Err(ApiError::bad(
+            UiMessage::error_api_hosted_definition_canonical_operation_id_required(),
+        ))
     }
 }
 fn fingerprint(req: &Prepare) -> Result<String, ApiError> {
@@ -89,7 +93,9 @@ fn fingerprint(req: &Prepare) -> Result<String, ApiError> {
     if req.label.len() > 256
         || serde_json::to_vec(&req.plan).map_err(|_| conflict())?.len() > 256 * 1024
     {
-        return Err(ApiError::bad("定义名称或提案超出预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_definition_definition_proposal_budget(),
+        ));
     }
     valid_id(&req.operation_id)?;
     // The derived initial binding is separately frozen by Core. Hash is only
@@ -277,7 +283,7 @@ fn delivery(
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Prepare>,
+    RequestJson(req): RequestJson<Prepare>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let actor = access(inner, &auth, &req.resource, true)?;
@@ -302,7 +308,7 @@ async fn prepare(
                         session_id: req.session_id.clone(), base_id: req.base_id.clone(), operation_id: req.operation_id.clone(),
                         intent_fingerprint: intent, binding: validation.binding.clone(),
                     }, |key, binding| weftext_data::upsert_saved_query_with_context(&req.source, None, key, &req.label, binding,
-                        &validation.plan, &validation.schema, &validation.context).map_err(|_| CoreError::new("definitionQualification", "The exact native Draft proposal is unavailable"))))
+                        &validation.plan, &validation.schema, &validation.context).map_err(|_| CoreError::new("definitionQualification", UiMessage::error_api_hosted_definition_native_draft_proposal_unavailable()))))
                 }).map_err(core_error)?
             }
         };
@@ -318,7 +324,7 @@ async fn prepare(
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -350,7 +356,7 @@ async fn operation(
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -380,7 +386,7 @@ async fn settle(
 async fn reservations(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Reservations>,
+    RequestJson(req): RequestJson<Reservations>,
 ) -> ApiResult {
     Ok(Json(locked(&state, move |inner| {
         let (actor, session, _) = inner.session(&auth, &req.session_id)?;
@@ -403,7 +409,9 @@ pub(super) fn save(
         return Err(unavailable());
     }
     if ids.len() > 32 {
-        return Err(ApiError::bad("每次保存最多携带 32 个原定义提案"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_definition_definition_proposal_count_limit(),
+        ));
     }
     for id in &ids {
         valid_id(id)?;
@@ -421,7 +429,7 @@ pub(super) fn save(
     let original = inner
         .core
         .with_actor_for_root(&scope, &inner.config.root, |core| {
-            core.actor_save_status(&req.operation_id)
+            core.actor_save_status(&session.resource, &req.operation_id)
         })
         .map_err(core_error)?;
     if original.is_some_and(|s| s.status != "notCommitted") {
@@ -604,7 +612,7 @@ mod integration_tests {
         let root = temp.path().join("library");
         let mut core = Core::new(temp.path().join("state")).unwrap();
         core.create_library(&root).unwrap();
-        let local = core.create_note(&root, &root, "Shared").unwrap();
+        let local = core.create_note_fixture(&root, &root, "Shared").unwrap();
         core.close_session(&local.session_id).unwrap();
         let schema =
             include_bytes!("../../../../docs/design/examples/schema.authoring.json").to_vec();
@@ -752,7 +760,7 @@ mod integration_tests {
             prepare(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(req.clone()),
+                crate::RequestJson(req.clone()),
             ),
         )
         .await
@@ -799,9 +807,13 @@ mod integration_tests {
             &doc,
             serde_json::from_value(json!({"select":[{"name":"body","expr":"body"}]})).unwrap(),
         );
-        let error = prepare(State(state.clone()), Extension(auth), Json(req.clone()))
-            .await
-            .unwrap_err();
+        let error = prepare(
+            State(state.clone()),
+            Extension(auth),
+            crate::RequestJson(req.clone()),
+        )
+        .await
+        .unwrap_err();
         assert_eq!(error.status, StatusCode::NOT_FOUND);
         let mut inner = state.inner.lock().unwrap();
         let scope = inner.actor_scope("alice");
@@ -831,12 +843,18 @@ mod integration_tests {
             let error = prepare(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(req.clone()),
+                crate::RequestJson(req.clone()),
             )
             .await
             .unwrap_err();
             assert_eq!(error.status, StatusCode::NOT_FOUND);
-            let current = (error.status, error.code, error.message);
+            let current = (
+                error.status,
+                error.code,
+                error.description.explanation,
+                error.description.diagnostics,
+                error.description.causes,
+            );
             assert_eq!(refusal.get_or_insert(current.clone()), &current);
             let mut inner = state.inner.lock().unwrap();
             let scope = inner.actor_scope("alice");
@@ -860,7 +878,7 @@ mod integration_tests {
         let Json(output) = prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(req.clone()),
+            crate::RequestJson(req.clone()),
         )
         .await
         .unwrap();

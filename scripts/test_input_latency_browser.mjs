@@ -1,8 +1,10 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { createdDocument } from './_creation_result.mjs';
 // Trusted source-editor key events on an explicit embedded candidate.
 // The second animation-frame receipt is a conservative feedback bound, not an
 // OS keyboard/IME measurement. Chrome Layout tracing and JS heap have separate scopes.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -36,6 +38,17 @@ const result = {
   ],
   measurements: [], pageErrors: [], pageCrashes: [], ownedRootProcesses: [], completed: false,
 };
+async function readOwnedOriginal(file) {
+  assert.ok(path.resolve(file).startsWith(out + path.sep), 'Sharing-lock retry is limited to this owned fixture');
+  for (let attempt = 0; attempt < 200; attempt++) {
+    try { return await readFile(file, 'utf8'); }
+    catch (error) {
+      if (!['EBUSY', 'EACCES'].includes(error.code) || attempt === 199) throw error;
+      (result.ownedOriginalReadRetries ??= []).push({ path: file, code: error.code, attempt: attempt + 1 });
+      await pause(50);
+    }
+  }
+}
 await mkdir(out, { recursive: false });
 const harness = await readFile(fileURLToPath(import.meta.url)); result.harnessSha256 = sha(harness);
 await writeFile(path.join(out, 'executed-harness.mjs'), harness, { flag: 'wx' });
@@ -52,21 +65,18 @@ function recordProcess(process, kind) {
 }
 
 async function start(data, extra = [], server = false) {
-  child = spawn(exe, ['--no-browser', '--data-dir', data, ...extra], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawnServe(exe, ['--data-dir', data, ...extra], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   recordProcess(child, server ? 'hosted backend' : 'local backend');
   let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes);
   const deadline = Date.now() + 30000;
   while (Date.now() < deadline) {
-    const match = stdout.match(server ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (match) { base = match[1]; ownerToken = match[2]; return; }
+    const match = serveReady(child);
+    if (match) { base = match.base; ownerToken = match.token; return; }
     if (child.exitCode !== null) throw Error(stderr); await pause(80);
   }
   throw Error('Owned backend startup timeout');
 }
-async function stop() {
-  if (child?.exitCode === null && child.signalCode === null) { const ended = new Promise(resolve => child.once('exit', resolve)); child.kill(); await ended; }
-  child = undefined;
-}
+async function stop() { await stopServe(child); child = undefined; }
 async function api(route, body) {
   const response = await fetch(base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': ownerToken }, body: JSON.stringify(body), signal: AbortSignal.timeout(120000) });
   const value = await response.json(); assert.ok(response.ok, route + ': ' + JSON.stringify(value)); return value;
@@ -185,7 +195,7 @@ try {
   for (const fixture of fixtures) for (let round = 1; round <= rounds; round++) {
     const dir = path.join(out, fixture + '-' + round); await mkdir(dir); const root = path.join(dir, 'lib'), data = path.join(dir, 'state');
     await start(data); await api('/api/library/create', { path: root, operationId: randomUUID() });
-    const note = await api('/api/note/create', { root, parent: root, name: 'Input', operationId: randomUUID() });
+    const note = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Input', operationId: randomUUID() }));
     const body = fixture === 'ordinary' ? '普通输入与草稿保持。\n'.repeat(160) : fixture === '100k-lines' ? '0123456789abcdefghi\n'.repeat(100000) : 'A'.repeat(1024 * 1024) + '\n';
     const original = note.source + '\n' + body;
     assert.ok(Buffer.byteLength(original) < 2 * 1024 * 1024);
@@ -219,8 +229,11 @@ try {
     for (const phase of ['cold-client', 'warm-reload']) {
       if (phase === 'warm-reload') await openPage(token, true);
       const measurement = await measure(dir, original, phase); measurement.fixture = fixture; measurement.round = round;
-      assert.equal(await readFile(note.path, 'utf8'), original); measurement.diskUnchanged = true;
-      result.measurements.push(measurement); await writeFile(path.join(out, 'progress.json'), JSON.stringify(result, null, 2));
+      // The native preview worker may hold a Windows sharing lease throughout
+      // the measurement. Verify exact original bytes after the owned backend
+      // closes, rather than mistaking an active read lease for author changes.
+      measurement.originalCheck = 'deferred until owned backend releases file leases';
+      result.measurements.push(measurement); await writeFile(path.join(out, 'progress.json'), stringifyServeJson(result, 2));
       console.log(JSON.stringify({ fixture, round, phase, p95Ms: measurement.feedbackUpperBoundMs.p95, maximumLayoutMs: measurement.layoutTaskMs.maximum, feedbackP95Met: measurement.feedbackP95Met, layoutMaximumMet: measurement.layoutMaximumMet }));
     }
     if (recoveryCheck) {
@@ -239,10 +252,11 @@ try {
       Object.assign(result.recovery, { sourceBytes: Buffer.byteLength(expected), sourceSha256: sha(expected), completeDraftAfterReload: true });
     }
     await browser.close(); browser = undefined; await browserServer.close(); browserServer = undefined; await vite?.close(); vite = undefined; await stop();
+    assert.equal(await readOwnedOriginal(note.path), original);
+    for (const measurement of result.measurements.filter(item => item.fixture === fixture && item.round === round)) measurement.diskUnchanged = true;
     if (recoveryCheck) {
       // This recovery-only case reloads an unsaved Draft and starts compilation.
       // Check the unchanged original once its owned backend releases file leases.
-      assert.equal(await readFile(note.path, 'utf8'), original);
       Object.assign(result.recovery, { completed: true, diskUnchanged: true }); console.log(JSON.stringify(result.recovery));
     }
   }
@@ -263,5 +277,5 @@ finally {
   for (const close of [() => browser?.close(), () => browserServer?.close(), async () => { await vite?.close(); vite = undefined; }, () => stop()]) { try { await close(); } catch (error) { result.cleanupErrors.push(String(error)); } }
   result.ownedProcessesClosed = result.ownedRootProcesses.every(item => item.exitObservedAt) && result.cleanupErrors.length === 0 && !vite;
   if (!result.ownedProcessesClosed) process.exitCode = 1;
-  await writeFile(path.join(out, 'server.stderr.log'), stderr); await writeFile(path.join(out, 'result.json'), JSON.stringify(result, null, 2));
+  await writeFile(path.join(out, 'server.stderr.log'), stderr); await writeFile(path.join(out, 'result.json'), stringifyServeJson(result, 2));
 }

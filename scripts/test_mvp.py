@@ -1,9 +1,10 @@
 """Exercise the built local application against disposable files, never a real library."""
+from _cli_serve import launch_serve
+from _creation_result import created_document
 import argparse
 import json
+import shutil
 from pathlib import Path
-import re
-import subprocess
 import tempfile
 import unittest
 from urllib.error import HTTPError
@@ -27,29 +28,17 @@ def walk(node):
 class LocalApplication(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.temp = tempfile.TemporaryDirectory(prefix='weftext-mvp-test-')
-        cls.root = Path(cls.temp.name)
-        cls.process = subprocess.Popen(
-            [str(EXE), '--no-browser', '--data-dir', str(cls.root / 'state')],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8',
-            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
-        address = None
-        for _ in range(4):
-            line = cls.process.stdout.readline()
-            match = re.search(r'(http://127\.0\.0\.1:\d+)/#token=(\w+)', line)
-            if match:
-                address = match
-                break
-        if not address:
-            cls.process.terminate()
-            raise RuntimeError('The built application did not print its local address')
-        cls.url, cls.token = address.groups()
+        # Preserve originals when typed shutdown fails or is unconfirmed. A
+        # TemporaryDirectory finalizer must not erase a still-live owner's data.
+        cls.root = Path(tempfile.mkdtemp(prefix='weftext-mvp-test-'))
+        cls.owner = launch_serve(EXE, ['--data-dir', str(cls.root / 'state')])
+        cls.process = cls.owner.process
+        cls.url, cls.token = cls.owner.ready['base'], cls.owner.ready['token']
 
     @classmethod
     def tearDownClass(cls):
-        cls.process.terminate()
-        cls.process.communicate(timeout=10)
-        cls.temp.cleanup()
+        cls.owner.stop()
+        shutil.rmtree(cls.root)
 
     def api(self, path, data=None, status=200, headers=None):
         request = Request(self.url + path,
@@ -71,6 +60,25 @@ class LocalApplication(unittest.TestCase):
         path.write_bytes(source.encode('utf-8'))
         return path, self.api('/api/open', {'path': str(path), 'root': str(folder)})
 
+    def assert_saved_replay(self, replay, receipt, path, committed, current):
+        # Receipt is durable; current-document delivery independently opens a
+        # qualified Session and may observe content written after the commit.
+        facts = ('operationId', 'status', 'path', 'baseId')
+        self.assertEqual({key: replay[key] for key in facts},
+                         {key: receipt[key] for key in facts})
+        self.assertEqual(('revisionId' in replay, replay.get('revisionId')),
+                         ('revisionId' in receipt, receipt.get('revisionId')))
+        self.assertNotIn('documentError', replay)
+        self.assertEqual(replay['committedSource'], committed)
+        self.assertEqual(replay['documentSourceMatchesCommit'], current == committed)
+        document = replay['document']
+        self.assertEqual(Path(document['path']), path)
+        self.assertEqual(document['source'], current)
+        self.assertTrue(document['baseId'])
+        self.assertEqual(str(uuid.UUID(document['sessionId'])), document['sessionId'])
+        self.assertEqual(path.read_bytes(), current.encode('utf-8'))
+        return document
+
     def test_access_boundary(self):
         self.api('/api/bootstrap', headers={'X-Weftext-Token': 'wrong'}, status=403)
         self.api('/api/bootstrap', headers={'Origin': 'https://example.invalid'}, status=403)
@@ -85,8 +93,9 @@ class LocalApplication(unittest.TestCase):
         receipt = self.api('/api/save', req)
         self.assertEqual(receipt['status'], 'saved')
         self.assertEqual(path.read_bytes(), source.encode())
-        self.assertEqual(self.api('/api/save', req), receipt)
+        self.assert_saved_replay(self.api('/api/save', req), receipt, path, source, source)
         path.write_text('外部新稿', encoding='utf-8')
+        self.assert_saved_replay(self.api('/api/save', req), receipt, path, source, '外部新稿')
         result = self.api('/api/save', {**req, 'baseId': receipt['baseId'],
                          'operationId': uid(), 'source': '我的新稿'}, status=409)
         self.assertEqual(result['error']['code'], 'conflict')
@@ -98,8 +107,11 @@ class LocalApplication(unittest.TestCase):
         req = {'sessionId': doc['sessionId'], 'path': str(target),
                'operationId': uid(), 'source': '另存稿'}
         receipt = self.api('/api/save-as', req)
-        self.assertEqual(self.api('/api/save-as', req), receipt)
+        self.assert_saved_replay(self.api('/api/save-as', req), receipt, target, '另存稿', '另存稿')
         self.assertEqual(path.read_text(encoding='utf-8'), doc['source'])
+        target.write_text('另存后的外部新稿', encoding='utf-8')
+        self.assert_saved_replay(self.api('/api/save-as', req), receipt, target,
+                                 '另存稿', '另存后的外部新稿')
         opened = self.api('/api/open', {'path': str(target)})
         self.api('/api/save', {'sessionId': opened['sessionId'], 'baseId': opened['baseId'],
                               'operationId': uid(), 'source': '另存后的继续编辑'})
@@ -126,8 +138,8 @@ class LocalApplication(unittest.TestCase):
         lib = self.api('/api/library/create', req)
         self.assertEqual(self.api('/api/library/create', req)['workspaceId'], lib['workspaceId'])
         create = {'root': str(root), 'parent': str(root), 'name': '第一篇', 'operationId': uid()}
-        node = self.api('/api/note/create', create)
-        replay = self.api('/api/note/create', create)
+        node = created_document(self.api('/api/note/create', create))
+        replay = created_document(self.api('/api/note/create', create))
         self.assertEqual(replay['nodeId'], node['nodeId'])
         self.assertEqual(node['kind'], 'managed')
         self.assertEqual(Path(node['path']), root / '第一篇' / '第一篇.typ')

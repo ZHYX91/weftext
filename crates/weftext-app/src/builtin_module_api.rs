@@ -2,6 +2,9 @@
 //! owned-resource import. This adapter never writes a note or invents a resource
 //! identity from a filename; actor records retain the original operation.
 use super::{ApiResult, AppState, Location, core_call, location};
+#[cfg(test)]
+use crate::CoreTestFixture;
+use crate::{RequestJson, UiMessage};
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, State},
@@ -59,7 +62,7 @@ pub(crate) fn validate_distribution(module: &ModuleDistribution) -> Result<(), C
     {
         return Err(CoreError::new(
             "moduleDistribution",
-            "The original request does not contain this exact bundled module; no resource was overwritten",
+            UiMessage::error_api_builtin_module_original_distribution_mismatch(),
         ));
     }
     Ok(())
@@ -172,13 +175,18 @@ fn qualify(
     if expected.is_some_and(|expected| expected != &identity) {
         return Err(CoreError::new(
             "moduleOwnerChanged",
-            "The selected session, physical owner or module placement changed; the original operation was not rebound",
+            UiMessage::error_api_builtin_module_owner_changed(),
         ));
     }
     let target = loc
         .path
         .parent()
-        .ok_or_else(|| CoreError::new("invalidPath", "Missing owned note directory"))?
+        .ok_or_else(|| {
+            CoreError::new(
+                "invalidPath",
+                UiMessage::error_api_builtin_module_owner_directory_missing(),
+            )
+        })?
         .join(MODULE_NAME);
     Ok((identity, node, target))
 }
@@ -214,7 +222,7 @@ fn selected_resource(
     if selected.owner != identity.owner || selected.module_path != MODULE_NAME {
         return Err(CoreError::new(
             "moduleResource",
-            "The selected resource is not this note's fixed module",
+            UiMessage::error_api_builtin_module_wrong_resource(),
         ));
     }
     let collection =
@@ -231,7 +239,7 @@ fn selected_resource(
     {
         return Err(CoreError::new(
             "moduleResource",
-            "The exact module ResourceRef is not uniquely registered to this note",
+            UiMessage::error_api_builtin_module_registration_ambiguous(),
         ));
     }
     let resource = core.qualified_resource_at(
@@ -246,20 +254,23 @@ fn selected_resource(
     if resource.revision.is_none() {
         return Err(CoreError::new(
             "resourceVersion",
-            "The module has no currently accepted resource version; no path-only reuse was granted",
+            UiMessage::error_api_builtin_module_accepted_version_missing(),
         ));
     }
     if resource.bytes() != super::writing_api::ENDNOTES_MODULE.as_bytes() {
         return Err(CoreError::new(
             "moduleConflict",
-            "The registered module contains different original bytes; it was preserved and no arbitrary resource body was delivered by this fixed-module endpoint",
+            UiMessage::error_api_builtin_module_original_bytes_differ(),
         ));
     }
     core.validate_resource_collection_witness(&loc.root, &collection.witness)?;
     core.validate_resource_witness(&loc.root, &resource.witness)?;
     Ok(resource)
 }
-async fn catalog(State(state): State<AppState>, Json(request): Json<CatalogRequest>) -> ApiResult {
+async fn catalog(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<CatalogRequest>,
+) -> ApiResult {
     let loc = location(&state, &request.session_id)?;
     Ok(Json(core_call(&state, move |core| {
         let (identity, node, target) = qualify(core, &loc, &request.session_id, request.identity.as_ref())?;
@@ -269,26 +280,29 @@ async fn catalog(State(state): State<AppState>, Json(request): Json<CatalogReque
         if resources.is_empty() {
             let cut = core.read_snapshot(&loc.root, &[target.to_string_lossy().into_owned()])?;
             if cut.files[0].bytes.is_some() {
-                return Err(CoreError::new("moduleOccupied", "A file already occupies the module location without an exact owned ResourceRef; it was not overwritten or adopted by name"));
+                return Err(CoreError::new("moduleOccupied", UiMessage::error_api_builtin_module_unowned_location_occupied()));
             }
         }
         core.validate_resource_collection_witness(&loc.root, &collection.witness)?;
         Ok(json!({"owner":identity.owner,"identity":identity,"coverage":if collection.unrecognized_entries == 0 {"complete"} else {"partial"},"resources":resources}))
     }).await?))
 }
-async fn read(State(state): State<AppState>, Json(request): Json<ResourceRequest>) -> ApiResult {
+async fn read(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<ResourceRequest>,
+) -> ApiResult {
     let loc = location(&state, &request.session_id)?;
     Ok(Json(core_call(&state, move |core| {
         let selected = ModuleResource { resource_ref: request.resource_ref, owner: request.identity.owner.clone(), module_path: MODULE_NAME.into() };
         let resource = selected_resource(core, &loc, &request.session_id, &request.identity, &selected)?;
-        if resource.bytes().len() > 262_144 { return Err(CoreError::new("moduleBudget", "The existing module exceeds the bounded source-read budget; it was preserved")); }
-        let source = String::from_utf8(resource.bytes().to_vec()).map_err(|_| CoreError::new("moduleEncoding", "The existing module is not UTF-8; it was preserved"))?;
+        if resource.bytes().len() > 262_144 { return Err(CoreError::new("moduleBudget", UiMessage::error_api_builtin_module_source_budget())); }
+        let source = String::from_utf8(resource.bytes().to_vec()).map_err(|_| CoreError::new("moduleEncoding", UiMessage::error_api_builtin_module_source_encoding()))?;
         Ok(json!({"resourceRef":resource.resource_ref,"sha256":weftext_engine::source_hash(&source),"source":source}))
     }).await?))
 }
 async fn authorized(
     State(state): State<AppState>,
-    Json(request): Json<ResourceRequest>,
+    RequestJson(request): RequestJson<ResourceRequest>,
 ) -> ApiResult {
     let loc = location(&state, &request.session_id)?;
     Ok(Json(
@@ -307,7 +321,12 @@ async fn authorized(
             let target = loc.path.parent().unwrap().join(MODULE_NAME);
             let relative = target
                 .strip_prefix(&loc.root)
-                .map_err(|_| CoreError::new("outsideRoot", "Module is outside this library"))?
+                .map_err(|_| {
+                    CoreError::new(
+                        "outsideRoot",
+                        UiMessage::error_api_builtin_module_outside_library(),
+                    )
+                })?
                 .to_string_lossy()
                 .replace('\\', "/");
             let compiled = core.admitted_compile_snapshot(&loc.root, "live")?;
@@ -336,11 +355,11 @@ fn prepare_original(
         if let Some(original) = core.actor_feature_retry(&resource, &request.operation_id, &fingerprint)? { return Ok(original); }
         let collection = core.qualified_resource_collection_at(&loc.root, &loc.path, &node.owner, "live")?;
         if collection.unrecognized_entries != 0 || collection.entries.iter().any(|entry| same_module_path(&entry.relative_path)) {
-            return Err(CoreError::new("moduleMembership", "The module's absence is not proven by complete owned membership; no duplicate import was prepared"));
+            return Err(CoreError::new("moduleMembership", UiMessage::error_api_builtin_module_absence_unproved()));
         }
         let manifest = loc.path.parent().unwrap().join("weftext.resources.json");
         let cut = core.read_snapshot(&loc.root, &[manifest.to_string_lossy().into_owned(), target.to_string_lossy().into_owned()])?;
-        if cut.files[1].bytes.is_some() { return Err(CoreError::new("moduleOccupied", "The module location is occupied; create-only import did not overwrite it")); }
+        if cut.files[1].bytes.is_some() { return Err(CoreError::new("moduleOccupied", UiMessage::error_api_builtin_module_location_occupied())); }
         core.validate_resource_collection_witness(&loc.root, &collection.witness)?;
         let operation = OperationRequest { operation_id: request.operation_id.clone(), root: loc.root.to_string_lossy().into_owned(),
             intent: OperationIntent::ImportResource { node: loc.path.to_string_lossy().into_owned(), name: MODULE_NAME.into(), bytes: request.module.source.as_bytes().to_vec(),
@@ -360,12 +379,15 @@ fn validate_original_identity(
     {
         return Err(CoreError::new(
             "operationConflict",
-            "The original module operation belongs to another owner or placement",
+            UiMessage::error_api_builtin_module_operation_owner_mismatch(),
         ));
     }
     Ok(())
 }
-async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareRequest>) -> ApiResult {
+async fn prepare(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<PrepareRequest>,
+) -> ApiResult {
     let loc = location(&state, &request.session_id)?;
     let id = request.operation_id.clone();
     Ok(Json(normalized(
@@ -375,7 +397,7 @@ async fn prepare(State(state): State<AppState>, Json(request): Json<PrepareReque
 }
 async fn status(
     State(state): State<AppState>,
-    Json(request): Json<OperationRequestInput>,
+    RequestJson(request): RequestJson<OperationRequestInput>,
 ) -> ApiResult {
     let loc = location(&state, &request.session_id)?;
     let id = request.operation_id.clone();
@@ -395,7 +417,10 @@ async fn status(
     .await?;
     Ok(Json(normalized(original, &id)))
 }
-async fn commit(State(state): State<AppState>, Json(request): Json<CommitRequest>) -> ApiResult {
+async fn commit(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<CommitRequest>,
+) -> ApiResult {
     let loc = location(&state, &request.session_id)?;
     let id = request.operation_id.clone();
     let committed = core_call(&state, move |core| {
@@ -407,14 +432,14 @@ async fn commit(State(state): State<AppState>, Json(request): Json<CommitRequest
                 .ok_or_else(|| {
                     CoreError::new(
                         "operationMissing",
-                        "Query the original module installation before commit",
+                        UiMessage::error_api_builtin_module_original_lookup_required(),
                     )
                 })?;
             validate_original_identity(&original, &request.identity)?;
             if original.plan_id.as_deref() != Some(&request.plan_id) {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "The plan is not the original module import",
+                    UiMessage::error_api_builtin_module_wrong_import_plan(),
                 ));
             }
             core.actor_feature_commit(&resource, &request.operation_id, &request.plan_id)
@@ -425,7 +450,7 @@ async fn commit(State(state): State<AppState>, Json(request): Json<CommitRequest
 }
 async fn settle(
     State(state): State<AppState>,
-    Json(request): Json<OperationRequestInput>,
+    RequestJson(request): RequestJson<OperationRequestInput>,
 ) -> ApiResult {
     let loc = location(&state, &request.session_id)?;
     let id = request.operation_id.clone();
@@ -451,7 +476,9 @@ mod tests {
         let mut core = Core::new(temp.path().join("private")).unwrap();
         let root = temp.path().join("library");
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "module owner").unwrap();
+        let note = core
+            .create_note_fixture(&root, &root, "module owner")
+            .unwrap();
         let loc = Location {
             root,
             path: note.path.into(),
@@ -479,7 +506,7 @@ mod tests {
         changed.module.source.push_str("\n#panic(\"changed\")");
         assert!(prepare_original(&mut core, &loc, &changed).is_err());
         let other = core
-            .create_note(&loc.root, &loc.root, "other owner")
+            .create_note_fixture(&loc.root, &loc.root, "other owner")
             .unwrap();
         let other_loc = Location {
             root: loc.root.clone(),
@@ -582,7 +609,9 @@ mod tests {
             std::fs::read(loc.path.parent().unwrap().join(MODULE_NAME)).unwrap(),
             b"different original"
         );
-        let other = core.create_note(&loc.root, &loc.root, "other").unwrap();
+        let other = core
+            .create_note_fixture(&loc.root, &loc.root, "other")
+            .unwrap();
         let other = Location {
             root: loc.root.clone(),
             path: other.path.into(),

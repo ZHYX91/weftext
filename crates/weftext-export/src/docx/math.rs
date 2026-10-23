@@ -2,12 +2,13 @@
 use super::xml::{Element, Xml};
 use unicode_normalization::char::decompose_compatible;
 use weftext_engine::RenderNode;
+use weftext_messages::{ErrorDescription, UiMessage};
 
 #[path = "math_import.rs"]
 mod omml;
 pub(super) use omml::import_equation;
 
-pub(super) fn convert(node: &RenderNode) -> Result<Element, String> {
+pub(super) fn convert(node: &RenderNode) -> Result<Element, ErrorDescription> {
     let mut math = Element::new("m:oMath");
     math.children = content(node)?;
     provenance(&mut math, node);
@@ -16,16 +17,18 @@ pub(super) fn convert(node: &RenderNode) -> Result<Element, String> {
 /// MathML's authored/generated width does not have an exact OMML space-run
 /// counterpart in this bounded converter. Preserve editable math and disclose
 /// the independent spacing loss instead of converting the equation to prose.
-pub(super) fn spacing_losses(node: &RenderNode) -> Vec<String> {
-    fn walk(node: &RenderNode, out: &mut Vec<String>) {
+pub(super) fn spacing_losses(node: &RenderNode) -> Vec<ErrorDescription> {
+    fn walk(node: &RenderNode, out: &mut Vec<ErrorDescription>) {
         if node.tag.as_deref() == Some("mspace") {
-            out.push(format!(
-                "数学间距 {} 输出为普通数学空格；精确宽度未保留",
-                node.attrs
-                    .get("width")
-                    .map(String::as_str)
-                    .unwrap_or("（原宽度）")
-            ));
+            let explanation = match node.attrs.get("width") {
+                Some(width) => UiMessage::error_export_docx_math_spacing_width_approximate(
+                    weftext_messages::params::ErrorExportDocxMathSpacingWidthApproximate {
+                        width: width.clone(),
+                    },
+                ),
+                None => UiMessage::error_export_docx_math_spacing_width_unspecified(),
+            };
+            out.push(explanation.into());
         }
         for child in &node.children {
             walk(child, out);
@@ -52,7 +55,7 @@ fn wrap(name: &str, nodes: Vec<Xml>) -> Element {
     e.children = nodes;
     e
 }
-fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
+fn content(node: &RenderNode) -> Result<Vec<Xml>, ErrorDescription> {
     let tag = node.tag.as_deref().unwrap_or("");
     if node.kind == "tag" || matches!(tag, "annotation" | "annotation-xml") {
         return Ok(vec![]);
@@ -70,13 +73,19 @@ fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
                     .is_none_or(|t| !matches!(t, "annotation" | "annotation-xml"))
         })
         .collect();
-    let argument = |index: usize| -> Result<Vec<Xml>, String> {
+    let argument = |index: usize| -> Result<Vec<Xml>, ErrorDescription> {
         children
             .get(index)
-            .ok_or_else(|| format!("{tag} 的参数不足"))
+            .ok_or_else(|| {
+                ErrorDescription::new(UiMessage::error_export_docx_math_argument_missing(
+                    weftext_messages::params::ErrorExportDocxMathArgumentMissing {
+                        element: tag.into(),
+                    },
+                ))
+            })
             .and_then(|n| content(n))
     };
-    let argument_element = |name: &str, index: usize| -> Result<Element, String> {
+    let argument_element = |name: &str, index: usize| -> Result<Element, ErrorDescription> {
         let mut element = wrap(name, argument(index)?);
         if let Some(node) = children.get(index) {
             provenance(&mut element, node);
@@ -170,7 +179,9 @@ fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
             let mut e = Element::new("m:f");
             if let Some(thickness) = node.attrs.get("linethickness") {
                 if !matches!(thickness.as_str(), "0" | "0px" | "0em" | "0pt") {
-                    return Err("自定义分数线宽尚不能准确转换为 Office Math；原源保留".into());
+                    return Err(
+                        UiMessage::error_export_docx_math_fraction_line_width_unsupported().into(),
+                    );
                 }
                 let mut pr = Element::new("m:fPr");
                 pr.push(Element::new("m:type").attr("m:val", "noBar"));
@@ -206,7 +217,7 @@ fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
                 })
                 .is_some_and(|v| v.eq_ignore_ascii_case("true"))
             {
-                return Err("数学重音需要专用 Office Math 映射，未降格成极限下标".into());
+                return Err(UiMessage::error_export_docx_math_accent_limit_unsupported().into());
             }
             let mut e = Element::new(if tag == "munder" {
                 "m:limLow"
@@ -223,7 +234,9 @@ fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
                     .get(*attr)
                     .is_some_and(|v| v.eq_ignore_ascii_case("true"))
             }) {
-                return Err("数学重音需要专用 Office Math 映射，未降格成极限上下标".into());
+                return Err(
+                    UiMessage::error_export_docx_math_accent_lower_upper_unsupported().into(),
+                );
             }
             let mut lower = Element::new("m:limLow");
             lower.push(argument_element("m:e", 0)?);
@@ -269,7 +282,9 @@ fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
                 .map(String::as_str)
                 .unwrap_or(",");
             if separator.chars().count() > 1 {
-                return Err("多分隔符公式暂不支持".into());
+                return Err(
+                    UiMessage::error_export_docx_math_multiple_separators_unsupported().into(),
+                );
             }
             pr.push(Element::new("m:sepChr").attr("m:val", separator));
             e.push(pr);
@@ -282,12 +297,14 @@ fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
             let mut e = Element::new("m:m");
             for row in children {
                 if row.tag.as_deref() != Some("mtr") {
-                    return Err("公式矩阵行类型暂不支持".into());
+                    return Err(UiMessage::error_export_docx_math_matrix_row_unsupported().into());
                 }
                 let mut mr = Element::new("m:mr");
                 for cell in &row.children {
                     if cell.tag.as_deref() != Some("mtd") {
-                        return Err("公式矩阵单元格类型暂不支持".into());
+                        return Err(
+                            UiMessage::error_export_docx_math_matrix_cell_unsupported().into()
+                        );
                     }
                     let mut nodes = vec![];
                     for c in &cell.children {
@@ -299,7 +316,14 @@ fn content(node: &RenderNode) -> Result<Vec<Xml>, String> {
             }
             e
         }
-        _ => return Err(format!("公式结构 {tag} 暂不能转换为可编辑 Office Math")),
+        _ => {
+            return Err(UiMessage::error_export_docx_math_structure_unsupported(
+                weftext_messages::params::ErrorExportDocxMathStructureUnsupported {
+                    element: tag.into(),
+                },
+            )
+            .into());
+        }
     };
     let mut result = result;
     provenance(&mut result, node);
@@ -310,7 +334,7 @@ pub(super) struct MathStyle {
     script: &'static str,
     style: &'static str,
 }
-fn variant(name: &str) -> Result<MathStyle, String> {
+fn variant(name: &str) -> Result<MathStyle, ErrorDescription> {
     let (script, style) = match name {
         "normal" => ("roman", "p"),
         "bold" => ("roman", "b"),
@@ -326,7 +350,14 @@ fn variant(name: &str) -> Result<MathStyle, String> {
         "sans-serif-italic" => ("sans-serif", "i"),
         "sans-serif-bold-italic" => ("sans-serif", "bi"),
         "monospace" => ("monospace", "p"),
-        _ => return Err(format!("公式 mathvariant {name} 暂不支持")),
+        _ => {
+            return Err(UiMessage::error_export_docx_math_variant_unsupported(
+                weftext_messages::params::ErrorExportDocxMathVariantUnsupported {
+                    variant: name.into(),
+                },
+            )
+            .into());
+        }
     };
     Ok(MathStyle { script, style })
 }
@@ -441,7 +472,7 @@ fn tokens(
     mathvariant: Option<&str>,
     normal_text: bool,
     tag: &str,
-) -> Result<Vec<Xml>, String> {
+) -> Result<Vec<Xml>, ErrorDescription> {
     let explicit = mathvariant.map(variant).transpose()?;
     let mut runs: Vec<(MathStyle, String)> = vec![];
     for c in text.chars() {
@@ -497,6 +528,97 @@ pub(super) fn plain(node: &RenderNode) -> String {
 #[cfg(test)]
 mod provenance_tests {
     use super::*;
+
+    fn rendered_math(source: &str) -> RenderNode {
+        let root = std::env::current_dir().unwrap();
+        let rendered = weftext_engine::Engine::new_with_system_fonts(false)
+            .unwrap()
+            .render(source, &root.join("math-typed-loss.typ"), &root)
+            .unwrap();
+        assert!(rendered.ok, "{:?}", rendered.diagnostics);
+        fn first(node: &RenderNode) -> Option<&RenderNode> {
+            if node.tag.as_deref() == Some("math") {
+                Some(node)
+            } else {
+                node.children.iter().find_map(first)
+            }
+        }
+        first(rendered.tree.as_ref().unwrap()).unwrap().clone()
+    }
+
+    #[test]
+    fn typed_math_losses_never_enter_plain_fallback_or_native_omml_roundtrip_source() {
+        let original = rendered_math("$frac(x, y)$");
+        let authored_plain = plain(&original);
+        let omml = convert(&original).unwrap();
+        let roundtrip = import_equation(&omml, 0).unwrap().source;
+        let mut unsupported = original.clone();
+        fn fraction(node: &mut RenderNode) -> Option<&mut RenderNode> {
+            if node.tag.as_deref() == Some("mfrac") {
+                Some(node)
+            } else {
+                node.children.iter_mut().find_map(fraction)
+            }
+        }
+        fraction(&mut unsupported)
+            .unwrap()
+            .attrs
+            .insert("linethickness".into(), "2pt".into());
+        let error = convert(&unsupported).unwrap_err();
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_export_docx_math_fraction_line_width_unsupported()
+        );
+        assert!(error.diagnostics.is_empty());
+        assert!(error.causes.as_slice().is_empty());
+        let wire = serde_json::to_value(&error).unwrap();
+        let _ = error.explanation.render(weftext_messages::UiLocale::ZhCn);
+        let _ = error.explanation.render(weftext_messages::UiLocale::EnUs);
+        assert_eq!(serde_json::to_value(&error).unwrap(), wire);
+        assert_eq!(plain(&unsupported), authored_plain);
+        assert_eq!(
+            import_equation(&convert(&original).unwrap(), 0)
+                .unwrap()
+                .source,
+            roundtrip
+        );
+    }
+
+    #[test]
+    fn spacing_reports_original_width_or_its_absence_and_preserves_parallel_losses() {
+        let mut space = rendered_math("$x$");
+        space.tag = Some("mspace".into());
+        space.attrs.clear();
+        space.children.clear();
+        space.text = None;
+        space.attrs.insert("width".into(), "0.75em".into());
+        let known = spacing_losses(&space).remove(0);
+        assert_eq!(
+            known.explanation,
+            UiMessage::error_export_docx_math_spacing_width_approximate(
+                weftext_messages::params::ErrorExportDocxMathSpacingWidthApproximate {
+                    width: "0.75em".into(),
+                }
+            )
+        );
+        let mut root = rendered_math("$x$");
+        root.children = vec![space.clone(); 96];
+        let parallel = spacing_losses(&root);
+        assert_eq!(parallel.len(), 96);
+        assert!(parallel.iter().all(|reason| reason == &known));
+        space.attrs.remove("width");
+        let missing = spacing_losses(&space).remove(0);
+        assert_eq!(
+            missing.explanation,
+            UiMessage::error_export_docx_math_spacing_width_unspecified()
+        );
+        assert!(missing.diagnostics.is_empty());
+        assert!(missing.causes.as_slice().is_empty());
+        assert_eq!(
+            serde_json::to_value(&missing).unwrap()["explanation"]["params"],
+            serde_json::json!({})
+        );
+    }
 
     #[test]
     fn math_native_provenance_distinguishes_repeated_symbols_and_subexpressions() {

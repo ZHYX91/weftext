@@ -67,8 +67,8 @@ fn library_inverse_requires_certified_single_passthrough() {
         let map = inspect_editor_with_style("正文", &style);
         assert!(map.literal_regions.is_empty());
         assert_eq!(
-            map.unavailable_reason.as_deref(),
-            Some("unverified-library-style")
+            map.unavailable_reason.map(|reason| reason.explanation),
+            Some(UiMessage::error_engine_reason_library_style_unverified())
         );
         let out = engine()
             .render_with_style("正文", &dir.path().join("note.typ"), dir.path(), &style)
@@ -216,6 +216,16 @@ fn native_library_note_local_effective_styles_use_original_source() {
 fn style_controls_certify_unique_direct_native_default_slots() {
     let map = inspect_library_style(DEFAULT_LIBRARY_STYLE);
     assert!(map.syntax_valid);
+    assert_eq!(map.entry_count, 1);
+    assert_eq!(
+        inspect_library_style("#let another-function(body) = body").entry_count,
+        0
+    );
+    assert_eq!(
+        inspect_library_style(&(DEFAULT_LIBRARY_STYLE.to_owned() + "\n" + DEFAULT_LIBRARY_STYLE))
+            .entry_count,
+        2
+    );
     assert_eq!(
         map.controls.iter().filter(|c| c.editable).count(),
         7,
@@ -434,20 +444,44 @@ fn unsafe_author_css_attribute_remains_unavailable() {
 #[test]
 fn unsupported_native_paint_and_stroke_are_explicit_flow_diagnostics() {
     let dir = TempDir::new().unwrap();
-    for source in [
-        "#set text(fill: gradient.linear(red, blue))\n渐变文字",
-        "#table(columns:1,stroke:(dash:\"dashed\", thickness:1pt),[单格])",
+    for (source, key) in [
+        (
+            "#set text(fill: gradient.linear(red, blue))\n渐变文字",
+            "error.engine.render.nonSolidTextPaint",
+        ),
+        (
+            "#table(columns:1,stroke:(dash:\"dashed\", thickness:1pt),[单格])",
+            "error.engine.render.tableStrokeUnsupported",
+        ),
+        (
+            "#set table(fill:gradient.linear(red, blue))\n#table(columns:1,[单格])",
+            "error.engine.render.nonSolidTableFill",
+        ),
+        (
+            "#set list(marker:n => str(n))\n- 作者原文",
+            "error.engine.render.dynamicListMarker",
+        ),
     ] {
         let out = engine()
             .render(source, &dir.path().join("note.typ"), dir.path())
             .unwrap();
         assert!(out.ok, "{source}\n{:?}", out.diagnostics);
         assert!(
-            out.diagnostics
-                .iter()
-                .any(|d| d.message.contains("no flow style adapter")),
+            out.diagnostics.iter().any(|diagnostic| diagnostic
+                .explanation
+                .as_ref()
+                .is_some_and(|message| message.key() == key)),
             "{:?}",
             out.diagnostics
+        );
+        assert!(
+            out.diagnostics
+                .iter()
+                .filter(|diagnostic| diagnostic
+                    .explanation
+                    .as_ref()
+                    .is_some_and(|message| message.key() == key))
+                .all(|diagnostic| diagnostic.diagnostics.is_empty())
         );
     }
 }

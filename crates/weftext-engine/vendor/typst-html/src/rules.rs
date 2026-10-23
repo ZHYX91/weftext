@@ -899,8 +899,9 @@ const CSL_INDENT_RULE: ShowFn<CslIndentElem> = |elem, _, _| {
     ))
 };
 
-const TABLE_RULE: ShowFn<TableElem> = |elem, engine, styles| {
+const TABLE_RULE: ShowFn<TableElem> = |elem, _, styles| {
     let grid = elem.grid.as_ref().unwrap();
+    let mut warnings = vec![];
     for cell in grid.entries.iter().filter_map(|entry| entry.as_cell()) {
         if [
             cell.stroke.top.as_ref(),
@@ -915,26 +916,31 @@ const TABLE_RULE: ShowFn<TableElem> = |elem, engine, styles| {
             stroke.dash.is_some()
                 || !matches!(stroke.paint, typst_library::visualize::Paint::Solid(_))
         }) {
-            engine.sink.warn(warning!(
-                cell.body.span(),
-                "dashed or non-solid table stroke has no flow style adapter; use paged preview"
-            ));
+            warnings.push(crate::WeftextFlowWarning {
+                kind: crate::WeftextFlowWarningKind::TableStrokeUnsupported,
+                span: cell.body.span(),
+            });
         }
         if cell
             .fill
             .as_ref()
             .is_some_and(|paint| !matches!(paint, typst_library::visualize::Paint::Solid(_)))
         {
-            engine.sink.warn(warning!(
-                cell.body.span(),
-                "non-solid table fill has no flow style adapter; use paged preview"
-            ));
+            warnings.push(crate::WeftextFlowWarning {
+                kind: crate::WeftextFlowWarningKind::NonSolidTableFill,
+                span: cell.body.span(),
+            });
         }
     }
-    Ok(show_cellgrid(grid, styles, elem.span()))
+    Ok(show_cellgrid(grid, styles, elem.span(), warnings))
 };
 
-fn show_cellgrid(grid: &CellGrid, styles: StyleChain, span: Span) -> Content {
+fn show_cellgrid(
+    grid: &CellGrid,
+    styles: StyleChain,
+    span: Span,
+    warnings: Vec<crate::WeftextFlowWarning>,
+) -> Content {
     let elem = |tag, body| {
         HtmlElem::new(tag)
             .with_body(Some(body))
@@ -1061,7 +1067,16 @@ fn show_cellgrid(grid: &CellGrid, styles: StyleChain, span: Span) -> Content {
         .into_iter()
         .chain(core::iter::once(body))
         .chain(footer);
-    BlockElem::packed(elem(tag::table, Content::sequence(content)))
+    BlockElem::packed(
+        HtmlElem::new(tag::table)
+            .with_weftext(WeftextHtmlSemantics {
+                warnings,
+                ..Default::default()
+            })
+            .with_body(Some(Content::sequence(content)))
+            .pack()
+            .spanned(span),
+    )
 }
 
 fn show_cell(tag: HtmlTag, cell: &Cell, styles: StyleChain) -> Content {

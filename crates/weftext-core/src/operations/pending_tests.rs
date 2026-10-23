@@ -73,8 +73,8 @@ fn pending_create_only_refuses(node: bool, recovery: bool) {
     assert!(!root.join("AbsentParent").exists());
     assert!(!root.join(".weftext-schema.json").exists());
     assert_eq!(fs::read(root.join(".weftext-rules")).unwrap(), before);
-    assert!(!core.committed(&first.operation_id));
-    assert!(!core.committed(&other.operation_id));
+    assert!(!core.committed(&first.operation_id).unwrap());
+    assert!(!core.committed(&other.operation_id).unwrap());
     assert!(core.operation_details(&first.operation_id).is_ok());
     assert!(core.operation_details(&other.operation_id).is_ok());
 }
@@ -102,7 +102,7 @@ fn pending_absent_child_refuses(recovery: bool) {
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    core.create_note(&root, &root, "Original").unwrap();
+    core.create_note_fixture(&root, &root, "Original").unwrap();
     let original_source = fs::read(root.join("Original/Original.typ")).unwrap();
     let first = core
         .prepare_operation(OperationRequest {
@@ -159,8 +159,8 @@ fn pending_absent_child_refuses(recovery: bool) {
     );
     assert!(!root.join("Original/AbsentChild").exists());
     assert!(!root.join("Renamed").exists());
-    assert!(!core.committed(&first.operation_id));
-    assert!(!core.committed(&other.operation_id));
+    assert!(!core.committed(&first.operation_id).unwrap());
+    assert!(!core.committed(&other.operation_id).unwrap());
 }
 
 #[test]
@@ -180,7 +180,7 @@ fn pending_copy_readers_can_share_original_schema_and_source_without_a_write_ove
     let root = temp.path().join("library");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    core.create_note(&root, &root, "Original").unwrap();
+    core.create_note_fixture(&root, &root, "Original").unwrap();
     let schema = core
         .prepare_config_save(
             &root,

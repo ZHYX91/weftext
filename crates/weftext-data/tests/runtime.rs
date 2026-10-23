@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use weftext_data::*;
+mod support;
+use support::assert_data_error;
 fn schema() -> Schema {
     Schema::bundled().unwrap()
 }
@@ -66,21 +68,31 @@ fn official_native_decoder_preserves_order_duplicates_and_exact_values() {
 #[test]
 fn native_budget_keeps_deep_static_source_unavailable_and_writer_bounded() {
     let expression = format!("{}1{}", "(".repeat(70), ")".repeat(70));
-    assert!(
-        decode_native_expression(&expression)
-            .unwrap_err()
-            .0
-            .contains("budget")
+    assert_data_error(
+        &decode_native_expression(&expression).unwrap_err(),
+        DataErrorKind::NativeBudget,
+        UiMessage::error_data_native_decoder_traversal_budget(),
     );
     let projection = project(&source(&format!(", priority: {expression}")), &schema());
+    assert!(projection.budget_exhausted);
     assert!(
-        matches!(&projection.fields.iter().find(|f| f.key == "priority").unwrap().cell, Cell::Unavailable { reason } if reason.contains("budget"))
+        projection
+            .fields
+            .iter()
+            .find(|f| f.key == "priority")
+            .unwrap()
+            .cell
+            .is_native_budget()
     );
     let mut value = NativeValue::Int("1".into());
     for _ in 0..70 {
         value = NativeValue::Array(vec![value]);
     }
-    assert!(value.to_typst().unwrap_err().0.contains("budget"));
+    assert_data_error(
+        &value.to_typst().unwrap_err(),
+        DataErrorKind::Budget,
+        UiMessage::error_data_native_native_value_traversal_budget_exceeded(),
+    );
     assert!(
         !schema()
             .validate(
@@ -93,7 +105,11 @@ fn native_budget_keeps_deep_static_source_unavailable_and_writer_bounded() {
             .is_empty()
     );
     let large = NativeValue::Array(vec![NativeValue::None; 100_001]);
-    assert!(large.to_typst().unwrap_err().0.contains("budget"));
+    assert_data_error(
+        &large.to_typst().unwrap_err(),
+        DataErrorKind::Budget,
+        UiMessage::error_data_native_native_value_byte_or_node_budget_exceeded(),
+    );
 }
 #[test]
 fn exact_writer_compiles_in_real_typst() {
@@ -126,9 +142,32 @@ fn exact_writer_compiles_in_real_typst() {
 #[test]
 fn full_central_catalog_installs_and_duplicate_json_or_signature_override_reject() {
     let s = schema();
-    assert_eq!(s.fields.len(), 55);
+    assert_eq!(s.fields.len(), 56);
     assert_eq!(s.types.len(), 8);
     assert_eq!(s.relations.len(), 28);
+    assert_eq!(
+        s.fields
+            .iter()
+            .find(|f| f.id == "tasks/reminder")
+            .unwrap()
+            .key,
+        "reminder"
+    );
+    let constraint = s
+        .types
+        .iter()
+        .find(|t| t.id == "tasks/task")
+        .unwrap()
+        .constraints
+        .iter()
+        .find(|c| c.validator == "temporal/task-reminder")
+        .unwrap();
+    assert_eq!(constraint.inputs.len(), 2);
+    for (slot, field) in [("due", "tasks/due"), ("reminder", "tasks/reminder")] {
+        assert!(
+            matches!(constraint.inputs.get(slot), Some(Selector::Field { id, path }) if id == field && path.is_empty())
+        );
+    }
     let json = serde_json::to_string(&s).unwrap();
     assert!(Schema::from_author_json(&json).is_ok());
     assert!(
@@ -590,7 +629,7 @@ fn real_set_title_product_retains_metadata_names_and_exact_field_writes() {
 }
 #[test]
 fn capture_is_identity_free_validated_and_defaults_never_added_on_read() {
-    let fields = BTreeMap::from([("status".into(), NativeValue::Text("open".into()))]);
+    let fields = BTreeMap::from([("tasks/status".into(), NativeValue::Text("open".into()))]);
     let template = capture_template(&["task".into()], &fields, "正文", &schema()).unwrap();
     assert!(!template.contains("id:"));
     assert!(template.contains("types:"));

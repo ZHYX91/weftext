@@ -1,6 +1,199 @@
 use super::*;
 use std::os::windows::fs::OpenOptionsExt;
 
+#[test]
+fn protected_history_draft_routing_validates_original_tuple_before_ignoring_foreign_body() {
+    let mut f = HistoryFixture::new();
+    let foreign = f._temp.path().join("foreign");
+    f.core.create_library(&foreign).unwrap();
+    let foreign_doc = f
+        .core
+        .create_note_fixture(&foreign, &foreign, "Foreign")
+        .unwrap();
+    let mut scope = f
+        .core
+        .capture_file_save_scope(&foreign.join("prospective.typ"))
+        .unwrap();
+    let path = f
+        .core
+        .draft_directory("draft-history")
+        .join(format!("{}.json", fresh()));
+    let foreign_identity = f.core.sessions[&foreign_doc.session_id]
+        .stamp
+        .identity
+        .clone();
+    let encoded = |scope: &QualifiedInputScope| {
+        let mut bytes = b"{\"scope\":".to_vec();
+        bytes.extend(serde_json::to_vec(scope).unwrap());
+        bytes.extend_from_slice(b",\"identity\":");
+        bytes.extend(serde_json::to_vec(&foreign_identity).unwrap());
+        bytes.extend_from_slice(b",\"source\":BROKEN_FOREIGN_BODY");
+        bytes
+    };
+    let valid_foreign = encoded(&scope);
+    fs::write(&path, &valid_foreign).unwrap();
+    assert!(f.core.list_history(&f.doc.session_id).is_ok());
+    let QualifiedInputScope::Library { binding } = &mut scope else {
+        panic!("library scope")
+    };
+    binding.root = display(&f._temp.path().join("contradictory-locator"));
+    let damaged = encoded(&scope);
+    fs::write(&path, &damaged).unwrap();
+    assert_eq!(
+        f.core.list_history(&f.doc.session_id).unwrap_err().code,
+        "privateEvidence"
+    );
+    assert_eq!(fs::read(&path).unwrap(), damaged);
+    fs::write(&path, &valid_foreign).unwrap();
+    assert!(f.core.list_history(&f.doc.session_id).is_ok());
+    assert_eq!(fs::read(path).unwrap(), valid_foreign);
+}
+
+#[test]
+fn protected_history_skips_other_physical_owner_before_its_private_body() {
+    let mut f = HistoryFixture::new();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
+    let scope = f.core.draft_session_scope(&other.session_id).unwrap();
+    let identity = f.core.sessions[&other.session_id].stamp.identity.clone();
+    let mut bytes = b"{\"scope\":".to_vec();
+    bytes.extend(serde_json::to_vec(&scope).unwrap());
+    bytes.extend_from_slice(b",\"identity\":");
+    bytes.extend(serde_json::to_vec(&identity).unwrap());
+    bytes.extend_from_slice(b",\"source\":BROKEN_OTHER_PRIVATE_BODY");
+    let path = f
+        .core
+        .draft_directory("draft-history")
+        .join(format!("{}.json", fresh()));
+    let mut paths = vec![path];
+    for _ in 0..128 {
+        paths.push(
+            f.core
+                .draft_directory("draft-history")
+                .join(format!("{}.json", fresh())),
+        );
+    }
+    for path in &paths {
+        fs::write(path, &bytes).unwrap();
+    }
+    assert!(f.core.list_history(&f.doc.session_id).is_ok());
+    for path in paths {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+    let mut reader = std::io::Cursor::new(&bytes);
+    assert_eq!(
+        draft_recovery::read_draft_metadata(&mut reader)
+            .unwrap()
+            .identity,
+        identity
+    );
+}
+
+#[test]
+fn retained_restore_rejects_foreign_scope_or_file_before_private_body_and_recovers_original_result()
+{
+    let mut f = HistoryFixture::new();
+    let version = f.initial_version();
+    f.save("saved S");
+    let request = f.restore_request(&version, "retain", Some("private pending Y"));
+    let original_result = f.core.restore_history(request.clone()).unwrap();
+    let original_plan = f.core.operations[&request.operation_id].clone();
+    let archives = &original_plan
+        .history_restore
+        .as_ref()
+        .unwrap()
+        .draft_records;
+    assert!(!archives.is_empty());
+    let path = f
+        .core
+        .draft_directory("draft-history")
+        .join(format!("{}.json", archives[0]));
+    let original = fs::read(&path).unwrap();
+    let plan_bytes = fs::read(f.core.journal_path(&request.operation_id, "plan")).unwrap();
+    let commit_bytes = fs::read(f.core.journal_path(&request.operation_id, "commit")).unwrap();
+    let source_bytes = fs::read(&f.doc.path).unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
+    let foreign = f._temp.path().join("foreign");
+    f.core.create_library(&foreign).unwrap();
+    let foreign_doc = f
+        .core
+        .create_note_fixture(&foreign, &foreign, "Foreign")
+        .unwrap();
+    let count = f.core.operations.len();
+    for doc in [&other, &foreign_doc] {
+        let scope = f.core.draft_session_scope(&doc.session_id).unwrap();
+        let identity = f.core.sessions[&doc.session_id].stamp.identity.clone();
+        let mut damaged = b"{\"scope\":".to_vec();
+        damaged.extend(serde_json::to_vec(&scope).unwrap());
+        damaged.extend_from_slice(b",\"identity\":");
+        damaged.extend(serde_json::to_vec(&identity).unwrap());
+        damaged.extend_from_slice(b",\"source\":BROKEN_FOREIGN_PRIVATE_BODY");
+        fs::write(&path, &damaged).unwrap();
+        let status = f
+            .core
+            .history_restore_status(&request.operation_id)
+            .unwrap();
+        assert_eq!(status.status, "committed");
+        assert_eq!(
+            status.receipt.unwrap().base_id,
+            original_result.receipt.base_id
+        );
+        assert!(status.result.is_none());
+        assert_eq!(status.result_error.unwrap().code, "privateEvidence");
+        assert_eq!(fs::read(&path).unwrap(), damaged);
+        assert_eq!(
+            fs::read(f.core.journal_path(&request.operation_id, "plan")).unwrap(),
+            plan_bytes
+        );
+        assert_eq!(
+            fs::read(f.core.journal_path(&request.operation_id, "commit")).unwrap(),
+            commit_bytes
+        );
+        assert_eq!(fs::read(&f.doc.path).unwrap(), source_bytes);
+        assert_eq!(f.core.operations.len(), count);
+    }
+    fs::write(&path, &original).unwrap();
+    let restored = f
+        .core
+        .history_restore_status(&request.operation_id)
+        .unwrap();
+    assert_eq!(restored.status, "committed");
+    assert_eq!(
+        restored.result.unwrap().protected_drafts[0].source,
+        original_result.protected_drafts[0].source
+    );
+    assert_eq!(fs::read(path).unwrap(), original);
+}
+
+#[test]
+fn protected_history_draft_budget_counts_original_records_even_when_alternatives_deduplicate() {
+    let mut f = HistoryFixture::new();
+    f.core
+        .persist_draft(&f.doc.session_id, "one original private alternative")
+        .unwrap();
+    let primary = f.core.draft_path(Path::new(&f.doc.path));
+    let original = fs::read(&primary).unwrap();
+    for index in 0..129 {
+        fs::write(
+            f.core
+                .draft_directory("draft-history")
+                .join(format!("{index}.json")),
+            &original,
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        f.core.list_history(&f.doc.session_id).unwrap_err().code,
+        "budget"
+    );
+    assert_eq!(fs::read(primary).unwrap(), original);
+}
+
 struct HistoryFixture {
     core: Core,
     _temp: tempfile::TempDir,
@@ -15,7 +208,7 @@ impl HistoryFixture {
         let root = temp.path().join("library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let doc = core.create_note(&root, &root, "Note").unwrap();
+        let doc = core.create_note_fixture(&root, &root, "Note").unwrap();
         Self {
             core,
             _temp: temp,
@@ -37,7 +230,7 @@ impl HistoryFixture {
             })
             .unwrap();
         self.doc.source = source.clone();
-        self.doc.base_id = receipt.base_id;
+        self.doc.base_id = receipt.receipt.base_id;
         (operation_id, source)
     }
     fn initial_version(&self) -> String {
@@ -46,7 +239,7 @@ impl HistoryFixture {
             .unwrap()
             .versions
             .iter()
-            .find(|v| v.kind == "createNote")
+            .find(|v| v.kind == "newNode")
             .unwrap()
             .version_id
             .clone()
@@ -139,6 +332,78 @@ fn history_lists_real_commits_and_read_compare_preserve_saved_and_draft_bytes() 
 }
 
 #[test]
+fn history_descriptions_are_typed_without_rewriting_source_or_retained_plan() {
+    let mut f = HistoryFixture::new();
+    let (version, source) = f.save("作者原文 English 中文 {literal}");
+    let plan_path = f.core.journal_path(&version, "plan");
+    let original_plan = fs::read(&plan_path).unwrap();
+    let timeline = f.core.list_history(&f.doc.session_id).unwrap();
+    assert_eq!(
+        timeline.retention.description.explanation.key(),
+        "history.retentionLimited"
+    );
+    let wire = serde_json::to_value(&timeline).unwrap();
+    assert!(wire["retention"].get("message").is_none());
+    assert!(wire["retention"]["description"]["diagnostics"].is_array());
+    assert!(wire["versions"].as_array().unwrap().iter().all(|record| {
+        record.get("message").is_none() && record["description"]["explanation"].is_object()
+    }));
+    let read = f.core.read_history(&f.doc.session_id, &version).unwrap();
+    assert_eq!(read.source, source);
+    assert_eq!(
+        read.preview_description.explanation.key(),
+        "history.sourceOnlyPreview"
+    );
+    let read_wire = serde_json::to_value(&read).unwrap();
+    assert!(read_wire.get("previewMessage").is_none());
+    assert!(read_wire["previewDescription"]["explanation"].is_object());
+    assert_ne!(
+        read.preview_description
+            .explanation
+            .render(weftext_messages::UiLocale::ZhCn),
+        read.preview_description
+            .explanation
+            .render(weftext_messages::UiLocale::EnUs)
+    );
+    assert_eq!(fs::read(&plan_path).unwrap(), original_plan);
+    assert_eq!(fs::read_to_string(&f.doc.path).unwrap(), source);
+}
+
+#[test]
+fn unreadable_retained_history_keeps_the_original_diagnostic_in_its_description() {
+    let mut f = HistoryFixture::new();
+    let (version, _) = f.save("retained source");
+    let plan = f.core.journal_path(&version, "plan");
+    let preserved = f.data.join("original-plan-preserved.json");
+    let original = fs::read(&plan).unwrap();
+    fs::rename(&plan, &preserved).unwrap();
+    let timeline = f.core.list_history(&f.doc.session_id).unwrap();
+    let entry = timeline
+        .versions
+        .iter()
+        .find(|entry| entry.version_id == version)
+        .unwrap();
+    assert_ne!(entry.status, "available");
+    assert!(!entry.description.diagnostics.is_empty());
+    assert!(
+        entry
+            .description
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.origin == DiagnosticOrigin::Os)
+    );
+    assert!(entry.description.details.is_some());
+    let error = f
+        .core
+        .read_history(&f.doc.session_id, &version)
+        .unwrap_err();
+    assert_eq!(error.code, "historyUnavailable");
+    assert_eq!(error.diagnostics, entry.description.diagnostics);
+    assert_eq!(fs::read(&preserved).unwrap(), original);
+    assert!(!plan.exists());
+}
+
+#[test]
 fn retained_trash_root_reads_exact_history_and_resources_without_content_write_rights() {
     let mut f = HistoryFixture::new();
     let initial = f.initial_version();
@@ -161,11 +426,14 @@ fn retained_trash_root_reads_exact_history_and_resources_without_content_write_r
         .managed_resource_snapshot(&f.root, &f.doc.path)
         .unwrap()
         .remove(0);
-    let before_identity = operations::capture_optional(Path::new(&before_resource.path))
-        .unwrap()
-        .unwrap()
-        .stamp
-        .identity;
+    let before_identity = operations::capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        Path::new(&before_resource.path),
+    )
+    .unwrap()
+    .unwrap()
+    .stamp
+    .identity;
     let draft = format!("{saved}\nprivate unsaved draft");
     f.core.persist_draft(&f.doc.session_id, &draft).unwrap();
     let history = f
@@ -208,11 +476,14 @@ fn retained_trash_root_reads_exact_history_and_resources_without_content_write_r
     assert_eq!(resource.bytes, before_resource.bytes);
     assert_eq!(resource.revision, before_resource.revision);
     assert_eq!(
-        operations::capture_optional(Path::new(&resource.path))
-            .unwrap()
-            .unwrap()
-            .stamp
-            .identity,
+        operations::capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            Path::new(&resource.path)
+        )
+        .unwrap()
+        .unwrap()
+        .stamp
+        .identity,
         before_identity
     );
     let operations_before = f.core.operations.len();
@@ -270,7 +541,10 @@ fn configured_owner_history_reads_exact_admitted_revision_without_other_sources(
     );
     drop(f.core);
     f.core = Core::new(&f.data).unwrap();
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     let guard = fs::OpenOptions::new()
         .read(true)
         .share_mode(0)
@@ -330,7 +604,7 @@ fn configured_owner_history_reads_exact_admitted_revision_without_other_sources(
 }
 
 #[test]
-fn history_legacy_time_and_clock_rollback_never_replace_commit_relationship() {
+fn history_optional_clock_and_clock_rollback_never_replace_commit_relationship() {
     let mut f = HistoryFixture::new();
     let initial = f.initial_version();
     let (second, _) = f.save("v2");
@@ -343,7 +617,6 @@ fn history_legacy_time_and_clock_rollback_never_replace_commit_relationship() {
             fact["savedAtUnixMs"] = serde_json::json!(time);
         } else {
             fact.as_object_mut().unwrap().remove("savedAtUnixMs");
-            fact.as_object_mut().unwrap().remove("commitSequence");
         }
         fs::write(path, serde_json::to_vec(&fact).unwrap()).unwrap();
     }
@@ -355,7 +628,7 @@ fn history_legacy_time_and_clock_rollback_never_replace_commit_relationship() {
         .unwrap();
     assert_eq!(old.saved_at_unix_ms, None);
     assert_eq!(old.time_basis, "unknown");
-    assert_eq!(old.commit_sequence, None);
+    assert!(old.commit_sequence.is_some());
     let v2 = timeline
         .versions
         .iter()
@@ -379,6 +652,24 @@ fn history_legacy_time_and_clock_rollback_never_replace_commit_relationship() {
     fs::write(path, serde_json::to_vec(&fact).unwrap()).unwrap();
     let tied = f.core.list_history(&f.doc.session_id).unwrap();
     assert_eq!(tied.versions[0].version_id, third);
+}
+
+#[test]
+fn history_missing_commit_sequence_refuses_admission_without_repairing_original() {
+    let f = HistoryFixture::new();
+    let initial = f.initial_version();
+    let path = f.core.journal_path(&initial, "commit");
+    let mut decision: serde_json::Value =
+        serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    decision.as_object_mut().unwrap().remove("commitSequence");
+    let invalid = serde_json::to_vec(&decision).unwrap();
+    fs::write(&path, &invalid).unwrap();
+    assert!(f.core.list_history(&f.doc.session_id).is_err());
+    assert_eq!(fs::read(&path).unwrap(), invalid);
+    let data = f.data.clone();
+    drop(f.core);
+    assert!(Core::new(data).is_err());
+    assert_eq!(fs::read(path).unwrap(), invalid);
 }
 
 #[test]
@@ -821,7 +1112,7 @@ fn history_external_rollback_to_former_committed_path_does_not_replace_hidden_dr
 }
 
 #[test]
-fn history_external_rename_keeps_unbound_actor_draft_in_bound_context() {
+fn history_external_rename_keeps_original_actor_input_scope_across_authority_context() {
     let mut f = HistoryFixture::new();
     let actor = "deployment:external-draft";
     let proposal = format!("{}\noriginal unbound private proposal", f.doc.source);
@@ -833,7 +1124,7 @@ fn history_external_rename_keeps_unbound_actor_draft_in_bound_context() {
             let path = core.draft_path(Path::new(&f.doc.path));
             let bytes = fs::read(&path)?;
             let draft: Draft = serde_json::from_slice(&bytes)?;
-            assert!(draft.library.is_none());
+            assert!(matches!(draft.scope, QualifiedInputScope::Library { .. }));
             Ok((path, bytes))
         })
         .unwrap();
@@ -890,7 +1181,10 @@ fn history_external_rename_keeps_unbound_actor_draft_in_bound_context() {
             assert_eq!(opened.recovered_draft.as_deref(), Some(proposal.as_str()));
             assert_eq!(fs::read(&draft_path)?, draft_bytes);
             let draft: Draft = serde_json::from_slice(&fs::read(&draft_path)?)?;
-            assert!(draft.library.is_none(), "an old scope is never backfilled");
+            assert!(
+                matches!(draft.scope, QualifiedInputScope::Library { .. }),
+                "authority changes do not retag original input"
+            );
             assert_eq!(core.list_history(&opened.session_id)?.versions.len(), 1);
             Ok(())
         })
@@ -936,22 +1230,18 @@ fn history_unresolved_restore_is_not_listed_or_blindly_executed_again() {
     let mut f = HistoryFixture::new();
     let initial = f.initial_version();
     f.save("v2");
-    let original_request = f.restore_request(&initial, "none", None);
-    f.core.restore_history(original_request).unwrap();
     let request = f.restore_request(&initial, "none", None);
-    let mut pending = f
-        .core
-        .operations
-        .values()
-        .find(|p| p.history_restore.is_some())
-        .unwrap()
-        .clone();
-    pending.operation_id = request.operation_id.clone();
-    pending.fingerprint = fresh();
-    pending.history_restore.as_mut().unwrap().fingerprint =
-        hash(&serde_json::to_vec(&request).unwrap());
-    f.core.stage(pending).unwrap();
     let original = fs::read(&f.doc.path).unwrap();
+    crate::hosted::set_test_failpoint("saveStaged");
+    assert_eq!(
+        f.core.restore_history(request.clone()).unwrap_err().code,
+        "injectedFailure"
+    );
+    let pending = &f.core.operations[&request.operation_id];
+    f.core.validate_file_save_plan(pending).unwrap();
+    let plan_bytes = fs::read(f.core.journal_path(&request.operation_id, "plan")).unwrap();
+    assert!(!f.core.committed(&request.operation_id).unwrap());
+    let operation_count = f.core.operations.len();
     assert_eq!(
         f.core
             .history_restore_status(&request.operation_id)
@@ -960,7 +1250,7 @@ fn history_unresolved_restore_is_not_listed_or_blindly_executed_again() {
         "recoveryPending"
     );
     assert_eq!(
-        f.core.restore_history(request).unwrap_err().code,
+        f.core.restore_history(request.clone()).unwrap_err().code,
         "recoveryPending"
     );
     assert_eq!(
@@ -968,6 +1258,11 @@ fn history_unresolved_restore_is_not_listed_or_blindly_executed_again() {
         "recoveryPending"
     );
     assert_eq!(fs::read(&f.doc.path).unwrap(), original);
+    assert_eq!(f.core.operations.len(), operation_count);
+    assert_eq!(
+        fs::read(f.core.journal_path(&request.operation_id, "plan")).unwrap(),
+        plan_bytes
+    );
 }
 
 #[test]
@@ -978,7 +1273,10 @@ fn history_reused_note_name_does_not_inherit_prebirth_moves() {
         source: display(&f.root.join("Note")),
         name: "Previous".into(),
     });
-    let fresh_note = f.core.create_note(&f.root, &f.root, "Note").unwrap();
+    let fresh_note = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Note")
+        .unwrap();
     let fresh_history = f.core.list_history(&fresh_note.session_id).unwrap();
     assert_ne!(fresh_note.node_id, original_id);
     assert_eq!(fresh_history.versions.len(), 1);
@@ -1110,4 +1408,110 @@ fn history_raced_external_write_never_rebases_the_protected_buffer() {
     assert_eq!(buffer_draft.base_source, saved);
     assert!(buffer_draft.base_known);
     assert_ne!(buffer_draft.base_source, external);
+}
+
+#[test]
+fn retained_history_keeps_independent_unknown_and_known_producers() {
+    let mut f = HistoryFixture::new();
+    f.core
+        .persist_draft(&f.doc.session_id, "Same retained input")
+        .unwrap();
+    let mut draft = f
+        .core
+        .current_session_draft(&f.doc.session_id)
+        .unwrap()
+        .unwrap();
+    draft.producer_id = None;
+    let bytes = serde_json::to_vec(&draft).unwrap();
+    for _ in 0..2 {
+        fs::write(
+            f.core
+                .draft_directory("draft-history")
+                .join(format!("{}.json", fresh())),
+            &bytes,
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        f.core
+            .list_history(&f.doc.session_id)
+            .unwrap()
+            .protected_drafts
+            .len(),
+        2
+    );
+    let mut known = draft.clone();
+    known.producer_id = Some(fresh());
+    for _ in 0..2 {
+        fs::write(
+            f.core
+                .draft_directory("draft-history")
+                .join(format!("{}.json", fresh())),
+            serde_json::to_vec(&known).unwrap(),
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        f.core
+            .list_history(&f.doc.session_id)
+            .unwrap()
+            .protected_drafts
+            .len(),
+        3
+    );
+    known.producer_id = Some(fresh());
+    fs::write(
+        f.core
+            .draft_directory("draft-history")
+            .join(format!("{}.json", fresh())),
+        serde_json::to_vec(&known).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        f.core
+            .list_history(&f.doc.session_id)
+            .unwrap()
+            .protected_drafts
+            .len(),
+        4
+    );
+}
+
+#[test]
+fn restore_retains_equal_text_buffer_independently_from_acknowledged_producer() {
+    let mut f = HistoryFixture::new();
+    let version = f.initial_version();
+    f.save("Saved S");
+    f.core
+        .persist_draft(&f.doc.session_id, "Shared pending buffer")
+        .unwrap();
+    let request = f.restore_request(&version, "retain", Some("Shared pending buffer"));
+    f.core.restore_history(request.clone()).unwrap();
+    let records = &f.core.operations[&request.operation_id]
+        .history_restore
+        .as_ref()
+        .unwrap()
+        .draft_records;
+    assert_eq!(records.len(), 2);
+    let retained: Vec<Draft> = records
+        .iter()
+        .map(|name| {
+            serde_json::from_slice(
+                &fs::read(
+                    f.core
+                        .draft_directory("draft-history")
+                        .join(format!("{name}.json")),
+                )
+                .unwrap(),
+            )
+            .unwrap()
+        })
+        .collect();
+    assert!(retained.iter().any(|draft| draft.producer_id.is_some()));
+    assert!(retained.iter().any(|draft| draft.producer_id.is_none()));
+    assert!(
+        retained
+            .iter()
+            .all(|draft| draft.source == "Shared pending buffer")
+    );
 }

@@ -5,6 +5,7 @@ use super::*;
 use crate::backend::{namespace_path_compare, namespace_relative_path};
 use crate::operations::{CapturedDirectory, SnapshotBinding, operation_read_control, read_blob};
 use std::cmp::Ordering;
+use weftext_messages::UiMessage;
 
 const MAX_DEPENDENCIES: usize = 4096;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
@@ -43,7 +44,7 @@ impl CompileDependency {
             _ => {
                 return Err(CoreError::new(
                     "invalidDependency",
-                    "Unknown native dependency kind",
+                    UiMessage::error_core_compile_dependencies_unknown_native_dependency_kind(),
                 ));
             }
         };
@@ -53,7 +54,7 @@ impl CompileDependency {
             _ => {
                 return Err(CoreError::new(
                     "invalidDependency",
-                    "Unknown native dependency status",
+                    UiMessage::error_core_compile_dependencies_unknown_native_dependency_status(),
                 ));
             }
         };
@@ -137,7 +138,7 @@ impl CompileDependencyWitness {
     }
 }
 
-fn stale(message: &str) -> CoreError {
+fn stale(message: UiMessage) -> CoreError {
     CoreError::new("staleBase", message)
 }
 
@@ -145,7 +146,7 @@ fn relative_path(text: &str) -> Result<PathBuf> {
     if text.is_empty() || text.len() > 4096 || text.chars().any(|c| c.is_control() || c == ':') {
         return Err(CoreError::new(
             "invalidPath",
-            "Native dependency must have one bounded project-relative path",
+            UiMessage::error_core_compile_dependencies_native_dependency_must_have_one_bounded_project_relative_path(),
         ));
     }
     let text = text.replace('\\', "/");
@@ -155,7 +156,7 @@ fn relative_path(text: &str) -> Result<PathBuf> {
     {
         return Err(CoreError::new(
             "invalidPath",
-            "Native dependency cannot contain empty or dot path components",
+            UiMessage::error_core_compile_dependencies_native_dependency_cannot_contain_empty_or_dot_path_components(),
         ));
     }
     let path = PathBuf::from(text);
@@ -166,7 +167,7 @@ fn relative_path(text: &str) -> Result<PathBuf> {
     {
         return Err(CoreError::new(
             "invalidPath",
-            "Native dependency must stay in its frozen project",
+            UiMessage::error_core_compile_dependencies_native_dependency_must_stay_in_frozen_project(),
         ));
     }
     Ok(path)
@@ -227,7 +228,7 @@ impl Core {
         if !self.admitted_cuts.contains_key(cut_id) || directories.len() > 5000 {
             return Err(CoreError::new(
                 "cutExpired",
-                "The original compile cut is unavailable",
+                UiMessage::error_core_compile_dependencies_original_compile_cut_unavailable(),
             ));
         }
         self.compile_dependency_cuts
@@ -237,7 +238,7 @@ impl Core {
         if find_path(&directories, &root, |directory| Path::new(&directory.path))?.is_none() {
             return Err(CoreError::new(
                 "cutExpired",
-                "Compile cut lacks its original directory root",
+                UiMessage::error_core_compile_dependencies_compile_cut_lacks_original_directory_root(),
             ));
         }
         self.compile_dependency_cuts
@@ -276,22 +277,28 @@ impl Core {
         let root = absolute_path(root)?;
         self.require_workspace(&root)?;
         let raw = self.compile_dependency_cuts.get(cut_id).ok_or_else(|| {
-            CoreError::new("cutExpired", "Use the original complete native compile cut")
+            CoreError::new(
+                "cutExpired",
+                UiMessage::error_core_compile_dependencies_use_original_complete_native_compile_cut(
+                ),
+            )
         })?;
         if !equal_path(&raw.root, &root)? {
             return Err(CoreError::new(
                 "outsideRoot",
-                "The original compile cut belongs to another library",
+                UiMessage::error_core_compile_dependencies_original_compile_cut_belongs_to_another_library(),
             ));
         }
-        let cut = self
-            .admitted_cuts
-            .get(cut_id)
-            .ok_or_else(|| CoreError::new("cutExpired", "The original admitted cut expired"))?;
+        let cut = self.admitted_cuts.get(cut_id).ok_or_else(|| {
+            CoreError::new(
+                "cutExpired",
+                UiMessage::error_core_compile_dependencies_original_admitted_cut_expired(),
+            )
+        })?;
         if dependencies.len() > MAX_DEPENDENCIES {
             return Err(CoreError::new(
                 "budget",
-                "Too many actual native dependency observations",
+                UiMessage::error_core_compile_dependencies_too_many_actual_native_dependency_observations(),
             ));
         }
         let mut bindings = cut
@@ -299,7 +306,7 @@ impl Core {
             .iter()
             .map(|base| {
                 self.snapshots.get(base).ok_or_else(|| {
-                    CoreError::new("cutExpired", "An original compile input basis expired")
+                    CoreError::new("cutExpired", UiMessage::error_core_compile_dependencies_original_compile_input_basis_expired())
                 })
             })
             .collect::<Result<Vec<_>>>()?;
@@ -307,7 +314,8 @@ impl Core {
             if namespace_relative_path(Path::new(&binding.path), &root)?.is_none() {
                 return Err(CoreError::new(
                     "outsideRoot",
-                    "An original compile input escaped its root",
+                    UiMessage::error_core_compile_dependencies_original_compile_input_escaped_root(
+                    ),
                 ));
             }
         }
@@ -319,7 +327,7 @@ impl Core {
             {
                 if !same_binding(last, binding) {
                     return Err(stale(
-                        "Competing original bases describe the same compile input",
+                        UiMessage::error_core_compile_dependencies_competing_original_bases_describe_same_compile_input(),
                     ));
                 }
                 continue;
@@ -349,7 +357,7 @@ impl Core {
                 && previous.derived() != dependency.derived()
             {
                 return Err(stale(
-                    "An actual input cannot also be a producer-owned virtual file",
+                    UiMessage::error_core_compile_dependencies_actual_input_cannot_also_producer_owned_virtual_file(),
                 ));
             }
             previous = Some(dependency);
@@ -363,7 +371,7 @@ impl Core {
                     || directory.is_some()
                 {
                     return Err(stale(
-                        "A producer-owned virtual input collides with an original author object",
+                        UiMessage::error_core_compile_dependencies_producer_owned_virtual_input_collides_with_original_author_object(),
                     ));
                 }
                 witness.add_negative(&root, &path, &unique, &raw.directories)?;
@@ -374,21 +382,21 @@ impl Core {
                     witness.add_file(binding)?;
                 } else if dependency.status == CompileDependencyStatus::Loaded {
                     return Err(stale(
-                        "Loaded native input was absent from its original cut",
+                        UiMessage::error_core_compile_dependencies_loaded_native_input_was_absent_from_original_cut(),
                     ));
                 } else {
                     witness.add_negative(&root, &path, &unique, &raw.directories)?;
                 }
             } else if dependency.status == CompileDependencyStatus::Loaded {
-                return Err(stale("Loaded native input has no original captured bytes"));
+                return Err(stale(UiMessage::error_core_compile_dependencies_loaded_native_input_has_no_original_captured_bytes()));
             } else if let Some(directory) = directory {
                 let parent = path
                     .parent()
-                    .ok_or_else(|| stale("A native directory dependency lacks its parent"))?;
+                    .ok_or_else(|| stale(UiMessage::error_core_compile_dependencies_native_directory_dependency_lacks_parent()))?;
                 let original_parent = find_path(&raw.directories, parent, |directory| {
                     Path::new(&directory.path)
                 })?
-                .ok_or_else(|| stale("The original directory parent is unavailable"))?;
+                .ok_or_else(|| stale(UiMessage::error_core_compile_dependencies_original_directory_parent_unavailable()))?;
                 if !witness
                     .directories
                     .iter()
@@ -425,16 +433,21 @@ impl Core {
         action: impl FnOnce(&Core) -> Result<T>,
     ) -> Result<T> {
         self.require_workspace(&witness.root)?;
-        let root_guard = ParentGuard::acquire(&witness.root.join(".compile-dependency-root"))?;
+        let root_guard = ParentGuard::acquire(
+            &self.backend,
+            &witness.root.join(".compile-dependency-root"),
+        )?;
         if root_guard.directory_identity()? != witness.root_identity {
-            return Err(stale("The original compile root was replaced"));
+            return Err(stale(
+                UiMessage::error_core_compile_dependencies_original_compile_root_was_replaced(),
+            ));
         }
         let mut guards = vec![root_guard];
         let mut handles = vec![];
         for basis in &witness.files {
             let path = Path::new(&basis.path);
             self.check_pending(path)?;
-            let guard = ParentGuard::acquire(path)?;
+            let guard = ParentGuard::acquire(&self.backend, path)?;
             let mut handle = if operation_read_control(&witness.root, path) {
                 guard.open_read_guard_file()?
             } else {
@@ -448,20 +461,23 @@ impl Core {
                 || read_blob(&mut handle)? != expected.bytes
             {
                 return Err(stale(
-                    "An actual native dependency changed its original object, bytes or parent",
+                    UiMessage::error_core_compile_dependencies_actual_native_dependency_changed_original_object_bytes_or_parent(),
                 ));
             }
             guards.push(guard);
             handles.push((handle, expected));
         }
         for directory in &witness.directories {
-            let parent = ParentGuard::acquire(&directory.path)?;
-            let child = ParentGuard::acquire(&directory.path.join(".compile-directory-input"))?;
+            let parent = ParentGuard::acquire(&self.backend, &directory.path)?;
+            let child = ParentGuard::acquire(
+                &self.backend,
+                &directory.path.join(".compile-directory-input"),
+            )?;
             if parent.directory_identity()? != directory.parent
                 || child.directory_identity()? != directory.identity
             {
                 return Err(stale(
-                    "An original directory input was replaced or reparented",
+                    UiMessage::error_core_compile_dependencies_original_directory_input_was_replaced_or_reparented(),
                 ));
             }
             guards.push(parent);
@@ -469,23 +485,23 @@ impl Core {
         }
         for slot in &witness.absent {
             self.check_pending(&slot.path)?;
-            let guard = ParentGuard::acquire(&slot.path)?;
+            let guard = ParentGuard::acquire(&self.backend, &slot.path)?;
             if guard.directory_identity()? != slot.parent {
-                return Err(stale("An unavailable input's original parent was replaced"));
+                return Err(stale(UiMessage::error_core_compile_dependencies_unavailable_input_s_original_parent_was_replaced()));
             }
-            absent(&slot.path)?;
+            absent(&self.backend, &slot.path)?;
             guards.push(guard);
         }
         let result = action(self);
         for (handle, expected) in &mut handles {
             if stamp(handle)? != expected.stamp || read_blob(handle)? != expected.bytes {
                 return Err(stale(
-                    "An actual native dependency changed during the final read decision",
+                    UiMessage::error_core_compile_dependencies_actual_native_dependency_changed_during_final_read_decision(),
                 ));
             }
         }
         for slot in &witness.absent {
-            absent(&slot.path)?;
+            absent(&self.backend, &slot.path)?;
         }
         drop(handles);
         drop(guards);
@@ -498,7 +514,7 @@ impl CompileDependencyWitness {
         for original in &self.files {
             if equal_path(Path::new(&original.path), Path::new(&basis.path))? {
                 if !same_binding(original, basis) {
-                    return Err(stale("Competing native dependency versions"));
+                    return Err(stale(UiMessage::error_core_compile_dependencies_competing_native_dependency_versions()));
                 }
                 return Ok(());
             }
@@ -514,7 +530,8 @@ impl CompileDependencyWitness {
         {
             return Err(CoreError::new(
                 "budget",
-                "Actual native dependencies exceed 64 MiB",
+                UiMessage::error_core_compile_dependencies_actual_native_dependencies_exceed64_mi_b(
+                ),
             ));
         }
         self.files.push(basis.clone());
@@ -528,7 +545,10 @@ impl CompileDependencyWitness {
         directories: &[CapturedDirectory],
     ) -> Result<()> {
         let relative = namespace_relative_path(path, root)?.ok_or_else(|| {
-            CoreError::new("outsideRoot", "Native dependency escaped its project")
+            CoreError::new(
+                "outsideRoot",
+                UiMessage::error_core_compile_dependencies_native_dependency_escaped_project(),
+            )
         })?;
         let mut parent = root.to_path_buf();
         for component in relative.components() {
@@ -546,14 +566,14 @@ impl CompileDependencyWitness {
             }
             let original_parent =
                 find_path(directories, &parent, |directory| Path::new(&directory.path))?
-                    .ok_or_else(|| stale("A negative input has no original directory anchor"))?;
+                    .ok_or_else(|| stale(UiMessage::error_core_compile_dependencies_negative_input_has_no_original_directory_anchor()))?;
             if original_parent.entries.iter().any(|entry| {
                 entry.rsplit_once(':').is_some_and(|(name, _)| {
                     equal_path(Path::new(name), Path::new(component.as_os_str())).unwrap_or(false)
                 })
             }) {
                 return Err(stale(
-                    "An original directory entry has no complete captured object",
+                    UiMessage::error_core_compile_dependencies_original_directory_entry_has_no_complete_captured_object(),
                 ));
             }
             for slot in &self.absent {
@@ -568,18 +588,18 @@ impl CompileDependencyWitness {
             return Ok(());
         }
         Err(stale(
-            "A producer-owned virtual input collides with an original directory",
+            UiMessage::error_core_compile_dependencies_producer_owned_virtual_input_collides_with_original_directory(),
         ))
     }
 }
 
-fn absent(path: &Path) -> Result<()> {
-    match fs::symlink_metadata(path) {
-        Ok(_) => Err(stale(
-            "An originally unavailable native input slot is now occupied",
-        )),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.into()),
+fn absent(backend: &crate::BackendContext, path: &Path) -> Result<()> {
+    if backend.entry_exists(path)? {
+        Err(stale(
+            weftext_messages::UiMessage::error_core_compile_dependencies_originally_unavailable_native_input_slot_now_occupied(),
+        ))
+    } else {
+        Ok(())
     }
 }
 

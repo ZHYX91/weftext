@@ -157,7 +157,7 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "resourceCollectionChanged",
-        "资源集合、准确登记版本或原导入计划已变化；请保留原件并核对原操作。",
+        UiMessage::error_api_hosted_resource_collections_collection_basis_changed(),
     )
 }
 fn resource_diagnostic_line(
@@ -165,7 +165,7 @@ fn resource_diagnostic_line(
     phase: &str,
     id: &str,
     code: &str,
-    message: &str,
+    diagnostics: &[RawDiagnostic],
 ) -> Option<String> {
     if setting != Some(std::ffi::OsStr::new("1")) {
         return None;
@@ -182,41 +182,47 @@ fn resource_diagnostic_line(
             "redacted"
         }
     }
-    let os_error = message
-        .rsplit_once("(os error ")
-        .and_then(|(_, suffix)| suffix.split_once(')'))
-        .map(|(number, _)| number)
-        .filter(|number| !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit()))
-        .and_then(|number| number.parse::<u32>().ok());
+    // Keep only bounded typed provenance. Diagnostic wording is private raw
+    // evidence, never an OS-code parser or an error-state discriminator.
+    let origins = diagnostics
+        .iter()
+        .take(32)
+        .map(|diagnostic| diagnostic.origin)
+        .collect::<Vec<_>>();
     let safe_id = digest(id.as_bytes()).chars().take(16).collect::<String>();
     let record = json!({
         "phase":safe_code(phase),
         "id":safe_id,
         "code":safe_code(code),
-        "osError":os_error,
+        "diagnosticOrigins":origins,
     });
     serde_json::to_string(&record)
         .ok()
         .map(|record| format!("weftext-resource-diagnostic {record}"))
 }
-fn resource_diagnostic(phase: &str, id: &str, code: &str, message: &str) {
+fn resource_diagnostic(phase: &str, id: &str, code: &str, diagnostics: &[RawDiagnostic]) {
     if let Some(line) = resource_diagnostic_line(
         std::env::var_os("WEFTEXT_TEST_RESOURCE_DIAGNOSTICS").as_deref(),
         phase,
         id,
         code,
-        message,
+        diagnostics,
     ) {
         use std::io::Write as _;
         let _ = writeln!(std::io::stderr().lock(), "{line}");
     }
 }
 fn scoped_core_error(phase: &str, collection: &str, error: CoreError) -> ApiError {
-    resource_diagnostic(phase, collection, &error.code, &error.message);
+    resource_diagnostic(phase, collection, &error.code, &error.diagnostics);
     changed()
 }
 fn core_error(error: CoreError) -> ApiError {
-    resource_diagnostic("generic_core", "unscoped_core", &error.code, &error.message);
+    resource_diagnostic(
+        "generic_core",
+        "unscoped_core",
+        &error.code,
+        &error.diagnostics,
+    );
     changed()
 }
 /// The special empty Office slot is tied to its original committed producer,
@@ -268,7 +274,7 @@ pub(super) fn qualify(
     collection: &str,
 ) -> Result<QualifiedResourceCollection, ApiError> {
     content_import::qualify_member(inner, collection).inspect_err(|error| {
-        resource_diagnostic("qualify_member", collection, &error.code, "");
+        resource_diagnostic("qualify_member", collection, &error.code, &[]);
     })?;
     let c = configured(inner, collection)?;
     let owner = inner.file(&c.owner).ok().ok_or_else(unavailable)?;
@@ -283,7 +289,9 @@ pub(super) fn qualify(
         )
         .map_err(|error| scoped_core_error("qualify_collection", collection, error))?;
     if captured.retained_bytes() > MAX_BYTES {
-        return Err(ApiError::bad("资源集合准确依据超过 32 MiB 读取预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_resource_collections_collection_read_budget(),
+        ));
     }
     Ok(captured)
 }
@@ -319,7 +327,9 @@ pub(super) fn expand_inputs(
             }
             let members = content_import::slot_member_ids(inner, slot)?;
             if members.len() > 64 {
-                return Err(ApiError::bad("展开输入超过 64 项预算"));
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_resource_collections_expanded_input_count_limit(),
+                ));
             }
             for member in members {
                 expanded.push(member.clone());
@@ -345,13 +355,15 @@ pub(super) fn expand_inputs(
                         "expand_new_unrecognized",
                         collection,
                         "unrecognized_entries",
-                        "",
+                        &[],
                     );
                     return Err(changed());
                 }
                 bytes = bytes.saturating_add(captured.retained_bytes());
                 if bytes > MAX_BYTES {
-                    return Err(ApiError::bad("资源集合准确依据超过 32 MiB 输入预算"));
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_resource_collections_collection_input_budget(),
+                    ));
                 }
                 captures.insert(collection.to_owned(), Arc::new(captured));
             }
@@ -362,7 +374,7 @@ pub(super) fn expand_inputs(
                         "expand_cached_unrecognized",
                         collection,
                         "unrecognized_entries",
-                        "",
+                        &[],
                     );
                     return Err(changed());
                 }
@@ -385,7 +397,7 @@ pub(super) fn expand_inputs(
             actual.insert(id.clone());
         }
         if actual.len() > 64 {
-            return Err(ApiError::bad("显式输入展开后超过 64 项预算"));
+            return Err(ApiError::bad(UiMessage::error_api_hosted_resource_collections_explicit_expanded_input_count_limit()));
         }
     }
     Ok((actual.into_iter().collect(), captures.into_iter().collect()))
@@ -538,18 +550,18 @@ fn member_import_fingerprint(
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Prepare>,
+    RequestJson(req): RequestJson<Prepare>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
             let actor = inner.actor(&auth)?;
             import_access(inner, &actor, &req.collection)?;
             if req.bytes_base64.len() > MAX_UPLOAD.div_ceil(3) * 4 {
-                return Err(ApiError::bad("资源原件上限为 16 MiB"));
+                return Err(ApiError::bad(UiMessage::error_api_hosted_resource_collections_resource_original_size_limit()));
             }
             let bytes = base64::engine::general_purpose::STANDARD
                 .decode(&req.bytes_base64)
-                .map_err(|_| ApiError::bad("资源原件编码无效"))?;
+                .map_err(|_| ApiError::bad(UiMessage::error_api_hosted_resource_collections_resource_original_encoding_invalid()))?;
             prepare_member_import(
                 inner,
                 &actor,
@@ -575,10 +587,14 @@ pub(super) fn prepare_member_import(
 ) -> Result<Value, ApiError> {
     let config = import_access(inner, actor, collection)?;
     if !valid_name(name) {
-        return Err(ApiError::bad("资源名称必须是一个有效文件名"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_resource_collections_resource_filename_invalid(),
+        ));
     }
     if bytes.len() > MAX_UPLOAD {
-        return Err(ApiError::bad("资源原件上限为 16 MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_resource_collections_resource_original_size_limit(),
+        ));
     }
     let fp = member_import_fingerprint(collection, name, &bytes)?;
     let actor_scope = scope(inner, actor);
@@ -634,7 +650,9 @@ pub(super) fn prepare_member_import(
             .saturating_add(bytes.len())
             > MAX_BYTES
         {
-            return Err(ApiError::bad("原件及准确导入依据超过 32 MiB 预算"));
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_resource_collections_resource_import_basis_budget(),
+            ));
         }
         let (metadata, content_type) = crate::media_api::inspect_media(&bytes);
         let decision = Decision {
@@ -643,7 +661,7 @@ pub(super) fn prepare_member_import(
             binding: binding(inner, collection)?,
             owner: captured.owner,
         };
-        let preview = json!({"summary":"以原生资源导入所选所有者，保留现有登记和未知成员；不保存正文或增加读取授权。","name":name,"bytes":bytes.len(),"contentType":content_type,"metadata":metadata,"_resourceImport":decision});
+        let preview = json!({"summary":UiMessage::error_api_hosted_resource_collections_import_plan_summary(),"name":name,"bytes":bytes.len(),"contentType":content_type,"metadata":metadata,"_resourceImport":decision});
         let request = OperationRequest {
             operation_id: operation_id.into(),
             root: root.to_string_lossy().into_owned(),
@@ -680,7 +698,7 @@ pub(super) fn prepare_member_import(
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -749,7 +767,7 @@ pub(super) fn member_import_status_matching(
 async fn commit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Commit>,
+    RequestJson(req): RequestJson<Commit>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -800,7 +818,7 @@ pub(super) fn commit_member_import(
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -847,18 +865,22 @@ mod diagnostic_tests {
                     "qualify_collection",
                     "private collection",
                     "resourceManifestUnavailable",
-                    "private message (os error 5)",
+                    &[RawDiagnostic {
+                        origin: DiagnosticOrigin::Os,
+                        text: "private message (os error 5)".into()
+                    }],
                 )
                 .is_none()
             );
         }
         assert!(
-            resource_diagnostic_line(Some(OsStr::new("1")), "phase", "id", "code", "").is_some()
+            resource_diagnostic_line(Some(OsStr::new("1")), "phase", "id", "code", &[]).is_some()
         );
     }
 
     #[test]
-    fn resource_diagnostic_formatter_emits_only_safe_fields_and_the_last_os_number() {
+    fn resource_diagnostic_formatter_emits_bounded_typed_origins_without_parsing_or_disclosing_text()
+     {
         let id = "private collection/path?token=secret";
         let message = "private body and path (os error 2), later failure (os error 32)";
         let line = resource_diagnostic_line(
@@ -866,7 +888,10 @@ mod diagnostic_tests {
             "qualify_collection",
             id,
             "resourceManifestUnavailable",
-            message,
+            &[RawDiagnostic {
+                origin: DiagnosticOrigin::Os,
+                text: message.into(),
+            }],
         )
         .unwrap();
         let record: Value =
@@ -875,7 +900,7 @@ mod diagnostic_tests {
         assert_eq!(record.as_object().unwrap().len(), 4);
         assert_eq!(record["phase"], "qualify_collection");
         assert_eq!(record["code"], "resourceManifestUnavailable");
-        assert_eq!(record["osError"], 32);
+        assert_eq!(record["diagnosticOrigins"], json!(["os"]));
         assert_eq!(record["id"], digest(id.as_bytes())[..16]);
         assert!(
             record["id"]
@@ -892,7 +917,13 @@ mod diagnostic_tests {
             "private/phase",
             id,
             "private/code\nbody",
-            "private (os error 5) later (os error not-a-number)",
+            &vec![
+                RawDiagnostic {
+                    origin: DiagnosticOrigin::Dependency,
+                    text: "private (os error 5) later (os error not-a-number)".into()
+                };
+                40
+            ],
         )
         .unwrap();
         let record: Value = serde_json::from_str(
@@ -903,7 +934,14 @@ mod diagnostic_tests {
         .unwrap();
         assert_eq!(record["phase"], "redacted");
         assert_eq!(record["code"], "redacted");
-        assert!(record["osError"].is_null());
+        assert_eq!(record["diagnosticOrigins"].as_array().unwrap().len(), 32);
+        assert!(
+            record["diagnosticOrigins"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|origin| origin == "dependency")
+        );
         assert!(!redacted.contains("private"));
     }
 }
@@ -950,7 +988,7 @@ mod tests {
         prepare(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Prepare {
+            crate::RequestJson(Prepare {
                 collection: "Owned".into(),
                 name: name.into(),
                 bytes_base64: base64::engine::general_purpose::STANDARD.encode(bytes),
@@ -1093,7 +1131,7 @@ mod tests {
         let result = commit(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Commit {
+            crate::RequestJson(Commit {
                 collection: "Owned".into(),
                 operation_id: id,
                 plan_id: proposal["planId"].as_str().unwrap().into(),
@@ -1130,7 +1168,7 @@ mod tests {
         let settled = settle(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 collection: "Owned".into(),
                 operation_id: missing.clone(),
             }),
@@ -1152,7 +1190,7 @@ mod tests {
         let settled = settle(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Operation {
+            crate::RequestJson(Operation {
                 collection: "Owned".into(),
                 operation_id: known.clone(),
             }),
@@ -1201,7 +1239,7 @@ mod tests {
             commit(
                 State(state.clone()),
                 Extension(auth.clone()),
-                Json(Commit {
+                crate::RequestJson(Commit {
                     collection: "Owned".into(),
                     operation_id: id,
                     plan_id: proposal["planId"].as_str().unwrap().into()

@@ -6,10 +6,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{Cursor, Read, Write};
+use weftext_messages::{ErrorDescription, UiMessage};
 use zip::{CompressionMethod, ZipArchive, ZipWriter, write::SimpleFileOptions};
 
 pub const NATIVE_FORMAT: &str = "weftext.native-package";
-pub const NATIVE_VERSION: u32 = 1;
+pub const NATIVE_VERSION: u32 = 2;
 pub const MAX_PACKAGE_BYTES: usize = 64 * 1024 * 1024;
 pub const MAX_PACKAGE_FILES: usize = 5000;
 const MAX_MANIFEST_BYTES: usize = 2 * 1024 * 1024;
@@ -65,7 +66,20 @@ impl NativeEntry {
 pub struct NativeLoss {
     pub path: String,
     pub code: String,
-    pub detail: String,
+    #[serde(flatten)]
+    pub description: ErrorDescription,
+    pub product_diagnostics: Vec<ErrorDescription>,
+}
+impl NativeLoss {
+    pub fn from_error(path: String, code: String, error: crate::ExportError) -> Self {
+        let (description, product_diagnostics) = error.into_parts();
+        Self {
+            path,
+            code,
+            description,
+            product_diagnostics,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -75,10 +89,9 @@ pub struct NativeManifest {
     pub version: u32,
     pub package_id: String,
     pub workspace_id: String,
-    /// v1 freezes the complete admitted live library, not an arbitrary raw tree.
+    /// v2 freezes the complete admitted live library, not an arbitrary raw tree.
     pub scope: String,
     pub schema_path: String,
-    #[serde(deserialize_with = "unique_entries")]
     pub entries: BTreeMap<String, NativeEntry>,
     #[serde(default)]
     pub losses: Vec<NativeLoss>,
@@ -93,53 +106,40 @@ pub struct NativePackage {
 #[derive(Debug, Clone)]
 pub struct NativeError {
     pub code: String,
-    pub message: String,
+    pub description: Box<ErrorDescription>,
+    pub product_diagnostics: Vec<ErrorDescription>,
 }
 impl NativeError {
-    fn new(code: &str, message: impl Into<String>) -> Self {
+    fn new(code: &str, description: impl Into<ErrorDescription>) -> Self {
         Self {
             code: code.into(),
-            message: message.into(),
+            description: Box::new(description.into()),
+            product_diagnostics: Vec::new(),
+        }
+    }
+    pub fn into_parts(self) -> (ErrorDescription, Vec<ErrorDescription>) {
+        (*self.description, self.product_diagnostics)
+    }
+    fn from_data(code: &str, error: weftext_data::DataError) -> Self {
+        let (description, product_diagnostics) = crate::ExportError::from_data(error).into_parts();
+        Self {
+            code: code.into(),
+            description: Box::new(description),
+            product_diagnostics,
         }
     }
 }
 impl std::fmt::Display for NativeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.code, self.message)
+        write!(f, "{}: {}", self.code, self.description)?;
+        for diagnostic in &self.product_diagnostics {
+            write!(f, "\n{diagnostic}")?;
+        }
+        Ok(())
     }
 }
 impl std::error::Error for NativeError {}
 type Result<T> = std::result::Result<T, NativeError>;
-
-fn unique_entries<'de, D: serde::Deserializer<'de>>(
-    deserializer: D,
-) -> std::result::Result<BTreeMap<String, NativeEntry>, D::Error> {
-    struct Entries;
-    impl<'de> serde::de::Visitor<'de> for Entries {
-        type Value = BTreeMap<String, NativeEntry>;
-        fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_str("a native entry map with unique member names")
-        }
-        fn visit_map<A: serde::de::MapAccess<'de>>(
-            self,
-            mut map: A,
-        ) -> std::result::Result<Self::Value, A::Error> {
-            let mut output = BTreeMap::new();
-            while let Some((key, value)) = map.next_entry::<String, NativeEntry>()? {
-                if output.insert(key, value).is_some() {
-                    return Err(serde::de::Error::custom("Duplicate native manifest member"));
-                }
-                if output.len() > MAX_PACKAGE_FILES {
-                    return Err(serde::de::Error::custom(
-                        "Native manifest member budget exceeded",
-                    ));
-                }
-            }
-            Ok(output)
-        }
-    }
-    deserializer.deserialize_map(Entries)
-}
 
 pub fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -167,7 +167,9 @@ pub fn append_generated_bibliography(
     if owners.len() != 1 {
         return Err(NativeError::new(
             "packageOwner",
-            "Generated bibliography requires one exact source owner",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_bibliography_owner_required(),
+            ),
         ));
     }
     let parent = owners[0].rsplit_once('/').unwrap().0;
@@ -187,7 +189,9 @@ pub fn append_generated_bibliography(
     {
         return Err(NativeError::new(
             "packagePath",
-            "Generated bibliography would occupy an original or omitted member",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_bibliography_member_occupied(),
+            ),
         ));
     }
     validate_generated_bibliography(&bytes)?;
@@ -201,7 +205,7 @@ pub fn append_generated_bibliography(
     {
         return Err(NativeError::new(
             "packageBudget",
-            "Generated bibliography exceeds the native package budget",
+            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_bibliography_package_budget_exceeded()),
         ));
     }
     let mut entry = NativeEntry::new(NativeFileRole::GeneratedBibliography, &bytes);
@@ -215,16 +219,24 @@ fn validate_generated_bibliography(bytes: &[u8]) -> Result<()> {
     if bytes.len() > 8 * 1024 * 1024 {
         return Err(NativeError::new(
             "packageBudget",
-            "Generated bibliography exceeds 8 MiB",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_bibliography_bytes_exceeded(),
+            ),
         ));
     }
     let text = std::str::from_utf8(bytes).map_err(|_| {
-        NativeError::new("packageBibliography", "Generated bibliography is not UTF-8")
+        NativeError::new("packageBibliography", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_bibliography_utf_eight_required()))
     })?;
     let raw = biblatex::RawBibliography::parse(text).map_err(|error| {
         NativeError::new(
             "packageBibliography",
-            format!("Generated bibliography is invalid: {error}"),
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_bibliography_invalid(),
+            )
+            .diagnostic(
+                weftext_messages::DiagnosticOrigin::Dependency,
+                error.to_string(),
+            ),
         )
     })?;
     let mut abbreviations = BTreeSet::new();
@@ -232,7 +244,7 @@ fn validate_generated_bibliography(bytes: &[u8]) -> Result<()> {
         if !abbreviations.insert(abbreviation.key.v.to_ascii_lowercase()) {
             return Err(NativeError::new(
                 "packageBibliography",
-                "Duplicate generated bibliography abbreviation",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_bibliography_abbreviation_duplicate()),
             ));
         }
     }
@@ -242,7 +254,7 @@ fn validate_generated_bibliography(bytes: &[u8]) -> Result<()> {
             if !fields.insert(field.key.v.to_ascii_lowercase()) {
                 return Err(NativeError::new(
                     "packageBibliography",
-                    "Duplicate generated bibliography field",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_bibliography_field_duplicate()),
                 ));
             }
         }
@@ -250,13 +262,19 @@ fn validate_generated_bibliography(bytes: &[u8]) -> Result<()> {
     let bibliography = biblatex::Bibliography::from_raw(raw).map_err(|error| {
         NativeError::new(
             "packageBibliography",
-            format!("Generated bibliography is invalid: {error}"),
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_bibliography_invalid(),
+            )
+            .diagnostic(
+                weftext_messages::DiagnosticOrigin::Dependency,
+                error.to_string(),
+            ),
         )
     })?;
     if bibliography.is_empty() || bibliography.len() > 4096 {
         return Err(NativeError::new(
             "packageBibliography",
-            "Generated bibliography requires 1 to 4096 records",
+            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_bibliography_record_range_required()),
         ));
     }
     Ok(())
@@ -268,7 +286,9 @@ pub fn validate_member_path(path: &str) -> Result<()> {
     if path.is_empty() || path.len() > 1024 || path.starts_with('/') || path.contains('\\') {
         return Err(NativeError::new(
             "packagePath",
-            "Noncanonical native member path",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_member_path_noncanonical(),
+            ),
         ));
     }
     for part in path.split('/') {
@@ -296,7 +316,13 @@ pub fn validate_member_path(path: &str) -> Result<()> {
         {
             return Err(NativeError::new(
                 "packagePath",
-                format!("Unsafe native member path: {path}"),
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_native_package_unsafe_member_path(
+                        weftext_messages::params::ErrorExportNativePackageUnsafeMemberPath {
+                            path: (path).to_string(),
+                        },
+                    ),
+                ),
             ));
         }
     }
@@ -307,22 +333,36 @@ fn uuid(value: &str) -> bool {
     uuid::Uuid::parse_str(value).is_ok_and(|u| u.to_string() == value)
 }
 
+fn unsupported_version(version: u32) -> NativeError {
+    NativeError::new(
+        "unsupportedVersion",
+        UiMessage::error_export_native_package_version_unsupported(
+            weftext_messages::params::ErrorExportNativePackageVersionUnsupported {
+                version: weftext_messages::UiInteger::new(i64::from(version))
+                    .expect("u32 fits the exact message integer domain"),
+            },
+        ),
+    )
+}
+
 /// Validates a closed exact byte map and the only supported package version.
 pub fn validate_native_package(package: &NativePackage) -> Result<()> {
     let manifest = &package.manifest;
-    if manifest.format != NATIVE_FORMAT
-        || manifest.version != NATIVE_VERSION
-        || manifest.scope != "library"
-    {
+    if manifest.version != NATIVE_VERSION {
+        return Err(unsupported_version(manifest.version));
+    }
+    if manifest.format != NATIVE_FORMAT || manifest.scope != "library" {
         return Err(NativeError::new(
             "packageVersion",
-            "Unsupported native package format/version/scope",
+            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_format_version_or_scope_unsupported()),
         ));
     }
     if !uuid(&manifest.package_id) || !uuid(&manifest.workspace_id) {
         return Err(NativeError::new(
             "packageIdentity",
-            "Package/workspace identities must be canonical UUIDs",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_package_workspace_uuid_required(),
+            ),
         ));
     }
     if package.files.len() != manifest.entries.len()
@@ -337,7 +377,7 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
     {
         return Err(NativeError::new(
             "packageBudget",
-            "Native package is incomplete or exceeds the member budget",
+            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_package_incomplete_or_member_budget_exceeded()),
         ));
     }
     let mut paths = BTreeSet::new();
@@ -349,17 +389,28 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
         if path == MANIFEST_PATH || !paths.insert(path.to_lowercase()) {
             return Err(NativeError::new(
                 "packagePath",
-                "Duplicate/colliding native member path",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_native_package_member_path_collision(
+                    ),
+                ),
             ));
         }
-        let bytes = package
-            .files
-            .get(path)
-            .ok_or_else(|| NativeError::new("packageManifest", "Missing declared native member"))?;
+        let bytes = package.files.get(path).ok_or_else(|| {
+            NativeError::new(
+                "packageManifest",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_native_package_declared_member_missing(),
+                ),
+            )
+        })?;
         if entry.bytes != bytes.len() || entry.sha256 != digest(bytes) {
             return Err(NativeError::new(
                 "packageDigest",
-                format!("Native member differs from its manifest: {path}"),
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_native_package_member_manifest_mismatch(weftext_messages::params::ErrorExportNativePackageMemberManifestMismatch {
+                        path: (path).to_string(),
+                    }),
+                ),
             ));
         }
         for id in [
@@ -374,7 +425,7 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
             if !uuid(id) {
                 return Err(NativeError::new(
                     "packageIdentity",
-                    "Native identities/revisions require canonical UUIDs",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_identity_revision_uuid_required()),
                 ));
             }
         }
@@ -382,7 +433,7 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
         match entry.role {
             NativeFileRole::Source => {
                 let id = entry.node_id.as_ref().ok_or_else(|| {
-                    NativeError::new("packageIdentity", "Source has no Node identity")
+                    NativeError::new("packageIdentity", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_source_node_identity_missing()))
                 })?;
                 let parts: Vec<_> = path.split('/').collect();
                 if !nodes.insert(id)
@@ -395,14 +446,14 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
                 {
                     return Err(NativeError::new(
                         "packageSource",
-                        "Source identity/path/encoding is not canonical",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_source_identity_path_or_encoding_noncanonical()),
                     ));
                 }
                 node_directories.insert(id.clone(), path.rsplit_once('/').unwrap().0);
             }
             NativeFileRole::Resource | NativeFileRole::Style => {
                 let id = entry.resource_id.as_ref().ok_or_else(|| {
-                    NativeError::new("packageIdentity", "Resource has no identity")
+                    NativeError::new("packageIdentity", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_resource_identity_missing()))
                 })?;
                 if entry.node_id.is_some()
                     || entry.owner_node_id.is_none()
@@ -411,7 +462,7 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
                 {
                     return Err(NativeError::new(
                         "packageResource",
-                        "Resource identity/owner is not canonical",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_resource_identity_or_owner_noncanonical()),
                     ));
                 }
             }
@@ -428,15 +479,26 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
                 {
                     return Err(NativeError::new(
                         "packageControl",
-                        "Invalid portable config path",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_portable_config_path_invalid()),
                     ));
                 }
                 if entry.role == NativeFileRole::Tags {
                     let document: weftext_data::TagDocument = serde_json::from_slice(bytes)
-                        .map_err(|e| NativeError::new("packageTags", e.to_string()))?;
+                        .map_err(|e| {
+                            NativeError::new(
+                                "packageTags",
+                                weftext_messages::ErrorDescription::new(
+                                    weftext_messages::UiMessage::error_export_native_package_tag_json(),
+                                )
+                                .diagnostic(
+                                    weftext_messages::DiagnosticOrigin::Json,
+                                    e.to_string(),
+                                ),
+                            )
+                        })?;
                     document
                         .forest()
-                        .map_err(|e| NativeError::new("packageTags", e.to_string()))?;
+                        .map_err(|e| NativeError::from_data("packageTags", e))?;
                 }
             }
             NativeFileRole::Annotations | NativeFileRole::ResourceManifest => {
@@ -452,7 +514,7 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
                 {
                     return Err(NativeError::new(
                         "packageControl",
-                        "Invalid owned document path",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_owned_document_path_invalid()),
                     ));
                 }
             }
@@ -465,7 +527,7 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
                 {
                     return Err(NativeError::new(
                         "packageBibliography",
-                        "Invalid generated bibliography path or identity role",
+                        weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_bibliography_path_or_role_invalid()),
                     ));
                 }
                 validate_generated_bibliography(bytes)?;
@@ -479,7 +541,9 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
         {
             return Err(NativeError::new(
                 "packageControl",
-                "Local admission/history is not a portable member",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_native_package_local_state_not_portable(),
+                ),
             ));
         }
     }
@@ -491,7 +555,10 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
         {
             return Err(NativeError::new(
                 "packageOwner",
-                "Resource/control owner is outside the selected native package",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_native_package_owner_outside_package(
+                    ),
+                ),
             ));
         }
     }
@@ -513,7 +580,7 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
             {
                 return Err(NativeError::new(
                     "packageOwner",
-                    "A native member crosses its exact Node ownership boundary",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_node_ownership_boundary_crossed()),
                 ));
             }
         }
@@ -526,7 +593,10 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
     {
         return Err(NativeError::new(
             "packageSchema",
-            "The frozen native schema is unavailable",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_frozen_schema_unavailable(
+                ),
+            ),
         ));
     }
     // A file cannot also be an ancestor directory, including Windows aliases.
@@ -536,7 +606,9 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
             if paths.contains(parent) || parent == MANIFEST_PATH {
                 return Err(NativeError::new(
                     "packagePath",
-                    "A file overlaps another member's directory",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_native_package_file_directory_overlap(),
+                    ),
                 ));
             }
             ancestor = parent;
@@ -548,40 +620,96 @@ pub fn validate_native_package(package: &NativePackage) -> Result<()> {
 /// Writes deterministic stored ZIP members: exact author bytes are not converted.
 pub fn write_native_package(package: &NativePackage) -> Result<Vec<u8>> {
     validate_native_package(package)?;
-    let manifest = serde_json::to_vec_pretty(&package.manifest)
-        .map_err(|e| NativeError::new("packageManifest", e.to_string()))?;
+    let manifest = serde_json::to_vec_pretty(&package.manifest).map_err(|e| {
+        NativeError::new(
+            "packageManifest",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_manifest_json(),
+            )
+            .diagnostic(weftext_messages::DiagnosticOrigin::Json, e.to_string()),
+        )
+    })?;
     if manifest.len() > MAX_MANIFEST_BYTES {
         return Err(NativeError::new(
             "packageBudget",
-            "Native manifest exceeds its byte budget",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_manifest_bytes_exceeded(),
+            ),
         ));
     }
     let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
     let options = SimpleFileOptions::default()
         .compression_method(CompressionMethod::Stored)
         .unix_permissions(0o600);
-    writer
-        .start_file(MANIFEST_PATH, options)
-        .map_err(|e| NativeError::new("packageZip", e.to_string()))?;
-    writer
-        .write_all(&manifest)
-        .map_err(|e| NativeError::new("packageZip", e.to_string()))?;
+    writer.start_file(MANIFEST_PATH, options).map_err(|e| {
+        NativeError::new(
+            "packageZip",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_archive(),
+            )
+            .diagnostic(
+                weftext_messages::DiagnosticOrigin::Dependency,
+                e.to_string(),
+            ),
+        )
+    })?;
+    writer.write_all(&manifest).map_err(|e| {
+        NativeError::new(
+            "packageZip",
+            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_io())
+                .diagnostic(
+                    weftext_messages::DiagnosticOrigin::Dependency,
+                    e.to_string(),
+                ),
+        )
+    })?;
     for (path, bytes) in &package.files {
-        writer
-            .start_file(path, options)
-            .map_err(|e| NativeError::new("packageZip", e.to_string()))?;
-        writer
-            .write_all(bytes)
-            .map_err(|e| NativeError::new("packageZip", e.to_string()))?;
+        writer.start_file(path, options).map_err(|e| {
+            NativeError::new(
+                "packageZip",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_archive(),
+                )
+                .diagnostic(
+                    weftext_messages::DiagnosticOrigin::Dependency,
+                    e.to_string(),
+                ),
+            )
+        })?;
+        writer.write_all(bytes).map_err(|e| {
+            NativeError::new(
+                "packageZip",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_io(),
+                )
+                .diagnostic(
+                    weftext_messages::DiagnosticOrigin::Dependency,
+                    e.to_string(),
+                ),
+            )
+        })?;
     }
     let bytes = writer
         .finish()
-        .map_err(|e| NativeError::new("packageZip", e.to_string()))?
+        .map_err(|e| {
+            NativeError::new(
+                "packageZip",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_archive(),
+                )
+                .diagnostic(
+                    weftext_messages::DiagnosticOrigin::Dependency,
+                    e.to_string(),
+                ),
+            )
+        })?
         .into_inner();
     if bytes.len() > MAX_PACKAGE_BYTES {
         return Err(NativeError::new(
             "packageBudget",
-            "Native ZIP exceeds its total byte budget",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_zip_total_bytes_exceeded(),
+            ),
         ));
     }
     Ok(bytes)
@@ -592,21 +720,36 @@ pub fn read_native_package(bytes: &[u8]) -> Result<NativePackage> {
     if bytes.len() > MAX_PACKAGE_BYTES {
         return Err(NativeError::new(
             "packageBudget",
-            "Native ZIP exceeds its byte budget",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_zip_bytes_exceeded(),
+            ),
         ));
     }
     // Bound declared central-directory allocation before ZipArchive parses it.
-    // Native v1 fits classic single-disk ZIP; ZIP64/multidisk metadata is not an
+    // Native v2 fits classic single-disk ZIP; ZIP64/multidisk metadata is not an
     // accepted input variant and cannot supply an attacker-sized entry reserve.
     let tail_start = bytes.len().saturating_sub(22 + u16::MAX as usize);
     let eocd = bytes[tail_start..]
         .windows(4)
         .rposition(|part| part == b"PK\x05\x06")
         .map(|offset| tail_start + offset)
-        .ok_or_else(|| NativeError::new("packageZip", "Native ZIP has no complete end record"))?;
-    let end = bytes
-        .get(eocd..eocd + 22)
-        .ok_or_else(|| NativeError::new("packageZip", "Native ZIP end record is truncated"))?;
+        .ok_or_else(|| {
+            NativeError::new(
+                "packageZip",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_native_package_zip_end_record_missing(
+                    ),
+                ),
+            )
+        })?;
+    let end = bytes.get(eocd..eocd + 22).ok_or_else(|| {
+        NativeError::new(
+            "packageZip",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_zip_end_record_truncated(),
+            ),
+        )
+    })?;
     let field = |offset: usize| u16::from_le_bytes([end[offset], end[offset + 1]]) as usize;
     let count = field(10);
     if field(4) != 0
@@ -619,32 +762,56 @@ pub fn read_native_package(bytes: &[u8]) -> Result<NativePackage> {
     {
         return Err(NativeError::new(
             "packageZip",
-            "Native v1 requires one complete classic single-disk ZIP",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_classic_single_disk_zip_required(),
+            ),
         ));
     }
     if !(2..=MAX_PACKAGE_FILES + 1).contains(&count) {
         return Err(NativeError::new(
             "packageBudget",
-            "Declared native ZIP member count exceeds the budget",
+            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_declared_zip_member_count_exceeded()),
         ));
     }
-    let mut zip = ZipArchive::new(Cursor::new(bytes))
-        .map_err(|e| NativeError::new("packageZip", e.to_string()))?;
+    let mut zip = ZipArchive::new(Cursor::new(bytes)).map_err(|e| {
+        NativeError::new(
+            "packageZip",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_archive(),
+            )
+            .diagnostic(
+                weftext_messages::DiagnosticOrigin::Dependency,
+                e.to_string(),
+            ),
+        )
+    })?;
     if zip.len() < 2 || zip.len() > MAX_PACKAGE_FILES + 1 {
         return Err(NativeError::new(
             "packageBudget",
-            "Native ZIP member count exceeds the budget",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_zip_member_count_exceeded(
+                ),
+            ),
         ));
     }
     let mut files = BTreeMap::new();
     let mut collision = BTreeSet::new();
     let mut total = 0usize;
     for index in 0..zip.len() {
-        let mut member = zip
-            .by_index(index)
-            .map_err(|e| NativeError::new("packageZip", e.to_string()))?;
+        let mut member = zip.by_index(index).map_err(|e| {
+            NativeError::new(
+                "packageZip",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_archive(),
+                )
+                .diagnostic(
+                    weftext_messages::DiagnosticOrigin::Dependency,
+                    e.to_string(),
+                ),
+            )
+        })?;
         let name = std::str::from_utf8(member.name_raw())
-            .map_err(|_| NativeError::new("packagePath", "ZIP member names must be UTF-8"))?
+            .map_err(|_| NativeError::new("packagePath", weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_zip_member_name_utf_eight_required())))?
             .to_string();
         validate_member_path(&name)?;
         let max = if name == MANIFEST_PATH {
@@ -666,36 +833,89 @@ pub fn read_native_package(bytes: &[u8]) -> Result<NativePackage> {
         {
             return Err(NativeError::new(
                 "packageZip",
-                "ZIP has duplicate, special, oversized or excessively compressed members",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_native_package_zip_member_unsupported(
+                    ),
+                ),
             ));
         }
-        total = total
-            .checked_add(member.size() as usize)
-            .ok_or_else(|| NativeError::new("packageBudget", "Native byte count overflow"))?;
+        total = total.checked_add(member.size() as usize).ok_or_else(|| {
+            NativeError::new(
+                "packageBudget",
+                weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_native_package_byte_count_overflow(),
+                ),
+            )
+        })?;
         if total > MAX_PACKAGE_BYTES {
             return Err(NativeError::new(
                 "packageBudget",
-                "Expanded native package exceeds its byte budget",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_expanded_package_bytes_exceeded()),
             ));
         }
         let mut output = Vec::new();
         (&mut member)
             .take(max as u64 + 1)
             .read_to_end(&mut output)
-            .map_err(|e| NativeError::new("packageZip", e.to_string()))?;
+            .map_err(|e| {
+                NativeError::new(
+                    "packageZip",
+                    weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_io(),
+                    )
+                    .diagnostic(
+                        weftext_messages::DiagnosticOrigin::Dependency,
+                        e.to_string(),
+                    ),
+                )
+            })?;
         if output.len() != member.size() as usize || output.len() > max {
             return Err(NativeError::new(
                 "packageZip",
-                "ZIP member size/checksum is invalid",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_native_package_zip_member_size_or_checksum_invalid()),
             ));
         }
         files.insert(name, output);
     }
-    let manifest_bytes = files
-        .remove(MANIFEST_PATH)
-        .ok_or_else(|| NativeError::new("packageManifest", "Native manifest is missing"))?;
-    let manifest = serde_json::from_slice(&manifest_bytes)
-        .map_err(|e| NativeError::new("packageManifest", e.to_string()))?;
+    let manifest_bytes = files.remove(MANIFEST_PATH).ok_or_else(|| {
+        NativeError::new(
+            "packageManifest",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_manifest_missing(),
+            ),
+        )
+    })?;
+    let value = weftext_data::parse_unique_json(&manifest_bytes)
+        .map_err(|error| NativeError::from_data("packageManifest", error))?;
+    // Reject the format version before decoding the versioned loss records.
+    // Earlier originals may carry the earlier explanation shape.
+    if let Some(version) = value
+        .get("version")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|version| u32::try_from(version).ok())
+        && version != NATIVE_VERSION
+    {
+        return Err(unsupported_version(version));
+    }
+    if value
+        .get("entries")
+        .and_then(serde_json::Value::as_object)
+        .is_some_and(|entries| entries.len() > MAX_PACKAGE_FILES)
+    {
+        return Err(NativeError::new(
+            "packageBudget",
+            UiMessage::error_export_native_package_manifest_members_exceeded(),
+        ));
+    }
+    let manifest = serde_json::from_value(value).map_err(|e| {
+        NativeError::new(
+            "packageManifest",
+            weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_manifest_json(),
+            )
+            .diagnostic(weftext_messages::DiagnosticOrigin::Json, e.to_string()),
+        )
+    })?;
     let package = NativePackage { manifest, files };
     validate_native_package(&package)?;
     Ok(package)
@@ -704,6 +924,7 @@ pub fn read_native_package(bytes: &[u8]) -> Result<NativePackage> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use weftext_messages::DiagnosticOrigin;
     fn fixture() -> NativePackage {
         let source = b"#metadata((id: \"00000000-0000-4000-8000-000000000001\", types: ())) <weftext>\n= Exact\r\n".to_vec();
         let mut source_entry = NativeEntry::new(NativeFileRole::Source, &source);
@@ -843,7 +1064,11 @@ mod tests {
         package.manifest.losses.push(NativeLoss {
             path: "note/WEFTEXT.CITATIONS.BIB".into(),
             code: "unregisteredFileOmitted".into(),
-            detail: "Existing raw file".into(),
+            description: weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_native_package_existing_raw_file(),
+            ),
+
+            product_diagnostics: Vec::new(),
         });
         assert_eq!(
             append_generated_bibliography(&mut package, owner, bytes.clone())
@@ -1013,5 +1238,84 @@ mod tests {
         );
         bytes[end + 8..end + 12].fill(255);
         assert_eq!(read_native_package(&bytes).unwrap_err().code, "packageZip");
+    }
+
+    fn unchecked_package(manifest: &[u8], package: &NativePackage) -> Vec<u8> {
+        let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+        for (path, bytes) in &package.files {
+            writer
+                .start_file(path, SimpleFileOptions::default())
+                .unwrap();
+            writer.write_all(bytes).unwrap();
+        }
+        writer
+            .start_file(MANIFEST_PATH, SimpleFileOptions::default())
+            .unwrap();
+        writer.write_all(manifest).unwrap();
+        writer.finish().unwrap().into_inner()
+    }
+
+    #[test]
+    fn native_v2_losses_keep_the_complete_typed_report_and_v1_is_explicitly_rejected() {
+        let mut package = fixture();
+        let parallel: Vec<_> = (0..40)
+            .map(|index| {
+                ErrorDescription::new(UiMessage::common_operation(
+                    weftext_messages::params::CommonOperation {
+                        operation_id: format!("loss-{index}"),
+                    },
+                ))
+                .diagnostic(DiagnosticOrigin::Dependency, format!("raw-{index}\r\n"))
+            })
+            .collect();
+        package.manifest.losses.push(NativeLoss::from_error(
+            "Note/Note.typ".into(),
+            "actualLoss".into(),
+            crate::ExportError::new(UiMessage::error_export_json())
+                .with_diagnostics(parallel.clone()),
+        ));
+        let bytes = write_native_package(&package).unwrap();
+        let decoded = read_native_package(&bytes).unwrap();
+        assert_eq!(decoded.manifest.version, 2);
+        assert_eq!(decoded.manifest.losses[0].product_diagnostics, parallel);
+        assert_eq!(write_native_package(&decoded).unwrap(), bytes);
+        let mut old = serde_json::to_value(&package.manifest).unwrap();
+        old["version"] = serde_json::json!(1);
+        old["losses"] = serde_json::json!([{"path":"Note/Note.typ","code":"originalLoss","detail":"Original v1 loss {text} 😀"}]);
+        let old_bytes = unchecked_package(&serde_json::to_vec(&old).unwrap(), &package);
+        let original = old_bytes.clone();
+        let error = read_native_package(&old_bytes).unwrap_err();
+        assert_eq!(error.code, "unsupportedVersion");
+        assert_eq!(
+            serde_json::to_value(error.description.explanation).unwrap(),
+            serde_json::json!({"key":"error.export.nativePackage.versionUnsupported","params":{"version":1}})
+        );
+        assert_eq!(old_bytes, original);
+    }
+
+    #[test]
+    fn native_manifest_duplicate_members_are_product_validation_not_raw_json() {
+        let package = fixture();
+        let manifest = serde_json::to_string(&package.manifest).unwrap();
+        let duplicate = format!("{{\"version\":2,{}", &manifest[1..]);
+        let error =
+            read_native_package(&unchecked_package(duplicate.as_bytes(), &package)).unwrap_err();
+        assert_eq!(error.code, "packageManifest");
+        assert!(error.description.diagnostics.is_empty());
+        assert!(
+            error
+                .description
+                .causes
+                .as_slice()
+                .iter()
+                .all(|cause| cause.diagnostics.is_empty())
+        );
+        assert!(
+            serde_json::to_value(error.description).unwrap()["causes"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|cause| cause["explanation"]["key"] == "error.data.schema.jsonKeyDuplicate")
+        );
     }
 }

@@ -1,11 +1,10 @@
 """Hosted native draft consumers using the actual executable and owned roots."""
 import json
 import sys
-import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from test_hosted import Hosted
-from owned_worker_observer import SUPPORTED, creation_boundary, timed_call, wait_for_owned_worker
+from owned_worker_observer import SUPPORTED, OwnedWorkerObservation, event_time_ns, timed_call
 
 PURE_COMPUTE = '#let checksum = range(500000).fold(0, (acc, i) => acc + i)\nFinal #checksum'
 
@@ -14,14 +13,15 @@ class HostedEditor(Hosted):
         if not SUPPORTED:
             self.skipTest('In-flight compiler race is unverified without the Windows owned-worker boundary')
         with ThreadPoolExecutor(max_workers=1) as pool:
-            boundary = creation_boundary()
-            submitted = time.monotonic_ns()
-            pending = pool.submit(timed_call, self.server.call, '/api/hosted/editor/render', basis, self.tokens['alice'])
-            worker = wait_for_owned_worker(self.server.process, pending, boundary)
-            self.assertFalse(pending.done())
-            change()
-            changed = time.monotonic_ns()
-            (code, result, _), completed = pending.result(timeout=40)
+            with OwnedWorkerObservation(self.server.owner) as observation:
+                submitted = event_time_ns()
+                pending = pool.submit(timed_call, self.server.call, '/api/hosted/editor/render', basis, self.tokens['alice'])
+                worker = observation.wait(pending)
+                self.assertFalse(pending.done())
+                observation.assert_inflight(pending)
+                change()
+                changed = event_time_ns()
+                (code, result, _), completed = pending.result(timeout=40)
         trace = {'submittedMonotonicNs':submitted, 'worker':worker,
                  'changeCompletedMonotonicNs':changed, 'renderCompletedMonotonicNs':completed,
                  'status':code, 'errorCode':result.get('error',{}).get('code')}

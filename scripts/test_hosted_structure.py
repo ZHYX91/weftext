@@ -3,6 +3,7 @@
 Local APIs only establish the fixture's admissions. All tested effects and new
 object entry points use hosted HTTP without rewriting operator configuration.
 """
+from _creation_result import created_document
 import base64
 import copy
 import json
@@ -37,7 +38,7 @@ class HostedStructure(HostedHistory):
             slots = {'Created': ('root', 'Created'), 'Copied': ('root', 'Copied'),
                      'Renamed': ('root', 'Renamed'), 'Moved': ('destination', 'Shared'),
                      'Restored': ('root', 'Restored'), 'Template': ('root', 'Template')}
-            self.config['structureSlots'] = {key: {'parent': parent, 'name': name} for key, (parent, name) in slots.items()}
+            self.config['structureSlots'] = {key: {'parent': parent, 'namePolicy': {'kind': 'fixed', 'name': name}} for key, (parent, name) in slots.items()}
             for key, (parent, name) in slots.items():
                 prefix = '' if parent == 'root' else 'Destination/'
                 self.config['files'][key] = {'path': f'{prefix}{name}/{name}.typ', 'title': key, 'editable': True}
@@ -134,7 +135,7 @@ class HostedStructure(HostedHistory):
     def test_structure_copy_requires_explicit_tree_read_export_and_fresh_identity(self):
         self.prepare_structure()
         def child(api):
-            note = api('/api/note/create', {'root': str(self.root), 'parent': str(self.root / 'Shared'), 'name': 'Child', 'operationId': uid()})
+            note = created_document(api('/api/note/create', {'root': str(self.root), 'parent': str(self.root / 'Shared'), 'name': 'Child', 'operationId': uid()}))
             self.child_source = note['source'] + '\nWHOLE_TREE_OPT_IN_PRIVATE_CHILD'
             api('/api/save', {'sessionId': note['sessionId'], 'baseId': note['baseId'], 'source': self.child_source, 'operationId': uid()})
         self.local(child)
@@ -200,8 +201,8 @@ class HostedStructure(HostedHistory):
         self.prepare_structure()
         # A legitimate local Core birth is still not the original hosted
         # producer authorized for a future destination slot.
-        self.local(lambda api: api('/api/note/create', {
-            'root': str(self.root), 'parent': str(self.root), 'name': 'Copied', 'operationId': uid()}))
+        self.local(lambda api: created_document(api('/api/note/create', {
+            'root': str(self.root), 'parent': str(self.root), 'name': 'Copied', 'operationId': uid()})))
         self.call('open', {'resource': 'Copied'}, status=404)
         self.grant(destinations={'Created': {'create': True}})
         request = self.request('create', 'Created', destination='Created')
@@ -251,6 +252,10 @@ class HostedStructure(HostedHistory):
         self.prepare(request, status=404)
         self.policy(lambda users: users['alice']['grants']['Created'].update(
             fields={'tasks/status': {'read': True, 'write': True}}))
+        catalog = self.call('structure')
+        form = next(slot for slot in catalog['slots'] if slot['resource'] == 'Created')['capture']
+        request['capture']['formBasis'] = {
+            'schemaRef': form['roleRef'], 'semanticDigest': form['semanticDigest']}
         result = self.execute(request)
         self.assertTrue(result['result']['canOpen'])
         profile = self.call('fields/read', {'resource': 'Created', 'fieldId': 'tasks/status'})
@@ -317,7 +322,7 @@ class HostedStructure(HostedHistory):
         self.config['directories']['secret-parent'] = {
             'path': 'Secret', 'reference': reference, 'title': 'Authorized destination only'}
         for key in ['ParentCopy', 'WithInput']:
-            self.config['structureSlots'][key] = {'parent': 'secret-parent', 'name': key}
+            self.config['structureSlots'][key] = {'parent': 'secret-parent', 'namePolicy': {'kind': 'fixed', 'name': key}}
             self.config['files'][key] = {'path': f'Secret/{key}/{key}.typ', 'title': key, 'editable': True}
         self.start()
         def policy(users):

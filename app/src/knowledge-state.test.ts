@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canApplySuggestion, isGraphemeRange, KnowledgeReadGate, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
+import { canApplySuggestion, decodeKnowledgeDelivery, isGraphemeRange, KnowledgeReadGate, knowledgeDeliveryErrors, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
+import {locale,message,UiError,uiTextValue} from "./ui-locale";
+import { committedDeliveryComplete, deliverCommitted } from "./original-operation";
 import type { KnowledgeBasis, KnowledgeMention, MediaRegionInput } from "./knowledge-state";
 
 const mention = (start: number, end: number, targets: string[]): KnowledgeMention => ({ startScalar: start, endScalar: end, startUtf16: start, endUtf16: end, targets: targets.map(nodeId => ({ workspaceId: "w", nodeId })), terms: [`${start}:${end}`], writable: true, component: -1 });
@@ -37,7 +39,7 @@ test("local draft refusal never invents an unknown Core operation; actual networ
   assert.equal(retainPendingKnowledgePlan(true, new Error("draft persistence failed after applying")), false);
   assert.equal(retainPendingKnowledgePlan(false, new Error("connection lost")), true);
   assert.equal(retainPendingKnowledgePlan(false, { code: "resultUnknown" }), true);
-  assert.equal(retainPendingKnowledgePlan(false, { code: "conflict" }), false);
+  assert.equal(retainPendingKnowledgePlan(false, { code: "conflict" }), true);
 });
 test("a late background response cannot replace a newer refresh or a switched draft", () => {
   const gate = new KnowledgeReadGate(); const first = gate.begin(), second = gate.begin();
@@ -108,7 +110,37 @@ test("recovery pending is an uncertain original operation, while a definite conf
   assert.equal(uncertainKnowledgeOperation("committed"), false);
 });
 
-test("typed Core losses expose their actual human message in the confirmation flow", () => {
-  assert.equal(knowledgeLossMessage({ code: "unknownReference", message: "此引用未能迁移，已保存准确原件。" }), "此引用未能迁移，已保存准确原件。");
-  assert.equal(knowledgeLossMessage("原文保留"), "原文保留");
+test("typed Core losses expose product explanation and preserve authored location without string fallback", () => {
+ const loss={path:"原文",code:"unknownReference",explanation:message("common.unavailable"),diagnostics:[],causes:[],productDiagnostics:[]};
+ assert.match(uiTextValue(knowledgeLossMessage(loss)),/原文/);
+ assert.throws(()=>knowledgeLossMessage("原文保留" as unknown as typeof loss));
+});
+
+test("local delivery and document errors keep the original committed fact and complete typed details after cloning", () => {
+ const description=()=>({explanation:message("common.unavailable"),diagnostics:[{origin:"os" as const,text:"original OS diagnostic 原文"}],causes:[]});
+ const fact={operationId:"original-operation",planId:"original-plan",status:"committed",path:"original/作者.typ",nodeIds:["node"]};
+ const failure={code:"sourceReopened",...description(),details:{kind:"committedReceipt" as const,receipt:fact,cause:{code:"reopenFailed",...description(),details:{kind:"currentSource" as const,currentSource:"作者原文 😀"}}}};
+ const original={status:"committed",operationId:fact.operationId,document:{sessionId:"fresh-session"},deliveryError:failure,documentError:{code:"readbackFailed",...description()},affectedDocuments:[{priorSessionId:"other-session",documentError:{code:"otherReadbackFailed",...description()}}]};
+ const decoded=decodeKnowledgeDelivery(JSON.parse(JSON.stringify(original)) as typeof original), restored=decodeKnowledgeDelivery(structuredClone(decoded));
+ assert.equal(restored.status,"committed");assert.equal(restored.operationId,fact.operationId);assert.equal(restored.document.sessionId,"fresh-session");
+ assert.deepEqual(restored.deliveryError.details.receipt,fact);assert.equal(restored.deliveryError.details.cause.details.currentSource,"作者原文 😀");
+ const display=knowledgeDeliveryErrors(restored),previous=locale.current;
+ try{locale.set("zh-CN");const chinese=display.map(uiTextValue).join("\n");locale.set("en-US");const english=display.map(uiTextValue).join("\n");assert.notEqual(chinese,english);assert.equal(display.length,3);assert.ok(english.includes("original OS diagnostic 原文"));assert.ok(english.includes("reopenFailed"));assert.equal(restored.status,"committed");}finally{locale.set(previous);}
+ assert.deepEqual(original.deliveryError.details.receipt,fact);
+});
+
+test("declared delivery errors reject legacy message-only acknowledgements in every error slot", () => {
+ for(const slot of ["deliveryError","documentError"])assert.throws(()=>decodeKnowledgeDelivery({status:"committed",operationId:"original",[slot]:{message:"legacy"}}));
+ assert.throws(()=>decodeKnowledgeDelivery({status:"committed",operationId:"original",affectedDocuments:[{documentError:{message:"legacy"}}]}));
+ assert.equal(knowledgeDeliveryErrors({}).length,0);
+});
+
+test("local callback failure survives receipt decoding as presentation without creating a wire error", async () => {
+ const previous=locale.current;
+ const receipt=await deliverCommitted({operationId:"original-operation",status:"committed"},async()=>{throw new UiError(message("common.unavailable"));});
+ const decoded=decodeKnowledgeDelivery(receipt),display=knowledgeDeliveryErrors(decoded);
+ assert.equal(decoded.status,"committed");assert.equal(decoded.operationId,"original-operation");assert.equal(committedDeliveryComplete(decoded),false);assert.equal(display.length,1);
+ assert.equal(Object.hasOwn(decoded,"deliveryError"),false);assert.equal(Object.hasOwn(decoded,"documentError"),false);
+ assert.equal(JSON.stringify(decoded),JSON.stringify({operationId:"original-operation",status:"committed"}));
+ try{locale.set("zh-CN");const chinese=uiTextValue(display[0]);locale.set("en-US");assert.notEqual(uiTextValue(display[0]),chinese);}finally{locale.set(previous);}
 });

@@ -1,7 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { createdDocument } from './_creation_result.mjs';
 // Optional real-browser acceptance. Supply a qualified Playwright installation
 // through WEFTEXT_PLAYWRIGHT_MODULE, plus EXE and a new owned evidence directory.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
@@ -18,17 +20,17 @@ let local,server,browser,page,base,localToken,config,stderr='';
 const routeErrors=[];result.routeErrors=routeErrors;
 const token={alice:randomBytes(32).toString('hex'),bob:randomBytes(32).toString('hex'),tagger:randomBytes(32).toString('hex'),writer:randomBytes(32).toString('hex'),admin:randomBytes(32).toString('hex')};
 async function start(args,hosted=false){
- const p=spawn(exe,args,{windowsHide:true,stdio:['ignore','pipe','pipe']});let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>stderr+=b);
- for(let i=0;i<300;i++){const match=text.match(hosted?/(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/:/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);if(match){base=match[1];localToken=match[2];return p;}if(p.exitCode!==null)throw new Error(stderr);await pause(100);}p.kill();throw new Error('startup timeout');
+ const p=spawnServe(exe,args,{windowsHide:true,stdio:['ignore','pipe','pipe']});let text='';p.stdout.on('data',b=>text+=b);p.stderr.on('data',b=>stderr+=b);
+ for(let i=0;i<300;i++){const match=serveReady(p);if(match){base=match.base;localToken=match.token;return p;}if(p.exitCode!==null)throw new Error(stderr);await pause(100);}await stopServe(p);throw new Error('startup timeout');
 }
-async function stop(p){if(p && p.exitCode===null && p.signalCode===null){const done=new Promise(resolve=>p.once('exit',resolve));p.kill();await done;}}
+async function stop(p){ await stopServe(p); }
 async function api(route,data,actor){
  const r=await fetch(base+route,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(actor?{Authorization:'Bearer '+token[actor]}:{'X-Weftext-Token':localToken})},body:data===undefined?undefined:JSON.stringify(data)});const body=await r.json();assert.ok(r.ok,JSON.stringify(body));return body;
 }
 async function click(name){await page.getByRole('button',{name,exact:true}).click();}
 async function readField(){const response=page.waitForResponse(r=>r.url().endsWith('/api/hosted/fields/read'));await click('读取字段');assert.equal((await response).status(),200);await page.locator('#fields fieldset').first().waitFor();}
 async function changePolicy(edit){const p=await api('/api/hosted/admin/policy',undefined,'admin');edit(p.users);return api('/api/hosted/admin/policy',{expectedGeneration:p.generation,users:p.users},'admin');}
-async function passed(message){result.cases.push(message);await writeFile(path.join(out,'progress.json'),JSON.stringify(result,null,2));console.log(message);}
+async function passed(message){result.cases.push(message);await writeFile(path.join(out,'progress.json'),stringifyServeJson(result, 2));console.log(message);}
 const tagRefs=value=>(value?.kind==='array'?value.value:[]).flatMap(item=>item.kind==='record'?item.value.filter(member=>member.key==='ref'&&member.value.kind==='text').map(member=>member.value.value):[]);
 async function tagProfile(){return api('/api/hosted/fields/read',{resource:'shared',fieldId:'core/tags'},'tagger');}
 async function registry(){return api('/api/hosted/navigation/registry',undefined,'tagger');}
@@ -40,7 +42,7 @@ async function cachedTagJob(){return page.evaluate(()=>Object.keys(sessionStorag
 function maskFixtureTags(source){const key=source.indexOf('tags:');assert.ok(key>=0);let start=key+5;while(/\s/.test(source[start]))start++;assert.equal(source[start],'(');let depth=0,string=false;for(let i=start;i<source.length;i++){const c=source[i];if(string){if(c==='\\')i++;else if(c==='"')string=false;continue;}if(c==='"')string=true;else if(c==='(')depth++;else if(c===')'&&!--depth)return source.slice(0,start)+'<tags-value>'+source.slice(i+1);}throw new Error('owned fixture tag tuple did not close');}
 try{
  const data=path.join(out,'state'), root=path.join(out,'library');
- local=await start(['--no-browser','--data-dir',data]);
+ local=await start(['--data-dir',data]);
  await api('/api/library/create',{path:root,operationId:randomUUID()});
  const schema=await api('/api/data/schema',{root});const op=randomUUID();
  const testSchema=JSON.parse(schema.source);testSchema.fields.find(f=>f.id==='tasks/priority').shape={kind:'scalar',semantic:'int'};
@@ -48,7 +50,7 @@ try{
  await api('/api/data/schema/install',{operationId:op,planId:plan.planId});
  const makeTag=async displayName=>{const registry=await api('/api/navigation/tags',{root}),prepared=await api('/api/navigation/create-tag',{root,displayName,parentRef:null,baseId:registry.baseId,operationId:randomUUID()});assert.equal((await api('/api/operations/commit',{operationId:prepared.preview.operationId,planId:prepared.preview.planId})).status,'committed');return prepared.targetRef;};
  const parentRef=await makeTag('归组 / Parent'),otherRef=await makeTag('直接 / Other');result.tagFixture={parentRef,otherRef};
- const note=await api('/api/note/create',{root,parent:root,name:'Shared',operationId:randomUUID()});
+ const note=createdDocument(await api('/api/note/create',{root,parent:root,name:'Shared',operationId:randomUUID()}));
  const initial=note.source.replace('types: ()',`types: ("task",), status: "open", priority: 7, aliases: ("中文😀",), tags: ((ref: "${otherRef}"), (text: "literal / 保留")), hidden: read("PRIVATE_BODY")`)+'\nHIDDEN_BODY_987\n';
  await api('/api/save',{sessionId:note.sessionId,baseId:note.baseId,source:initial,operationId:randomUUID()});
  await stop(local);local=null;
@@ -59,7 +61,7 @@ try{
   tagger:{enabled:true,tokenSha256:sha(token.tagger),grants:{shared:{fields:{'core/tags':{read:true,write:true}}}},navigation:{tags:{read:true,create:true,rename:false,move:false}}},
   writer:{enabled:true,tokenSha256:sha(token.writer),grants:{shared:{read:true,write:true,history:true}}}}};
  const configPath=path.join(out,'server.json');await writeFile(configPath,JSON.stringify(config,null,2));
- server=await start(['--no-browser','--data-dir',data,'--server-config',configPath],true);
+ server=await start(['--data-dir',data,'--server-config',configPath],true);
  browser=await chromium.launch({channel:'chrome',headless:true});result.browser=browser.version();
  const ctx=await browser.newContext({viewport:{width:1440,height:1100}});page=await ctx.newPage();
  observePage(page);
@@ -163,7 +165,7 @@ try{
  const recoveredPrepare=page.waitForResponse(r=>r.url().endsWith('/api/hosted/navigation/registry/operation'));await click('核对原标签新建与赋值操作');const knownPrepare=await (await recoveredPrepare).json();assert.equal(knownPrepare.operationId,assignedRequest.operationId);assert.equal(knownPrepare.status,'prepared');assert.equal(knownPrepare.planId,assignedPrepared.planId);assert.equal(tagPrepares,afterOriginalPrepare);await waitTagAction('明确提交原新建与赋值计划');
  let commitLostResolve;const commitWasLost=new Promise(resolve=>commitLostResolve=resolve);await page.route('**/api/hosted/navigation/registry/commit',async route=>{try{const submitted=route.request().postDataJSON();assert.equal(submitted.operationId,assignedRequest.operationId);assert.equal(submitted.planId,assignedPrepared.planId);const reply=await route.fetch();assignedCommit=await reply.json();assert.equal(reply.status(),200,JSON.stringify(assignedCommit));assert.equal(assignedCommit.status,'committed');await route.abort('failed');commitLostResolve();}catch(error){routeErrors.push(String(error));commitLostResolve();await route.abort('failed').catch(()=>{});}});
  await click('明确提交原新建与赋值计划');await bounded(commitWasLost,'actual tag commit');assert.deepEqual(routeErrors,[]);await waitTagAction('核对原标签新建与赋值操作');await page.unroute('**/api/hosted/navigation/registry/commit');assert.equal(assignedCommit.operationId,assignedRequest.operationId);assert.equal(assignedCommit.navigationRef,assignedPrepared.navigationRef);assert.ok(!JSON.stringify(assignedCommit).includes('HIDDEN_BODY_987'));
- const committedCount=tagCommits;config.bind=new URL(base).host;await writeFile(configPath,JSON.stringify(config,null,2));await stop(server);server=await start(['--no-browser','--data-dir',data,'--server-config',configPath],true);await page.reload();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · core/tags'});await readField();await waitTagAction('核对原标签新建与赋值操作');
+ const committedCount=tagCommits;config.bind=new URL(base).host;await writeFile(configPath,JSON.stringify(config,null,2));await stop(server);server=await start(['--data-dir',data,'--server-config',configPath],true);await page.reload();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · core/tags'});await readField();await waitTagAction('核对原标签新建与赋值操作');
  const recoveredCommit=page.waitForResponse(r=>r.url().endsWith('/api/hosted/navigation/registry/operation'));await click('核对原标签新建与赋值操作');const knownCommit=await (await recoveredCommit).json();assert.equal(knownCommit.operationId,assignedRequest.operationId);assert.equal(knownCommit.status,'committed');assert.equal(knownCommit.planId,assignedPrepared.planId);assert.equal(knownCommit.navigationRef,assignedPrepared.navigationRef);await waitTagAction('结束已核对记录，继续字段编辑');assert.equal(tagCommits,committedCount);assert.equal(tagPrepares,afterOriginalPrepare);
  const actualTags=(await tagProfile()).field.cell.value;assert.deepEqual(tagRefs(actualTags),[otherRef,knownCommit.navigationRef]);assert.ok(JSON.stringify(actualTags).includes('literal / 保留'));assert.ok(!tagRefs(actualTags).includes(parentRef));const newTag=(await registry()).tags.items.find(tag=>tag.reference===knownCommit.navigationRef);assert.equal(newTag.parentTagId,parentRef.split('/').at(-1));const assignedSource=await readFile(notePath,'utf8');assert.equal(maskFixtureTags(assignedSource),maskFixtureTags(beforeAssignedSource));assert.ok(!(await page.locator('body').innerText()).includes('HIDDEN_BODY_987'));assert.equal(await page.locator('#source .cm-content').count(),0);
  await page.screenshot({path:path.join(out,'tag-first-assignment-recovered.png'),fullPage:true});await click('结束已核对记录，继续字段编辑');assert.equal(await page.getByRole('button',{name:'保存字段',exact:true}).isDisabled(),true);await click('已核对，采用当前字段依据');
@@ -181,4 +183,4 @@ try{
  result.cases.push('revocation clears field drafts/results and held late delivery; unrelated actor remains authorized');
  assert.deepEqual(result.pageErrors,[]);assert.deepEqual(routeErrors,[]);result.completed=true;
 }catch(e){result.failure=String(e.stack??e);if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});throw e;}
-finally{await browser?.close();await stop(local);await stop(server);result.ownedProcessesClosed=(!local||local.exitCode!==null||local.signalCode!==null)&&(!server||server.exitCode!==null||server.signalCode!==null)&&(!browser||!browser.isConnected());await writeFile(path.join(out,'results.json'),JSON.stringify(result,null,2));await writeFile(path.join(out,'server.stderr.log'),stderr);console.log(JSON.stringify({out,cases:result.cases,completed:result.completed,pageErrors:result.pageErrors,routeErrors}));}
+finally{await browser?.close();await stop(local);await stop(server);result.ownedProcessesClosed=(!local||local.exitCode!==null||local.signalCode!==null)&&(!server||server.exitCode!==null||server.signalCode!==null)&&(!browser||!browser.isConnected());await writeFile(path.join(out,'results.json'),stringifyServeJson(result, 2));await writeFile(path.join(out,'server.stderr.log'),stderr);console.log(JSON.stringify({out,cases:result.cases,completed:result.completed,pageErrors:result.pageErrors,routeErrors}));}

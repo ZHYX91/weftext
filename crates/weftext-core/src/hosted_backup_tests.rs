@@ -60,7 +60,10 @@ fn owner_backup_original_fence_preflight_restart_commit_and_fixed_artifact_prese
  {
     let mut f = Fixture::new();
     fs::create_dir(f.root.join("empty-目录")).unwrap();
-    let note = f.core.create_note(&f.root, &f.root, "Note").unwrap();
+    let note = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Note")
+        .unwrap();
     for (actor, text) in [
         ("deployment:alice", "ALICE_PRIVATE"),
         ("deployment:bob", "BOB_PRIVATE"),
@@ -196,7 +199,7 @@ fn owner_backup_preplan_loss_restart_settle_and_category_fence_do_not_regenerate
                 "cancelled"
             );
             assert!(core.actor_feature_status("library", &operation).is_err());
-            assert!(core.actor_save_status(&operation).is_err());
+            assert!(core.actor_save_status("library", &operation).is_err());
             Ok(())
         })
         .unwrap();
@@ -220,6 +223,7 @@ fn owner_backup_installing_status_survives_restart_and_settle_cannot_cancel() {
     // Persist the original decision's real installing marker without claiming
     // that any afterimage was installed; recovery must remain authoritative.
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &f.core.journal_path(&internal, "install"),
         &serde_json::to_vec(
             &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint}),

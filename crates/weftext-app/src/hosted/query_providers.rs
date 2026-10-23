@@ -67,7 +67,9 @@ pub(super) fn budget(selection: &Selection) -> Result<(), ApiError> {
             .chain(&selection.series_policies)
             .any(|(id, fp)| !bounded_id(id) || !valid_digest(fp))
     {
-        return Err(ApiError::bad("请选择有界的 Provider ID 和准确服务端指纹"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_query_providers_provider_fingerprint_required(),
+        ));
     }
     Ok(())
 }
@@ -388,7 +390,7 @@ pub(super) fn check_shape_names(
                     }
                 }
             }
-            for child in &advanced.union_all {
+            for child in advanced.union_all.iter().flatten() {
                 visit(schema, public, field_names, child, remaining)?;
             }
             if let Some(related) = &advanced.related {
@@ -589,7 +591,13 @@ mod tests {
                     "plan":{"select":[{"name":"value","expr":"wanted"}],"advanced":{"parameters":[{"name":"wanted","shape":{"kind":"use","name":name}}]}}})).unwrap();
                 let error = query::execute(&state, &auth, req).await.unwrap_err();
                 assert_eq!(error.status, StatusCode::BAD_REQUEST);
-                let current = (error.status, error.code, error.message);
+                let current = (
+                    error.status,
+                    error.code,
+                    error.description.explanation,
+                    error.description.diagnostics,
+                    error.description.causes,
+                );
                 assert_eq!(refusal.get_or_insert(current.clone()), &current);
             }
         }
@@ -613,7 +621,13 @@ mod tests {
                 Err(error) => error,
             };
             assert_eq!(error.status, StatusCode::NOT_FOUND);
-            let current = (error.status, error.code, error.message);
+            let current = (
+                error.status,
+                error.code,
+                error.description.explanation,
+                error.description.diagnostics,
+                error.description.causes,
+            );
             assert_eq!(refusal.get_or_insert(current.clone()), &current);
         }
     }

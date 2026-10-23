@@ -1,6 +1,7 @@
 //! Recognition consumes immutable provenance and creates one atomic author tree.
 use super::*;
 use operations::{AbsentDependency, CapturedFile, Mutation};
+use weftext_messages::UiMessage;
 
 impl Core {
     #[allow(clippy::too_many_arguments)]
@@ -31,7 +32,7 @@ impl Core {
             &schema,
             &preview.operation_id,
         )
-        .map_err(|e| CoreError::new("recognitionImport", e.to_string()))?;
+        .map_err(|e| CoreError::from_export("recognitionImport", e))?;
         let mut mutation = self.plan_content_import(
             root,
             parent,
@@ -59,14 +60,17 @@ impl Core {
                 .ok_or_else(|| {
                     CoreError::new(
                         "recognitionEvidence",
-                        "Original resource allocation missing",
+                        UiMessage::error_core_recognition_original_resource_allocation_missing(),
                     )
                 })?;
             let evidence_file = files
                 .iter_mut()
                 .find(|f| f.path.ends_with("recognition-evidence.json"))
                 .ok_or_else(|| {
-                    CoreError::new("recognitionEvidence", "Provenance resource missing")
+                    CoreError::new(
+                        "recognitionEvidence",
+                        UiMessage::error_core_recognition_provenance_resource_missing(),
+                    )
                 })?;
             let mut retained: serde_json::Value = serde_json::from_slice(&evidence_file.after)?;
             retained["originalResource"] = original.into();

@@ -1,6 +1,7 @@
 //! Typed navigation preparation keeps the original identity reservation and
 //! canonical Plan fingerprint, wrapped by the existing actor operation record.
 use super::*;
+use weftext_messages::UiMessage;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(
@@ -169,7 +170,7 @@ impl Core {
         if bytes.len() > 256 * 1024 || !preview.is_object() {
             return Err(CoreError::new(
                 "invalidIntent",
-                "Navigation requires bounded typed input and an author preview",
+                UiMessage::error_core_hosted_navigation_navigation_requires_bounded_typed_input_and_author_preview(),
             ));
         }
         check_size(&serde_json::to_vec(&preview)?)?;
@@ -183,6 +184,7 @@ impl Core {
             return Ok(status);
         }
         let record = ActorOperation {
+            scope: self.actor_input_scope_for_root(Path::new(&navigation.root))?,
             library: self.actor_library.clone(),
             actor: self.actor.clone().unwrap(),
             resource: resource.into(),
@@ -204,12 +206,18 @@ impl Core {
             owner_backup: None,
         };
         journal::private_create(
+            &self.backend,
             &self.actor_record(operation)?,
-            &Self::actor_operation_bytes(&record)?,
+            &self.actor_operation_bytes(&record)?,
         )?;
         navigation.prepare(self, &record.core_operation_id)?;
         self.actor_feature_status(resource, operation)?
-            .ok_or_else(|| CoreError::new("invalidState", "Missing original navigation operation"))
+            .ok_or_else(|| {
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_hosted_navigation_missing_original_navigation_operation(),
+                )
+            })
     }
 }
 

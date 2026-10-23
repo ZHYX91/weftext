@@ -1,5 +1,6 @@
 use serde_json::Value;
 use weftext_engine::inspect_editor;
+use weftext_messages::{ErrorDescription, UiMessage};
 
 fn assert_ranges(source: &str, value: &Value, path: &str, visited: &mut Vec<String>) {
     match value {
@@ -127,7 +128,12 @@ fn empty_ascii_unicode_and_invalid_source_keep_all_present_ranges_accurate() {
         let (map, _) = checked_map(source);
         if source.contains("broken") {
             assert_eq!(map["syntaxValid"], false);
-            assert_eq!(map["unavailableReason"], "syntax-invalid");
+            let reason: ErrorDescription =
+                serde_json::from_value(map["unavailableReason"].clone()).unwrap();
+            assert_eq!(
+                reason,
+                ErrorDescription::from(UiMessage::error_engine_reason_syntax_invalid())
+            );
         } else {
             assert_eq!(map["syntaxValid"], true, "{source:?}");
         }

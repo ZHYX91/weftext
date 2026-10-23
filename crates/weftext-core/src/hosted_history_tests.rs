@@ -22,7 +22,7 @@ impl Fixture {
         let root = temp.path().join("library");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let created = core.create_note(&root, &root, "Note").unwrap();
+        let created = core.create_note_fixture(&root, &root, "Note").unwrap();
         let path = PathBuf::from(created.path);
         let mut doc = core
             .with_actor(ALICE, |c| c.open(&path, Some(root.clone())))
@@ -126,6 +126,13 @@ fn hosted_history_restore_new_save_keeps_later_history_and_all_own_drafts_withou
     let status = f.restore(request.clone()).unwrap();
     assert_eq!(status.status, "committed");
     assert_eq!(status.result_status, "available");
+    assert!(status.result_error.is_none());
+    assert!(
+        serde_json::to_value(&status)
+            .unwrap()
+            .get("resultError")
+            .is_none()
+    );
     let result = status.result.unwrap();
     assert_eq!(result.source, f.original_source);
     assert_eq!(result.receipt.operation_id, operation);
@@ -199,11 +206,14 @@ fn hosted_history_dirty_buffer_none_is_rejected_and_changed_original_request_can
     assert_eq!(f.status(&operation).status, "notCommitted");
     assert_eq!(f.restore(request.clone()).unwrap().status, "notCommitted");
     request.draft_action = "retain".into();
-    assert_eq!(f.restore(request).unwrap_err().code, "operationConflict");
+    assert_eq!(
+        f.restore(request.clone()).unwrap_err().code,
+        "operationConflict"
+    );
     assert_eq!(
         f.core
             .with_actor(ALICE, |c| c
-                .actor_history_restore_retry("Note", &operation, OTHER_FP))
+                .actor_history_restore_for_request("Note", &request, OTHER_FP))
             .unwrap_err()
             .code,
         "operationConflict"
@@ -267,10 +277,12 @@ fn hosted_history_installed_and_committed_lost_response_statuses_are_never_cance
         let operation = fresh();
         let request = f.request(&operation, Some(f.doc.source.clone() + "\nprivate buffer"));
         set_test_failpoint(point);
-        assert_eq!(
-            f.restore(request.clone()).unwrap_err().code,
-            "injectedFailure"
-        );
+        let first = f.restore(request.clone());
+        if point == "saveCommitted" {
+            assert_eq!(first.unwrap().status, "committed");
+        } else {
+            assert_eq!(first.unwrap_err().code, "injectedFailure");
+        }
         f.restart();
         let expected = if point == "saveCommitted" {
             "committed"
@@ -293,6 +305,54 @@ fn hosted_history_installed_and_committed_lost_response_statuses_are_never_cance
 }
 
 #[test]
+fn first_hosted_restore_retains_a_postcommit_draft_warning_but_later_lookup_does_not_invent_it() {
+    let mut f = Fixture::new();
+    let operation = fresh();
+    let request = f.request(&operation, Some(f.doc.source.clone() + "\nprivate Y"));
+    set_test_failpoint("saveDraftUpdate");
+    let first = f.restore(request.clone()).unwrap();
+    assert_eq!(first.status, "committed");
+    let result = first.result.unwrap();
+    assert_eq!(result.receipt.operation_id, operation);
+    assert_eq!(result.recovery_issue.unwrap().code, "injectedFailure");
+    assert_eq!(fs::read_to_string(&f.path).unwrap(), f.original_source);
+    let internal = f.internal(&operation);
+    let count = f.core.operations.len();
+    for field in ["session", "base", "version", "source", "action"] {
+        let mut changed = request.clone();
+        match field {
+            "session" => changed.session_id = fresh(),
+            "base" => changed.base_id = fresh(),
+            "version" => changed.version_id = fresh(),
+            "source" => changed.draft_source = Some("different".into()),
+            _ => changed.draft_action = "none".into(),
+        }
+        assert_eq!(
+            f.core
+                .with_actor(ALICE, |core| core
+                    .actor_history_restore_for_request("Note", &changed, FP))
+                .unwrap_err()
+                .code,
+            "operationConflict"
+        );
+    }
+    f.restart();
+    let known = f
+        .core
+        .with_actor(ALICE, |core| {
+            core.actor_history_restore_for_request("Note", &request, FP)
+        })
+        .unwrap()
+        .unwrap();
+    assert_eq!(known.status, "committed");
+    assert!(known.result.is_none());
+    let retry = f.restore(request).unwrap();
+    assert!(retry.result.unwrap().recovery_issue.is_none());
+    assert_eq!(f.internal(&operation), internal);
+    assert_eq!(f.core.operations.len(), count);
+}
+
+#[test]
 fn hosted_history_category_actor_resource_and_basis_cannot_borrow_another_operation() {
     let mut f = Fixture::new();
     let operation = fresh();
@@ -300,7 +360,7 @@ fn hosted_history_category_actor_resource_and_basis_cannot_borrow_another_operat
     f.restore(request.clone()).unwrap();
     assert_eq!(
         f.core
-            .with_actor(ALICE, |c| c.actor_save_status(&operation))
+            .with_actor(ALICE, |c| c.actor_save_status("Note", &operation))
             .unwrap_err()
             .code,
         "operationConflict"
@@ -330,7 +390,7 @@ fn hosted_history_category_actor_resource_and_basis_cannot_borrow_another_operat
     assert!(
         f.core
             .with_actor(BOB, |c| c
-                .actor_history_restore_retry("Note", &operation, FP))
+                .actor_history_restore_for_request("Note", &request, FP))
             .unwrap()
             .is_none()
     );
@@ -364,11 +424,18 @@ fn hosted_history_category_actor_resource_and_basis_cannot_borrow_another_operat
 #[test]
 fn hosted_history_explicit_owner_result_and_navigation_do_not_scan_unconfigured_sources() {
     let mut f = Fixture::new();
-    let hidden = f.core.create_note(&f.root, &f.root, "Unreadable").unwrap();
+    let hidden = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Unreadable")
+        .unwrap();
     let duplicate = f.root.join("UnconfiguredCopy");
     fs::create_dir(&duplicate).unwrap();
     fs::write(duplicate.join("UnconfiguredCopy.typ"), &f.original_source).unwrap();
-    let hidden_guard = ParentGuard::acquire(Path::new(&hidden.path)).unwrap();
+    let hidden_guard = ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        Path::new(&hidden.path),
+    )
+    .unwrap();
     let _hidden_file = hidden_guard.open_file(true, false).unwrap();
     let selected = f.core.qualified_node_at(&f.root, &f.path).unwrap();
     assert_eq!(selected.owner.node_id, f.doc.node_id.clone().unwrap());
@@ -395,7 +462,10 @@ fn hosted_history_current_qualification_and_result_refuse_replacement_and_remapp
     let operation = fresh();
     let request = f.request(&operation, None);
     f.restore(request.clone()).unwrap();
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     assert_eq!(
         f.core
             .with_actor(ALICE, |c| c.actor_history_restore_result_at(
@@ -416,6 +486,16 @@ fn hosted_history_current_qualification_and_result_refuse_replacement_and_remapp
     assert_eq!(retry.status, "committed");
     assert_eq!(retry.result_status, "unavailable");
     assert!(retry.result.is_none());
+    let error = retry.result_error.as_ref().unwrap();
+    assert_eq!(error.code, "identityPending");
+    assert!(error.explanation.key().starts_with("error.core."));
+    let wire = serde_json::to_value(&retry).unwrap();
+    assert_eq!(wire["status"], "committed");
+    assert_eq!(wire["resultError"]["code"], "identityPending");
+    assert!(wire["resultError"].get("message").is_none());
+    assert!(wire["resultError"]["explanation"].is_object());
+    assert!(wire["resultError"]["diagnostics"].is_array());
+    assert!(wire["resultError"]["causes"].is_array());
     assert_eq!(
         f.core
             .with_actor(ALICE, |c| c
@@ -504,7 +584,10 @@ fn hosted_history_unknown_version_and_wrong_configured_path_have_no_source_effec
     let mut request = f.request(&fresh(), None);
     request.version_id = fresh();
     assert_eq!(f.restore(request).unwrap_err().code, "historyUnavailable");
-    let other = f.core.create_note(&f.root, &f.root, "Other").unwrap();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
     let request = f.request(&fresh(), None);
     assert_eq!(
         f.core
@@ -703,7 +786,7 @@ fn hosted_history_qualification_rejects_unproved_external_move_and_other_workspa
 fn hosted_history_qualification_rejects_real_trash_children_through_windows_case_alias() {
     let mut f = Fixture::new();
     f.core
-        .create_note(&f.root, f.path.parent().unwrap(), "Child")
+        .create_note_fixture(&f.root, f.path.parent().unwrap(), "Child")
         .unwrap();
     let operation = fresh();
     let plan = f
@@ -783,7 +866,7 @@ fn hosted_history_restore_preserves_original_saved_definition_admission_without_
                         &weftext_data::QueryPlan::default(),
                         &schema,
                     )
-                    .map_err(|e| CoreError::new("invalidQueryDefinition", e.to_string()))
+                    .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))
                 },
             )
         })

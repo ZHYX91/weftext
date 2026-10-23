@@ -18,13 +18,18 @@ enum Actual {
     File(FileIdentity, Vec<u8>),
 }
 fn directory_identity(path: &Path) -> FileIdentity {
-    ParentGuard::acquire(&path.join(".resource-retirement-probe"))
-        .unwrap()
-        .directory_identity()
-        .unwrap()
+    ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &path.join(".resource-retirement-probe"),
+    )
+    .unwrap()
+    .directory_identity()
+    .unwrap()
 }
 fn capture(path: &Path) -> CapturedFile {
-    capture_optional(path).unwrap().unwrap()
+    capture_optional(&crate::BackendContext::local().unwrap(), path)
+        .unwrap()
+        .unwrap()
 }
 fn tree(root: &Path) -> BTreeMap<PathBuf, Actual> {
     fn visit(root: &Path, path: &Path, result: &mut BTreeMap<PathBuf, Actual>) {
@@ -120,7 +125,7 @@ impl Fixture {
             ("Left", vec!["asset-a.bin", "asset-b.bin", "keep.bin"]),
             ("Right", vec!["asset-c.bin", "keep.bin"]),
         ] {
-            let note = a.create_note(&ar, &ar, name).unwrap();
+            let note = a.create_note_fixture(&ar, &ar, name).unwrap();
             for asset in assets {
                 let imported = a
                     .prepare_import_resource(
@@ -431,7 +436,7 @@ impl Fixture {
         preview: &OperationPreview,
         retired: &[RetiredMember],
     ) {
-        assert!(self.b.committed(&preview.operation_id));
+        assert!(self.b.committed(&preview.operation_id).unwrap());
         assert_eq!(
             serde_json::to_value(
                 self.b
@@ -463,7 +468,7 @@ impl Fixture {
             assert_eq!(preserved.stamp, asset.original.stamp);
             assert_eq!(preserved.bytes, asset.original.bytes);
             assert_eq!(
-                self.b.accepted_revision(&preserved).as_ref(),
+                self.b.accepted_revision(&preserved).unwrap().as_ref(),
                 Some(&member.file_revision)
             );
             assert!(!Path::new(&transaction.relocated_path(&member.source)).exists());
@@ -482,7 +487,7 @@ impl Fixture {
                 graph.blob(&installed.state.files[&canonical]).unwrap()
             );
             assert_eq!(
-                self.b.accepted_revision(&current).as_ref(),
+                self.b.accepted_revision(&current).unwrap().as_ref(),
                 installed.state.file_revisions.get(&canonical)
             );
             assert_eq!(
@@ -659,7 +664,11 @@ fn compound_resource_retirement_original_moved_file_checkpoints_restart_and_fini
                 .expect_err(&format!("The original {stage}/{point} hook must interrupt"));
         assert_eq!(error.code, "recoveryPending", "{point}: {error:?}");
         assert!(
-            error.message.contains("underlying testInterrupted:"),
+            error
+                .causes
+                .as_slice()
+                .iter()
+                .any(|cause| cause.code == "testInterrupted"),
             "{point}: {error:?}"
         );
         let install = f.b.journal_path(&preview.operation_id, "install");
@@ -723,8 +732,8 @@ fn compound_resource_retirement_original_moved_file_checkpoints_restart_and_fini
                 Some(retired.digest.as_str())
             );
             assert_eq!(
-                member.current_identity.as_ref().unwrap().index,
-                retired.identity.index.to_string()
+                member.current_identity.as_ref().unwrap(),
+                &crate::journal::RecoveryIdentity::from(&retired.identity)
             );
             if point == "retire0" || point == "retire2" {
                 let after = Path::new(&retired.target).exists();
@@ -791,7 +800,7 @@ fn reject_before_install(f: &mut Fixture, preview: &OperationPreview) {
         serde_json::to_value(&f.b.operations[&preview.operation_id]).unwrap(),
         original
     );
-    assert!(!f.b.committed(&preview.operation_id));
+    assert!(!f.b.committed(&preview.operation_id).unwrap());
     f.assert_sender_originals();
 }
 #[test]
@@ -849,7 +858,13 @@ fn compound_resource_retirement_after_first_original_move_rejects_foreign_target
             f.b.execute_operation(&preview.operation_id, &preview.plan_id)
                 .unwrap_err();
         assert_eq!(error.code, "recoveryPending");
-        assert!(error.message.contains("underlying testInterrupted:"));
+        assert!(
+            error
+                .causes
+                .as_slice()
+                .iter()
+                .any(|cause| cause.code == "testInterrupted")
+        );
         let first = capture(Path::new(&retired[0].target));
         assert_eq!(first.stamp.identity, retired[0].identity);
         let transaction = f.b.operations[&preview.operation_id]
@@ -902,7 +917,7 @@ fn compound_resource_retirement_after_first_original_move_rejects_foreign_target
             );
             assert_eq!(capture(Path::new(&retired[0].target)).stamp, first.stamp);
             assert_eq!(capture(Path::new(&retired[0].target)).bytes, first.bytes);
-            assert!(!f.b.committed(&preview.operation_id));
+            assert!(!f.b.committed(&preview.operation_id).unwrap());
         }
         f.assert_sender_originals();
     }

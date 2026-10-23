@@ -3,6 +3,7 @@
 Local Core routes provision admissions and structural operations while the hosted
 server is stopped. Query, definition and output consumers use hosted HTTP only.
 """
+from _creation_result import created_document
 import copy
 import json
 import shutil
@@ -34,8 +35,8 @@ class HostedScopes(HostedQuery):
             for key, directory in [('shared', self.root / 'Shared'), ('secret', self.root / 'Secret')]:
                 self.refs[key] = api('/api/navigation/capture', {
                     'root': str(self.root), 'path': str(directory)})['targetRef']
-            child = api('/api/note/create', {'root': str(self.root),
-                'parent': str(self.root / 'Shared'), 'name': 'Child', 'operationId': uid()})
+            child = created_document(api('/api/note/create', {'root': str(self.root),
+                'parent': str(self.root / 'Shared'), 'name': 'Child', 'operationId': uid()}))
             source = (f'#metadata((id: "{child["nodeId"]}", types: ("task",), '
                       'status: "open", private: "PRIVATE_CHILD")) <weftext>\n= 子笔记😀\n子正文\n')
             api('/api/save', {'sessionId': child['sessionId'], 'baseId': child['baseId'],
@@ -235,7 +236,7 @@ class HostedScopes(HostedQuery):
         self.policy(lambda users: [users['fields']['grants'][resource].update(
             office={'export': True, 'download': True}) for resource in ('Shared', 'Child', 'Other')])
         output = self.query(self.scope_plan('shared'))
-        request = {'requestId': uid(), 'queryId': output['queryId'], 'format': 'xlsx',
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'queryId': output['queryId'], 'format': 'xlsx',
                    'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}}
         prepared = self.call('office/export/prepare', request, 'fields')
         original = HostedOffice.deliver(self, prepared, 'fields')
@@ -320,7 +321,7 @@ class HostedScopes(HostedQuery):
         self.policy(lambda users: [users['fields']['grants'][resource].update(
             office={'export': True, 'download': True}) for resource in ('Shared', 'Child')])
         result = self.query(self.scope_plan('shared', lifecycle='trash'))
-        request = {'requestId': uid(), 'queryId': result['queryId'], 'format': 'xlsx',
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'queryId': result['queryId'], 'format': 'xlsx',
                    'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}}
         output = self.call('office/export/prepare', request, 'fields')
         artifact = HostedOffice.deliver(self, output, 'fields')

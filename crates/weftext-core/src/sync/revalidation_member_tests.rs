@@ -22,7 +22,7 @@ impl Fixture {
         let data = temp.path().join("private");
         let mut core = Core::new(&data).unwrap();
         core.create_library(&root).unwrap();
-        let note = core.create_note(&root, &root, "Note").unwrap();
+        let note = core.create_note_fixture(&root, &root, "Note").unwrap();
         let source = PathBuf::from(&note.path);
         let imported = core
             .prepare_import_resource(
@@ -50,10 +50,12 @@ impl Fixture {
         }
     }
     fn observe_removed_resource(&self, update_manifest: bool) {
-        let original = capture_optional(&self.asset).unwrap().unwrap();
+        let original = capture_optional(&crate::BackendContext::local().unwrap(), &self.asset)
+            .unwrap()
+            .unwrap();
         fs::rename(&self.asset, &self.retained).unwrap();
         assert_eq!(
-            capture_optional(&self.retained)
+            capture_optional(&crate::BackendContext::local().unwrap(), &self.retained)
                 .unwrap()
                 .unwrap()
                 .stamp
@@ -101,7 +103,9 @@ fn sync_adoption_removed_registered_member_is_a_real_no_write_portable_successor
         .versions[0]
         .clone();
     f.observe_removed_resource(true);
-    let manifest = capture_optional(&f.manifest).unwrap().unwrap();
+    let manifest = capture_optional(&crate::BackendContext::local().unwrap(), &f.manifest)
+        .unwrap()
+        .unwrap();
     let cut = f.cut();
     let json = serde_json::to_value(&cut).unwrap();
     assert_eq!(json["removedMembers"].as_array().unwrap().len(), 1);
@@ -115,7 +119,10 @@ fn sync_adoption_removed_registered_member_is_a_real_no_write_portable_successor
     let preview = f.core.prepare_operation(request.clone()).unwrap();
     assert!(!f.asset.exists());
     assert_eq!(
-        capture_optional(&f.manifest).unwrap().unwrap().stamp,
+        capture_optional(&crate::BackendContext::local().unwrap(), &f.manifest)
+            .unwrap()
+            .unwrap()
+            .stamp,
         manifest.stamp
     );
     assert_eq!(fs::read(&f.retained).unwrap(), b"original registered bytes");
@@ -131,7 +138,10 @@ fn sync_adoption_removed_registered_member_is_a_real_no_write_portable_successor
     f.core.publish_sync(&f.root).unwrap();
     assert!(!f.asset.exists());
     assert_eq!(
-        capture_optional(&f.manifest).unwrap().unwrap().stamp,
+        capture_optional(&crate::BackendContext::local().unwrap(), &f.manifest)
+            .unwrap()
+            .unwrap()
+            .stamp,
         manifest.stamp
     );
     let history = f.core.read_sync_history(&f.identity).unwrap();
@@ -225,14 +235,19 @@ fn sync_adoption_removed_member_reappearing_after_review_does_not_gain_an_absenc
         } else {
             fs::rename(&f.retained, &f.asset).unwrap();
         }
-        let observed = capture_optional(&f.asset).unwrap().unwrap();
+        let observed = capture_optional(&crate::BackendContext::local().unwrap(), &f.asset)
+            .unwrap()
+            .unwrap();
         assert_eq!(
             f.core.prepare_operation(request.clone()).unwrap_err().code,
             "staleBase"
         );
         assert!(!f.core.operations.contains_key(&request.operation_id));
         assert_eq!(
-            capture_optional(&f.asset).unwrap().unwrap().stamp,
+            capture_optional(&crate::BackendContext::local().unwrap(), &f.asset)
+                .unwrap()
+                .unwrap()
+                .stamp,
             observed.stamp
         );
     }
@@ -316,8 +331,12 @@ fn sync_adoption_removed_member_original_prepared_and_recovery_keep_negative_slo
                     .install_record(&f.core.operations[&preview.operation_id])
                     .unwrap();
             }
-            let source = capture_optional(&f.source).unwrap().unwrap();
-            let manifest = capture_optional(&f.manifest).unwrap().unwrap();
+            let source = capture_optional(&crate::BackendContext::local().unwrap(), &f.source)
+                .unwrap()
+                .unwrap();
+            let manifest = capture_optional(&crate::BackendContext::local().unwrap(), &f.manifest)
+                .unwrap()
+                .unwrap();
             match mutation {
                 "sameFile" => fs::rename(&f.retained, &f.asset).unwrap(),
                 "newFile" => fs::write(&f.asset, fs::read(&f.retained).unwrap()).unwrap(),
@@ -379,10 +398,16 @@ fn sync_adoption_removed_member_original_prepared_and_recovery_keep_negative_slo
                         .exists()
                 );
             }
-            assert!(!f.core.committed(&preview.operation_id));
-            assert!(!f.core.resolved(&preview.operation_id));
-            let current_source = capture_optional(&f.source).unwrap().unwrap();
-            let current_manifest = capture_optional(&f.manifest).unwrap().unwrap();
+            assert!(!f.core.committed(&preview.operation_id).unwrap());
+            assert!(!f.core.resolved(&preview.operation_id).unwrap());
+            let current_source =
+                capture_optional(&crate::BackendContext::local().unwrap(), &f.source)
+                    .unwrap()
+                    .unwrap();
+            let current_manifest =
+                capture_optional(&crate::BackendContext::local().unwrap(), &f.manifest)
+                    .unwrap()
+                    .unwrap();
             assert_eq!(current_source.bytes, source.bytes);
             assert_eq!(current_source.stamp.identity, source.stamp.identity);
             assert_eq!(current_manifest.bytes, manifest.bytes);
@@ -483,8 +508,8 @@ fn sync_adoption_removed_member_original_pending_namespace_writer_prevents_commi
                     .exists()
             );
         }
-        assert!(!f.core.committed(&original.operation_id));
-        assert!(!f.core.committed(&other.operation_id));
+        assert!(!f.core.committed(&original.operation_id).unwrap());
+        assert!(!f.core.committed(&other.operation_id).unwrap());
         assert!(!f.asset.exists());
         assert_eq!(fs::read(&f.source).unwrap(), source);
         assert_eq!(fs::read(&f.manifest).unwrap(), manifest);

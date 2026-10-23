@@ -1,5 +1,5 @@
 //! Bounded native heading numbering. Unknown author rules are preserved.
-use crate::EngineError;
+use crate::{EngineError, UiMessage};
 use serde::{Deserialize, Serialize};
 use std::ops::Range;
 use typst_syntax::{
@@ -46,7 +46,10 @@ pub struct HeadingNumberingInspection {
     pub source_hash: String,
     pub settings: Option<HeadingNumberingIntent>,
     pub editable: bool,
-    pub reason: Option<String>,
+    /// True only when an exact frozen endnotes certificate is the sole blocker.
+    /// Independently produced admission evidence, never inferred from UI text.
+    pub frozen_endnotes_required: bool,
+    pub reason: Option<weftext_messages::ErrorDescription>,
 }
 fn generate(settings: &HeadingNumberingIntent) -> Result<String, EngineError> {
     if settings.start == 0
@@ -54,8 +57,8 @@ fn generate(settings: &HeadingNumberingIntent) -> Result<String, EngineError> {
         || !(1..=6).contains(&settings.max_level)
         || settings.exclude_labels.len() > 200
     {
-        return Err(EngineError(
-            "编号起始值须为 1–1000000，层级为 1–6，排除项不超过 200".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_numbering_numbering_bounds(),
         ));
     }
     let mut seen = std::collections::BTreeSet::new();
@@ -70,7 +73,9 @@ fn generate(settings: &HeadingNumberingIntent) -> Result<String, EngineError> {
                 .any(|n| n.cast::<ast::Label>().is_some_and(|l| l.get() == label))
             || !seen.insert(label)
         {
-            return Err(EngineError("编号排除项须为唯一的原生标题标记".into()));
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_numbering_numbering_exclusion_invalid(),
+            ));
         }
     }
     let numbering = match settings.scheme {
@@ -347,25 +352,42 @@ pub(crate) fn inspect_heading_numbering_qualified(
         .map(|(_, range)| &source[range.end..])
         .unwrap_or(source);
     let endnotes = crate::notes::endnotes_import(source);
-    let reason = if source.starts_with("// weftext:heading-numbering") && parsed.is_none() {
-        Some("unverified-numbering-header")
+    let (reason, frozen_endnotes_required) = if source.starts_with("// weftext:heading-numbering")
+        && parsed.is_none()
+    {
+        (
+            Some(weftext_messages::UiMessage::error_engine_reason_numbering_header_unverified()),
+            false,
+        )
     } else if !["heading", "numbering", "counter"]
         .iter()
         .all(|name| crate::notes::notes_binding_available(source, name))
     {
-        Some("unverified-standard-binding")
+        (
+            Some(weftext_messages::UiMessage::error_engine_reason_standard_binding_unverified()),
+            false,
+        )
     } else if author_rules_unknown(tail, endnotes) {
-        Some("custom-native-numbering-rule")
+        (
+            Some(weftext_messages::UiMessage::error_engine_reason_numbering_rule_custom()),
+            false,
+        )
     } else if endnotes && !pinned.is_some_and(|proof| proof.certifies(source)) {
-        Some("requires-frozen-endnotes-module")
+        (
+            Some(
+                weftext_messages::UiMessage::error_engine_reason_endnotes_frozen_module_required(),
+            ),
+            true,
+        )
     } else {
-        None
+        (None, false)
     };
     HeadingNumberingInspection {
         source_hash: crate::source_hash(source),
         settings: parsed.map(|(settings, _)| settings),
         editable: reason.is_none(),
-        reason: reason.map(str::to_owned),
+        frozen_endnotes_required,
+        reason: reason.map(Into::into),
     }
 }
 pub fn edit_heading_numbering(
@@ -381,10 +403,9 @@ pub(crate) fn edit_heading_numbering_qualified(
 ) -> Result<String, EngineError> {
     let inspection = inspect_heading_numbering_qualified(source, pinned);
     if !inspection.editable {
-        return Err(EngineError(format!(
-            "保留未知原生编号规则：{}",
-            inspection.reason.unwrap_or_default()
-        )));
+        return Err(EngineError::new(inspection.reason.unwrap_or_else(|| {
+            UiMessage::error_engine_reason_numbering_rule_custom().into()
+        })));
     }
     let header = generate(action)?;
     let tail = parse_header(source)
@@ -426,8 +447,8 @@ pub(crate) fn edit_heading_numbering_qualified(
         .iter()
         .any(|label| labels.get(label) != Some(&1))
     {
-        return Err(EngineError(
-            "排除标记必须准确对应当前源码中的唯一标题；缺失或生成标记保持原样".into(),
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_numbering_numbering_exclusion_unmatched(),
         ));
     }
     let result = format!("{header}{tail}");
@@ -437,7 +458,9 @@ pub(crate) fn edit_heading_numbering_qualified(
         .0
         .is_empty()
     {
-        return Err(EngineError("编号修改未产生有效原生源码".into()));
+        return Err(EngineError::new(
+            weftext_messages::UiMessage::error_engine_numbering_numbering_readback_failed(),
+        ));
     }
     Ok(result)
 }
@@ -636,9 +659,17 @@ mod tests {
         let notes =
             "#import \"weftext-endnotes.typ\": endnote, endnote-ref, endnotes\n= A\n#endnotes()";
         assert_eq!(
-            inspect_heading_numbering(notes).reason.as_deref(),
-            Some("requires-frozen-endnotes-module")
+            inspect_heading_numbering(notes)
+                .reason
+                .map(|reason| reason.explanation),
+            Some(
+                weftext_messages::UiMessage::error_engine_reason_endnotes_frozen_module_required()
+            )
         );
+        assert!(inspect_heading_numbering(notes).frozen_endnotes_required);
+        let blocked = format!("#set heading(numbering: custom)\n{notes}");
+        assert!(!inspect_heading_numbering(&blocked).frozen_endnotes_required);
+        assert!(!inspect_heading_numbering("= Plain heading").frozen_endnotes_required);
         assert!(edit_heading_numbering(notes, &Default::default()).is_err());
     }
     #[test]

@@ -3,6 +3,7 @@
 use super::*;
 use operations::{CapturedFile, Mutation, SnapshotBinding};
 use std::collections::BTreeSet;
+use weftext_messages::UiMessage;
 
 pub struct QualifiedQueryScope {
     pub target_ref: String,
@@ -83,26 +84,26 @@ impl Core {
         if workspace_id != workspace.workspace_id || !matches!(kind, "node" | "directory") {
             return Err(CoreError::new(
                 "identityPending",
-                "Scope reference and admitted workspace differ",
+                UiMessage::error_core_query_scope_scope_reference_and_admitted_workspace_differ(),
             ));
         }
         self.check_pending(&path)?;
-        let guard = ParentGuard::acquire(&path.join(".query-scope-prospective"))?;
+        let guard = ParentGuard::acquire(&self.backend, &path.join(".query-scope-prospective"))?;
         let directory_identity = guard.directory_identity()?;
         let coordinate = guard.directory_coordinates()?;
         let root_coordinate =
-            ParentGuard::acquire(&root.join(".query-root-prospective"))?.directory_coordinates()?;
+            ParentGuard::acquire(&self.backend, &root.join(".query-root-prospective"))?
+                .directory_coordinates()?;
         let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
-            CoreError::new("outsideRoot", "Scope is outside the selected physical root")
+            CoreError::new(
+                "outsideRoot",
+                UiMessage::error_core_query_scope_scope_outside_selected_physical_root(),
+            )
         })?;
         self.query_lifecycle_boundary(&root, &coordinate, lifecycle)?;
         let mut dependencies = if kind == "node" {
             let mut source = None;
-            for p in self
-                .operations
-                .values()
-                .filter(|p| self.committed(&p.operation_id))
-            {
+            for p in self.committed_plans()?.into_iter() {
                 for birth in self
                     .read_births(&p.operation_id)?
                     .into_iter()
@@ -119,7 +120,7 @@ impl Core {
                             if source.replace(path.join(leaf)).is_some() {
                                 return Err(CoreError::new(
                                     "identityPending",
-                                    "Ambiguous admitted scope placement",
+                                    UiMessage::error_core_query_scope_ambiguous_admitted_scope_placement(),
                                 ));
                             }
                         }
@@ -129,7 +130,7 @@ impl Core {
             let source = source.ok_or_else(|| {
                 CoreError::new(
                     "identityPending",
-                    "No original node placement proves the selected scope",
+                    UiMessage::error_core_query_scope_no_original_node_placement_proves_selected_scope(),
                 )
             })?;
             let owner = weftext_knowledge::NodeRef {
@@ -145,7 +146,7 @@ impl Core {
             let captured = identity_file.binding.captured.as_ref().ok_or_else(|| {
                 CoreError::new(
                     "identityPending",
-                    "An admitted directory marker is required",
+                    UiMessage::error_core_query_scope_admitted_directory_marker_required(),
                 )
             })?;
             crate::directory_identity::validate_directory_marker(&captured.bytes)?;
@@ -153,7 +154,7 @@ impl Core {
             if value["directoryId"] != id || identity_file.binding.parent != directory_identity {
                 return Err(CoreError::new(
                     "identityPending",
-                    "Directory marker and expected physical object differ",
+                    UiMessage::error_core_query_scope_directory_marker_and_expected_physical_object_differ(),
                 ));
             }
             let places = self.query_directory_placements(workspace_id, id, &directory_identity)?;
@@ -165,7 +166,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "identityPending",
-                    "No committed directory placement proves this exact object",
+                    UiMessage::error_core_query_scope_no_committed_directory_placement_proves_exact_object(),
                 ));
             }
             let mut proofs = vec![identity_file];
@@ -205,21 +206,21 @@ impl Core {
         if workspace.workspace_id != expected.workspace_id {
             return Err(CoreError::new(
                 "identityPending",
-                "Node reference belongs to another workspace",
+                UiMessage::error_core_query_scope_node_reference_belongs_to_another_workspace(),
             ));
         }
         self.check_pending(&path)?;
-        let guard = ParentGuard::acquire(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
         let mut handle = guard.open_file(false, false)?;
         let actual = stamp(&handle)?;
         self.check_pending_identity(&actual.identity)?;
         let coordinate = backend::file_coordinates(&handle)?;
         self.query_lifecycle_boundary(&root, coordinate.parent().unwrap(), lifecycle)?;
         let bytes = read_source(&mut handle)?;
-        let birth = self.admitted_binding(&actual.identity).ok_or_else(|| {
+        let birth = self.admitted_binding(&actual.identity)?.ok_or_else(|| {
             CoreError::new(
                 "identityPending",
-                "The selected source has no original physical admission",
+                UiMessage::error_core_query_scope_selected_source_has_no_original_physical_admission(),
             )
         })?;
         if birth.workspace_id != expected.workspace_id
@@ -231,36 +232,18 @@ impl Core {
         {
             return Err(CoreError::new(
                 "identityPending",
-                "The current owner declaration and original admission differ",
+                UiMessage::error_core_query_scope_current_owner_declaration_and_original_admission_differ(),
             ));
         }
-        let root_coordinate =
-            ParentGuard::acquire(&root.join(".query-root-prospective"))?.directory_coordinates()?;
-        let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
-            CoreError::new(
-                "outsideRoot",
-                "Source is outside the selected physical root",
-            )
-        })?;
         let places = self.node_placement_paths(&birth)?;
-        if places.len() != 1
-            || !places.iter().any(|p| {
-                crate::history::history_relative_path(Path::new(p), &root)
-                    .is_some_and(|p| query_same_relative(&p, relative))
-            })
-        {
-            return Err(CoreError::new(
-                "identityPending",
-                "No committed node placement proves this exact object",
-            ));
-        }
+        self.check_query_node_placement_paths(&root, &coordinate, &places)?;
         let captured = CapturedFile {
             path: display(&path),
             bytes,
             stamp: actual,
         };
         let identity = captured.stamp.identity.clone();
-        let revision = self.accepted_revision(&captured);
+        let revision = self.accepted_revision(&captured)?;
         let source_hash = hash(&captured.bytes);
         let main = SnapshotWitness {
             binding: SnapshotBinding {
@@ -297,7 +280,7 @@ impl Core {
         if absolute_path(root)? != witness.root {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Scope witness belongs to another root",
+                UiMessage::error_core_query_scope_scope_witness_belongs_to_another_root(),
             ));
         }
         self.query_validate_dependencies(root, &witness.dependencies)?;
@@ -310,7 +293,35 @@ impl Core {
         if qualified.witness.directory != witness.directory {
             return Err(CoreError::new(
                 "staleBase",
-                "The selected scope object changed",
+                UiMessage::error_core_query_scope_selected_scope_object_changed(),
+            ));
+        }
+        Ok(())
+    }
+    pub(crate) fn check_query_node_placement_paths(
+        &self,
+        root: &Path,
+        coordinate: &Path,
+        places: &BTreeSet<String>,
+    ) -> Result<()> {
+        let root_coordinate =
+            ParentGuard::acquire(&self.backend, &root.join(".query-root-prospective"))?
+                .directory_coordinates()?;
+        let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
+            CoreError::new(
+                "outsideRoot",
+                UiMessage::error_core_query_scope_source_outside_selected_physical_root(),
+            )
+        })?;
+        if places.len() != 1
+            || !places.iter().any(|path| {
+                crate::history::history_relative_path(Path::new(path), root)
+                    .is_some_and(|path| query_same_relative(&path, relative))
+            })
+        {
+            return Err(CoreError::new(
+                "identityPending",
+                UiMessage::error_core_query_scope_no_committed_node_placement_proves_exact_object(),
             ));
         }
         Ok(())
@@ -323,7 +334,7 @@ impl Core {
         if absolute_path(root)? != witness.root {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Node witness belongs to another root",
+                UiMessage::error_core_query_scope_node_witness_belongs_to_another_root(),
             ));
         }
         self.query_validate_dependencies(root, &witness.dependencies)?;
@@ -336,7 +347,7 @@ impl Core {
         if qualified.witness.identity != witness.identity {
             return Err(CoreError::new(
                 "staleBase",
-                "The selected source object changed",
+                UiMessage::error_core_query_scope_selected_source_object_changed(),
             ));
         }
         Ok(())
@@ -394,7 +405,7 @@ impl Core {
     }
     fn query_file_witness(&self, path: &Path) -> Result<SnapshotWitness> {
         self.check_pending(path)?;
-        let guard = ParentGuard::acquire(path)?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
         let captured = match guard.open_file(false, false) {
             Ok(mut handle) => {
                 let actual = stamp(&handle)?;
@@ -421,7 +432,7 @@ impl Core {
         if rules.binding.captured.is_none() && self.query_rules_ever_committed(root)? {
             return Err(CoreError::new(
                 "rulesUnavailable",
-                "Previously committed library rules are missing; absence is not a legacy default",
+                UiMessage::error_core_query_scope_previously_committed_library_rules_missing_absence_not_legacy_default(),
             ));
         }
         let mut controls = vec![rules];
@@ -436,9 +447,25 @@ impl Core {
     }
     pub(crate) fn query_rules_ever_committed(&self, root: &Path) -> Result<bool> {
         let workspace = self.require_workspace(root)?.workspace_id;
-        for p in self.operations.values().filter(|p| {
-            self.committed(&p.operation_id) && p.workspace_id.as_deref() == Some(&workspace)
-        }) {
+        for p in self
+            .operations
+            .values()
+            .map(|p| -> Result<_> {
+                Ok(
+                    if {
+                        self.committed(&p.operation_id)?
+                            && p.workspace_id.as_deref() == Some(&workspace)
+                    } {
+                        Some(p)
+                    } else {
+                        None
+                    },
+                )
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+        {
             let mut parents = Vec::new();
             if p.files.iter().any(|(name, _)| name == ".weftext-rules") {
                 parents.push(Path::new(&p.path));
@@ -467,7 +494,9 @@ impl Core {
                 );
             }
             for parent in parents {
-                if query_same_relative(parent, root) && backend::same_directory(parent, root)? {
+                if query_same_relative(parent, root)
+                    && backend::same_directory(&self.backend, parent, root)?
+                {
                     return Ok(true);
                 }
             }
@@ -483,15 +512,16 @@ impl Core {
         if !matches!(lifecycle, "live" | "trash") {
             return Err(CoreError::new(
                 "invalidLifecycle",
-                "Choose live or trash explicitly",
+                UiMessage::error_core_query_scope_choose_live_or_trash_explicitly(),
             ));
         }
-        let root_guard = ParentGuard::acquire(&root.join(".query-root-prospective"))?;
+        let root_guard =
+            ParentGuard::acquire(&self.backend, &root.join(".query-root-prospective"))?;
         let root_coordinate = root_guard.directory_coordinates()?;
         let relative = coordinate.strip_prefix(&root_coordinate).map_err(|_| {
             CoreError::new(
                 "outsideRoot",
-                "The selected physical object is outside the library",
+                UiMessage::error_core_query_scope_selected_physical_object_outside_library(),
             )
         })?;
         let trash = relative.components().next().is_some_and(|c| {
@@ -502,7 +532,7 @@ impl Core {
         if trash != (lifecycle == "trash") {
             return Err(CoreError::new(
                 "lifecycleMismatch",
-                "The selected object is in another lifecycle",
+                UiMessage::error_core_query_scope_selected_object_in_another_lifecycle(),
             ));
         }
         self.check_discovery_boundary(root, &root.join(relative))?;
@@ -511,11 +541,12 @@ impl Core {
             if parts.components().count() != 2 {
                 return Err(CoreError::new(
                     "identityPending",
-                    "Select an exact retained trash tree, not the trash container",
+                    UiMessage::error_core_query_scope_select_exact_retained_trash_tree_not_trash_container(),
                 ));
             }
             let tree = root.join(&parts);
-            let tree_guard = ParentGuard::acquire(&tree.join(".query-trash-prospective"))?;
+            let tree_guard =
+                ParentGuard::acquire(&self.backend, &tree.join(".query-trash-prospective"))?;
             let tree_identity = tree_guard.directory_identity()?;
             let owned = self.original_trash_roots(root)?.iter().any(|entry| {
                 crate::history::history_relative_path(&entry.path, root)
@@ -525,7 +556,7 @@ impl Core {
             if !owned {
                 return Err(CoreError::new(
                     "identityPending",
-                    "The trash tree lacks its original committed physical placement",
+                    UiMessage::error_core_query_scope_trash_tree_lacks_original_committed_physical_placement(),
                 ));
             }
         }

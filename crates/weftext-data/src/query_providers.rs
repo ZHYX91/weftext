@@ -12,7 +12,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 fn unavailable() -> DataError {
-    DataError("Query provider unavailable".into())
+    DataError::unavailable(
+        weftext_messages::UiMessage::error_data_query_providers_query_provider_unavailable(),
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -248,10 +250,10 @@ impl SemanticDependencies {
                 _ => vec![],
             }
         };
-        let name = if validator.operation == "event" {
-            "recurrence"
-        } else {
-            "value"
+        let name = match validator.operation.as_str() {
+            "event" => "recurrence",
+            "task-reminder" => "reminder",
+            _ => "value",
         };
         for value in slot(name) {
             match validator.operation.as_str() {
@@ -269,6 +271,19 @@ impl SemanticDependencies {
                     }
                 }
                 "recurrence" | "event" => self.recurrence(schema, value),
+                "task-reminder" => {
+                    if value.member("kind").and_then(NativeValue::text) == Some("due_day") {
+                        if let (Some(key), Some(version)) = (
+                            value.member("zone").and_then(NativeValue::text),
+                            value.member("zone_version").and_then(NativeValue::text),
+                        ) {
+                            self.exact_provider(schema, key, version, "zone");
+                        }
+                        for due in slot("due") {
+                            self.endpoint(schema, due);
+                        }
+                    }
+                }
                 "period" => {
                     if let Some(key) = value.member("series_key").and_then(NativeValue::text) {
                         let policy = schema.series_policies.iter().find(|p| p.key == key);
@@ -482,8 +497,8 @@ impl ProviderTrace {
     }
     pub(crate) fn record(&self, dependencies: &SemanticDependencies) -> Result<()> {
         if self.failed.load(Ordering::Relaxed) {
-            return Err(DataError(
-                "Query provider dependency budget exhausted".into(),
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_query_providers_query_provider_dependency_budget_exhausted(),
             ));
         }
         let mut all = self.state.lock().map_err(|_| unavailable())?;
@@ -527,16 +542,16 @@ impl ProviderTrace {
         {
             self.failed.store(true, Ordering::Relaxed);
             all.clear();
-            return Err(DataError(
-                "Query provider dependency budget exhausted".into(),
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_query_providers_query_provider_dependency_budget_exhausted(),
             ));
         }
         Ok(())
     }
     pub(crate) fn finish(&self) -> Result<QueryProviderDependencies> {
         if self.failed.load(Ordering::Relaxed) {
-            return Err(DataError(
-                "Query provider dependency budget exhausted".into(),
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_query_providers_query_provider_dependency_budget_exhausted(),
             ));
         }
         Ok(QueryProviderDependencies {
@@ -706,7 +721,7 @@ fn shape_effects(
                     let families = match operation {
                         "calendar-date" | "range" | "during" => &["calendar"][..],
                         "period" => &["calendar", "zone", "series"][..],
-                        "recurrence" | "event" => &["calendar", "zone"][..],
+                        "recurrence" | "event" | "task-reminder" => &["calendar", "zone"][..],
                         _ => &[][..],
                     };
                     requirements
@@ -906,6 +921,7 @@ fn provider_requirements(
             return Err(unavailable());
         }
         let a = plan.advanced.clone().unwrap_or_default();
+        a.validate_union()?;
         let mut values = StaticValues::default();
         let mut req =
             state
@@ -1040,7 +1056,7 @@ fn provider_requirements(
                 .insert(id, series_policy_fingerprint(&p)?);
         }
         state.requirements.insert(baseline.clone(), req);
-        for branch in &a.union_all {
+        for branch in a.union_branches() {
             visit(
                 branch,
                 schema,
@@ -1120,6 +1136,61 @@ fn provider_requirements(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn task_reminder_qualifies_only_the_selected_branch_calendar_and_zone() {
+        let schema = Schema::bundled().unwrap();
+        let constraint = schema
+            .types
+            .iter()
+            .find(|t| t.id == "tasks/task")
+            .unwrap()
+            .constraints
+            .iter()
+            .find(|c| c.validator == "temporal/task-reminder")
+            .unwrap();
+        let record = |members: Vec<(&str, &str)>| {
+            NativeValue::Record(
+                members
+                    .into_iter()
+                    .map(|(key, value)| crate::NativeMember {
+                        key: key.into(),
+                        value: NativeValue::Text(value.into()),
+                    })
+                    .collect(),
+            )
+        };
+        let mut fields = BTreeMap::from([
+            (
+                "tasks/reminder".into(),
+                record(vec![("kind", "absolute"), ("at", "2026-10-23T09:00:00Z")]),
+            ),
+            (
+                "tasks/due".into(),
+                record(vec![("calendar", "missing"), ("version", "missing")]),
+            ),
+        ]);
+        let mut absolute = SemanticDependencies::default();
+        absolute
+            .constraint(&schema, constraint, None, Some(&fields))
+            .unwrap();
+        assert!(absolute.exact_provider_selections.is_empty());
+        assert_eq!(absolute.providers.len(), 1);
+        fields.insert(
+            "tasks/reminder".into(),
+            record(vec![
+                ("kind", "due_day"),
+                ("zone", "UTC"),
+                ("zone_version", "fixed-utc.v1"),
+            ]),
+        );
+        let mut day = SemanticDependencies::default();
+        day.constraint(&schema, constraint, None, Some(&fields))
+            .unwrap();
+        assert_eq!(day.exact_provider_selections.len(), 2);
+        assert!(day.exact_provider_selections.values().any(Option::is_none));
+        assert!(day.providers.contains_key("zones/utc"));
+        assert!(!day.providers.contains_key("calendars/gregorian"));
+    }
     #[test]
     fn provider_trace_deduplicates_occurrences_and_latches_a_bounded_failure() {
         let trace = ProviderTrace::new();

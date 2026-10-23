@@ -9,9 +9,10 @@ from test_hosted_editor import HostedEditor
 
 
 class HostedFields(HostedEditor):
+
     def prepare_fields(self):
         self.server.close()
-        local = Server(['--no-browser', '--data-dir', str(self.data)])
+        local = Server([ '--data-dir', str(self.data)])
         try:
             code, schema, _ = local.call('/api/data/schema', {'root': str(self.root)})
             self.assertEqual(code, 200, schema)
@@ -78,9 +79,11 @@ class HostedFields(HostedEditor):
     def test_fields_aba_external_change_revoke_and_settlement(self):
         self.prepare_fields()
         old = self.field(); other = self.field('Other')
-        doc = self.open(); self.save(doc, doc['source'].replace('status: "open"', 'status: "done"'))
-        doc = self.open(); self.save(doc, doc['source'].replace('status: "done"', 'status: "open"'))
-        self.call('fields/write', self.proposal(old), 'fields', 409)
+        doc = self.open()
+        doc = self.save_current(doc, doc['source'].replace('status: "open"', 'status: "done"'))
+        self.save_current(doc, doc['source'].replace('status: "done"', 'status: "open"'))
+        refused = self.call('fields/write', self.proposal(old), 'fields', 409)
+        self.assertEqual(refused['error']['code'], 'fieldBasisChanged')
         pending = self.proposal(self.field())
         operation = {k: pending[k] for k in ['resource', 'fieldId', 'operationId']}
         self.assertEqual(self.call('fields/operation', operation, 'fields')['status'], 'notRegistered')
@@ -136,13 +139,12 @@ class HostedFields(HostedEditor):
         # An authorized field which the current Type does not contribute is
         # absent, not a reason to lose the whole row or decode its unknown key.
         other = self.open('Other')
-        self.save(other, other['source'].replace('types: ("task",)', 'types: ()').replace('status: "open"', 'status: read("HIDDEN_UNBOUND_VALUE")'))
+        other = self.save_current(other, other['source'].replace('types: ("task",)', 'types: ()').replace('status: "open"', 'status: read("HIDDEN_UNBOUND_VALUE")'))
         absent = self.call('query', {'fields': ['tasks/status'], 'resources': ['Other'], 'plan': {}}, 'fields')['result']
         self.assertEqual(len(absent['rows']), 1)
         self.assertEqual(absent['rows'][0]['cells']['status']['state'], 'absent')
         self.assertNotIn('HIDDEN_UNBOUND_VALUE', json.dumps(absent))
-        other = self.open('Other')
-        self.save(other, other['source'].replace('types: ()', 'types: ("task",)').replace('status: read("HIDDEN_UNBOUND_VALUE")', 'status: "open"'))
+        self.save_current(other, other['source'].replace('types: ()', 'types: ("task",)').replace('status: read("HIDDEN_UNBOUND_VALUE")', 'status: "open"'))
         self.call('query', {**request, 'resources': ['Secret']}, 'fields', 404)
         for field in ['core/aliases', 'invented/hidden']:
             self.call('query', {'fields': [field], 'resources': [], 'plan': {}}, 'fields', 404)

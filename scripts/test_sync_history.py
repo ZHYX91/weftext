@@ -25,8 +25,22 @@ class ReceivedHistory(Sync):
         before_binding = self.call(self.b, '/api/sync/binding', root=str(self.rb))
         initial = self.history()['versions'][0]
         expected = {initial['revision']: original['source']}
+        writer = self.open(self.a, self.ra)
         for suffix in ['历史二 中文', '历史三 😀', '当前头']:
-            source = self.save(self.a, self.ra, suffix)
+            source = writer['source'] + '\n' + suffix
+            operation = uid()
+            saved = self.call(self.a, '/api/save', sessionId=writer['sessionId'],
+                              baseId=writer['baseId'], source=source, operationId=operation)
+            self.assertEqual(saved['status'], 'saved')
+            self.assertEqual(saved['operationId'], operation)
+            self.assertNotIn('documentError', saved)
+            self.assertTrue(saved['documentSourceMatchesCommit'])
+            current = saved['document']
+            self.assertEqual(current['sessionId'], writer['sessionId'])
+            self.assertEqual(current['source'], source)
+            self.assertEqual(current['baseId'], saved['baseId'])
+            self.assertEqual((self.ra / 'Note/Note.typ').read_bytes(), source.encode())
+            writer = current
             received = self.transfer(self.a, self.ra, self.b, [self.key])
             head = next(o for o in received['objects'] if o['object'] == self.key)['view']['versions'][0]
             expected[head['revision']] = source
@@ -56,7 +70,7 @@ class ReceivedHistory(Sync):
         self.assertEqual(reopened['source'], original['source'])
         self.assertEqual(reopened['recoveredDraft'], draft)
         self.b.close()
-        self.b = Server(['--no-browser', '--data-dir', str(self.folder / 'state-b')])
+        self.b = Server([ '--data-dir', str(self.folder / 'state-b')])
         self.assertEqual(self.history()['versions'], records)
         self.assertEqual(self.open(self.b, self.rb)['recoveredDraft'], draft)
 
@@ -101,7 +115,7 @@ class ReceivedHistory(Sync):
         self.assertEqual(error['error']['code'], 'syncIncomplete')
         self.assertEqual(self.open(self.b, self.rb)['source'], original)
         self.b.close()
-        self.b = Server(['--no-browser', '--data-dir', str(self.folder / 'state-b')])
+        self.b = Server([ '--data-dir', str(self.folder / 'state-b')])
         self.assertEqual(self.history(), page)
         self.call(self.b, '/api/sync/receive', identity=self.identity, directory=str(self.exchange))
         self.assertEqual(self.history()['coverage'], 'complete')
@@ -159,7 +173,7 @@ class ReceivedHistory(Sync):
         receipt = self.commit(self.a, plan)
         self.assertEqual(receipt['status'], 'committed')
         self.a.close()
-        self.a = Server(['--no-browser', '--data-dir', str(self.folder / 'state-a')])
+        self.a = Server([ '--data-dir', str(self.folder / 'state-a')])
         restored = self.call(self.a, '/api/sync/operation', operationId=request['operationId'])
         self.assertEqual(restored['request'], request)
         self.assertEqual(restored['plan']['planId'], plan['planId'])

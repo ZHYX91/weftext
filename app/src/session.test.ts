@@ -1,12 +1,35 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DocumentSession, encodeLiteral, validLiteralRange, recoverySource, canRebindSaveAs, sourceConsumerNeedsComparison } from "./session";
-import type { OpenedDocument, RenderOutput } from "./types";
+import { DocumentSession, encodeLiteral, validLiteralRange, recoverySource, canRebindSaveAs, rebindCommittedSave, sourceConsumerNeedsComparison, uniqueRetainedDrafts } from "./session";
+import type { DraftInput, OpenedDocument, RenderOutput } from "./types";
 import { createSourceState } from "./editor";
 import { relativeFileTarget, absoluteFileTarget, quoteTypstString } from "./links";
+import { locale, message, uiTextValue } from "./ui-locale";
 
 const opened: OpenedDocument = { sessionId: "s", path: "a.typ", root: ".", source: "原文", baseId: "b", kind: "file" };
 const render = (source: string, serial: number): RenderOutput => ({ source, serial } as RenderOutput);
+
+test("retained comparison preserves independent producers, roles and unknown input without text coalescing", () => {
+  const input: DraftInput = { path: "a.typ", baseSource: "S", source: "same 😀", baseKnown: true, producerId: "A", role: {kind: "proposal"} };
+  const independent = { ...input, producerId: "B" };
+  const baseline: DraftInput = { ...input, role: {kind: "committedBaseline", operationId: "one"} };
+  const later: DraftInput = { ...baseline, role: {kind: "committedBaseline", operationId: "two"} };
+  const unknown: DraftInput = { path: "a.typ", baseSource: "S", source: "\ud800", baseKnown: true };
+  assert.deepEqual(uniqueRetainedDrafts([input, {...input}, independent, baseline, later, unknown, {...unknown}]),
+    [input, independent, baseline, later, unknown, {...unknown}]);
+  assert.equal(unknown.source.charCodeAt(0), 0xd800);
+});
+
+test("only recovery actually installed by this editor establishes an explicit continuation request", () => {
+  const recovered = { ...opened, recoveredDraft: "已恢复输入", recoveredDraftWitness: "a".repeat(64) };
+  const session = new DocumentSession(recovered);
+  assert.deepEqual(session.recoveryContinuation, { sessionId: opened.sessionId, recordWitness: "a".repeat(64), recoveredSource: "已恢复输入" });
+  session.edit("继续编辑");
+  assert.equal(session.recoveryContinuation?.recoveredSource, "已恢复输入");
+  session.opened = { ...recovered, sessionId: "another", recoveredDraft: "另一位作者" };
+  assert.equal(session.recoveryContinuation?.sessionId, opened.sessionId);
+  assert.equal(new DocumentSession(opened).recoveryContinuation, null);
+});
 
 test("qualified same-Node relocation pauses consumers while equal-byte edits retain the original writer and Draft basis", () => {
   const original = { ...opened, path: "D:\\Library\\Left\\Left.typ", nodeId: "node", workspaceId: "workspace" };
@@ -123,4 +146,51 @@ test("Save As reopens only the exact saved target and never qualifies its old pr
   assert.equal(original.baseId, "b");
   assert.equal(canRebindSaveAs(submitted, { ...external, source: submitted }), true);
   assert.equal(canRebindSaveAs(submitted, { ...external, source: submitted, recoveredDraftConflict: true }), false);
+});
+
+test("original save delivery rebinds a lost Session with its actual base while preserving newer input and editor state", () => {
+  const session = new DocumentSession({ ...opened, nodeId: "node", workspaceId: "workspace" });
+  session.edit("submitted"); const frozen = { sessionId: session.opened.sessionId, source: session.source };
+  session.edit("submitted + waiting input");
+  const sourceState = createSourceState(session.source), selection = sourceState.selection;
+  const fresh = { ...session.opened, sessionId: "reopened", source: "submitted", baseId: "actual-fresh-base" };
+  assert.equal(rebindCommittedSave(session, frozen, fresh), true);
+  assert.equal(session.source, "submitted + waiting input"); assert.equal(session.baseSource, "submitted");
+  assert.equal(session.baseId, "actual-fresh-base"); assert.equal(session.opened.sessionId, "reopened");
+  assert.equal(sourceState.doc.toString(), "submitted + waiting input"); assert.equal(sourceState.selection, selection);
+});
+test("a later current source or changed owner/Session cannot borrow the original receipt base", () => {
+  for (const change of [{ source: "later committed T" }, { nodeId: "different" }, { workspaceId: "different" }]) {
+    const session = new DocumentSession({ ...opened, nodeId: "node", workspaceId: "workspace" }); session.edit("new input Y");
+    const before = structuredClone(session.opened);
+    assert.equal(rebindCommittedSave(session, { sessionId: "s", source: "submitted S" }, { ...session.opened, source: "submitted S", baseId: "actual-T-base", ...change }), false);
+    assert.deepEqual(session.opened, before); assert.equal(session.source, "new input Y"); assert.equal(session.baseId, "b");
+  }
+});
+test("an ordinary file within an admitted workspace retains that exact workspace on qualified save delivery", () => {
+  const session = new DocumentSession({ ...opened, workspaceId: "workspace" });
+  session.edit("input Y");
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "saved S" }, { ...opened, workspaceId: "foreign", source: "saved S" }), false);
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "saved S" }, { ...opened, workspaceId: "workspace", source: "saved S", baseId: "fresh" }), true);
+  assert.equal(session.baseId, "fresh"); assert.equal(session.source, "input Y");
+});
+
+test("qualified ordinary save delivery can restore its actual ancestor owner after a default-parent open", () => {
+  const session = new DocumentSession({ ...opened, path: "D:/A/nested/ordinary.typ", root: "D:/A/nested" });
+  session.edit("Y");
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "S" }, { ...session.opened, workspaceId: "qualified-A", root: "D:/A", source: "S", baseId: "fresh" }), true);
+  assert.equal(session.source, "Y");
+  assert.equal(session.opened.workspaceId, "qualified-A");
+});
+
+test("a live Session error remains visible across locale and equal-source projection updates until actual edit or acknowledged save", () => {
+  const session = new DocumentSession({ ...opened, workspaceId: "qualified" }), note = message("common.save");
+  session.error = note; const serial = session.serial;
+  locale.set("en-US"); assert.equal(uiTextValue(session.error), "Save"); assert.equal(session.source, opened.source); assert.equal(session.baseId, opened.baseId); assert.equal(session.serial, serial);
+  session.edit(opened.source); assert.equal(session.error, note);
+  session.acceptProjection(render(session.source, session.serial)); assert.equal(session.error, note);
+  session.edit("作者新增😀\r\n"); assert.equal(session.error, null);
+  session.error = note;
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "saved" }, { ...opened, workspaceId: "qualified", sessionId: "fresh", source: "saved", baseId: "actual" }), true);
+  assert.equal(session.error, null); assert.equal(session.source, "作者新增😀\r\n"); assert.equal(session.baseId, "actual"); locale.set("zh-CN");
 });

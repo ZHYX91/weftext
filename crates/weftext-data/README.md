@@ -22,6 +22,12 @@ Core captures and publishes Query inputs, coverage and freshness. The crate does
 
 Advanced Query supports same-cut saved calls with exact current/pinned definitions, typed parameters, ordered unions, distinct, unnest, related traversal and terminal aggregates. Temporal providers execute Gregorian and finite-table periods, exact zone conversion and bounded recurrence expansion from the installed calendar/zone versions. Missing history, provider coverage, target closure or host budget remains partial/unavailable rather than an empty complete result.
 
+Product error explanations use `UiMessage` and named parameters generated from the sole catalog. Original JSON, CEL and compiler diagnostics carry separate provenance; neither rendered text nor message keys determine invalid, unavailable, coverage or budget states. `Cell::Unavailable` separates the machine fact `kind`, typed summary `reason` and complete parallel `diagnostics`. Parallel diagnostics do not consume the bounded cause chain. The producer independently computes `TypedRefClosure.completeWithoutUnboundRootFields`: it excludes only unknown root fields; invalid, computed or unbound members in known fields still fail that exact proof.
+
+The product-owned `diagnostics` returned by `expandRecurrence` are canonical structured records in the native-value/CEL ABI, containing message keys, parameters, original diagnostics and causes. They are no longer a list of interface text. Locale is applied only for presentation and does not change CEL results, statuses, occurrence coordinates, budgets or authored event fields. Each CEL evaluation owns a separate typed host-error channel. Exceeding its 128-item or 8 MiB diagnostic budget explicitly rejects that derived result while retaining the input and already collected diagnostics; `|| true` cannot absorb it.
+
+`parse_unique_json` is the shared strict JSON entry for Schema, Export and Knowledge: it reports duplicate keys as typed product facts and preserves genuine serde syntax diagnostics separately. Callers own their byte/member admission limits and original input bytes. Query `unionAll` distinguishes an absent producer from an explicit empty producer list; the latter is rejected by typed preflight.
+
 Relevant specifications: [SOURCE](../../docs/design/SOURCE.md), [FEATURES](../../docs/design/FEATURES.md).
 
 Verification:

@@ -1,6 +1,7 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 // Owned headless structure acceptance; local APIs establish only the fixture.
 import { createRequire } from 'node:module';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -27,7 +28,7 @@ try:
  c.prepare_structure()
  def provision(api):
   for key in ['Builtin','CopyTree','Late','Storage','Fence','Opaque','Revoke','ActorLate']:
-   c.config['structureSlots'][key]={'parent':'root','name':key}
+   c.config['structureSlots'][key]={'parent':'root','namePolicy':{'kind':'fixed','name':key}}
    c.config['files'][key]={'path':key+'/'+key+'.typ','title':key,'editable':True}
   c.config['structureSlots']['Created']['types']=['tasks/task']
   doc=api('/api/open',{'root':str(c.root),'path':str(c.root/'Shared/Shared.typ')})
@@ -63,8 +64,8 @@ try:
 finally:c.server.close()
 `, 'utf8');
 let fixture, server, browser, page, observer, base, stderr = '', localCalls = 0; const routeErrors = [], holders = [];
-async function start() { const child = spawn(exe, ['--no-browser', '--data-dir', fixture.data, '--server-config', fixture.configPath], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes); for (let i = 0; i < 300; i++) { const match = stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/); if (match) { base = match[1]; return child; } if (child.exitCode !== null) throw new Error(stderr); await pause(100); } child.kill(); throw new Error('startup timeout'); }
-async function stop(child) { if (child && child.exitCode === null && child.signalCode === null) { const done = new Promise(resolve => child.once('exit', resolve)); child.kill(); await done; } }
+async function start() { const child = spawnServe(exe, ['--data-dir', fixture.data, '--server-config', fixture.configPath], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes); for (let i = 0; i < 300; i++) { const match = serveReady(child); if (match) { base = match.base; return child; } if (child.exitCode !== null) throw new Error(stderr); await pause(100); } await stopServe(child); throw new Error('startup timeout'); }
+async function stop(child) { await stopServe(child); }
 async function api(route, body, actor = 'alice', expected = 200) { const response = await fetch(base + '/api/hosted/' + route, { method: body === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + fixture.tokens[actor] }, body: body === undefined ? undefined : JSON.stringify(body) }); const value = await response.json(); assert.equal(response.status, expected, JSON.stringify(value)); return value; }
 async function policy(edit) { const old = await api('admin/policy', undefined, 'admin'); edit(old.users); return api('admin/policy', { expectedGeneration: old.generation, users: old.users }, 'admin'); }
 const response = (target, predicate) => { const promise = target.waitForResponse(predicate, { timeout: 30000 }); promise.catch(() => {}); return promise; };
@@ -87,7 +88,7 @@ async function savedSource(resource, actor = 'alice') { const doc = await api('o
 function bounded(promise, name) { let timer; return Promise.race([promise, new Promise((_, reject) => timer = setTimeout(() => reject(new Error('Timed out waiting for ' + name)), 30000))]).finally(() => clearTimeout(timer)); }
 function held(pattern, { before = false, statuses = [200], predicate = () => true, drop = false, block = false } = {}) { let resume, report, finish; const resumed = new Promise(resolve => resume = resolve), observed = new Promise(resolve => report = resolve), finished = new Promise(resolve => finish = resolve); let selected = false; const handler = async route => { if (selected || !predicate(route.request().postDataJSON())) { await route.continue(); return; } selected = true; try { const request = route.request().postDataJSON(); if (before) { report({ request }); await resumed; } if (block) { await route.abort('failed'); return; } const fetched = await route.fetch(), body = await fetched.json(); assert.ok(statuses.includes(fetched.status()), JSON.stringify(body)); if (!before) { report({ request, body }); await resumed; } if (drop) await route.abort('failed'); else await route.fulfill({ response: fetched }); } catch (error) { routeErrors.push(pattern + ': ' + String(error)); report({ error }); await route.abort('failed').catch(() => {}); } finally { finish(); } }; const holder = { pattern, handler, get observed() { return bounded(observed, pattern); }, get finished() { return bounded(finished, pattern + ' handler'); }, release: () => resume() }; holders.push(holder); return holder; }
 async function release(holder, target = page) { holder.release(); await holder.finished; await target.unroute(holder.pattern, holder.handler); }
-async function passed(message) { result.cases.push(message); await writeFile(path.join(out, 'progress.json'), JSON.stringify(result, null, 2)); console.log(message); }
+async function passed(message) { result.cases.push(message); await writeFile(path.join(out, 'progress.json'), stringifyServeJson(result, 2)); console.log(message); }
 async function restart() { fixture.config.bind = new URL(base).host; fixture.config.users = (await api('admin/policy', undefined, 'admin')).users; await writeFile(fixture.configPath, JSON.stringify(fixture.config)); await stop(server); server = null; server = await start(); }
 try {
   await writeFile(path.join(out, 'fixture-setup.log'), execFileSync(python, [helper, repo, exe, out], { windowsHide: true, stdio: 'pipe', timeout: 240000 })); fixture = JSON.parse(await readFile(path.join(out, 'fixture.json'), 'utf8')); server = await start(); browser = await chromium.launch({ channel: 'chrome', headless: true }); result.browser = browser.version();
@@ -129,4 +130,4 @@ try {
   }
   assert.equal(localCalls, 0); assert.deepEqual(result.pageErrors, []); assert.deepEqual(routeErrors, []); result.completed = true;
 } catch (error) { result.failure = String(error.stack ?? error); for (const [name, target] of [['main', page], ['observer', observer]]) if (target) { await target.screenshot({ path: path.join(out, 'failure-' + name + '.png'), fullPage: true }).catch(() => {}); await writeFile(path.join(out, 'failure-' + name + '.html'), await target.content().catch(() => '')).catch(() => {}); } throw error; }
-finally { holders.forEach(holder => holder.release()); await browser?.close(); await stop(server); result.routeErrors = routeErrors; result.localConsumerCalls = localCalls; result.ownedProcessesClosed = (!server || server.exitCode !== null || server.signalCode !== null) && (!browser || !browser.isConnected()); result.stderrBytes = Buffer.byteLength(stderr); await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, pageErrors: result.pageErrors, routeErrors })); }
+finally { holders.forEach(holder => holder.release()); await browser?.close(); await stop(server); result.routeErrors = routeErrors; result.localConsumerCalls = localCalls; result.ownedProcessesClosed = (!server || server.exitCode !== null || server.signalCode !== null) && (!browser || !browser.isConnected()); result.stderrBytes = Buffer.byteLength(stderr); await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases, pageErrors: result.pageErrors, routeErrors })); }

@@ -1,4 +1,5 @@
 """Owned real-program acceptance of ordinary root presets and native Query organization."""
+from _creation_result import created_document, library_fact
 import json
 from pathlib import Path
 import sys
@@ -14,10 +15,10 @@ def plan(): return {'scope':{'descendants':True,'lifecycle':'live'},'types':[],'
 class QueryOrganization(unittest.TestCase):
     def setUp(self):
         self.folder=Path(tempfile.mkdtemp(prefix='weftext-org-')); print('Query organization evidence:',self.folder,flush=True)
-        self.data=self.folder/'state'; self.root=self.folder/'Library'; self.server=test_hosted.Server(['--no-browser','--data-dir',str(self.data)]); self.addCleanup(lambda:self.server.close()); self.serial=0
+        self.data=self.folder/'state'; self.root=self.folder/'Library'; self.server=test_hosted.Server(['--data-dir',str(self.data)]); self.addCleanup(lambda:self.server.close()); self.serial=0
         self.options={'initialRoot':{'title':'我的首页😀','queries':['tasks','events']}}
         self.operation=uid(); self.receipt=self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options})
-        self.doc=self.call('/api/open',{'root':str(self.root),'path':self.receipt['rootNotePath']})
+        self.doc=self.receipt['rootDocument']
     def call(self,route,body=None,status=200):
         code,value,_=self.server.call(route,body); self.assertEqual(code,status,(route,value)); return value
     def basis(self,source=None):
@@ -26,7 +27,7 @@ class QueryOrganization(unittest.TestCase):
         basis=self.basis(source); return basis,self.call('/api/query/embedded/discover',basis)['occurrences']
     def test_root_presets_have_real_schema_original_keys_and_complete_empty_typed_results(self):
         self.assertEqual(Path(self.receipt['rootNotePath']),self.root/'Library.typ')
-        self.assertEqual(self.doc['kind'],'managed'); self.assertEqual(self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options}),self.receipt)
+        self.assertEqual(self.doc['kind'],'managed'); replay=self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options}); self.assertEqual(library_fact(replay),library_fact(self.receipt)); self.assertEqual(replay['rootDocument']['nodeId'],self.doc['nodeId'])
         schema=self.call('/api/data/schema',{'root':str(self.root)}); self.assertFalse(schema['builtinDefault'])
         basis,queries=self.discover(); self.assertEqual(len(queries),2)
         for query in queries:
@@ -49,7 +50,7 @@ class QueryOrganization(unittest.TestCase):
     def test_shared_call_pinned_edit_and_copy_keep_real_owner_and_do_not_rewrite_it(self):
         owner_source=self.doc['source']; owner=f"weftext-node://{self.doc['workspaceId']}/{self.doc['nodeId']}"
         definitions=self.call('/api/query/definitions',{'root':str(self.root),'owner':owner}); target=definitions['definitions'][0]
-        self.doc=self.call('/api/note/create',{'root':str(self.root),'parent':str(self.root),'name':'Caller','operationId':uid()}); self.serial=0
+        self.doc=created_document(self.call('/api/note/create',{'root':str(self.root),'parent':str(self.root),'name':'Caller','operationId':uid()})); self.serial=0
         call=plan(); call['advanced']={'call':{'owner':owner,'selection':{'mode':'current','key':target['key']},'arguments':{}}}
         operation=uid(); basis=self.basis(); proposal=self.call('/api/query/definition/draft',{**basis,'baseId':self.doc['baseId'],'label':'weftext-query-共享调用','plan':call,'operationId':operation})
         self.call('/api/save',{'sessionId':self.doc['sessionId'],'baseId':self.doc['baseId'],'source':proposal['source'],'operationId':operation})
@@ -69,15 +70,15 @@ class QueryOrganization(unittest.TestCase):
     def test_root_user_changes_survive_restart_and_original_creation_retry(self):
         owner=self.doc['nodeId']; source=f'#metadata((id: "{owner}", types: ())) <weftext>\n\n用户清空预设后自己的正文😀\n'
         self.call('/api/save',{'sessionId':self.doc['sessionId'],'baseId':self.doc['baseId'],'source':source,'operationId':uid()})
-        self.server.close(); self.server=test_hosted.Server(['--no-browser','--data-dir',str(self.data)])
-        receipt=self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options}); self.assertEqual(receipt,self.receipt)
-        self.doc=self.call('/api/open',{'root':str(self.root),'path':receipt['rootNotePath']}); self.assertEqual(self.doc['source'],source); self.serial=0
+        self.server.close(); self.server=test_hosted.Server(['--data-dir',str(self.data)])
+        receipt=self.call('/api/library/create',{'path':str(self.root),'operationId':self.operation,'options':self.options}); self.assertEqual({key:receipt[key] for key in ('operationId','root','workspaceId','status','rootNotePath')},{key:self.receipt[key] for key in ('operationId','root','workspaceId','status','rootNotePath')})
+        self.doc=receipt['rootDocument']; self.assertEqual(self.doc['source'],source); self.serial=0
         self.assertEqual(self.discover()[1],[])
     def test_root_preset_sync_clone_keeps_schema_keys_and_exact_author_source(self):
         envelope=(self.root/'.weftext-workspace.json').read_bytes()
         binding=self.call('/api/sync/enable',{'root':str(self.root),'operationId':uid()}); identity=binding['identity']; objects=[{'kind':'node','id':self.doc['nodeId']},{'kind':'schema'}]; exchange=self.folder/'exchange'
         self.call('/api/sync/export',{'root':str(self.root),'directory':str(exchange),'objects':objects})
-        replica=test_hosted.Server(['--no-browser','--data-dir',str(self.folder/'replica-state')]); self.addCleanup(replica.close); destination=self.folder/'Replica'
+        replica=test_hosted.Server(['--data-dir',str(self.folder/'replica-state')]); self.addCleanup(replica.close); destination=self.folder/'Replica'
         def call(route,body):
             code,value,_=replica.call(route,body); self.assertEqual(code,200,(route,value)); return value
         call('/api/sync/receive',{'identity':identity,'directory':str(exchange)})

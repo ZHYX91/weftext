@@ -4,6 +4,131 @@ fn session_id(value: &Value) -> String {
     value["sessionId"].as_str().unwrap().to_owned()
 }
 
+async fn original_status(
+    state: &HostedState,
+    auth: &Auth,
+    resource: &str,
+    operation: &str,
+) -> ApiResult {
+    status(
+        State(state.clone()),
+        Extension(auth.clone()),
+        crate::RequestJson(OperationStatus {
+            resource: resource.into(),
+            operation_id: operation.into(),
+        }),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn original_save_status_authorizes_frozen_resource_before_reading_private_actor_body() {
+    let (temp, state, auth, doc, _, _) = history_api::test_fixture();
+    assert!(
+        serde_json::from_value::<OperationStatus>(json!({"operationId":uuid::Uuid::new_v4()}))
+            .is_err()
+    );
+    let operation = uuid::Uuid::new_v4().to_string();
+    let source = doc["source"].as_str().unwrap().to_owned() + "\nActual private saved S";
+    let Json(saved) = save(
+        State(state.clone()),
+        Extension(auth.clone()),
+        crate::RequestJson(SourceSaveRequest {
+            session_id: session_id(&doc),
+            base_id: doc["baseId"].as_str().unwrap().into(),
+            source: source.clone(),
+            operation_id: operation.clone(),
+            definition_reservations: vec![],
+        }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(saved["status"], "committed");
+    let scope = state.inner.lock().unwrap().actor_scope("alice");
+    let path = temp
+        .path()
+        .join("state/actors")
+        .join(digest(scope.as_bytes()))
+        .join("operations")
+        .join(format!("{operation}.json"));
+    let original = std::fs::read(&path).unwrap();
+    let record: Value = serde_json::from_slice(&original).unwrap();
+    let core_id = record["coreOperationId"].as_str().unwrap();
+    let plan = temp
+        .path()
+        .join("state/journal")
+        .join(format!("{core_id}.plan.json"));
+    let commit = temp
+        .path()
+        .join("state/journal")
+        .join(format!("{core_id}.commit.json"));
+    let plan_bytes = std::fs::read(&plan).unwrap();
+    let commit_bytes = std::fs::read(&commit).unwrap();
+    let marker = b",\"cancelled\":";
+    let at = original
+        .windows(marker.len())
+        .position(|part| part == marker)
+        .unwrap();
+    let mut damaged = original[..at].to_vec();
+    damaged.extend_from_slice(b",\"cancelled\":BROKEN_PRIVATE_BODY");
+    std::fs::write(&path, &damaged).unwrap();
+    {
+        let mut inner = state.inner.lock().unwrap();
+        let grants = &mut inner.policy.users.get_mut("alice").unwrap().grants;
+        let mut target = grants["Shared"].clone();
+        target.read = true;
+        grants.insert("Target".into(), target);
+        grants.get_mut("Shared").unwrap().read = false;
+    }
+    assert_eq!(
+        original_status(&state, &auth, "Shared", &operation)
+            .await
+            .unwrap_err()
+            .status,
+        StatusCode::NOT_FOUND
+    );
+    assert_eq!(
+        original_status(&state, &auth, "Target", &operation)
+            .await
+            .unwrap_err()
+            .code,
+        "operationConflict"
+    );
+    assert_eq!(std::fs::read(&path).unwrap(), damaged);
+    state
+        .inner
+        .lock()
+        .unwrap()
+        .policy
+        .users
+        .get_mut("alice")
+        .unwrap()
+        .grants
+        .get_mut("Shared")
+        .unwrap()
+        .read = true;
+    assert_eq!(
+        original_status(&state, &auth, "Shared", &operation)
+            .await
+            .unwrap_err()
+            .code,
+        "invalidState"
+    );
+    std::fs::write(&path, &original).unwrap();
+    let Json(recovered) = original_status(&state, &auth, "Shared", &operation)
+        .await
+        .unwrap();
+    assert_eq!(recovered, saved);
+    assert_eq!(std::fs::read(plan).unwrap(), plan_bytes);
+    assert_eq!(std::fs::read(commit).unwrap(), commit_bytes);
+    assert_eq!(std::fs::read(path).unwrap(), original);
+    let root = state.inner.lock().unwrap().config.root.clone();
+    assert_eq!(
+        std::fs::read_to_string(root.join("Shared/Shared.typ")).unwrap(),
+        source
+    );
+}
+
 #[tokio::test]
 async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
     let (_temp, state, auth, original, _, _) = history_api::test_fixture();
@@ -11,7 +136,7 @@ async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
         let Json(opened) = open(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(Open {
+            crate::RequestJson(Open {
                 resource: "Shared".into(),
             }),
         )
@@ -23,7 +148,7 @@ async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
             Extension(Auth {
                 digest: digest(b"bob"),
             }),
-            Json(SessionRequest {
+            crate::RequestJson(SessionRequest {
                 session_id: id.clone(),
             }),
         )
@@ -32,7 +157,7 @@ async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
         let Json(renewed) = keepalive(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(SessionRequest {
+            crate::RequestJson(SessionRequest {
                 session_id: id.clone(),
             }),
         )
@@ -42,7 +167,7 @@ async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
         let Json(closed) = close(
             State(state.clone()),
             Extension(auth.clone()),
-            Json(SessionRequest { session_id: id }),
+            crate::RequestJson(SessionRequest { session_id: id }),
         )
         .await
         .unwrap();
@@ -145,7 +270,7 @@ async fn close_does_not_require_a_document_read_grant() {
     let Json(closed) = close(
         State(state.clone()),
         Extension(auth),
-        Json(SessionRequest {
+        crate::RequestJson(SessionRequest {
             session_id: id.clone(),
         }),
     )

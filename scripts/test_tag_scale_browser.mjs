@@ -1,7 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { createdDocument } from './_creation_result.mjs';
 // TAG10: actual embedded local/hosted controls consume one Core-imported forest.
 // This is a bounded Windows browser acceptance, not OS IME/AT or timing parity.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { mkdir, readFile, writeFile, stat, access, realpath } from 'node:fs/promises';
 import { createHash, randomUUID, randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -20,8 +22,8 @@ const root = path.join(out, 'TEST-library'), data = path.join(out, 'state'), not
 let child, browser, page, base, localToken, stderr = '', phase = 'fixture';
 const queryHolds = [];
 async function until(check, name, timeout = 30000) { const deadline = Date.now() + timeout; let last; while (Date.now() < deadline) { try { const value = await check(); if (value) return value; } catch (error) { last = error; } await pause(80); } throw last ?? new Error('Timed out ' + name); }
-async function start(args = [], hosted = false) { child = spawn(exe, ['--no-browser', '--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes); await until(() => { const found = stdout.match(hosted ? /(http:\/\/127\.0\.0\.1:\d+)\/\r?\n/ : /(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/); if (found) { base = found[1]; localToken = found[2]; return true; } if (child.exitCode !== null) throw new Error('Owned server exited: ' + stderr); return false; }, 'owned candidate start'); }
-async function stop() { if (child?.exitCode === null && child.signalCode === null) { const done = new Promise(resolve => child.once('exit', resolve)); child.kill(); await done; } }
+async function start(args = [], hosted = false) { child = spawnServe(exe, ['--data-dir', data, ...args], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }); let stdout = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes); await until(() => { const found = serveReady(child); if (found) { base = found.base; localToken = found.token; return true; } if (child.exitCode !== null) throw new Error('Owned server exited: ' + stderr); return false; }, 'owned candidate start'); }
+async function stop() { await stopServe(child); }
 async function api(route, body, expected = 200) { const reply = await fetch(base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': localToken }, body: JSON.stringify(body), signal: AbortSignal.timeout(300000) }); const value = await reply.json(); assert.equal(reply.status, expected, route + ': ' + JSON.stringify(value)); return value; }
 async function installSchema(source, purpose) {
   const current = await api('/api/data/schema', { root }), operationId = randomUUID();
@@ -38,7 +40,7 @@ async function refreshActualQuery(query) {
 function observe(target) { target.on('pageerror', error => result.pageErrors.push({ phase, error: String(error) })); target.on('request', request => { const route = new URL(request.url()).pathname; if (route.startsWith('/api/')) result.requests.push({ phase, route, method: request.method() }); }); }
 const click = (name, host = page) => host.getByRole('button', { name, exact: true }).click();
 const response = route => { const pending = page.waitForResponse(reply => new URL(reply.url()).pathname === route); pending.catch(() => {}); return pending; };
-async function passed(message) { result.cases.push(message); await writeFile(path.join(out, 'progress.json'), JSON.stringify(result, null, 2)); console.log('PASS ' + message); }
+async function passed(message) { result.cases.push(message); await writeFile(path.join(out, 'progress.json'), stringifyServeJson(result, 2)); console.log('PASS ' + message); }
 async function unchanged(before, original, uploaded) { const now = await stat(tagPath); assert.equal(sha(await readFile(tagPath)), before.hash); assert.equal(now.dev, before.dev); assert.equal(now.ino, before.ino); assert.equal(await readFile(notePath, 'utf8'), original); assert.deepEqual(await readFile(path.join(root, 'FiveThousand', '.weftext-import-originals', 'original.weftext')), uploaded); }
 async function keyboardChoose(select, value) { const options = await select.locator('option').evaluateAll(items => items.map(item => ({ value: item.value, disabled: item.disabled }))); const at = options.findIndex(item => item.value === value); assert.ok(at >= 0 && !options[at].disabled, 'Actual keyboard target must be present and enabled'); await select.focus(); await select.press('Home'); for (let index = 0; index < at; index++) await select.press('ArrowDown'); await select.press('Tab'); await until(() => select.inputValue().then(actual => actual === value), 'native keyboard choice'); }
 function bounded(promise, name) { let timer; return Promise.race([promise, new Promise((_, reject) => timer = setTimeout(() => reject(new Error('Timed out ' + name)), 30000))]).finally(() => clearTimeout(timer)); }
@@ -70,7 +72,7 @@ async function releaseQuery(holder, query, before, focusName, keepWatching = fal
   assert.deepEqual(after.state, before, 'A late actual Query response must preserve the original controls, raw inputs and selections'); assert.deepEqual(after.removals, [], 'Original Query inputs and navigation must remain mounted throughout response delivery'); assert.equal(after.focused, true, 'Actual focused Query control must retain keyboard focus'); assert.deepEqual(result.routeErrors, []); return after;
 }
 try {
-  await start(); await api('/api/library/create', { path: root, operationId: randomUUID() }); const anchor = await api('/api/note/create', { root, parent: root, name: 'Anchor', operationId: randomUUID() });
+  await start(); await api('/api/library/create', { path: root, operationId: randomUUID() }); const anchor = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Anchor', operationId: randomUUID() }));
   const schema = await api('/api/data/schema', { root }); await writeFile(path.join(out, 'schema.json'), schema.source);
   const helper = path.join(out, 'owned-native-fixture.py'); await writeFile(helper, String.raw`import json,sys
 from pathlib import Path
@@ -174,4 +176,4 @@ for count in (5000,5001):
   await passed('actual independently authorized hosted tags-only UI consumes the same complete 5,000-tree, mounts 100-option segments and accepts deepest-parent keyboard selection/full path without source, field or history grants');
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.observerErrors, []); assert.deepEqual(result.routeErrors, []); result.completed = true;
 } catch (error) { result.failure = String(error.stack ?? error); if (page && !page.isClosed()) { await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: false }).catch(() => {}); await writeFile(path.join(out, 'failure.html'), await page.content().catch(() => '')).catch(() => {}); } throw error; }
-finally { queryHolds.forEach(holder => holder.release()); await browser?.close(); await stop(); result.ownedProcessesClosed = (!child || child.exitCode !== null || child.signalCode !== null) && (!browser || !browser.isConnected()); await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases.length, failure: result.failure, pageErrors: result.pageErrors })); }
+finally { queryHolds.forEach(holder => holder.release()); await browser?.close(); await stop(); result.ownedProcessesClosed = (!child || child.exitCode !== null || child.signalCode !== null) && (!browser || !browser.isConnected()); await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr); console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases.length, failure: result.failure, pageErrors: result.pageErrors })); }

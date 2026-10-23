@@ -46,26 +46,20 @@ pub struct RecurrenceOccurrence {
 pub struct RecurrenceExpansion {
     pub status: ExpansionStatus,
     pub occurrences: Vec<RecurrenceOccurrence>,
-    pub diagnostics: Vec<String>,
+    pub diagnostics: Vec<ErrorDescription>,
     pub steps: u64,
     /// Exact installed provider identities and data versions consumed by this call.
     pub providers: Vec<String>,
 }
-fn failure(message: impl Into<String>) -> DataError {
-    DataError(message.into())
+fn failure(message: impl Into<ErrorDescription>) -> DataError {
+    DataError::new(message)
 }
 fn as_cell(result: Result<()>) -> Cell {
     match result {
         Ok(()) => Cell::value(NativeValue::Bool(true)),
-        Err(e)
-            if e.0.contains("unavailable")
-                || e.0.contains("coverage")
-                || e.0.contains("budget") =>
-        {
-            Cell::Unavailable { reason: e.0 }
-        }
+        Err(e) if e.is_unavailable() => Cell::unavailable_error(e),
         Err(e) => Cell::Invalid {
-            diagnostics: vec![e.0],
+            diagnostics: e.into_diagnostics(),
             value: None,
         },
     }
@@ -74,20 +68,43 @@ fn text<'a>(value: &'a NativeValue, key: &str) -> Result<&'a str> {
     value
         .member(key)
         .and_then(NativeValue::text)
-        .ok_or_else(|| failure(format!("{key}: required text")))
+        .ok_or_else(|| {
+            failure(
+                weftext_messages::UiMessage::error_data_recurrence_required_text_member_missing(
+                    weftext_messages::params::ErrorDataRecurrenceRequiredTextMemberMissing {
+                        member_key: (key).to_string(),
+                    },
+                ),
+            )
+        })
 }
 fn integer(value: &NativeValue, key: &str) -> Result<i64> {
     value
         .member(key)
         .and_then(NativeValue::integer)
-        .ok_or_else(|| failure(format!("{key}: required integer")))
+        .ok_or_else(|| {
+            failure(
+                weftext_messages::UiMessage::error_data_recurrence_required_integer_member_missing(
+                    weftext_messages::params::ErrorDataRecurrenceRequiredIntegerMemberMissing {
+                        member_key: (key).to_string(),
+                    },
+                ),
+            )
+        })
 }
 fn array<'a>(value: &'a NativeValue, key: &str) -> Result<Option<&'a [NativeValue]>> {
     value
         .member(key)
         .map(|v| {
-            v.array()
-                .ok_or_else(|| failure(format!("{key}: expected array")))
+            v.array().ok_or_else(|| {
+                failure(
+                    weftext_messages::UiMessage::error_data_recurrence_member_requires_array(
+                        weftext_messages::params::ErrorDataRecurrenceMemberRequiresArray {
+                            member_key: (key).to_string(),
+                        },
+                    ),
+                )
+            })
         })
         .transpose()
 }
@@ -96,7 +113,9 @@ fn weekday(value: &str) -> Result<i64> {
         .iter()
         .position(|d| *d == value)
         .map(|n| n as i64)
-        .ok_or_else(|| failure("Invalid weekday"))
+        .ok_or_else(|| {
+            failure(weftext_messages::UiMessage::error_data_recurrence_invalid_weekday())
+        })
 }
 fn exact_provider<'a>(
     schema: &'a Schema,
@@ -117,7 +136,13 @@ fn exact_provider<'a>(
             }) && p.data["key"].as_str() == Some(key)
                 && p.data["version"].as_str() == Some(version)
         })
-        .ok_or_else(|| failure(format!("Exact {family} provider/version unavailable")))
+        .ok_or_else(|| {
+            DataError::unavailable(
+                weftext_messages::UiMessage::error_data_recurrence_exact_provider_version_unavailable(weftext_messages::params::ErrorDataRecurrenceExactProviderVersionUnavailable {
+                    provider_family: (family).to_string(),
+                }),
+            )
+        })
 }
 #[derive(Debug, Clone)]
 enum Onset {
@@ -129,15 +154,15 @@ impl Onset {
         match value {
             NativeValue::Date(s) => {
                 let date = NaiveDate::parse_from_str(s, "%Y-%m-%d")
-                    .map_err(|_| failure("Invalid occurrence date"))?;
+                    .map_err(|_| failure(weftext_messages::UiMessage::error_data_recurrence_invalid_occurrence_date()))?;
                 if !(1..=9999).contains(&date.year()) || date.format("%Y-%m-%d").to_string() != *s {
-                    return Err(failure("Noncanonical occurrence date"));
+                    return Err(failure(weftext_messages::UiMessage::error_data_recurrence_noncanonical_occurrence_date()));
                 }
                 Ok(Self::Date(date))
             }
             NativeValue::Text(s) => Ok(Self::Instant(ExactInstant::parse(s)?)),
             _ => Err(failure(
-                "Recurrence requires complete DateOrInstant; precision cannot be filled",
+                weftext_messages::UiMessage::error_data_recurrence_recurrence_requires_complete_date_or_instant(),
             )),
         }
     }
@@ -194,15 +219,22 @@ struct Rule<'a> {
 impl<'a> Rule<'a> {
     fn parse(value: &'a NativeValue, schema: &'a Schema) -> Result<Self> {
         if value.record().is_none() {
-            return Err(failure("Recurrence must be a record"));
+            return Err(failure(
+                weftext_messages::UiMessage::error_data_recurrence_recurrence_requires_record(),
+            ));
         }
         let frequency = text(value, "frequency")?;
         if !matches!(frequency, "daily" | "weekly" | "monthly" | "yearly") {
-            return Err(failure("Invalid recurrence frequency"));
+            return Err(failure(
+                weftext_messages::UiMessage::error_data_recurrence_invalid_recurrence_frequency(),
+            ));
         }
         let interval = integer(value, "interval")?;
         if !(1..=65535).contains(&interval) {
-            return Err(failure("Recurrence interval outside 1..65535"));
+            return Err(failure(
+                weftext_messages::UiMessage::error_data_recurrence_recurrence_interval_out_of_range(
+                ),
+            ));
         }
         let count = value
             .member("count")
@@ -210,11 +242,13 @@ impl<'a> Rule<'a> {
                 v.integer()
                     .filter(|n| (1..=2_147_483_647).contains(n))
                     .map(|n| n as usize)
-                    .ok_or_else(|| failure("Recurrence count outside 1..2147483647"))
+                    .ok_or_else(|| failure(weftext_messages::UiMessage::error_data_recurrence_recurrence_count_out_of_range()))
             })
             .transpose()?;
         if count.is_some() && value.member("until").is_some() {
-            return Err(failure("count and until are mutually exclusive"));
+            return Err(failure(
+                weftext_messages::UiMessage::error_data_recurrence_count_and_until_mutually_exclusive(),
+            ));
         }
         let until = value.member("until").map(Onset::parse).transpose()?;
         let selector = |key: &str, min: i64, max: i64| -> Result<Option<Vec<i64>>> {
@@ -224,7 +258,7 @@ impl<'a> Rule<'a> {
                         .map(|v| {
                             v.integer()
                                 .filter(|n| *n >= min && *n <= max && *n != 0)
-                                .ok_or_else(|| failure(format!("Invalid {key} selector")))
+                                .ok_or_else(|| failure(weftext_messages::UiMessage::error_data_recurrence_invalid_recurrence_selector(weftext_messages::params::ErrorDataRecurrenceInvalidRecurrenceSelector {selector_key: (key).to_string()})))
                         })
                         .collect()
                 })
@@ -242,12 +276,12 @@ impl<'a> Rule<'a> {
                             .map(|v| {
                                 v.integer()
                                     .filter(|n| (-5..=5).contains(n) && *n != 0)
-                                    .ok_or_else(|| failure("Invalid weekday ordinal"))
+                                    .ok_or_else(|| failure(weftext_messages::UiMessage::error_data_recurrence_invalid_weekday_ordinal()))
                             })
                             .transpose()?;
                         if ordinal.is_some() && !matches!(frequency, "monthly" | "yearly") {
                             return Err(failure(
-                                "Weekday ordinal requires monthly/yearly frequency",
+                                weftext_messages::UiMessage::error_data_recurrence_weekday_ordinal_requires_monthly_or_yearly(),
                             ));
                         }
                         Ok((d, ordinal))
@@ -259,14 +293,18 @@ impl<'a> Rule<'a> {
             .member("weekStart")
             .map(|v| {
                 v.text()
-                    .ok_or_else(|| failure("Invalid weekStart"))
+                    .ok_or_else(|| {
+                        failure(
+                            weftext_messages::UiMessage::error_data_recurrence_invalid_week_start(),
+                        )
+                    })
                     .and_then(weekday)
             })
             .transpose()?
             .unwrap_or(0);
         if !matches!(text(value, "fold")?, "earlier" | "later") || text(value, "gap")? != "skip" {
             return Err(failure(
-                "Recurrence requires explicit fold earlier/later and gap skip",
+                weftext_messages::UiMessage::error_data_recurrence_explicit_fold_and_gap_policy_required(),
             ));
         }
         let calendar_provider = exact_provider(
@@ -299,14 +337,14 @@ impl<'a> Rule<'a> {
         let mut exception_keys = BTreeSet::new();
         for exception in &exceptions {
             validate_exception_inner(exception, schema)?;
-            let key = Onset::parse(
-                exception
-                    .member("onset")
-                    .ok_or_else(|| failure("Exception onset required"))?,
-            )?
+            let key = Onset::parse(exception.member("onset").ok_or_else(|| {
+                failure(
+                    weftext_messages::UiMessage::error_data_recurrence_exception_onset_required(),
+                )
+            })?)?
             .key()?;
             if !exception_keys.insert(key) {
-                return Err(failure("Duplicate exceptions for one exact original onset"));
+                return Err(failure(weftext_messages::UiMessage::error_data_recurrence_duplicate_exceptions_for_original_onset()));
             }
         }
         let rule = Self {
@@ -344,7 +382,7 @@ impl<'a> Rule<'a> {
         if let Some(first) = all.first() {
             for onset in &all {
                 if !first.same_domain(onset) {
-                    return Err(failure("Recurrence date/instant domains disagree"));
+                    return Err(failure(weftext_messages::UiMessage::error_data_recurrence_recurrence_date_instant_domains_disagree()));
                 }
                 rule.coverage(onset)?;
             }
@@ -457,59 +495,78 @@ impl<'a> Rule<'a> {
     }
 }
 fn exact_range(range: &NativeValue) -> Result<[Onset; 2]> {
-    let start = Onset::parse(
-        range
-            .member("start")
-            .ok_or_else(|| failure("Recurrence range needs bounded start"))?,
-    )?;
+    let start = Onset::parse(range.member("start").ok_or_else(|| {
+        failure(
+            weftext_messages::UiMessage::error_data_recurrence_recurrence_range_requires_bounded_start(),
+        )
+    })?)?;
     let end = Onset::parse(
         range
             .member("end_exclusive")
-            .ok_or_else(|| failure("Recurrence range needs bounded end_exclusive"))?,
+            .ok_or_else(|| failure(weftext_messages::UiMessage::error_data_recurrence_recurrence_range_requires_bounded_exclusive_end()))?,
     )?;
     if !start.same_domain(&end) {
-        return Err(failure("Recurrence range date/instant domains disagree"));
+        return Err(failure(
+            weftext_messages::UiMessage::error_data_recurrence_recurrence_range_domains_disagree(),
+        ));
     }
     if !start.compare(&end).is_lt() {
-        return Err(failure("Recurrence range is empty or reversed"));
+        return Err(failure(
+            weftext_messages::UiMessage::error_data_recurrence_recurrence_range_empty_or_reversed(),
+        ));
     }
     Ok([start, end])
 }
 fn validate_exception_inner(exception: &NativeValue, _schema: &Schema) -> Result<()> {
     if exception.record().is_none() {
-        return Err(failure("Exception must be a record"));
+        return Err(failure(
+            weftext_messages::UiMessage::error_data_recurrence_exception_requires_record(),
+        ));
     }
-    let onset = Onset::parse(
-        exception
-            .member("onset")
-            .ok_or_else(|| failure("Exception onset required"))?,
-    )?;
+    let onset = Onset::parse(exception.member("onset").ok_or_else(|| {
+        failure(weftext_messages::UiMessage::error_data_recurrence_exception_onset_required())
+    })?)?;
     let changed = ["range", "title", "status", "note"]
         .iter()
         .any(|k| exception.member(k).is_some());
     match text(exception, "action")? {
-        "cancel" if changed => return Err(failure("Cancel forbids replacement data")),
-        "replace" if !changed => return Err(failure("Replace requires an actual change")),
+        "cancel" if changed => {
+            return Err(failure(
+                weftext_messages::UiMessage::error_data_recurrence_cancel_forbids_replacement_data(
+                ),
+            ));
+        }
+        "replace" if !changed => {
+            return Err(failure(
+                weftext_messages::UiMessage::error_data_recurrence_replace_requires_actual_change(),
+            ));
+        }
         "cancel" | "replace" => {}
-        _ => return Err(failure("Invalid exception action")),
+        _ => {
+            return Err(failure(
+                weftext_messages::UiMessage::error_data_recurrence_invalid_exception_action(),
+            ));
+        }
     }
     if let Some(range) = exception.member("range")
         && exact_range(range)?
             .iter()
             .any(|end| !onset.same_domain(end))
     {
-        return Err(failure("Exception onset/replacement domains disagree"));
+        return Err(failure(weftext_messages::UiMessage::error_data_recurrence_exception_onset_replacement_domains_disagree()));
     }
     for key in ["title", "note"] {
         if exception.member(key).is_some_and(|v| v.text().is_none()) {
-            return Err(failure("Replacement title/note must be text"));
+            return Err(failure(weftext_messages::UiMessage::error_data_recurrence_replacement_title_or_note_requires_text()));
         }
     }
     if exception
         .member("status")
         .is_some_and(|v| !matches!(v.text(), Some("tentative" | "confirmed" | "cancelled")))
     {
-        return Err(failure("Invalid replacement status"));
+        return Err(failure(
+            weftext_messages::UiMessage::error_data_recurrence_invalid_replacement_status(),
+        ));
     }
     Ok(())
 }
@@ -535,9 +592,11 @@ pub fn validate_event(
             diagnostics: expansion.diagnostics,
             value: None,
         },
-        _ => Cell::Unavailable {
-            reason: expansion.diagnostics.join("; "),
-        },
+        _ => Cell::unavailable_group(
+            DataErrorKind::Unavailable,
+            UiMessage::error_data_recurrence_validation_unavailable(),
+            expansion.diagnostics,
+        ),
     }
 }
 fn native_range(start: &Onset, end: &Onset) -> Result<NativeValue> {
@@ -556,7 +615,7 @@ fn template_range(onset: &Onset, template: &[Onset; 2]) -> Result<NativeValue> {
     let end = match (onset, &template[0], &template[1]) {
         (Onset::Date(d), Onset::Date(a), Onset::Date(b)) => Onset::Date(
             d.checked_add_days(Days::new((*b - *a).num_days() as u64))
-                .ok_or_else(|| failure("Occurrence range coverage unavailable"))?,
+                .ok_or_else(|| DataError::coverage(weftext_messages::UiMessage::error_data_recurrence_occurrence_range_coverage_unavailable()))?,
         ),
         (Onset::Instant(i), Onset::Instant(a), Onset::Instant(b)) => {
             let negative = ExactDecimal {
@@ -565,7 +624,7 @@ fn template_range(onset: &Onset, template: &[Onset; 2]) -> Result<NativeValue> {
             };
             Onset::Instant(i.shifted(b.utc_seconds - a.utc_seconds, &b.fraction.add(&negative))?)
         }
-        _ => return Err(failure("Occurrence/template domains disagree")),
+        _ => return Err(failure(weftext_messages::UiMessage::error_data_recurrence_occurrence_template_domains_disagree())),
     };
     native_range(onset, &end)
 }
@@ -586,14 +645,16 @@ pub fn expand_recurrence(
         providers: vec![],
     };
     if let Err(error) = expand_inner(template, recurrence, window, schema, budget, &mut output) {
-        output.status = if error.0.contains("budget") || error.0.contains("coverage") {
-            ExpansionStatus::Partial
-        } else if error.0.contains("unavailable") {
-            ExpansionStatus::Unavailable
-        } else {
-            ExpansionStatus::Invalid
+        output.status = match error.kind() {
+            DataErrorKind::Budget | DataErrorKind::NativeBudget | DataErrorKind::Coverage => {
+                ExpansionStatus::Partial
+            }
+            DataErrorKind::Unavailable | DataErrorKind::ClosedExpressionUnavailable => {
+                ExpansionStatus::Unavailable
+            }
+            DataErrorKind::Invalid => ExpansionStatus::Invalid,
         };
-        output.diagnostics.push(error.0);
+        output.diagnostics.extend(error.into_diagnostics());
         // Incomplete admission cannot expose unproven replacement/negative results.
         output.occurrences.clear();
     }
@@ -609,16 +670,22 @@ fn expand_inner(
 ) -> Result<()> {
     let input_bytes = serde_json::to_vec(&(template_native, recurrence, window))?.len() as u64;
     if input_bytes > supplied.max_bytes {
-        return Err(failure("Recurrence input byte budget exhausted"));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_recurrence_recurrence_input_byte_budget_exhausted(),
+        ));
     }
     let template = exact_range(template_native)?;
     let rule = Rule::parse(recurrence, schema)?;
     let budget = rule.budget(supplied, schema);
     if input_bytes > budget.max_bytes {
-        return Err(failure("Recurrence input byte budget exhausted"));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_recurrence_recurrence_input_byte_budget_exhausted(),
+        ));
     }
     if budget.max_steps == 0 || budget.max_occurrences == 0 || budget.max_bytes == 0 {
-        return Err(failure("Recurrence budget exhausted"));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_recurrence_recurrence_budget_exhausted(),
+        ));
     }
     output.providers = [rule.calendar_provider, rule.zone_provider]
         .iter()
@@ -643,7 +710,9 @@ fn expand_inner(
         .map(Onset::parse)
         .transpose()?;
     if window_start.is_none() && window_end.is_none() {
-        return Err(failure("Window needs at least one finite endpoint"));
+        return Err(failure(
+            weftext_messages::UiMessage::error_data_recurrence_window_requires_finite_endpoint(),
+        ));
     }
     let mut domain_values = window_start
         .iter()
@@ -661,7 +730,7 @@ fn expand_inner(
     for onset in domain_values {
         if !template[0].same_domain(onset) {
             return Err(failure(
-                "Recurrence template/window/date/exception domains disagree",
+                weftext_messages::UiMessage::error_data_recurrence_recurrence_inputs_domains_disagree(),
             ));
         }
         rule.coverage(onset)?;
@@ -670,7 +739,7 @@ fn expand_inner(
         if let Some(range) = e.member("range") {
             for onset in exact_range(range)? {
                 if !template[0].same_domain(&onset) {
-                    return Err(failure("Replacement domain disagrees with template"));
+                    return Err(failure(weftext_messages::UiMessage::error_data_recurrence_replacement_template_domains_disagree()));
                 }
                 rule.coverage(&onset)?;
             }
@@ -679,22 +748,26 @@ fn expand_inner(
     if let (Some(a), Some(b)) = (&window_start, &window_end)
         && !a.compare(b).is_lt()
     {
-        return Err(failure("Window reversed or empty"));
+        return Err(failure(
+            weftext_messages::UiMessage::error_data_recurrence_window_empty_or_reversed(),
+        ));
     }
     if rule
         .until
         .as_ref()
         .is_some_and(|u| u.compare(&template[0]).is_lt())
     {
-        return Err(failure("until cannot precede derived anchor"));
+        return Err(failure(
+            weftext_messages::UiMessage::error_data_recurrence_until_precedes_derived_anchor(),
+        ));
     }
     if window_end.is_none()
         && rule.count.is_none()
         && rule.until.is_none()
         && !rule.empty_selectors()
     {
-        return Err(failure(
-            "Unbounded recurrence window needs a finite termination bound; unavailable",
+        return Err(DataError::unavailable(
+            weftext_messages::UiMessage::error_data_recurrence_unbounded_window_requires_finite_termination(),
         ));
     }
     let local = template[0].civil(&rule.zone)?;
@@ -716,11 +789,15 @@ fn expand_inner(
     loop {
         output.steps += 1;
         if output.steps > budget.max_steps {
-            return Err(failure("Recurrence proof budget exhausted"));
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_recurrence_recurrence_proof_budget_exhausted(),
+            ));
         }
-        let next = date
-            .checked_add_days(Days::new(1))
-            .ok_or_else(|| failure("Calendar coverage exhausted"))?;
+        let next = date.checked_add_days(Days::new(1)).ok_or_else(|| {
+            DataError::coverage(
+                weftext_messages::UiMessage::error_data_recurrence_calendar_coverage_exhausted(),
+            )
+        })?;
         let future = match &template[0] {
             Onset::Date(_) => Onset::Date(next),
             Onset::Instant(_) => Onset::Instant(ExactInstant {
@@ -760,9 +837,9 @@ fn expand_inner(
                 }
                 generated_bytes = generated_bytes
                     .checked_add(onset.key()?.len() as u64)
-                    .ok_or_else(|| failure("Recurrence byte budget exhausted"))?;
+                    .ok_or_else(|| DataError::budget(weftext_messages::UiMessage::error_data_recurrence_recurrence_byte_budget_exhausted()))?;
                 if generated_bytes > budget.max_bytes {
-                    return Err(failure("Recurrence byte budget exhausted"));
+                    return Err(DataError::budget(weftext_messages::UiMessage::error_data_recurrence_recurrence_byte_budget_exhausted()));
                 }
                 if let Err(index) = base.binary_search_by(|existing| existing.compare(&onset)) {
                     base.insert(index, onset);
@@ -785,7 +862,7 @@ fn expand_inner(
         let key = onset.key()?;
         if !originals.contains_key(&key) {
             return Err(failure(
-                "Exception onset is not a member of base union RDATE",
+                weftext_messages::UiMessage::error_data_recurrence_exception_onset_outside_base_and_rdate(),
             ));
         }
         exceptions.insert(key, *exception);
@@ -798,7 +875,9 @@ fn expand_inner(
     for (key, onset) in originals {
         output.steps += 1;
         if output.steps > budget.max_steps {
-            return Err(failure("Recurrence decision budget exhausted"));
+            return Err(DataError::budget(
+                weftext_messages::UiMessage::error_data_recurrence_recurrence_decision_budget_exhausted(),
+            ));
         }
         let exception = exceptions.get(&key);
         let replacement = exception
@@ -824,11 +903,30 @@ fn expand_inner(
             Cell::Value {
                 value: NativeValue::Bool(false),
             } => continue,
-            Cell::Invalid { diagnostics, .. } => return Err(failure(diagnostics.join("; "))),
-            Cell::Unavailable { reason } => {
-                return Err(failure(format!("Overlap unavailable: {reason}")));
+            Cell::Invalid { diagnostics, .. } => {
+                return Err(
+                    DataError::new(UiMessage::error_data_recurrence_overlap_invalid())
+                        .with_diagnostics(diagnostics),
+                );
             }
-            _ => return Err(failure("Overlap unavailable")),
+            Cell::Unavailable {
+                kind,
+                reason,
+                diagnostics,
+            } => {
+                let mut all = vec![reason];
+                all.extend(diagnostics);
+                return Err(DataError::with_kind(
+                    kind,
+                    UiMessage::error_data_recurrence_overlap_unavailable(),
+                )
+                .with_diagnostics(all));
+            }
+            _ => {
+                return Err(DataError::unavailable(
+                    weftext_messages::UiMessage::error_data_recurrence_overlap_unavailable(),
+                ));
+            }
         }
         let field = |key: &str| exception.and_then(|e| e.member(key)).cloned();
         output.occurrences.push(RecurrenceOccurrence {
@@ -840,12 +938,14 @@ fn expand_inner(
             note: field("note"),
         });
         if output.occurrences.len() as u64 > budget.max_occurrences {
-            return Err(failure("Recurrence occurrence budget exhausted"));
+            return Err(DataError::budget(weftext_messages::UiMessage::error_data_recurrence_recurrence_occurrence_budget_exhausted()));
         }
     }
     let size = serde_json::to_vec(&output.occurrences)?.len() as u64;
     if size > budget.max_bytes {
-        return Err(failure("Recurrence output byte budget exhausted"));
+        return Err(DataError::budget(
+            weftext_messages::UiMessage::error_data_recurrence_recurrence_output_byte_budget_exhausted(),
+        ));
     }
     output.occurrences.sort_by(|a, b| {
         let aa = exact_range(&a.range).unwrap();
@@ -866,16 +966,23 @@ impl ExpansionBudget {
     /// Closed native budget for the trusted expandRecurrence export. Ordinary
     /// records cannot override provider limits or carry executable instructions.
     pub fn from_native(value: &NativeValue) -> Result<Self> {
-        let members = value
-            .record()
-            .ok_or_else(|| failure("Recurrence budget must be a record"))?;
+        let members = value.record().ok_or_else(|| {
+            failure(
+                weftext_messages::UiMessage::error_data_recurrence_recurrence_budget_requires_record(),
+            )
+        })?;
         let expected = ["max_steps", "max_occurrences", "max_bytes"];
         if members.len() != 3 || members.iter().any(|m| !expected.contains(&m.key.as_str())) {
-            return Err(failure("Unknown/missing recurrence budget members"));
+            return Err(failure(weftext_messages::UiMessage::error_data_recurrence_recurrence_budget_member_unknown_or_missing()));
         }
         let read = |key| {
-            integer(value, key)
-                .and_then(|n| u64::try_from(n).map_err(|_| failure("Negative recurrence budget")))
+            integer(value, key).and_then(|n| {
+                u64::try_from(n).map_err(|_| {
+                    failure(
+                        weftext_messages::UiMessage::error_data_recurrence_negative_recurrence_budget(),
+                    )
+                })
+            })
         };
         Ok(Self {
             max_steps: read("max_steps")?,
@@ -935,11 +1042,52 @@ impl RecurrenceExpansion {
         record(vec![
             ("status", NativeValue::Text(status.into())),
             ("occurrences", NativeValue::Array(occurrences)),
-            ("diagnostics", texts(&self.diagnostics)),
+            (
+                "diagnostics",
+                NativeValue::Array(
+                    self.diagnostics
+                        .iter()
+                        .map(product_description_native)
+                        .collect(),
+                ),
+            ),
             ("steps", NativeValue::Int(self.steps.to_string())),
             ("providers", texts(&self.providers)),
         ])
     }
+}
+
+/// Canonical product diagnostics are structured native values. Locale rendering
+/// is a presentation operation and never participates in the Query ABI.
+fn product_description_native(description: &ErrorDescription) -> NativeValue {
+    fn value(json_value: serde_json::Value) -> NativeValue {
+        match json_value {
+            serde_json::Value::Null => NativeValue::None,
+            serde_json::Value::Bool(value) => NativeValue::Bool(value),
+            serde_json::Value::String(value) => NativeValue::Text(value),
+            serde_json::Value::Number(value) => {
+                // UiInteger is the only numeric slot in the description wire.
+                assert!(
+                    value.is_i64() || value.is_u64(),
+                    "product message numbers are exact integers"
+                );
+                NativeValue::Int(value.to_string())
+            }
+            serde_json::Value::Array(values) => {
+                NativeValue::Array(values.into_iter().map(value).collect())
+            }
+            serde_json::Value::Object(values) => NativeValue::Record(
+                values
+                    .into_iter()
+                    .map(|(key, item)| NativeMember {
+                        key,
+                        value: value(item),
+                    })
+                    .collect(),
+            ),
+        }
+    }
+    value(serde_json::to_value(description).expect("canonical product diagnostics serialize"))
 }
 /// The trusted three-argument ABI adapter receives one same-cut Event record.
 /// Overrides inherit uncovered title/status/note from the explicit event input.
@@ -958,7 +1106,7 @@ pub fn expand_event(
         budget.max_occurrences = budget.max_occurrences.min(provider.limits.max_expansion);
         budget.max_bytes = budget.max_bytes.min(provider.limits.max_bytes);
     }
-    let reject = |status, message: &str| RecurrenceExpansion {
+    let reject = |status, message: UiMessage| RecurrenceExpansion {
         status,
         occurrences: vec![],
         diagnostics: vec![message.into()],
@@ -968,7 +1116,7 @@ pub fn expand_event(
     if serde_json::to_vec(&(event, window)).map_or(true, |v| v.len() as u64 > budget.max_bytes) {
         return reject(
             ExpansionStatus::Partial,
-            "Event input byte budget exhausted",
+            weftext_messages::UiMessage::error_data_recurrence_event_input_byte_budget_exhausted(),
         );
     }
     if ["title", "note"]
@@ -980,14 +1128,16 @@ pub fn expand_event(
     {
         return reject(
             ExpansionStatus::Invalid,
-            "Event title/note/status input is invalid",
+            weftext_messages::UiMessage::error_data_recurrence_event_title_note_or_status_invalid(),
         );
     }
     let Some(range) = event.member("range") else {
         return RecurrenceExpansion {
             status: ExpansionStatus::Invalid,
             occurrences: vec![],
-            diagnostics: vec!["Event range required".into()],
+            diagnostics: vec![
+                weftext_messages::UiMessage::error_data_recurrence_event_range_required().into(),
+            ],
             steps: 0,
             providers: vec![],
         };
@@ -997,7 +1147,9 @@ pub fn expand_event(
     } else {
         let result = (|| -> Result<Vec<RecurrenceOccurrence>> {
             if budget.max_steps == 0 || budget.max_occurrences == 0 {
-                return Err(failure("Event expansion budget exhausted"));
+                return Err(DataError::budget(
+                    weftext_messages::UiMessage::error_data_recurrence_event_expansion_budget_exhausted(),
+                ));
             }
             let endpoints = exact_range(range)?;
             match range_overlap(range, window, schema) {
@@ -1014,11 +1166,26 @@ pub fn expand_event(
                     status: None,
                     note: None,
                 }]),
-                Cell::Invalid { diagnostics, .. } => Err(failure(diagnostics.join("; "))),
-                Cell::Unavailable { reason } => {
-                    Err(failure(format!("Event overlap unavailable: {reason}")))
+                Cell::Invalid { diagnostics, .. } => Err(DataError::new(
+                    UiMessage::error_data_recurrence_event_overlap_invalid(),
+                )
+                .with_diagnostics(diagnostics)),
+                Cell::Unavailable {
+                    kind,
+                    reason,
+                    diagnostics,
+                } => {
+                    let mut all = vec![reason];
+                    all.extend(diagnostics);
+                    Err(DataError::with_kind(
+                        kind,
+                        UiMessage::error_data_recurrence_event_overlap_unavailable(),
+                    )
+                    .with_diagnostics(all))
                 }
-                _ => Err(failure("Event overlap unavailable")),
+                _ => Err(DataError::unavailable(
+                    weftext_messages::UiMessage::error_data_recurrence_event_overlap_unavailable(),
+                )),
             }
         })();
         match result {
@@ -1030,15 +1197,17 @@ pub fn expand_event(
                 providers: vec![],
             },
             Err(e) => RecurrenceExpansion {
-                status: if e.0.contains("budget") {
-                    ExpansionStatus::Partial
-                } else if e.0.contains("unavailable") {
-                    ExpansionStatus::Unavailable
-                } else {
-                    ExpansionStatus::Invalid
+                status: match e.kind() {
+                    DataErrorKind::Budget
+                    | DataErrorKind::NativeBudget
+                    | DataErrorKind::Coverage => ExpansionStatus::Partial,
+                    DataErrorKind::Unavailable | DataErrorKind::ClosedExpressionUnavailable => {
+                        ExpansionStatus::Unavailable
+                    }
+                    DataErrorKind::Invalid => ExpansionStatus::Invalid,
                 },
                 occurrences: vec![],
-                diagnostics: vec![e.0],
+                diagnostics: e.into_diagnostics(),
                 steps: 0,
                 providers: vec![],
             },
@@ -1057,9 +1226,10 @@ pub fn expand_event(
     }
     if serde_json::to_vec(&result.occurrences).map_or(true, |v| v.len() as u64 > budget.max_bytes) {
         result.status = ExpansionStatus::Partial;
-        result
-            .diagnostics
-            .push("Event output byte budget exhausted".into());
+        result.diagnostics.push(
+            weftext_messages::UiMessage::error_data_recurrence_event_output_byte_budget_exhausted()
+                .into(),
+        );
         result.occurrences.clear();
     }
     result

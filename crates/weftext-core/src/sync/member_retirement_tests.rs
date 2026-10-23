@@ -22,7 +22,7 @@ impl Fixture {
         let br = temp.path().join("b-library");
         let mut a = Core::new(temp.path().join("a-private")).unwrap();
         a.create_library(&ar).unwrap();
-        let note = a.create_note(&ar, &ar, "Note").unwrap();
+        let note = a.create_note_fixture(&ar, &ar, "Note").unwrap();
         let imported = a
             .prepare_import_resource(
                 &ar,
@@ -80,16 +80,20 @@ impl Fixture {
 
     fn publish_original_external_removal(&mut self) -> ObjectState {
         let asset = self.ar.join("Note").join("asset.bin");
-        let before = crate::operations::capture_optional(&asset)
-            .unwrap()
-            .unwrap();
+        let before =
+            crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), &asset)
+                .unwrap()
+                .unwrap();
         fs::rename(&asset, &self.retained).unwrap();
         assert_eq!(
-            crate::operations::capture_optional(&self.retained)
-                .unwrap()
-                .unwrap()
-                .stamp
-                .identity,
+            crate::operations::capture_optional(
+                &crate::BackendContext::local().unwrap(),
+                &self.retained
+            )
+            .unwrap()
+            .unwrap()
+            .stamp
+            .identity,
             before.stamp.identity
         );
         let manifest_path = self.ar.join("Note").join("weftext.resources.json");
@@ -141,12 +145,16 @@ fn member_retirement_qualifies_only_real_sender_removed_registered_resource_meta
     let mut f = Fixture::new();
     let source_path = f.br.join("Note").join("Note.typ");
     let resource_path = f.br.join("Note").join("asset.bin");
-    let source = crate::operations::capture_optional(&source_path)
-        .unwrap()
-        .unwrap();
-    let asset = crate::operations::capture_optional(&resource_path)
-        .unwrap()
-        .unwrap();
+    let source =
+        crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), &source_path)
+            .unwrap()
+            .unwrap();
+    let asset = crate::operations::capture_optional(
+        &crate::BackendContext::local().unwrap(),
+        &resource_path,
+    )
+    .unwrap()
+    .unwrap();
     let chosen = f.publish_original_external_removal();
     let graph = f.b.read_sync_history(&f.identity).unwrap();
     let resource_ids = crate::sync::apply::validate_state(&graph, &f.node, &f.before).unwrap();
@@ -169,14 +177,17 @@ fn member_retirement_qualifies_only_real_sender_removed_registered_resource_meta
     );
     // Qualification alone has no receiver effect, new identity or receipt.
     assert_eq!(
-        crate::operations::capture_optional(&resource_path)
-            .unwrap()
-            .unwrap()
-            .stamp,
+        crate::operations::capture_optional(
+            &crate::BackendContext::local().unwrap(),
+            &resource_path
+        )
+        .unwrap()
+        .unwrap()
+        .stamp,
         asset.stamp
     );
     assert_eq!(
-        crate::operations::capture_optional(&source_path)
+        crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), &source_path)
             .unwrap()
             .unwrap()
             .stamp,

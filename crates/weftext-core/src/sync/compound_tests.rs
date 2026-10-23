@@ -49,12 +49,15 @@ fn fixture_with_child(child: bool) -> Pair {
     let mut keys = BTreeSet::new();
     for name in ["Left", "Right", "Container", "Still"] {
         keys.insert(ObjectKey::Node(
-            a.create_note(&ar, &ar, name).unwrap().node_id.unwrap(),
+            a.create_note_fixture(&ar, &ar, name)
+                .unwrap()
+                .node_id
+                .unwrap(),
         ));
     }
     if child {
         keys.insert(ObjectKey::Node(
-            a.create_note(&ar, ar.join("Left"), "Child")
+            a.create_note_fixture(&ar, ar.join("Left"), "Child")
                 .unwrap()
                 .node_id
                 .unwrap(),
@@ -171,6 +174,90 @@ fn placements(core: &Core, id: &str) -> Vec<(String, String)> {
         .map(|step| (step.source.into(), step.target.into()))
         .collect()
 }
+
+#[test]
+fn saved_descendant_baseline_follows_original_compound_member_after_restart() {
+    let mut pair = fixture();
+    let old = pair.br.join("Left/Child/Child.typ");
+    let doc = pair.b.open(&old, Some(pair.br.clone())).unwrap();
+    let receipt = pair
+        .b
+        .save(SaveRequest {
+            session_id: doc.session_id.clone(),
+            base_id: doc.base_id.clone(),
+            operation_id: fresh(),
+            source: doc.source.clone(),
+        })
+        .unwrap()
+        .receipt;
+    let original_record = fs::read(pair.b.draft_path(&old)).unwrap();
+    pair.b.close_session(&doc.session_id).unwrap();
+    drop(pair.b);
+    pair.b = Core::new(&pair.bd).unwrap();
+    let preview = pair.b.prepare_operation(request(&pair)).unwrap();
+    assert!(placements(&pair.b, &preview.operation_id).len() >= 2);
+    pair.b
+        .execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    drop(pair.b);
+    pair.b = Core::new(&pair.bd).unwrap();
+    let moved = pair.br.join("新名/Child/Child.typ");
+    let history_before = fs::read_dir(pair.b.draft_directory("draft-history"))
+        .unwrap()
+        .count();
+    let reopened = pair.b.open(&moved, Some(pair.br.clone())).unwrap();
+    assert_eq!(reopened.source, doc.source);
+    assert!(reopened.recovered_draft.is_none());
+    assert!(!reopened.recovered_draft_conflict);
+    pair.b.close_session(&reopened.session_id).unwrap();
+    // The first successful rebinding retains exactly one original record.
+    // Repeated opens and subsequent saves must not grow that archive.
+    let retained: Vec<_> = fs::read_dir(pair.b.draft_directory("draft-history"))
+        .unwrap()
+        .map(|entry| fs::read(entry.unwrap().path()).unwrap())
+        .collect();
+    assert_eq!(retained.len(), history_before + 1);
+    assert!(retained.contains(&original_record));
+    for _ in 0..3 {
+        let reopened = pair.b.open(&moved, Some(pair.br.clone())).unwrap();
+        assert_eq!(reopened.source, doc.source);
+        assert!(reopened.recovered_draft.is_none());
+        assert!(!reopened.recovered_draft_conflict);
+        pair.b.close_session(&reopened.session_id).unwrap();
+    }
+    assert_eq!(
+        pair.b
+            .operation_status(&receipt.operation_id)
+            .unwrap()
+            .status,
+        "committed"
+    );
+    let reopened = pair.b.open(&moved, Some(pair.br.clone())).unwrap();
+    let source = format!("{}\nFurther descendant input", reopened.source);
+    pair.b.persist_draft(&reopened.session_id, &source).unwrap();
+    pair.b
+        .flush_document_draft(crate::DocumentDraftFlush {
+            session_id: reopened.session_id.clone(),
+            base_id: reopened.base_id.clone(),
+            source_digest: crate::hash(source.as_bytes()),
+        })
+        .unwrap();
+    pair.b
+        .save(SaveRequest {
+            session_id: reopened.session_id,
+            base_id: reopened.base_id,
+            operation_id: fresh(),
+            source,
+        })
+        .unwrap();
+    assert_eq!(
+        fs::read_dir(pair.b.draft_directory("draft-history"))
+            .unwrap()
+            .count(),
+        retained.len()
+    );
+}
+
 fn assert_installed(pair: &mut Pair, operation: &str) {
     assert_eq!(
         pair.a
@@ -207,7 +294,7 @@ fn assert_installed(pair: &mut Pair, operation: &str) {
         fs::read(pair.br.join("Container/Right/raw.txt")).unwrap(),
         b"receiver-only right"
     );
-    assert!(pair.b.committed(operation));
+    assert!(pair.b.committed(operation).unwrap());
     assert_eq!(
         pair.b
             .sync_binding_info(&pair.br)
@@ -252,7 +339,7 @@ fn compound_two_moves_one_decision_keeps_resources_child_history_actor_drafts_an
     let before = paths
         .iter()
         .map(|path| {
-            crate::operations::capture_optional(path)
+            crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), path)
                 .unwrap()
                 .unwrap()
                 .stamp
@@ -300,7 +387,7 @@ fn compound_two_moves_one_decision_keeps_resources_child_history_actor_drafts_an
     ];
     for (index, path) in after.iter().enumerate() {
         assert_eq!(
-            crate::operations::capture_optional(path)
+            crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), path)
                 .unwrap()
                 .unwrap()
                 .stamp
@@ -408,10 +495,13 @@ fn compound_first_move_restart_resumes_only_remaining_original_steps_and_content
     );
     assert!(Path::new(&moves[0].1).exists());
     assert!(Path::new(&moves[1].0).exists());
-    let first_identity = ParentGuard::acquire(&Path::new(&moves[0].1).join(".probe"))
-        .unwrap()
-        .directory_identity()
-        .unwrap();
+    let first_identity = ParentGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &Path::new(&moves[0].1).join(".probe"),
+    )
+    .unwrap()
+    .directory_identity()
+    .unwrap();
     drop(pair.b);
     pair.b = Core::new(&pair.bd).unwrap();
     let info = pair.b.inspect_recovery(&preview.operation_id).unwrap();
@@ -438,10 +528,13 @@ fn compound_first_move_restart_resumes_only_remaining_original_steps_and_content
         .unwrap();
     assert_installed(&mut pair, &preview.operation_id);
     assert_eq!(
-        ParentGuard::acquire(&Path::new(&moves[0].1).join(".probe"))
-            .unwrap()
-            .directory_identity()
-            .unwrap(),
+        ParentGuard::acquire(
+            &crate::BackendContext::local().unwrap(),
+            &Path::new(&moves[0].1).join(".probe")
+        )
+        .unwrap()
+        .directory_identity()
+        .unwrap(),
         first_identity
     );
     assert_eq!(
@@ -570,7 +663,7 @@ fn compound_recovery_third_state_never_moves_second_tree_or_overwrites_outside()
         assert!(Path::new(&moves[1].0).exists());
         assert!(!Path::new(&moves[1].1).exists());
         assert_eq!(fs::read(&still).unwrap(), bytes);
-        assert!(!pair.b.committed(&preview.operation_id));
+        assert!(!pair.b.committed(&preview.operation_id).unwrap());
     }
 }
 
@@ -579,7 +672,7 @@ fn compound_same_bytes_external_stamp_requires_adoption_before_prepare() {
     let mut pair = fixture();
     let path = pair.br.join("Right/Right.typ");
     let bytes = fs::read(&path).unwrap();
-    let old = crate::operations::capture_optional(&path)
+    let old = crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), &path)
         .unwrap()
         .unwrap()
         .stamp;
@@ -590,7 +683,7 @@ fn compound_same_bytes_external_stamp_requires_adoption_before_prepare() {
     .unwrap();
     drop(file);
     assert_ne!(
-        crate::operations::capture_optional(&path)
+        crate::operations::capture_optional(&crate::BackendContext::local().unwrap(), &path)
             .unwrap()
             .unwrap()
             .stamp,
@@ -645,11 +738,15 @@ fn compound_interrupted_original_cut_rejects_late_receive_without_replaying_seco
     let info = pair.b.inspect_recovery(&preview.operation_id).unwrap();
     assert_eq!(info.coherence, "unavailable");
     assert!(info.allowed_actions.is_empty());
-    assert!(
-        info.members.iter().any(
-            |member| member.kind == "syncCut" && member.message.contains("syncConflictChanged")
-        )
-    );
+    assert!(info.members.iter().any(|member| member.kind == "syncCut"
+        && member.description.as_ref().is_some_and(|description| {
+            description.explanation.key() == "recovery.replicaCutUnqualified"
+                && description
+                    .causes
+                    .as_slice()
+                    .iter()
+                    .any(|cause| cause.code == "syncConflictChanged")
+        })));
     for action in ["keepCurrent", "adoptAfterImages", "resumeOriginalPlan"] {
         assert!(
             pair.b
@@ -661,7 +758,7 @@ fn compound_interrupted_original_cut_rejects_late_receive_without_replaying_seco
     assert!(Path::new(&moves[1].0).exists());
     assert!(!Path::new(&moves[1].1).exists());
     assert_eq!(fs::read(pair.br.join("Still/Still.typ")).unwrap(), still);
-    assert!(!pair.b.committed(&preview.operation_id));
+    assert!(!pair.b.committed(&preview.operation_id).unwrap());
 }
 
 #[test]
@@ -748,7 +845,7 @@ fn compound_recovery_cut_gate_also_protects_original_update_from_late_received_h
     let bd = temp.path().join("receiver-private");
     let mut a = Core::new(temp.path().join("author-private")).unwrap();
     a.create_library(&ar).unwrap();
-    let node = a.create_note(&ar, &ar, "Note").unwrap();
+    let node = a.create_note_fixture(&ar, &ar, "Note").unwrap();
     let keys = BTreeSet::from([ObjectKey::Node(node.node_id.unwrap())]);
     let identity = a.enable_sync(&ar, &fresh()).unwrap().identity;
     let mut b = Core::new(&bd).unwrap();
@@ -791,8 +888,12 @@ fn compound_recovery_cut_gate_also_protects_original_update_from_late_received_h
         .unwrap();
     // Retain original FI and after bytes, as an interrupted original Update's
     // content write. This is the existing Core recovery fixture mechanism.
-    crate::journal::private_create(&b.journal_path(&preview.operation_id, "install"), b"{}")
-        .unwrap();
+    crate::journal::private_create(
+        &crate::BackendContext::local().unwrap(),
+        &b.journal_path(&preview.operation_id, "install"),
+        b"{}",
+    )
+    .unwrap();
     fs::write(&note.path, &note.after).unwrap();
     drop(b);
     let mut b = Core::new(&bd).unwrap();
@@ -814,5 +915,5 @@ fn compound_recovery_cut_gate_also_protects_original_update_from_late_received_h
         assert!(b.resolve_recovery(&preview.operation_id, action).is_err());
     }
     assert_eq!(fs::read(&note.path).unwrap(), note.after);
-    assert!(!b.committed(&preview.operation_id));
+    assert!(!b.committed(&preview.operation_id).unwrap());
 }

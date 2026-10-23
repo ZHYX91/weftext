@@ -4,6 +4,7 @@ Usage: python scripts/test_hosted_legacy_office.py EXE NEW_EVIDENCE_DIRECTORY [N
 The executable, library, policy, data, conversion processes and artifacts belong
 to this one run. No Word/WPS automation or synthetic conversion receipt is used.
 """
+from _creation_result import created_document
 import base64
 import hashlib
 from html.parser import HTMLParser
@@ -21,12 +22,14 @@ from urllib.request import Request, urlopen
 import test_hosted
 from test_hosted import uid, digest, Server as BaseServer
 from test_hosted_office import HostedOffice
+from windows_package import load_contract
 
 
 EXE = Path(sys.argv[1]).resolve()
 EVIDENCE = Path(sys.argv[2]).resolve()
 RUN_ROOT = Path(sys.argv[3]).resolve() if len(sys.argv) > 3 else EVIDENCE
 MODE = sys.argv[4] if len(sys.argv) > 4 else 'explicit'
+HOST_PATHS = load_contract((Path(__file__).resolve().parents[1] / 'packaging/windows/host-contract.json').read_bytes())['paths']
 if MODE not in {'explicit', 'default', 'long'}:
     raise ValueError('Mode must be explicit, default or long')
 test_hosted.EXE = EXE
@@ -95,13 +98,15 @@ class HostedLegacyOffice(HostedOffice):
         # Keep this Windows fixture short: CreateProcess's cwd does not accept
         # arbitrary extended-length paths even when file IO supports them.
         self.folder = EVIDENCE
-        self.data = RUN_ROOT / ('Weftext-MVP' if MODE == 'default' else 's')
+        self.data = RUN_ROOT / HOST_PATHS['persistentRelativeRoot'] / HOST_PATHS['coreRelativePath'] if MODE == 'default' else RUN_ROOT / 's'
         self.root = RUN_ROOT / 'l'
-        local = Server(['--no-browser', *self.data_args()])
+        local = Server([ *self.data_args()], expected_default_data_dir=self.data if MODE == 'default' else None,
+                       evidence_parent=RUN_ROOT if MODE == 'default' else None)
         try:
             self.assertEqual(local.call('/api/library/create', {'path': str(self.root), 'operationId': uid()})[0], 200)
             code, doc, _ = local.call('/api/note/create', {'root': str(self.root), 'parent': str(self.root), 'name': 'Shared', 'operationId': uid()})
             self.assertEqual(code, 200, doc)
+            doc = created_document(doc)
             code, _, _ = local.call('/api/save', {'sessionId': doc['sessionId'], 'baseId': doc['baseId'], 'source': doc['source'] + '初始共同正文', 'operationId': uid()})
             self.assertEqual(code, 200)
         finally:
@@ -121,7 +126,9 @@ class HostedLegacyOffice(HostedOffice):
 
     def start(self):
         self.config_path.write_text(json.dumps(self.config), 'utf-8')
-        self.server = Server(['--no-browser', *self.data_args(), '--server-config', str(self.config_path)], hosted=True)
+        self.server = Server([ *self.data_args(), '--server-config', str(self.config_path)], hosted=True,
+                             expected_default_data_dir=self.data if MODE == 'default' else None,
+                             evidence_parent=RUN_ROOT if MODE == 'default' else None)
 
     def call(self, route, data=None, actor='alice', status=200, headers=None):
         result = super().call(route, data, actor, status, headers)
@@ -151,8 +158,8 @@ class HostedLegacyOffice(HostedOffice):
             users['alice']['grants']['ImportedDoc'] = {'read': True, 'write': True, 'office': {'doc': {'import': True}}}
         self.policy(grants)
         source = self.open()['source'] + '\n\nREAL_HOSTED_DOC_BODY 中文 English 20261018\n'
-        request = dict(requestId=uid(), resource='Shared', source=source, format='doc',
-                       reviewMode='none', includeResolved=False, stylePolicy='template', bindings={}, legacyBackend='libreoffice')
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'resource': 'Shared', 'source': source, 'format': 'doc',
+                       'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}, 'legacyBackend': 'libreoffice'}
         self.call('office/export/prepare', request, status=404)
         self.call('office/export/prepare', request, 'bob', 404)
         # Ordinary DOCX remains usable without any old-format grant.
@@ -283,8 +290,8 @@ class HostedLegacyOffice(HostedOffice):
         self.policy(lambda users: users['alice']['grants']['Shared'].update(
             office={'export': True, 'download': True, 'doc': {'export': True, 'download': True}}))
         source = self.open()['source'] + '\nLONG_PATH_EXACT_ORIGINAL\n'
-        request = dict(requestId=uid(), resource='Shared', source=source, format='doc',
-                       reviewMode='none', includeResolved=False, stylePolicy='template', bindings={}, legacyBackend='libreoffice')
+        request = {'outputLocale': 'zh-CN', 'requestId': uid(), 'resource': 'Shared', 'source': source, 'format': 'doc',
+                       'reviewMode': 'none', 'includeResolved': False, 'stylePolicy': 'template', 'bindings': {}, 'legacyBackend': 'libreoffice'}
         refused = self.call('office/export/prepare', request)
         self.assertEqual(refused['status'], 'failed', refused)
         conversion = refused['preview']['legacy']

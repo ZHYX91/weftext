@@ -17,7 +17,7 @@ const fresh = (storage: Storage) => new HostedDraftCache(storage, () => prefix);
 
 test("small recovery, frozen original save and reservations roundtrip through one codec", () => {
   const { cache, storage } = create();
-  const draft: HostedDraft = { source: "新😀\ud800", baseSource: "旧\r\n", reference: "weftext-node://test/id", definitionReservations: ["r"], pending: { operationId: "op", source: "原请求", request: { sessionId: "session", baseId: "base", operationId: "op", source: "原请求", definitionReservations: ["r"] } } };
+  const draft: HostedDraft = { source: "新😀\ud800", baseSource: "旧\r\n", reference: "weftext-node://test/id", definitionReservations: ["r"], pending: { resource: "Shared", operationId: "op", source: "原请求", request: { sessionId: "session", baseId: "base", operationId: "op", source: "原请求", definitionReservations: ["r"] } } };
   cache.write("note", draft);
   assert.deepEqual(fresh(storage).read("note"), draft);
   assert.deepEqual(JSON.parse(storage.getItem(prefix + "note")!), draft);
@@ -40,7 +40,7 @@ test("large edits synchronously persist compact metadata and survive a fresh rea
 
 test("a large unsaved replacement keeps its small original Base and independent pending request", () => {
   const { cache, storage } = create();
-  const draft: HostedDraft = { source: large, baseSource: "原先小稿", pending: { operationId: "op", source: large + "旧提案", request: { sessionId: "s", baseId: "b", operationId: "op", source: large + "旧提案" } } };
+  const draft: HostedDraft = { source: large, baseSource: "原先小稿", pending: { resource: "Shared", operationId: "op", source: large + "旧提案", request: { sessionId: "s", baseId: "b", operationId: "op", source: large + "旧提案" } } };
   cache.write("note", draft);
   draft.source += "后到的新输入"; cache.write("note", draft);
   assert.deepEqual(fresh(storage).read("note"), draft);
@@ -49,7 +49,7 @@ test("a large unsaved replacement keeps its small original Base and independent 
 
 test("failed metadata commit leaves the complete previous recovery and unknown operation untouched", () => {
   const { cache, storage } = create();
-  const previous: HostedDraft = { source: large, baseSource: "旧", pending: { operationId: "unknown", source: large, request: { sessionId: "s", baseId: "b", operationId: "unknown", source: large } } };
+  const previous: HostedDraft = { source: large, baseSource: "旧", pending: { resource: "Shared", operationId: "unknown", source: large, request: { sessionId: "s", baseId: "b", operationId: "unknown", source: large } } };
   cache.write("note", previous);
   const original = storage.getItem(prefix + "note"); const keys = [...storage.values.keys()].sort();
   storage.fail = key => key === prefix + "note";
@@ -106,9 +106,20 @@ test("replacement releases only snapshots no longer referenced by committed reco
 test("a retained page cannot overwrite a newer recovery record or revive reclaimed snapshots", () => {
   const { cache, storage } = create(); const retainedPage = fresh(storage);
   cache.write("note", { source: large, baseSource: large }); retainedPage.read("note");
-  const newer: HostedDraft = { source: "新".repeat(200000), baseSource: "另一个基线", pending: { operationId: "new-operation", source: "新".repeat(200000) } };
+  const newer: HostedDraft = { source: "新".repeat(200000), baseSource: "另一个基线", pending: { resource: "Shared", operationId: "new-operation", source: "新".repeat(200000) } };
   cache.write("note", newer); const committed = storage.getItem(prefix + "note");
   assert.throws(() => retainedPage.write("note", { source: large + "旧页的新输入", baseSource: large }), /其他页面更新/);
   assert.equal(storage.getItem(prefix + "note"), committed);
   assert.deepEqual(fresh(storage).read("note"), newer);
+});
+
+
+test("a pending save without its frozen resource remains unsupported and preserves its original cache bytes", () => {
+  const { storage } = create();
+  for (const resource of [undefined, "", 42]) {
+    const raw = JSON.stringify({ source: "later Y", baseSource: "B", pending: { resource, operationId: "original", source: "X" } });
+    storage.values.set(prefix + "Alias", raw);
+    assert.throws(() => fresh(storage).read("Alias"), /无法完整读取/);
+    assert.equal(storage.values.get(prefix + "Alias"), raw);
+  }
 });

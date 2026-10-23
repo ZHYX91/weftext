@@ -47,11 +47,11 @@ pub struct RecognitionReview {
     #[serde(default)]
     pub selected_structure_ids: Vec<String>,
 }
-fn error(message: &str) -> ExportError {
-    ExportError(message.into())
+fn error(message: impl Into<weftext_messages::ErrorDescription>) -> ExportError {
+    ExportError::new(message)
 }
 fn quoted(value: &str) -> Result<String> {
-    weftext_engine::encode_string(value).map_err(|e| ExportError(e.to_string()))
+    weftext_engine::encode_string(value).map_err(ExportError::from_engine)
 }
 fn insert(
     p: &mut NativePackage,
@@ -101,18 +101,23 @@ fn mapped_value(schema: &Schema, mapping: &ReviewField) -> Result<NativeValue> {
         .fields
         .iter()
         .find(|f| Some(&f.id) == mapping.target_field.as_ref())
-        .ok_or_else(|| error("Mapped field is not installed"))?;
-    let kind = mapping
-        .target_type
-        .as_ref()
-        .ok_or_else(|| error("Mapped field requires an explicit installed type"))?;
+        .ok_or_else(|| {
+            error(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_recognition_mapped_field_not_installed(),
+            ))
+        })?;
+    let kind = mapping.target_type.as_ref().ok_or_else(|| {
+        error(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_recognition_mapped_type_required(),
+        ))
+    })?;
     if !mapping_fields(schema)
         .iter()
         .any(|v| v["id"] == field.id && v["typeId"] == *kind)
     {
-        return Err(error(
-            "Field/type is not an applicable bounded scalar mapping",
-        ));
+        return Err(error(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_recognition_scalar_mapping_not_applicable(),
+        )));
     }
     let value = match schema.resolve(&field.shape) {
         Shape::Scalar { semantic } => match semantic.as_str() {
@@ -120,16 +125,25 @@ fn mapped_value(schema: &Schema, mapping: &ReviewField) -> Result<NativeValue> {
             "date" => NativeValue::Date(mapping.value.clone()),
             // exact_decimal's native codec is textual, retaining all digits.
             "text" | "nonempty_text" | "exact_decimal" => NativeValue::Text(mapping.value.clone()),
-            _ => return Err(error("Unsupported mapped scalar codec")),
+            _ => {
+                return Err(error(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_recognition_scalar_codec_unsupported(
+                    ),
+                )));
+            }
         },
-        _ => return Err(error("Unsupported mapped field shape")),
+        _ => {
+            return Err(error(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_recognition_field_shape_unsupported(),
+            )));
+        }
     };
     if !schema.validate(&field.shape, &value).is_valid() {
-        return Err(error(
-            "Confirmed value does not satisfy the installed field shape",
-        ));
+        return Err(error(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_recognition_confirmed_value_shape_mismatch(),
+        )));
     }
-    value.to_typst().map_err(|e| ExportError(e.to_string()))?;
+    value.to_typst().map_err(ExportError::from_data)?;
     Ok(value)
 }
 /// Evidence contains exact worker result, scheme proposal, settings and digests.
@@ -147,7 +161,11 @@ pub fn build_recognition_package(
         "png" => "png",
         "jpeg" => "jpg",
         "docx" => "docx",
-        _ => return Err(error("Unsupported recognition input")),
+        _ => {
+            return Err(error(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_recognition_input_unsupported(),
+            )));
+        }
     };
     if original.is_empty()
         || original.len() > 16 * 1024 * 1024
@@ -155,9 +173,10 @@ pub fn build_recognition_package(
         || serde_json::to_vec(review)?.len() > 2 * 1024 * 1024
         || !weftext_data::uuid_v4(operation)
     {
-        return Err(error(
-            "Recognition input, review or evidence budget exceeded",
-        ));
+        return Err(error(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_recognition_input_review_or_evidence_exceeded(
+            ),
+        )));
     }
     if !matches!(review.purpose.as_str(), "resource" | "text" | "note")
         || review.title.is_empty()
@@ -165,10 +184,14 @@ pub fn build_recognition_package(
         || review.blocks.len() > 20_000
         || review.fields.len() > 128
     {
-        return Err(error("Invalid recognition review"));
+        return Err(error(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_recognition_review_invalid(),
+        )));
     }
     if evidence["inputSha256"] != exchange::digest(original) {
-        return Err(error("Recognition original digest does not match"));
+        return Err(error(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_recognition_original_digest_mismatch(),
+        )));
     }
     if evidence["result"]["workerFinalValidation"] == false
         || (review.purpose != "resource"
@@ -177,17 +200,19 @@ pub fn build_recognition_package(
                 Some("complete" | "partial")
             ))
     {
-        return Err(error(
-            "Interrupted or failed recognition requires an explicit new job",
-        ));
+        return Err(error(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_recognition_new_job_required_after_failure(),
+        )));
     }
     if review.purpose != "resource"
         && evidence["result"]["status"] != "complete"
         && !review.accept_partial
     {
-        return Err(error("Partial recognition requires explicit acceptance"));
+        return Err(error(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_recognition_partial_acceptance_required(),
+        )));
     }
-    let schema = Schema::from_author_json(schema_json).map_err(|e| ExportError(e.to_string()))?;
+    let schema = Schema::from_author_json(schema_json).map_err(ExportError::from_data)?;
     let id = |role: &str| {
         let hash = exchange::digest(format!("{operation}:{role}").as_bytes());
         let mut bytes = u128::from_str_radix(&hash[..32], 16).unwrap().to_be_bytes();
@@ -233,12 +258,14 @@ pub fn build_recognition_package(
             || field.value.len() > 65536
             || !candidates.is_some_and(|a| a.contains_key(&field.key))
         {
-            return Err(error("Confirmed field lacks an actual scheme candidate"));
+            return Err(error(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_recognition_confirmed_field_candidate_missing(),
+            )));
         }
         if evidence["scheme"]["applicability"] != "supported" || !confirmed_keys.insert(&field.key)
         {
             return Err(error(
-                "Field confirmation requires an applicable scheme and unique keys",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_confirmation_scheme_or_keys_invalid()),
             ));
         }
         let candidate = field
@@ -252,13 +279,13 @@ pub fn build_recognition_package(
             })
         {
             return Err(error(
-                "Confirm an exact sourced candidate or explicitly mark a manual correction",
+                weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_candidate_or_manual_correction_required()),
             ));
         }
         if let Some(target) = &field.target_field {
             if !fields.insert(target.clone()) {
                 return Err(error(
-                    "Two candidates cannot silently replace one mapped field",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_mapped_field_candidate_conflict()),
                 ));
             }
             let value = mapped_value(&schema, field)?;
@@ -276,9 +303,9 @@ pub fn build_recognition_package(
                 _ => "text",
             };
             if expected != actual {
-                return Err(error(
-                    "Mapped field codec differs from the scheme's exact value kind",
-                ));
+                return Err(error(weftext_messages::ErrorDescription::new(
+                    weftext_messages::UiMessage::error_export_recognition_mapped_codec_kind_mismatch(),
+                )));
             }
             members.push(NativeMember {
                 key: f.key.clone(),
@@ -295,7 +322,7 @@ pub fn build_recognition_package(
         "#metadata({}) <weftext>\n#heading(level: 1, text({}))\n\n",
         NativeValue::Record(members)
             .to_typst()
-            .map_err(|e| ExportError(e.to_string()))?,
+            .map_err(ExportError::from_data)?,
         quoted(&review.title)?
     );
     let original_name = format!("original.{ext}");
@@ -342,14 +369,16 @@ pub fn build_recognition_package(
     let mut selected = BTreeSet::new();
     for id in &review.selected_structure_ids {
         if !selected.insert(id) || !structures.is_some_and(|a| a.iter().any(|s| s["id"] == *id)) {
-            return Err(error(
-                "Selected structure is duplicated or no longer in frozen evidence",
-            ));
+            return Err(error(weftext_messages::ErrorDescription::new(
+                weftext_messages::UiMessage::error_export_recognition_structure_duplicate_or_unfrozen(),
+            )));
         }
     }
     let numbering = review.numbering.as_deref().unwrap_or("keep");
     if !matches!(numbering, "keep" | "remove" | "rebuild") {
-        return Err(error("Unsupported numbering choice"));
+        return Err(error(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_recognition_numbering_choice_unsupported(),
+        )));
     }
     if numbering == "rebuild" && !selected.is_empty() {
         source.push_str("#counter(heading).update(0)\n");
@@ -363,7 +392,7 @@ pub fn build_recognition_package(
                 || block.text.len() > 2 * 1024 * 1024
             {
                 return Err(error(
-                    "Reviewed block is duplicated or lacks frozen source provenance",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_block_duplicate_or_provenance_missing()),
                 ));
             }
             let structure = structures.and_then(|a| {
@@ -388,12 +417,12 @@ pub fn build_recognition_package(
                 if numbering != "keep" && s["nativeNumbering"].is_null() {
                     if s["raw"] != block.text {
                         return Err(error(
-                            "Numbering transformation cannot reuse offsets after manual text changes",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_numbering_offsets_invalid_after_manual_edit()),
                         ));
                     }
                     authored_text = s["content"]
                         .as_str()
-                        .ok_or_else(|| error("Selected numbering content range missing"))?
+                        .ok_or_else(|| error(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_numbering_content_range_missing())))?
                         .to_string();
                 }
                 if numbering == "rebuild" {
@@ -401,7 +430,7 @@ pub fn build_recognition_package(
                         .as_u64()
                         .filter(|level| (1..=6).contains(level))
                         .ok_or_else(|| {
-                            error("Rebuilding supports only proven heading levels 1 through 6")
+                            error(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_heading_level_rebuild_unsupported()))
                         })?;
                     source.push_str(&format!(
                         "#heading(level: {level}, numbering: \"1.1.1.1.1.1\", text({}))\n\n",
@@ -416,7 +445,7 @@ pub fn build_recognition_package(
                         || n["level"].as_u64().unwrap_or(0) > 1
                     {
                         return Err(error(
-                            "This native counter requires a supported explicit numbering proposal",
+                            weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_counter_proposal_required()),
                         ));
                     }
                     let key = n["numId"].to_string();
@@ -428,7 +457,7 @@ pub fn build_recognition_package(
                     });
                     let pattern = n["pattern"].as_str().unwrap_or("%1.");
                     if pattern.matches("%1").count() != 1 || pattern.contains("%2") {
-                        return Err(error("Unsupported native counter pattern"));
+                        return Err(error(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_counter_pattern_unsupported())));
                     }
                     let pattern = pattern.replace("%1", "1");
                     source.push_str(&format!(
@@ -448,24 +477,24 @@ pub fn build_recognition_package(
                     block
                         .heading_level
                         .filter(|l| (1..=6).contains(l))
-                        .ok_or_else(|| error("Invalid heading level"))?,
+                        .ok_or_else(|| error(weftext_messages::UiMessage::error_export_recognition_heading_level_rebuild_unsupported()))?,
                     quoted(&authored_text)?
                 )),
                 "table" => {
                     if !tables.contains(&block.id) {
-                        return Err(error("Table review requires a real frozen grid candidate"));
+                        return Err(error(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_frozen_grid_candidate_required())));
                     }
                     let rows = block
                         .table
                         .as_ref()
-                        .ok_or_else(|| error("Missing confirmed table cells"))?;
+                        .ok_or_else(|| error(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_confirmed_table_cells_missing())))?;
                     let cols = rows.first().map_or(0, Vec::len);
                     if cols == 0
                         || cols > 64
                         || rows.len() > 500
                         || rows.iter().any(|r| r.len() != cols)
                     {
-                        return Err(error("Only bounded rectangular tables are supported"));
+                        return Err(error(weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_bounded_rectangular_table_required())));
                     }
                     source.push_str(&format!("#table(columns: {cols},\n"));
                     for cell in rows.iter().flatten() {
@@ -473,7 +502,11 @@ pub fn build_recognition_package(
                     }
                     source.push_str(")\n\n");
                 }
-                _ => return Err(error("Unsupported reviewed block kind")),
+                _ => {
+                    return Err(error(weftext_messages::ErrorDescription::new(
+                        weftext_messages::UiMessage::error_export_recognition_block_kind_unsupported(),
+                    )));
+                }
             }
         }
     }
@@ -496,14 +529,22 @@ pub fn build_recognition_package(
         source.push_str(")\n");
     }
     if source.len() > 2 * 1024 * 1024 {
-        return Err(error("Generated author source exceeds budget"));
+        return Err(error(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_recognition_generated_source_exceeded(),
+        )));
     }
     let validation = weftext_data::validate_note(&source, &schema, &Default::default());
     if !validation.is_valid() {
-        return Err(ExportError(format!(
-            "Recognition author fields do not qualify: {}",
-            validation.diagnostics.join("; ")
-        )));
+        return Err(ExportError::new(weftext_messages::ErrorDescription::new(
+            weftext_messages::UiMessage::error_export_recognition_author_fields_invalid(),
+        ))
+        .with_diagnostics(
+            validation
+                .diagnostics
+                .into_iter()
+                .chain(validation.unavailable)
+                .collect(),
+        ));
     }
     let original_ref = format!("weftext-resource://{workspace}/{original_id}");
     let retained = json!({"version":1,"authority":"historicalAcceptedAtImportOnly","inputSha256":exchange::digest(original),"originalResource":original_ref,"schemaSha256":exchange::digest(schema_json.as_bytes()),"evidence":evidence,"review":review});
@@ -541,8 +582,10 @@ pub fn build_recognition_package(
         Some(&node),
         None,
     );
-    package.manifest.losses.push(exchange::NativeLoss{path:"recognition".into(),code:"recognition-layout".into(),detail:"Editable text and bounded structures; original layout and uncertain results remain in the retained original and evidence".into()});
-    exchange::validate_native_package(&package).map_err(|e| ExportError(e.to_string()))?;
+    package.manifest.losses.push(exchange::NativeLoss{path:"recognition".into(),code:"recognition-layout".into(),description:weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_export_recognition_editable_recognition_with_original_retained()),
+product_diagnostics: Vec::new(),
+});
+    exchange::validate_native_package(&package).map_err(ExportError::from_native)?;
     Ok(package)
 }
 

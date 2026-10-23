@@ -41,7 +41,7 @@ pub(super) fn clone_locations(
                 }
                 _ if state.retired => {
                     return Err(invalid(
-                        "Only a placed content object can occupy a Trash tree",
+                        UiMessage::error_core_sync_clone_layout_trash_placement_required(),
                     ));
                 }
                 _ => root.to_path_buf(),
@@ -51,7 +51,7 @@ pub(super) fn clone_locations(
         }
         if remaining.len() == prior {
             return Err(invalid(
-                "Selected placement graph is cyclic or lacks its parent",
+                UiMessage::error_core_sync_clone_layout_placement_graph_incomplete(),
             ));
         }
     }
@@ -66,7 +66,9 @@ pub(super) fn validate_clone_namespace(transaction: &FrozenOperation) -> Result<
         ..
     } = &transaction.mutation
     else {
-        return Err(invalid("Clone must retain its original CreateTree"));
+        return Err(invalid(
+            UiMessage::error_core_sync_clone_layout_original_create_tree_required(),
+        ));
     };
     let mut slots = directories
         .iter()
@@ -90,7 +92,7 @@ pub(super) fn validate_clone_namespace(transaction: &FrozenOperation) -> Result<
             || (!directory && crate::backend::namespace_relative_path(right, left)?.is_some())
         {
             return Err(invalid(
-                "Clone files and directories overlap in the actual namespace",
+                UiMessage::error_core_sync_clone_layout_namespace_overlap(),
             ));
         }
     }

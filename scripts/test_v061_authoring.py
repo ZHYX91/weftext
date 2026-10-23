@@ -10,6 +10,7 @@ Run: python scripts/test_v061_authoring.py CANDIDATE.exe --evidence-dir DIRECTOR
      python scripts/test_v061_authoring.py --list
 Optional positional test names select exact cases; unknown selections fail.
 """
+from _creation_result import created_document, library_fact
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import copy
@@ -59,7 +60,7 @@ class RetainedHTTP(unittest.TestCase):
         self.servers = []
 
     def server(self, label, state, config=None):
-        args = ['--no-browser', '--data-dir', str(state)]
+        args = [ '--data-dir', str(state)]
         if config is not None:
             args += ['--server-config', str(config)]
         server = Server(args, hosted=config is not None)
@@ -73,9 +74,7 @@ class RetainedHTTP(unittest.TestCase):
     def close_server(self, server):
         if server.evidence_closed:
             return
-        if server.process.poll() is None:
-            server.process.terminate()
-        stdout, stderr = server.process.communicate(timeout=15)
+        stdout, stderr = server.close()
         server.evidence_closed = True
         stem = f'server-{server.evidence_index:02}-{server.evidence_label}'
         (self.folder / f'{stem}.stdout.log').write_text(stdout, encoding='utf-8')
@@ -103,8 +102,8 @@ class RetainedHTTP(unittest.TestCase):
         return self.call(server, '/api/library/create', {'path': str(root), 'operationId': uid()})
 
     def create_note(self, server, root, name='Note'):
-        return self.call(server, '/api/note/create', {
-            'root': str(root), 'parent': str(root), 'name': name, 'operationId': uid()})
+        return created_document(self.call(server, '/api/note/create', {
+            'root': str(root), 'parent': str(root), 'name': name, 'operationId': uid()}))
 
     def local_fixture(self):
         server = self.server('local', self.folder / 'state')
@@ -281,8 +280,8 @@ class RetainedHTTP(unittest.TestCase):
         reopened = self.view(server, root, token=token)
         self.assertEqual(reopened['source'], source)
         if hosted:
-            self.assertEqual(self.call(server, '/api/hosted/operation', {'operationId': request['operationId']}, token=token), receipt)
-            self.assertEqual(self.call(server, '/api/hosted/operation', {'operationId': request['operationId']}, token=tokens['bob'])['status'], 'notRegistered')
+            self.assertEqual(self.call(server, '/api/hosted/operation', {'resource': doc['resource'], 'operationId': request['operationId']}, token=token), receipt)
+            self.assertEqual(self.call(server, '/api/hosted/operation', {'resource': doc['resource'], 'operationId': request['operationId']}, token=tokens['bob'])['status'], 'notRegistered')
         else:
             self.assertEqual(reopened['nodeId'], doc['nodeId'])
             self.assertEqual(reopened['workspaceId'], doc['workspaceId'])
@@ -412,7 +411,7 @@ class RetainedHTTP(unittest.TestCase):
         creation = {'path': str(root), 'operationId': uid(),
                     'options': {'initialStyle': {'source': INITIAL_STYLE, 'enabled': True}}}
         receipt = self.call(a, '/api/library/create', creation)
-        self.assertEqual(self.call(a, '/api/library/create', creation), receipt)
+        self.assertEqual(library_fact(self.call(a, '/api/library/create', creation)), library_fact(receipt))
         changed = copy.deepcopy(creation)
         changed['options']['initialStyle']['enabled'] = False
         self.assertEqual(self.call(a, '/api/library/create', changed, 409)['error']['code'], 'operationConflict')
@@ -466,7 +465,7 @@ class RetainedHTTP(unittest.TestCase):
         # A restart queries the original creation, never installs fresh IDs.
         self.close_server(a)
         a = self.server('initial-style-source-restart', self.folder / 'state-a')
-        self.assertEqual(self.call(a, '/api/library/create', creation), receipt)
+        self.assertEqual(library_fact(self.call(a, '/api/library/create', creation)), library_fact(receipt))
         cancelled = {'path': str(self.folder / 'cancelled-library'), 'operationId': uid(),
                      'options': copy.deepcopy(creation['options'])}
         self.assertEqual(self.call(a, '/api/library/create-cancel', cancelled)['status'], 'resolved')
@@ -609,7 +608,11 @@ class RetainedHTTP(unittest.TestCase):
         b = self.server('receiver', self.folder / 'state-b')
         root_b = self.folder / 'replica'
         source = note['source'] + TABLE_BODY
-        self.save_exact(a, note, source)
+        initial, _ = self.save_exact(a, note, source)
+        sender = initial['document']
+        self.assertEqual(sender['sessionId'], note['sessionId'])
+        self.assertEqual(sender['source'], source)
+        self.assertEqual(sender['baseId'], initial['baseId'])
         key = {'kind': 'node', 'id': note['nodeId']}
         binding = self.call(a, '/api/sync/enable', {'root': str(root_a), 'operationId': uid()})
         identity = binding['identity']
@@ -640,11 +643,11 @@ class RetainedHTTP(unittest.TestCase):
         raw = path.parent / 'personal.raw'
         raw.write_bytes(b'owned private raw')
         raw_identity = physical_identity(raw)
-        sender = self.view(a, root_a)
         sender_basis, sender_map = self.observe(a, sender, source, 1)
         updated = self.propose(a, sender_basis, sender_map, {'kind': 'tableEdit', 'range': self.table(sender_map)['range'],
                                'action': {'kind': 'moveRow', 'from': 0, 'to': 1}})['source']
         updated = updated.replace('\n#table(', '\nSynchronized prefix moves the exact source range\n\n#table(', 1)
+        self.observe(a, sender, updated, 2)
         self.save_exact(a, sender, updated)
         before_receive = tree_state(root_b)
         transfer()

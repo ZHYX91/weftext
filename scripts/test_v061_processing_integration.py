@@ -5,6 +5,7 @@ and proofreading workers. Owned libraries, state, HTTP records and process logs
 are retained; this suite does not establish browser, Office or IME acceptance.
 Only the tests declared below run, including through unittest discovery.
 """
+from _creation_result import created_document
 import argparse
 import copy
 import hashlib
@@ -48,10 +49,8 @@ class EvidenceServer(hosted_harness.Server):
     def close(self):
         if self.closed:
             return
+        stdout, stderr = super().close()
         self.closed = True
-        if self.process.poll() is None:
-            self.process.terminate()
-        stdout, stderr = self.process.communicate(timeout=15)
         # Hosted output has no bearer tokens; bootstrap's startup URL was
         # consumed by the harness and its remaining output is redacted too.
         if self.token:
@@ -83,7 +82,7 @@ class SharedProcessingIntegration(HostedLibrary):
         self.data = self.folder / 'state'
         self.root = self.folder / 'library'
         self.server = None
-        local = EvidenceServer(['--no-browser', '--data-dir', str(self.data)],
+        local = EvidenceServer([ '--data-dir', str(self.data)],
                                self.folder / 'bootstrap')
         try:
             def call(route, request):
@@ -94,8 +93,8 @@ class SharedProcessingIntegration(HostedLibrary):
             call('/api/library/create', {'path': str(self.root), 'operationId': hosted_harness.uid()})
             self.docs = {}
             for name, text in (('Shared', MARKER), ('Other', '独立的原稿😀')):
-                doc = call('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
-                    'name': name, 'operationId': hosted_harness.uid()})
+                doc = created_document(call('/api/note/create', {'root': str(self.root), 'parent': str(self.root),
+                    'name': name, 'operationId': hosted_harness.uid()}))
                 source = doc['source'] + '\n\n' + text + '\n'
                 call('/api/save', {'sessionId': doc['sessionId'], 'baseId': doc['baseId'],
                     'source': source, 'operationId': hosted_harness.uid()})
@@ -126,7 +125,7 @@ class SharedProcessingIntegration(HostedLibrary):
     def start(self):
         retained_json(self.config_path, self.config)
         self.start_number += 1
-        self.server = EvidenceServer(['--no-browser', '--data-dir', str(self.data),
+        self.server = EvidenceServer([ '--data-dir', str(self.data),
             '--server-config', str(self.config_path)],
             self.folder / f'hosted-{self.start_number:02d}', hosted=True)
 
@@ -165,7 +164,9 @@ class SharedProcessingIntegration(HostedLibrary):
                    if finding['ruleId'] == 'owned.shared.dictionary']
         self.assertEqual(len(matches), 1, result)
         finding = matches[0]
-        self.assertEqual(finding['message'], options['rules'][0]['message'])
+        self.assertEqual(finding['messageOrigin'], 'author')
+        self.assertEqual(finding['authorMessage'], options['rules'][0]['message'])
+        self.assertNotIn('message', finding)
         self.assertEqual(finding['replacement'], 'LC_REVIEWED')
         self.assertTrue(finding['sourceRange'], finding)
         self.assertTrue(finding['executable'], finding)
@@ -175,7 +176,7 @@ class SharedProcessingIntegration(HostedLibrary):
 
     def request(self, profile, result, options):
         return {'resource': 'Shared', 'basis': profile['basis'],
-            'operationId': hosted_harness.uid(), 'intent': {'kind': 'annotationProofread',
+            'operationId': hosted_harness.uid(), 'intent': {'annotationLocale': 'zh-CN', 'kind': 'annotationProofread',
                 'scanId': result['scanId'], 'options': options,
                 'findings': [finding['id'] for finding in result['findings']
                              if finding['ruleId'] == 'owned.shared.dictionary'], 'ignore': False}}

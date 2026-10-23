@@ -1,8 +1,9 @@
+import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 // Real local initialization UI over owned fixtures. Never uses desktop input.
 // The supplied binary and frontend mode are recorded; working builds are not
 // promoted to final candidates by this focused acceptance.
 import assert from 'node:assert/strict';
-import { spawn, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -33,25 +34,20 @@ async function readOwnedFile(file, encoding = 'utf8') {
 }
 
 async function start() {
-  const child = spawn(exe, ['--no-browser', '--data-dir', path.join(out, 'private-state')],
+  const child = spawnServe(exe, ['--data-dir', path.join(out, 'private-state')],
     { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout = '';
   child.stdout.on('data', value => stdout += value);
   child.stderr.on('data', value => stderr += value);
   for (let index = 0; index < 300; index++) {
-    const found = stdout.match(/(http:\/\/127\.0\.0\.1:\d+)\/#token=(\w+)/);
-    if (found) return { child, base: found[1], token: found[2] };
+    const found = serveReady(child);
+    if (found) return { child, base: found.base, token: found.token };
     if (child.exitCode !== null) throw new Error(`Owned server exited: ${stderr}`);
     await pause(100);
   }
-  child.kill(); throw new Error('Owned server startup timed out');
+  await stopServe(child); throw new Error('Owned server startup timed out');
 }
-async function stop() {
-  if (server?.child.exitCode === null && server.child.signalCode === null) {
-    const exited = new Promise(resolve => server.child.once('exit', resolve));
-    server.child.kill(); await exited;
-  }
-}
+async function stop() { await stopServe(server?.child); }
 async function frontend() {
   if (!dev) return server.base;
   const { createServer } = await import(pathToFileURL(path.join(repo, 'app/node_modules/vite/dist/node/index.js')).href);
@@ -223,7 +219,7 @@ try {
 } finally {
   await browser?.close(); await vite?.close(); await stop();
   result.requests = creationRequests;
-  await writeFile(path.join(out, 'result.json'), JSON.stringify(result, null, 2));
+  await writeFile(path.join(out, 'result.json'), stringifyServeJson(result, 2));
   await writeFile(path.join(out, 'server.stderr.log'), stderr);
 }
 process.stdout.write(JSON.stringify({ completed: result.completed, sha256: result.sha256,

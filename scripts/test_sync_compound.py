@@ -10,6 +10,7 @@ Run: python scripts/test_sync_compound.py <candidate.exe> [exact_test_name ...]
 Unknown selections fail before either program starts. Every positive prepare
 must return 200; an older candidate's syncStructureRequired is never a pass.
 """
+from _creation_result import created_document
 import base64
 import ctypes
 from ctypes import wintypes
@@ -125,14 +126,14 @@ class SyncCompound(unittest.TestCase):
                 json.dumps({'test': self._testMethodName}) + '\n', encoding='utf-8')
         self.transfer_number = 0
         self.servers = []
-        self.a = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-a')], 'A')
-        self.b = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-b')], 'B')
+        self.a = self.start_server([ '--data-dir', str(self.folder / 'state-a')], 'A')
+        self.b = self.start_server([ '--data-dir', str(self.folder / 'state-b')], 'B')
         self.ra, self.rb = self.folder / 'library-a', self.folder / 'library-b'
         self.call(self.a, '/api/library/create', path=str(self.ra), operationId=uid())
         self.docs = {}
         for name in ['Left', 'Right', 'Container', 'Still']:
-            doc = self.call(self.a, '/api/note/create', root=str(self.ra),
-                            parent=str(self.ra), name=name, operationId=uid())
+            doc = created_document(self.call(self.a, '/api/note/create', root=str(self.ra),
+                            parent=str(self.ra), name=name, operationId=uid()))
             self.docs[name] = doc
             self.save(self.a, self.ra, Path(name) / f'{name}.typ', f'初始 {name} 中文😀')
         self.keys = {name: {'kind': 'node', 'id': doc['nodeId']}
@@ -223,9 +224,7 @@ class SyncCompound(unittest.TestCase):
     def close_server(self, server):
         if server.evidence_closed:
             return
-        if server.process.poll() is None:
-            server.process.terminate()
-        stdout, stderr = server.process.communicate(timeout=15)
+        stdout, stderr = server.close()
         server.evidence_closed = True
         stem = f'server-{server.evidence_index:02}-{server.evidence_name}'
         (self.folder / f'{stem}.stdout.log').write_text(stdout, encoding='utf-8')
@@ -401,7 +400,7 @@ class SyncCompound(unittest.TestCase):
 
     def restart_b(self):
         self.close_server(self.b)
-        self.b = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-b')], 'B-restart')
+        self.b = self.start_server([ '--data-dir', str(self.folder / 'state-b')], 'B-restart')
 
     def retain_original(self, source, retained):
         """Move only the current test's originals to an unused owned path."""

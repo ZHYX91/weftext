@@ -173,7 +173,7 @@ pub(super) fn canonicalize(
         *directory = select(inner, actor, directory)?.1.reference.clone();
     }
     if let Some(a) = &mut plan.advanced {
-        for child in &mut a.union_all {
+        for child in a.union_all.iter_mut().flatten() {
             canonicalize(inner, actor, child)?;
         }
         if let Some(r) = &mut a.related {
@@ -191,8 +191,8 @@ pub(super) fn preauthorize(
         if a.call.is_some() {
             return Ok(());
         }
-        if !a.union_all.is_empty() {
-            for p in &a.union_all {
+        if a.union_all.as_ref().is_some_and(|plans| !plans.is_empty()) {
+            for p in a.union_all.iter().flatten() {
                 preauthorize(inner, actor, p)?;
             }
             return Ok(());
@@ -236,8 +236,8 @@ fn leaf_scopes(
                     .map_err(|_| query::changed())?;
                 return visit(&d.plan, context, out, nodes, depth + 1);
             }
-            if !a.union_all.is_empty() {
-                for child in &a.union_all {
+            if a.union_all.as_ref().is_some_and(|plans| !plans.is_empty()) {
+                for child in a.union_all.iter().flatten() {
                     visit(child, context, out, nodes, depth + 1)?;
                 }
                 return Ok(());
@@ -433,7 +433,7 @@ fn guard_error(error: CoreError) -> ApiError {
         ApiError::new(
             StatusCode::CONFLICT,
             "basisRequired",
-            "目录或 Trash 定义的保存保护需要现存的库规则文件；请由库所有者通过配置操作显式安装后重试。",
+            UiMessage::error_api_hosted_query_scopes_existing_rules_configuration_required(),
         )
     } else {
         query::changed()
@@ -554,7 +554,13 @@ mod tests {
             )
             .await
             .unwrap_err();
-            refusals.push((error.status, error.code, error.message));
+            refusals.push((
+                error.status,
+                error.code,
+                error.description.explanation,
+                error.description.diagnostics,
+                error.description.causes,
+            ));
         }
         assert_eq!(refusals[0], refusals[1]);
         assert_eq!(refusals[0].0, StatusCode::NOT_FOUND);

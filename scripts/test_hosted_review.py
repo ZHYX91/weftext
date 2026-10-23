@@ -157,7 +157,7 @@ class HostedReview(HostedFields):
         self.assertEqual(len(typos), 2)
         self.assertTrue(any(f['sourceRange'] for f in typos))
         findings = [f['id'] for f in scan['findings'] if f['sourceRange']]
-        intent = dict(kind='annotationProofread', options=options, findings=findings, scanId=scan['scanId'], ignore=False)
+        intent = {'annotationLocale': 'zh-CN', 'kind': 'annotationProofread', 'options': options, 'findings': findings, 'scanId': scan['scanId'], 'ignore': False}
         self.call('review/prepare', dict(resource='Shared', basis=profile['basis'], operationId=uid(), intent={key: value for key, value in intent.items() if key != 'scanId'}), status=400)
         plan, _ = self.prepare_annotation(profile, intent)
         self.commit_annotation(plan)
@@ -195,7 +195,7 @@ class HostedReview(HostedFields):
         profile = self.review(); scan = self.call('review/proofread', dict(resource='Shared', basis=profile['basis'], options=options))
         findings = [f['id'] for f in scan['findings'] if f['sourceRange']]
         self.assertTrue(findings)
-        prepared, _ = self.prepare_annotation(profile, dict(kind='annotationProofread', options=options, findings=findings, scanId=scan['scanId'], ignore=False))
+        prepared, _ = self.prepare_annotation(profile, {'annotationLocale': 'zh-CN', 'kind': 'annotationProofread', 'options': options, 'findings': findings, 'scanId': scan['scanId'], 'ignore': False})
         sidecar = (self.root/'Shared/weftext.annotations.json').read_bytes()
         dependency = self.open('Secret'); self.save(dependency, dependency['source']+'\nDEPENDENCY_CHANGED')
         self.commit_annotation(prepared, status=409)

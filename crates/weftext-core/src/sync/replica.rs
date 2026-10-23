@@ -9,6 +9,7 @@ use crate::{
     operations::{FileChange, Mutation},
     valid_operation_id,
 };
+use weftext_messages::UiMessage;
 
 type LocalState<'a> = (
     BTreeMap<ObjectKey, LocalObject>,
@@ -72,7 +73,84 @@ pub struct SyncBindingInfo {
     pub installed_versions: Vec<(ObjectKey, String)>,
 }
 
+fn setup_fingerprint(root: &Path, workspace: &str) -> Result<String> {
+    Ok(hash(&serde_json::to_vec(
+        &serde_json::json!({"kind":"enableSync","root":display(root),"workspace":workspace}),
+    )?))
+}
+
 impl Core {
+    /// Immutable result of the original setup decision, independent of later
+    /// replica state, publications or the current path's binding.
+    pub(crate) fn original_sync_setup_fact(&self, plan: &Plan) -> Result<serde_json::Value> {
+        let invalid = || {
+            CoreError::new(
+                "invalidState",
+                UiMessage::error_core_sync_original_setup_evidence_invalid(),
+            )
+        };
+        let setup = plan.sync_setup.as_ref().ok_or_else(invalid)?;
+        if plan.kind != "enableSync"
+            || plan.transaction.is_some()
+            || plan.before.is_some()
+            || !plan.after.is_empty()
+            || plan.identity.is_some()
+            || plan.receipt.is_some()
+            || !plan.files.is_empty()
+            || plan.node_id.is_some()
+            || plan.history_restore.is_some()
+            || plan.sync_publication.is_some()
+            || plan.sync_application.is_some()
+            || plan.content_revision.is_some()
+            || plan.path != setup.root
+            || plan.workspace_id.as_ref() != Some(&setup.identity.workspace_id)
+            || setup.selection.is_some()
+            || setup_fingerprint(Path::new(&setup.root), &setup.identity.workspace_id)?
+                != plan.fingerprint
+        {
+            return Err(invalid());
+        }
+        valid_operation_id(&setup.replica_id)?;
+        let mut graph = ReplicaGraph::new(&setup.identity.workspace_id, &setup.identity.genesis)?;
+        for (id, bytes) in &setup.bundle.blobs {
+            graph.offer_blob(id, bytes.clone())?;
+        }
+        for (id, manifest) in &setup.bundle.manifests {
+            graph.offer_manifest(id, manifest.clone())?;
+        }
+        if graph.status(&setup.identity.genesis)? != Admission::Accepted
+            || setup
+                .bundle
+                .manifests
+                .get(&setup.identity.genesis)
+                .is_none_or(|genesis| {
+                    genesis.operation_id != plan.operation_id
+                        || genesis.replica_id != setup.replica_id
+                })
+        {
+            return Err(invalid());
+        }
+        for original in &setup.initial {
+            let manifest = setup
+                .bundle
+                .manifests
+                .get(&original.commit)
+                .ok_or_else(invalid)?;
+            if graph.status(&original.commit)? != Admission::Accepted
+                || !manifest.changes.iter().any(|change| {
+                    change.object == original.object
+                        && change.revision == original.revision
+                        && change.after == original.state
+                })
+            {
+                return Err(invalid());
+            }
+        }
+        Ok(
+            serde_json::json!({"operationId":plan.operation_id,"kind":"enableSync","path":setup.root,
+            "root":setup.root,"workspaceId":setup.identity.workspace_id,"identity":setup.identity,"replicaId":setup.replica_id}),
+        )
+    }
     pub fn enable_sync(
         &mut self,
         root: impl AsRef<Path>,
@@ -82,35 +160,33 @@ impl Core {
         valid_operation_id(operation_id)?;
         let root = absolute_path(root.as_ref())?;
         let workspace = self.require_workspace(&root)?;
-        let fingerprint = hash(&serde_json::to_vec(
-            &serde_json::json!({"kind":"enableSync","root":display(&root),"workspace":workspace.workspace_id}),
-        )?);
+        let fingerprint = setup_fingerprint(&root, &workspace.workspace_id)?;
         if let Some(plan) = self.operations.get(operation_id).cloned() {
             if plan.fingerprint != fingerprint
                 || plan.sync_setup.is_none()
-                || self.resolved(operation_id)
+                || self.resolved(operation_id)?
             {
                 return Err(CoreError::new(
                     "operationConflict",
-                    "This operation does not name the same sync setup",
+                    UiMessage::error_core_sync_operation_does_not_name_same_sync_setup(),
                 ));
             }
             let setup = plan.sync_setup.as_ref().unwrap();
             // Setup has no author-tree writes; retry its exact retained bytes.
             self.receive_sync(&setup.identity, setup.bundle.clone())?;
-            if !self.committed(operation_id) {
+            if !self.committed(operation_id)? {
                 self.commit(&plan)?;
             }
             return self.sync_binding_info(&root);
         }
         if self
-            .sync_setups()
+            .sync_setups()?
             .iter()
             .any(|s| s.root == display(&root) || s.identity.workspace_id == workspace.workspace_id)
         {
             return Err(CoreError::new(
                 "syncAlreadyEnabled",
-                "Use the existing replica binding and original operation",
+                UiMessage::error_core_sync_use_existing_replica_binding_and_original_operation(),
             ));
         }
         self.check_sync_setup_pending(&workspace.workspace_id)?;
@@ -160,13 +236,13 @@ impl Core {
         if !captured.snapshot.complete || !trash.complete {
             return Err(CoreError::new(
                 "coverageIncomplete",
-                "Sync setup requires a qualified content inventory",
+                UiMessage::error_core_sync_sync_setup_requires_qualified_content_inventory(),
             ));
         }
         let tags = captured.snapshot.tags.as_ref().ok_or_else(|| {
             CoreError::new(
                 "coverageIncomplete",
-                "Sync setup requires its original complete Tags capture",
+                UiMessage::error_core_sync_sync_setup_requires_original_complete_tags_capture(),
             )
         })?;
         self.qualified_tag_document_from_snapshot(root, tags)?;
@@ -212,7 +288,9 @@ impl Core {
             let name = path.file_stem().unwrap().to_string_lossy().into_owned();
             let object = ObjectKey::Node(source.node_id.clone().unwrap());
             if objects.contains_key(&object) {
-                return Err(invalid("Duplicate Node in replica setup"));
+                return Err(invalid(
+                    UiMessage::error_core_sync_replica_setup_node_duplicate(),
+                ));
             }
             objects.insert(
                 object.clone(),
@@ -244,15 +322,17 @@ impl Core {
                     .any(|o| Path::new(&o.directory) == path.parent().unwrap())
             {
                 let value: serde_json::Value = serde_json::from_slice(bytes)?;
-                let id = value["directoryId"]
-                    .as_str()
-                    .ok_or_else(|| invalid("Directory marker lacks an identity"))?;
+                let id = value["directoryId"].as_str().ok_or_else(|| {
+                    invalid(UiMessage::error_core_sync_replica_directory_marker_identity_missing())
+                })?;
                 let reference = format!("weftext-directory://{workspace_id}/{id}");
                 let resolved = self.resolve_navigation_target(root, &reference)?;
                 if resolved.status != "managed"
                     || resolved.path.as_deref() != Some(&display(path.parent().unwrap()))
                 {
-                    return Err(invalid("A directory marker is not currently admitted"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_replica_directory_marker_not_admitted(),
+                    ));
                 }
                 let object = if path.parent() == Some(root) {
                     ObjectKey::RootDirectory(id.into())
@@ -319,8 +399,8 @@ impl Core {
                 let name = relative_to(&path, Path::new(&tracked.directory))?;
                 super::relative(&name)?;
                 let blob = hash(bytes);
-                let observed = crate::operations::capture_optional(&path)?
-                    .ok_or_else(|| invalid("Captured replica file disappeared"))?;
+                let observed = crate::operations::capture_optional(&self.backend, &path)?
+                    .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_replica_captured_replica_file_disappeared()))?;
                 let frozen = self.admitted_cuts[&captured.snapshot.cut_id]
                     .bases
                     .iter()
@@ -330,16 +410,18 @@ impl Core {
                         crate::history::history_relative_path(Path::new(&f.path), &path)
                             .is_some_and(|p| p.as_os_str().is_empty())
                     })
-                    .ok_or_else(|| invalid("Original replica cut has no physical file evidence"))?;
+                    .ok_or_else(|| invalid(UiMessage::error_core_sync_replica_original_cut_physical_evidence_missing()))?;
                 if observed.bytes != *bytes || observed.stamp != frozen.stamp {
-                    return Err(invalid("Captured replica file changed during binding"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_replica_captured_file_changed_during_binding(),
+                    ));
                 }
                 physical_bindings.push(SyncPhysicalBinding {
                     object: tracked.object.clone(),
                     relative_path: name.clone(),
                     stamp: observed.stamp.clone(),
                 });
-                let revision = self.accepted_revision(&observed).unwrap_or_else(fresh);
+                let revision = self.accepted_revision(&observed)?.unwrap_or_else(fresh);
                 tracked.state.file_revisions.insert(name.clone(), revision);
                 tracked.state.files.insert(name, blob.clone());
                 bundle.blobs.insert(blob, bytes.clone());
@@ -362,16 +444,19 @@ impl Core {
             }
             if let ObjectKey::Node(id) = &tracked.object {
                 let canonical = format!("{}.typ", tracked.state.name);
-                let blob =
-                    tracked.state.files.get(&canonical).ok_or_else(|| {
-                        invalid("Canonical source is absent from the captured node")
-                    })?;
+                let blob = tracked.state.files.get(&canonical).ok_or_else(|| {
+                    invalid(
+                        UiMessage::error_core_sync_replica_captured_node_canonical_source_missing(),
+                    )
+                })?;
                 if weftext_engine::inspect(&crate::decode(&bundle.blobs[blob])?)
                     .id
                     .as_ref()
                     != Some(id)
                 {
-                    return Err(invalid("Captured source changed identity"));
+                    return Err(invalid(
+                        UiMessage::error_core_sync_replica_captured_source_identity_changed(),
+                    ));
                 }
             }
         }
@@ -383,12 +468,9 @@ impl Core {
         for tracked in &mut initial {
             let mut parents = BTreeSet::from([identity.genesis.clone()]);
             if let Some(parent) = &tracked.state.parent {
-                parents.insert(
-                    birth_commits
-                        .get(parent)
-                        .cloned()
-                        .ok_or_else(|| invalid("Missing initial parent checkpoint"))?,
-                );
+                parents.insert(birth_commits.get(parent).cloned().ok_or_else(|| {
+                    invalid(UiMessage::error_core_sync_replica_initial_parent_checkpoint_missing())
+                })?);
             }
             // An initial checkpoint still obeys the same lifetime rule as any
             // received history. The object already has original committed
@@ -449,6 +531,7 @@ impl Core {
     }
 
     pub fn sync_binding_info(&self, root: impl AsRef<Path>) -> Result<SyncBindingInfo> {
+        self.backend.check_path(&self.data_dir)?;
         self.sync_local_owner()?;
         let root = absolute_path(root.as_ref())?;
         let setup = self.sync_setup_for(&root)?;
@@ -467,7 +550,7 @@ impl Core {
             for plan in self.operations.values() {
                 if let Some(application) = &plan.sync_application
                     && application.root == setup.root
-                    && self.committed(&plan.operation_id)
+                    && self.committed(&plan.operation_id)?
                 {
                     selected.extend(application.selection.iter().cloned());
                 }
@@ -513,6 +596,7 @@ impl Core {
     }
 
     pub(crate) fn check_sync_operation_access(&self, operation: &str) -> Result<()> {
+        self.backend.check_path(&self.data_dir)?;
         if self
             .operations
             .get(operation)
@@ -526,47 +610,46 @@ impl Core {
         if self.actor.is_some() {
             Err(CoreError::new(
                 "syncOwnerRequired",
-                "Replica management requires the local owner",
+                UiMessage::error_core_sync_replica_management_requires_local_owner(),
             ))
         } else {
             Ok(())
         }
     }
     pub(crate) fn check_sync_setup_pending(&self, workspace: &str) -> Result<()> {
-        if self.operations.values().any(|p| {
-            p.sync_setup
+        for p in self.operations.values() {
+            if p.sync_setup
                 .as_ref()
                 .is_some_and(|s| s.identity.workspace_id == workspace)
-                && !self.committed(&p.operation_id)
-                && !self.resolved(&p.operation_id)
-        }) {
-            return Err(CoreError::new(
-                "syncSetupPending",
-                "Resume or resolve the original replica setup before allocating another",
-            ));
+                && !self.committed(&p.operation_id)?
+                && !self.resolved(&p.operation_id)?
+            {
+                return Err(CoreError::new(
+                    "syncSetupPending",
+                    UiMessage::error_core_sync_resume_or_resolve_original_replica_setup_before_allocating_another(),
+                ));
+            }
         }
         Ok(())
     }
-    pub(crate) fn sync_setups(&self) -> Vec<&SyncSetup> {
-        self.operations
-            .values()
-            .filter_map(|p| {
-                p.sync_setup
-                    .as_ref()
-                    .filter(|_| self.committed(&p.operation_id))
-            })
-            .collect()
+
+    pub(crate) fn sync_setups(&self) -> Result<Vec<&SyncSetup>> {
+        Ok(self
+            .committed_plans()?
+            .into_iter()
+            .filter_map(|plan| plan.sync_setup.as_ref())
+            .collect())
     }
     pub(crate) fn sync_setup_for(&self, root: &Path) -> Result<&SyncSetup> {
         let matches: Vec<_> = self
-            .sync_setups()
+            .sync_setups()?
             .into_iter()
             .filter(|s| Path::new(&s.root) == root)
             .collect();
         if matches.len() != 1 {
             return Err(CoreError::new(
                 "syncNotEnabled",
-                "This root does not have one committed replica binding",
+                UiMessage::error_core_sync_root_does_not_have_one_committed_replica_binding(),
             ));
         }
         Ok(matches.into_iter().next().unwrap())
@@ -576,14 +659,19 @@ impl Core {
         for plan in self.operations.values() {
             if let Some(publication) = &plan.sync_publication
                 && publication.root == root
-                && self.committed(&plan.operation_id)
+                && self.committed(&plan.operation_id)?
             {
-                let fact: serde_json::Value = serde_json::from_slice(&std::fs::read(
-                    self.journal_path(&plan.operation_id, "commit"),
-                )?)?;
+                if matches!(plan.kind.as_str(), "save" | "saveAs") {
+                    self.validate_file_save_plan(plan)?;
+                }
+                let fact: serde_json::Value = serde_json::from_slice(
+                    &self
+                        .backend
+                        .read_bytes(self.journal_path(&plan.operation_id, "commit"))?,
+                )?;
                 let sequence = fact["commitSequence"]
                     .as_u64()
-                    .ok_or_else(|| invalid("Publication lacks its durable commit order"))?;
+                    .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_replica_publication_lacks_its_durable_commit_order()))?;
                 records.push((sequence, publication));
             }
         }
@@ -613,14 +701,19 @@ impl Core {
                 || p.sync_application
                     .as_ref()
                     .is_some_and(|v| v.root == setup.root))
-                && self.committed(&p.operation_id)
+                && self.committed(&p.operation_id)?
             {
-                let fact: serde_json::Value = serde_json::from_slice(&std::fs::read(
-                    self.journal_path(&p.operation_id, "commit"),
-                )?)?;
+                if matches!(p.kind.as_str(), "save" | "saveAs") {
+                    self.validate_file_save_plan(p)?;
+                }
+                let fact: serde_json::Value = serde_json::from_slice(
+                    &self
+                        .backend
+                        .read_bytes(self.journal_path(&p.operation_id, "commit"))?,
+                )?;
                 let sequence = fact["commitSequence"]
                     .as_u64()
-                    .ok_or_else(|| invalid("Replica event lacks commit order"))?;
+                    .ok_or_else(|| invalid(weftext_messages::UiMessage::error_core_replica_replica_event_lacks_commit_order()))?;
                 records.push((sequence, p));
             }
         }
@@ -640,7 +733,11 @@ impl Core {
                     .find(|(key, _)| key == &c.object)
                     .map(|(_, p)| p.clone())
                     .or_else(|| objects.get(&c.object).map(|o| o.directory.clone()))
-                    .ok_or_else(|| invalid("Publication has no local object locator"))?;
+                    .ok_or_else(|| {
+                        invalid(
+                            UiMessage::error_core_sync_replica_publication_object_locator_missing(),
+                        )
+                    })?;
                 objects.insert(
                     c.object.clone(),
                     LocalObject {
@@ -677,21 +774,35 @@ impl Core {
         }) {
             return Ok(());
         }
+        let original_owner = if matches!(plan.kind.as_str(), "save" | "saveAs") {
+            self.validate_file_save_plan(plan)?;
+            match &plan.file_save.as_ref().unwrap().scope {
+                crate::file_save_scope::QualifiedInputScope::Library { binding } => {
+                    Some(&binding.workspace_id)
+                }
+                crate::file_save_scope::QualifiedInputScope::DeviceUnassigned => return Ok(()),
+            }
+        } else {
+            plan.workspace_id.as_ref()
+        };
         let matches: Vec<_> = self
-            .sync_setups()
+            .sync_setups()?
             .into_iter()
             .filter(|s| {
-                plan.transaction.as_ref().map_or_else(
-                    || Path::new(&plan.path).starts_with(&s.root),
-                    |t| t.request.root == s.root,
-                )
+                original_owner.is_none_or(|owner| owner == &s.identity.workspace_id)
+                    && plan.transaction.as_ref().map_or_else(
+                        || Path::new(&plan.path).starts_with(&s.root),
+                        |t| t.request.root == s.root,
+                    )
             })
             .collect();
         if matches.is_empty() {
             return Ok(());
         }
         if matches.len() != 1 {
-            return Err(invalid("Author operation crosses replica bindings"));
+            return Err(invalid(
+                UiMessage::error_core_sync_replica_operation_crosses_bindings(),
+            ));
         }
         let setup = &matches[0];
         let root = Path::new(&setup.root);
@@ -706,7 +817,7 @@ impl Core {
             let mut leaves = BTreeSet::new();
             for file in &transaction.files {
                 if let Some(key) = owner(&before, root, Path::new(&file.path)) {
-                    let object = before.get(&key).ok_or_else(|| CoreError::new("syncExternalChange", "An observed configuration has no installed basis; explicitly handle it before publishing"))?;
+                    let object = before.get(&key).ok_or_else(|| CoreError::new("syncExternalChange", UiMessage::error_core_sync_observed_configuration_has_no_installed_basis_explicitly_handle_it_before_publishing()))?;
                     let relative =
                         relative_to(Path::new(&file.path), Path::new(&object.directory))?;
                     if let Some(revision) = object.state.file_revisions.get(&relative) {
@@ -718,7 +829,7 @@ impl Core {
             let physical = self.sync_installed_stamps(&before, &tracked, Some(&leaves))?;
             for file in &transaction.files {
                 if let Some(key) = owner(&before, root, Path::new(&file.path)) {
-                    let object = before.get(&key).ok_or_else(|| CoreError::new("syncExternalChange", "An observed configuration has no installed basis; explicitly handle it before publishing"))?;
+                    let object = before.get(&key).ok_or_else(|| CoreError::new("syncExternalChange", UiMessage::error_core_sync_observed_configuration_has_no_installed_basis_explicitly_handle_it_before_publishing()))?;
                     let relative =
                         relative_to(Path::new(&file.path), Path::new(&object.directory))?;
                     let stamp_changed = object
@@ -732,7 +843,7 @@ impl Core {
                                 .ok_or_else(|| {
                                     CoreError::new(
                                         "identityUnavailable",
-                                        "Installed input physical evidence is unavailable",
+                                        UiMessage::error_core_sync_installed_input_physical_evidence_unavailable(),
                                     )
                                 })
                         })
@@ -747,7 +858,7 @@ impl Core {
                     {
                         return Err(CoreError::new(
                             "syncExternalChange",
-                            "An observed operation input differs from its replica base; explicitly adopt external content first",
+                            UiMessage::error_core_sync_observed_operation_input_differs_from_replica_base_explicitly_adopt_external_content_first(),
                         ));
                     }
                     dependencies.insert(key);
@@ -756,7 +867,7 @@ impl Core {
             match &transaction.mutation {
                 Mutation::Compound { .. } => {
                     return Err(invalid(
-                        "Compound namespace decisions require their original SyncApplication",
+                        UiMessage::error_core_sync_replica_compound_original_application_required(),
                     ));
                 }
                 Mutation::Update { files } => {
@@ -819,7 +930,11 @@ impl Core {
                                 && matches!(o.object, ObjectKey::Node(_) | ObjectKey::Directory(_))
                         })
                         .map(|(k, _)| k.clone())
-                        .ok_or_else(|| invalid("Relocated object has no replica basis"))?;
+                        .ok_or_else(|| {
+                            invalid(
+                                UiMessage::error_core_sync_replica_relocated_object_basis_missing(),
+                            )
+                        })?;
                     let parent = if Path::new(target).starts_with(root.join(".weftext-trash")) {
                         before[&key].state.parent.clone()
                     } else {
@@ -827,14 +942,15 @@ impl Core {
                     };
                     let node = objects.get_mut(&key).unwrap();
                     let source_hash = node.state.files.remove(old_leaf).ok_or_else(|| {
-                        invalid("Relocated canonical file is missing from replica basis")
+                        invalid(UiMessage::error_core_sync_replica_relocated_canonical_file_basis_missing())
                     })?;
                     node.state.files.insert(new_leaf.clone(), source_hash);
-                    let revision = node
-                        .state
-                        .file_revisions
-                        .remove(old_leaf)
-                        .ok_or_else(|| invalid("Relocated canonical revision is missing"))?;
+                    let revision = node.state.file_revisions.remove(old_leaf).ok_or_else(|| {
+                        invalid(
+                            UiMessage::error_core_sync_replica_relocated_canonical_revision_missing(
+                            ),
+                        )
+                    })?;
                     node.state.file_revisions.insert(new_leaf.clone(), revision);
                     node.state.name = if matches!(key, ObjectKey::Directory(_)) {
                         Path::new(target)
@@ -867,9 +983,9 @@ impl Core {
                 &mut objects,
                 root,
                 Path::new(&plan.path),
-                plan.node_id
-                    .as_ref()
-                    .ok_or_else(|| invalid("Node creation lacks an identity"))?,
+                plan.node_id.as_ref().ok_or_else(|| {
+                    invalid(UiMessage::error_core_sync_replica_node_creation_identity_missing())
+                })?,
             )?;
             patch(
                 &mut objects,
@@ -1008,7 +1124,7 @@ impl Core {
         observed: &crate::FileStamp,
     ) -> Result<()> {
         for setup in self
-            .sync_setups()
+            .sync_setups()?
             .into_iter()
             .filter(|s| path.starts_with(&s.root))
         {
@@ -1016,7 +1132,7 @@ impl Core {
             let Some(key) = owner(&local, Path::new(&setup.root), path) else {
                 continue;
             };
-            let object = local.get(&key).ok_or_else(|| CoreError::new("syncExternalChange", "An observed configuration has no installed basis; explicitly handle it before saving"))?;
+            let object = local.get(&key).ok_or_else(|| CoreError::new("syncExternalChange", UiMessage::error_core_sync_observed_configuration_has_no_installed_basis_explicitly_handle_it_before_saving()))?;
             let relative = relative_to(path, Path::new(&object.directory))?;
             let Some(revision) = object.state.file_revisions.get(&relative) else {
                 continue;
@@ -1029,13 +1145,13 @@ impl Core {
             let installed = stamps.get(revision).ok_or_else(|| {
                 CoreError::new(
                     "identityUnavailable",
-                    "Installed source physical evidence is unavailable",
+                    UiMessage::error_core_sync_installed_source_physical_evidence_unavailable(),
                 )
             })?;
             if installed != observed {
                 return Err(CoreError::new(
                     "syncExternalChange",
-                    "The observed file differs from its original installed physical basis; explicitly adopt external content first",
+                    UiMessage::error_core_sync_observed_file_differs_from_original_installed_physical_basis_explicitly_adopt_external_content_first(),
                 ));
             }
         }
@@ -1117,14 +1233,15 @@ fn parent_id(
         .ok_or_else(|| {
             CoreError::new(
                 "syncUnmanagedParent",
-                "Admit the containing directory before synchronizing its children",
+                UiMessage::error_core_sync_admit_containing_directory_before_synchronizing_children(
+                ),
             )
         })
 }
 fn relative_to(path: &Path, directory: &Path) -> Result<String> {
     Ok(path
         .strip_prefix(directory)
-        .map_err(|_| invalid("Object file is outside its owner"))?
+        .map_err(|_| invalid(UiMessage::error_core_sync_replica_object_file_outside_owner()))?
         .to_string_lossy()
         .replace('\\', "/"))
 }
@@ -1145,7 +1262,7 @@ fn register_directory(
     let marker: serde_json::Value = serde_json::from_slice(&file.after)?;
     let id = marker["directoryId"]
         .as_str()
-        .ok_or_else(|| invalid("Directory identity missing"))?;
+        .ok_or_else(|| invalid(UiMessage::error_core_sync_replica_directory_identity_missing()))?;
     let directory = path.parent().unwrap();
     let key = if directory == root {
         ObjectKey::RootDirectory(id.into())
@@ -1153,7 +1270,9 @@ fn register_directory(
         ObjectKey::Directory(id.into())
     };
     if objects.contains_key(&key) {
-        return Err(invalid("Directory identity already exists in this replica"));
+        return Err(invalid(
+            UiMessage::error_core_sync_replica_directory_identity_already_present(),
+        ));
     }
     let parent = if directory == root {
         None
@@ -1186,7 +1305,9 @@ fn register_node(
 ) -> Result<()> {
     let key = ObjectKey::Node(id.into());
     if objects.contains_key(&key) {
-        return Err(invalid("Node identity was already present in this replica"));
+        return Err(invalid(
+            UiMessage::error_core_sync_replica_node_identity_already_present(),
+        ));
     }
     let directory = path.parent().unwrap();
     let parent = parent_id(objects, root, directory.parent().unwrap())?;
@@ -1249,13 +1370,13 @@ fn patch(
                 .get(id)
                 .copied()
                 .or_else(|| blobs.get(id))
-                .ok_or_else(|| invalid("Original replica blob is missing"))
+                .ok_or_else(|| invalid(UiMessage::error_core_sync_replica_original_blob_missing()))
         })
         .transpose()?;
     if previous.map(Vec::as_slice) != file.before.as_deref() {
         return Err(CoreError::new(
             "syncExternalChange",
-            "Current bytes differ from the replica's observed base; preserve and explicitly adopt external content before publishing",
+            UiMessage::error_core_sync_current_bytes_differ_from_replica_s_observed_base_preserve_and_explicitly_adopt_external_content_before_publishing(),
         ));
     }
     let blob = hash(&file.after);

@@ -7,6 +7,7 @@ use super::*;
 use crate::operations::{
     CapturedDirectory, SnapshotBinding, read_blob, resource_path, sorted_entries,
 };
+use weftext_messages::UiMessage;
 
 const MAX_MEMBERS: usize = 5000;
 const MAX_BYTES: usize = 64 * 1024 * 1024;
@@ -137,7 +138,7 @@ impl Core {
                     None if self.query_rules_ever_committed(&root)? => {
                         return Err(CoreError::new(
                             "rulesUnavailable",
-                            "Previously committed library rules are missing",
+                            UiMessage::error_core_exchange_previously_committed_library_rules_missing(),
                         ));
                     }
                     None => {}
@@ -168,7 +169,7 @@ impl Core {
             if matches.len() != 1 {
                 return Err(CoreError::new(
                     "coverageIncomplete",
-                    "An admitted node has no unique current physical member",
+                    UiMessage::error_core_exchange_admitted_node_has_no_unique_current_physical_member(),
                 ));
             }
             let member = matches[0];
@@ -186,7 +187,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "coverageIncomplete",
-                    "An admitted node lacks its exact original placement",
+                    UiMessage::error_core_exchange_admitted_node_lacks_exact_original_placement(),
                 ));
             }
             if is_trash(&root, &source_path)? {
@@ -200,7 +201,7 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Admitted live member changed during capture",
+                    UiMessage::error_core_exchange_admitted_live_member_changed_during_capture(),
                 ));
             }
             let source = qualified.captured_file();
@@ -231,56 +232,73 @@ impl Core {
                 if data["version"] != 1 {
                     return Err(CoreError::new(
                         "resourceManifest",
-                        "Unsupported resource manifest version",
+                        UiMessage::error_core_operations_unsupported_resource_manifest_version(),
                     ));
                 }
-                let resources = data["resources"]
-                    .as_array()
-                    .ok_or_else(|| CoreError::new("resourceManifest", "Missing resources array"))?;
+                let resources = data["resources"].as_array().ok_or_else(|| {
+                    CoreError::new(
+                        "resourceManifest",
+                        UiMessage::error_core_operations_missing_resources_array(),
+                    )
+                })?;
                 if resources.len() > 64 {
                     return Err(CoreError::new(
                         "budget",
-                        "At most 64 registered resources per owner",
+                        UiMessage::error_core_exchange_at_most64_registered_resources_per_owner(),
                     ));
                 }
                 let mut ids = BTreeSet::new();
                 for resource in resources {
-                    let id = resource["resourceId"]
-                        .as_str()
-                        .ok_or_else(|| CoreError::new("resourceManifest", "Missing resource ID"))?;
+                    let id = resource["resourceId"].as_str().ok_or_else(|| {
+                        CoreError::new(
+                            "resourceManifest",
+                            UiMessage::error_core_operations_missing_resource_i_d(),
+                        )
+                    })?;
                     valid_operation_id(id)?;
                     if !ids.insert(id) {
-                        return Err(CoreError::new("resourceManifest", "Duplicate resource ID"));
+                        return Err(CoreError::new(
+                            "resourceManifest",
+                            UiMessage::error_core_operations_duplicate_resource_i_d(),
+                        ));
                     }
                     let name = resource["path"].as_str().ok_or_else(|| {
-                        CoreError::new("resourceManifest", "Missing resource path")
+                        CoreError::new(
+                            "resourceManifest",
+                            UiMessage::error_core_operations_missing_resource_path(),
+                        )
                     })?;
                     let path = resource_path(owner, name)?;
                     if is_private_tree(&root, &path) || is_trash(&root, &path)? {
                         return Err(CoreError::new(
                             "resourcePath",
-                            "Resource is inside an omitted internal subtree",
+                            UiMessage::error_core_exchange_resource_inside_omitted_internal_subtree(
+                            ),
                         ));
                     }
                     let input = self.native_export_file(&witness, &path)?;
                     let file = input.binding.captured.as_ref().ok_or_else(|| {
-                        CoreError::new("resourceMissing", "Registered resource file is absent")
+                        CoreError::new(
+                            "resourceMissing",
+                            UiMessage::error_core_operations_registered_resource_file_absent(),
+                        )
                     })?;
                     if !self.admitted_resource(
                         id,
                         &witness.workspace_id,
                         node_id,
                         &file.stamp.identity,
-                    ) {
+                    )? {
                         return Err(CoreError::new(
                             "resourceUnadmitted",
-                            "Resource lacks its exact physical admission",
+                            UiMessage::error_core_exchange_resource_lacks_exact_physical_admission(
+                            ),
                         ));
                     }
                     let mut entry = NativeEntry::new(Role::Resource, &file.bytes);
                     entry.owner_node_id = Some(node_id.clone());
                     entry.resource_id = Some(id.into());
-                    entry.revision = self.accepted_revision(file);
+                    entry.revision = self.accepted_revision(file)?;
                     put(
                         &mut package,
                         relative(&root, &file.path)?,
@@ -301,7 +319,7 @@ impl Core {
                 self.native_export_file(&witness, &owner.join("weftext.annotations.json"))?;
             if let Some(file) = &annotation.binding.captured {
                 knowledge::decode_annotations(&file.bytes)
-                    .map_err(|e| CoreError::new(&e.code, e.message))?;
+                    .map_err(|e| CoreError::from_knowledge(&e.code.clone(), e))?;
                 let mut entry = NativeEntry::new(Role::Annotations, &file.bytes);
                 entry.owner_node_id = Some(node_id.clone());
                 put(
@@ -324,10 +342,10 @@ impl Core {
                 .to_vec()
             });
         weftext_data::Schema::from_author_json(&decode(&schema)?)
-            .map_err(|e| CoreError::new("schemaUnavailable", e.to_string()))?;
+            .map_err(|e| CoreError::from_data("schemaUnavailable", e))?;
         let mut schema_entry = NativeEntry::new(Role::Schema, &schema);
         if let Some(file) = captured_named(&witness, ".weftext-schema.json") {
-            schema_entry.revision = self.accepted_revision(file);
+            schema_entry.revision = self.accepted_revision(file)?;
         }
         put(
             &mut package,
@@ -382,8 +400,10 @@ impl Core {
                 continue;
             }
             package.manifest.losses.push(NativeLoss {
-                path, code: "unregisteredFileOmitted".into(),
-                detail: "Unregistered/raw content or the named internal subtree is outside admitted native content; local history and unknown files require a complete backup".into(),
+                path,
+                code: "unregisteredFileOmitted".into(),
+                description: UiMessage::loss_core_native_export_unregistered_file_omitted().into(),
+                product_diagnostics: Vec::new(),
             });
         }
         native_input_budget(&witness)?;
@@ -410,7 +430,7 @@ impl Core {
         if !same_path(&absolute_path(root.as_ref())?, &witness.root) {
             return Err(CoreError::new(
                 "outsideRoot",
-                "Native export witness belongs to another root",
+                UiMessage::error_core_exchange_native_export_witness_belongs_to_another_root(),
             ));
         }
         let _held = self.native_export_guards(witness)?;
@@ -419,11 +439,7 @@ impl Core {
 
     fn native_export_admissions(&self, workspace: &str) -> Result<Vec<(String, FileIdentity)>> {
         let mut births = BTreeMap::new();
-        for plan in self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-        {
+        for plan in self.committed_plans()?.into_iter() {
             for birth in self.read_births(&plan.operation_id)? {
                 if birth.workspace_id != workspace {
                     continue;
@@ -434,14 +450,14 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "coverageIncomplete",
-                        "Competing admitted node identities",
+                        UiMessage::error_core_exchange_competing_admitted_node_identities(),
                     ));
                 }
                 births.insert(birth.node_id, birth.identity);
                 if births.len() > MAX_MEMBERS {
                     return Err(CoreError::new(
                         "budget",
-                        "Native export exceeds 5000 admitted nodes",
+                        UiMessage::error_core_exchange_native_export_exceeds5000_admitted_nodes(),
                     ));
                 }
             }
@@ -456,12 +472,14 @@ impl Core {
         let mut omitted = vec![];
         let mut metadata_bytes = root.as_os_str().len() * 2 + std::mem::size_of::<PathBuf>();
         while let Some(path) = queue.pop() {
-            let guard = ParentGuard::acquire(&path.join(".native-export-membership"))?;
+            let guard =
+                ParentGuard::acquire(&self.backend, &path.join(".native-export-membership"))?;
             let (entries, complete) = guard.directory_entries(MAX_MEMBERS)?;
             if !complete {
                 return Err(CoreError::new(
                     "coverageIncomplete",
-                    "Native export membership enumeration is incomplete",
+                    UiMessage::error_core_exchange_native_export_membership_enumeration_incomplete(
+                    ),
                 ));
             }
             let parent = guard.directory_identity()?;
@@ -484,16 +502,18 @@ impl Core {
             directories.push(directory);
             for (name, attrs) in entries {
                 let child = path.join(name);
-                if attrs & (0x400 | 0x1000 | 0x40000 | 0x100000 | 0x400000) != 0 {
+                if attrs.is_unsupported() {
                     return Err(CoreError::new(
                         "unsupportedPath",
-                        "Native membership includes a reparse, offline or placeholder object",
+                        UiMessage::error_core_exchange_native_membership_includes_reparse_offline_or_placeholder_object(),
                     ));
                 }
-                if attrs & 0x10 != 0 {
+                if attrs.is_directory() {
                     if is_private_tree(root, &child) {
-                        let omitted_guard =
-                            ParentGuard::acquire(&child.join(".native-export-omitted"))?;
+                        let omitted_guard = ParentGuard::acquire(
+                            &self.backend,
+                            &child.join(".native-export-omitted"),
+                        )?;
                         let omitted_path = display(&child);
                         native_metadata_charge(
                             &mut metadata_bytes,
@@ -509,7 +529,7 @@ impl Core {
                     }
                 } else {
                     self.check_pending(&child)?;
-                    let leaf = ParentGuard::acquire(&child)?;
+                    let leaf = ParentGuard::acquire(&self.backend, &child)?;
                     let handle = leaf.open_placement_file()?;
                     let actual = stamp(&handle)?;
                     self.check_pending_identity(&actual.identity)?;
@@ -529,7 +549,8 @@ impl Core {
                 {
                     return Err(CoreError::new(
                         "budget",
-                        "Native export namespace exceeds 5000 members",
+                        UiMessage::error_core_exchange_native_export_namespace_exceeds5000_members(
+                        ),
                     ));
                 }
             }
@@ -547,7 +568,7 @@ impl Core {
         path: &Path,
     ) -> Result<SnapshotWitness> {
         self.check_pending(path)?;
-        let guard = ParentGuard::acquire(path)?;
+        let guard = ParentGuard::acquire(&self.backend, path)?;
         let parent = guard.directory_identity()?;
         let observed = witness
             .observations
@@ -562,7 +583,7 @@ impl Core {
                 if observed.is_none_or(|f| f.stamp != actual || f.parent != parent) {
                     return Err(CoreError::new(
                         "scopeChanged",
-                        "Native input differs from original namespace observation",
+                        UiMessage::error_core_exchange_native_input_differs_from_original_namespace_observation(),
                     ));
                 }
                 self.check_pending_identity(&actual.identity)?;
@@ -585,9 +606,12 @@ impl Core {
     }
 
     fn native_export_trash_member(&self, witness: &NativeExportWitness, path: &Path) -> Result<()> {
-        let relative = path
-            .strip_prefix(&witness.root)
-            .map_err(|_| CoreError::new("outsideRoot", "Trash member is outside root"))?;
+        let relative = path.strip_prefix(&witness.root).map_err(|_| {
+            CoreError::new(
+                "outsideRoot",
+                UiMessage::error_core_exchange_trash_member_outside_root(),
+            )
+        })?;
         let tree = witness
             .root
             .join(relative.components().take(2).collect::<PathBuf>());
@@ -599,25 +623,21 @@ impl Core {
             .ok_or_else(|| {
                 CoreError::new(
                     "coverageIncomplete",
-                    "Trash tree is not in the captured membership",
+                    UiMessage::error_core_exchange_trash_tree_not_in_captured_membership(),
                 )
             })?;
-        if !self
-            .operations
-            .values()
-            .filter(|p| self.committed(&p.operation_id))
-            .any(|p| {
-                p.transaction.as_ref().is_some_and(|t| {
-                    t.is_trash()
-                        && matches!(&t.mutation,
+        if !self.committed_plans()?.into_iter().any(|p| {
+            p.transaction.as_ref().is_some_and(|t| {
+                t.is_trash()
+                    && matches!(&t.mutation,
                 Mutation::Relocate { target, source_identity, .. }
                 if same_path(Path::new(target), &tree) && source_identity == identity)
-                })
             })
-        {
+        }) {
             return Err(CoreError::new(
                 "coverageIncomplete",
-                "Trash member has no original physical tree placement",
+                UiMessage::error_core_exchange_trash_member_has_no_original_physical_tree_placement(
+                ),
             ));
         }
         Ok(())
@@ -626,27 +646,31 @@ impl Core {
     fn native_export_guards(
         &self,
         witness: &NativeExportWitness,
-    ) -> Result<(Vec<ParentGuard>, Vec<File>)> {
+    ) -> Result<(Vec<ParentGuard>, Vec<backend::BoundFile>)> {
         let mut guards = vec![];
         let mut handles = vec![];
         for directory in &witness.directories {
             let guard = ParentGuard::acquire(
+                &self.backend,
                 &Path::new(&directory.path).join(".native-export-membership"),
             )?;
             if guard.directory_identity()? != directory.identity {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Native export parent/root object changed",
+                    UiMessage::error_core_exchange_native_export_parent_root_object_changed(),
                 ));
             }
             guards.push(guard);
         }
         for (path, identity) in &witness.omitted_directories {
-            let guard = ParentGuard::acquire(&Path::new(path).join(".native-export-omitted"))?;
+            let guard = ParentGuard::acquire(
+                &self.backend,
+                &Path::new(path).join(".native-export-omitted"),
+            )?;
             if guard.directory_identity()? != *identity {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Native export omitted subtree object changed",
+                    UiMessage::error_core_exchange_native_export_omitted_subtree_object_changed(),
                 ));
             }
             guards.push(guard);
@@ -655,11 +679,11 @@ impl Core {
             let binding = &input.binding;
             let path = Path::new(&binding.path);
             self.check_pending(path)?;
-            let guard = ParentGuard::acquire(path)?;
+            let guard = ParentGuard::acquire(&self.backend, path)?;
             if guard.directory_identity()? != binding.parent {
                 return Err(CoreError::new(
                     "staleBase",
-                    "Native export input parent changed",
+                    UiMessage::error_core_exchange_native_export_input_parent_changed(),
                 ));
             }
             match (&binding.captured, guard.open_read_guard_file()) {
@@ -669,7 +693,7 @@ impl Core {
                     if actual != original.stamp || read_blob(&mut handle)? != original.bytes {
                         return Err(CoreError::new(
                             "staleBase",
-                            "Native export input object or bytes changed",
+                            UiMessage::error_core_exchange_native_export_input_object_or_bytes_changed(),
                         ));
                     }
                     handles.push(handle);
@@ -679,7 +703,7 @@ impl Core {
                 _ => {
                     return Err(CoreError::new(
                         "staleBase",
-                        "Native export absent input became present",
+                        UiMessage::error_core_exchange_native_export_absent_input_became_present(),
                     ));
                 }
             }
@@ -690,7 +714,7 @@ impl Core {
         {
             return Err(CoreError::new(
                 "scopeChanged",
-                "Native export workspace or admitted membership changed",
+                UiMessage::error_core_exchange_native_export_workspace_or_admitted_membership_changed(),
             ));
         }
         for resource in &witness.resources {
@@ -705,10 +729,10 @@ impl Core {
                 &witness.workspace_id,
                 &resource.node_id,
                 &file.stamp.identity,
-            ) {
+            )? {
                 return Err(CoreError::new(
                     "resourceUnadmitted",
-                    "Native resource admission changed",
+                    UiMessage::error_core_exchange_native_resource_admission_changed(),
                 ));
             }
         }
@@ -718,16 +742,20 @@ impl Core {
 
     fn native_export_membership(&self, witness: &NativeExportWitness) -> Result<()> {
         for (path, identity) in &witness.omitted_directories {
-            let guard = ParentGuard::acquire(&Path::new(path).join(".native-export-omitted"))?;
+            let guard = ParentGuard::acquire(
+                &self.backend,
+                &Path::new(path).join(".native-export-omitted"),
+            )?;
             if guard.directory_identity()? != *identity {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Native export omitted subtree object changed",
+                    UiMessage::error_core_exchange_native_export_omitted_subtree_object_changed(),
                 ));
             }
         }
         for directory in &witness.directories {
             let guard = ParentGuard::acquire(
+                &self.backend,
                 &Path::new(&directory.path).join(".native-export-membership"),
             )?;
             let (entries, complete) = guard.directory_entries(MAX_MEMBERS)?;
@@ -737,17 +765,17 @@ impl Core {
             {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Native export observed membership changed",
+                    UiMessage::error_core_exchange_native_export_observed_membership_changed(),
                 ));
             }
         }
         for observed in &witness.observations {
-            let guard = ParentGuard::acquire(Path::new(&observed.path))?;
+            let guard = ParentGuard::acquire(&self.backend, Path::new(&observed.path))?;
             let handle = guard.open_placement_file()?;
             if guard.directory_identity()? != observed.parent || stamp(&handle)? != observed.stamp {
                 return Err(CoreError::new(
                     "scopeChanged",
-                    "Native export observed file identity or metadata changed",
+                    UiMessage::error_core_exchange_native_export_observed_file_identity_or_metadata_changed(),
                 ));
             }
         }
@@ -759,9 +787,12 @@ fn same_path(a: &Path, b: &Path) -> bool {
     crate::history::history_relative_path(a, b).is_some_and(|path| path.as_os_str().is_empty())
 }
 fn is_trash(root: &Path, path: &Path) -> Result<bool> {
-    let relative = path
-        .strip_prefix(root)
-        .map_err(|_| CoreError::new("outsideRoot", "Native member is outside root"))?;
+    let relative = path.strip_prefix(root).map_err(|_| {
+        CoreError::new(
+            "outsideRoot",
+            UiMessage::error_core_exchange_native_member_outside_root(),
+        )
+    })?;
     Ok(relative.components().next().is_some_and(|part| {
         part.as_os_str()
             .to_string_lossy()
@@ -797,7 +828,7 @@ fn native_input_budget(witness: &NativeExportWitness) -> Result<()> {
     {
         return Err(CoreError::new(
             "budget",
-            "Native export selected/retained inputs exceed 5000 files or 64 MiB",
+            UiMessage::error_core_exchange_native_export_selected_retained_inputs_exceed5000_files_or64_mi_b(),
         ));
     }
     Ok(())
@@ -807,7 +838,10 @@ fn native_metadata_charge(total: &mut usize, bytes: usize) -> Result<()> {
         .checked_add(bytes)
         .filter(|total| *total <= MAX_BYTES)
         .ok_or_else(|| {
-            CoreError::new("budget", "Native export namespace metadata exceeds 64 MiB")
+            CoreError::new(
+                "budget",
+                UiMessage::error_core_exchange_native_export_namespace_metadata_exceeds64_mi_b(),
+            )
         })?;
     Ok(())
 }
@@ -819,7 +853,7 @@ fn native_incoming_budget(witness: &NativeExportWitness, bytes: u64) -> Result<(
     {
         return Err(CoreError::new(
             "budget",
-            "Native export selected input exceeds the retained byte budget",
+            UiMessage::error_core_exchange_native_export_selected_input_exceeds_retained_byte_budget(),
         ));
     }
     Ok(())
@@ -845,7 +879,7 @@ fn native_style(package: &mut NativePackage) -> Result<()> {
         .ok_or_else(|| {
             CoreError::new(
                 "styleSelection",
-                "Enabled style has no exact resource in this workspace",
+                UiMessage::error_core_exchange_enabled_style_has_no_exact_resource_in_workspace(),
             )
         })?;
     if settings["defaultStyle"]["entryFunction"]
@@ -854,7 +888,7 @@ fn native_style(package: &mut NativePackage) -> Result<()> {
     {
         return Err(CoreError::new(
             "styleSelection",
-            "Unsupported style entry function",
+            UiMessage::error_core_exchange_unsupported_style_entry_function(),
         ));
     }
     let entry = package
@@ -867,7 +901,7 @@ fn native_style(package: &mut NativePackage) -> Result<()> {
         .ok_or_else(|| {
             CoreError::new(
                 "styleSelection",
-                "Selected style is not the admitted live style resource",
+                UiMessage::error_core_exchange_selected_style_not_admitted_live_style_resource(),
             )
         })?;
     decode(&package.files["Styles/library-style.typ"])?;
@@ -892,7 +926,7 @@ mod tests {
             let root = temp.path().join("Library");
             let mut core = Core::new(temp.path().join("private")).unwrap();
             core.create_library(&root).unwrap();
-            let note = core.create_note(&root, &root, "Note").unwrap();
+            let note = core.create_note_fixture(&root, &root, "Note").unwrap();
             let source = PathBuf::from(&note.path);
             let plan = core
                 .prepare_import_resource(

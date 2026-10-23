@@ -1,4 +1,5 @@
 """Stage-three read-only diagnostics, exact fragment proposals and current-cut refusal."""
+from _creation_result import created_document
 import json
 from pathlib import Path
 import sys
@@ -13,7 +14,7 @@ class LinkDiagnostics(unittest.TestCase):
     def setUp(self):
         self.folder=Path(tempfile.mkdtemp(prefix='weftext-links-'))
         self.root=self.folder/'library'
-        self.server=Server(['--no-browser','--data-dir',str(self.folder/'state')])
+        self.server=Server(['--data-dir',str(self.folder/'state')])
         self.call('/api/library/create',{'path':str(self.root),'operationId':uid()})
         self.target=self.note('目标','= 路线图 <route>\n\n目标正文')
         self.current=self.note('来源','路线图 route\n\n#link("'+self.ref(self.target)+'#lost")[片段失效]\n#link("weftext-node://'+self.target['workspaceId']+'/'+uid()+'")[缺失]\n')
@@ -23,7 +24,7 @@ class LinkDiagnostics(unittest.TestCase):
     def call(self,route,body=None,status=200):
         code,value,_=self.server.call(route,body);self.assertEqual(code,status,value);return value
     def note(self,name,body):
-        doc=self.call('/api/note/create',{'root':str(self.root),'parent':str(self.root),'name':name,'operationId':uid()})
+        doc=created_document(self.call('/api/note/create',{'root':str(self.root),'parent':str(self.root),'name':name,'operationId':uid()}))
         source=doc['source']+'\n\n'+body
         self.call('/api/save',{'sessionId':doc['sessionId'],'baseId':doc['baseId'],'source':source,'operationId':uid()})
         return self.call('/api/open',{'root':str(self.root),'path':doc['path']})

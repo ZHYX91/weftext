@@ -1,10 +1,12 @@
+import { message } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { QueryRefreshQueue, queryRefreshKey } from "./query-refresh";
 import { QueryPanel, defaultPreference, queryPlanRefreshInput, type QueryPlanInputs, type QueryResult } from "./query-panel";
 
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
-const result = (cutId: string): QueryResult => ({ cutId, rows: [], diagnostics: [], coverage: "complete", freshness: "current", totalKnown: 0, limited: false });
+import { localQueryResult } from "./query-result.test-support";
+const result=(cutId:string):QueryResult=>localQueryResult({cutId});
 
 /** Exercise the real panel's controller paths without mounting its rendering shell. */
 function panelHarness(request: (path: string, body: unknown) => Promise<unknown>) {
@@ -138,15 +140,21 @@ test("saved current and pinned reads use the same panel scheduler, while a diffe
   assert.equal(runs, 3); assert.deepEqual(selections, [{ mode: "current", key: "saved" }, { mode: "pinned", key: "saved", revision: "exact-a" }, { mode: "pinned", key: "saved", revision: "exact-b" }]);
 });
 
-test("a saved definition's explicit committed-but-unavailable receipt retires its environment and retains the original operation", async () => {
-  for (const code of ["committedResultUnavailable", "permissionDenied"]) {
-    const bodies: unknown[] = [];
-    const { state, internals } = panelHarness(async (path, body) => { assert.equal(path, "/api/query/definition/save"); bodies.push(body); throw Object.assign(new Error("owner unavailable"), { code }); });
-    Object.assign(state.host, { getDocument: () => ({ root: "D:/notes", nodeId: "owner", sessionId: "original-session", source: "author draft", serial: 7, baseId: "original-base", path: "D:/notes/A.typ" }), savedDefinition: async () => { throw new Error("no opened document should be invented"); } });
-    state.result = result("old-cut"); await internals.saveDefinition("Saved");
-    if (code === "committedResultUnavailable") {
-      assert.equal(state.environmentEpoch, 1); assert.equal(state.result.superseded, true); assert.ok(state.savedPending);
-      await internals.saveDefinition("Changed display input"); assert.deepEqual(bodies[1], bodies[0]);
-    } else { assert.equal(state.environmentEpoch, 0); assert.equal(state.result.superseded, undefined); assert.equal(state.savedPending, null); }
-  }
+test("a saved definition keeps its frozen original through ordinary errors and delivers its committed fact", async () => {
+  const calls: { path: string; body: unknown }[] = [];
+  const { state, internals } = panelHarness(async (path, body) => {
+    calls.push({ path, body });
+    if (path === "/api/query/definition/save") throw Object.assign(new Error("owner unavailable"), { code: "permissionDenied" });
+    const id = (body as { operationId: string }).operationId;
+    assert.equal(path, "/api/operations/status");
+    return { operationId: id, status: "committed", documentError: { code: "committedResultUnavailable", explanation: message("queryDefinition.saveReceiptUnavailable"), diagnostics: [], causes: [] } };
+  });
+  let delivered = 0;
+  Object.assign(state.host, { getDocument: () => ({ root: "D:/notes", nodeId: "owner", sessionId: "original-session", source: "author draft", serial: 7, baseId: "original-base", path: "D:/notes/A.typ" }), savedDefinition: async () => { delivered++; throw new Error("document delivery unavailable"); } });
+  state.result = result("old-cut"); await internals.saveDefinition("Saved");
+  assert.equal(delivered, 1); assert.ok(state.savedPending);
+  const original = structuredClone((state.savedPending as { body: unknown }).body);
+  await internals.saveDefinition("Changed display input");
+  assert.equal(delivered, 2); assert.deepEqual((state.savedPending as { body: unknown }).body, original);
+  assert.deepEqual(calls.map(call => call.path), ["/api/query/definition/save", "/api/operations/status", "/api/operations/status"]);
 });

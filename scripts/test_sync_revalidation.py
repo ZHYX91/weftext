@@ -8,6 +8,7 @@ transcripts and owned-process evidence stay in a fresh explicit output directory
 Run: python scripts/test_sync_revalidation.py EXE [exact_test_name ...]
 Set WEFTEXT_SYNC_EVIDENCE_DIR to a new workspace output directory.
 """
+from _creation_result import created_document
 import copy
 import hashlib
 import json
@@ -70,15 +71,15 @@ class SyncRevalidation(SyncCompound):
         (self.folder / 'case.json').write_text(
             json.dumps({'test': self._testMethodName}) + '\n', encoding='utf-8')
         self.servers, self.transfer_number = [], 0
-        self.a = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-a')], 'A')
-        self.b = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-b')], 'B')
+        self.a = self.start_server([ '--data-dir', str(self.folder / 'state-a')], 'A')
+        self.b = self.start_server([ '--data-dir', str(self.folder / 'state-b')], 'B')
         self.ra, self.rb = self.folder / 'library-a', self.folder / 'library-b'
         self.call(self.a, '/api/library/create', path=str(self.ra), operationId=uid())
         self.with_schema = 'absent_schema' not in self._testMethodName
         if self.with_schema:
             self.install_schema(self.a, self.ra, 'semantic_baseline_title')
-        doc = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra),
-                        name='Note', operationId=uid())
+        doc = created_document(self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra),
+                        name='Note', operationId=uid()))
         self.key = {'kind': 'node', 'id': doc['nodeId']}
         self.keys = {'Note': self.key}
         if 'missing_annotation_target' in self._testMethodName:
@@ -210,8 +211,8 @@ class SyncRevalidation(SyncCompound):
             names.append('Unrelated')
         self.native_keys = {}
         for name in names:
-            doc = self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra),
-                            name=name, operationId=uid())
+            doc = created_document(self.call(self.a, '/api/note/create', root=str(self.ra), parent=str(self.ra),
+                            name=name, operationId=uid()))
             key = {'kind': 'node', 'id': doc['nodeId']}
             self.native_keys[name] = key
             metadata = f'#metadata((id: "{doc["nodeId"]}"'
@@ -557,7 +558,7 @@ class SyncRevalidation(SyncCompound):
 
     def restart_a(self):
         self.close_server(self.a)
-        self.a = self.start_server(['--no-browser', '--data-dir', str(self.folder / 'state-a')], 'A-restart')
+        self.a = self.start_server([ '--data-dir', str(self.folder / 'state-a')], 'A-restart')
 
     def new_received_source(self, suffix):
         self.saved = self.save(self.a, self.ra, Path('Note/Note.typ'), suffix)['source']
@@ -805,8 +806,20 @@ class SyncRevalidation(SyncCompound):
         self.assertEqual(len(losses), 1)
         self.assertEqual(losses[0]['path'],
                          f'weftext-node://{self.identity["workspaceId"]}/{self.key["id"]}')
-        self.assertIn(self.annotation_id, losses[0]['detail'])
-        self.assertIn('preserved-target-not-in-authorized-read-cut', losses[0]['detail'])
+        self.assertEqual(losses[0], {
+            'path': f'weftext-node://{self.identity["workspaceId"]}/{self.key["id"]}',
+            'code': 'annotationTargetUnavailable',
+            'explanation': {
+                'key': 'error.core.sync.revalidationWriter.annotationPreservedAwaitingReconnection',
+                'params': {'annotationId': self.annotation_id}},
+            'diagnostics': [],
+            'causes': [{
+                'code': 'preserved-target-not-in-authorized-read-cut',
+                'explanation': {
+                    'key': 'error.core.sync.revalidationWriter.annotationTargetQualificationUnavailable',
+                    'params': {}},
+                'diagnostics': []}],
+            'productDiagnostics': []})
         self.commit(self.b, self.plan)
         self.assert_applied()
         self.assertEqual((self.rb / 'Note/weftext.annotations.json').read_bytes(), self.annotation_bytes)

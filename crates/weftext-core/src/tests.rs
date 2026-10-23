@@ -39,7 +39,7 @@ fn temporary_admitted_membership_checks_release_cuts_on_rejection_commit_and_res
     let mut f = Fixture::new("plain");
     let root = f.temp.path().join("library");
     f.core.create_library(&root).unwrap();
-    f.core.create_note(&root, &root, "Note").unwrap();
+    f.core.create_note_fixture(&root, &root, "Note").unwrap();
     let cut = f.core.admitted_snapshot(&root).unwrap();
     let make_request = |name: &str| OperationRequest {
         operation_id: fresh(),
@@ -86,7 +86,9 @@ fn temporary_admitted_membership_checks_release_cuts_on_rejection_commit_and_res
         .core
         .prepare_admitted_operation(make_request("Late"), &cut.cut_id)
         .unwrap();
-    f.core.create_note(&root, &root, "Concurrent").unwrap();
+    f.core
+        .create_note_fixture(&root, &root, "Concurrent")
+        .unwrap();
     let bases = f
         .core
         .snapshots
@@ -143,7 +145,7 @@ fn owned_read_witness_releases_core_storage_but_keeps_exact_validation() {
     let mut f = Fixture::new("plain");
     let root = f.temp.path().join("library");
     f.core.create_library(&root).unwrap();
-    let doc = f.core.create_note(&root, &root, "Note").unwrap();
+    let doc = f.core.create_note_fixture(&root, &root, "Note").unwrap();
     let baseline = f.core.snapshots.len();
     let mut last = None;
     for _ in 0..40 {
@@ -189,7 +191,7 @@ fn failed_bounded_read_does_not_register_partial_snapshot_bytes() {
     let mut f = Fixture::new("plain");
     let root = f.temp.path().join("library");
     f.core.create_library(&root).unwrap();
-    let doc = f.core.create_note(&root, &root, "Note").unwrap();
+    let doc = f.core.create_note_fixture(&root, &root, "Note").unwrap();
     let huge = root.join("large-owned-fixture.bin");
     fs::File::create(&huge)
         .unwrap()
@@ -223,7 +225,10 @@ fn guarded_rename_move_trash_restore_preserve_node_and_physical_identity() {
     let mut f = Fixture::new("ordinary");
     let root = f.temp.path().join("library");
     f.core.create_library(&root).unwrap();
-    let note = f.core.create_note(&root, &root, "Original").unwrap();
+    let note = f
+        .core
+        .create_note_fixture(&root, &root, "Original")
+        .unwrap();
     let file_id = f.core.sessions[&note.session_id].stamp.identity.clone();
     let renamed = operation(
         &mut f.core,
@@ -301,7 +306,10 @@ fn frozen_plan_revalidation_no_replace_and_exact_retry() {
     let mut f = Fixture::new("ordinary");
     let root = f.temp.path().join("library");
     f.core.create_library(&root).unwrap();
-    let note = f.core.create_note(&root, &root, "Original").unwrap();
+    let note = f
+        .core
+        .create_note_fixture(&root, &root, "Original")
+        .unwrap();
     let request = OperationRequest {
         operation_id: fresh(),
         root: display(&root),
@@ -363,7 +371,7 @@ fn same_bytes_replacement_invalidates_snapshot_and_multi_file_reader_barrier() {
     let mut f = Fixture::new("ordinary");
     let root = f.temp.path().join("library");
     f.core.create_library(&root).unwrap();
-    let note = f.core.create_note(&root, &root, "Note").unwrap();
+    let note = f.core.create_note_fixture(&root, &root, "Note").unwrap();
     let source_path = PathBuf::from(&note.path);
     let annotations = source_path
         .parent()
@@ -421,6 +429,7 @@ fn same_bytes_replacement_invalidates_snapshot_and_multi_file_reader_barrier() {
         })
         .unwrap();
     journal::private_create(
+        &crate::BackendContext::local().unwrap(),
         &f.core.journal_path(&p.operation_id, "install"),
         b"{\"testCrash\":true}",
     )
@@ -547,7 +556,7 @@ fn exact_bom_crlf_and_invalid_native_source_are_preserved() {
     assert_eq!(doc.source, original);
     assert_eq!(doc.kind, "ordinary");
     let receipt = f.core.save(request(&doc, original)).unwrap();
-    assert_eq!(receipt.base_id, doc.base_id);
+    assert_eq!(receipt.receipt.base_id, doc.base_id);
     assert_eq!(fs::read(&f.path).unwrap(), original.as_bytes());
     assert!(!f.temp.path().join(".weftext-workspace.json").exists());
     let source = "\u{feff}= Changed\r\n#still-invalid(\n";
@@ -560,11 +569,11 @@ fn successive_saves_shorten_without_tail_and_rotate_only_their_base() {
     let mut f = Fixture::new("a very long original\n");
     let mut doc = f.open();
     let first = f.core.save(request(&doc, "短\n")).unwrap();
-    assert_ne!(first.base_id, doc.base_id);
-    doc.base_id = first.base_id;
+    assert_ne!(first.receipt.base_id, doc.base_id);
+    doc.base_id = first.receipt.base_id;
     let second = f.core.save(request(&doc, "x\n")).unwrap();
     assert_eq!(fs::read(&f.path).unwrap(), b"x\n");
-    assert_ne!(second.base_id, doc.base_id);
+    assert_ne!(second.receipt.base_id, doc.base_id);
 }
 
 #[test]
@@ -592,6 +601,11 @@ fn external_change_conflicts_and_draft_survives_restart() {
             .code,
         "draftConflict"
     );
+    let original_record = restarted
+        .current_session_draft_record(&restored.session_id)
+        .unwrap()
+        .unwrap()
+        .1;
     restarted
         .resolve_draft(
             &restored.session_id,
@@ -606,10 +620,11 @@ fn external_change_conflicts_and_draft_survives_restart() {
         fs::read_to_string(&f.path).unwrap(),
         "external + our draft\n"
     );
-    assert_eq!(
-        fs::read_dir(f.data.join("draft-history")).unwrap().count(),
-        2
-    );
+    let history = fs::read_dir(f.data.join("draft-history"))
+        .unwrap()
+        .map(|entry| fs::read(entry.unwrap().path()).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(history, vec![original_record]);
 }
 
 #[test]
@@ -641,7 +656,7 @@ fn stale_and_retry_input_are_distinct_from_commit() {
             ..request(&doc, "after")
         })
         .unwrap();
-    assert_eq!(first.base_id, retry.base_id);
+    assert_eq!(first.receipt.base_id, retry.receipt.base_id);
     assert_eq!(
         f.core
             .save(SaveRequest {
@@ -702,7 +717,7 @@ fn parent_chain_guards_block_ancestor_rename_and_leaf_replacement() {
     fs::create_dir(&parent).unwrap();
     let path = parent.join("note.typ");
     fs::write(&path, "x").unwrap();
-    let guard = ParentGuard::acquire(&path).unwrap();
+    let guard = ParentGuard::acquire(&crate::BackendContext::local().unwrap(), &path).unwrap();
     let file = guard.open_file(true, false).unwrap();
     assert!(fs::rename(&parent, temp.path().join("moved")).is_err());
     assert!(fs::rename(&path, parent.join("replaced.typ")).is_err());
@@ -727,7 +742,12 @@ fn namespace_leaf_rename_keeps_guards_and_identity_through_directory_move() {
     fs::create_dir(&target_parent).unwrap();
     fs::write(source.join("Original.typ"), "original content").unwrap();
 
-    let guard = backend::NamespaceGuard::acquire(&source, &target_parent).unwrap();
+    let guard = backend::NamespaceGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &source,
+        &target_parent,
+    )
+    .unwrap();
     let directory_id = guard.source_identity().unwrap();
     let leaf = guard.open_source_file("Original.typ", true).unwrap();
     let file_id = backend::stamp(&leaf).unwrap().identity;
@@ -764,7 +784,12 @@ fn namespace_leaf_rename_refuses_an_occupied_name_without_replacing_either_file(
     fs::create_dir(&source).unwrap();
     fs::write(source.join("Original.typ"), "original content").unwrap();
     fs::write(source.join("Occupied.typ"), "other content").unwrap();
-    let guard = backend::NamespaceGuard::acquire(&source, temp.path()).unwrap();
+    let guard = backend::NamespaceGuard::acquire(
+        &crate::BackendContext::local().unwrap(),
+        &source,
+        temp.path(),
+    )
+    .unwrap();
     let leaf = guard.open_source_file("Original.typ", true).unwrap();
     let file_id = backend::stamp(&leaf).unwrap().identity;
 
@@ -795,18 +820,18 @@ fn hard_link_alias_is_refused() {
 fn interrupted_write_third_state_and_partial_commit_never_reexecute() {
     let mut f = Fixture::new("before");
     let doc = f.open();
-    let session = f.core.sessions[&doc.session_id].clone();
-    let id = fresh();
-    let plan = journal::Plan::file(
-        id.clone(),
-        hash(b"proposal"),
-        &f.path,
-        Some(b"before".to_vec()),
-        b"after".to_vec(),
-        Some(session.stamp.identity),
-        "save",
+    let request = request(&doc, "after");
+    let id = request.operation_id.clone();
+    hosted::set_test_failpoint("saveStaged");
+    assert_eq!(f.core.save(request).unwrap_err().code, "injectedFailure");
+    assert_eq!(fs::read_to_string(&f.path).unwrap(), "before");
+    assert!(f.core.operations.contains_key(&id));
+    assert!(
+        !f.data
+            .join("journal")
+            .join(format!("{id}.commit.json"))
+            .exists()
     );
-    f.core.stage(plan).unwrap();
     fs::write(&f.path, "third external version").unwrap();
     fs::write(
         f.data.join("journal").join(format!("{id}.commit.json")),
@@ -814,6 +839,19 @@ fn interrupted_write_third_state_and_partial_commit_never_reexecute() {
     )
     .unwrap();
     drop(f.core);
+    assert!(Core::new(&f.data).is_err());
+    let invalid_decision = f.data.join("journal").join(format!("{id}.commit.json"));
+    assert_eq!(
+        fs::read(&invalid_decision).unwrap(),
+        b"{incomplete decision"
+    );
+    // The constructor never repairs an unknown decision. The fixture retains
+    // that original explicitly before exercising the separate pending plan.
+    fs::rename(
+        &invalid_decision,
+        invalid_decision.with_extension("owned-test-parked"),
+    )
+    .unwrap();
     let mut restarted = Core::new(&f.data).unwrap();
     assert_eq!(
         restarted.open(&f.path, None).unwrap_err().code,
@@ -846,12 +884,15 @@ fn native_birth_admission_duplicate_and_unmanaged_browse() {
     let mut f = Fixture::new("outside");
     let root = f.temp.path().join("library");
     let library = f.core.create_library(&root).unwrap();
-    let doc = f.core.create_note(&root, &root, "A").unwrap();
+    let doc = f.core.create_note_fixture(&root, &root, "A").unwrap();
     assert_eq!(doc.kind, "managed");
     assert_eq!(doc.workspace_id, Some(library.workspace_id));
     let first_id = doc.node_id.clone().unwrap();
     assert_eq!(
-        f.core.create_note(&root, &root, "A").unwrap_err().code,
+        f.core
+            .create_note_fixture(&root, &root, "A")
+            .unwrap_err()
+            .code,
         "exists"
     );
     assert_eq!(f.core.create_library(&root).unwrap_err().code, "exists");
@@ -909,6 +950,98 @@ fn native_birth_admission_duplicate_and_unmanaged_browse() {
 }
 
 #[test]
+fn inventory_requalifies_complete_original_admissions_on_each_call() {
+    let mut f = Fixture::new("outside");
+    let root = f.temp.path().join("library");
+    let empty = f.temp.path().join("empty");
+    fs::create_dir(&empty).unwrap();
+    f.core.create_library(&root).unwrap();
+    let first = "00000000-0000-4000-8000-000000000001";
+    let last = "ffffffff-ffff-4fff-bfff-ffffffffffff";
+    for (operation_id, name) in [(first, "A"), (last, "Z")] {
+        let preview = f
+            .core
+            .prepare_operation(OperationRequest {
+                operation_id: operation_id.into(),
+                root: display(&root),
+                intent: OperationIntent::NewNode {
+                    parent: display(&root),
+                    name: name.into(),
+                    source: None,
+                },
+            })
+            .unwrap();
+        f.core
+            .execute_operation(operation_id, &preview.plan_id)
+            .unwrap();
+    }
+    let inventory = f.core.inventory(&root).unwrap();
+    assert_eq!(
+        inventory
+            .entries
+            .iter()
+            .filter(|entry| entry.identity_status == "admitted")
+            .count(),
+        2
+    );
+    let plural = f.core.journal_path(last, "births");
+    let birth = if plural.exists() {
+        plural
+    } else {
+        f.core.journal_path(last, "birth")
+    };
+    let original = fs::read(&birth).unwrap();
+    fs::write(&birth, b"invalid original birth").unwrap();
+    // A previous successful inventory cannot hide corrupt committed evidence.
+    // Even an empty ordinary directory takes the complete admission cut.
+    assert!(f.core.inventory(&root).is_err());
+    assert!(f.core.inventory(&empty).is_err());
+    assert_eq!(fs::read(&birth).unwrap(), b"invalid original birth");
+    fs::write(&birth, original).unwrap();
+    assert!(f.core.inventory(&root).unwrap().complete);
+    let restored_empty = f.core.inventory(&empty).unwrap();
+    assert!(restored_empty.complete && restored_empty.entries.is_empty());
+    let source = root.join("A/A.typ");
+    let source_guard = ParentGuard::acquire(&f.core.backend, &source).unwrap();
+    let protected_reader = source_guard.open_read_guard_file().unwrap();
+    let shared = f.core.inventory(&root).unwrap();
+    assert!(shared.complete);
+    assert_eq!(
+        shared
+            .entries
+            .iter()
+            .filter(|entry| entry.identity_status == "admitted")
+            .count(),
+        2
+    );
+    drop(protected_reader);
+    drop(source_guard);
+    let original = fs::read(&source).unwrap();
+    fs::write(&source, b"broken declaration").unwrap();
+    let changed = f.core.inventory(&root).unwrap();
+    assert_eq!(
+        changed
+            .entries
+            .iter()
+            .find(|entry| entry.relative_path == "A/A.typ")
+            .unwrap()
+            .identity_status,
+        "bindingConflict"
+    );
+    fs::write(&source, original).unwrap();
+    assert_eq!(
+        f.core
+            .inventory(&root)
+            .unwrap()
+            .entries
+            .iter()
+            .filter(|entry| entry.identity_status == "admitted")
+            .count(),
+        2
+    );
+}
+
+#[test]
 fn exact_rules_hide_ignored_and_browse_explicit_unmanaged_descendants() {
     let mut f = Fixture::new("outside");
     let root = f.temp.path().join("library");
@@ -939,7 +1072,7 @@ fn exact_rules_hide_ignored_and_browse_explicit_unmanaged_descendants() {
     assert_eq!(descendant.identity_status, "unmanaged");
     assert_eq!(
         f.core
-            .create_note(&root, root.join("unmanaged"), "New")
+            .create_note_fixture(&root, root.join("unmanaged"), "New")
             .unwrap_err()
             .code,
         "excludedBoundary"
@@ -1118,6 +1251,21 @@ fn creation_replays_exact_original_ids_and_rejects_new_intents() {
         .core
         .create_note_with_id(&root, &root, "标题 @key_", &node_op)
         .unwrap();
+    assert_eq!(created.node_ids, replay.node_ids);
+    let created = f
+        .core
+        .open(
+            Path::new(&created.path).join("标题 @key_.typ"),
+            Some(root.clone()),
+        )
+        .unwrap();
+    let replay = f
+        .core
+        .open(
+            Path::new(&replay.path).join("标题 @key_.typ"),
+            Some(root.clone()),
+        )
+        .unwrap();
     assert_eq!(created.node_id, replay.node_id);
     assert_eq!(created.source, replay.source);
     assert!(created.source.contains("\\@key\\_"));
@@ -1136,7 +1284,10 @@ fn creation_replays_exact_original_ids_and_rejects_new_intents() {
         f.core
             .operations
             .values()
-            .filter(|p| p.node_id.is_some())
+            .filter(|p| p
+                .transaction
+                .as_ref()
+                .is_some_and(|t| t.preview.kind == "newNode"))
             .count(),
         1
     );
@@ -1172,24 +1323,47 @@ fn stale_base_proposal_remains_unqualified_after_restart() {
 #[test]
 fn private_journal_publication_never_replaces_or_reads_partial_temps() {
     let mut f = Fixture::new("before");
-    let id = fresh();
+    let doc = f.open();
+    let request = request(&doc, "after");
+    let id = request.operation_id.clone();
+    let replacement = SaveRequest {
+        session_id: request.session_id.clone(),
+        base_id: request.base_id.clone(),
+        operation_id: id.clone(),
+        source: "replacement".into(),
+    };
     fs::write(
         f.data.join("journal").join(format!("{}.pending", fresh())),
         "partial unpublished payload",
     )
     .unwrap();
-    let plan = journal::Plan::file(
-        id.clone(),
-        hash(b"original"),
-        &f.path,
-        Some(b"before".to_vec()),
-        b"after".to_vec(),
-        None,
-        "save",
+    hosted::set_test_failpoint("saveStaged");
+    assert_eq!(f.core.save(request).unwrap_err().code, "injectedFailure");
+    assert_eq!(fs::read_to_string(&f.path).unwrap(), "before");
+    assert!(
+        !f.data
+            .join("journal")
+            .join(format!("{id}.commit.json"))
+            .exists()
     );
-    f.core.stage(plan.clone()).unwrap();
+    let plan = f.core.operations[&id].clone();
+    f.core.validate_file_save_plan(&plan).unwrap();
     let mut changed = plan;
     changed.after = b"replacement".to_vec();
+    changed.fingerprint = original_delivery::save_fingerprint(
+        &replacement,
+        &f.path,
+        None,
+        f.core.sessions[&doc.session_id].file_scope.clone().unwrap(),
+        &changed.file_save.as_ref().unwrap().draft_producer_id,
+    )
+    .unwrap();
+    let revision = fresh();
+    changed.content_revision = Some(revision.clone());
+    let receipt = changed.receipt.as_mut().unwrap();
+    receipt.base_id = revision.clone();
+    receipt.revision_id = Some(revision);
+    f.core.validate_file_save_plan(&changed).unwrap();
     assert_eq!(f.core.stage(changed).unwrap_err().code, "exists");
     assert!(fs::rename(f.data.join("journal"), f.data.join("moved-journal")).is_err());
     drop(f.core);
@@ -1200,14 +1374,15 @@ fn private_journal_publication_never_replaces_or_reads_partial_temps() {
 }
 
 #[test]
-fn selected_library_backup_excludes_foreign_plaintext_and_retains_draft_consumption() {
+fn selected_library_backup_excludes_foreign_plaintext_and_preserves_current_draft_and_archived_input()
+ {
     let mut f = Fixture::new("ordinary");
     let first = f.temp.path().join("L1");
     let second = f.temp.path().join("L2");
     f.core.create_library(&first).unwrap();
     f.core.create_library(&second).unwrap();
-    let a = f.core.create_note(&first, &first, "A").unwrap();
-    let b = f.core.create_note(&second, &second, "B").unwrap();
+    let a = f.core.create_note_fixture(&first, &first, "A").unwrap();
+    let b = f.core.create_note_fixture(&second, &second, "B").unwrap();
     f.core
         .persist_draft(&a.session_id, "selected retained proposal")
         .unwrap();
@@ -1247,10 +1422,7 @@ fn selected_library_backup_excludes_foreign_plaintext_and_retains_draft_consumpt
             }),
         "Explicit resolution must preserve the original selected proposal before backup"
     );
-    let marker = f
-        .core
-        .draft_path(&first.join("C/C.typ"))
-        .with_extension("relocation.json");
+    let marker = f.core.draft_path(&first.join("C/C.typ"));
     assert!(marker.exists());
     operation(
         &mut f.core,
@@ -1263,10 +1435,7 @@ fn selected_library_backup_excludes_foreign_plaintext_and_retains_draft_consumpt
     f.core
         .open(second.join("D/D.typ"), Some(second.clone()))
         .unwrap();
-    let foreign_marker = f
-        .core
-        .draft_path(&second.join("D/D.typ"))
-        .with_extension("relocation.json");
+    let foreign_marker = f.core.draft_path(&second.join("D/D.typ"));
     let target = f.temp.path().join("selected-backup");
     operation(
         &mut f.core,
@@ -1313,7 +1482,7 @@ fn readonly_source_and_resource_are_guarded_noop_dependencies_of_annotation_deci
     let mut f = Fixture::new("ordinary");
     let root = f.temp.path().join("library");
     f.core.create_library(&root).unwrap();
-    let note = f.core.create_note(&root, &root, "Note").unwrap();
+    let note = f.core.create_note_fixture(&root, &root, "Note").unwrap();
     let p = f
         .core
         .prepare_import_resource(&root, &note.path, "owned.bin", vec![1, 2, 3, 4], &fresh())
@@ -1385,7 +1554,7 @@ fn rich_copy_and_template_rewrite_self_refs_and_own_resource_bytes() {
     let mut f = Fixture::new("ordinary");
     let root = f.temp.path().join("library");
     let library = f.core.create_library(&root).unwrap();
-    let note = f.core.create_note(&root, &root, "Person").unwrap();
+    let note = f.core.create_note_fixture(&root, &root, "Person").unwrap();
     let id = note.node_id.clone().unwrap();
     let workspace = library.workspace_id;
     let source = format!(
@@ -1471,7 +1640,7 @@ fn admitted_compile_inputs_remain_frozen_and_selected_style_is_exact() {
     let mut f = Fixture::new("ordinary");
     let root = f.temp.path().join("library");
     f.core.create_library(&root).unwrap();
-    let note = f.core.create_note(&root, &root, "Note").unwrap();
+    let note = f.core.create_note_fixture(&root, &root, "Note").unwrap();
     fs::write(root.join("Note/input.txt"), b"first").unwrap();
     let before = f.core.read_library_style(&root).unwrap();
     let p = f

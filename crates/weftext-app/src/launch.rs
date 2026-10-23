@@ -1,276 +1,338 @@
-//! Console argument dispatch. Native hosts can bind `LocalService` directly.
-use crate::{
-    host_environment,
-    local_service::{InitialDocument, LocalService, LocalServiceOptions},
-};
+//! The two PE roles share earliest worker dispatch and one owner/service path.
+//! The console owns business CLI output; the default desktop owns native UI.
+use crate::host_environment;
+#[cfg(windows)]
+use crate::local_service::{InitialDocument, LocalServiceOptions};
 use clap::Parser;
-use std::{future::Future, io, path::PathBuf};
+use std::{ffi::OsString, io, path::PathBuf};
 
-#[derive(Parser)]
-#[command(
-    name = "weftext",
-    version,
-    about = "Weftext local Typst writing and knowledge tools"
-)]
-struct Args {
-    /// Run the bounded hosted service with an operator-owned configuration.
-    #[arg(long, conflicts_with_all = ["open", "root", "port"])]
-    server_config: Option<PathBuf>,
+#[derive(Debug, Clone, clap::Args)]
+pub struct ServeArgs {
+    #[arg(skip)]
+    pub data_dir: Option<PathBuf>,
+    /// Administrator-enrolled authority for the controlled Linux service.
+    #[arg(long)]
+    pub service_enrollment: Option<PathBuf>,
     #[arg(long, default_value_t = 0)]
-    port: u16,
+    pub port: u16,
+    #[arg(long,conflicts_with_all=["open","root","port"])]
+    pub server_config: Option<PathBuf>,
     #[arg(long)]
-    data_dir: Option<PathBuf>,
-    #[arg(long)]
-    open: Option<PathBuf>,
+    pub open: Option<PathBuf>,
     #[arg(long, requires = "open")]
-    root: Option<PathBuf>,
-    #[arg(long)]
-    no_browser: bool,
-    #[arg(long, hide = true, conflicts_with_all = ["notes_edit_worker", "server_config", "port", "data_dir", "open", "root", "no_browser"])]
-    render_worker: bool,
-    #[arg(long, hide = true, conflicts_with_all = ["render_worker", "server_config", "port", "data_dir", "open", "root", "no_browser"])]
-    notes_edit_worker: bool,
+    pub root: Option<PathBuf>,
 }
-
-enum Action {
-    RenderWorker,
-    NotesWorker,
-    Hosted {
-        data_dir: PathBuf,
-        config: PathBuf,
-    },
-    Local {
-        options: LocalServiceOptions,
-        browser: bool,
-    },
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServeReady<'a> {
+    pub schema_version: u32,
+    pub kind: &'static str,
+    pub url: &'a str,
+    pub owner_identity: &'a crate::local_client::OwnerIdentity,
 }
-
-impl Args {
-    fn action(self) -> io::Result<Action> {
-        // Internal workers never resolve a user directory or acquire Core.
-        if self.render_worker {
-            return Ok(Action::RenderWorker);
-        }
-        if self.notes_edit_worker {
-            return Ok(Action::NotesWorker);
-        }
-        let data_dir = match self.data_dir {
-            Some(path) => path,
-            None => default_data_dir()?,
-        };
-        if let Some(config) = self.server_config {
-            return Ok(Action::Hosted { data_dir, config });
-        }
-        Ok(Action::Local {
-            options: LocalServiceOptions {
-                data_dir,
-                port: self.port,
-                initial_document: self.open.map(|path| InitialDocument {
-                    path,
-                    root: self.root,
-                }),
-            },
-            browser: !self.no_browser,
-        })
+#[derive(Debug)]
+pub struct ServeError {
+    pub code: &'static str,
+    pub diagnostic: &'static str,
+}
+impl std::fmt::Display for ServeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.diagnostic)
     }
 }
-
-/// Resolve the persistent host default without creating it. This does not grant
-/// the current OS a supported Core backend; startup still checks that backend.
+impl std::error::Error for ServeError {}
+pub(crate) fn write_ready(url: &str, owner: &crate::local_client::OwnerIdentity) -> io::Result<()> {
+    use std::io::Write;
+    let mut output = std::io::stdout().lock();
+    serde_json::to_writer(
+        &mut output,
+        &ServeReady {
+            schema_version: 1,
+            kind: "ready",
+            url,
+            owner_identity: owner,
+        },
+    )?;
+    output.write_all(b"\n")?;
+    output.flush()
+}
 pub fn default_data_dir() -> io::Result<PathBuf> {
     host_environment::default_data_dir()
 }
 
-/// Run the installed console entry using the process arguments.
-pub async fn run() -> Result<(), Box<dyn std::error::Error>> {
-    match Args::parse().action()? {
-        Action::RenderWorker => crate::worker_main().or_else(|error| {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Worker {
+    Render,
+    Notes,
+}
+fn worker(arguments: &[OsString]) -> io::Result<Option<Worker>> {
+    let render = arguments.iter().any(|value| value == "--render-worker");
+    let notes = arguments.iter().any(|value| value == "--notes-edit-worker");
+    if !render && !notes {
+        return Ok(None);
+    }
+    if arguments.len() != 1 || render && notes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "An internal worker accepts exactly its one role flag",
+        ));
+    }
+    Ok(Some(if render {
+        Worker::Render
+    } else {
+        Worker::Notes
+    }))
+}
+/// Both synchronous executable mains call this before a runtime, path lookup,
+/// artifact discovery, clap business parsing, COM, Core or any GUI side effect.
+pub fn dispatch_worker() -> Option<Result<(), Box<dyn std::error::Error>>> {
+    match worker(&std::env::args_os().skip(1).collect::<Vec<_>>()) {
+        Ok(None) => None,
+        Err(error) => Some(Err(error.into())),
+        Ok(Some(Worker::Render)) => Some(crate::worker_main().or_else(|error| {
             crate::write_render_worker_failure(error, &mut std::io::stdout().lock())
-        }),
-        Action::NotesWorker => crate::notes_worker_main(),
-        Action::Hosted { data_dir, config } => {
-            let (core, data_dir) = host_environment::open_core(data_dir)?;
-            crate::hosted::serve(core, config, data_dir.join("legacy-office")).await
-        }
-        Action::Local { options, browser } => {
-            let service = LocalService::bind(options).await?;
-            println!(
-                "Weftext {}\n{}\n关闭此进程停止本地服务。",
-                env!("CARGO_PKG_VERSION"),
-                service.browser_url()
-            );
-            let address = service.browser_url().to_owned();
-            let handoff = async move {
-                if browser && let Err(error) = host_environment::open_browser(&address).await {
-                    eprintln!(
-                        "Default browser handoff failed or is unconfirmed: {error}. The local service remains running at the address above; --no-browser skips this handoff."
-                    );
-                }
-            };
-            // Serve while the OS handles the UI request: a launcher must not
-            // stall the very HTTP page the selected browser is trying to open.
-            serve_with_handoff(
-                service,
-                async {
-                    if let Err(error) = tokio::signal::ctrl_c().await {
-                        eprintln!(
-                            "Cannot monitor shutdown signal; stopping local service: {error}"
-                        );
-                    }
-                },
-                handoff,
-            )
-            .await?;
-            Ok(())
-        }
+        })),
+        Ok(Some(Worker::Notes)) => Some(crate::notes_worker_main()),
     }
 }
 
-async fn serve_with_handoff(
-    service: LocalService,
-    shutdown: impl Future<Output = ()> + Send + 'static,
-    handoff: impl Future<Output = ()>,
-) -> io::Result<()> {
-    let serving = service.serve_until(shutdown);
-    tokio::pin!(serving, handoff);
-    tokio::select! {
-        biased;
-        () = &mut handoff => serving.await,
-        result = &mut serving => {
-            eprintln!("Local service stopped before browser handoff completed; its outcome remains unconfirmed and no retry was sent.");
-            result
+#[derive(Debug, Parser)]
+#[command(name = "weftext", version, about = "Weftext Windows desktop")]
+struct DesktopArgs {
+    #[arg(long)]
+    data_dir: Option<PathBuf>,
+    #[arg(long,conflicts_with_all=["login_startup","service_owner","toast_server"])]
+    capture: bool,
+    #[arg(long,conflicts_with_all=["capture","service_owner","toast_server","data_dir"])]
+    login_startup: bool,
+    #[arg(long,hide=true,conflicts_with_all=["capture","login_startup","toast_server"])]
+    service_owner: bool,
+    #[arg(long,hide=true,conflicts_with_all=["capture","login_startup","service_owner","data_dir"])]
+    toast_server: bool,
+    #[arg(long,hide=true,conflicts_with_all=["capture","login_startup","service_owner","data_dir","toast_server"])]
+    toast_owner: Option<String>,
+}
+
+pub async fn desktop() -> Result<(), ServeError> {
+    let mut raw = std::env::args_os().collect::<Vec<_>>();
+    // COM LocalServer32 appends this protocol token. It is accepted only on the
+    // exact toast-server route, never as a generic hidden launch argument.
+    let embeddings = raw
+        .iter()
+        .skip(1)
+        .filter(|value| {
+            value
+                .to_str()
+                .is_some_and(|value| value.eq_ignore_ascii_case("-Embedding"))
+        })
+        .count();
+    if embeddings != 0 {
+        if embeddings != 1 || !raw.iter().any(|value| value == "--toast-server") {
+            return Err(ServeError {
+                code: "desktopArguments",
+                diagnostic: "The COM embedding token requires the notification server role",
+            });
         }
+        raw.retain(|value| {
+            !value
+                .to_str()
+                .is_some_and(|value| value.eq_ignore_ascii_case("-Embedding"))
+        });
+    }
+    let args = DesktopArgs::try_parse_from(raw).map_err(|_| ServeError {
+        code: "desktopArguments",
+        diagnostic: "Invalid desktop arguments; use weftext-cli for formal console commands",
+    })?;
+    #[cfg(windows)]
+    {
+        if args.toast_server {
+            return crate::native::toast_server().await;
+        }
+        if let Some(opaque) = args.toast_owner {
+            return crate::native::run_toast_owner(&opaque).await;
+        }
+        if args.login_startup {
+            return crate::native::run_login_startup().await;
+        }
+        let data = args
+            .data_dir
+            .map_or_else(default_data_dir, Ok)
+            .map_err(|_| ServeError {
+                code: "profileUnavailable",
+                diagnostic: "The persistent profile location is unavailable",
+            })?;
+        let activation = if args.service_owner {
+            crate::native::Activation::Headless
+        } else if args.capture {
+            crate::native::Activation::Capture
+        } else {
+            crate::native::Activation::Library
+        };
+        crate::native::run(LocalServiceOptions::new(data), activation, false).await
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = args;
+        Err(ServeError {
+            code: "desktopUnsupported",
+            diagnostic: "This native desktop role requires Windows 11 x64",
+        })
+    }
+}
+
+/// A manual desktop start needs a visible canonical failure even though its
+/// PE has no console. OS/background roles never display or activate an error UI.
+pub fn report_desktop_error(error: &ServeError) {
+    let background = std::env::args_os().skip(1).any(|argument| {
+        argument.to_str().is_some_and(|argument| {
+            [
+                "--service-owner",
+                "--login-startup",
+                "--toast-server",
+                "--toast-owner",
+            ]
+            .iter()
+            .any(|flag| {
+                argument == *flag
+                    || argument
+                        .strip_prefix(flag)
+                        .is_some_and(|rest| rest.starts_with('='))
+            }) || argument.eq_ignore_ascii_case("-Embedding")
+        })
+    });
+    if !background {
+        #[cfg(windows)]
+        crate::native::report_start_failure(error);
+        #[cfg(not(windows))]
+        let _ = error;
+    }
+}
+
+pub async fn serve(args: ServeArgs) -> Result<(), ServeError> {
+    let data = args
+        .data_dir
+        .clone()
+        .map_or_else(default_data_dir, Ok)
+        .map_err(|_| ServeError {
+            code: "profileUnavailable",
+            diagnostic: "The persistent profile location is unavailable",
+        })?;
+    #[cfg(windows)]
+    {
+        if args.service_enrollment.is_some() {
+            return Err(ServeError {
+                code: "invalidServiceEnrollment",
+                diagnostic: "The Windows service uses its actual Windows authority, not a Linux enrollment",
+            });
+        }
+        if let Some(config) = args.server_config {
+            return crate::hosted_owner::run(data, config).await;
+        }
+        crate::native::run(
+            LocalServiceOptions {
+                data_dir: data,
+                port: args.port,
+                initial_document: args.open.map(|path| InitialDocument {
+                    path,
+                    root: args.root,
+                }),
+            },
+            crate::native::Activation::Headless,
+            true,
+        )
+        .await
+    }
+    #[cfg(target_os = "linux")]
+    {
+        controlled_hosted(args, data).await
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    {
+        let _ = (data, args);
+        Err(ServeError {
+            code: "serviceAuthorityRequired",
+            diagnostic: "This host has no qualified service authority",
+        })
+    }
+}
+
+#[cfg(target_os = "linux")]
+async fn controlled_hosted(args: ServeArgs, data: PathBuf) -> Result<(), ServeError> {
+    let enrollment = args.service_enrollment.ok_or(ServeError {
+        code: "serviceAuthorityRequired",
+        diagnostic: "Controlled Linux serve requires an administrator enrollment",
+    })?;
+    let config=args.server_config.ok_or(ServeError{code:"hostedConfigurationRequired",diagnostic:"Controlled Linux serve currently requires the explicit hosted configuration; local owner IPC is unavailable"})?;
+    let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .map_err(|_| ServeError {
+        code: "shutdownSignalUnavailable",
+        diagnostic: "The controlled service termination signal could not be monitored",
+    })?;
+    let backend=weftext_core::BackendContext::controlled_service(&enrollment).map_err(|_|ServeError{code:"serviceAuthorityRejected",diagnostic:"The actual UID, privileges, enrollment and filesystem roots did not qualify"})?;
+    let core = weftext_core::Core::with_backend(&data, backend).map_err(|_| ServeError {
+        code: "coreUnavailable",
+        diagnostic: "The exact enrolled persistent Core could not be opened",
+    })?;
+    let service=crate::hosted::HostedService::bind(core,config,data.join("legacy-office")).await.map_err(|error|{
+        if error.is::<crate::hosted::PairingMismatch>(){ServeError{code:"syncPairingMismatch",diagnostic:"Persisted sync pairing differs from configuration; existing grants cannot silently move to another family"}}
+        else{ServeError{code:"hostedConfiguration",diagnostic:"The controlled hosted configuration could not be bound"}}
+    })?;
+    let ready = serde_json::json!({"schemaVersion":1,"kind":"ready","url":service.origin(),"serviceAuthority":{"kind":"linuxControlledService","storageProfile":weftext_core::STORAGE_PROFILE}});
+    // No Windows PID/FILETIME/broker identity is invented on this platform.
+    let output = (|| -> io::Result<()> {
+        use std::io::Write;
+        let mut stdout = std::io::stdout().lock();
+        serde_json::to_writer(&mut stdout, &ready)?;
+        stdout.write_all(b"\n")?;
+        stdout.flush()
+    })();
+    let output_failed = output.is_err();
+    service.serve_until(async move{if !output_failed{tokio::select!{_ = terminate.recv()=>{},_ = tokio::signal::ctrl_c()=>{}}}}).await.map_err(|_|ServeError{code:"shutdownUnknown",diagnostic:"The controlled service did not confirm accepted-work drain and final Core release"})?;
+    if output_failed {
+        Err(ServeError {
+            code: "readyOutput",
+            diagnostic: "The controlled service Ready output was not confirmed; accepted work was drained",
+        })
+    } else {
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
-    fn workers_cannot_be_combined_with_user_or_other_worker_modes() {
-        for worker in ["--render-worker", "--notes-edit-worker"] {
-            for other in [
-                vec!["--data-dir", "state"],
-                vec!["--port", "1234"],
-                vec!["--open", "note.typ"],
-                vec!["--server-config", "server.json"],
-                vec!["--no-browser"],
+    fn internal_workers_are_exact_earliest_roles() {
+        for flag in ["--render-worker", "--notes-edit-worker"] {
+            assert!(worker(&[flag.into()]).unwrap().is_some());
+            for extra in [
+                "--capture",
+                "--data-dir",
+                "--notes-edit-worker",
+                "--render-worker",
+                "--toast-server",
             ] {
-                let mut args = vec!["weftext", worker];
-                args.extend(other);
-                assert!(Args::try_parse_from(args).is_err());
+                assert!(worker(&[flag.into(), extra.into()]).is_err());
             }
         }
-        assert!(
-            Args::try_parse_from(["weftext", "--render-worker", "--notes-edit-worker"]).is_err()
-        );
-        assert!(matches!(
-            Args::try_parse_from(["weftext", "--render-worker"])
-                .unwrap()
-                .action()
-                .unwrap(),
-            Action::RenderWorker
-        ));
-        assert!(matches!(
-            Args::try_parse_from(["weftext", "--notes-edit-worker"])
-                .unwrap()
-                .action()
-                .unwrap(),
-            Action::NotesWorker
-        ));
+        assert_eq!(worker(&["--capture".into()]).unwrap(), None);
     }
-
     #[test]
-    fn root_is_never_ignored_and_hosted_mode_cannot_open_a_local_document() {
-        assert!(Args::try_parse_from(["weftext", "--root", "library"]).is_err());
+    fn desktop_roles_are_independent_and_old_browser_mode_is_absent() {
+        assert!(DesktopArgs::try_parse_from(["weftext"]).is_ok());
+        for mode in ["--capture", "--service-owner"] {
+            assert!(DesktopArgs::try_parse_from(["weftext", mode, "--data-dir", "TEST"]).is_ok());
+        }
+        assert!(DesktopArgs::try_parse_from(["weftext", "--login-startup"]).is_ok());
         assert!(
-            Args::try_parse_from([
-                "weftext",
-                "--server-config",
-                "server.json",
-                "--open",
-                "note.typ"
-            ])
-            .is_err()
+            DesktopArgs::try_parse_from(["weftext", "--login-startup", "--data-dir", "TEST"])
+                .is_err()
         );
+        assert!(DesktopArgs::try_parse_from(["weftext", "--no-browser"]).is_err());
+        assert!(DesktopArgs::try_parse_from(["weftext", "--capture", "--login-startup"]).is_err());
         assert!(
-            Args::try_parse_from([
-                "weftext",
-                "--server-config",
-                "server.json",
-                "--port",
-                "1234"
-            ])
-            .is_err()
+            DesktopArgs::try_parse_from(["weftext", "--toast-server", "--data-dir", "TEST"])
+                .is_err()
         );
-        let action = Args::try_parse_from([
-            "weftext",
-            "--no-browser",
-            "--data-dir",
-            "owned-state",
-            "--open",
-            "note.typ",
-            "--root",
-            "library",
-        ])
-        .unwrap()
-        .action()
-        .unwrap();
-        let Action::Local { options, browser } = action else {
-            panic!("wrong launch mode")
-        };
-        assert!(!browser);
-        assert_eq!(options.data_dir, PathBuf::from("owned-state"));
-        let initial = options.initial_document.unwrap();
-        assert_eq!(initial.path, PathBuf::from("note.typ"));
-        assert_eq!(initial.root, Some(PathBuf::from("library")));
-    }
-
-    #[cfg(windows)]
-    #[tokio::test]
-    async fn host_shutdown_does_not_wait_for_an_unfinished_browser_handoff() {
-        let directory = tempfile::tempdir().unwrap();
-        let data = directory.path().join("state");
-        let service = LocalService::bind(LocalServiceOptions::new(data.clone()))
-            .await
-            .unwrap();
-        let address = url::Url::parse(service.browser_url()).unwrap();
-        let token = address
-            .fragment()
-            .unwrap()
-            .strip_prefix("token=")
-            .unwrap()
-            .to_owned();
-        let endpoint = format!("http://127.0.0.1:{}/api/bootstrap", address.port().unwrap());
-        let (stop, stopped) = tokio::sync::oneshot::channel();
-        let host = tokio::spawn(serve_with_handoff(
-            service,
-            async {
-                let _ = stopped.await;
-            },
-            std::future::pending(),
-        ));
-        let client = reqwest::Client::new();
-        let response = tokio::time::timeout(
-            std::time::Duration::from_secs(3),
-            client.get(endpoint).header("x-weftext-token", token).send(),
-        )
-        .await
-        .unwrap()
-        .unwrap();
-        assert!(response.status().is_success());
-        drop(response);
-        drop(client);
-        stop.send(()).unwrap();
-        tokio::time::timeout(std::time::Duration::from_secs(3), host)
-            .await
-            .unwrap()
-            .unwrap()
-            .unwrap();
-        let reopened = LocalService::bind(LocalServiceOptions::new(data))
-            .await
-            .unwrap();
-        drop(reopened);
     }
 }

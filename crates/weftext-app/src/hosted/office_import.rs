@@ -100,20 +100,21 @@ fn changed() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "officeImportChanged",
-        "导入目标、授权或原计划已变化；请保留原件并核对原操作。",
+        UiMessage::error_api_hosted_office_import_word_import_basis_changed(),
     )
 }
 fn core_error(error: CoreError) -> ApiError {
     // Parser diagnostics and Core previews can contain server/schema paths.
-    let (code, message) = if error.code == "copyLoss" {
-        ("officeImportLosses", "请明确接受本次原导入计划的转换损失。")
+    let code = if error.code == "copyLoss" {
+        "officeImportLosses"
     } else {
-        (
-            "officeImportOperation",
-            "原导入操作未完成或目标已变化；请保留原件并核对原操作。",
-        )
+        "officeImportOperation"
     };
-    ApiError::new(StatusCode::CONFLICT, code, message)
+    ApiError::new(
+        StatusCode::CONFLICT,
+        code,
+        UiMessage::error_api_hosted_office_import_original_operation_unavailable(),
+    )
 }
 fn scope(inner: &HostedInner, actor: &str) -> String {
     format!("{}:office-import", inner.actor_scope(actor))
@@ -160,13 +161,21 @@ fn access_format(
 }
 fn upload(encoded: &str) -> Result<Vec<u8>, ApiError> {
     if encoded.len() > MAX_UPLOAD.div_ceil(3) * 4 {
-        return Err(ApiError::bad("Word原件上限为16MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_import_word_original_size_limit(),
+        ));
     }
     let bytes = base64::engine::general_purpose::STANDARD
         .decode(encoded)
-        .map_err(|_| ApiError::bad("Word原件编码无效"))?;
+        .map_err(|_| {
+            ApiError::bad(
+                UiMessage::error_api_hosted_office_import_word_original_encoding_invalid(),
+            )
+        })?;
     if bytes.is_empty() || bytes.len() > MAX_UPLOAD {
-        return Err(ApiError::bad("Word原件须为1字节至16MiB"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_import_word_original_size_range(),
+        ));
     }
     Ok(bytes)
 }
@@ -183,7 +192,7 @@ fn unknown() -> ApiError {
     ApiError::new(
         StatusCode::CONFLICT,
         "resultUnknown",
-        "原外部导入的准确状态尚不能确认；原件和操作保留，不自动重新转换。",
+        UiMessage::error_api_hosted_office_import_external_import_unresolved(),
     )
 }
 fn legacy_root(inner: &HostedInner, actor: &str) -> Result<PathBuf, ApiError> {
@@ -191,7 +200,7 @@ fn legacy_root(inner: &HostedInner, actor: &str) -> Result<PathBuf, ApiError> {
         ApiError::new(
             StatusCode::UNPROCESSABLE_ENTITY,
             "conversionUnavailable",
-            "当前Server未配置自己的持久外部转换目录；普通DOCX仍可使用。",
+            UiMessage::error_api_hosted_office_import_external_import_directory_required(),
         )
     })?;
     Ok(root
@@ -294,7 +303,7 @@ fn retain_claim(base: &Path, root: &Path, claim: ImportClaim) -> Result<ImportCl
             return Err(ApiError::new(
                 StatusCode::CONFLICT,
                 "operationConflict",
-                "同一导入编号不能用于不同原件、格式、后端或题注选择。",
+                UiMessage::error_api_hosted_office_import_import_request_input_conflict(),
             ));
         }
         return Ok(old);
@@ -402,7 +411,7 @@ async fn targets(State(state): State<HostedState>, Extension(auth): Extension<Au
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Prepare>,
+    RequestJson(req): RequestJson<Prepare>,
 ) -> ApiResult {
     let parsed_id = uuid::Uuid::parse_str(&req.operation_id);
     if parsed_id.is_err()
@@ -413,15 +422,21 @@ async fn prepare(
                     || id.get_version() != Some(uuid::Version::Random)
             }))
     {
-        return Err(ApiError::bad("导入编号或Word格式无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_import_word_import_request_invalid(),
+        ));
     }
     if req.format == "docx" && req.legacy_backend.is_some() {
-        return Err(ApiError::bad("普通DOCX不使用外部转换器"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_import_docx_external_converter_unused(),
+        ));
     }
     if req.docx_options.as_ref().is_some_and(|options| {
         serde_json::to_vec(options).map_or(true, |bytes| bytes.len() > 1024 * 1024)
     }) {
-        return Err(ApiError::bad("题注选项超过导入预算"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_import_caption_options_budget(),
+        ));
     }
     let bytes = upload(&req.bytes_base64)?;
     let upload_digest = digest(&bytes);
@@ -445,17 +460,17 @@ async fn prepare(
             // the durable claims directory.
             let previous=read_claim(base,&owned_root,&captured.operation_id)?;
             recover_only=previous.is_some();
-            if previous.as_ref().is_some_and(|claim|claim.fingerprint!=claim_fingerprint){return Err(ApiError::new(StatusCode::CONFLICT,"operationConflict","同一导入编号不能用于不同原件、格式、后端或题注选择。"));}
+            if previous.as_ref().is_some_and(|claim|claim.fingerprint!=claim_fingerprint){return Err(ApiError::new(StatusCode::CONFLICT,"operationConflict",UiMessage::error_api_hosted_office_import_import_request_input_conflict()));}
             let key=(actor.clone(),captured.operation_id.clone());
             if let Some(claim)=&previous && (claim.decision.actor_epoch!=inner.actor_generation(&actor)||claim.decision.config_hash!=config_hash(inner,&file)?||claim.decision.expires_at_unix_ms<=now_ms()){return Err(changed());}
             if inner.office.import_active.contains_key(&key){return Ok(ImportStart::Existing(json!({"resource":captured.resource,"operationId":captured.operation_id,"status":"pending","planId":null,"preview":{},"commitAllowed":false})));}
-            if inner.office.import_active.len()>=32||inner.office.import_active.keys().filter(|(owner,_)|owner==&actor).count()>=8{return Err(ApiError::bad("Server外部导入作业已满，请先检查原操作"));}
+            if inner.office.import_active.len()>=32||inner.office.import_active.keys().filter(|(owner,_)|owner==&actor).count()>=8{return Err(ApiError::bad(UiMessage::error_api_hosted_office_import_external_import_capacity()));}
             let claim=retain_claim(base,&owned_root,ImportClaim{schema_version:1,fingerprint:claim_fingerprint.clone(),decision:decision.clone(),resource:captured.resource.clone(),operation_id:captured.operation_id.clone(),format:captured.format.clone(),legacy_backend:captured.legacy_backend.clone(),docx_options:captured.docx_options.clone(),conversion_layout:Some("flatV1".into())})?;
             let location=conversion_location(inner,&actor,&captured.operation_id,claim.decision.actor_epoch,claim.conversion_layout.as_deref())?;
             office::ensure_owned(base,&location.root,!recover_only).map_err(|_|unknown())?;
             decision=claim.decision;
             if decision.actor_epoch!=inner.actor_generation(&actor)||decision.config_hash!=config_hash(inner,&file)?||decision.expires_at_unix_ms<=now_ms(){return Err(changed());}
-            let flag=Arc::new(AtomicBool::new(false));inner.office.import_active.insert(key.clone(),office::LegacyImportRun{actor_epoch:decision.actor_epoch,cancel:flag.clone()});guard=Some(ImportGuard{state:guard_state,key,cancel:flag.clone()});cancel=Some(flag);root=Some(location.root);conversion_id=Some(location.request_id);
+            let flag=Arc::new(AtomicBool::new(inner.office.closing));inner.office.import_active.insert(key.clone(),office::LegacyImportRun{actor_epoch:decision.actor_epoch,cancel:flag.clone()});guard=Some(ImportGuard{state:guard_state,key,cancel:flag.clone()});cancel=Some(flag);root=Some(location.root);conversion_id=Some(location.request_id);
         }
         Ok(ImportStart::Frozen(Box::new(FrozenImport{actor,decision,root,conversion_id,cancel,recover_only,_guard:guard})))
     }).await?;
@@ -527,11 +542,11 @@ async fn prepare(
                 } else {
                     "officeImportConversion"
                 },
-                "Server外部转换未取得可确认的准确结果；原件与原操作保留。",
+                UiMessage::error_api_hosted_office_import_external_import_result_unconfirmed(),
             )
         })?;
         if converted.status != "succeeded" {
-            return Err(ApiError::new(
+            return Err(ApiError::from_core_parts(
                 StatusCode::CONFLICT,
                 if converted.status == "unknown" {
                     "resultUnknown"
@@ -540,7 +555,8 @@ async fn prepare(
                 } else {
                     "conversionUnavailable"
                 },
-                converted.message,
+                converted.public_description(),
+                converted.public_details(),
             ));
         }
         native_bytes = converted
@@ -560,12 +576,13 @@ async fn prepare(
             bytes: converted.original.bytes.clone(),
         });
         conversion_losses = converted
-            .losses()
+            .public_losses()
             .into_iter()
             .map(|loss| weftext_export::exchange::NativeLoss {
                 path: format!("original.{}", req.format),
                 code: loss.code,
-                detail: loss.message,
+                description: loss.description,
+                product_diagnostics: loss.product_diagnostics,
             })
             .collect();
         let mut metadata = converted.metadata();
@@ -577,7 +594,7 @@ async fn prepare(
         let file=access_format(inner,&actor,&req.resource,&req.format)?;if config_hash(inner,&file)?!=frozen.decision.config_hash||frozen.cancel.as_ref().is_some_and(|cancel|cancel.load(Ordering::Acquire)){return Err(changed());}
         let actor_scope=scope(inner,&actor);if let Some(old)=inner.core.with_actor_for_root(&actor_scope,&inner.config.root,|core|core.actor_feature_retry(&req.resource,&req.operation_id,&input_fingerprint)).map_err(core_error)?{return safe_status(inner,&actor,&file,old);}
         let(parent,name,target)=slot(inner,&file)?;if !available(&target){return Err(changed());}
-        let mut preview=json!({"summary":"在所选空槽位创建可编辑Word导入副本；准确原件、中间DOCX及转换损失同属本次计划，确认前不创建。","_officeImport":frozen.decision});
+        let mut preview=json!({"summary":UiMessage::error_api_hosted_office_import_plan_summary(),"_officeImport":frozen.decision});
         if let Some(legacy)=legacy_preview{preview["legacyConversion"]=legacy;}
         let intent=if req.format=="docx"&&req.docx_options.is_none(){OperationIntent::ImportDocx{parent:parent.to_string_lossy().into_owned(),name,bytes:native_bytes,allow_losses:true}}else{OperationIntent::ImportDocxWithOptions{parent:parent.to_string_lossy().into_owned(),name,bytes:native_bytes,allow_losses:true,options:req.docx_options.unwrap_or_default(),originals,conversion_losses}};
         let request=OperationRequest{operation_id:req.operation_id.clone(),root:inner.config.root.to_string_lossy().into_owned(),intent};
@@ -615,11 +632,11 @@ impl Drop for ImportGuard {
 async fn inspect(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Inspect>,
+    RequestJson(req): RequestJson<Inspect>,
 ) -> ApiResult {
     if req.format != "docx" {
         return Err(ApiError::bad(
-            "题注分析只接受准确DOCX原件，不自动运行外部转换",
+            UiMessage::error_api_hosted_office_import_caption_analysis_docx_required(),
         ));
     }
     let bytes = upload(&req.bytes_base64)?;
@@ -641,14 +658,14 @@ async fn inspect(
     })
     .await?;
     let analysis =
-        tokio::task::spawn_blocking(move || weftext_export::docx::analyze_docx_import(&bytes))
+        crate::work::spawn_blocking(move || weftext_export::docx::analyze_docx_import(&bytes))
             .await
             .map_err(|_| unknown())?
             .map_err(|_| {
                 ApiError::new(
                     StatusCode::UNPROCESSABLE_ENTITY,
                     "officeImportInspect",
-                    "当前Word原件无法安全分析；原上传保留。",
+                    UiMessage::error_api_hosted_office_import_word_original_analysis_unavailable(),
                 )
             })?;
     Ok(Json(
@@ -672,25 +689,31 @@ async fn inspect(
 async fn cancel(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     if uuid::Uuid::parse_str(&req.operation_id).is_err() {
-        return Err(ApiError::bad("原导入编号无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_import_original_import_id_invalid(),
+        ));
     }
     Ok(Json(locked(&state,move|inner|{let actor=inner.actor(&auth)?;access(inner,&actor,&req.resource)?;
         let root=legacy_root(inner,&actor)?;let claim=read_claim(inner.office.legacy_root.as_deref().ok_or_else(unknown)?,&root,&req.operation_id)?.ok_or_else(unavailable)?;
         access_format(inner,&actor,&req.resource,&claim.format)?;if claim.resource!=req.resource||claim.decision.actor_epoch!=inner.actor_generation(&actor){return Err(changed());}
         let active=inner.office.import_active.get(&(actor,req.operation_id.clone()));if let Some(active)=active{active.cancel.store(true,Ordering::Release);}
-        Ok(json!({"resource":req.resource,"operationId":req.operation_id,"status":if active.is_some(){"cancelling"}else{"notRunning"},"message":"仅请求取消原外部转换；以原操作实际回执为准，原件保留。"}))
+        let description = ErrorDescription::new(UiMessage::operation_hosted_office_import_cancel_requested());
+        Ok(json!({"resource":req.resource,"operationId":req.operation_id,"status":if active.is_some(){"cancelling"}else{"notRunning"},
+            "explanation":description.explanation,"diagnostics":description.diagnostics,"causes":description.causes}))
     }).await?))
 }
 async fn operation(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     if uuid::Uuid::parse_str(&req.operation_id).is_err() {
-        return Err(ApiError::bad("原导入编号无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_import_original_import_id_invalid(),
+        ));
     }
     Ok(Json(locked(&state,move|inner| {
         let actor=inner.actor(&auth)?;let file=access(inner,&actor,&req.resource)?;
@@ -705,7 +728,7 @@ async fn operation(
 async fn commit(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Commit>,
+    RequestJson(req): RequestJson<Commit>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
@@ -759,10 +782,12 @@ async fn commit(
 async fn settle(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    Json(req): Json<Operation>,
+    RequestJson(req): RequestJson<Operation>,
 ) -> ApiResult {
     if uuid::Uuid::parse_str(&req.operation_id).is_err() {
-        return Err(ApiError::bad("原导入编号无效"));
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_office_import_original_import_id_invalid(),
+        ));
     }
     Ok(Json(
         locked(&state, move |inner| {

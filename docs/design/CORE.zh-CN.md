@@ -27,6 +27,10 @@ Weftext 原生 Rust Core 供 Desktop、CLI、Server、WebUI 和未来 Mobile 使
 
 `.weftext-rules` 不继承 `.gitignore`。Core 的单一库存分别记录文件存在/可见性、Folder Node 资格及显式节点识别边界：ignored 从普通列表隐藏并排除节点发现，字节仍备份；unmanaged 可见、可展开并可打开普通文件，不获得 Node/typed Query 资格。无同名主文件的目录与非配对 `.typ` 默认标“不管理”，不因此停止向下普通枚举或发现未被显式排除的后代配对。用户显式将目录子树设为不管理时，节点发现/批量整理不重入该子树，普通文件浏览仍可进入。完整节点的 canonical `.typ` 不可独立设为不管理；显式退出节点管理须预览身份/引用后果，不自动移动或删除文件。
 
+每次完整库存扫描在根、Workspace 与规则资格成立后，只读取一次全部已提交 Plan 的原 Birth 证据，按原顺序保留本次调用内的物理绑定观察；逐文件仍核当前受保护句柄、身份、源码声明和相关 pending。坏的后续 Birth 不能被较早的有效绑定遮蔽。此观察不跨扫描复用，不授予提交权限；下一次扫描重新读取原证据。无关 Plan 不触发目标路径的 install／commit／resolution 查询，相关 Plan 的原资格顺序与别名边界保持。
+
+一次已接纳修订查询只枚举一次观察记录名称，并始终持有原 journal 目录 guard；每个已提交 Plan 仍通过同一受保护 reader 按观察顺序读取原记录。必需记录缺失或损坏仍拒绝，准确 stamp 与字节 hash、每 Plan 首个匹配事实、耐久提交序号及最大序号歧义规则不变。在确认修订号或确认没有修订号之前，再完整枚举一次并核对相关记录名称集合；名称变化直接拒绝，不接纳新记录替换原结论。名称与修订结果均不跨查询缓存。
+
 节点结构动作仍拒绝显式 ignored/unmanaged 边界内的目标，或已知子树含这类排除边界的动作；普通非节点文件动作经同一安全后端独立预览确切范围，不借普通改名/移动绕过受管节点的两侧配对、已登记资源及历史责任。已接纳节点突然缺主文件或改配对是诊断/恢复事件，不能静默降为普通文件、退休身份或猜新 ID。开放树未观察新增的严格排除仍需强范围能力；§5 的迟到边界 pending 规则针对这些显式排除边界，不把普通容器缺主文件误当同一阻断条件。
 
 受管目录提供稳定快捷目标：Node目录直接用NodeRef；非Node容器由Core `admitDirectory` 创建 `weftext.directory.json`，只记DirectoryId，不复制parent/name/path。出生/复制fresh ID/移动/duplicate/gap按同一Plan与manifest处理。快捷创建只接纳选定容器，不整改全库。unmanaged 边界不自动加 ID。用户可明确只登记目录导航身份，保留其非 Node 状态和原发现边界；这不创建主文件、Node 或 typed 业务对象。拒绝登记或后端无法证明稳定目录身份时，仅提供明确较弱的 locator 书签，不能称改名稳定快捷。根 `.weftext-tags.json` 集中登记immutable TagId与可改displayName；TagRef用于稳定快捷/导航/Query。同名不自动合并，literal标签字符串不自发登记对象。Core `createTag`可与笔记typed TagRef赋值同Plan，SOURCE负责该原生typed槽。
@@ -39,17 +43,19 @@ portable 控制资料只保存无法从当前文件恢复的事实：身份创�
 
 完整备份包含普通文件、ignored 字节、portable 控制/历史及一致捕获的本机未决 journal/Draft；只复制活动 SQLite 主文件不合格。可单独导出仅资料备份，但须说明它不能恢复丢失的操作/费用责任。恢复到新设备重建本地观察与派生索引；真实未决执行责任只由原日志或显式责任接管恢复。
 
-`BackupLibrary` 保留原 v1 `library/`、`private/`、`backup.json` 树。新 ActorOperation、output claim、Draft 和迁移记录把可选库归属放在原记录首个 metadata 字段，不另建归属账本。托管 producer 绑定可信配置 root、实际文件身份及已接纳 WorkspaceId；新本地 Draft 使用原 Session root，普通 root 可无 WorkspaceId。保留的旧事实不补造归属。选择器在受保护句柄上先读有界 metadata，再读正文，检查完整的保留 proposal／消费闭包，排除可证外库正文。归属未知或混库时明确失败，不过滤 proposal 或导出整个共享私有目录。
+`BackupLibrary` 保留原 v1 `library/`、`private/`、`backup.json` 树。当前文件 Draft 的首字段为必需 qualified `scope`，file-save 归属固定在同一原 Plan；actor／output 权限首部与其作者库归属分域，不另建归属账本。选择器在受保护句柄上先读有界 metadata，再读正文；文件 actor 记录使用同一原 Plan 分类。可证外库正文不读取，未知或矛盾归属明确失败，不按当前路径认领原资料或导出整个共享私有目录。
 
 原冻结备份计划保留所选准确文件和一枚私有成员／路由摘要，执行与原事务恢复均重新检查。只有同一备份操作的类型和内容均已验证的证据，才允许其自身新增 journal 文件；文件名前缀相同不获得例外。备份只有在捕获完整原未决证据及当前树时，才可包含仍 installing 的源操作，不先解决它或认定其 committed。首个输出 effect 前，原 manifest 与唯一文件／目录须符合 64 MiB、5,000 成员输入预算，无损 ZIP 须在 80 MiB 内；编码只消费这些冻结 after-images。专用托管备份 fence 位于原 ActorOperation，独立于通用 feature／output 权限，不增加自动 restore decoder，也不允许因交付缓存丢失重放原请求。
 
 原生内容包另用 `capture_native_export` 在一次捕获中生成包字节、manifest 与内存 `NativeExportWitness`，消费方交付前复验同一见证，不另读一份当前树来证明旧包。获权的纳管正文、登记资源、批注、Schema、设置和样式按原角色收集；未纳管、忽略和 Trash 内容只记录必要的省略路径及物理元数据，不读其正文后再过滤。当前最多 5,000 个命名空间成员与 64 MiB 保留输入，见证核实际观察到的成员及对象，不承诺任意未来原始文件的强负范围。该包不包含私有 journal、草稿或凭据，不能替代完整恢复备份。
 
-v1 原生包新增闭合 `generatedBibliography` 角色，仅允许唯一 source 所有者同目录的 `weftext.citations.bib`，保留本次准确、合法的 UTF-8 Bib 字节。它没有 NodeId、ResourceId 或作者 revision；与真实成员、大小写别名或已报告省略的同名原件冲突时拒绝，不覆盖原件。生成必须从原包捕获的获权 Work 出版字段派生，完整库输出权不隐含文献使用／输出权。导入时该派生文件只保存在完整原始 ZIP 中，不安装为当前作者文件或资源，并报告 `generatedBibliographyNotInstalled`；应用继续从已重映射的当前 Work 生成文献输入。旧 reader 对不认识的角色明确拒绝，不宣称旧 reader 可读新增角色的包。实际产品通过范围仍以候选验收记录为准。
+v2 原生包包含闭合 `generatedBibliography` 角色，仅允许唯一 source 所有者同目录的 `weftext.citations.bib`，保留本次准确、合法的 UTF-8 Bib 字节。它没有 NodeId、ResourceId 或作者 revision；与真实成员、大小写别名或已报告省略的同名原件冲突时拒绝，不覆盖原件。生成必须从原包捕获的获权 Work 出版字段派生，完整库输出权不隐含文献使用／输出权。导入时该派生文件只保存在完整原始 ZIP 中，不安装为当前作者文件或资源，并报告 `generatedBibliographyNotInstalled`；应用继续从已重映射的当前 Work 生成文献输入。旧 reader 对不认识的角色明确拒绝，不宣称旧 reader 可读新增角色的包。实际产品通过范围仍以候选验收记录为准。
 
-v1 原生内容包另增加闭合 `Tags` 角色，只允许根 `.weftext-tags.json` 的完整合法 v2 森林；导出捕获原 Core 已接纳完整树和同一见证，当前 v1 表须先显式升级，不能在导出／复制时改写原 blob。跨库导入默认通过目标 Core 为全树创建新身份并保必要祖先，在同一个 ImportNative／CreateTree Plan 的 updates 中写 Tags。以完整源 TagRef 建本次映射，统一改父级、正文 typed 引用、Query CEL 的 tagRef 字面及按 Shape 证明的 typed 参数默认值；普通 literal 原样保留。不按同名或裸 UUID 合并，不顺带改挂已有目标标签，不另存永久别名表，完整原 ZIP 继续保留。
+v2 原生内容包另包含闭合 `Tags` 角色，只允许根 `.weftext-tags.json` 的完整合法 v2 森林；导出捕获原 Core 已接纳完整树和同一见证，当前 v1 表须先显式升级，不能在导出／复制时改写原 blob。跨库导入默认通过目标 Core 为全树创建新身份并保必要祖先，在同一个 ImportNative／CreateTree Plan 的 updates 中写 Tags。以完整源 TagRef 建本次映射，统一改父级、正文 typed 引用、Query CEL 的 tagRef 字面及按 Shape 证明的 typed 参数默认值；普通 literal 原样保留。不按同名或裸 UUID 合并，不顺带改挂已有目标标签，不另存永久别名表，完整原 ZIP 继续保留。
 
 导入 Query 的 Schema 基线仅在完整源 schemaRef／revision 与包中准确 Schema entry.revision 一致、且目标 Schema 语义一致时重绑为目标合法 revision。目标尚无 Schema 而实际 bundled Schema 相等时，在同一 Plan 初始化并固定新 revision。包未保准确的 Query Schema 历史时以 `schemaMappingRequired` 拒绝，不能用包的 latest 或目标当前定义冒原基线。托管导入依据实际计划副作用另查 tags.create／schema.write 及原读取权限；原导入槽权不隐含共享标签／Schema 写权，重试、提交及恢复仍核同一原计划。
+
+当前原生内容包版本为 **v2**：损失和产品说明使用同一类型化消息合同，保留损失的机器代码、位置与完整并列诊断。v1 包明确以 `unsupportedVersion` 拒绝；真实旧 ZIP 保留原件，不自动升级或保留旧解析分支。这里的包版本独立于格式标记、Tag 森林及完整恢复备份版本。
 
 ### 2.1 普通文件会话
 
@@ -63,15 +69,17 @@ v1 原生内容包另增加闭合 `Tags` 角色，只允许根 `.weftext-tags.js
 
 ### 2.2 私有 Draft 与改名恢复
 
-同一 actor 的原 `drafts` 目录内，以原 `FileIdentity` 与完整 `ActorLibraryBinding`（含明确无绑定）派生单层主 record 键，不再按当前位置为同一对象建立相互竞争的草稿。主 record 是该准确对象／库作用域的唯一恢复权威，包括 clean、明确 discard 和 merge 后的状态；读取与写入使用同一作用域优先规则，已有 bound clean 主 record 不能被旧 unbound 提案盖过。不同 actor／库的记录不转授读取或写入权，旧无绑定记录也不因迁移补造库归属。
+同一 actor 的原 `drafts` 目录内，以必需原 `FileIdentity` 与必需 `QualifiedInputScope` 派生单层主 record 键。主 record 是该准确对象／库作用域的唯一恢复权威，包括 clean、明确 discard 和 merge 后的状态。普通目录可明确属于设备输入；库输入必有已准入 WorkspaceId 与原根 FI。不同 actor／库不转授读取或写入权，旧缺 scope 记录不自动取得当前资格。
 
-所有原 session 草稿写口，包括普通持久化、过期 Save 保稿和明确恢复决议，均使用 session 原 stamp 的文件身份，不读取旧路径现 occupant 的身份来选择写目标。原 actor 的库定位沿已核定的 `actor_library_path`，`ActorLibraryBinding` 中的原根坐标及身份只是归属证据，不能当作可直接打开的路径。
+所有原 session 草稿写口，包括普通持久化、过期 Save 保稿和明确恢复决议，均使用 session 原 stamp 的文件身份与已冻结 scope，不读取旧路径现 occupant 或当前库来重新选择草稿归属。Server 配置 namespace 只承担其独立权限核验，不替代文件的原归属。
 
-旧 path-hash record 仅沿准确文件身份与原已提交 relocation lineage 迁移，核对 canonical 文件及其目录的同对象连续性；按原 scope／路径／准确字节指纹一次消费，独立 consumed marker 不代替主 record。原身份未知的当前槽旧稿仅作未知 Base 提案保留，不据路径补造身份或库归属。原 legacy 字节保留；迁移覆写原主 record 前，先把其准确原字节保存在现有 `draft-history`，再登记新主 record 与消费事实。`draft-history` 是保全和明确比较材料，不自动扫描为当前恢复权威；已明确清稿／合并后，旧历史不能自行复活。主 record 损坏或资格不符也不能回退选择另一作用域或旧历史。
+已提交的同对象 relocation 只在同一 FI＋scope 下更新主 record 的 locator；先将准确旧字节保存在既有 `draft-history`，再更新唯一主 record。不再读取旧 path-hash 槽或缺 scope 记录来合并当前提案，也不保 consumed marker／迁移协议。旧原件保留，缺必要资格明确 unsupported；归档只作保全与明确比较材料，清稿／合并后不得自动复活。主 record 损坏或资格不符不能回退另一作用域或旧历史。
 
 同一 FI 与库作用域不证明外部变动后的当前位置。缺少原已提交位置关系的外部改名或历史坐标回退仍可查看源，但不自动恢复、迁移或消费旧 Draft；历史坐标不能冒作当前迁移证明。新打开的 session 在内存保留位置尚未确认的资格，后续 persist／Save 以 `identityPending` 明确拒绝覆盖原私有记录；编辑器保留当前输入并报告恢复草稿写入失败。正常已获资格的原 session 在已提交移动／交换后仍可按原 FI 与原位置关系续写，不能借旧路径当前其他对象的身份选写草稿。
 
-完整 Draft record（含 Base、提案、全部 alternatives）及迁移记录采用一致的 16 MiB 读写预算；覆写前先校验完整拟议字节，超限或读取／持久化失败保留旧可读草稿，不截断或只检查正文长度。本轮 Windows／NTFS 的定向回归及受影响 Draft、历史、owner backup、库作用域和同步 HTTP／浏览器消费者均已通过最终验收；平台和真实断电限制仍见 MVP。
+完整 Draft record（含 Base、提案、全部 alternatives）采用一致的 16 MiB 读写预算；覆写前先校验完整拟议字节，超限或读取／持久化失败保留旧可读草稿，不截断或只检查正文长度。当前 scope 升级的定向与 HTTP／浏览器验证按本轮准确源码和产物记录；先前候选结果不自动证明新格式通过，平台和真实断电限制仍见 MVP。
+
+Windows Compound 在取得完整命名空间保护时，一次捕获各保留目录原句柄的规范坐标。地址比较使用这份固定名称投影，包含已获资格祖先中的短文件名别名；当前源 FI、父 FI、位置阶段与后代成员仍分别必验。移动及后续目录保留不改写原投影，过期阶段不能把原句柄移动后的新地址当作预期位置。
 
 ### 2.3 标签森林、原身份与版本升级
 
@@ -99,6 +107,38 @@ v1 原生内容包另增加闭合 `Tags` 角色，只允许根 `.weftext-tags.js
 
 准备、取消、未知结果查询、安装／恢复及设置同步沿原 Core 操作与对象链。同步传完整 Settings 对象，不按列表项自动合并；历史或部分副本的引用不授予当前导航身份。取消仅能终结未安装的准确原计划，已可能安装则保现场交原恢复；重启不分配替代操作。托管通用设置写入若实际改变该成员，除设置读写权外另需当前 `library.reorderNodes`，并须对每个变更父级有准确匹配的 `navigation.directories` 获权配置；目录成员披露不由重排权扩展到全库，也不授正文／字段／媒体读取。提交及未决操作重验两项资格，成员权撤销也清除旧预览；设置权、字段权或个人排序均不隐含作者重排权。
 
+### 2.5 私有捕获稿与关闭确认
+
+尚未创建的捕获输入由 Core 私有 `capture-drafts/<draftId>.json` 保存，不能伪造已有文件的 FileIdentity 塞进普通 Draft。记录只有 v2：首字段 `scope` 固定设备本人或服务端推导的 actor，以及准确库绑定或明确 `deviceUnassigned`；后者不属于当前打开的库。已选库固定 root 物理身份和 WorkspaceId，父容器保实际稳定引用及其真实目录身份摘要。路径仅用于重新定位；同路径替换库／目录不得复用旧资格，合法同对象移动须重新解析原引用。一条已绑定捕获稿不改绑另一库。
+
+`currentInput` 与不可变 `pending` 同一记录原子替换。名称、标题、正文、位置／参数原文和所有字段控件原文使用显式 UTF-16 code units，保留 lone surrogate、NUL、组合中间输入；标识符仍为合法字符串。合法 native value 仅为可选候选，不能替代所有控件原文，DOM validity 也不能证明字符串可转 UTF-8。形成真实作者源时才严格转换，失败保原 code units，不使用替换字符。类型／字段用稳定 ID，控件地址用 FieldId、值路径和 controlRole，不用 ARIA 文案。恢复稿不附旧 Base、Schema 全文、目录／预览或权限能力。
+
+`revision` 是整记录 CAS，`inputRevision` 单独记录输入变化和同值 ABA，均限制在 JavaScript 准确整数范围。`mutationId` 及命令指纹使最后一笔持久写丢回执后可同号查询／重放；只读恢复查询必须携已冻结的原 typed command 及原 expected revision，不能仅凭同 ID 证明另一命令已保存。同 ID 换命令或旧 revision 不覆盖新稿。负查询仅表示已被后续写替代或未知，不能证明该写从未发生。更新不存在的记录不隐式新建。
+
+字段原文明确区分私有 exact raw 与已证实的本人片段：`CaptureRawInput.text` 是当前字段完整 UTF-16 原值，可含程序预填或保护默认值；只有独立 `author.text/provenance` 才能进入本人纯投影。provenance 固定真实 producer、inputId 和观测修订，不是权限能力。没有本人证据的 raw 不进入该投影；有证据的恢复片段标为 copyOnly，不能自动拼成旧完整字段。结构／Schema 变化在控件退休前将原地址和 UTF-16 原文移入同一 `currentInput.detachedRawInputs`，带独立 retirementId 和原因；旧 list index、union 分支或同名新字段不能继承该绑定。live 与 detached 原文共用 1024 项及原记录预算，detached 不是第二本历史账。资料库授权退休后，服务端按仍有效 actor 身份只返回本人纯投影，不返回私有完整 raw、旧 Schema 候选、模板、私有目标路径或 frozen wire；纯输入更新保留原 scope/pending，不能修改这些保护字段或产生作者效果。
+
+顶层 name/title/body/rootInput/parentInput/parametersText 同样区分六份私有完整原值与同一记录中的 `authorTexts`。每槽保留按真实 producer/inputId 区分的本人证明片段数组，总计最多 1024 项；只更新同身份的较新修订，同修订变字节或倒退均拒绝。新窗口的证明不覆盖旧 producer，不把旧片段拼接后套上新 provenance；空文本仍是原身份的新删除证明。程序预填、DOM 采样和恢复只更新私有完整值，不造本人证明。纯 author checkpoint 只合并 own overlay；字段换 producer 时把旧证明保留为 detached，不能覆盖原私有候选。获权 hosted active 另返六份完整原值和正文模式，撤权纯投影不能自动拼回可提交正文。
+
+字段结构只使用 `valueState = valid {value: NativeValue} | incomplete {wire: CaptureText}`。后者仅保存一棵私有原生字段树的准确 JSON/UTF-16，保留无效标量旁的 siblings、union 标记和 list 位置，不含 Schema/Base 或整个业务表单。两态均严格拒绝重复／未知原生成员；未完成标量必须匹配同 FieldId、原 ValuePath 的 live exact raw。完整树必须用 valid，提交只接 valid。恢复须重新核原 FieldId、Schema 身份和语义摘要，过期／未知地址保原件为未绑定材料，不派发作者 input/proof。旧 value/null 格式明确不支持，不保兼容双轨。
+
+正常获权编辑用一次完整 input 原子持久化其本人证据。唯一原记录持久标明 inputCut 为 full 或 authorOnly，既有 lastMutation 明确封闭命令种类。显式本人检查点不能确认完整表单、冻结或发起新作者效果，也不能给完整表单关闭证明；目标选择和中性检查点保留原 cut。重启时若无 full cut，仅本人片段可取回为 copyOnly，不以 RAM 标记或旧私有候选恢复 formReady。完整请求响应未知时先按同一原 mutation／expectedRevision／规范完整 digest 查询，浏览器 transport 不存该候选，绝不另写 pure mutation 覆盖可能成功的结果。只有重新获权的完整输入 mutation 才建立 full。digest-only reader 必须核原命令确为 Input，其他真实命令的 digest 也不能冒充完整输入 ACK。新修订中的空本人文字仍是明确删除证据。
+
+前端只使用一份 Records v3 纯输入恢复存储与单一 IndexedDB transaction-CAS。捕获项按 deployment／本人 actor／真实 draftId／producer 隔离，同一项分别保 current 本人 UTF-16 输入和待确认 mutation 的冻结本人 cut／expectedRevision／原号／指纹；旧 A 丢响应时的新 B 不能被 A 的 ACK 删除。它不保存 Schema、default、template、target、typed candidate、私有完整 raw 或 frozen 作者效果 wire，不另建 Capture raw ledger。浏览器 stage/flush/ACK 仅证明 transport proposal，不能冒充 Core ACK、完整表单持久化或关闭许可。真实结构选择及 typed candidate 未得到 Core ACK 时仍阻止提交／关闭。IndexedDB 故障保内存与原磁盘项；同 origin 的正常浏览器进程恢复不能自动外推不同随机端口或 Core 进程的恢复。
+
+明确处置未知 private input mutation 必须先查原 mutation。只有同一记录 revision 仍等于其原 expectedRevision，才可用独立稳定原号做 `checkpoint_capture_input`：只 CAS 前进记录修订并耐久发布，不改 currentInput、inputRevision 或真正 frozen 创建 pending。旧 input 先提交则 checkpoint 冲突并查询真实原结果；checkpoint 先提交则迟到旧 expectedRevision 永久拒绝。checkpoint 自身丢 ACK 仍查原号，不盲换号／rebase 旧请求；浏览器项只在确认原 mutation 或 checkpoint 原记录后明确处置。该 fence 不是作者操作终结或完整 Form ACK。
+
+显式继续下一条时，`advance_capture_submission` 必须重查同一 journal 的原 committed/resolved/cancelled 决议；unknown/prepared/installing 不能凭前端标志释放原号。缺 Plan 的本地终结还须匹配原 requestKind 和 wireDigest。只有成功提交且 current inputRevision 仍等于提交 cut，才清空消费过的输入；新输入和 detached 原文保留。捕获稿不另存 Receipt，结果重新打开始终查询原操作。名称留空时由原 operationId 确定默认碎片名称，不要求作者标题。
+
+本地 Capture 创建提交只返回原提交事实，另行交付原结果。HTTP 与 Core 共用单一 `CaptureCreationRequest`；`open_capture_result` 严格读取同一 frozen wire，按原 canonical intent 核已有 feature Plan，再从原唯一 Birth／materialized 身份重开当前节点。它不 prepare/execute，不借同库其他 NewNode、旧 receipt.path 或原 Session 推断结果。打开或界面接纳失败保 pending 原号，下一条无需先建立文档 Session；无效原请求的终结仍只使用 wireDigest。
+
+首次作者请求发送前可靠固定 pending 的原 operationId、requestKind、准确 JSON wire、该 wire 的 SHA-256 及输入修订；不按新 currentInput 重采原请求。读取顶层身份时只解码操作／目标字段，其余载荷用 serde 的 IgnoredAny 校验语法，原 wire 不转成 Value；因此含 escaped lone surrogate 的原被拒请求仍能保留准确摘要。原提交、原号 status／settle 和 typed resolution 继续归 journal，捕获稿不保存第二份 Receipt 账本。hosted 必须另核当前 actor／原库／批准槽，私有记录或摘要均不授予权限。
+
+正式记录完整上限 16 MiB，每个 local／actor 域最多 128 条、记录与保留暂存合计 64 MiB；最终作者源仍受 2 MiB 限制，wire 最多 3 MiB。本地 capture HTTP 请求另限 16 MiB＋16 KiB。列表在读取正文前累计预算。未发布写位于独立 `capture-staging/<owner>/<draftId>.<stageId>.stage`，失败或中断保留原件及旧正式稿；已识别暂存只计容量、不会被当成正式稿或自动提升。原子发布期间最多额外保留一份旧记录（16 MiB），不声称实际掉电事务保证。未知版本／非闭合编码拒读，不建立旧格式回退。
+
+完整 owner backup 同批认识 capture 路径及同一严格 validator：先在原受保护句柄读有界 scope 头，再只读所选库正文；外库或 device-unassigned 的坏／大正文不进入选中预算。actor 路径由真实 owner 重算，不能借当前 actor 或同 draftId 串户。暂存不是库作者参与者，不伪作已确认稿或提交事实。既有 64 MiB／5000 成员总备份预算及显式恢复限制不变。
+
+`capture_flush_receipt` 只在受保护读回与期望 draftId、recordRevision、inputRevision、lastMutationId 完全一致后返回摘要和原 pending 编号。这是持久快照 ACK，**不是 native ClosePermit**。宿主必须先处理 IME 并冻结输入，再把 ACK 绑定当前 surface／epoch／本地 edit serial；任何新输入、迟到回执或持久失败均拒绝关闭。操作结果 unknown 但完整 pending 已持久时可关闭 UI 后继续恢复，不能因此宣称已提交。真实窗口生命周期和消费者按对应切片验收，不因存储 API 接通而通过 DSK02。
+
 ## 3. 身份、版本与当前读取
 
 保留随机 UUIDv4：WorkspaceId 与各 Node/Resource/Annotation/Directory/Tag ID 使用完整类型化 `EntityRef`，解决改名稳定引用、离线创建及复制独立身份，且不把名字/路径变成身份。UUID 的价值是稳定随机标识，不是安全凭证。Directory/Tag只补导航必需身份，不成为笔记或逐值事实ID。Core 分配新身份；源码/sidecar中的 ID 是声明。已有身份须匹配已接纳创建事实、当前唯一文件绑定和 lifecycle；重复 ID、外部复制带 ID、缺元数据或 partial sync 不自动新建或重发 ID。
@@ -111,7 +151,7 @@ v1 原生内容包另增加闭合 `Tags` 角色，只允许根 `.weftext-tags.js
 
 路径、完整 options 与原 operationId 在首次网络写入前保留。重试核对同一指纹，换 options 不复用原编号；已提交结果还须证明原库根物理身份，原路径上相同字节的新目录不获得原库资格。部分初始化只能按原 Plan 检查后续写：已归本操作的原对象和准确 before／after 才可继续，未知新增或第三态保留并进入恢复，不以标记或同名文件猜归属。
 
-`cancel_library_creation_with_options_and_id` 接受准确原输入：已提交保持 committed；已登记但未完成的创建沿原恢复资格，只能保留可证 before 或继续核验原安装。未登记请求用专用 `cancelLibraryCreation` 私有 Plan 的单次持久创建记录终态；仅当指纹准确匹配且没有作者文件、身份、事务、历史或同步参与者时，该记录本身即 resolved，不依赖随后另写 resolution。无效原始路径只作为有界原请求证据，不读取、写入、接纳、阻挡或发布该作者路径。重启和迟到创建仍识别同一取消事实；状态未知或权限／I/O 错误不能冒终态。
+`cancel_library_creation_with_options_and_id` 接受准确原输入：已提交保持 committed；已登记但未完成的创建沿原恢复资格，只能保留可证 before 或继续核验原安装。未登记请求在原 journal 单次持久写入 `cancelPrepared` resolution，内含 typed `createLibrary` attempt 和准确原请求指纹，不制造作者 Plan 或参与者。无效原始路径只参与有界原请求指纹，不读取、写入、接纳、阻挡或发布该作者路径。重启和迟到创建识别同一决议，变输入被拒绝；状态未知或权限／I/O 错误不能冒终态。保留旧取消 Plan 的严格读取见下方原事实合同；它不是当前生产写入方式。
 
 `RevisionId` 是冻结 Plan 时私有分配的随机标识。commit 后才有效，manifest 一次关联 EntityRef、RevisionId、exact blob、因果父版本与事务。它不依赖包含自身的源码摘要，能在最终 `.typ` 中构造 self/cross 固定地址和批注锚点。计划私有 ID 不作为公开成功；真正 no-op 保持版本，外部同字节接纳是新的来源接纳事实。
 
@@ -190,12 +230,12 @@ Compound root 已到达原计划最终位置，且将作为另一参与者的目
 
 托管 copy/template 的完整子树读取与导出由 Server 在捕获前分别授权。Core 的不透明 FeatureTreeWitness 固定准确所有者、源树文件／目录成员、物理身份、父对象、字节和原 Schema／根控制文件；成员和保留字节有界。传输 inventory 仅从该已获权 cut 和显式 inputs 的原获权上下文建立，不调用全库 inventory 读取其他正文，也不将目标父对象的命名空间证据当成引用读取授权。没有证明的普通外部路径链接保原值并报告复制损失；需要目标证明的 typed ref 缺少该上下文时拒绝 copyRef，不能仅凭稳定引用读取目标。原 Plan 仍承担保存、提交和恢复，见证本身不授予新权限。
 
-预先配置的托管目标槽位通过原 FrozenOperation 的可选 hosted_destination 绑定实际目标选择器，不从来源锚点推断。只有原托管结构准备写入该字段；本地、旧记录及其他生产者保持缺省，不回填历史。新建／复制／模板的原出生证据，或改名／移动／恢复的原 Relocate 叶身份，与当前已纳管对象和准确位置共同证明槽位资格。名字相同、字节相同或另一次本地创建不足以认领该槽位；读取结果还需 Server 当前独立读取授权。
+托管目的能力由原 FeatureOperation 和 FrozenOperation 的同一个闭合 `HostedDestination` 绑定：Fixed 固定槽 ID；UniqueChild 另固定真实父目录 FileIdentity／WorkspaceId、prefix、maxMembers 和原外部 operationId。固定槽的新建／复制／模板 Birth 或改名／移动／恢复 Relocate 身份继续确认准确预留位置。UniqueChild 只接 NewNode／TemplateNode，以 prefix＋原号 no-replace 命名，不把 receive 扩给其他结构动作。其成员从同一原 Plan/Birth 派生；准备和提交都核包含 unavailable 及旧 prefix 的保留成员额度，读取另核原 Birth 的 FileIdentity。所选原 commit／Birth 证据损坏、读失败或超预算须 unavailable，不能当空集合或零成员；不建立额外成员账本、不按目录同名收养。本地 producer 没有 hosted destination，不能取得预授权；读取所有结果仍须 Server 当前独立读取授权。
 
 安装算法：
 
 1. 在操作日志及exact blobs已durable后取得§5.1目标祖先/父闭包和Core范围reader barrier。预算预留计划文件数对应的同时handle容量；不足在安装前失败/显式改批，不先半写。
-2. 一个后端调用create-only建立计划目录并返回其原guard，不采用`mkdir → reopen`。Windows候选使用[NtCreateFile](https://learn.microsoft.com/zh-cn/windows/win32/api/winternl/nf-winternl-ntcreatefile)：`RootDirectory`是已持target-parent handle，name仅单个相对目录分量；`FILE_CREATE`、`FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT`，LIST_DIRECTORY/READ_ATTRIBUTES/DELETE/SYNCHRONIZE access，share READ|WRITE而不shareDELETE。要求成功且`IO_STATUS_BLOCK.Information=FILE_CREATED`，日志登记返回对象证据并持续保留同handle加入闭包。已有同名目录冲突，不在其中合并。初始workspace root也对获权外部parent使用同一调用。普通外部工具可能先看见目录，Core reader仅见incomplete/installing。有限本机NTFS probe已验证返回创建handle、同名collision与外部root rename被拒；生产平台/耐久资格仍待验。只有mkdir/reopen的后端不能伪造创建归属，必须提供真实等价原语或保持该scope pending。
+2. 一个后端调用create-only建立计划目录并返回其原guard，不采用`mkdir → reopen`。Windows候选使用[NtCreateFile](https://learn.microsoft.com/zh-cn/windows/win32/api/winternl/nf-winternl-ntcreatefile)：`RootDirectory`是已持target-parent handle，name仅单个相对目录分量；`FILE_CREATE`、`FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT | FILE_OPEN_REPARSE_POINT`，LIST_DIRECTORY/READ_ATTRIBUTES/DELETE/SYNCHRONIZE access，share READ|WRITE而不shareDELETE。要求成功且`IO_STATUS_BLOCK.Information=FILE_CREATED`，日志登记返回对象证据并持续保留同handle加入闭包。已有同名目录冲突，不在其中合并。初始workspace root也对获权外部parent使用同一调用。普通外部工具可能先看见目录，Core reader仅见incomplete/installing。有限本机NTFS probe已验证返回创建handle、同名collision与外部root rename被拒；生产平台/耐久资格仍待验。Linux受控服务档位仅在已接纳OS隔离namespace和原writer fence连续持有时，允许`mkdirat → constrained open`作为等价原语；先同步parent，再持有新原对象并在决议前登记opaque身份。未隔离的mkdir/reopen不能伪造创建归属。
 3. 逐个`CreateNEW`创建计划文件，RW share0，以创建返回的同handle写准确after、设置精确长度、flush并回读。所有这些文件handle保持到commit，不关闭再hash/replace。目标filename被外部抢占则冲突，不替换；新对象的本操作归属直接来自create-only返回handle和journal。
 4. 校验全部计划目标、fresh identity/ref map与constraint。复制要求的每个snapshot对象都已创建，才能commit。纯copy的after是该固定成员集，不要求排除目标目录里其他人的新raw文件。未知新增是独立external对象，不记成本次copied result、不授ID/typed资格，也不删除；交付可以标`external_pending`，需要排他全集后条件则此次strong intent不满足。
 5. durable marker固定所有计划对象/receipt后释放文件/目录guard。Core重新扫描实际树时保新增外部资料，原snapshot Receipt保持；不能因外部额外file而把缺少计划目标的copy洗成成功。
@@ -216,6 +256,12 @@ purge仍是获权破坏性动作；root和确认的bytes/成员固定，ignored/
 这允许静止正常本地Trash完成purge；遇到并发新稿则保全并等待明确新决定。它没有排他全namespace承诺。真正需要原子erase全树/业务strong negative范围的部署使用有独立OS权限/fencing的Server writer，不从同用户ACL名字推导。
 
 已知ignored/unmanaged边界仍在操作前拒且扫描不重入；开放树late boundary在rename后、commit前发现时保真实树并pending，不覆盖原路径第三对象；commit之后的新boundary是后续external observation，不能撤销原历史Receipt或重执行该move。若要求在任意raw新增竞态下瞬间不存在boundary/唯一值，该意图是强negative-scope，不能由本地目录guards冒充。普通同对象move、固定snapshot copy与安全purge各有自己的明确完成条件，不因此全不可用。
+
+**合格文件系统元数据 v2。** 当前 Core 存储档位为 `weftext.qualified-fs.v2`，与原生导出包版本独立。物理身份与保留目录项元数据均有明确平台标签：Windows 保留真实 volume／file-index／creation 证据；Linux 使用合格文件系统实际 FSID 与 `name_to_handle_at` opaque handle，不能用 inode／ctime 元组或伪造 Windows 属性位。旧无标签物理记录明确拒绝，原件不重写。作者内容只通过显式导入／接纳进入另一物理副本；历史 Windows 证据不能授予 Linux 连续性。
+
+**Linux 受控服务档位。** `Core::with_backend` 接收显式接纳的 `BackendContext`；普通 `Core::new` 不自动授予任意 Linux 路径写权。接纳通过无符号链接、不可由服务或其他用户写入的祖先目录，读取有界且 root 管理员拥有的 enrollment，核查专属非登录 service UID、不同的 client／worker UID、准确 real／effective／saved 身份、无 capabilities／supplementary groups、原 root opaque 身份、私有服务所有权和有界完整现存树。管理员拥有的 root 父目录阻止普通客户端／worker 替换根目录项。对真实 root FD 的锁仅协调不同私有 data-dir 的服务实例，不是 OS 写隔离机制。客户端／worker 必须以各自不同的 OS 身份运行，不能继承服务描述符或凭据；调用者自报 API 参数和同 UID 锁都不构成该部署。
+
+Linux 的 `BoundFile` 保留 root／parent FD 与准确 basename；`openat2` 使用 BENEATH／NO_SYMLINKS／NO_MAGICLINKS／NO_XDEV，包括拒绝 bind mount。原生 ext4／XFS 须实际支持 opaque handles；不合格文件系统、非 UTF-8 名、符号链接、硬链接和特殊项明确失败。枚举真实目录 FD 并返回 complete／budget 结果。移动使用 `renameat2(RENAME_NOREPLACE)`，同步受影响的两个目录；私有替换明确声明 replace。文件同步和目录项同步为不同耐久步骤。source／read 范围在已隔离的服务权限下持有相容的进程内 lease。机制仍需逐平台产品检查，不建立真实断电、桌面、Mobile 或 macOS 验收。
 
 **Server 与后续平台。** Server writer service 使用 OS 隔离目录，普通客户端和 worker 不直写；fence 每次实际文件动作和日志决议。该部署可实现强 namespace 与自动恢复。Linux 的普通 advisory 锁无法阻止任意同用户工具；Linux 首轮可提供受控服务目录或明确的独占宿主模式，开放本地写后端待单独证明。网络文件系统逐项认证。可选 checkout→三方导回服务于长期外部编辑或不合格后端，保留原 Base/current/proposed；不是正常 Desktop 保存的强制步骤。
 
@@ -308,6 +354,14 @@ producer公布轻量FieldAccessProfile：内部绑定当前exact sourceRevision�
 
 `CompileSnapshot` 保存 exact SourceSnapshot、Environment、完整实际 World dependencies、最终官方 semantic projection/origin map、输出或诊断。合法源/body 编译或投影失败仍保原源、Draft 和可用静态 fields；旧预览不能冒当前。worker 无 ambient 文件/网络/凭据/写权，有可终止的时间/内存/输出预算；无完整追踪不给强资格。编译不会创建身份、保存或隐式调用业务动作。
 
+产品错误和计算出的状态说明使用 canonical `UiMessage`（语义 key 与有类型的命名参数），不按机器 code、英文或中文运行时文本推导翻译。`ErrorDescription` 的 `explanation`、`diagnostics`、`causes` 均必填；原始诊断保留原文，并明确标注 `os/json/typst/network/externalTool/dependency` 来源。作者正文、第三方诊断与真实历史原文不进入产品模板。Core 错误另保机器 code、获权 `currentSource` 和类型化 details；普通状态投影不重新公开受保护源码。真正因果链最多 32 项，超出时完整原结构进入既有类型化问题集合，不截断或 panic。并列校验／编译问题不折成因果链或拼接字符串；其预算由原输入及生产边界控制。聚合 details 区分 Data 的真实分类、产品问题与未满足的准确语义证据；解码证据描述不授予写入资格。
+
+JSON 正文路由共用一个请求解析边界：授权 middleware 先于正文，先核 JSON 内容类型，再按原路由字节上限读取原请求。框架字段／语法错误保原 HTTP 状态及原诊断，并使用同一类型化错误 envelope。处理器收到请求前，唯一 Data 严格解析器检查原字节中的全部对象键，包含泛型 Value 和嵌套 JSON；不从已丢失重复键的对象声称验证成功。响应 JSON 不改作请求解析器。原提交回执与后续交付独立，交付错误携带完整获权类型化事实，不覆盖已知提交状态。
+
+托管导入／复制审核在原 ActorOperation 中冻结闭合的安全损失语义。该授权投影排除私有路径、作者值和来源诊断，不持久化翻译后的文案。公开损失只含固定安全 code、canonical 类型化说明、原诊断与因果数组，以及必填 `productDiagnostics` 数组。切换显示语言不重新生成已审核的损失事实。旧字符串 message 损失记录明确拒绝，原字节不重写。
+
+编译／批注 worker 的唯一内部错误协议为 **version 2**。`display_tree_budget` 保持独立机器类别，并与 `product_error` 一样必带完整 `productDiagnostics` 数组；产品失败另有类型化 description。预算与真实 World 问题可同时保留。旧协议、未知／重复／额外成员和不合形状的对象均拒绝，不从错误文案恢复类别。新操作回执只保存操作、计划、提交状态、路径与成员事实，不再生成冗余说明字符串；既有 journal 和真实历史说明保留原字节。界面语言只控制显示。确需写入 DOCX／PDF 或新批注正文的产品标签，使用单独明确的输出／内容语言意图并冻结在相应请求与原计划中；切换界面语言不重写原 Plan、已存批注、作者值或 CEL 结果。
+
 中文默认依 [EDITOR](EDITOR.zh-CN.md) §8.6 落实。字体锁固定可用字体集合及其准确文件版本/许可与回退环境，不能只记最终已用字体而忽略集合新增改变回退选择。Desktop、Server/CLI 和 WebUI 消费同一已准入集合；宿主系统字体只有显式准入后才能参加该环境，worker 不扫描 ambient 字体。浏览器获权同源交付遵守资源授权/撤权，不增加外网权限。字体集合、库语言/样式或实际依赖变化失效受影响 compile/preview/Job 准备；静态字段和 note 原字节不因字体变化而改动。已确认下载仍交原 staged bytes，缺当前交付资格则停止而不重编译替换。
 
 ### 9.1 共同LogicalCut及current发布
@@ -370,7 +424,35 @@ v0.6.2 识别执行资料只保存在执行端独立 private state；它不是�
 
 托管入口使用既有 `contentImportSlots` 的独立 `recognition {run,read,import,download}` 权限，默认均拒绝；这些权限不隐含未来正文、字段、历史、搜索、资源或输出权。映射字段还须目标成员的准确 FieldId 读写权，schema 读取另外获权。生成成员仍由原 slot producer 的出生事实证明，新增目录资格和每个后续消费者沿既有 Core 规则；同步保原件、来源、字段及真实身份，不传执行资格或私人作业目录。
 
+### 9.4 本设备任务提醒决定
+
+`tasks/reminder` 是唯一作者意图。Core 从准入且当前可读的已保存 Task 重建候选，不从 Draft、通知参数或第二任务缓存取事实。共同 `device-state/reminders.json` 仅保存库选择、逐提醒 opt-in、个人处理和投递责任；复用 device-state 身份，不用 sync replica_id。复制任务不复制启用资格。固定叶 typed 完整格式拒未知／重复成员，限 16 MiB、128 库及 32768 记录，经原字节摘要和共同 device guard/CAS/flush/回读持久。库固定 WorkspaceId 与物理根身份，路径仅定位；外国设备／profile 不自动采纳。scope-first backup 仅在完整验证已知叶后排除该设备全局数据，未知文件仍拒绝。
+
+设备记录使用 schema version 2。`failedBeforeCall` 与 `unknown` 保存类型化 `CoreDescription`，在原记录预算内保留实际因果链、原诊断来源及完整并列事实。单条投递说明另有 16 KiB 序列化预算，超过时明确拒绝，不截断。调度问题连同 owner 与 reminder 身份保留完整原始类型化 Core 错误。状态／版本／重复校验使用显式事实，不解析诊断文案。v1 与旧字符串诊断记录明确拒绝，原始字节保留。原 OS 请求中的标题／正文、执行键域及系统通知 group 属于独立外部事实，保持原值。
+
+一次多成员捕获按库收集，仅在本次调用内复用该库的完整库存定位观察，切换库即释放；准备、原批次重试和原通知重新核权共用完整捕获路径。逐源的原物理准入、当前位置、字节、Schema 与控制见证不省略；发生决定前，在原输入 guards 持有期间按库重新完整扫描，核对固定 NodeRef 到原 source path 的唯一映射。单条订阅与有界内部批次共用一条设置写入路径：原 mutation 重取先于重新捕获，重复成员拒绝，完整资格后一次 CAS，失败不写前缀。对外仍为原单条命令，原单条 fingerprint 和禁用语义保持。
+
+不可克隆、不可由 wire 构造的交付许可只携带原 members（至多64项），源码／控制见证先按准确路径去重再克隆。私有 journal cut 持有原 commit、Birth、observation 记录的受保护读取句柄，只纳入初始已存在且经原解码器确认的 commit。签发与调用前接纳均用一次批量检查复用普通 Core reader 的同一物理准入、placement 重放和已接纳 revision 算法，读取固定 cut 的原记录，不接纳临时新增 commit／observation。完整已知 operation、相关名称、parent／FI、stamp 与 hash 围栏仍须一致。journal 枚举沿用5000成员上限并守64MiB实读预算；原作者输入1024路径／64MiB预算保持。Debug 只报计数，不输出捕获正文。
+
+调用前在原作者 guards 内复核当前设备／账本、原成员、选库／订阅同意及 effect key，准确原正／负作者见证、fresh 完整库存映射与该固定 journal 证明。仅正文变化、Schema／控制或 journal 证据变化也拒绝旧许可，不静默重新捕获。确认 failed-before-call 后，才按原效果号通过完整 fresh 捕获重试。完整输入资格先于新 attempt 时钟及原五秒墙钟／单调时限；最终 postcheck、目标分钟检查与一次性消费仍先于外部调用。
+
+执行键为 `weftext.reminder-effect.v1` 与 device、NodeRef、reminderId、实际语义摘要和精确 trigger 的 canonical SHA256。先持久原键的 submitting、完整 OS request 和 attempt，才返回不可反序列化／克隆的 permit。每次系统调用前必须 `check_reminder_permit`：重验当前源、库、设备、任务和授权，复核共同源／配置正负见证闭包及全部后置检查，并最终核对目标分钟、单调 5 秒时限和墙钟未回拨；全部通过后才准入一次并消费许可。普通投递不能因资格核查耗时越过目标分钟。Native 在 Core 锁外调用 OS，再以原 permit 写回结果；最后检查不声称与之后的作者编辑或 OS 调用全局原子。Server 没有 toast producer 或投递 HTTP 接口。
+
+submittedToSystem、可证明未调用的 failedBeforeCall 和 unknown 分开；重启后的 submitting 对外也是 unknown，成功不是已读。只有完整原 app/tag/group/activation/request 在系统历史出现才能确认 unknown；缺席、用户清除或系统限制不解锁重试。明确取消原因（库／提醒关闭、Task 关闭、定义变更）与个人 handled、外部结果正交；处理不写 Task.status。撤回使用原地址，opaque activation key 回跳逐成员重新授权，不能恢复旧读取权。
+
+宿主可按真实单条／汇总投递键有界读取完整原通知，核对激活目录保存的 opaque key。此读取仅验证当前设备账本，不要求作者库在线，也不改投递结果；汇总内的任务成员键不是独立 OS 通知地址。后续打开仍通过实际 Core 回跳重新授权，原记录存在不授予当前作者读取权。
+
+恢复汇总由 Core 可信扫描当前全部已启用且同意投递的订阅，调用方不能挑选前 64 项。受限或未知 scope 仅产生保留完整原因的类型化问题，不消费该范围。问题样本最多 32 项，`issue_count` 保留总数、`issues_complete` 明示样本是否完整；任何问题都不能被解释为完整可资格集合。完成、失效和已处理项排除。
+
+全部新增错过项必须同时符合 1,024 输入、64 MiB 扫描及 16 MiB／32,768 记录的账本预算；超预算整批不发 permit、不写水位，并明确报告预算／部分范围。在预算内按 execution key 排序，一次 CAS 固定不超过 64 个实际 OS 成员和其余项的 `SummaryOverflow`。后者仅投影 `inAppOnly`，没有 OS Attempt；原通知读取、历史确认、完成和激活入口均不把它当作系统通知。汇总在扫描后的新可信准入时间固定 cutoff，`nextAllowedAt = cutoff + 900 秒`，重启保留冷却时间，墙钟回拨时拒绝新批。
+
+仅原 Individual 的确定 `failedBeforeCall` 可以首次进入该错过阶段，并保留 prior Attempt。既有 SummaryMember／Overflow 或任何可能已有 OS 效果者不得进入新批。原汇总的确定调用前失败仅能按原 key、原 request 和原成员显式重试，cutoff、overflow 和 cooldown 均不变；不重组为另一个汇总。
+
+最终决定前后保持正向输入共享只读 guard、核对原 parent／准确字节／身份／Pending；缺失配置保原见证并前后复验，使用唯一 bundled schema，无用户安装前置。缺失槽是观察而非未来创建锁；后验变化不给 permit，已持久 submitting／unknown 不抹去。最后检查与 OS 效果不声称对之后任意作者编辑全局原子。已有无效配置不回退。单独数据／账本测试不等于真实桌面 DSK03–08 验收。
+
 ## 10. 最小消费接口
+
+本机设备身份、三项桌面设置及其私有记录/CAS/库备份边界见[本机设备状态](DEVICE-STATE.zh-CN.md)。这层基础不代表原生 UI、提醒或安装已经通过验收。
 
 | 接口 / 对象 | 各 owner 的责任 |
 | --- | --- |
@@ -463,3 +545,54 @@ live、Trash 及混合调用按原实际生命周期快照与所选 after 判定
 Server 的独立 syncOwner capability 仅授权明确 syncIdentity 的完整不可变记录传输，不继承文档或字段权，不授予原始路径、private state 或作者树安装。持久策略绑定配对，actor/epoch/票据与每块交付/接收在同一服务锁下重验；撤权清缓存、重新授权不复活旧票据。服务端已有同一物理副本的用户保存沿用原 Core outbox，relay 不因接收 manifest 改 current。上传按完整记录摘要幂等；半条记录是有界可丢内存缓存，完整记录由原 Core immutable store 保留，不能把传输进度当作者 receipt。下载冻结记录字节，不在续传时取 latest。
 
 本地网络客户端只在准确配对与有限记录目录下复制，网络等待不持有 Core writer 锁。每条完成记录再经 Core 校验，部分或重启传输保留已收完整记录，安装继续使用已有 Plan 资格与恢复机制。此通道信任同所有者设备/账户；TLS、权限和摘要分别处理传输机密、披露资格和完整性，不构成设备签名/恶意 provider 协议。
+
+
+## 原提交事实与结果交付（当前开发合同）
+
+创建、复制、模板和恢复的交付从原事务的 canonical birth／搬移物理身份出发，核原 workspace、birth 与 materialized 证据，再投影同一物理节点的唯一当前 placement。正常移动可交付原节点的当前位置；旧路径被另一已接纳节点复用、同 NodeID 的文件替身或证据不完整时，不按旧 path 或逻辑 ID 猜对象，只保原回执并报告交付不可用。库创建同样独立核原物理库根与可选根节点；根笔记随实际文档交付，不再次按 `rootNotePath` 打开。识别导入的本地打开沿原 actor/resource/library 操作记录核同一 birth 成员，托管入口仍独立授权，不借本地全局查询。
+
+Query 定义重放先用与 `save` 生产共用的完整 SaveRequest 指纹核 session、base、原 Plan path 与保留的最终 source，再做可选 schema／结果 IO，按原 pinned schema 重建准确源码；只读原提交事实，不调用保存写入。旧 Core Session 和界面位置缓存丢失不妨碍核原请求，变输入仍报 operationConflict。普通文件保存与 `enableSync` 是当前正式的非 transaction Plan 家族；同步启用状态从原 SyncSetup 和严格原 commit 读取固定 identity／replicaId，不用当前 binding 冒充原结果。未知 kind、互相矛盾的参与者或损坏 commit 保留为错误，没有另一份回执账本。
+
+另存为在写入前，沿原操作既有 materialized-object 证据记新文件的物理身份；首次交付和以后查询共用同一严格身份重开，复用路径上的相同字节不能证明仍是原文件。证据缺失或普通文件移出已知定位范围时，保原提交回执并报告交付不可用。当前缓冲区可明确只结束这次界面交付等待，继续原 Session、Y 和 Undo，并保原号用于只读查询；这个处置不取消作者效果、不宣称目标已交付，也不分配新号重投原另存为。
+
+已有普通文件标签及普通启动文档的自动刷新，只向 `/api/open` 提交原 `sessionId`。Core 在重开前后核原 Session 所持文件的物理身份；缺 Session、原件移走或同字节替身均不能静默安装新 writer。原缓冲区、Session 和 Undo 保留，可明确另存当前稿。`{path,root?}` 是独立的新路径打开意图，混合两种请求会被拒绝。此设备本地 reader 不作为托管授权入口。
+
+Save／另存为首次响应及原号状态共用同一文件保存交付信封。消费者核原号、实际 saved／committed 状态、非空原回执 base／path、冻结源／路径，以及完整实际 document 与一致 source-match 标记，或 typed documentError。通用 committed 信封不足以确认文件 writer；畸形回执保原请求与输入，只查原号恢复，不再以缺 document 的回退分支推进 Base 或释放编号。
+
+新建普通笔记、快速记录与周期笔记共用现有 `NewNode`／`CreateTree`，没有另一条直接文件写入算法。创建接口返回原 `OperationReceipt`，可选 `document` 与 `documentError` 单独报告打开和会话登记；已有回执不会因之后打开、刷新或下载失败变成无效果。快速记录／周期请求先核原号与完整作者输入，已存在的计划不按当前 schema 重解释。
+
+普通保存的原 Plan 仍只保存 `Receipt`。瞬时 `SaveOutcome` 的 `recoveryIssue` 报告提交后个人 Draft 更新失败，源码提交与会话的新依据仍成立。`/api/operations/status` 从原 Plan／commit 读取保存事实，不依赖旧会话；其可选新文档有自己的实际 base。客户端只在原编辑器会话、真实 owner 和已提交源码均匹配时接纳新会话，保留等待期间的新输入、选区与 Undo。当前磁盘已是另一版时保原回执与交付待定，不能把原回执 base 与另一版的会话混用。Query 定义和历史恢复的状态也先保提交事实，再独立报告结果读取失败。
+
+普通错误码和单次 missing 不证明无效果。客户端冻结原请求；未知结果先查原号，再经 `/api/operations/settle` 在同一原 journal 写入持久终结后才可释放编号。新全局查询／终结限本地所有者；托管内部事实读取继续由原 actor、resource、library 校验约束。操作编号统一为小写带连字符 UUID，拒绝别名，不改写原件。resolution 使用有界、严格字段和原号／文件名校验；解析或读盘错误保留为错误，不能解释成未解决或已取消。已加载 Core 中确定已提交的原事实优先于附属交付元数据。
+
+无 Plan 的决议只能是 `cancelPrepared`。裸终结标记属于设备本身，不进入某个库的作者或同步集合。已有非安装预约须带原号及原库物理身份，按原 typed 记录核对；与预约相连的取消及预约按实际归属共同备份，外库只读有界归属首部。新取消不再制造 `cancelLibraryCreation` Plan；保留的旧取消仅按严格无作者参与者的形状读取。任何未知 suffix、孤立 install／commit、损坏决议或无法证明归属的预约都保留并拒绝宣布无效果；备份不忽略这些证据。实现与定向回归不建立整版 0.7、多端、真实 IME 或断电验收。
+
+终结请求仅含 `operationId`、`requestKind` 和严格 64 位十六进制 `wireDigest`。客户端在首次异步等待前同步固定原 `JSON.stringify` 字节，再对这些字节计算 SHA-256；终结不重采后续输入，也不要求服务端再次解析原作者 JSON，因此被拒绝的孤立 UTF-16 代理项也能安全结束原号。摘要是同一决议的请求关联元数据，不证明未提交；后端仍先核原 Plan／commit、命名空间证据与所有者。历史恢复沿同一冻结边界，后续 CaptureDraft 直接复用此合同。
+
+本地历史恢复的 restore 与 status 接口统一返回原操作状态信封：`operationId/status/receipt` 加可选 `result/resultError`。完整结果直接可消费；提交已确定但准确结果暂不可读时，仍保原回执、编号和 committed 状态，不能退成未知或再发作者恢复。missing 查询与终结之间可能已有提交：通用 settle 的 flat 保存事实先保留，再从 history/status 取得历史结果，不能把 flat 回执当作历史结果。不同作者输入的同号请求仍返回 operationConflict。
+
+备份对 Plan、带作用域的 Draft／actor 首部、CaptureDraft 及无 Plan 预约，均先按明确原 workspace 身份路由，再看定位路径。A 的整物理库根保留移走、旧路径独立准入新 B 后，A 的外库记录会被排除，不读其正文，也不阻挡 B 的合法备份。同 workspace 却物理根不同，或同一物理根被矛盾 workspace 声称，仍报 scopeChanged；未知／畸形首部、有界预算和选中记录的严格 reader 继续保守拒绝。
+
+文件保存使用原 Plan 的必需 `fileSave {version:1,sessionId,baseId?,scope}` 参与者；普通 Save 保原 session/base，SaveAs 保原 session 并在 stage 前冻结目标归属。path 与 after 只存于原 Plan，完整参与者和 scope 纳入同一指纹、同一 commit。`QualifiedInputScope` 只有明确 `deviceUnassigned` 或 `library {binding:{root,rootIdentity,workspaceId}}`，库 WorkspaceId 非可选。Open 检查真实祖先的已准入库，即便普通嵌套文件默认 UI root 只是直接父目录，也不能误归为设备输入。缺控制证明、损坏或读取失败不降为设备输入。Save 承原 Session 的 scope，SaveAs 取目标 scope；原号重试／查询不根据当前路径重算归属。
+
+Session、当前文件 Draft 共用同一 scope，Draft 必需原 FI，唯一主键为 `(FI,scope)`。旧 Session 的后续输入仍归原库，即使旧根路径已属于另一库；不得重新标记为当前库。已提交的同对象移动只在同 scope 下更新主记录 path，先归档准确旧字节；删除旧路径槽／空归属合并和 consumed 迁移协议。旧缺 scope 的 Draft 或缺必需参与者／版本的 file-save 原件保持，报告 unsupported，不自动补证、升级或提供正常写入／备份双轨。原历史 commit 不能因此被解释为无效果。
+
+备份、历史／修订、同步安装戳和托管原操作读取共用原 Plan 资格。普通 Save、SaveAs、未准入普通文件及未提交私有提案都按原 scope 分类；不保留路径回退或临时 Birth 推导索引。actor 的 Server 配置 namespace 是独立权限域，可是普通目录或子目录，不能当文件归属；file-save actor 记录复用同 Plan 分类与原权限记录。Capture 保留设备／已绑定生命周期和原 volume-GUID 坐标首部；其 shape 校验不等于 file-save 原 scope 证明，不能把缺失 WorkspaceId 的权限目录当成已绑定库。若消费者需要转换，须经 Core 原准入事实取得稳定 locator，不直接复用坐标字符串。
+
+原 ActorOperation 也以必需 closed `ActorInputScope` 首部保存输入归属：`qualified {scope}` 或没有作者输入的纯 fence `noInput`。Save／field／definition／history 从原 Session 冻结，feature／navigation／backup 从已核原输入 root 冻结，发生在持久提案写入之前。已有 Core file-save Plan 时，必须与该同一参与者 scope 一致。namespace 的 `library` 权限字段仍独立，不能用它先排除作者库。因 staleBase 等普通前效果错误尚无 Plan 的托管提案，仍进入其准确原库备份；无输入设备 fence 不认领某个库。
+
+共同原 scope reader 同时联核原 WorkspaceId、根 FI 和原准入 Plan 的稳定 locator；即使记录将被归为外库，也不能忽略矛盾 locator。首部保留有界原 JSON 字节作严格 typed decode，重复成员不能经中间通用值覆盖。Actor producer 在持久化前执行相同完整验证：普通 source／field 可以是设备输入，但非空库功能／导航提案必须已有合格库；拒绝时不留下自身 reader 无法读取的提案。纯 `noInput` fence 还须核准确 actor/operations/canonical UUID 文件名，不能隐藏实际 Plan。
+
+Draft reader 从当前真实位置逆向遍历同 workspace 的原 committed relocation，联核当前移动目录 FI，规范叶另核文件 FI；这可恢复整目录内未单独列入事务文件清单的普通输入。旧 Session 的 writer 路径关系不能充当当前物理位置证明，外部回滚到历史旧槽不会覆盖隐藏主稿。同步 publication／local-state 读取同样要求 file-save 原参与者；新发布以原 workspace 选择原 replica，旧路径复用不会把新库保存发布到外库绑定。
+
+普通保存、定义保存及原事务内同物理文件的搬移交付，刷新仍活动的原 Session，不另建输入 producer。刷新先核原保存 Session 或原事务捕获的文件 FI，再核当前文件 FI、Node、actor 与完整原 scope；保留原 producer、完整 Draft witness、已确认输入和冲突状态。文件实际基准未变时也保留 BaseId，重复 status 不使同一编辑器的请求失效。若实际基准已变且不匹配原事务捕获基准与原提交 observation，返回独立比较 Session，不更新原 writer 的基准或输入。保存失联后的查询显式携带冻结请求的原 Session；不带 Session 的通用回执查询及 SaveAs 仍返回独立 Session，不能从回执推导延续权。迟到输入继续属于原 writer，多窗口的独立提案不按文本合并；重启后仍走完整记录 CAS 的显式恢复。
+
+Draft 的每条主／备选输入区分普通 `proposal` 与 `committedBaseline { operationId }`。只有真实普通保存提交后，Core 才能签发后者。原 `FileSaveData` v2 在 fingerprint 和原 commit 中绑定准确 `draftProducerId`；Plan 将 `fileSave, identity` 放在作者载荷之前。消费基线前，在同一保护句柄上先核这两项原元数据，再有界读取并重核持久 Plan 与保留事实一致，走现有唯一 commit 校验器，核 scope、FI、producer、已知 Base、准确 afterimage 及已提交搬移路径。证据缺失、损坏或不一致须失败并保留当前完整 Draft，不能把加载时缓存当作原件。
+
+关闭回读复用同一受保护 Draft 记录读取入口，先核原 scope 与 FI，再读正文，并以原完整字节计算回执。搬移路径证明同时覆盖原 files 与 Relocate／Compound 的 leaf／members，按准确 FI 和最具体原映射核对；完整新记录通过资格后才归档。历史／比较仅合并来源已知且 producer、完整输入、角色和原号均相同的投影；未知来源及显式保留的当前缓冲区不按同文折叠。
+
+普通 persist 只可保留同一 producer 已 ACK、仍在完整记录中且输入依据未变的既有基线角色；输入变化即回到 proposal，Undo 回到同文也不能重新获得资格，旧保存重试不重装基线。打开与合并沿同一分类规则逐条消费已验证且 producer 已不活动的基线，不转移其 producer。混合记录保留其他完整输入，必要时提升完整条目，并在交付恢复 DTO/witness 前原子更新当前记录；全是可消费基线时可暂留磁盘投影，直到首次真实 persist。角色与原号参与完整 witness、回读、恢复及预算。原作者字节和可再生基线由原 Plan/commit 保留，正常消费不写 draft-history，也不放宽 128 条／16 MiB 保护预算；未知依据、独立同文输入和活动 producer 仍保留。
+
+所有私有 ActorOperation 读取先在同一 ParentGuard 保护句柄上逐字节读取既有顺序首部 `scope, library?, actor, resource, fingerprint, coreOperationId`（总计 8 KiB、单值 2 KiB），严格核原 scope tuple、原 Plan 和实际 actor/resource/库资格，再有界读取正文并重核元数据一致。Server 的原保存 status 必需原 resource，读取授权在进入 Core 前完成。定义枚举对已证明的其他 resource 只读首部，不读取或计入其正文预算；畸形原 tuple 不能借外域跳过。无 namespace library 绑定的原输入仍必须与当前受信库的 WorkspaceId 和根 FI 一致。纯 noInput fence 则在 4 KiB 内完整核其无输入事实，不能用未核的首部声明掩盖作者内容。
+
+Draft 持久布局必需先 `scope, identity`，再正文；历史枚举仅在原 scope 和 FI 均匹配后计入 128 条／16 MiB 预算。准确 restore 引用若 scope 或 FI 不符直接拒绝，保原 commit 与回执，只报告结果暂不可交付。资格通过后从同一个受保护句柄有界读取、严格反序列化并联核首部；旧布局原件保留，明确 unsupported，不增加旧／新双 reader 或平行 metadata 账本。定义保存 admission sidecar 也先核其原 file-save Plan 和既有 coreOperationId/saveOperationId/actor/resource 首部，再读取预约正文。

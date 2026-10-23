@@ -1,11 +1,13 @@
 //! Same-owner local adapters only. Never mounted in the hosted actor router.
 use super::{ApiResult, AppState, core_call, value};
+use crate::RequestJson;
 use axum::{Json, Router, extract::State, routing::post};
 use serde::Deserialize;
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use weftext_core::sync::{ObjectKey, SyncIdentity, SyncRevalidation};
+use weftext_messages::UiMessage;
 
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
@@ -28,7 +30,10 @@ pub(crate) fn router() -> Router<AppState> {
 struct OperationLookup {
     operation_id: String,
 }
-async fn operation(State(state): State<AppState>, Json(req): Json<OperationLookup>) -> ApiResult {
+async fn operation(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<OperationLookup>,
+) -> ApiResult {
     Ok(Json(
         core_call(&state, move |core| {
             let request = core.sync_operation_request(&req.operation_id)?;
@@ -44,7 +49,10 @@ struct CancelRequest {
     operation_id: String,
     plan_id: String,
 }
-async fn cancel(State(state): State<AppState>, Json(req): Json<CancelRequest>) -> ApiResult {
+async fn cancel(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<CancelRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.cancel_prepared_sync(&req.operation_id, &req.plan_id)
@@ -97,7 +105,10 @@ struct HistoryRequest {
     after_commit: Option<String>,
     limit: Option<usize>,
 }
-async fn history(State(state): State<AppState>, Json(req): Json<HistoryRequest>) -> ApiResult {
+async fn history(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<HistoryRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.received_sync_versions(
@@ -128,14 +139,14 @@ struct RevalidationReviewRequest {
 }
 async fn revalidation_cut(
     State(state): State<AppState>,
-    Json(req): Json<AdoptionCutRequest>,
+    RequestJson(req): RequestJson<AdoptionCutRequest>,
 ) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             if core.sync_binding_info(&req.root)?.identity != req.identity {
                 return Err(weftext_core::CoreError::new(
                     "syncIdentity",
-                    "The selected replica does not match the explicit pairing identity",
+                    UiMessage::error_api_sync_pairing_identity_mismatch(),
                 ));
             }
             core.sync_revalidation_cut(&req.root, &req.objects)
@@ -145,7 +156,7 @@ async fn revalidation_cut(
 }
 async fn revalidation_review(
     State(state): State<AppState>,
-    Json(req): Json<RevalidationReviewRequest>,
+    RequestJson(req): RequestJson<RevalidationReviewRequest>,
 ) -> ApiResult {
     let captured = core_call(&state, move |core| {
         core.capture_sync_revalidation_review_for_operation(
@@ -204,7 +215,7 @@ async fn native_validation_outputs_with_budget(
     requests: &weftext_core::sync::SyncNativeRenderInputs,
     budget: &mut NativeValidationBudget,
 ) -> Result<Vec<weftext_core::sync::SyncNativeRenderOutput>, super::ApiError> {
-    let failure = |message: &str| {
+    let failure = |message: weftext_messages::UiMessage| {
         super::ApiError::from(weftext_core::CoreError::new(
             "queryInvocationUnavailable",
             message,
@@ -213,36 +224,41 @@ async fn native_validation_outputs_with_budget(
     budget.notes = budget.notes.saturating_add(requests.len());
     if budget.notes > 32 {
         return Err(failure(
-            "The native Query validation exceeds 32 exact notes",
+            weftext_messages::UiMessage::error_api_sync_native_validation_note_budget(),
         ));
     }
     let mut outputs = Vec::with_capacity(requests.len());
     let mut retained = 0usize;
     for index in 0..requests.len() {
-        let request = requests
-            .render_request(index)
-            .ok_or_else(|| failure("The exact native input is missing"))?;
+        let request = requests.render_request(index).ok_or_else(|| {
+            failure(weftext_messages::UiMessage::error_api_sync_native_input_missing())
+        })?;
         let remaining = budget
             .deadline
             .saturating_duration_since(tokio::time::Instant::now());
         if remaining.is_zero() {
             return Err(failure(
-                "The native Query validation exceeded its total worker budget",
+                weftext_messages::UiMessage::error_api_sync_native_validation_worker_budget(),
             ));
         }
         let value = tokio::time::timeout(remaining, super::render_frozen_worker(state, request))
             .await
-            .map_err(|_| failure("The native Query validation timed out"))??;
-        let output: weftext_engine::RenderOutput = serde_json::from_value(value)
-            .map_err(|_| failure("The native worker returned an invalid exact result"))?;
+            .map_err(|_| {
+                failure(weftext_messages::UiMessage::error_api_sync_native_validation_timed_out())
+            })??;
+        let output: weftext_engine::RenderOutput = serde_json::from_value(value).map_err(|_| {
+            failure(weftext_messages::UiMessage::error_api_sync_native_result_invalid())
+        })?;
         retained = retained.saturating_add(
             serde_json::to_vec(&output.products)
-                .map_err(|_| failure("Invalid native products"))?
+                .map_err(|_| {
+                    failure(weftext_messages::UiMessage::error_api_sync_native_products_invalid())
+                })?
                 .len(),
         );
         if retained > 32 * 1024 * 1024 {
             return Err(failure(
-                "The native product inputs exceed the original Query byte budget",
+                weftext_messages::UiMessage::error_api_sync_native_product_byte_budget(),
             ));
         }
         outputs.push(output.into());
@@ -250,13 +266,18 @@ async fn native_validation_outputs_with_budget(
     Ok(outputs)
 }
 
-struct AdoptionJsonBudget(usize);
+#[derive(Default)]
+struct AdoptionJsonBudget {
+    bytes: usize,
+    exceeded: bool,
+}
 impl std::io::Write for AdoptionJsonBudget {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        if self.0.saturating_add(bytes.len()) > 16 * 1024 * 1024 {
-            return Err(std::io::Error::other("adoption JSON exceeds 16 MiB"));
+        if self.bytes.saturating_add(bytes.len()) > 16 * 1024 * 1024 {
+            self.exceeded = true;
+            return Err(std::io::ErrorKind::FileTooLarge.into());
         }
-        self.0 += bytes.len();
+        self.bytes += bytes.len();
         Ok(bytes.len())
     }
     fn flush(&mut self) -> std::io::Result<()> {
@@ -265,7 +286,7 @@ impl std::io::Write for AdoptionJsonBudget {
 }
 async fn adoption_cut(
     State(state): State<AppState>,
-    Json(req): Json<AdoptionCutRequest>,
+    RequestJson(req): RequestJson<AdoptionCutRequest>,
 ) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
@@ -273,13 +294,14 @@ async fn adoption_cut(
             if binding.identity != req.identity {
                 return Err(weftext_core::CoreError::new(
                     "syncIdentity",
-                    "The selected replica does not match the explicit pairing identity",
+                    UiMessage::error_api_sync_pairing_identity_mismatch(),
                 ));
             }
             let cut = core.read_sync_adoption_cut(std::path::Path::new(&req.root), &req.objects)?;
             // Count the actual wire representation without allocating a second
             // large byte array. Browser persistence can have a smaller budget.
-            if serde_json::to_writer(AdoptionJsonBudget(0), &cut).is_err() {
+            let mut budget = AdoptionJsonBudget::default();
+            if let Err(error) = serde_json::to_writer(&mut budget, &cut) {
                 for change in &cut.changes {
                     if let Some(base) = &change.base_id {
                         let _ = core.take_snapshot_witness(base);
@@ -288,17 +310,24 @@ async fn adoption_cut(
                 for member in &cut.removed_members {
                     let _ = core.take_snapshot_witness(&member.base_id);
                 }
-                return Err(weftext_core::CoreError::new(
-                    "budget",
-                    "采纳预览的完整请求超过 16 MiB；请减少本次所选对象，原文件与草稿保留",
-                ));
+                return Err(if budget.exceeded {
+                    weftext_core::CoreError::new(
+                        "budget",
+                        UiMessage::error_api_sync_adoption_preview_budget(),
+                    )
+                } else {
+                    error.into()
+                });
             }
             Ok(cut)
         })
         .await?,
     )?))
 }
-async fn binding(State(state): State<AppState>, Json(req): Json<RootRequest>) -> ApiResult {
+async fn binding(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<RootRequest>,
+) -> ApiResult {
     let result = core_call(&state, move |core| match core.sync_binding_info(req.root) {
         Ok(binding) => Ok(Some(binding)),
         Err(error) if error.code == "syncNotEnabled" => Ok(None),
@@ -307,7 +336,10 @@ async fn binding(State(state): State<AppState>, Json(req): Json<RootRequest>) ->
     .await?;
     Ok(Json(value(result)?))
 }
-async fn enable(State(state): State<AppState>, Json(req): Json<EnableRequest>) -> ApiResult {
+async fn enable(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<EnableRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.enable_sync(req.root, &req.operation_id)
@@ -315,17 +347,26 @@ async fn enable(State(state): State<AppState>, Json(req): Json<EnableRequest>) -
         .await?,
     )?))
 }
-async fn status(State(state): State<AppState>, Json(req): Json<IdentityRequest>) -> ApiResult {
+async fn status(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<IdentityRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| core.sync_status(&req.identity)).await?,
     )?))
 }
-async fn publish(State(state): State<AppState>, Json(req): Json<RootRequest>) -> ApiResult {
+async fn publish(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<RootRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| core.publish_sync(req.root)).await?,
     )?))
 }
-async fn receive(State(state): State<AppState>, Json(req): Json<ReceiveRequest>) -> ApiResult {
+async fn receive(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<ReceiveRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.read_sync_directory(&req.identity, req.directory)
@@ -333,7 +374,10 @@ async fn receive(State(state): State<AppState>, Json(req): Json<ReceiveRequest>)
         .await?,
     )?))
 }
-async fn export(State(state): State<AppState>, Json(req): Json<ExportRequest>) -> ApiResult {
+async fn export(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<ExportRequest>,
+) -> ApiResult {
     Ok(Json(value(
         core_call(&state, move |core| {
             core.write_sync_directory(req.root, req.directory, &req.objects)
@@ -341,7 +385,10 @@ async fn export(State(state): State<AppState>, Json(req): Json<ExportRequest>) -
         .await?,
     )?))
 }
-async fn file(State(state): State<AppState>, Json(req): Json<FileRequest>) -> ApiResult {
+async fn file(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<FileRequest>,
+) -> ApiResult {
     let result = core_call(&state, move |core| {
         let exact = core.read_received_sync_file(&req.identity, &req.object, &req.revision, &req.path)?;
         let bytes = &exact.bytes;

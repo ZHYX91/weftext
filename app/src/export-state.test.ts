@@ -2,12 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { bibliographyConflictCount, ExchangeController, OutputController, OutputReadGate, type BibliographyInspection, type ExchangeRequest, type ExportRequest, type OutputTransport, type PreparedOutput } from "./export-state";
 import type { DocumentBasis } from "./data-panel";
+import { message } from "./ui-locale";
 
 const basis = (): DocumentBasis => ({ sessionId: "session-a", source: "原生草稿", serial: 7, baseId: "base-a", path: "D:/Library/Note/note.typ", root: "D:/Library" });
 const hash = "a".repeat(64);
-const prepared = (request: ExportRequest, overrides: Partial<PreparedOutput> = {}): PreparedOutput => ({ id: "artifact-a", requestId: request.requestId, filename: "输出.docx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", length: 3, digest: hash, summary: "真实文件", losses: [], status: "prepared", ...overrides });
+const prepared = (request: ExportRequest, overrides: Partial<PreparedOutput> = {}): PreparedOutput => ({ id: "artifact-a", requestId: request.requestId, filename: "输出.docx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", length: 3, digest: hash, summary: message("common.save"), losses: [],preview:null,expiresInSeconds:3600, status: "prepared", ...overrides });
+const confirmed=(id="artifact-a")=>prepared({requestId:"request-a"} as ExportRequest,{id,status:"confirmed"});
+const description=()=>({explanation:message("common.unavailable"),diagnostics:[],causes:[]});
 function transport(overrides: Partial<OutputTransport> = {}): OutputTransport {
-  return { id: () => "request-a", prepare: async request => prepared(request), confirm: async request => ({ id: request.id, status: "confirmed", digest: hash, length: 3 }), download: async () => new Blob(["abc"]), digest: async () => hash, ...overrides };
+  return { id: () => "request-a", prepare: async request => prepared(request), confirm: async request => confirmed(request.id), download: async () => new Blob(["abc"]), digest: async () => hash, ...overrides };
 }
 
 test("legacy output freezes its DOCX review inputs and cancellation signals the original request without unlocking it", async () => {
@@ -19,8 +22,8 @@ test("legacy output freezes its DOCX review inputs and cancellation signals the 
   resolve(prepared(request)); await pending;
 });
 test("an unknown persistent external outcome keeps the same immutable request instead of launching a new conversion", async () => {
-  const requests: ExportRequest[] = []; const controller = new OutputController(transport({ prepare: async input => { requests.push(input); return { id: input.requestId, requestId: input.requestId, status: "failed", code: "resultUnknown", message: "原转换结果未知" }; } }), basis());
-  controller.setDraft({ format: "wps", legacyBackend: "configured" }); await assert.rejects(controller.prepare(), /未知/); assert.equal(controller.uncertain, "prepare");
+  const requests: ExportRequest[] = []; const controller = new OutputController(transport({ prepare: async input => { requests.push(input); return { id: input.requestId, requestId: input.requestId, status: "failed", code: "resultUnknown", ...description() }; } }), basis());
+  controller.setDraft({ format: "wps", legacyBackend: "configured" }); await assert.rejects(controller.prepare(), {code:"resultUnknown"}); assert.equal(controller.uncertain, "prepare");
   await assert.rejects(controller.prepare()); assert.deepEqual(requests[0], requests[1]); assert.throws(() => controller.setDraft({ legacyBackend: "libreoffice" }));
 });
 
@@ -29,7 +32,7 @@ test("output freezes the original draft and server-retained Query; no later docu
   const controller = new OutputController(transport({ prepare: async value => { request = value; return prepared(value); } }), current, query);
   current.source = "等待期间的新输入"; current.serial = 8; query.queryId = "query-b"; query.rowCount = 99;
   await controller.prepare();
-  assert.deepEqual(request, { requestId: "request-a", sessionId: "session-a", source: "原生草稿", serial: 7, baseId: "base-a", format: "xlsx", stylePolicy: "template", queryId: "query-a" });
+  assert.deepEqual(request, { requestId: "request-a", sessionId: "session-a", source: "原生草稿", serial: 7, baseId: "base-a", format: "xlsx", stylePolicy: "template", outputLocale: "zh-CN", queryId: "query-a" });
   assert.equal(controller.draft.query!.rowCount, 2); assert.equal(controller.draft.query!.coverage, "partial");
 });
 
@@ -68,14 +71,14 @@ test("definite preparation refusal retains template and draft while allowing a c
 
 test("loss acceptance is required, and an unknown confirmation repeats exactly the original artifact and decision", async () => {
   const requests: { id: string; acceptLosses: boolean }[] = []; let calls = 0;
-  const controller = new OutputController(transport({ prepare: async request => prepared(request, { losses: [{ code: "loss", message: "转换限制", location: "段落 1" }] }), confirm: async request => { requests.push(request); if (++calls === 1) throw Object.assign(new Error("unknown"), { code: "resultUnknown" }); return { id: request.id, status: "confirmed" }; } }), basis());
+  const controller = new OutputController(transport({ prepare: async request => prepared(request, { losses: [{ code: "loss", ...description(),productDiagnostics:[], location: "段落 1" }] }), confirm: async request => { requests.push(request); if (++calls === 1) throw Object.assign(new Error("unknown"), { code: "resultUnknown" }); return confirmed(request.id); } }), basis());
   await controller.prepare(); await assert.rejects(controller.confirm(false), /接受/); assert.equal(requests.length, 0);
   await assert.rejects(controller.confirm(true)); assert.equal(controller.confirmed, false); await assert.rejects(controller.prepare(), /原输出/);
   await controller.confirm(false); assert.deepEqual(requests, [{ id: "artifact-a", acceptLosses: true }, { id: "artifact-a", acceptLosses: true }]);
 });
 
 test("mismatched confirmation and wrong byte lengths/digests cannot be advertised as confirmed or received", async () => {
-  const controller = new OutputController(transport({ confirm: async () => ({ id: "different", status: "confirmed" }) }), basis());
+  const controller = new OutputController(transport({ confirm: async () => confirmed("different") }), basis());
   await controller.prepare(); await assert.rejects(controller.confirm(true), /不一致/); assert.equal(controller.confirmed, false); await assert.rejects(controller.download(), /确认/);
   for (const overrides of [{ download: async () => new Blob(["abcd"]) }, { digest: async () => "b".repeat(64) }]) {
     const wrong = new OutputController(transport(overrides), basis()); await wrong.prepare(); await wrong.confirm(false); await assert.rejects(wrong.download(), /字节/); assert.equal(wrong.received, false); assert.equal(wrong.uncertain, "download");
@@ -94,31 +97,34 @@ test("a late template response cannot replace a newer file or format selection",
   assert.equal(gate.accepts(first), false); assert.equal(gate.accepts(second), true); gate.invalidate(); assert.equal(gate.accepts(second), false);
 });
 
+const exchangePlan = (operationId="operation-a", losses: import("./office-wire").NativeLoss[] = []) => ({ operationId, planId:"plan-a", kind:"nativeImport", status:"prepared", changes:[], nodeMap:{}, newNodeId:null, revisions:{}, resourceMap:{}, losses });
+const exchangeReceipt = (operationId="operation-a", status="committed") => ({ operationId, planId:"plan-a", status, path:"D:/Library/Imported/note.typ", nodeIds:[] });
+const nativeLoss=()=>({path:"manifest",code:"native",...description(),productDiagnostics:[]});
 const importInput = () => ({ sessionId: "s", baseId: "b", root: "D:/Library", parent: "D:/Library", name: "导入副本", bytesBase64: "eA==", format: "native" as const });
 test("unknown import preparation freezes its original and destination under one operation ID", async () => {
   const requests: ExchangeRequest[] = []; let calls = 0;
-  const controller = new ExchangeController({ id: () => "operation-a", prepare: async request => { requests.push(structuredClone(request)); if (++calls === 1) { request.bytesBase64 = "mutated"; throw new Error("connection lost"); } return { operationId: request.operationId, planId: "plan-a", losses: [], changes: [] }; }, commit: async () => ({ status: "committed" }) });
+  const controller = new ExchangeController({ id: () => "operation-a", prepare: async request => { requests.push(structuredClone(request)); if (++calls === 1) { request.bytesBase64 = "mutated"; throw new Error("connection lost"); } return exchangePlan(request.operationId); }, commit: async () => exchangeReceipt() });
   const input = importInput(); controller.setInput(input); input.name = "new"; await assert.rejects(controller.prepare()); assert.throws(() => controller.setInput(importInput()), /重复创建/); await controller.prepare(); assert.deepEqual(requests[0], requests[1]); assert.equal(requests[0].name, "导入副本");
 });
 
 test("uncertain native commit repeats one plan, and a received receipt prevents duplicate creation when opening failed", async () => {
   const requests: { operationId: string; planId: string; acceptLosses: boolean }[] = []; let calls = 0;
-  const controller = new ExchangeController({ id: () => "operation-a", prepare: async request => ({ operationId: request.operationId, planId: "plan-a", losses: [] }), commit: async request => { requests.push(request); if (++calls === 1) throw Object.assign(new Error("unknown"), { code: "resultUnknown" }); return { status: "committed", operationId: request.operationId, path: "D:/Library/Imported/note.typ" }; } });
+  const controller = new ExchangeController({ id: () => "operation-a", prepare: async request => exchangePlan(request.operationId), commit: async request => { requests.push(request); if (++calls === 1) throw Object.assign(new Error("unknown"), { code: "resultUnknown" }); return exchangeReceipt(request.operationId); } });
   controller.setInput(importInput()); await controller.prepare(); await assert.rejects(controller.commit(false)); await assert.rejects(controller.prepare(), /原导入/); const receipt = await controller.commit(false); assert.equal(await controller.commit(false), receipt); assert.deepEqual(requests, [{ operationId: "operation-a", planId: "plan-a", acceptLosses: false }, { operationId: "operation-a", planId: "plan-a", acceptLosses: false }]);
 });
 
 test("native loss acceptance and actual committed receipts gate the visible success state", async () => {
-  let commits = 0; const controller = new ExchangeController({ id: () => "operation-a", prepare: async request => ({ operationId: request.operationId, planId: "plan-a", losses: ["本机资格不转移"] }), commit: async () => { commits++; return { status: "pending" }; } });
+  let commits = 0; const controller = new ExchangeController({ id: () => "operation-a", prepare: async request => exchangePlan(request.operationId,[nativeLoss()]), commit: async () => { commits++; return exchangeReceipt("operation-a","pending"); } });
   controller.setInput(importInput()); await controller.prepare(); await assert.rejects(controller.commit(false), /接受/); assert.equal(commits, 0); await assert.rejects(controller.commit(true), /实际完成/); assert.equal(controller.receipt, null); assert.equal(controller.uncertain, "commit");
 });
 
 test("HTTP failure JSON is a definite terminal output failure; pending JSON retains the same request", async () => {
-  const seen: ExportRequest[] = []; let calls = 0; const controller = new OutputController(transport({ prepare: async request => { seen.push(request); return ++calls === 1 ? { requestId: request.requestId, status: "pending" } : { requestId: request.requestId, status: "failed", code: "conversionUnavailable", message: "模板中缺少明确正文槽位" }; } }), basis());
-  await assert.rejects(controller.prepare(), /仍在处理/); assert.equal(controller.uncertain, "prepare"); await assert.rejects(controller.prepare(), /缺少明确正文/); assert.equal(controller.uncertain, null); assert.deepEqual(seen[0], seen[1]); controller.setDraft({ format: "source" }); assert.equal(controller.draft.format, "source");
+  const seen: ExportRequest[] = []; let calls = 0; const controller = new OutputController(transport({ prepare: async request => { seen.push(request); return ++calls === 1 ? { id:request.requestId, requestId: request.requestId, status: "pending" } : { id:request.requestId, requestId: request.requestId, status: "failed", code: "conversionUnavailable", ...description() }; } }), basis());
+  await assert.rejects(controller.prepare(), /仍在处理/); assert.equal(controller.uncertain, "prepare"); await assert.rejects(controller.prepare(), {code:"outputFailed"}); assert.equal(controller.uncertain, null); assert.deepEqual(seen[0], seen[1]); controller.setDraft({ format: "source" }); assert.equal(controller.draft.format, "source");
 });
 
 test("unknown lossy import commit freezes the accepted loss decision through retry", async () => {
-  const decisions: boolean[] = []; let calls = 0; const controller = new ExchangeController({ id: () => "operation-a", prepare: async request => ({ operationId: request.operationId, planId: "plan-a", losses: [{ code: "native", detail: "本机资格不转移", path: "manifest" }] }), commit: async request => { decisions.push(request.acceptLosses); if (++calls === 1) throw new Error("connection lost"); return { status: "committed", path: "D:/Library/导入副本" }; } });
+  const decisions: boolean[] = []; let calls = 0; const controller = new ExchangeController({ id: () => "operation-a", prepare: async request => exchangePlan(request.operationId,[nativeLoss()]), commit: async request => { decisions.push(request.acceptLosses); if (++calls === 1) throw new Error("connection lost"); return exchangeReceipt(request.operationId); } });
   controller.setInput(importInput()); await controller.prepare(); await assert.rejects(controller.commit(true)); await controller.commit(false); assert.deepEqual(decisions, [true, true]);
 });
 

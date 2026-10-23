@@ -19,7 +19,7 @@ fn fixture() -> Fixture {
     let data = temp.path().join("private");
     let mut core = Core::new(&data).unwrap();
     core.create_library(&root).unwrap();
-    let note = core.create_note(&root, &root, "Note").unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
     let node = ObjectKey::Node(note.node_id.unwrap());
     let resource = core
         .prepare_import_resource(
@@ -169,8 +169,10 @@ fn saved_definition_fixture() -> (Fixture, String) {
 #[test]
 fn sync_adoption_existing_definition_external_body_publishes_and_transfers_exact_source() {
     let (mut f, key) = saved_definition_fixture();
-    let original = capture_optional(&f.path).unwrap().unwrap();
-    let original_revision = f.core.accepted_revision(&original).unwrap();
+    let original = capture_optional(&crate::BackendContext::local().unwrap(), &f.path)
+        .unwrap()
+        .unwrap();
+    let original_revision = f.core.accepted_revision(&original).unwrap().unwrap();
     // Ordinary body compilation is deliberately unavailable. This is not a
     // reason to reject the unchanged, already-admitted static Query control.
     let external = raw(&f, "#unavailable_display_only()\nexternal body edit");
@@ -199,10 +201,12 @@ fn sync_adoption_existing_definition_external_body_publishes_and_transfers_exact
     f.core
         .execute_operation(&preview.operation_id, &preview.plan_id)
         .unwrap();
-    let adopted = capture_optional(&f.path).unwrap().unwrap();
+    let adopted = capture_optional(&crate::BackendContext::local().unwrap(), &f.path)
+        .unwrap()
+        .unwrap();
     assert_eq!(adopted.stamp.identity, original.stamp.identity);
     assert_eq!(adopted.bytes, external.as_bytes());
-    let revision = f.core.accepted_revision(&adopted).unwrap();
+    let revision = f.core.accepted_revision(&adopted).unwrap().unwrap();
     assert_ne!(revision, original_revision);
     let ObjectKey::Node(owner) = &f.node else {
         unreachable!()
@@ -448,15 +452,18 @@ fn sync_adoption_definition_stale_observation_and_pending_keep_original_records(
             .code,
         "recoveryPending"
     );
-    assert!(!f.core.committed(&first.operation_id));
-    assert!(!f.core.committed(&second.operation_id));
+    assert!(!f.core.committed(&first.operation_id).unwrap());
+    assert!(!f.core.committed(&second.operation_id).unwrap());
     assert_eq!(fs::read(&f.path).unwrap(), external.as_bytes());
 }
 
 #[test]
 fn sync_adoption_external_citation_uses_exact_selected_work_publication() {
     let mut f = fixture();
-    let work = f.core.create_note(&f.root, &f.root, "Work").unwrap();
+    let work = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Work")
+        .unwrap();
     let work_id = work.node_id.unwrap();
     let work_path = PathBuf::from(work.path);
     let publication = format!(
@@ -620,7 +627,12 @@ fn sync_adoption_observed_content_new_versions_restart_retry_and_all_drafts_reta
     assert!(graph.blob(&hash(external.as_bytes())).is_some());
     assert_eq!(
         f.core
-            .accepted_revision(&capture_optional(&f.path).unwrap().unwrap()),
+            .accepted_revision(
+                &capture_optional(&crate::BackendContext::local().unwrap(), &f.path)
+                    .unwrap()
+                    .unwrap()
+            )
+            .unwrap(),
         Some(preview.revisions[&display(&f.path)].clone())
     );
     f.core
@@ -652,7 +664,12 @@ fn sync_adoption_cut_no_change_cleans_bases_same_bytes_external_write_is_new_fac
     assert_eq!(f.core.snapshots.len(), original_count);
     let before = f
         .core
-        .accepted_revision(&capture_optional(&f.path).unwrap().unwrap())
+        .accepted_revision(
+            &capture_optional(&crate::BackendContext::local().unwrap(), &f.path)
+                .unwrap()
+                .unwrap(),
+        )
+        .unwrap()
         .unwrap();
     fs::write(&f.path, &f.source).unwrap();
     let input = request(&mut f);
@@ -673,9 +690,18 @@ fn sync_adoption_cut_no_change_cleans_bases_same_bytes_external_write_is_new_fac
 #[test]
 fn sync_samebytes_external_new_base_save_requires_adoption_then_core_noop_remains_valid() {
     let mut f = fixture();
-    let original = capture_optional(&f.path).unwrap().unwrap().stamp;
+    let original = capture_optional(&crate::BackendContext::local().unwrap(), &f.path)
+        .unwrap()
+        .unwrap()
+        .stamp;
     fs::write(&f.path, &f.source).unwrap();
-    assert_ne!(capture_optional(&f.path).unwrap().unwrap().stamp, original);
+    assert_ne!(
+        capture_optional(&crate::BackendContext::local().unwrap(), &f.path)
+            .unwrap()
+            .unwrap()
+            .stamp,
+        original
+    );
     let forbidden = format!("{}\nnew editor proposal", f.source);
     assert_eq!(
         f.core
@@ -723,7 +749,12 @@ fn sync_samebytes_external_new_base_save_requires_adoption_then_core_noop_remain
         .unwrap();
     assert_eq!(
         f.core
-            .accepted_revision(&capture_optional(&f.path).unwrap().unwrap()),
+            .accepted_revision(
+                &capture_optional(&crate::BackendContext::local().unwrap(), &f.path)
+                    .unwrap()
+                    .unwrap()
+            )
+            .unwrap(),
         Some(adopted)
     );
     f.core
@@ -835,7 +866,7 @@ fn sync_adoption_installed_cut_changed_or_cancelled_original_never_reexecutes() 
             .code,
         "recoveryPending"
     );
-    assert!(!f.core.committed(&preview.operation_id));
+    assert!(!f.core.committed(&preview.operation_id).unwrap());
 }
 
 #[test]
@@ -939,7 +970,7 @@ fn sync_adoption_invalid_typed_rules_and_uninstalled_or_late_schema_fail_closed(
             .code,
         "scopeChanged"
     );
-    assert!(!f.core.committed(&preview.operation_id));
+    assert!(!f.core.committed(&preview.operation_id).unwrap());
 }
 
 #[test]

@@ -1,209 +1,212 @@
-"""Build, check or package the local MVP. No publishing and no workspace-private inputs."""
+"""Build/check the product or generate an unsigned, qualified Windows candidate."""
 import argparse
-import hashlib
 import json
 import os
-import re
 from pathlib import Path
 import shutil
 import subprocess
 import sys
 import tomllib
-import zipfile
+import uuid
+
+from cargo_cache import CargoCache
+from package_inputs import BuildArtifacts, collect_artifact, read_checked, require_checkout, sha256, snapshot, validate_target
+from windows_package import artifact_catalog, load_contract, msix_version, package_windows, pe_info, sdk_tools
+from windows_materials import freeze_materials
 
 ROOT = Path(__file__).resolve().parents[1]
 NPM = shutil.which('npm.cmd' if os.name == 'nt' else 'npm') or 'npm'
-IGNORED = {'.git', 'node_modules', 'target', 'dist', '.workspace', '__pycache__'}
-VERSION = tomllib.loads((ROOT / 'crates/weftext-app/Cargo.toml').read_text(encoding='utf-8'))['package']['version']
+NODE = shutil.which('node.exe' if os.name == 'nt' else 'node') or 'node'
+CHECK_SCRIPTS = [
+    'test_mvp.py', 'test_commit_delivery.py', 'test_local_features.py', 'test_outputs.py',
+    'test_v05_completion.py', 'test_review_interchange.py', 'test_hosted.py',
+    'test_hosted_review.py', 'test_hosted_office.py', 'test_hosted_citations_outputs.py',
+    'test_v061_authoring.py', 'test_everyday.py', 'test_query_organization.py',
+    'test_hierarchical_tags.py', 'test_link_diagnostics.py', 'test_v061_processing.py',
+    'test_v061_processing_integration.py', 'test_recognition.py', 'test_hosted_owner_backup.py',
+    'test_hosted_content_import.py', 'test_hosted_query.py', 'test_hosted_providers.py',
+    'test_hosted_scopes.py', 'test_hosted_library.py', 'test_hosted_media.py',
+    'test_hosted_resource_collections.py', 'test_hosted_definition.py', 'test_hosted_history.py',
+    'test_hosted_navigation_fragments.py', 'test_hosted_structure.py',
+    'test_hosted_knowledge_links.py', 'test_hosted_navigation_registry.py',
+    'test_sync.py', 'test_sync_compound.py', 'test_sync_revalidation.py',
+    'test_sync_structure.py', 'test_sync_placement.py', 'test_sync_retirement.py',
+    'test_sync_history.py', 'test_remote_sync.py',
+]
 
 
-def run(*args, capture=False, env=None):
-    return subprocess.run([str(x) for x in args], cwd=ROOT, check=True,
+def run(*args, capture=False, env=None, cwd=ROOT):
+    return subprocess.run([str(value) for value in args], cwd=cwd, check=True,
                           capture_output=capture, text=True, encoding='utf-8', env=env).stdout
 
 
-def build(release):
-    run(NPM, '--prefix', 'app', 'ci', '--ignore-scripts')
-    run(NPM, '--prefix', 'app', 'run', 'build')
-    args = ['cargo', 'build', '--locked', '-p', 'weftext-app',
+def metadata(cwd, env, full=False):
+    args = ['cargo', 'metadata', '--locked', '--format-version', '1']
+    if full:
+        args.append('--offline')
+    else:
+        args.append('--no-deps')
+    return json.loads(run(*args, capture=True, cwd=cwd, env=env))
+
+
+def build(release, *, package_input=False, linker=None, windows_sdk=None):
+    environment = dict(os.environ)
+    initial = metadata(ROOT, environment)
+    target = validate_target(ROOT, initial['target_directory'])
+    environment['CARGO_TARGET_DIR'] = str(target)
+    if windows_sdk is not None:
+        environment['WEFTEXT_WINDOWS_SDK_BIN'] = str(Path(windows_sdk).absolute())
+    if package_input:
+        environment['CARGO_BUILD_TARGET'] = 'x86_64-pc-windows-msvc'
+    frozen = snapshot(ROOT, [target])
+    source_root = ROOT
+    if package_input:
+        # A before/after comparison of an edited checkout alone is not an atomic
+        # source snapshot. Package builds use an owned, fixed public-source copy.
+        source_root = target / 'weftext-package-inputs' / str(uuid.uuid4()) / 'source'
+        source_root.mkdir(parents=True, exist_ok=False)
+        for name, data in frozen.items():
+            path = source_root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open('xb') as stream:
+                stream.write(data)
+    contract = load_contract(frozen['packaging/windows/host-contract.json'])
+    linker_version = None
+    linker_bytes = None
+    if linker is not None:
+        from windows_trust import file_version
+        linker = Path(linker).absolute()
+        if linker.name.lower() != 'link.exe':
+            raise ValueError('The packaging linker must be an explicit installed MSVC link.exe')
+        linker_bytes = read_checked(linker, linker.parent)
+        if pe_info(linker_bytes)['machine'] != 0x8664:
+            raise ValueError('Use the actual x64 MSVC linker for the x64 package build')
+        linker_version = file_version(linker)
+        environment['CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER'] = str(linker)
+    run(NPM, '--prefix', 'app', 'ci', '--ignore-scripts', cwd=source_root, env=environment)
+    run(NPM, '--prefix', 'app', 'run', 'build', cwd=source_root, env=environment)
+    frontend = snapshot(source_root / 'app/dist')
+    local_metadata = metadata(source_root, environment)
+    app_manifest = source_root / 'crates/weftext-app/Cargo.toml'
+    package_id = next(package['id'] for package in local_metadata['packages']
+                      if Path(package['manifest_path']) == app_manifest)
+    args = ['cargo', 'build', '--locked', '-p', 'weftext-app', '--bins',
             '--message-format=json-render-diagnostics']
+    if package_input:
+        args.extend(['--target', 'x86_64-pc-windows-msvc'])
     if release:
         args.append('--release')
-    executable = None
-    # Cargo owns the output location, including target-dir and target overrides.
-    # Never check or package an old default-target executable after a new build.
-    with subprocess.Popen(args, cwd=ROOT, stdout=subprocess.PIPE,
-                          text=True, encoding='utf-8') as process:
-        for line in process.stdout:
-            message = json.loads(line)
-            if (message.get('reason') == 'compiler-artifact'
-                    and message.get('target', {}).get('name') == 'weftext'
-                    and 'bin' in message['target']['kind']
-                    and message.get('executable')):
-                executable = Path(message['executable'])
-        if process.wait():
-            raise subprocess.CalledProcessError(process.returncode, args)
-    if executable is None or not executable.is_file():
-        raise RuntimeError('Cargo did not report the built Weftext executable')
-    print(f'Built executable: {executable}')
-    return executable
+    paths, participants = {}, set()
+    def compiled(message):
+        collect_artifact(message, package_id, contract['roles'], paths)
+        participants.add(message['package_id'])
+    # Keep the product target lock through qualification and copying, so another
+    # product invocation cannot replace mutable Cargo outputs before freezing.
+    with CargoCache(source_root, target, environment) as cache:
+        cache.run(args, on_message=compiled)
+        if set(paths) != {'desktop', 'cli'}:
+            raise ValueError('Cargo did not report both real Weftext desktop and CLI executables')
+        binaries = {role: read_checked(path, target) for role, path in paths.items()}
+        complete_metadata = metadata(source_root, environment, full=True)
+        if validate_target(source_root, complete_metadata['target_directory']) != target:
+            raise ValueError('Cargo target directory changed during the build')
+        if snapshot(source_root, [target]) != frozen or snapshot(source_root / 'app/dist') != frontend:
+            raise ValueError('Build inputs changed during compilation; originals retained, package refused')
+        if linker is not None and read_checked(linker, linker.parent) != linker_bytes:
+            raise ValueError('MSVC linker changed during the build')
+        catalog_path = catalog = None
+        if os.name == 'nt':
+            catalog = artifact_catalog(frozen, binaries, contract)
+            artifact_root = target / 'weftext-build-artifacts' / str(uuid.uuid4())
+            artifact_root.mkdir(parents=True, exist_ok=False)
+            paths = {}
+            for role, policy in contract['roles'].items():
+                path = artifact_root / policy['filename']
+                with path.open('xb') as stream:
+                    stream.write(binaries[role])
+                paths[role] = path
+            catalog_path = artifact_root / 'artifact-catalog.json'
+            with catalog_path.open('xb') as stream:
+                stream.write(catalog)
+    result = BuildArtifacts(source_root, paths, binaries, frozen, frontend, complete_metadata,
+                            frozenset(participants), target, 'release' if release else 'debug', linker_version,
+                            {key: environment[key] for key in ('CARGO_TARGET_DIR', 'CARGO_BUILD_TARGET',
+                             'CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER', 'WEFTEXT_WINDOWS_SDK_BIN') if key in environment},
+                            catalog_path, catalog)
+    for role, path in paths.items():
+        print(f'Built {role}: {path} (SHA-256 {sha256(binaries[role])})', flush=True)
+    if catalog_path is not None:
+        print(f'Artifact catalog: {catalog_path}', flush=True)
+    if package_input:
+        print(f'Frozen package source: {source_root}')
+    return result
 
 
-def source_files(target_directory):
-    for directory, children, names in os.walk(ROOT):
-        children[:] = [name for name in children if name not in IGNORED
-                       and Path(directory) / name != target_directory]
-        for name in names:
-            p = Path(directory) / name
-            if p.suffix not in {'.pyc', '.pyo'}:
-                yield p
+def check(artifacts):
+    root, exe = artifacts.source_root, artifacts.paths['cli']
+    environment = {**os.environ, **artifacts.build_environment,
+                   'WEFTEXT_TEST_EXECUTABLE': str(exe)}
+    def checked(*args, **kwargs):
+        return run(*args, cwd=root, env=environment, **kwargs)
+    checked(sys.executable, 'scripts/check.py', '--models')
+    check_root = artifacts.target_directory / 'weftext-checks' / str(uuid.uuid4())
+    check_root.mkdir(parents=True, exist_ok=False)
+    print(f'Product check root: {check_root}', flush=True)
+    checked(sys.executable, 'scripts/test_cargo_cache.py', '--fixture-root', check_root / 'cargo-inputs')
+    checked(sys.executable, 'scripts/test_windows_package.py')
+    checked(sys.executable, 'scripts/test_cli_serve.py')
+    checked(sys.executable, 'scripts/test_owned_worker_observer.py')
+    checked(NODE, '--test', 'scripts/test_cli_serve.mjs')
+    checked(sys.executable, 'scripts/recognition/test_schemes.py')
+    checked(sys.executable, '-S', 'scripts/recognition/test_docx_reader.py')
+    checked(sys.executable, 'resources/fonts/verify.py')
+    checked(NPM, '--prefix', 'app', 'test')
+    checked('cargo', 'fmt', '--all', '--', '--check')
+    checked(sys.executable, 'scripts/test_cli_contract.py',
+            '--gui-executable', artifacts.paths['desktop'], '--cli-executable', artifacts.paths['cli'],
+            '--test-root', check_root / 'cli', '--output-dir', check_root / 'cli-results')
+    with CargoCache(root, artifacts.target_directory, environment) as cache:
+        cache.run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets',
+                   '--message-format=json-render-diagnostics', '--', '-D', 'warnings'])
+        cache.run(['cargo', 'test', '--locked', '--workspace', '--message-format=json-render-diagnostics'])
+    for script in CHECK_SCRIPTS:
+        checked(sys.executable, 'scripts/' + script, exe)
+    artifacts.verify_inputs(root)
 
 
-def package(executable):
-    # Refuse to overwrite an existing candidate; a tested artifact keeps its identity.
-    import datetime
-    metadata = json.loads(run('cargo', 'metadata', '--locked', '--format-version', '1', capture=True))
-    target_directory = Path(metadata['target_directory'])
-    if (target_directory.is_relative_to(ROOT)
-            and not target_directory.is_relative_to(ROOT / 'target')):
-        raise RuntimeError('Packaging requires target/ or a Cargo target directory outside the source tree')
-    stamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
-    destination = ROOT / 'dist' / f'weftext-{VERSION}-local-{stamp}'
-    destination.mkdir(parents=True, exist_ok=False)
-    shutil.copy2(executable, destination / executable.name)
-    shutil.copy2(ROOT / 'app/example.typ', destination / 'example.typ')
-    for name in ['LICENSE', 'NOTICE']:
-        shutil.copy2(ROOT / name, destination / name)
-    for lang in ['', '.zh-CN']:
-        guide = (ROOT / f'docs/MVP{lang}.md').read_text(encoding='utf-8')
-        guide = re.sub(r'^---\n.*?\n---\n', '', guide, flags=re.S)
-        guide = re.sub(r'\[([^]]+)\]\([^)]+\)', r'\1 (source.zip/docs)', guide)
-        (destination / f'README{lang}.txt').write_text(guide, encoding='utf-8')
-    with zipfile.ZipFile(destination / 'source.zip', 'w', zipfile.ZIP_DEFLATED, strict_timestamps=False) as archive:
-        for file in source_files(target_directory):
-            archive.write(file, file.relative_to(ROOT))
-    inventory = []
-    licenses = destination / 'third-party'
-
-    def collect(name, version, folder, license_id, repository, ecosystem):
-        label = f'{ecosystem}-{name.replace("/", "-").replace("@", "")}-{version}'
-        copied = []
-        for directory, children, names in os.walk(folder):
-            children[:] = [n for n in children if n not in IGNORED]
-            for filename in names:
-                if filename.lower().startswith(('license', 'licence', 'copying', 'notice', 'ofl')):
-                    file = Path(directory) / filename
-                    relative = file.relative_to(folder)
-                    target = licenses / label / relative
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(file, target)
-                    copied.append(str(target.relative_to(destination)))
-        inventory.append({'ecosystem': ecosystem, 'name': name, 'version': version,
-                          'license': license_id, 'repository': repository, 'licenseFiles': copied})
-
-    # Conservative build inventory includes transitive and test/build dependencies.
-    # It does not claim every listed package is shipped or that system fonts are bundled.
-    for item in metadata['packages']:
-        if item.get('source') or '/vendor/' in Path(item['manifest_path']).as_posix():
-            collect(item['name'], item['version'], Path(item['manifest_path']).parent,
-                    item.get('license'), item.get('repository'), 'cargo')
-    lock = json.loads((ROOT / 'app/package-lock.json').read_text(encoding='utf-8'))
-    for relative, item in lock['packages'].items():
-        if not relative:
-            continue
-        folder = ROOT / 'app' / relative
-        if not folder.exists():
-            continue  # Optional dependencies for another build platform.
-        manifest = json.loads((folder / 'package.json').read_text(encoding='utf-8'))
-        collect(manifest['name'], manifest['version'], folder, manifest.get('license'),
-                manifest.get('repository'), 'npm')
-    fonts = ROOT / 'resources/fonts'
-    collect('weftext-offline-fonts', VERSION, fonts, 'See the exact per-font manifests and original notices', None, 'assets')
-    for name in ['manifest.json', 'builtin-manifest.json', 'web-manifest.json']:
-        shutil.copy2(fonts / name, destination / f'FONTS-{name}')
-    (destination / 'DEPENDENCIES.json').write_text(json.dumps({
-        'scope': 'Installed build dependency inventory including test/build tools, the local Typst HTML patch, and compiler/browser font assets. Only the exact font manifests describe bundled fonts; unrelated system fonts are not copied.',
-        'packages': inventory}, ensure_ascii=False, indent=2), encoding='utf-8')
-    binary = destination / executable.name
-    (destination / 'BUILD.json').write_text(json.dumps({
-        'version': f'{VERSION}-local', 'platform': sys.platform,
-        'profile': executable.parent.name, 'sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
-        'sourceSha256': hashlib.sha256((destination / 'source.zip').read_bytes()).hexdigest(),
-        'status': 'local candidate, not a published release',
-        'source': 'source.zip contains this working-tree source, including uncommitted changes',
-        'recognition': {
-            'runtimeIncluded': False,
-            'setup': 'source.zip/scripts/recognition/README.md',
-            'runtimeLockSha256': hashlib.sha256((ROOT / 'resources/recognition/runtime-lock.json').read_bytes()).hexdigest(),
-            'embeddedScripts': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in
-                                (ROOT / 'scripts/recognition').glob('*.py')
-                                if p.name in {'worker.py', 'engine.py', 'install.py', 'schemes.py', 'docx_reader.py', 'product_worker.py'}},
-        },
-    }, indent=2), encoding='utf-8')
-    archive = str(destination) + '.zip'
-    # Registry license files can carry an epoch timestamp; ZIP's lower bound is 1980.
-    with zipfile.ZipFile(archive, 'x', zipfile.ZIP_DEFLATED, strict_timestamps=False) as bundle:
-        for file in destination.rglob('*'):
-            if file.is_file():
-                bundle.write(file, file.relative_to(destination.parent))
-    print(f'Local candidate: {destination}\nArchive: {archive}')
-    return destination
-
-
-if __name__ == '__main__':
+def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('action', choices=['build', 'check', 'package'])
     parser.add_argument('--release', action='store_true', help='Use the optimized Rust profile')
-    args = parser.parse_args()
-    exe = build(args.release)
-    if args.action in {'check', 'package'}:
-        run(sys.executable, 'scripts/check.py', '--models')
-        run(sys.executable, 'scripts/recognition/test_schemes.py')
-        run(sys.executable, '-S', 'scripts/recognition/test_docx_reader.py')
-        run(sys.executable, 'resources/fonts/verify.py')
-        run(NPM, '--prefix', 'app', 'test')
-        run('cargo', 'fmt', '--all', '--', '--check')
-        run('cargo', 'clippy', '--locked', '--workspace', '--all-targets', '--', '-D', 'warnings')
-        run('cargo', 'test', '--locked', '--workspace', env={**os.environ, 'WEFTEXT_TEST_EXECUTABLE': str(exe)})
-        run(sys.executable, 'scripts/test_mvp.py', exe)
-        run(sys.executable, 'scripts/test_local_features.py', exe)
-        run(sys.executable, 'scripts/test_outputs.py', exe)
-        run(sys.executable, 'scripts/test_v05_completion.py', exe)
-        run(sys.executable, 'scripts/test_review_interchange.py', exe)
-        run(sys.executable, 'scripts/test_hosted.py', exe)
-        # Includes source/editor/field boundaries and separately authorized review.
-        run(sys.executable, 'scripts/test_hosted_review.py', exe)
-        run(sys.executable, 'scripts/test_hosted_office.py', exe)
-        run(sys.executable, 'scripts/test_hosted_citations_outputs.py', exe)
-        run(sys.executable, 'scripts/test_v061_authoring.py', exe)
-        run(sys.executable, 'scripts/test_everyday.py', exe)
-        run(sys.executable, 'scripts/test_query_organization.py', exe)
-        run(sys.executable, 'scripts/test_hierarchical_tags.py', exe)
-        run(sys.executable, 'scripts/test_link_diagnostics.py', exe)
-        run(sys.executable, 'scripts/test_v061_processing.py', exe)
-        run(sys.executable, 'scripts/test_v061_processing_integration.py', exe)
-        run(sys.executable, 'scripts/test_recognition.py', exe)
-        run(sys.executable, 'scripts/test_hosted_owner_backup.py', exe)
-        run(sys.executable, 'scripts/test_hosted_content_import.py', exe)
-        run(sys.executable, 'scripts/test_hosted_query.py', exe)
-        run(sys.executable, 'scripts/test_hosted_providers.py', exe)
-        run(sys.executable, 'scripts/test_hosted_scopes.py', exe)
-        run(sys.executable, 'scripts/test_hosted_library.py', exe)
-        run(sys.executable, 'scripts/test_hosted_media.py', exe)
-        run(sys.executable, 'scripts/test_hosted_resource_collections.py', exe)
-        run(sys.executable, 'scripts/test_hosted_definition.py', exe)
-        run(sys.executable, 'scripts/test_hosted_history.py', exe)
-        run(sys.executable, 'scripts/test_hosted_navigation_fragments.py', exe)
-        run(sys.executable, 'scripts/test_hosted_structure.py', exe)
-        run(sys.executable, 'scripts/test_hosted_knowledge_links.py', exe)
-        run(sys.executable, 'scripts/test_hosted_navigation_registry.py', exe)
-        run(sys.executable, 'scripts/test_sync.py', exe)
-        run(sys.executable, 'scripts/test_sync_compound.py', exe)
-        run(sys.executable, 'scripts/test_sync_revalidation.py', exe)
-        run(sys.executable, 'scripts/test_sync_structure.py', exe)
-        run(sys.executable, 'scripts/test_sync_placement.py', exe)
-        run(sys.executable, 'scripts/test_sync_retirement.py', exe)
-        run(sys.executable, 'scripts/test_sync_history.py', exe)
-        run(sys.executable, 'scripts/test_remote_sync.py', exe)
+    parser.add_argument('--windows-sdk', type=Path, help='x64 Windows SDK bin directory; package only')
+    parser.add_argument('--offline-materials', type=Path, help='Directory containing exact repository-locked offline installers')
+    parser.add_argument('--msvc-linker', type=Path, help='Installed x64 MSVC link.exe used explicitly by the package build')
+    args = parser.parse_args(argv)
+    tools = materials = contract = None
     if args.action == 'package':
-        package(exe)
+        if os.name != 'nt' or not all((args.windows_sdk, args.offline_materials, args.msvc_linker)):
+            parser.error('package requires Windows, --windows-sdk, --offline-materials and --msvc-linker')
+        require_checkout(ROOT)
+        contract = load_contract(read_checked(ROOT / 'packaging/windows/host-contract.json', ROOT))
+        version = tomllib.loads(read_checked(ROOT / 'crates/weftext-app/Cargo.toml', ROOT).decode('utf-8'))['package']['version']
+        msix_version(version)
+        tools = sdk_tools(args.windows_sdk)
+        materials = freeze_materials(ROOT, args.offline_materials, contract)
+    elif any((args.windows_sdk, args.offline_materials, args.msvc_linker)):
+        parser.error('Windows packaging inputs are accepted only for package')
+    artifacts = build(args.release, package_input=args.action == 'package', linker=args.msvc_linker,
+                      windows_sdk=args.windows_sdk)
+    if args.action in {'check', 'package'}:
+        check(artifacts)
+    if args.action == 'package':
+        source = artifacts.source_root
+        if load_contract(artifacts.source['packaging/windows/host-contract.json']) != contract:
+            raise ValueError('Host contract changed after package preflight')
+        if sha256(artifacts.source['packaging/windows/offline-materials.json']) != materials['lockSha256']:
+            raise ValueError('Offline material lock changed after package preflight')
+        version = tomllib.loads(artifacts.source['crates/weftext-app/Cargo.toml'].decode('utf-8'))['package']['version']
+        package_windows(source, artifacts, version, contract, materials, tools, output_root=ROOT)
+
+
+if __name__ == '__main__':
+    main()

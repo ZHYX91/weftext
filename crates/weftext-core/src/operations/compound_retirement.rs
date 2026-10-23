@@ -1,10 +1,11 @@
 //! Original Resource leaves move to their frozen preservation slots. This is
 //! part of the enclosing Compound decision, not a second writer or admission.
 use super::*;
+use weftext_messages::UiMessage;
 
 pub(super) struct Proof {
     pub member: RecoveryMember,
-    pub file: File,
+    pub file: backend::BoundFile,
     pub guard: Option<ParentGuard>,
 }
 
@@ -21,7 +22,10 @@ pub(super) fn validate(t: &FrozenOperation) -> Result<()> {
             .iter()
             .find(|file| locator_equal(&file.path, &retired.source))
             .ok_or_else(|| {
-                CoreError::new("invalidPlan", "Retirement lacks its original captured file")
+                CoreError::new(
+                    "invalidPlan",
+                    UiMessage::error_core_operations_retirement_lacks_original_captured_file(),
+                )
             })?;
         if !matches!(retired.object, crate::sync::ObjectKey::Node(_))
             || retired.identity != original.stamp.identity
@@ -36,19 +40,22 @@ pub(super) fn validate(t: &FrozenOperation) -> Result<()> {
         {
             return Err(CoreError::new(
                 "invalidPlan",
-                "Retirement differs from its exact original Plan",
+                UiMessage::error_core_operations_retirement_differs_from_exact_original_plan(),
             ));
         }
         valid_operation_id(&retired.resource_id)?;
         valid_operation_id(&retired.file_revision)?;
     }
     if t.retired_members().len() > MAX_OPERATION_FILES {
-        return Err(CoreError::new("budget", "Too many retired members"));
+        return Err(CoreError::new(
+            "budget",
+            UiMessage::error_core_operations_too_many_retired_members(),
+        ));
     }
     Ok(())
 }
 
-fn optional_file(result: Result<File>) -> Result<Option<File>> {
+fn optional_file(result: Result<backend::BoundFile>) -> Result<Option<backend::BoundFile>> {
     match result {
         Ok(file) => Ok(Some(file)),
         Err(error) if error.code == "missing" => Ok(None),
@@ -59,7 +66,7 @@ fn optional_file(result: Result<File>) -> Result<Option<File>> {
 pub(super) fn check_file(
     t: &FrozenOperation,
     retired: &RetiredMember,
-    file: &mut File,
+    file: &mut backend::BoundFile,
 ) -> Result<Vec<u8>> {
     let original = t
         .files
@@ -73,7 +80,7 @@ pub(super) fn check_file(
     {
         return Err(CoreError::new(
             "thirdState",
-            "Retired member changed its original identity, metadata or bytes",
+            UiMessage::error_core_operations_retired_member_changed_original_identity_metadata_or_bytes(),
         ));
     }
     Ok(bytes)
@@ -101,16 +108,16 @@ pub(super) fn capture(
             if namespace.source_parent_identity(&relative)? != retired.parent {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Retired member original parent changed",
+                    UiMessage::error_core_operations_retired_member_original_parent_changed(),
                 ));
             }
             optional_file(namespace.open_source_retiring(&relative, write))?
         } else {
-            let guard = ParentGuard::acquire(Path::new(&retired.source))?;
+            let guard = ParentGuard::acquire(&core.backend, Path::new(&retired.source))?;
             if guard.directory_identity()? != retired.parent {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Retired member original parent changed",
+                    UiMessage::error_core_operations_retired_member_original_parent_changed(),
                 ));
             }
             let file = optional_file(guard.open_retiring_file(write))?;
@@ -122,12 +129,12 @@ pub(super) fn capture(
             Path::new(&retired.target).parent().unwrap(),
         )?;
         let mut target_guard = None;
-        let target = match ParentGuard::acquire(Path::new(&retired.target)) {
+        let target = match ParentGuard::acquire(&core.backend, Path::new(&retired.target)) {
             Ok(guard) => {
                 if Some(guard.directory_identity()?) != expected_parent {
                     return Err(CoreError::new(
                         "thirdState",
-                        "Retirement preservation parent lacks original materialization",
+                        UiMessage::error_core_operations_retirement_preservation_parent_lacks_original_materialization(),
                     ));
                 }
                 let file = optional_file(guard.open_retiring_file(write))?;
@@ -143,7 +150,7 @@ pub(super) fn capture(
             _ => {
                 return Err(CoreError::new(
                     "thirdState",
-                    "Retired member is missing or occupies both original and preservation slots",
+                    UiMessage::error_core_operations_retired_member_missing_or_occupies_both_original_and_preservation_slots(),
                 ));
             }
         };
@@ -167,7 +174,7 @@ pub(super) fn capture(
         member.matches_before = !after;
         member.matches_after = after;
         member.state = if after { "knownAfter" } else { "knownBefore" }.into();
-        member.message = "Original registered Resource and exact preserved physical file".into();
+        member.description = Some(UiMessage::recovery_retired_resource_retained().into());
         proofs.push(Proof {
             member,
             file,
@@ -204,9 +211,10 @@ pub(super) fn refresh(core: &Core, plan: &Plan, capture: &mut RecoveryCapture) -
 pub(super) fn verify_held(
     core: &Core,
     plan: &Plan,
-    union: &MultiNamespaceGuard,
+    union: &mut MultiNamespaceGuard,
+    phases: &[StepPhase],
     retired: &RetiredMember,
-    file: &mut File,
+    file: &mut backend::BoundFile,
 ) -> Result<()> {
     let t = plan.transaction.as_ref().unwrap();
     check_file(t, retired, file)?;
@@ -216,7 +224,7 @@ pub(super) fn verify_held(
     {
         return Err(CoreError::new(
             "thirdState",
-            "Retirement preservation parent changed",
+            UiMessage::error_core_operations_retirement_preservation_parent_changed(),
         ));
     }
     let coordinate = crate::backend::file_coordinates(file)?;
@@ -226,9 +234,15 @@ pub(super) fn verify_held(
     {
         return Err(CoreError::new(
             "thirdState",
-            "Original retired member is outside its frozen preservation slot",
+            UiMessage::error_core_operations_original_retired_member_outside_frozen_preservation_slot(),
         ));
     }
-    ensure_absent(Path::new(&t.relocated_path(&retired.source)))?;
+    placement::ensure_absent(
+        &core.backend,
+        union,
+        steps(t)?,
+        phases,
+        Path::new(&t.relocated_path(&retired.source)),
+    )?;
     Ok(())
 }
