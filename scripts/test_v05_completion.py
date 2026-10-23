@@ -845,8 +845,8 @@ class V05Completion(features.LocalFeatures):
                 with zipfile.ZipFile(io.BytesIO(payload)) as archive:
                     xml = ET.fromstring(archive.read('word/document.xml'))
                 text = ''.join(xml.itertext())
-                self.assertIn('partial', text); self.assertIn('不能据此断言全库为空', text)
-                self.assertIn('诊断', text)
+                self.assertIn('部分范围。', text); self.assertIn('不能据此断言全库为空', text)
+                self.assertIn('部分条件或数据尚无法确定，详细原因见输出预览。', text)
 
 
     def test_19_inline_query_boundaries_and_pdf_binding_guard(self):
