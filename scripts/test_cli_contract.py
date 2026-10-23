@@ -637,32 +637,45 @@ class Harness:
                 recent = {key: process[key] for key in (
                     'label', 'exitCode', 'expectedExitCodes', 'timedOut',
                     'elapsedSeconds', 'stdout', 'stderr') if key in process}
-                try:
-                    raw = read_small(self.output / process['stderr'])
-                    records, unparsed = [], 0
-                    for line in raw.splitlines():
-                        if not line.strip():
-                            continue
-                        try:
-                            if len(line) > 16384:
-                                raise ValueError('Diagnostic line exceeds the bounded parse')
-                            value = unique_json(line)
-                            error = value.get('error') if isinstance(value, dict) else None
-                            if value.get('schemaVersion') != 1 or not isinstance(error, dict):
-                                raise ValueError('Not a versioned machine error')
-                            record = {key: error[key] for key in ('code', 'exitCode')
-                                      if type(error.get(key)) in (str, int)}
-                            description = error.get('description')
-                            if isinstance(description, dict) and isinstance(description.get('key'), str):
-                                record['descriptionKey'] = description['key']
-                            records.append(self.diagnostic_text(json.dumps(record, ensure_ascii=True), 1024))
-                        except (ValueError, AttributeError, UnicodeError):
-                            unparsed += 1
-                    recent['stderrDiagnostic'] = {'length': len(raw), 'sha256': digest(raw),
-                        'machineErrorCount': len(records), 'recentMachineErrors': records[-4:],
-                        'unparsedLines': unparsed}
-                except (OSError, AssertionError) as error:
-                    recent['stderrUnavailable'] = type(error).__name__
+                for stream in ('stdout', 'stderr'):
+                    try:
+                        raw = read_small(self.output / process[stream])
+                        records, unparsed = [], 0
+                        for line in raw.splitlines():
+                            if not line.strip():
+                                continue
+                            try:
+                                if len(line) > 16384:
+                                    raise ValueError('Diagnostic line exceeds the bounded parse')
+                                value = unique_json(line)
+                                if not isinstance(value, dict) or value.get('schemaVersion') != 1:
+                                    raise ValueError('Not a versioned machine reply')
+                                # HTTP rejections are typed replies on stdout;
+                                # local transport failures are stderr errors.
+                                error = value.get('error')
+                                if stream == 'stdout' and isinstance(value.get('result'), dict):
+                                    error = value['result'].get('error')
+                                if not isinstance(error, dict):
+                                    raise ValueError('Not a machine error')
+                                record = {}
+                                code = error.get('code')
+                                if isinstance(code, str) and re.fullmatch(r'[A-Za-z0-9_-]{1,80}', code):
+                                    record['code'] = code
+                                if type(error.get('exitCode')) is int:
+                                    record['exitCode'] = error['exitCode']
+                                explanation = error.get('explanation')
+                                if isinstance(explanation, dict) and isinstance(explanation.get('key'), str):
+                                    record['explanationKey'] = explanation['key']
+                                if type(value.get('httpStatus')) is int:
+                                    record['httpStatus'] = value['httpStatus']
+                                records.append(self.diagnostic_text(json.dumps(record, ensure_ascii=True), 1024))
+                            except (ValueError, AttributeError, UnicodeError):
+                                unparsed += 1
+                        recent[stream + 'Diagnostic'] = {'length': len(raw), 'sha256': digest(raw),
+                            'machineErrorCount': len(records), 'recentMachineErrors': records[-4:],
+                            'unparsedLines': unparsed}
+                    except (OSError, AssertionError) as error:
+                        recent[stream + 'Unavailable'] = type(error).__name__
                 processes.append(recent)
             diagnostic = {'case': item['name'], 'status': item['status'],
                 'resultPath': str(self.output / 'result.json'),
@@ -1433,9 +1446,10 @@ class Harness:
             require(basis['result']['resource'] == 'Shared' and basis['result']['source'] == note['source'],
                     'Hosted read did not return the configured original note')
             basis_file = self.json_file('remote-basis.json', basis)
-            # Deterministic varied text makes the real compressed DOCX exceed
-            # one 64-KiB chunk while remaining well inside the input budget.
-            source = basis['result']['source'] + '\n\n' + '\n'.join(
+            # Keep the varied content in bounded paragraphs: a single enormous
+            # Typst paragraph tests layout cost rather than chunk transport.
+            # The real compressed DOCX must still exceed one 64-KiB chunk.
+            source = basis['result']['source'] + '\n\n' + '\n\n'.join(
                 hashlib.sha256(str(index).encode('ascii')).hexdigest() for index in range(6000)) + '\n中文😀\n'
             source_file = self.artifact('remote-source.typ', source.encode('utf-8'))
             request = self.output / 'remote-save.weftext-request.json'
@@ -1475,7 +1489,7 @@ class Harness:
                     'Remote chunk delivery changed the frozen artifact or original request')
             with zipfile.ZipFile(target) as archive:
                 text = ''.join(ET.fromstring(archive.read('word/document.xml')).itertext())
-            require(all(hashlib.sha256(str(index).encode('ascii')).hexdigest() in text for index in (0, 5999))
+            require(all(hashlib.sha256(str(index).encode('ascii')).hexdigest() in text for index in range(6000))
                     and '中文😀' in text, 'Downloaded Office content lost the frozen author text')
             chunks = [entry['chunk'] for entry in relay.requests if 'chunk' in entry]
             offset = 0
