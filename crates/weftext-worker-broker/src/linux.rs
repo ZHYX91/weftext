@@ -254,6 +254,9 @@ impl Socket {
         Ok(cred)
     }
     fn send<T: Serialize>(&self, frame: &T, fds: &[RawFd]) -> Result<()> {
+        self.send_flags(frame, fds, 0)
+    }
+    fn send_flags<T: Serialize>(&self, frame: &T, fds: &[RawFd], flags: i32) -> Result<()> {
         let bytes = serde_json::to_vec(frame)?;
         if bytes.len() > MAX_FRAME || fds.len() > 3 {
             return Err(invalid("invalid outgoing frame bound"));
@@ -278,7 +281,7 @@ impl Socket {
                 std::ptr::copy_nonoverlapping(fds.as_ptr(), libc::CMSG_DATA(c).cast(), fds.len());
             }
         }
-        let n = unsafe { libc::sendmsg(self.0.as_raw_fd(), &message, libc::MSG_NOSIGNAL) };
+        let n = unsafe { libc::sendmsg(self.0.as_raw_fd(), &message, libc::MSG_NOSIGNAL | flags) };
         if n < 0 {
             return Err(std::io::Error::last_os_error().into());
         }
@@ -390,12 +393,26 @@ fn verify_stdio(fds: &[OwnedFd]) -> Result<()> {
 /// Caller supplies the already-selected Core enrollment, never an executable.
 pub struct BrokerClient {
     policy: PathBuf,
-    enrollment: PathBuf,
+    binding: EnrollmentBinding,
 }
 impl BrokerClient {
-    pub fn connect(enrollment: &Path, policy: &Path) -> Result<Self> {
+    pub fn connect(
+        enrollment: &weftext_enrollment::ValidatedEnrollment,
+        policy: &Path,
+    ) -> Result<Self> {
+        enrollment
+            .verify_service_process()
+            .map_err(|error| invalid(format!("original service qualification: {error:?}")))?;
+        enrollment
+            .check_current()
+            .map_err(|error| invalid(format!("original enrollment continuity: {error:?}")))?;
+        let binding = EnrollmentBinding {
+            path: enrollment.enrollment_path().into(),
+            id: enrollment.enrollment_id().into(),
+            sha256: enrollment.enrollment_sha256().into(),
+        };
         let p = Policy::load(policy)?;
-        if p.enrollment != enrollment {
+        if !binding.matches(&p.enrollment, &p.enrollment_id, &p.enrollment_sha256) {
             return Err(invalid("broker client is not the enrolled Core service"));
         }
         p.qualified()
@@ -403,7 +420,7 @@ impl BrokerClient {
             .map_err(|error| invalid(format!("service qualification: {error:?}")))?;
         Ok(Self {
             policy: policy.into(),
-            enrollment: enrollment.into(),
+            binding,
         })
     }
     pub fn launch(&self, kind: WorkerKind, timeout: Duration) -> Result<OwnedWorker> {
@@ -416,7 +433,11 @@ impl BrokerClient {
         };
         request.validate()?;
         let policy = Policy::load(&self.policy)?;
-        if policy.enrollment != self.enrollment {
+        if !self.binding.matches(
+            &policy.enrollment,
+            &policy.enrollment_id,
+            &policy.enrollment_sha256,
+        ) {
             return Err(invalid("enrollment changed"));
         }
         policy
@@ -431,6 +452,23 @@ impl BrokerClient {
             true,
         )?;
         let socket = Socket::new()?;
+        // A stalled administrator broker must not retain a service thread
+        // forever. These bounds cover connect, send and the Started reply.
+        let timeout = libc::timeval {
+            tv_sec: 5,
+            tv_usec: 0,
+        };
+        for option in [libc::SO_RCVTIMEO, libc::SO_SNDTIMEO] {
+            cvt(unsafe {
+                libc::setsockopt(
+                    socket.0.as_raw_fd(),
+                    libc::SOL_SOCKET,
+                    option,
+                    (&timeout as *const libc::timeval).cast(),
+                    size_of::<libc::timeval>() as _,
+                )
+            })?;
+        }
         let (address, len) = Socket::address(&policy.socket)?;
         cvt(unsafe {
             libc::connect(
@@ -445,29 +483,49 @@ impl BrokerClient {
         let (child_in, input) = pipe()?;
         let (output, child_out) = pipe()?;
         let (error, child_err) = pipe()?;
-        socket.send(
-            &request,
-            &[
-                child_in.as_raw_fd(),
-                child_out.as_raw_fd(),
-                child_err.as_raw_fd(),
-            ],
-        )?;
+        socket
+            .send(
+                &request,
+                &[
+                    child_in.as_raw_fd(),
+                    child_out.as_raw_fd(),
+                    child_err.as_raw_fd(),
+                ],
+            )
+            .map_err(|error| Error::unknown(format!("worker launch send: {error}")))?;
         drop((child_in, child_out, child_err));
         let reply = socket
-            .receive(false)?
-            .ok_or_else(|| invalid("missing launch reply"))?;
+            .receive(false)
+            .map_err(|error| Error::unknown(format!("worker launch reply: {error}")))?
+            .ok_or_else(|| Error::unknown("missing launch reply"))?;
         if !reply.fds.is_empty() {
-            return Err(invalid("unexpected broker descriptors"));
+            return Err(Error::unknown("unexpected broker descriptors"));
         }
-        let started: Started = decode(&reply.bytes)?;
+        let started: Started = decode(&reply.bytes)
+            .map_err(|error| Error::unknown(format!("worker launch frame: {error}")))?;
         if started.version != 1
             || started.job_id.len() != 32
             || started.pid <= 1
             || started.image_sha256 != policy.image_sha256
         {
-            return Err(invalid("invalid launch identity"));
+            return Err(Error::unknown("invalid launch identity"));
         }
+        // Synchronous broker consumers may wait for the full original worker
+        // deadline plus cleanup; the async App consumer uses try_wait instead.
+        let completion_timeout = libc::timeval {
+            tv_sec: (MAX_TIMEOUT_MS / 1000 + 5) as _,
+            tv_usec: 0,
+        };
+        cvt(unsafe {
+            libc::setsockopt(
+                socket.0.as_raw_fd(),
+                libc::SOL_SOCKET,
+                libc::SO_RCVTIMEO,
+                (&completion_timeout as *const libc::timeval).cast(),
+                size_of::<libc::timeval>() as _,
+            )
+        })
+        .map_err(|error| Error::unknown(format!("worker receipt deadline setup: {error}")))?;
         Ok(OwnedWorker {
             socket,
             started,
@@ -512,14 +570,7 @@ impl OwnedWorker {
         }
         let receipt: Receipt = decode(&reply.bytes)
             .map_err(|error| Error::unknown(format!("worker completion frame: {error}")))?;
-        if receipt.version != 1
-            || receipt.job_id != self.started.job_id
-            || !receipt.cgroup_empty
-            || !receipt.pidfd_exited
-            || receipt.reaped == 0
-        {
-            return Err(Error::unknown("incomplete worker-tree receipt"));
-        }
+        receipt.validate(&self.started)?;
         self.receipt = Some(receipt.clone());
         Ok(Some(receipt))
     }
@@ -530,32 +581,31 @@ impl OwnedWorker {
         self.receive_receipt(false)?
             .ok_or_else(|| Error::unknown("no worker receipt"))
     }
-    pub fn cancel_and_wait(&mut self) -> Result<Receipt> {
-        if let Some(receipt) = self.try_wait()? {
-            return Ok(receipt);
-        }
+    /// Nonblocking exact-job cancellation; no cleanup claim until its receipt.
+    pub fn request_cancel(&self) -> Result<()> {
         self.socket
-            .send(
+            .send_flags(
                 &Cancel {
                     version: 1,
                     cancel: true,
                 },
                 &[],
+                libc::MSG_DONTWAIT,
             )
-            .map_err(|error| Error::unknown(format!("worker cancellation transport: {error}")))?;
+            .map_err(|error| Error::unknown(format!("worker cancellation transport: {error}")))
+    }
+    pub fn cancel_and_wait(&mut self) -> Result<Receipt> {
+        if let Some(receipt) = self.try_wait()? {
+            return Ok(receipt);
+        }
+        self.request_cancel()?;
         self.wait()
     }
 }
 impl Drop for OwnedWorker {
     fn drop(&mut self) {
         if self.receipt.is_none() {
-            let _ = self.socket.send(
-                &Cancel {
-                    version: 1,
-                    cancel: true,
-                },
-                &[],
-            );
+            let _ = self.request_cancel();
         }
         // Disconnect transfers no completion claim: the daemon still owns reaping.
     }
@@ -725,6 +775,30 @@ mod tests {
             stderr: None,
             receipt: None,
         }
+    }
+    #[test]
+    fn cancellation_is_nonblocking_and_does_not_invent_a_receipt() {
+        let (client, server) = socket_pair();
+        let mut worker = receipt_client(client);
+        worker.request_cancel().unwrap();
+        let packet = server.receive(false).unwrap().unwrap();
+        let cancel: Cancel = decode(&packet.bytes).unwrap();
+        assert_eq!(cancel.version, 1);
+        assert!(cancel.cancel);
+        assert!(packet.fds.is_empty());
+        assert!(worker.try_wait().unwrap().is_none());
+        for _ in 0..100_000 {
+            if worker.request_cancel().is_err() {
+                let start = Instant::now();
+                assert_eq!(
+                    worker.request_cancel().unwrap_err().kind,
+                    ErrorKind::Unknown
+                );
+                assert!(start.elapsed() < Duration::from_secs(1));
+                return;
+            }
+        }
+        panic!("bounded socket queue did not fill");
     }
     #[test]
     fn zero_payload_rights_are_closed_before_eof_rejection() {

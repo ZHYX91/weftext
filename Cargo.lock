@@ -4435,6 +4435,7 @@ dependencies = [
  "weftext-export",
  "weftext-knowledge",
  "weftext-messages",
+ "weftext-worker-broker",
  "windows",
  "windows-core",
  "windows-sys 0.61.2",

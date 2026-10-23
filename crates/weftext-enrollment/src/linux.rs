@@ -48,6 +48,9 @@ pub struct ValidatedEnrollment {
     key_file: File,
 }
 impl ValidatedEnrollment {
+    pub fn enrollment_path(&self) -> &Path {
+        &self.path
+    }
     pub fn enrollment_sha256(&self) -> &str {
         &self.enrollment_sha256
     }

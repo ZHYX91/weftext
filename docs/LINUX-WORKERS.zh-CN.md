@@ -34,7 +34,7 @@ Core 与 broker 共同使用 `weftext-enrollment` 的唯一 `inspect_enrollment`
 客户端仅能以注册的 Core 服务身份调用：
 
 ```rust,ignore
-let broker = BrokerClient::connect(&core_enrollment_path, &administrator_policy_path)?;
+let broker = BrokerClient::connect(backend.controlled_enrollment(), &administrator_policy_path)?;
 let mut worker = broker.launch(WorkerKind::Render, Duration::from_secs(20))?;
 let stdin = worker.take_stdin();
 let stdout = worker.take_stdout();
@@ -43,7 +43,7 @@ let stderr = worker.take_stderr();
 let receipt = worker.wait()?; // 失败路径使用 cancel_and_wait()。
 ```
 
-`WorkerKind::Render` 恰执行 `--render-worker`，`Notes` 恰执行 `--notes-edit-worker`；两者直接进入产品映像的既有内部分派。`Recognition` 返回 typed `Unavailable`，因为尚无管理员批准的 Linux Python/runtime/script 组合。不能请求任意程序、argv、环境、工作目录、URI 或额外描述符。App 的唯一 `owned_process` 适配器持有输入 96 MiB、stdout 24 MiB、stderr 256 KiB 和并发排空预算；broker 的接纳超时最长为 20 秒。
+`WorkerKind::Render` 恰执行 `--render-worker`，`Notes` 恰执行 `--notes-edit-worker`；两者直接进入产品映像的既有内部分派。`Recognition` 返回 typed `Unavailable`，因为尚无管理员批准的 Linux Python/runtime/script 组合。不能请求任意程序、argv、环境、工作目录、URI 或额外描述符。App 的 `compiler_worker::Transport` 按托管实例绑定原 Core 已持有的密封登记，并固定登记路径／身份／摘要；相同路径的新登记不能替换现有绑定。共用 compiler pump 持有输入 96 MiB、stdout 24 MiB、stderr 256 KiB 和并发排空预算，Windows 的实际进程仍由 `owned_process` 约束；broker 的接纳超时最长为 20 秒。
 
 传输采用 `AF_UNIX/SOCK_SEQPACKET`，每帧最多 4096 bytes。首帧恰为 `{version,kind,timeoutMs}`，并携带恰三个独立、方向正确的匿名 pipe FD。常规文件、命名 FIFO、重复 pipe、错误方向、截断辅助数据及额外 FD 均拒绝。broker 用 `SO_PEERCRED` 核对真实连接者的服务 UID/GID；客户端核对 root peer。任务接纳后只接受严格 `{version:1,cancel:true}`，不用 PID 或客户端声称的身份来寻址取消。
 
@@ -55,7 +55,7 @@ let receipt = worker.wait()?; // 失败路径使用 cancel_and_wait()。
 
 daemon 持有内核 pidfd 与该任务 cgroup，自己作为 subreaper。自然退出、超时、取消、断开或坏控制帧均进入同一 `cgroup.kill` 及回收路径，包含 fork、`setsid` 和父进程退出后仍运行的后代。仅当真实 pidfd 已退出、`cgroup.events` 的 `populated=0` 且自有子进程已 wait/reap，才生成绑定随机 job ID 的回执，保留真实根进程退出码/信号。内核拒绝收尾时保持所有权并停止接纳后续任务，不发完成回执。
 
-`try_wait`、`wait`、`cancel_and_wait` 只在取得该完整回执后报告完成。daemon 断链、错误回执或未知状态返回 `Unknown`；`Drop` 发送取消通知和断开，不代表已经完成。App 必须保留实际任务收尾 lease，直到 `cancel_and_wait` 回执。正常 SIGTERM/INT/QUIT 会先收尾活动任务。部署宿主仍须以独占的服务 cgroup 和 `KillMode=control-group` 等实际 supervisor 管理 daemon 及其整个子树；SIGKILL、宿主崩溃或断电不能伪造成客户端完成回执。已有 socket 不自动覆盖，仅自动移除这个 daemon 自己绑定且身份仍匹配的 socket。
+`try_wait`、`wait`、`cancel_and_wait` 只在取得该完整回执后报告完成。daemon 断链、错误回执或未知状态返回 `Unknown`；`Drop` 发送取消通知和断开，不代表已经完成。App 的非阻塞适配器使用 `request_cancel` 加有限期 `try_wait`，保留实际任务收尾许可至原终局回执；HTTP 调用方断开不释放该许可，占用时不排队，启动／清理未知则关闭后续准入。正常 SIGTERM/INT/QUIT 会先收尾活动任务。部署宿主仍须以独占的服务 cgroup 和 `KillMode=control-group` 等实际 supervisor 管理 daemon 及其整个子树；SIGKILL、宿主崩溃或断电不能伪造成客户端完成回执。已有 socket 不自动覆盖，仅自动移除这个 daemon 自己绑定且身份仍匹配的 socket。
 
 ## 检查与部署边界
 

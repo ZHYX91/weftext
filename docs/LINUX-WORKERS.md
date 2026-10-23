@@ -35,7 +35,7 @@ Policy, image and every ancestor must be root-owned, without group/other writes,
 Only the enrolled Core service identity may use the client:
 
 ```rust,ignore
-let broker = BrokerClient::connect(&core_enrollment_path, &administrator_policy_path)?;
+let broker = BrokerClient::connect(backend.controlled_enrollment(), &administrator_policy_path)?;
 let mut worker = broker.launch(WorkerKind::Render, Duration::from_secs(20))?;
 let stdin = worker.take_stdin();
 let stdout = worker.take_stdout();
@@ -44,7 +44,7 @@ let stderr = worker.take_stderr();
 let receipt = worker.wait()?; // Use cancel_and_wait() on failure paths.
 ```
 
-`WorkerKind::Render` executes exactly `--render-worker`; `Notes` executes exactly `--notes-edit-worker`. Both enter the existing early internal dispatch of the product image. `Recognition` returns typed `Unavailable`: there is no approved Linux Python/runtime/script combination. Requests cannot select arbitrary programs, argv, environment, cwd, URIs or additional descriptors. App's sole `owned_process` adapter owns the 96 MiB input, 24 MiB stdout, 256 KiB stderr and concurrent-drain budgets. Broker admission allows at most 20 seconds.
+`WorkerKind::Render` executes exactly `--render-worker`; `Notes` executes exactly `--notes-edit-worker`. Both enter the existing early internal dispatch of the product image. `Recognition` returns typed `Unavailable`: there is no approved Linux Python/runtime/script combination. Requests cannot select arbitrary programs, argv, environment, cwd, URIs or additional descriptors. App's `compiler_worker::Transport` binds each hosted instance to Core's retained sealed enrollment and pins its path/identity/digest; a replacement at the same path cannot replace that binding. The shared compiler pump owns the 96 MiB input, 24 MiB stdout, 256 KiB stderr and concurrent-drain budgets; Windows processes remain contained by `owned_process`. Broker admission allows at most 20 seconds.
 
 Transport uses `AF_UNIX/SOCK_SEQPACKET` with at most 4096 bytes per frame. The first frame is exactly `{version,kind,timeoutMs}`, accompanied by exactly three distinct, correctly directed anonymous pipe FDs. Regular files, named FIFOs, duplicate pipes, wrong directions, truncated ancillary data and extra FDs are rejected. The broker authenticates actual service UID/GID using `SO_PEERCRED`; the client authenticates the root peer. After admission only strict `{version:1,cancel:true}` is accepted. Cancellation is never addressed by a claimed PID or client-supplied identity.
 
@@ -56,7 +56,7 @@ Trusted child setup performs fixed syscalls only: place the three pipes in stdio
 
 The daemon retains the actual kernel pidfd and job cgroup and acts as subreaper. Natural exit, timeout, cancel, disconnect and invalid control frames enter the same `cgroup.kill`/reap path, including fork, `setsid` and descendants outliving their root. A receipt bound to a random job ID is produced only after the actual pidfd exits, `cgroup.events` reports `populated=0` and owned children have been waited/reaped. It preserves the real root exit code/signal. If the kernel refuses cleanup, ownership is retained, later admission stops and no completion receipt is sent.
 
-`try_wait`, `wait` and `cancel_and_wait` report completion only with that full receipt. Daemon disconnects, invalid receipts and uncertain state return `Unknown`. `Drop` sends cancellation/disconnect notifications and makes no completion claim. App must retain its actual cleanup lease until `cancel_and_wait` returns the receipt. Normal SIGTERM/INT/QUIT first reap the active job. Deployment must also use an exclusive supervised service cgroup, such as actual `KillMode=control-group` supervision, covering the daemon and its entire subtree. SIGKILL, host failure and power loss cannot become fabricated client completion receipts. Existing sockets are never overwritten; automatic removal is limited to this daemon's own bound socket with matching identity.
+`try_wait`, `wait` and `cancel_and_wait` report completion only with that full receipt. Daemon disconnects, invalid receipts and uncertain state return `Unknown`. `Drop` sends cancellation/disconnect notifications and makes no completion claim. App's nonblocking adapter uses `request_cancel` plus bounded `try_wait`, retaining its actual admission/cleanup permit until the original terminal receipt. An HTTP disconnect does not release that permit; contention never queues, and unknown launch/cleanup closes later admission. Normal SIGTERM/INT/QUIT first reap the active job. Deployment must also use an exclusive supervised service cgroup, such as actual `KillMode=control-group` supervision, covering the daemon and its entire subtree. SIGKILL, host failure and power loss cannot become fabricated client completion receipts. Existing sockets are never overwritten; automatic removal is limited to this daemon's own bound socket with matching identity.
 
 ## Checks and deployment boundary
 

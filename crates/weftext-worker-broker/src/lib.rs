@@ -127,11 +127,46 @@ pub struct Receipt {
     pub pidfd_exited: bool,
 }
 
+impl Receipt {
+    /// Identity, full tree cleanup and a single real POSIX exit are all required.
+    pub fn validate(&self, started: &Started) -> Result<()> {
+        if self.version != 1
+            || self.job_id != started.job_id
+            || !self.cgroup_empty
+            || !self.pidfd_exited
+            || self.reaped == 0
+            || self.exit_code.is_some() == self.signal.is_some()
+            || self
+                .exit_code
+                .is_some_and(|code| !(0..=255).contains(&code))
+            || self
+                .signal
+                .is_some_and(|signal| !(1..=64).contains(&signal))
+        {
+            return Err(Error::unknown("incomplete worker-tree receipt"));
+        }
+        Ok(())
+    }
+}
+
 pub fn decode<T: for<'de> Deserialize<'de>>(bytes: &[u8]) -> Result<T> {
     if bytes.is_empty() || bytes.len() > MAX_FRAME {
         return Err(Error::new(ErrorKind::Rejected, "empty or oversized frame"));
     }
     Ok(serde_json::from_slice(bytes)?)
+}
+
+#[cfg(any(target_os = "linux", test))]
+struct EnrollmentBinding {
+    path: std::path::PathBuf,
+    id: String,
+    sha256: String,
+}
+#[cfg(any(target_os = "linux", test))]
+impl EnrollmentBinding {
+    fn matches(&self, path: &std::path::Path, id: &str, sha256: &str) -> bool {
+        self.path == path && self.id == id && self.sha256 == sha256
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -142,6 +177,97 @@ pub use linux::{BrokerClient, OwnedWorker, run_daemon};
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn same_enrollment_path_cannot_adopt_a_different_authority() {
+        let binding = EnrollmentBinding {
+            path: "/authority/enrollment.json".into(),
+            id: "original-id".into(),
+            sha256: "original-bytes".into(),
+        };
+        assert!(binding.matches(&binding.path, "original-id", "original-bytes"));
+        assert!(!binding.matches(&binding.path, "replacement-id", "original-bytes"));
+        assert!(!binding.matches(&binding.path, "original-id", "replacement-bytes"));
+        assert!(!binding.matches(
+            std::path::Path::new("/other/enrollment.json"),
+            "original-id",
+            "original-bytes"
+        ));
+    }
+    #[test]
+    fn only_original_complete_tree_receipts_qualify() {
+        let started = Started {
+            version: 1,
+            job_id: "a".repeat(32),
+            pid: 123,
+            image_sha256: "b".repeat(64),
+        };
+        let receipt = Receipt {
+            version: 1,
+            job_id: started.job_id.clone(),
+            completion: Completion::Exited,
+            exit_code: Some(0),
+            signal: None,
+            reaped: 1,
+            cgroup_empty: true,
+            pidfd_exited: true,
+        };
+        assert!(receipt.validate(&started).is_ok());
+        let killed = Receipt {
+            completion: Completion::Timeout,
+            exit_code: None,
+            signal: Some(9),
+            ..receipt.clone()
+        };
+        assert!(killed.validate(&started).is_ok());
+        for bad in [
+            Receipt {
+                version: 2,
+                ..receipt.clone()
+            },
+            Receipt {
+                job_id: "c".repeat(32),
+                ..receipt.clone()
+            },
+            Receipt {
+                cgroup_empty: false,
+                ..receipt.clone()
+            },
+            Receipt {
+                pidfd_exited: false,
+                ..receipt.clone()
+            },
+            Receipt {
+                reaped: 0,
+                ..receipt.clone()
+            },
+            Receipt {
+                signal: Some(9),
+                ..receipt.clone()
+            },
+            Receipt {
+                exit_code: None,
+                ..receipt.clone()
+            },
+            Receipt {
+                exit_code: Some(-1),
+                ..receipt.clone()
+            },
+            Receipt {
+                exit_code: Some(256),
+                ..receipt.clone()
+            },
+            Receipt {
+                signal: Some(0),
+                ..killed.clone()
+            },
+            Receipt {
+                signal: Some(65),
+                ..killed
+            },
+        ] {
+            assert_eq!(bad.validate(&started).unwrap_err().kind, ErrorKind::Unknown);
+        }
+    }
     #[test]
     fn strict_closed_frames() {
         for raw in [

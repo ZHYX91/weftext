@@ -162,6 +162,7 @@ struct Config {
 }
 #[derive(Clone)]
 struct HostedState {
+    workers: compiler_worker::Transport,
     inner: Arc<Mutex<HostedInner>>,
     origin: Arc<str>,
     host: Arc<str>,
@@ -1025,7 +1026,7 @@ async fn preview(
     })?;
     let output = worker_failure::observe_hosted_result(
         worker_failure::HostedContext::Preview,
-        render_worker(input).await,
+        render_worker_with(input, &state.workers).await,
     );
     locked(&state, move |inner| {
         let (actor, session, _) = inner.session(&auth, &req.session_id)?;
@@ -1221,6 +1222,7 @@ impl HostedService {
         core: Core,
         config_path: PathBuf,
         legacy_root: PathBuf,
+        workers: compiler_worker::Transport,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut config: Config = serde_json::from_slice(&std::fs::read(&config_path)?)?;
         config.root = std::path::absolute(&config.root)?;
@@ -1363,6 +1365,7 @@ impl HostedService {
             .1
             .to_owned();
         let state = HostedState {
+            workers,
             inner: Arc::new(Mutex::new(HostedInner {
                 core,
                 config,

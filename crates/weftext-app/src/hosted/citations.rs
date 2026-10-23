@@ -863,7 +863,7 @@ async fn read_editor(
         Some((
             worker_failure::observe_hosted_result(
                 worker_failure::HostedContext::CitationRead,
-                render_worker(input).await,
+                render_worker_with(input, &state.workers).await,
             ),
             dependencies,
             environment,
@@ -917,7 +917,7 @@ async fn edit_native(
         Some((
             worker_failure::observe_hosted_result(
                 worker_failure::HostedContext::CitationEdit,
-                render_worker(frozen.0).await,
+                render_worker_with(frozen.0, &state.workers).await,
             ),
             frozen.1,
             frozen.2,

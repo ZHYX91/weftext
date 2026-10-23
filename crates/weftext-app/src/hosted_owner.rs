@@ -41,7 +41,7 @@ pub(crate) async fn run(data_dir: PathBuf, config: PathBuf) -> Result<(), ServeE
     })?;
     let (core, data) = crate::host_environment::open_core(data)
         .map_err(|_| failed("coreUnavailable", "The persistent Core could not be opened"))?;
-    let service=HostedService::bind(core,config,data.join("legacy-office")).await.map_err(|error|{
+    let service=HostedService::bind(core,config,data.join("legacy-office"),crate::compiler_worker::Transport::default()).await.map_err(|error|{
         if error.is::<crate::hosted::PairingMismatch>() {
             failed("syncPairingMismatch","Persisted sync pairing differs from configuration; existing grants cannot silently move to another family")
         }else {failed("hostedConfiguration","The configured hosted service could not be bound; check the operator configuration and selected profile")}

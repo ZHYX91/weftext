@@ -1421,6 +1421,7 @@ mod tests {
         .0;
         assert_eq!(repeated["planId"], plan["planId"]);
         let HostedState {
+            workers,
             inner,
             origin,
             host,
@@ -1434,6 +1435,7 @@ mod tests {
         } = Arc::try_unwrap(inner).ok().unwrap().into_inner().unwrap();
         drop(core);
         let state = HostedState {
+            workers,
             inner: Arc::new(Mutex::new(HostedInner {
                 core: Core::new(temp.path().join("state")).unwrap(),
                 config,

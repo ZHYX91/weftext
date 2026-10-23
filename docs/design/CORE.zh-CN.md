@@ -263,6 +263,8 @@ purge仍是获权破坏性动作；root和确认的bytes/成员固定，ignored/
 
 Linux 的 `BoundFile` 保留 root／parent FD 与准确 basename；`openat2` 使用 BENEATH／NO_SYMLINKS／NO_MAGICLINKS／NO_XDEV，包括拒绝 bind mount。原生 ext4／XFS 须实际支持 opaque handles；不合格文件系统、非 UTF-8 名、符号链接、硬链接和特殊项明确失败。枚举真实目录 FD 并返回 complete／budget 结果。移动使用 `renameat2(RENAME_NOREPLACE)`，同步受影响的两个目录；私有替换明确声明 replace。文件同步和目录项同步为不同耐久步骤。source／read 范围在已隔离的服务权限下持有相容的进程内 lease。机制仍需逐平台产品检查，不建立真实断电、桌面、Mobile 或 macOS 验收。
 
+托管编译 broker 绑定已准入 Core 后端持有的同一 `ValidatedEnrollment`；每次启动固定原登记路径、身份和完整摘要，另读同一路径不能替换 authority。实例的单一启动许可由已接受任务持有至原 worker 进程树终局回执，HTTP 调用方断开也不释放；占用时在启动前拒绝，启动／清理未知则关闭后续 worker 准入且不能宣称干净排空。
+
 **Server 与后续平台。** Server writer service 使用 OS 隔离目录，普通客户端和 worker 不直写；fence 每次实际文件动作和日志决议。该部署可实现强 namespace 与自动恢复。Linux 的普通 advisory 锁无法阻止任意同用户工具；Linux 首轮可提供受控服务目录或明确的独占宿主模式，开放本地写后端待单独证明。网络文件系统逐项认证。可选 checkout→三方导回服务于长期外部编辑或不合格后端，保留原 Base/current/proposed；不是正常 Desktop 保存的强制步骤。
 
 不需要抵抗磁盘所有者刻意绕过隔离、直接损坏日志或恶意内核；普通编辑器/同步器竞态、已有句柄和 mapping 在需验证范围内。范围外行为不产生声称“任意外部写都安全”的承诺。无所需保护时保稿并返回该动作的明确边界，不暗降级到覆盖未观察稿件的 observed-only save。
