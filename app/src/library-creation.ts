@@ -120,12 +120,14 @@ function validRequest(value: LibraryCreationRequest): boolean {
 /** The exact native bytes and original ID are retained before the first write. */
 export class LibraryCreationController {
     private readonly closeGuard = new ProposalCloseGuard();
-    private readonly releaseCloseOwner = registerNativeProposalOwner(this);
+    private readonly releaseCloseOwner: () => void;
     assertCloseReady(): void { this.closeGuard.assertReady(this.busy || this.request !== null || this.proposal !== null || this.recoveryError !== null || this.draftEdited || !!this.draft.path || this.draft.rootMode !== undefined); }
     freezeForClose(): boolean { return this.closeGuard.freeze(this.busy || this.request !== null || this.proposal !== null || this.recoveryError !== null || this.draftEdited || !!this.draft.path || this.draft.rootMode !== undefined); }
     thawAfterClose(): void { this.closeGuard.thaw(); }
     bindCloseGuard(element: HTMLElement): void { this.closeGuard.bind(element); }
     runCloseTracked<T>(operation: () => Promise<T>): Promise<T> { return this.closeGuard.run(operation); }
+    /** Hiding retains the live original owner; it is not a native-close acknowledgement. */
+    assertCanHide(): void { this.closeGuard.assertMutable(); this.closeGuard.assertReady(this.busy); }
 
     draft: CreationDraft = { path: "", language: '"zh"', region: '"CN"', defaults: null };
     request: LibraryCreationRequest | null = null;
@@ -137,6 +139,7 @@ export class LibraryCreationController {
     private draftEdited = false;
     constructor(readonly host: LibraryCreationHost, private storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> = localStorage) {
         const raw = storage.getItem(key);
+        this.releaseCloseOwner = registerNativeProposalOwner(this);
         if (!raw)
             return;
         try {
@@ -316,17 +319,31 @@ export class LibraryCreationController {
     }
 }
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text: UiText = ""): HTMLElementTagNameMap[K] => { const e = document.createElement(tag); setUiText(e, text); return e; };
+interface CreationDialogResult {
+    receipt: LibraryCreationReceipt | null;
+    retained: boolean;
+}
+// A hidden original keeps its actual controller, host and bound DOM. Reopening
+// must not reconstruct a second registered owner from the recovery record.
+let retainedCreation: Promise<() => Promise<CreationDialogResult>> | null = null;
 let activeCreation: Promise<LibraryCreationReceipt | null> | null = null;
 export function openLibraryCreation(host: LibraryCreationHost): Promise<LibraryCreationReceipt | null> {
-    if (!activeCreation)
-        activeCreation = showLibraryCreation(host).finally(() => { activeCreation = null; });
+    if (!activeCreation) {
+        const retained = retainedCreation ??= createLibraryCreationDialog(host);
+        activeCreation = retained.then(show => show(), error => {
+            if (retainedCreation === retained) retainedCreation = null;
+            throw error;
+        }).then(result => {
+            if (!result.retained && retainedCreation === retained) retainedCreation = null;
+            return result.receipt;
+        }).finally(() => { activeCreation = null; });
+    }
     return activeCreation;
 }
-async function showLibraryCreation(host: LibraryCreationHost): Promise<LibraryCreationReceipt | null> {
+async function createLibraryCreationDialog(host: LibraryCreationHost): Promise<() => Promise<CreationDialogResult>> {
     const controller = new LibraryCreationController(host);
     let loadError: unknown;
     try { await controller.load(); } catch (error) { loadError = error; }
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = el("dialog");
     controller.bindCloseGuard(dialog);
     dialog.className = "modal library-creation-dialog";
@@ -372,7 +389,7 @@ async function showLibraryCreation(host: LibraryCreationHost): Promise<LibraryCr
         b.onclick = () => {
             void (async () => {
                 try {
-                    if (composing)
+                    if (!dialog.open || composing)
                         return;
                     const promise = run();
                     draw();
@@ -447,7 +464,7 @@ async function showLibraryCreation(host: LibraryCreationHost): Promise<LibraryCr
                 const b = el("button", ({ keepCurrent: uiMessage("libraryCreation.keepStateEndOriginal"), adoptAfterImages: uiMessage("libraryCreation.verifyOriginalWrittenContents"), resumeOriginalPlan: uiMessage("libraryCreation.continueOnlyMissingParts") } as Record<string, UiText>)[action] ?? action);
                 b.type = "button";
                 b.disabled = controller.busy;
-                b.onclick = () => { void controller.resolve(action).then(draw).catch(error => { setUiText(message, String(error)); draw(); }); };
+                b.onclick = () => { if (dialog.open) void controller.resolve(action).then(draw).catch(error => { setUiText(message, String(error)); draw(); }); };
                 preview.append(b);
             }
         }
@@ -486,23 +503,31 @@ async function showLibraryCreation(host: LibraryCreationHost): Promise<LibraryCr
     dialog.addEventListener("compositionend", () => { composing = false; });
     dialog.addEventListener("keydown", event => event.stopPropagation());
     dialog.append(el("h2", uiMessage("shell.createLibrary")), el("p", uiMessage("libraryCreation.createLibraryDescription")), path, el("label", uiMessage("libraryCreation.documentLanguage")), language, el("label", uiMessage("libraryCreation.documentRegion")), region, el("label", uiMessage("libraryCreation.initialRootContent")), rootMode, rootTitle, queryChoices, preview, message, actions);
-    document.body.append(dialog);
-    draw();
     if (loadError !== undefined) setUiText(message, errorUiText(loadError));
-    dialog.showModal();
-    path.focus();
-    return new Promise(resolve => {
+    dialog.addEventListener("cancel", event => { event.preventDefault(); finish(null); });
+    return () => new Promise(resolve => {
+        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        let settled = false;
         finish = value => {
-            if (controller.busy || composing)
+            if (settled || controller.busy || composing)
                 return;
-            try { controller.dismiss(); }
+            const retained = value === null && (controller.request !== null || controller.recoveryError !== null);
+            try {
+                if (retained) controller.assertCanHide();
+                else controller.dismiss();
+            }
             catch (error) { setUiText(message, errorUiText(error)); return; }
+            settled = true;
+            finish = () => {};
             dialog.close();
             dialog.remove();
             if (previousFocus?.isConnected)
                 previousFocus.focus();
-            resolve(value);
+            resolve({ receipt: value, retained });
         };
-        dialog.addEventListener("cancel", event => { event.preventDefault(); finish(null); });
+        document.body.append(dialog);
+        draw();
+        dialog.showModal();
+        path.focus();
     });
 }
