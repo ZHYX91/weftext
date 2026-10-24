@@ -7,7 +7,9 @@ use crate::journal::Plan;
 use std::io::{Seek, SeekFrom};
 use weftext_messages::UiMessage;
 
-const MAX_ROUTING_MEMBERS: usize = 5000;
+// The 256 shard directory entries are metadata overhead rather than new
+// author payload; original selected-file budgets remain enforced separately.
+const MAX_ROUTING_MEMBERS: usize = 5256;
 const PRIVATE_ROOTS: [&str; 7] = [
     "journal",
     "drafts",
@@ -26,6 +28,12 @@ enum RecordKind {
     Output,
     Capture,
 }
+fn journal_bucket_folder(core: &Core, path: &Path) -> bool {
+    path.parent() == Some(core.data_dir.join("journal").as_path())
+        && path.file_name().and_then(std::ffi::OsStr::to_str).is_some_and(|name| {
+            name.len() == 2 && name.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        })
+}
 fn record_kind(core: &Core, path: &Path) -> Result<RecordKind> {
     let relative = path
         .strip_prefix(&core.data_dir)
@@ -36,7 +44,7 @@ fn record_kind(core: &Core, path: &Path) -> Result<RecordKind> {
         .collect::<Option<Vec<_>>>()
         .ok_or_else(private_evidence)?;
     match parts.as_slice() {
-        ["journal", _] => Ok(RecordKind::Journal),
+        ["journal", _, _] if path.parent().is_some_and(|parent| journal_bucket_folder(core, parent)) => Ok(RecordKind::Journal),
         ["drafts" | "draft-history", _] => Ok(RecordKind::Draft),
         ["actors", _, "drafts" | "draft-history", _] => Ok(RecordKind::Draft),
         ["actors", _, "operations", _] => Ok(RecordKind::Actor),
@@ -463,7 +471,7 @@ impl Core {
                 if attrs.is_unsupported() {
                     return Err(private_evidence());
                 }
-                if folder == self.data_dir.join("journal")
+                if journal_bucket_folder(self, &folder)
                     && own.is_some_and(|p| {
                         name.to_string_lossy()
                             .starts_with(&format!("{}.", p.operation_id))
@@ -482,6 +490,10 @@ impl Core {
                 }
                 routed_entries.push((name.clone(), attrs));
                 if attrs.is_directory() {
+                    if folder == self.data_dir.join("journal") && journal_bucket_folder(self, &path) {
+                        queue.push(path);
+                        continue;
+                    }
                     if !path.starts_with(self.data_dir.join("actors")) {
                         return Err(private_evidence());
                     }
@@ -509,7 +521,7 @@ impl Core {
                     let file_guard = ParentGuard::acquire(&self.backend, &path)?;
                     let mut file = file_guard.open_read_guard_file()?;
                     let actual = stamp(&file)?;
-                    let (selected, route) = if folder == self.data_dir.join("journal") {
+                    let (selected, route) = if journal_bucket_folder(self, &folder) {
                         let text = name.to_string_lossy();
                         let id = text.split('.').next().ok_or_else(private_evidence)?;
                         let suffix = qualified_journal_suffix(id, &text)?;

@@ -399,15 +399,18 @@ impl Core {
         Ok(())
     }
     pub(crate) fn load_journals(&mut self) -> Result<()> {
+        let mut plans = Vec::new();
         for entry in self.journal_entries()? {
             let path = entry?.path();
             if path
                 .file_name()
                 .is_some_and(|n| n.to_string_lossy().ends_with(".plan.json"))
             {
-                let plan = self.read_journal_plan(&path)?;
-                self.operations.insert(plan.operation_id.clone(), plan);
+                plans.push(self.read_journal_plan(&path)?);
             }
+        }
+        for plan in plans {
+            self.operations.insert(plan.operation_id.clone(), plan);
         }
         // Decode every original committed fact once on startup; the
         // in-process watermark is reconstructed, never an extra fact ledger.
