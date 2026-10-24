@@ -72,6 +72,7 @@ pub(crate) struct FileSaveData {
     pub version: u8,
     pub session_id: String,
     pub draft_producer_id: String,
+    pub input_revision: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_id: Option<String>,
     pub scope: QualifiedInputScope,
@@ -84,12 +85,17 @@ impl FileSaveData {
         draft_producer_id: String,
     ) -> Self {
         Self {
-            version: 2,
+            version: 3,
             session_id,
             draft_producer_id,
+            input_revision: 0,
             base_id,
             scope,
         }
+    }
+    pub(crate) fn with_input_revision(mut self, input_revision: u64) -> Self {
+        self.input_revision = input_revision;
+        self
     }
 }
 pub(crate) fn unsupported_scope() -> CoreError {

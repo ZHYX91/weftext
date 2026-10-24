@@ -8,6 +8,7 @@ pub(crate) fn save_fingerprint(
     restore: Option<&history::RestoreBinding>,
     scope: QualifiedInputScope,
     producer: &str,
+    input_revision: u64,
 ) -> Result<String> {
     file_save_scope::fingerprint(
         "save",
@@ -18,7 +19,7 @@ pub(crate) fn save_fingerprint(
             Some(request.base_id.clone()),
             scope,
             producer.to_owned(),
-        ),
+        ).with_input_revision(input_revision),
         restore,
     )
 }
@@ -587,6 +588,7 @@ impl Core {
             Session {
                 draft_producer_id: original.draft_producer_id,
                 draft_input: original.draft_input,
+                draft_input_revision: original.draft_input_revision,
                 draft_witness: original.draft_witness,
                 conflicting_draft: original.conflicting_draft,
                 ..refreshed
@@ -720,6 +722,7 @@ impl Core {
                 None,
                 plan.file_save.as_ref().unwrap().scope.clone(),
                 &plan.file_save.as_ref().unwrap().draft_producer_id,
+                plan.file_save.as_ref().unwrap().input_revision,
             )? != plan.fingerprint
         {
             return Err(CoreError::new(
