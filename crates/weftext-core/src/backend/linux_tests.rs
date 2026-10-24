@@ -605,3 +605,15 @@ fn controlled_service_core_round_trip_and_negative_boundaries() {
     );
     assert_eq!(std::fs::read(device_path).unwrap(), device_bytes);
 }
+
+#[test]
+fn linux_case_distinct_pending_targets_have_distinct_original_coordinates() {
+    let a = Path::new("/enrolled/Documents/A.typ");
+    let b = Path::new("/enrolled/Documents/a.typ");
+    assert_ne!(namespace_path_compare(a, b).unwrap(), std::cmp::Ordering::Equal);
+    assert_eq!(namespace_relative_path(b, a).unwrap(), None);
+    assert_eq!(
+        namespace_path_compare(a, Path::new("/enrolled/Documents/A.typ")).unwrap(),
+        std::cmp::Ordering::Equal
+    );
+}
