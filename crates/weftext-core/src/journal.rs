@@ -297,12 +297,58 @@ fn decode_journal_plan(path: &Path, bytes: &[u8]) -> Result<Plan> {
 const JOURNAL_BUCKETS: usize = 256;
 const JOURNAL_BUCKET_LIMIT: usize = 5000;
 const JOURNAL_ADMISSION_MARGIN: usize = 32;
-fn journal_bucket(id: &str) -> String {
-    id.get(..2).filter(|part| part.bytes().all(|b| b.is_ascii_hexdigit()))
-        .unwrap_or("00").to_ascii_lowercase()
+fn journal_record_budget(plan: &Plan) -> usize {
+    // Fixed record families plus objects this operation can actually create.
+    // Captured existing files/directories do not publish materialization facts.
+    let created = |files: &[operations::FileChange]| {
+        files.iter().filter(|file| file.before.is_none()).count()
+    };
+    JOURNAL_ADMISSION_MARGIN
+        .saturating_add(plan.files.len())
+        .saturating_add(plan.transaction.as_ref().map_or(0, |t| {
+            use operations::Mutation;
+            match &t.mutation {
+                Mutation::Update { files } => created(files),
+                Mutation::CreateTree {
+                    directories,
+                    files,
+                    updates,
+                    ..
+                } => directories
+                    .len()
+                    .saturating_add(created(files))
+                    .saturating_add(created(updates))
+                    .saturating_add(1),
+                Mutation::Relocate {
+                    updates,
+                    create_trash_parent,
+                    ..
+                } => created(updates).saturating_add(usize::from(*create_trash_parent)),
+                Mutation::Compound {
+                    created_files,
+                    created_directories,
+                    updates,
+                    relocations,
+                    ..
+                } => created(created_files)
+                    .saturating_add(created_directories.len())
+                    .saturating_add(created(updates))
+                    .saturating_add(relocations.len()),
+            }
+        }))
 }
-fn valid_journal_bucket(name: &str) -> bool {
-    name.len() == 2 && name.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+
+fn journal_bucket(id: &str) -> String {
+    id.get(..2)
+        .filter(|part| part.bytes().all(|b| b.is_ascii_hexdigit()))
+        .unwrap_or("00")
+        .to_ascii_lowercase()
+}
+pub(crate) fn valid_journal_bucket(name: &str) -> bool {
+    name.len() == 2
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 pub(crate) struct JournalEntries<'a> {
     backend: &'a BackendContext,
@@ -325,11 +371,17 @@ impl Iterator for JournalEntries<'_> {
                     let name = file.to_string_lossy();
                     let id = name.split('.').next().unwrap_or("");
                     if valid_operation_id(id).is_err()
-                        || entry.path().parent().and_then(Path::file_name).and_then(|p| p.to_str())
+                        || entry
+                            .path()
+                            .parent()
+                            .and_then(Path::file_name)
+                            .and_then(|p| p.to_str())
                             != Some(journal_bucket(id).as_str())
                     {
-                        return Some(Err(CoreError::new("privateEvidence",
-                            UiMessage::error_core_journal_journal_filename_invalid())));
+                        return Some(Err(CoreError::new(
+                            "privateEvidence",
+                            UiMessage::error_core_journal_journal_filename_invalid(),
+                        )));
                     }
                     return Some(Ok(entry));
                 }
@@ -339,9 +391,15 @@ impl Iterator for JournalEntries<'_> {
                 Ok(bucket) => bucket,
                 Err(error) => return Some(Err(error)),
             };
-            if !bucket.file_name().to_str().is_some_and(valid_journal_bucket) {
-                return Some(Err(CoreError::new("privateEvidence",
-                    UiMessage::error_core_journal_journal_filename_invalid())));
+            if !bucket
+                .file_name()
+                .to_str()
+                .is_some_and(valid_journal_bucket)
+            {
+                return Some(Err(CoreError::new(
+                    "privateEvidence",
+                    UiMessage::error_core_journal_journal_filename_invalid(),
+                )));
             }
             match self.backend.read_dir(bucket.path()) {
                 Ok(entries) => self.current = Some(entries),
@@ -352,7 +410,9 @@ impl Iterator for JournalEntries<'_> {
 }
 impl Core {
     pub(crate) fn journal_path(&self, id: &str, suffix: &str) -> PathBuf {
-        self.data_dir.join("journal").join(journal_bucket(id))
+        self.data_dir
+            .join("journal")
+            .join(journal_bucket(id))
             .join(format!("{id}.{suffix}.json"))
     }
     /// One-time relocation under the original Core instance lock. Rename
@@ -370,16 +430,23 @@ impl Core {
     pub(crate) fn initialize_journal_layout(&self, may_convert: bool) -> Result<()> {
         const MAX_LEGACY_ENTRIES: usize = 65_536 + JOURNAL_BUCKETS;
         let root = self.data_dir.join("journal");
-        let existing = self.backend.read_dir_bounded(&root, MAX_LEGACY_ENTRIES)?
+        let existing = self
+            .backend
+            .read_dir_bounded(&root, MAX_LEGACY_ENTRIES)?
             .map(|entry| entry.map(|entry| entry.path()))
             .collect::<Result<Vec<_>>>()?;
         let mut flat = std::collections::BTreeMap::<String, Vec<PathBuf>>::new();
         let mut buckets = std::collections::BTreeSet::<String>::new();
         for path in existing {
-            let name = path.file_name().and_then(|part| part.to_str()).ok_or_else(|| {
-                CoreError::new("privateEvidence",
-                    UiMessage::error_core_journal_journal_filename_invalid())
-            })?;
+            let name = path
+                .file_name()
+                .and_then(|part| part.to_str())
+                .ok_or_else(|| {
+                    CoreError::new(
+                        "privateEvidence",
+                        UiMessage::error_core_journal_journal_filename_invalid(),
+                    )
+                })?;
             if valid_journal_bucket(name) {
                 buckets.insert(name.to_owned());
                 continue;
@@ -387,10 +454,43 @@ impl Core {
             let id = name.split('.').next().unwrap_or("");
             valid_operation_id(id)?;
             if !may_convert {
-                return Err(CoreError::new("unsupportedFileSaveEvidence",
-                    UiMessage::error_core_file_save_scope_retained_file_save_scope_unsupported()));
+                return Err(CoreError::new(
+                    "unsupportedFileSaveEvidence",
+                    UiMessage::error_core_file_save_scope_retained_file_save_scope_unsupported(),
+                ));
             }
             flat.entry(journal_bucket(id)).or_default().push(path);
+        }
+        // Preflight the complete conversion before moving any original. A
+        // full target bucket must not strand a partially converted profile.
+        for (name, files) in &flat {
+            let target = root.join(name);
+            let count = if buckets.contains(name) {
+                self.backend
+                    .read_dir(&target)?
+                    .collect::<Result<Vec<_>>>()?
+                    .len()
+            } else {
+                0
+            };
+            if count.saturating_add(files.len()) > JOURNAL_BUCKET_LIMIT {
+                return Err(CoreError::new(
+                    "budget",
+                    UiMessage::error_core_backend_private_namespace_budget(),
+                ));
+            }
+            for file in files {
+                if buckets.contains(name)
+                    && self
+                        .backend
+                        .entry_exists(target.join(file.file_name().unwrap()))?
+                {
+                    return Err(CoreError::new(
+                        "privateEvidence",
+                        UiMessage::error_core_journal_journal_filename_invalid(),
+                    ));
+                }
+            }
         }
         // Only create buckets containing real retained files. No empty
         // 256-folder skeleton and no unverifiable auxiliary index.
@@ -401,12 +501,18 @@ impl Core {
             }
             let _ = self.backend.read_dir(&target_dir)?;
             for old_path in files {
-                let leaf = old_path.file_name().ok_or_else(|| CoreError::new(
-                    "privateEvidence", UiMessage::error_core_journal_journal_filename_invalid()))?;
+                let leaf = old_path.file_name().ok_or_else(|| {
+                    CoreError::new(
+                        "privateEvidence",
+                        UiMessage::error_core_journal_journal_filename_invalid(),
+                    )
+                })?;
                 let target = target_dir.join(leaf);
                 if self.backend.entry_exists(&target)? {
-                    return Err(CoreError::new("privateEvidence",
-                        UiMessage::error_core_journal_journal_filename_invalid()));
+                    return Err(CoreError::new(
+                        "privateEvidence",
+                        UiMessage::error_core_journal_journal_filename_invalid(),
+                    ));
                 }
                 let guard = ParentGuard::acquire(&self.backend, &old_path)?;
                 let file = guard.open_read_guard_file()?;
@@ -439,14 +545,101 @@ impl Core {
             current: None,
         })
     }
-    fn admit_journal_operation(&self, id: &str) -> Result<()> {
-        let path = self.data_dir.join("journal").join(journal_bucket(id));
+    pub(crate) fn admit_journal_operation(&self, plan: &Plan) -> Result<()> {
+        self.committed_sequence
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .checked_add(1)
+            .ok_or_else(|| {
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_journal_commit_sequence_exhausted(),
+                )
+            })?;
+        self.admit_journal_capacity(&plan.operation_id, Some(plan))
+    }
+    fn admit_journal_capacity(&self, id: &str, candidate: Option<&Plan>) -> Result<()> {
+        let bucket = journal_bucket(id);
+        let path = self.data_dir.join("journal").join(&bucket);
         self.backend.create_private_directory(&path)?;
-        if self.backend.read_dir(&path)?.count() >= JOURNAL_BUCKET_LIMIT - JOURNAL_ADMISSION_MARGIN {
-            return Err(CoreError::new("budget",
-                UiMessage::error_core_backend_private_namespace_budget()));
+        let mut counts = std::collections::BTreeMap::<String, usize>::new();
+        let mut terminal_names = std::collections::BTreeSet::new();
+        let mut used = 0usize;
+        for entry in self.backend.read_dir(&path)? {
+            let name = entry?.file_name();
+            if let Some(id) = name.to_str().and_then(|n| {
+                n.strip_suffix(".commit.json")
+                    .or_else(|| n.strip_suffix(".resolution.json"))
+            }) {
+                terminal_names.insert(id.to_owned());
+            }
+            *counts
+                .entry(
+                    name.to_string_lossy()
+                        .split('.')
+                        .next()
+                        .unwrap_or("")
+                        .into(),
+                )
+                .or_default() += 1;
+            used += 1;
+        }
+        // Derive outstanding reservations from the original pending Plans on
+        // every admission, including after restart. Terminal operations only
+        // consume their actual retained entries.
+        let mut reserved_write = false;
+        for pending in self.operations.values().filter(|p| {
+            candidate.is_none_or(|plan| p.operation_id != plan.operation_id)
+                && journal_bucket(&p.operation_id) == bucket
+        }) {
+            // Capacity is a namespace bound, not a commit/permission decision.
+            // Existing terminal names already occupy their create-only slots;
+            // the actual operation still has to decode its original facts.
+            // Do not read unrelated author bodies merely to count free space.
+            if !terminal_names.contains(&pending.operation_id) {
+                let remaining = journal_record_budget(pending)
+                    .saturating_sub(*counts.get(&pending.operation_id).unwrap_or(&0));
+                reserved_write |= pending.operation_id == id && remaining > 0;
+                used = used.saturating_add(remaining);
+            }
+        }
+        used = used.saturating_add(if let Some(plan) = candidate {
+            journal_record_budget(plan)
+                .saturating_sub(*counts.get(&plan.operation_id).unwrap_or(&0))
+        } else {
+            usize::from(!reserved_write)
+        });
+        // Keep one slot available for a flushed temporary publication.
+        if used >= JOURNAL_BUCKET_LIMIT {
+            return Err(CoreError::new(
+                "budget",
+                UiMessage::error_core_backend_private_namespace_budget(),
+            ));
         }
         Ok(())
+    }
+    /// All Core record producers share pending Plan reservations, including
+    /// pre-Plan fences and allocation records. Such writes cannot consume the
+    /// final slots already required to settle an outstanding transaction.
+    pub(crate) fn create_private_record(&self, path: &Path, bytes: &[u8]) -> Result<()> {
+        if path.parent().and_then(Path::parent) == Some(self.data_dir.join("journal").as_path()) {
+            let name = path.file_name().and_then(|n| n.to_str()).ok_or_else(|| {
+                CoreError::new(
+                    "privateEvidence",
+                    UiMessage::error_core_journal_journal_filename_invalid(),
+                )
+            })?;
+            let id = name.split('.').next().unwrap_or("");
+            valid_operation_id(id)?;
+            if path.parent() != self.journal_path(id, "plan").parent() {
+                return Err(CoreError::new(
+                    "privateEvidence",
+                    UiMessage::error_core_journal_journal_filename_invalid(),
+                ));
+            }
+            self.admit_journal_capacity(id, None)?;
+            return publish_private_record(&self.backend, path, bytes);
+        }
+        private_create(&self.backend, path, bytes)
     }
     pub(crate) fn load_journals(&mut self) -> Result<()> {
         let mut plans = Vec::new();
@@ -471,12 +664,17 @@ impl Core {
                 .to_str()
                 .and_then(|name| name.strip_suffix(".commit.json"))
             {
-                let commit = self.committed_record(id)?.ok_or_else(|| CoreError::new(
-                    "invalidState", UiMessage::error_core_journal_original_commit_evidence_invalid()))?;
+                let commit = self.committed_record(id)?.ok_or_else(|| {
+                    CoreError::new(
+                        "invalidState",
+                        UiMessage::error_core_journal_original_commit_evidence_invalid(),
+                    )
+                })?;
                 maximum = maximum.max(commit.commit_sequence);
             }
         }
-        self.committed_sequence.store(maximum, std::sync::atomic::Ordering::Relaxed);
+        self.committed_sequence
+            .store(maximum, std::sync::atomic::Ordering::Relaxed);
         self.validate_resolution_namespace()
     }
     pub(crate) fn read_journal_plan(&self, path: &Path) -> Result<Plan> {
@@ -525,11 +723,10 @@ impl Core {
             ));
         }
         self.validate_operation_pending(&plan)?;
-        self.admit_journal_operation(&plan.operation_id)?;
         self.freeze_sync_publication(&mut plan)?;
+        self.admit_journal_operation(&plan)?;
         // A plan contains complete exact preimage/afterimage before any user write.
-        private_create(
-            &self.backend,
+        self.create_private_record(
             &self.journal_path(&plan.operation_id, "plan"),
             &serde_json::to_vec(&plan)?,
         )?;
@@ -553,30 +750,33 @@ impl Core {
         Ok(Some(record))
     }
     pub(crate) fn commit(&self, plan: &Plan) -> Result<()> {
-        let sequence = self.committed_sequence.load(std::sync::atomic::Ordering::Relaxed)
-            .checked_add(1).ok_or_else(|| {
-            CoreError::new(
-                "invalidState",
-                UiMessage::error_core_journal_commit_sequence_exhausted(),
-            )
-        })?;
+        let sequence = self
+            .committed_sequence
+            .load(std::sync::atomic::Ordering::Relaxed)
+            .checked_add(1)
+            .ok_or_else(|| {
+                CoreError::new(
+                    "invalidState",
+                    UiMessage::error_core_journal_commit_sequence_exhausted(),
+                )
+            })?;
         let saved_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .ok()
             .and_then(|duration| u64::try_from(duration.as_millis()).ok());
-        let published = private_create(
-            &self.backend,
-            &self.journal_path(&plan.operation_id, "commit"),
+        let published = self.create_private_record(&self.journal_path(&plan.operation_id, "commit"),
             &serde_json::to_vec(
                 &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint,"receipt":plan.receipt,"fileSave":plan.file_save,"storageProfile":STORAGE_PROFILE,"savedAtUnixMs":saved_at,"commitSequence":sequence}),
             )?,
         );
         if published.is_ok() {
-            self.committed_sequence.store(sequence, std::sync::atomic::Ordering::Relaxed);
+            self.committed_sequence
+                .store(sequence, std::sync::atomic::Ordering::Relaxed);
         } else {
             // A possibly published commit makes the watermark unavailable
             // until complete original evidence is reloaded at restart.
-            self.committed_sequence.store(u64::MAX, std::sync::atomic::Ordering::Relaxed);
+            self.committed_sequence
+                .store(u64::MAX, std::sync::atomic::Ordering::Relaxed);
         }
         published
     }
@@ -780,8 +980,7 @@ impl Core {
             }
             self.validate_unregistered_fence_namespace(id)?;
         }
-        private_create(
-            &self.backend,
+        self.create_private_record(
             &path,
             &serde_json::to_vec(&ResolutionRecord {
                 operation_id: id.into(),
@@ -801,12 +1000,12 @@ impl Core {
                 continue;
             }
             let pending_path = Path::new(&p.path);
-            let same = backend::namespace_path_compare(pending_path, path)?
-                == std::cmp::Ordering::Equal;
+            let same =
+                backend::namespace_path_compare(pending_path, path)? == std::cmp::Ordering::Equal;
             let nested_library = p.kind == "createLibrary"
                 && backend::namespace_relative_path(path, pending_path)?.is_some();
-            let affects = same || nested_library
-                || p.transaction.as_ref().is_some_and(|t| t.affects(path));
+            let affects =
+                same || nested_library || p.transaction.as_ref().is_some_and(|t| t.affects(path));
             if !affects {
                 continue;
             }
@@ -1172,14 +1371,26 @@ pub(crate) fn private_create(
     // before introducing a file that would make its bucket unreadable.
     if let Some(parent) = path.parent()
         && parent.parent().and_then(Path::file_name) == Some(std::ffi::OsStr::new("journal"))
-        && parent.file_name().and_then(std::ffi::OsStr::to_str).is_some_and(valid_journal_bucket)
+        && parent
+            .file_name()
+            .and_then(std::ffi::OsStr::to_str)
+            .is_some_and(valid_journal_bucket)
     {
         backend.create_private_directory(parent)?;
         if backend.read_dir(parent)?.count() >= JOURNAL_BUCKET_LIMIT - 1 {
-            return Err(CoreError::new("budget",
-                UiMessage::error_core_backend_private_namespace_budget()));
+            return Err(CoreError::new(
+                "budget",
+                UiMessage::error_core_backend_private_namespace_budget(),
+            ));
         }
     }
+    publish_private_record(backend, path, bytes)
+}
+fn publish_private_record(
+    backend: &crate::BackendContext,
+    path: &Path,
+    bytes: &[u8],
+) -> Result<()> {
     let temporary = path.with_extension(format!("{}.pending", fresh()));
     let guard = ParentGuard::acquire(backend, &temporary)?;
     let mut file = guard.open_file(true, true)?;
@@ -1319,35 +1530,92 @@ mod journal_bucket_tests {
     fn actual_committed_saves_survive_more_than_five_thousand_retained_members() {
         let temp = tempfile::tempdir().unwrap();
         let profile = temp.path().join("private");
-        let note = temp.path().join("note.typ");
-        fs::write(&note, "B").unwrap();
         let mut core = Core::new(&profile).unwrap();
-        let doc = core.open(&note, None).unwrap();
-        let op = fresh();
-        core.save(SaveRequest {
-            operation_id: op.clone(), session_id: doc.session_id,
-            base_id: doc.base_id, source: "committed S".into(),
-        }).unwrap();
-        // Synthetic retained plans exercise the namespace budget without
-        // constructing 5200 file mutations. The original S above is real.
-        for index in 0..5200 {
-            let id = fresh();
-            let plan = Plan::file(
-                id.clone(), hash(format!("original-{index}").as_bytes()),
-                &temp.path().join(format!("absent-{index}.typ")),
-                None, Vec::new(), None, "syntheticRetained",
-            );
-            private_create(
-                &core.backend, &core.journal_path(&id, "plan"),
-                &serde_json::to_vec(&plan).unwrap(),
-            ).unwrap();
+        let mut documents = (0..40)
+            .map(|index| {
+                let note = temp.path().join(format!("note-{index}.typ"));
+                fs::write(&note, "B").unwrap();
+                core.open(&note, None).unwrap()
+            })
+            .collect::<Vec<_>>();
+        let mut ids = Vec::new();
+        // A real working set: 40 live documents, 45 successive saves each.
+        // This crosses the old retained-entry boundary without synthetic facts.
+        for round in 0..45 {
+            for (index, doc) in documents.iter_mut().enumerate() {
+                let id = fresh();
+                let saved = core
+                    .save(SaveRequest {
+                        operation_id: id.clone(),
+                        session_id: doc.session_id.clone(),
+                        base_id: doc.base_id.clone(),
+                        source: format!("actual save {round}-{index}"),
+                    })
+                    .unwrap();
+                doc.base_id = saved.receipt.base_id;
+                ids.push(id);
+            }
         }
+        assert!(
+            core.journal_entries()
+                .unwrap()
+                .collect::<Result<Vec<_>>>()
+                .unwrap()
+                .len()
+                > 5000
+        );
         drop(core);
         let mut recovered = Core::new(&profile).unwrap();
-        assert_eq!(recovered.local_operation_status(&op).unwrap()["status"], "committed");
-        let opened = recovered.open(&note, None).unwrap();
-        assert_eq!(opened.source, "committed S");
-        assert!(recovered.operations.len() > 5000);
+        for id in [ids.first().unwrap(), ids.last().unwrap()] {
+            assert_eq!(
+                recovered.local_operation_status(id).unwrap()["status"],
+                "committed"
+            );
+        }
+        let opened = recovered
+            .open(temp.path().join("note-39.typ"), None)
+            .unwrap();
+        assert_eq!(opened.source, "actual save 44-39");
+    }
+
+    #[test]
+    fn unknown_sequence_and_large_transaction_fail_before_author_effects() {
+        let temp = tempfile::tempdir().unwrap();
+        let note = temp.path().join("note.typ");
+        fs::write(&note, "B").unwrap();
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        let doc = core.open(&note, None).unwrap();
+        core.committed_sequence
+            .store(u64::MAX, std::sync::atomic::Ordering::Relaxed);
+        let id = fresh();
+        assert!(
+            core.save(SaveRequest {
+                operation_id: id.clone(),
+                session_id: doc.session_id,
+                base_id: doc.base_id,
+                source: "S".into()
+            })
+            .is_err()
+        );
+        assert_eq!(fs::read_to_string(&note).unwrap(), "B");
+        assert!(!core.journal_path(&id, "plan").exists());
+        core.committed_sequence
+            .store(0, std::sync::atomic::Ordering::Relaxed);
+        let mut plan = Plan::file(
+            fresh(),
+            "fingerprint".into(),
+            &note,
+            None,
+            vec![],
+            None,
+            "capacityProbe",
+        );
+        // These possible materializations alone exceed one shard's budget.
+        plan.files = (0..5000).map(|n| (format!("file-{n}"), vec![])).collect();
+        let id = plan.operation_id.clone();
+        assert_eq!(core.stage(plan).unwrap_err().code, "budget");
+        assert!(!core.journal_path(&id, "plan").exists());
+        assert_eq!(fs::read_to_string(note).unwrap(), "B");
     }
 
     #[test]
@@ -1360,9 +1628,12 @@ mod journal_bucket_tests {
         let doc = core.open(&note, None).unwrap();
         let op = fresh();
         core.save(SaveRequest {
-            operation_id: op.clone(), session_id: doc.session_id,
-            base_id: doc.base_id, source: "S".into(),
-        }).unwrap();
+            operation_id: op.clone(),
+            session_id: doc.session_id,
+            base_id: doc.base_id,
+            source: "S".into(),
+        })
+        .unwrap();
         let plan = core.journal_path(&op, "plan");
         let commit = core.journal_path(&op, "commit");
         let before_plan = fs::read(&plan).unwrap();
@@ -1388,16 +1659,31 @@ mod wrong_bucket_tests {
         let private = temp.path().join("private");
         let core = Core::new(&private).unwrap();
         let id = fresh();
-        let plan = Plan::file(id.clone(), hash(b"wrong-bucket"),
-            &temp.path().join("outside.typ"), None, b"S".to_vec(), None,
-            "retainedUnknown");
+        let plan = Plan::file(
+            id.clone(),
+            hash(b"wrong-bucket"),
+            &temp.path().join("outside.typ"),
+            None,
+            b"S".to_vec(),
+            None,
+            "retainedUnknown",
+        );
         let original = serde_json::to_vec(&plan).unwrap();
-        let bucket = if journal_bucket(&id) == "00" { "01" } else { "00" };
+        let bucket = if journal_bucket(&id) == "00" {
+            "01"
+        } else {
+            "00"
+        };
         let wrong_dir = private.join("journal").join(bucket);
         std::fs::create_dir_all(&wrong_dir).unwrap();
         let wrong = wrong_dir.join(format!("{id}.plan.json"));
         std::fs::write(&wrong, &original).unwrap();
-        assert!(core.journal_entries().unwrap().collect::<Result<Vec<_>>>().is_err());
+        assert!(
+            core.journal_entries()
+                .unwrap()
+                .collect::<Result<Vec<_>>>()
+                .is_err()
+        );
         drop(core);
         assert!(Core::new(&private).is_err());
         assert_eq!(std::fs::read(&wrong).unwrap(), original);

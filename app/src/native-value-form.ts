@@ -98,6 +98,8 @@ export interface DocumentBasis {
     nodeId?: string;
     workspaceId?: string;
     dirty?: boolean;
+    /** Present only when this exact source and serial have a durable Draft ACK. */
+    inputRevision?: number;
 }
 export interface SourcePatch {
     from: number;

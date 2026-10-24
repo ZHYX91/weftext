@@ -936,11 +936,7 @@ impl Core {
                     history: None,
                     owner_backup: None,
                 };
-                journal::private_create(
-                    &self.backend,
-                    &path,
-                    &self.actor_operation_bytes(&record)?,
-                )?;
+                self.create_private_record(&path, &self.actor_operation_bytes(&record)?)?;
                 record
             }
         };
@@ -1086,7 +1082,7 @@ impl Core {
             history: None,
             owner_backup: None,
         };
-        journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
+        self.create_private_record(&path, &self.actor_operation_bytes(&record)?)?;
         let outcome = self.save(SaveRequest {
             session_id: request.session_id,
             base_id: request.base_id,
@@ -1133,8 +1129,7 @@ impl Core {
                 history: None,
                 owner_backup: None,
             };
-            journal::private_create(
-                &self.backend,
+            self.create_private_record(
                 &self.actor_record(operation)?,
                 &self.actor_operation_bytes(&record)?,
             )?;

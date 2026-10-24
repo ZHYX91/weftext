@@ -122,7 +122,7 @@ class SyncRevalidation(SyncCompound):
         original = self.open(self.b, self.rb, Path('Note/Note.typ'))
         self.original_source = original['source']
         self.draft = self.original_source + '\nB PRIVATE SEMANTIC DRAFT 🌿'
-        self.call(self.b, '/api/draft', sessionId=original['sessionId'],
+        self.call(self.b, '/api/draft', inputRevision=1, sessionId=original['sessionId'],
                   baseId=original['baseId'], source=self.draft)
         timeline = self.call(self.b, '/api/history/list', sessionId=original['sessionId'])
         self.history = {item['versionId']: self.call(
@@ -490,7 +490,7 @@ class SyncRevalidation(SyncCompound):
         sender = self.open(self.a, self.ra, Path('Note/Note.typ'))
         self.removed_source = sender['source']
         self.removed_draft = self.removed_source + '\nA PRIVATE MEMBER REMOVAL DRAFT 🌿'
-        self.call(self.a, '/api/draft', sessionId=sender['sessionId'], baseId=sender['baseId'], source=self.removed_draft)
+        self.call(self.a, '/api/draft', inputRevision=1, sessionId=sender['sessionId'], baseId=sender['baseId'], source=self.removed_draft)
         history = self.call(self.a, '/api/history/list', sessionId=sender['sessionId'])
         self.removed_history = {item['versionId']: self.call(
             self.a, '/api/history/read', sessionId=sender['sessionId'], versionId=item['versionId'])['source']

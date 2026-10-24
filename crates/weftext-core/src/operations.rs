@@ -1390,8 +1390,7 @@ impl Core {
             .collect::<Result<Vec<_>>>()?;
         let record = self.journal_path(&plan.operation_id, "observations");
         if self.backend.entry_exists(&record)? {
-            journal::private_create(
-                &self.backend,
+            self.create_private_record(
                 &self.journal_path(
                     &plan.operation_id,
                     &format!("recovery-observations-{}", fresh()),
@@ -1399,7 +1398,7 @@ impl Core {
                 &serde_json::to_vec(&facts)?,
             )?;
         } else {
-            journal::private_create(&self.backend, &record, &serde_json::to_vec(&facts)?)?;
+            self.create_private_record(&record, &serde_json::to_vec(&facts)?)?;
         }
         if !t.births().is_empty() {
             let births = t.births();
@@ -1445,7 +1444,7 @@ impl Core {
                     ));
                 }
             } else if !actual.is_empty() {
-                journal::private_create(&self.backend, &record, &serde_json::to_vec(&actual)?)?;
+                self.create_private_record(&record, &serde_json::to_vec(&actual)?)?;
             }
         }
         let mut resources = Vec::new();
@@ -1512,7 +1511,7 @@ impl Core {
                     ));
                 }
             } else {
-                journal::private_create(&self.backend, &record, &serde_json::to_vec(&resources)?)?;
+                self.create_private_record(&record, &serde_json::to_vec(&resources)?)?;
             }
         }
         Ok(())
@@ -1523,8 +1522,7 @@ impl Core {
         path: &Path,
         file: &backend::BoundFile,
     ) -> Result<()> {
-        journal::private_create(
-            &self.backend,
+        self.create_private_record(
             &self.journal_path(
                 operation_id,
                 &format!("object-{}", hash(display(path).as_bytes())),
@@ -1565,8 +1563,7 @@ impl Core {
         bytes: &[u8],
         revision: &str,
     ) -> Result<()> {
-        journal::private_create(
-            &self.backend,
+        self.create_private_record(
             &self.journal_path(operation_id, "observations"),
             &serde_json::to_vec(&vec![RevisionFact {
                 path: display(path),
@@ -1669,8 +1666,7 @@ impl Core {
         self.verify_snapshot(&path, base_id, Some(&current))?;
         let key = fresh();
         let revision = self.accepted_revision(&current)?.unwrap_or_else(fresh);
-        journal::private_create(
-            &self.backend,
+        self.create_private_record(
             &record,
             &serde_json::to_vec(&DefinitionReservation {
                 library: self.draft_library_for_root(&root)?,
@@ -1721,9 +1717,8 @@ impl Core {
                     weftext_messages::UiMessage::error_core_operations_owner_not_admitted(),
                 )
             })?;
-        let directory = self.journal_path("probe", "definition-reservation");
         let mut found = None;
-        for entry in self.backend.read_dir(directory.parent().unwrap())? {
+        for entry in self.journal_entries()? {
             let entry = entry?;
             let name = entry.file_name();
             let name = name.to_string_lossy();
@@ -3079,8 +3074,7 @@ impl Core {
             return Ok(old.revision);
         }
         let revision = fresh();
-        journal::private_create(
-            &self.backend,
+        self.create_private_record(
             &reservation_path,
             &serde_json::to_vec(&RevisionReservation {
                 library: self.draft_library_for_root(&root)?,
@@ -6098,14 +6092,12 @@ impl Core {
                     guards.push(guard);
                 }
                 if !resource_births.is_empty() {
-                    journal::private_create(
-                        &self.backend,
+                    self.create_private_record(
                         &self.journal_path(operation_id, "resource-births"),
                         &serde_json::to_vec(&resource_births)?,
                     )?;
                 }
-                journal::private_create(
-                    &self.backend,
+                self.create_private_record(
                     &self.journal_path(operation_id, "observations"),
                     &serde_json::to_vec(&observations)?,
                 )?;
@@ -6312,21 +6304,18 @@ impl Core {
                     guards.push(g);
                 }
                 if !new_births.is_empty() {
-                    journal::private_create(
-                        &self.backend,
+                    self.create_private_record(
                         &self.journal_path(operation_id, "births"),
                         &serde_json::to_vec(&new_births)?,
                     )?;
                 }
                 if !resource_births.is_empty() {
-                    journal::private_create(
-                        &self.backend,
+                    self.create_private_record(
                         &self.journal_path(operation_id, "resource-births"),
                         &serde_json::to_vec(&resource_births)?,
                     )?;
                 }
-                journal::private_create(
-                    &self.backend,
+                self.create_private_record(
                     &self.journal_path(operation_id, "observations"),
                     &serde_json::to_vec(&observations)?,
                 )?;
@@ -6341,9 +6330,8 @@ impl Core {
         Ok(t.receipt.clone())
     }
     pub(crate) fn install_record(&self, plan: &journal::Plan) -> Result<()> {
-        journal::private_create(
-            &self.backend,
-            &self.journal_path(&plan.operation_id, "install"),
+        self.admit_journal_operation(plan)?;
+        self.create_private_record(&self.journal_path(&plan.operation_id, "install"),
             &serde_json::to_vec(
                 &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint}),
             )?,

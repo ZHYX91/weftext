@@ -80,7 +80,7 @@ class SyncRetirement(SyncCompound):
         for name, relative in self.initial_paths.items():
             doc = self.open(self.b, self.rb, relative)
             self.drafts[name] = doc['source'] + f'\nB OWNER PRIVATE {name} 🌿'
-            self.call(self.b, '/api/draft', sessionId=doc['sessionId'], source=self.drafts[name])
+            self.call(self.b, '/api/draft', inputRevision=1, sessionId=doc['sessionId'], source=self.drafts[name])
             versions = self.call(self.b, '/api/history/list', sessionId=doc['sessionId'])['versions']
             self.history[name] = {version['versionId']: self.call(self.b, '/api/history/read',
                 sessionId=doc['sessionId'], versionId=version['versionId'])['source']

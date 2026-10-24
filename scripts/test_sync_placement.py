@@ -63,7 +63,7 @@ class SyncPlacement(SyncCompound):
         for name in ['Still'] + (['Child'] if self.nested else []):
             doc = self.open(self.b, self.rb, self.original_paths[name])
             self.drafts[name] = doc['source'] + f'\nB PRIVATE PLACEMENT DRAFT {name} 🌿'
-            self.call(self.b, '/api/draft', sessionId=doc['sessionId'], baseId=doc['baseId'], source=self.drafts[name])
+            self.call(self.b, '/api/draft', inputRevision=1, sessionId=doc['sessionId'], baseId=doc['baseId'], source=self.drafts[name])
             history = self.call(self.b, '/api/history/list', sessionId=doc['sessionId'])
             self.history[name] = {item['versionId']: self.call(self.b, '/api/history/read',
                                   sessionId=doc['sessionId'], versionId=item['versionId'])['source']

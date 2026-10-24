@@ -194,3 +194,14 @@ test("a live Session error remains visible across locale and equal-source projec
   assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "saved" }, { ...opened, workspaceId: "qualified", sessionId: "fresh", source: "saved", baseId: "actual" }), true);
   assert.equal(session.error, null); assert.equal(session.source, "作者新增😀\r\n"); assert.equal(session.baseId, "actual"); locale.set("zh-CN");
 });
+
+test("an unacknowledged same-value ABA cannot borrow an earlier source ACK", () => {
+  const session = new DocumentSession(opened);
+  session.edit("S");
+  session.acknowledgeDraft("S", session.serial, 1);
+  assert.equal(session.acknowledgedInputRevision, 1);
+  session.edit("Y"); session.edit("S");
+  assert.equal(session.acknowledgedInputRevision, null);
+  session.acknowledgeDraft("S", session.serial, 3);
+  assert.equal(session.acknowledgedInputRevision, 3);
+});

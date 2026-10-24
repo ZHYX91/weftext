@@ -233,7 +233,9 @@ impl BackendContext {
     /// Explicit one-time migration may inspect a larger *complete* directory
     /// under its own physical guard. Normal product enumeration stays at 5000.
     pub(crate) fn read_dir_bounded(
-        &self, path: impl AsRef<Path>, limit: usize,
+        &self,
+        path: impl AsRef<Path>,
+        limit: usize,
     ) -> Result<ScopedDirectoryEntries> {
         let path = path.as_ref();
         let guard = ParentGuard::acquire(self, &path.join(".private-enumeration"))?;
@@ -281,7 +283,16 @@ impl BackendContext {
     #[cfg(target_os = "linux")]
     pub fn controlled_service(enrollment: &Path) -> Result<Self> {
         Ok(Self {
-            root: platform::ControlledRoot::admit(enrollment)?,
+            root: platform::ControlledRoot::admit(enrollment, None)?,
+        })
+    }
+    /// Admit the exact configured private profile's bounded journal layout.
+    /// This changes only scan budgets; every retained object still needs the
+    /// original enrollment, physical ownership and no-symlink qualification.
+    #[cfg(target_os = "linux")]
+    pub fn controlled_service_for_profile(enrollment: &Path, profile: &Path) -> Result<Self> {
+        Ok(Self {
+            root: platform::ControlledRoot::admit(enrollment, Some(profile))?,
         })
     }
     pub(crate) fn check_path(&self, path: &Path) -> Result<()> {

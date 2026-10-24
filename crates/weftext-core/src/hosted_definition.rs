@@ -448,11 +448,7 @@ impl Core {
                 ),
             ));
         }
-        journal::private_create(
-            &self.backend,
-            &self.actor_record(&request.operation_id)?,
-            &bytes,
-        )?;
+        self.create_private_record(&self.actor_record(&request.operation_id)?, &bytes)?;
         #[cfg(all(test, windows))]
         test_failpoint("reservationDurable")?;
         self.actor_definition_details(resource, &request.operation_id)?
@@ -591,7 +587,7 @@ impl Core {
             record.cancelled = true;
             private_replace(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
+            self.create_private_record(&path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_definition_status(resource, operation)?
             .ok_or_else(conflict)
@@ -835,7 +831,7 @@ impl Core {
                 return Err(conflict());
             }
         } else {
-            journal::private_create(&self.backend, &path, &bytes)?;
+            self.create_private_record(&path, &bytes)?;
         }
         #[cfg(all(test, windows))]
         test_failpoint("admissionsDurable")?;

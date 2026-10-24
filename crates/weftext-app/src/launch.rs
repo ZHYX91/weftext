@@ -269,8 +269,9 @@ async fn controlled_hosted(args: ServeArgs, data: PathBuf) -> Result<(), ServeEr
         code: "workerAuthorityRequired",
         diagnostic: "Controlled Linux serve requires its explicit administrator worker policy",
     })?;
+    let profile = data.clone();
     let (backend, workers) = crate::work::spawn_blocking(move || {
-        let backend = weftext_core::BackendContext::controlled_service(&enrollment)
+        let backend = weftext_core::BackendContext::controlled_service_for_profile(&enrollment, &profile)
             .map_err(|_| ServeError { code: "serviceAuthorityRejected",
                 diagnostic: "The actual UID, privileges, enrollment and filesystem roots did not qualify" })?;
         let workers = crate::compiler_worker::Transport::controlled(&backend, &policy)

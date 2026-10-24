@@ -199,7 +199,7 @@ pub(super) enum DraftRequest {
 pub(super) struct DraftWrite {
     pub session_id: String,
     pub source: String,
-    pub input_revision: Option<u64>,
+    pub input_revision: u64,
 }
 impl DraftRequest {
     pub fn session_id(&self) -> &str {

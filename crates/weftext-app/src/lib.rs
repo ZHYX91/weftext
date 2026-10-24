@@ -326,10 +326,11 @@ impl ApiError {
                     "compile_timeout",
                     UiMessage::error_api_worker_deadline(),
                 ),
+                #[cfg(target_os = "linux")]
                 Kind::Cancelled => (
                     StatusCode::CONFLICT,
                     "compiler_cancelled",
-                    weftext_messages::UiMessage::error_api_worker_transport_failed(),
+                    UiMessage::error_api_worker_cancelled(),
                 ),
                 Kind::NonzeroExit => (
                     StatusCode::UNPROCESSABLE_ENTITY,
@@ -574,7 +575,7 @@ struct CreateNote {
 struct DraftRequest {
     session_id: String,
     source: String,
-    input_revision: Option<u64>,
+    input_revision: u64,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -807,11 +808,19 @@ async fn save(
     let id = req.operation_id.clone();
     let session = req.session_id.clone();
     let input_revision = req.input_revision;
-    let request = SaveRequest { session_id: req.session_id, base_id: req.base_id, source: req.source, operation_id: req.operation_id };
-    let output = value(core_call(&state, move |c| match input_revision {
-        Some(revision) => c.save_ordered(request, revision),
-        None => c.save(request),
-    }).await?)?;
+    let request = SaveRequest {
+        session_id: req.session_id,
+        base_id: req.base_id,
+        source: req.source,
+        operation_id: req.operation_id,
+    };
+    let output = value(
+        core_call(&state, move |c| match input_revision {
+            Some(revision) => c.save_ordered(request, revision),
+            None => c.save(request),
+        })
+        .await?,
+    )?;
     Ok(Json(
         knowledge_api::file_save_delivery(&state, id, output, Some(session)).await,
     ))
@@ -822,11 +831,19 @@ async fn save_as(
 ) -> ApiResult {
     let id = req.operation_id.clone();
     let input_revision = req.input_revision;
-    let request = SaveAsRequest { session_id: req.session_id, path: req.path, source: req.source, operation_id: req.operation_id };
-    let output = value(core_call(&state, move |c| match input_revision {
-        Some(revision) => c.save_as_ordered(request, revision),
-        None => c.save_as(request),
-    }).await?)?;
+    let request = SaveAsRequest {
+        session_id: req.session_id,
+        path: req.path,
+        source: req.source,
+        operation_id: req.operation_id,
+    };
+    let output = value(
+        core_call(&state, move |c| match input_revision {
+            Some(revision) => c.save_as_ordered(request, revision),
+            None => c.save_as(request),
+        })
+        .await?,
+    )?;
     Ok(Json(
         knowledge_api::file_save_delivery(&state, id, output, None).await,
     ))
@@ -836,10 +853,10 @@ async fn draft(
     RequestJson(req): RequestJson<DraftRequest>,
 ) -> ApiResult {
     let revision = req.input_revision;
-    core_call(&state, move |c| match revision {
-        Some(revision) => c.persist_draft_ordered(&req.session_id, &req.source, revision),
-        None => c.persist_draft(&req.session_id, &req.source),
-    }).await?;
+    core_call(&state, move |c| {
+        c.persist_draft_ordered(&req.session_id, &req.source, revision)
+    })
+    .await?;
     Ok(Json(json!({"ok":true,"inputRevision":revision})))
 }
 async fn resume_draft(
@@ -1231,7 +1248,9 @@ async fn owned_compiler_worker(
                     .map_err(|error| (Kind::Wait, Some(error)))?;
                 facts.exit = Some(status.exit());
                 #[cfg(target_os = "linux")]
-                { facts.completion = Some(status.completion()); }
+                {
+                    facts.completion = Some(status.completion());
+                }
                 facts.cleanup_confirmed = true;
                 Ok::<_, (Kind, Option<std::io::Error>)>(status)
             };
@@ -1243,9 +1262,13 @@ async fn owned_compiler_worker(
         .map_err(|(kind, error)| (kind, error, None))?;
         if !output.success() {
             #[cfg(target_os = "linux")]
-            { return Err((output.failure_kind(), None, None)); }
+            {
+                return Err((output.failure_kind(), None, None));
+            }
             #[cfg(not(target_os = "linux"))]
-            { return Err((Kind::NonzeroExit, None, None)); }
+            {
+                return Err((Kind::NonzeroExit, None, None));
+            }
         }
         decode_compiler_worker_output(&facts.stdout.bytes, notes_edit)
             .map_err(|error| (Kind::OutputRejected, None, Some(error)))
@@ -1262,6 +1285,10 @@ async fn owned_compiler_worker(
             Ok(()) => match child.wait().await {
                 Ok(status) => {
                     facts.exit = Some(status.exit());
+                    #[cfg(target_os = "linux")]
+                    {
+                        facts.completion = Some(status.completion());
+                    }
                     facts.cleanup_confirmed = true;
                 }
                 Err(error) => facts.cleanup_error = Some(error),
@@ -1272,6 +1299,10 @@ async fn owned_compiler_worker(
                 // the same held process/job's independent actual exit can be.
                 if let Ok(Some(status)) = child.try_wait() {
                     facts.exit = Some(status.exit());
+                    #[cfg(target_os = "linux")]
+                    {
+                        facts.completion = Some(status.completion());
+                    }
                     facts.cleanup_confirmed = true;
                 }
             }

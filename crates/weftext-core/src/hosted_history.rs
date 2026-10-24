@@ -417,11 +417,7 @@ impl Core {
                 UiMessage::error_core_hosted_history_history_request_exceeds_durable_budget(),
             ));
         }
-        journal::private_create(
-            &self.backend,
-            &self.actor_record(&request.operation_id)?,
-            &bytes,
-        )?;
+        self.create_private_record(&self.actor_record(&request.operation_id)?, &bytes)?;
         #[cfg(all(test, windows))]
         definition_test_failpoint("historyActorDurable")?;
         let restored = match self.restore_history_at(root, path, internal_request(&record)?) {
@@ -482,7 +478,7 @@ impl Core {
             record.cancelled = true;
             private_replace(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
+            self.create_private_record(&path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_history_restore_status(resource, operation)?
             .ok_or_else(conflict)

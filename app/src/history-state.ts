@@ -91,6 +91,7 @@ export interface HistoryRestoreRequest {
     operationId: string;
     draftAction: "retain" | "none";
     draftSource?: string;
+    inputRevision?: number;
 }
 export interface HistoryRestoreResult {
     receipt: Receipt;
@@ -360,7 +361,8 @@ export class HistoryController {
             throw fail("draftChanged", uiMessage("historyState.confirmationBasisChanged"));
         if ((basis.dirty || basis.source !== basis.baseSource) && draftAction !== "retain")
             throw fail("draftProtectionRequired", uiMessage("historyState.explicitlyKeepUnsavedDraft"));
-        const request = Object.freeze({ sessionId: basis.sessionId, baseId: basis.baseId, versionId: basis.selectedVersionId, operationId: this.host.id(), draftAction, ...(draftAction === "retain" ? { draftSource: basis.source } : {}) });
+        const request = Object.freeze({ sessionId: basis.sessionId, baseId: basis.baseId, versionId: basis.selectedVersionId, operationId: this.host.id(), draftAction, draftSource: basis.source,
+            ...(basis.inputRevision === undefined ? {} : { inputRevision: basis.inputRevision }) });
         this.pending = { request, basis, attempt: freezeOriginalAttempt(request, "save") };
         this.operation = null;
         return this.execute();

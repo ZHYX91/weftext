@@ -523,8 +523,7 @@ impl Core {
             }
             return Ok(false);
         }
-        journal::private_create(
-            &self.backend,
+        self.create_private_record(
             &path,
             &Self::actor_output_bytes(&OutputClaim {
                 library: self.actor_library.clone(),
@@ -1165,8 +1164,7 @@ impl Core {
             history: None,
             owner_backup: None,
         };
-        journal::private_create(
-            &self.backend,
+        self.create_private_record(
             &self.actor_record(external_operation_id)?,
             &self.actor_operation_bytes(&record)?,
         )?;
@@ -1314,7 +1312,7 @@ impl Core {
             record.cancelled = true;
             private_replace(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
+            self.create_private_record(&path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_feature_status(resource, operation)?
             .ok_or_else(|| {

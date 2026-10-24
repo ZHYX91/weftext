@@ -81,7 +81,11 @@ fn observation_record_cut_rejects_new_relevant_names_without_replacing_the_cut()
     let cut = core.observation_record_paths().unwrap();
     let plans = core.committed_plans().unwrap();
     core.check_observation_record_paths(&cut, &plans).unwrap();
-    let journal = core.journal_path(&operation_id, "plan").parent().unwrap().to_path_buf();
+    let journal = core
+        .journal_path(&operation_id, "plan")
+        .parent()
+        .unwrap()
+        .to_path_buf();
     fs::write(
         journal.join(format!("{operation_id}.unrelated.json")),
         b"{}",

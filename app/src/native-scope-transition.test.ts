@@ -8,14 +8,14 @@ import { ProposalCloseGuard } from "./proposal-close-guard";
 import { LibraryCloseActivity } from "./library-native-close";
 import { message, UiError, errorUiText } from "./ui-locale";
 import { ApiError } from "./api-error";
-import { DocumentSession, rebindCommittedSave } from "./session";
+import { DocumentSession, rebindCommittedSave, canRebindSaveAs } from "./session";
 import { fileSaveReceipt, type FileSaveReceipt } from "./file-save-result";
 import { originalCommitted, submitOriginal, TerminatedAttempt } from "./original-operation";
 
 // Exercise the actual main consumers and WorkspaceTools methods. Substitute
 // transport, rendered DOM and editor construction, not transition decisions.
 const main = ts.createSourceFile("main.ts", readFileSync(new URL("./main.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = ["chooseLibrary", "createLibrary", "restoreNavigation", "activateDocument", "renderSidebar", "addDocument", "ownsOpenedSession", "saveDocument", "pendingSave"];
+const names = ["chooseLibrary", "createLibrary", "restoreNavigation", "activateDocument", "renderSidebar", "addDocument", "ownsOpenedSession", "setComparisonTarget", "saveDocument", "pendingSave"];
 const functions = main.statements.filter(node => ts.isFunctionDeclaration(node) && names.includes(node.name?.text ?? ""));
 assert.equal(functions.length, names.length);
 const workspaceSource = ts.createSourceFile("workspace-tools.ts", readFileSync(new URL("./workspace-tools.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -308,4 +308,53 @@ test("activateDocument publishes an admitted context without inventing another w
   assert.equal(f.context.navigationContexts.get(doc).inventory, latest);
   assert.equal(doc.session.opened, fresh); assert.equal(f.context.ownsOpenedSession(fresh.sessionId), true);
   assert.deepEqual(f.released, []); assert.equal(f.effects.includes("focus"), true);
+});
+
+test("replacing a comparison retires only unowned result Sessions and keeps the writer", async () => {
+  const f = fixture(), { doc, prior } = f.target();
+  const first = { ...prior, sessionId: "old-comparison", source: "external-before" };
+  Object.assign(doc, { comparisonTarget: first });
+  let next = { ...prior, sessionId: "comparison-1", source: "external-current" };
+  f.context.api = async (route: string) => route === "/api/open" ? next : f.next;
+  f.context.sidebar = { querySelector: () => null };
+  Object.assign(doc.editor, { view: { focus() {} } });
+  await f.context.activateDocument(doc);
+  assert.deepEqual(f.released, [first.sessionId]);
+  next = { ...next, sessionId: "comparison-2" };
+  f.context.current = f.context.documents[0];
+  await f.context.activateDocument(doc);
+  assert.deepEqual(f.released, [first.sessionId, "comparison-1"]);
+  assert.equal(doc.session.opened, prior);
+  assert.equal(f.context.ownsOpenedSession(prior.sessionId), true);
+  assert.equal(f.context.ownsOpenedSession(next.sessionId), true);
+});
+
+test("SaveAs retires the original writer only after newer target input is acknowledged", async () => {
+  const f = fixture(), savedReply = deferred<any>(), sent = deferred<void>(), targetAck = deferred<void>(), atTargetAck = deferred<void>();
+  const prior = { sessionId: "original-writer", root: f.original.root, source: "B", baseId: "base-B", path: `${f.original.root}/ordinary.typ`, kind: "ordinary" };
+  const session = new DocumentSession(prior); session.edit("S");
+  const opened = { ...prior, sessionId: "target-writer", source: "S", baseId: "target-base", path: `${f.original.root}/copy.typ` };
+  const receipt = { operationId: "save-as-original", status: "saved", path: opened.path, baseId: "committed-base", committedSource: "S", document: opened, documentSourceMatchesCommit: true };
+  const doc: any = { session, writing: { state: { composing: false }, settleForSessionChange: async () => {} }, editor: { clearTokens() {} }, sourceTrashed: false };
+  f.context.current = doc; f.context.documents = [doc];
+  Object.assign(f.context, {
+    historyPanel: { hasPending: () => false }, historyContext: () => ({}), refreshChrome() {}, renderSidebar() {},
+    operationId: () => receipt.operationId, originalCommitted, submitOriginal, TerminatedAttempt, ApiError, errorUiText,
+    rebindCommittedSave, canRebindSaveAs, fileSaveReceipt,
+    persistDraft: async (owner: any) => {
+      if (owner.session.opened.sessionId === opened.sessionId) { atTargetAck.resolve(); await targetAck.promise; }
+      const revision = owner.session.issueDraftRevision(); owner.session.acknowledgeDraft(owner.session.source, owner.session.serial, revision);
+    },
+    api: async (route: string) => {
+      if (route === "/api/save-as") { sent.resolve(); return savedReply.promise; }
+      assert.equal(route, "/api/library/open"); return f.original;
+    },
+  });
+  const saving = f.context.saveDocument(doc, opened.path);
+  await sent.promise; session.edit("Y"); savedReply.resolve(receipt);
+  await atTargetAck.promise;
+  assert.deepEqual(f.released, []); assert.equal(session.source, "Y");
+  targetAck.resolve(); await saving;
+  assert.deepEqual(f.released, [prior.sessionId]); assert.equal(session.opened.sessionId, opened.sessionId);
+  assert.equal(session.source, "Y"); assert.equal(session.dirty, true); assert.equal(doc.lastSave, undefined);
 });

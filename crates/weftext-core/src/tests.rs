@@ -826,18 +826,16 @@ fn interrupted_write_third_state_and_partial_commit_never_reexecute() {
     assert_eq!(f.core.save(request).unwrap_err().code, "injectedFailure");
     assert_eq!(fs::read_to_string(&f.path).unwrap(), "before");
     assert!(f.core.operations.contains_key(&id));
-    assert!(
-        !f.core.journal_path(&id, "commit").exists()
-    );
+    assert!(!f.core.journal_path(&id, "commit").exists());
     fs::write(&f.path, "third external version").unwrap();
-    fs::write(
-        f.core.journal_path(&id, "commit"),
-        "{incomplete decision",
-    )
-    .unwrap();
+    fs::write(f.core.journal_path(&id, "commit"), "{incomplete decision").unwrap();
     drop(f.core);
     assert!(Core::new(&f.data).is_err());
-    let invalid_decision = f.data.join("journal").join(&id[..2]).join(format!("{id}.commit.json"));
+    let invalid_decision = f
+        .data
+        .join("journal")
+        .join(&id[..2])
+        .join(format!("{id}.commit.json"));
     assert_eq!(
         fs::read(&invalid_decision).unwrap(),
         b"{incomplete decision"
@@ -1329,16 +1327,16 @@ fn private_journal_publication_never_replaces_or_reads_partial_temps() {
         operation_id: id.clone(),
         source: "replacement".into(),
     };
-    let pending = f.core.journal_path(&id, "plan")
+    let pending = f
+        .core
+        .journal_path(&id, "plan")
         .with_extension(format!("{}.pending", fresh()));
     fs::create_dir_all(pending.parent().unwrap()).unwrap();
     fs::write(&pending, "partial unpublished payload").unwrap();
     hosted::set_test_failpoint("saveStaged");
     assert_eq!(f.core.save(request).unwrap_err().code, "injectedFailure");
     assert_eq!(fs::read_to_string(&f.path).unwrap(), "before");
-    assert!(
-        !f.core.journal_path(&id, "commit").exists()
-    );
+    assert!(!f.core.journal_path(&id, "commit").exists());
     let plan = f.core.operations[&id].clone();
     f.core.validate_file_save_plan(&plan).unwrap();
     let mut changed = plan;
@@ -1350,7 +1348,12 @@ fn private_journal_publication_never_replaces_or_reads_partial_temps() {
         f.core.sessions[&doc.session_id].file_scope.clone().unwrap(),
         &changed.file_save.as_ref().unwrap().draft_producer_id,
         changed.file_save.as_ref().unwrap().input_revision,
-        changed.file_save.as_ref().unwrap().author_input_digest.as_deref(),
+        changed
+            .file_save
+            .as_ref()
+            .unwrap()
+            .author_input_digest
+            .as_deref(),
     )
     .unwrap();
     let revision = fresh();

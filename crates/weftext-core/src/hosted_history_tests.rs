@@ -68,6 +68,7 @@ impl Fixture {
             operation_id: operation.into(),
             draft_action: "retain".into(),
             draft_source,
+            input_revision: None,
         }
     }
     fn restore(&mut self, request: HistoryRestoreRequest) -> Result<ActorHistoryRestoreStatus> {

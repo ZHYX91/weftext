@@ -348,7 +348,7 @@ mod tests {
             let mut changed = core.operations[&id].clone();
             match variant {
                 "scope" => changed.file_save.as_mut().unwrap().session_id = fresh(),
-                "version" => changed.file_save.as_mut().unwrap().version = 3,
+                "version" => changed.file_save.as_mut().unwrap().version = 2,
                 _ => changed.file_save = None,
             }
             fs::write(&plan_path, serde_json::to_vec(&changed).unwrap()).unwrap();

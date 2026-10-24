@@ -291,6 +291,7 @@ impl Core {
         let session = self.sessions.get_mut(&request.session_id).unwrap();
         session.draft_producer_id = producer;
         session.draft_input = Some(draft.proposal());
+        session.draft_cuts.clear();
         Ok(())
     }
 
@@ -360,7 +361,8 @@ impl Core {
             .sessions
             .get(session_id)
             .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
-        let scope = self.draft_scope_for_session_unread(session_id, session.conflicting_draft.as_ref())?;
+        let scope =
+            self.draft_scope_for_session_unread(session_id, session.conflicting_draft.as_ref())?;
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
         let Some((draft, bytes)) =
             self.read_draft_record(&path, &scope, &session.stamp.identity)?
@@ -387,6 +389,31 @@ impl Core {
         Ok(self
             .current_session_draft_record(session_id)?
             .map(|(draft, _)| draft))
+    }
+
+    /// An old ACK is evidence of an author cut, not a cache of the current
+    /// private file's qualification. Recheck the producer's complete durable
+    /// entry before acknowledging a retry or using a frozen save cut.
+    pub(super) fn validate_acknowledged_draft(&self, session_id: &str) -> Result<Draft> {
+        self.check_actor_session(session_id)?;
+        let invalid = || {
+            CoreError::new("draftChanged",
+            UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again())
+        };
+        let input = self.sessions[session_id]
+            .draft_input
+            .as_ref()
+            .ok_or_else(invalid)?;
+        let current = self
+            .current_session_draft(session_id)?
+            .ok_or_else(invalid)?;
+        if !std::iter::once(current.proposal())
+            .chain(current.alternatives.iter().cloned())
+            .any(|entry| same_proposal(input, &entry))
+        {
+            return Err(invalid());
+        }
+        Ok(current)
     }
 
     pub(super) fn store_session_draft(
@@ -523,6 +550,29 @@ impl Core {
         }
         Ok(scope)
     }
+    /// Select only structural lineage candidates before opening original facts.
+    /// These protected checks are repeated per operation, never a permission cache.
+    fn committed_draft_relocations(
+        &self,
+        scope: &QualifiedInputScope,
+    ) -> Result<Vec<&journal::Plan>> {
+        let QualifiedInputScope::Library { binding } = scope else {
+            return Ok(Vec::new());
+        };
+        let mut plans = Vec::new();
+        for plan in self.operations.values().filter(|plan| {
+            plan.workspace_id.as_ref() == Some(&binding.workspace_id)
+                && plan
+                    .transaction
+                    .as_ref()
+                    .is_some_and(|transaction| !transaction.relocations().is_empty())
+        }) {
+            if self.committed(&plan.operation_id)? {
+                plans.push(plan);
+            }
+        }
+        Ok(plans)
+    }
     fn check_committed_draft_paths(
         &self,
         scope: &QualifiedInputScope,
@@ -533,10 +583,11 @@ impl Core {
         if same_draft_path(first, second) {
             return Ok(());
         }
+        let plans = self.committed_draft_relocations(scope)?;
         let mut paths = BTreeSet::from([first.to_owned()]);
         loop {
             let previous = paths.len();
-            for plan in self.committed_plans()?.into_iter() {
+            for plan in &plans {
                 let Some(transaction) = &plan.transaction else {
                     continue;
                 };
@@ -591,10 +642,11 @@ impl Core {
         path: &Path,
         identity: &FileIdentity,
     ) -> Result<BTreeSet<String>> {
+        let plans = self.committed_draft_relocations(scope)?;
         let mut lineage = BTreeSet::from([display(path)]);
         loop {
             let before = lineage.len();
-            for plan in self.committed_plans()?.into_iter() {
+            for plan in &plans {
                 if !matches!(scope, QualifiedInputScope::Library { binding }
                     if plan.workspace_id.as_ref() == Some(&binding.workspace_id))
                 {
@@ -777,8 +829,7 @@ impl Core {
                 self.qualify_committed_baseline(&next.scope, &next.identity, &input)?;
             }
             // Preserve the original before rebinding the unique current record.
-            journal::private_create(
-                &self.backend,
+            self.create_private_record(
                 &self
                     .draft_directory("draft-history")
                     .join(format!("{}.json", fresh())),

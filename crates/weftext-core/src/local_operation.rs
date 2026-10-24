@@ -80,9 +80,12 @@ impl Core {
         if data.version != 3 {
             return Err(file_save_scope::unsupported_scope());
         }
-        let canonical_digest = data.author_input_digest.as_ref().is_some_and(|digest|
-            digest.len() == 64 && digest.bytes().all(|byte|
-                byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
+        let canonical_digest = data.author_input_digest.as_ref().is_some_and(|digest| {
+            digest.len() == 64
+                && digest
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        });
         if (data.input_revision == 0 && data.author_input_digest.is_some())
             || (data.input_revision > 0
                 && (data.input_revision > 9_007_199_254_740_991 || !canonical_digest))
@@ -396,7 +399,7 @@ impl Core {
         let bytes = serde_json::to_vec(&record)?;
         journal::decode_resolution(id, &bytes)?;
         self.validate_unregistered_fence_namespace(id)?;
-        journal::private_create(&self.backend, &self.journal_path(id, "resolution"), &bytes)?;
+        self.create_private_record(&self.journal_path(id, "resolution"), &bytes)?;
         self.local_operation_status(id)
     }
 }
@@ -551,6 +554,7 @@ mod tests {
     fn orphan_evidence_and_uuid_case_alias_cannot_be_declared_effect_free() {
         let (_temp, mut core, _root, _data, _doc) = fixture();
         let id = fresh();
+        fs::create_dir_all(core.journal_path(&id, "install").parent().unwrap()).unwrap();
         fs::write(
             core.journal_path(&id, "install"),
             b"retained unknown original",
@@ -587,6 +591,7 @@ mod tests {
             "{{\n  \"operationId\":\"{original_id}\",\n  \"action\":\"cancelPrepared\",\n  \"message\":\"Original retained prose\"\n}}\n"
         );
         let path = core.journal_path(&original_id, "resolution");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, original.as_bytes()).unwrap();
         assert_eq!(
             core.local_operation_status(&original_id).unwrap()["status"],
@@ -618,6 +623,7 @@ mod tests {
         assert!(journal::decode_resolution(&id,format!(r#"{{"operationId":"{id}","action":"cancelPrepared","action":"keepCurrent","message":"retained"}}"#).as_bytes()).is_err());
         assert!(journal::decode_resolution(&id, &vec![b' '; 4097]).is_err());
         let (_temp, core, _root, _data, _doc) = fixture();
+        fs::create_dir_all(core.journal_path(&id, "resolution").parent().unwrap()).unwrap();
         fs::write(
             core.journal_path(&id, "resolution"),
             serde_json::to_vec(
@@ -643,6 +649,12 @@ mod tests {
         core.reserve_definition_key(&root, &doc.path, &basis.base_id, &original)
             .unwrap();
         let copied = fresh();
+        fs::create_dir_all(
+            core.journal_path(&copied, "definition-reservation")
+                .parent()
+                .unwrap(),
+        )
+        .unwrap();
         fs::copy(
             core.journal_path(&original, "definition-reservation"),
             core.journal_path(&copied, "definition-reservation"),

@@ -52632,6 +52632,11 @@
       "en-US": "The frozen compiler input could not be encoded",
       "params": {}
     },
+    "error.api.worker.cancelled": {
+      "zh-CN": "编译作业已取消",
+      "en-US": "The compilation job was cancelled",
+      "params": {}
+    },
     "error.api.worker.transportFailed": {
       "zh-CN": "原编译器传输未完成",
       "en-US": "The original compiler transport did not complete",

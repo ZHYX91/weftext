@@ -2485,6 +2485,7 @@ export class QueryPanel {
                 this.host.notify(message("queryDefinition.saveReceiptUnavailable"), true);
                 return;
             }
+            const initiator = this.host.getDocument();
             try {
                 await this.host.prepareAction?.();
             }
@@ -2497,13 +2498,17 @@ export class QueryPanel {
                 this.host.notify(message("queryDefinition.noteAndNameRequired"), true);
                 return;
             }
+            if (!this.savedPending && (!initiator || initiator.sessionId !== basis.sessionId)) {
+                this.host.notify(message("shell.queryProposalBasisChanged"), true);
+                return;
+            }
             const nativeLabel = label.startsWith("weftext-query-") ? label : `weftext-query-${label}`;
             if (!this.savedPending && !/^weftext-query-[\p{L}\p{N}_-]+$/u.test(nativeLabel)) {
                 this.host.notify(message("queryDefinition.invalidName"), true);
                 return;
             }
             const retry = this.savedPending !== null;
-            this.savedPending ??= { basis: { ...basis }, body: { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, baseId: basis.baseId, key, label: nativeLabel, plan: this.getPlan(), operationId: crypto.randomUUID() } };
+            this.savedPending ??= { basis: { ...basis }, body: { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, baseId: basis.baseId, inputRevision: basis.inputRevision, key, label: nativeLabel, plan: this.getPlan(), operationId: crypto.randomUUID() } };
             const pending = this.savedPending;
             let receiptReceived = false;
             try {

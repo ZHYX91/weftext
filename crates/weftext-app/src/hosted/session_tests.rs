@@ -57,10 +57,12 @@ async fn original_save_status_authorizes_frozen_resource_before_reading_private_
     let plan = temp
         .path()
         .join("state/journal")
+        .join(&core_id[..2])
         .join(format!("{core_id}.plan.json"));
     let commit = temp
         .path()
         .join("state/journal")
+        .join(&core_id[..2])
         .join(format!("{core_id}.commit.json"));
     let plan_bytes = std::fs::read(&plan).unwrap();
     let commit_bytes = std::fs::read(&commit).unwrap();

@@ -83,7 +83,9 @@ impl Status {
     pub(crate) fn exit(&self) -> crate::owned_process::ProcessExit {
         self.exit.exit()
     }
-    pub(crate) fn completion(&self) -> Completion { self.completion.clone() }
+    pub(crate) fn completion(&self) -> Completion {
+        self.completion.clone()
+    }
     pub(crate) fn failure_kind(&self) -> Kind {
         match &self.completion {
             Completion::Timeout => Kind::Deadline,
@@ -232,6 +234,7 @@ pub(super) async fn spawn(
             Ok(()) => match child.try_wait() {
                 Ok(Some(status)) => {
                     failure.exit = Some(status.exit());
+                    failure.completion = Some(status.completion());
                     failure.cleanup_confirmed = true;
                 }
                 Err(error) => failure.cleanup_error = Some(error),
@@ -246,34 +249,83 @@ pub(super) async fn spawn(
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn exact_broker_exit_reason_is_not_downgraded_to_nonzero_exit() {
+    #[tokio::test]
+    async fn exact_broker_exit_reason_is_not_downgraded_to_nonzero_exit() {
+        use axum::response::IntoResponse;
         let started = weftext_worker_broker::Started {
-            version: 1, job_id: "a".repeat(32), pid: 123, image_sha256: "b".repeat(64),
+            version: 1,
+            job_id: "a".repeat(32),
+            pid: 123,
+            image_sha256: "b".repeat(64),
         };
         for (completion, kind, code, signal) in [
             (Completion::Timeout, Kind::Deadline, None, Some(9)),
             (Completion::Cancelled, Kind::Cancelled, None, Some(9)),
-            (Completion::Disconnected, Kind::SupervisionLost, None, Some(9)),
-            (Completion::SetupFailed, Kind::SupervisionLost, None, Some(9)),
+            (
+                Completion::Disconnected,
+                Kind::SupervisionLost,
+                None,
+                Some(9),
+            ),
+            (
+                Completion::SetupFailed,
+                Kind::SupervisionLost,
+                None,
+                Some(9),
+            ),
             (Completion::Exited, Kind::NonzeroExit, Some(7), None),
         ] {
             let receipt = Receipt {
-                version: 1, job_id: started.job_id.clone(),
-                completion: completion.clone(), exit_code: code, signal,
-                reaped: 1, cgroup_empty: true, pidfd_exited: true,
+                version: 1,
+                job_id: started.job_id.clone(),
+                completion: completion.clone(),
+                exit_code: code,
+                signal,
+                reaped: 1,
+                cgroup_empty: true,
+                pidfd_exited: true,
             };
             receipt.validate(&started).unwrap();
             let status = Status::from_receipt(&receipt).unwrap();
             assert_eq!(status.completion(), completion);
             assert_eq!(status.failure_kind(), kind);
             assert!(!status.success());
+            let mut failure = WorkerFailure::new(status.failure_kind());
+            failure.exit = Some(status.exit());
+            failure.completion = Some(status.completion());
+            failure.stdout.bytes = b"PRIVATE WORKER SOURCE".to_vec();
+            let response = crate::ApiError::worker_failure(failure).into_response();
+            let (expected_status, expected_code) = match completion {
+                Completion::Timeout => (axum::http::StatusCode::REQUEST_TIMEOUT, "compile_timeout"),
+                Completion::Cancelled => (axum::http::StatusCode::CONFLICT, "compiler_cancelled"),
+                Completion::Exited => (
+                    axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+                    "compiler_failed",
+                ),
+                Completion::Disconnected | Completion::SetupFailed => (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "compiler_supervisor_unknown",
+                ),
+            };
+            assert_eq!(response.status(), expected_status);
+            let bytes = axum::body::to_bytes(response.into_body(), 4096)
+                .await
+                .unwrap();
+            let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(body["error"]["code"], expected_code);
+            assert!(!std::str::from_utf8(&bytes).unwrap().contains("PRIVATE"));
         }
         let success = Status::from_receipt(&Receipt {
-            version: 1, job_id: started.job_id,
-            completion: Completion::Exited, exit_code: Some(0), signal: None,
-            reaped: 1, cgroup_empty: true, pidfd_exited: true,
-        }).unwrap();
+            version: 1,
+            job_id: started.job_id,
+            completion: Completion::Exited,
+            exit_code: Some(0),
+            signal: None,
+            reaped: 1,
+            cgroup_empty: true,
+            pidfd_exited: true,
+        })
+        .unwrap();
         assert!(success.success());
     }
 

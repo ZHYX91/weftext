@@ -20,8 +20,9 @@ pub(crate) fn save_fingerprint(
             Some(request.base_id.clone()),
             scope,
             producer.to_owned(),
-        ).with_input_revision(input_revision)
-            .with_author_digest(author_digest.map(str::to_owned)),
+        )
+        .with_input_revision(input_revision)
+        .with_author_digest(author_digest.map(str::to_owned)),
         restore,
     )
 }
@@ -731,9 +732,16 @@ impl Core {
         let expected_digest = expected_author_source.map(|source| hash(source.as_bytes()));
         if plan.kind != "save"
             || plan.transaction.is_some()
-            || expected_revision.is_some_and(|revision|
+            || expected_revision.is_some_and(|revision| {
                 plan.file_save.as_ref().unwrap().input_revision != revision
-                    || expected_digest.as_deref() != plan.file_save.as_ref().unwrap().author_input_digest.as_deref())
+                    || expected_digest.as_deref()
+                        != plan
+                            .file_save
+                            .as_ref()
+                            .unwrap()
+                            .author_input_digest
+                            .as_deref()
+            })
             || save_fingerprint(
                 request,
                 Path::new(&plan.path),
@@ -741,7 +749,11 @@ impl Core {
                 plan.file_save.as_ref().unwrap().scope.clone(),
                 &plan.file_save.as_ref().unwrap().draft_producer_id,
                 plan.file_save.as_ref().unwrap().input_revision,
-                plan.file_save.as_ref().unwrap().author_input_digest.as_deref(),
+                plan.file_save
+                    .as_ref()
+                    .unwrap()
+                    .author_input_digest
+                    .as_deref(),
             )? != plan.fingerprint
         {
             return Err(CoreError::new(

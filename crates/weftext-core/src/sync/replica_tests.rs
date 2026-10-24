@@ -672,3 +672,44 @@ fn selected_library_backup_includes_sync_history_and_pending_publication() {
             .exists()
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn sync_setup_selection_qualifies_only_actual_setup_candidates() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let note = temp.path().join("ordinary.typ");
+    fs::write(&note, "B").unwrap();
+    let doc = core.open(&note, None).unwrap();
+    let id = fresh();
+    core.save(SaveRequest {
+        operation_id: id.clone(),
+        session_id: doc.session_id,
+        base_id: doc.base_id,
+        source: "S".into(),
+    })
+    .unwrap();
+    fs::write(
+        core.journal_path(&id, "commit"),
+        b"retained damaged unrelated commit",
+    )
+    .unwrap();
+    assert!(core.sync_setups().unwrap().is_empty());
+    assert!(core.local_operation_status(&id).is_err());
+    assert_eq!(fs::read_to_string(note).unwrap(), "S");
+    // A real setup remains an actual dependency; malformed original evidence
+    // is never replaced by a cached successful qualification.
+    let other = tempfile::tempdir().unwrap();
+    let mut core = Core::new(other.path().join("private")).unwrap();
+    let root = other.path().join("library");
+    core.create_library(&root).unwrap();
+    let id = fresh();
+    core.enable_sync(&root, &id).unwrap();
+    assert_eq!(core.sync_setups().unwrap().len(), 1);
+    fs::write(
+        core.journal_path(&id, "commit"),
+        b"retained damaged setup commit",
+    )
+    .unwrap();
+    assert!(core.sync_setups().is_err());
+}

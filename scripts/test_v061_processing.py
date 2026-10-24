@@ -198,7 +198,7 @@ class LocalProcessing(local_harness.LocalFeatures):
         doc = self.note(root, '处理设置与草稿', '#set text(lang: "zh", region: "CN")\n原稿正文😀')
         original = Path(doc['path']).read_bytes()
         draft = doc['source'] + '\n独立的个人未保存草稿'
-        self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': draft})
+        self.api('/api/draft', {'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': draft})
         settings = root / '.weftext-settings.json'
         unknown = {'version': 1, 'customExtension': {'keep': ['未知', 7, {'nested': True}]},
                    'customLocale': 'zh-Hant-HK'}
@@ -381,7 +381,7 @@ class LocalProcessing(local_harness.LocalFeatures):
         doc = self.ordinary('= 原始标题\n\n原始正文😀\n')
         source = doc['source'] + '\n个人未保存输入'
         original = Path(doc['path']).read_bytes()
-        self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': source})
+        self.api('/api/draft', {'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': source})
         basis = {'sessionId': doc['sessionId'], 'source': source, 'serial': 17}
         mapping = self.api('/api/editor-map', basis)
         rendered = self.api('/api/render', basis)

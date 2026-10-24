@@ -10158,6 +10158,7 @@ export const zhCN = {
   "error.api.worker.supervisionLost": "编译器监督器没有返回实际完成结果",
   "error.api.worker.setupFailed": "受控编译器进程无法启动",
   "error.api.worker.inputEncoding": "冻结的编译输入无法编码",
+  "error.api.worker.cancelled": "编译作业已取消",
   "error.api.worker.transportFailed": "原编译器传输未完成",
   "error.api.worker.streamBudget": "编译器流超过字节预算；原输入保留",
   "error.api.worker.processExitUnknown": "编译器进程的实际退出尚未确认；原输入保留",
@@ -20342,6 +20343,7 @@ export interface MessageParamsMap {
   "error.api.worker.supervisionLost": {  };
   "error.api.worker.setupFailed": {  };
   "error.api.worker.inputEncoding": {  };
+  "error.api.worker.cancelled": {  };
   "error.api.worker.transportFailed": {  };
   "error.api.worker.streamBudget": {  };
   "error.api.worker.processExitUnknown": {  };
@@ -32360,6 +32362,7 @@ export const messageParamTypes = {
   "error.api.worker.supervisionLost": {},
   "error.api.worker.setupFailed": {},
   "error.api.worker.inputEncoding": {},
+  "error.api.worker.cancelled": {},
   "error.api.worker.transportFailed": {},
   "error.api.worker.streamBudget": {},
   "error.api.worker.processExitUnknown": {},
@@ -42543,6 +42546,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.api.worker.supervisionLost": "The compiler supervisor did not return its actual completion",
   "error.api.worker.setupFailed": "The contained compiler process could not be started",
   "error.api.worker.inputEncoding": "The frozen compiler input could not be encoded",
+  "error.api.worker.cancelled": "The compilation job was cancelled",
   "error.api.worker.transportFailed": "The original compiler transport did not complete",
   "error.api.worker.streamBudget": "The compiler stream exceeded its byte budget; the original input is retained",
   "error.api.worker.processExitUnknown": "The compiler's actual process exit is unconfirmed; the original input is retained",

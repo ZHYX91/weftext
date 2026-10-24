@@ -188,7 +188,7 @@ class SyncCompound(unittest.TestCase):
         for name in ['Left', 'Right']:
             doc = self.open(self.b, self.rb, Path(name) / f'{name}.typ')
             self.drafts[name] = doc['source'] + f'\nB PRIVATE DRAFT {name} 🌿'
-            self.call(self.b, '/api/draft', sessionId=doc['sessionId'],
+            self.call(self.b, '/api/draft', inputRevision=1, sessionId=doc['sessionId'],
                       baseId=doc['baseId'], source=self.drafts[name])
             timeline = self.call(self.b, '/api/history/list', sessionId=doc['sessionId'])
             available = [version for version in timeline['versions'] if version['status'] == 'available']

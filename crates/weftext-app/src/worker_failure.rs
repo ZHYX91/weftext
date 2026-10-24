@@ -14,6 +14,7 @@ pub(crate) enum Kind {
     StdoutBudget,
     StderrBudget,
     Deadline,
+    #[cfg(target_os = "linux")]
     Cancelled,
     Wait,
     NonzeroExit,
@@ -195,6 +196,8 @@ struct SafeSummary {
     context: HostedContext,
     kind: Kind,
     exit: Option<ExitSummary>,
+    #[cfg(target_os = "linux")]
+    completion: Option<weftext_worker_broker::Completion>,
     stdin_complete: bool,
     stdout: StreamSummary,
     stderr: StreamSummary,
@@ -242,6 +245,8 @@ fn diagnostic_line(context: HostedContext, failure: &WorkerFailure) -> Option<Di
         context,
         kind: failure.kind,
         exit: failure.exit.map(ExitSummary::from),
+        #[cfg(target_os = "linux")]
+        completion: failure.completion.clone(),
         stdin_complete: failure.stdin_complete,
         stdout: StreamSummary::from(&failure.stdout),
         stderr: StreamSummary::from(&failure.stderr),

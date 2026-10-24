@@ -2948,12 +2948,16 @@ fn replay_saved_definition(
     // Original author identity is checked before any optional schema/result
     // delivery. The journal already retains the exact submitted save bytes.
     let outcome = core
-        .saved_outcome_for_request_revision(&SaveRequest {
-            session_id: req.session_id.clone(),
-            base_id: req.base_id.clone(),
-            source: original.source.clone(),
-            operation_id: req.operation_id.clone(),
-        }, req.input_revision, Some(&req.source))?
+        .saved_outcome_for_request_revision(
+            &SaveRequest {
+                session_id: req.session_id.clone(),
+                base_id: req.base_id.clone(),
+                source: original.source.clone(),
+                operation_id: req.operation_id.clone(),
+            },
+            req.input_revision,
+            Some(&req.source),
+        )?
         .ok_or_else(|| {
             CoreError::new(
                 "recoveryPending",
@@ -5259,10 +5263,12 @@ mod tests {
         let plan = directory
             .path()
             .join("state/journal")
+            .join(&id[..2])
             .join(format!("{id}.plan.json"));
         let commit = directory
             .path()
             .join("state/journal")
+            .join(&id[..2])
             .join(format!("{id}.commit.json"));
         let plan_bytes = std::fs::read(&plan).unwrap();
         let commit_bytes = std::fs::read(&commit).unwrap();
@@ -5398,6 +5404,7 @@ mod tests {
         let plan_path = directory
             .path()
             .join("state/journal")
+            .join(&request.operation_id[..2])
             .join(format!("{}.plan.json", request.operation_id));
         let committed_plan = std::fs::read(&plan_path).unwrap();
         let path = PathBuf::from(first["document"]["path"].as_str().unwrap());

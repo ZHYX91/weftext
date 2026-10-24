@@ -59,9 +59,9 @@ test("retiring a registered barrier withdraws readiness until a complete registr
 test("native draft transport binds an original request to the real surface epoch and preserves exact source", () => fixture(async f => {
   f.surface.register("body", participant(async () => [proof])); f.surface.markReady(); f.deliver(bound);
   const source = "\ufeffA\r\n中文😀\nB\rC"; let settled = false;
-  const result = nativeDraftRequest("/api/draft", { sessionId: "actual-session", source })!;
+  const result = nativeDraftRequest("/api/draft", { sessionId: "actual-session", source, inputRevision: 7 })!;
   result.then(() => { settled = true; });
-  const call = f.messages.at(-1)!; assert.equal(call.type, "draft-call"); assert.deepEqual(call.request, { kind: "persist", body: { sessionId: "actual-session", source } });
+  const call = f.messages.at(-1)!; assert.equal(call.type, "draft-call"); assert.deepEqual(call.request, { kind: "persist", body: { sessionId: "actual-session", source, inputRevision: 7 } });
   f.deliver({ ...bound, type: "core-draft-result", surfaceEpoch: "retired", requestId: call.requestId, body: { ok: true } }); await f.tick(); assert.equal(settled, false);
   f.deliver({ ...bound, type: "core-draft-result", requestId: call.requestId, body: { ok: true } }); assert.deepEqual(await result, { ok: true });
   assert.equal(nativeDraftRequest("/api/save", { source }), undefined);
@@ -70,7 +70,7 @@ test("native draft transport binds an original request to the real surface epoch
 test("unsupported raw UTF16 is rejected before native transmission and is never normalized", () => fixture(async f => {
   f.surface.register("body", participant(async () => [proof])); f.surface.markReady(); f.deliver(bound); const before = f.messages.length;
   const source = "A\ud800B";
-  await assert.rejects(nativeDraftRequest("/api/draft", { sessionId: "actual-session", source })!, /raw UTF16/);
+  await assert.rejects(nativeDraftRequest("/api/draft", { sessionId: "actual-session", source, inputRevision: 7 })!, /raw UTF16/);
   assert.equal(source.charCodeAt(1), 0xd800); assert.equal(f.messages.length, before);
 }));
 

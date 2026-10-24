@@ -369,6 +369,7 @@ fn core_restore_request(req: &Restore) -> HistoryRestoreRequest {
         operation_id: req.operation_id.clone(),
         draft_action: req.draft_action.clone(),
         draft_source: Some(req.source.clone()),
+        input_revision: None,
     }
 }
 fn public_status(

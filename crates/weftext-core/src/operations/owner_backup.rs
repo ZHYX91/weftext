@@ -35,9 +35,15 @@ enum RecordKind {
 }
 fn journal_bucket_folder(core: &Core, path: &Path) -> bool {
     path.parent() == Some(core.data_dir.join("journal").as_path())
-        && path.file_name().and_then(std::ffi::OsStr::to_str).is_some_and(|name| {
-            name.len() == 2 && name.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        })
+        && path
+            .file_name()
+            .and_then(std::ffi::OsStr::to_str)
+            .is_some_and(|name| {
+                name.len() == 2
+                    && name
+                        .bytes()
+                        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+            })
 }
 fn record_kind(core: &Core, path: &Path) -> Result<RecordKind> {
     let relative = path
@@ -49,7 +55,13 @@ fn record_kind(core: &Core, path: &Path) -> Result<RecordKind> {
         .collect::<Option<Vec<_>>>()
         .ok_or_else(private_evidence)?;
     match parts.as_slice() {
-        ["journal", _, _] if path.parent().is_some_and(|parent| journal_bucket_folder(core, parent)) => Ok(RecordKind::Journal),
+        ["journal", _, _]
+            if path
+                .parent()
+                .is_some_and(|parent| journal_bucket_folder(core, parent)) =>
+        {
+            Ok(RecordKind::Journal)
+        }
         ["drafts" | "draft-history", _] => Ok(RecordKind::Draft),
         ["actors", _, "drafts" | "draft-history", _] => Ok(RecordKind::Draft),
         ["actors", _, "operations", _] => Ok(RecordKind::Actor),
@@ -354,7 +366,7 @@ impl Core {
             self.resolution_record(&plan.operation_id)?;
         }
         let mut selected_attempts = Vec::new();
-        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
+        for entry in self.journal_entries()? {
             let entry = entry?;
             let name = entry.file_name();
             let name = name.to_string_lossy();
@@ -458,8 +470,8 @@ impl Core {
         let mut members = 0usize;
         let mut journal_members = 0usize;
         while let Some(folder) = queue.pop() {
-            let is_journal = folder == self.data_dir.join("journal")
-                || journal_bucket_folder(self, &folder);
+            let is_journal =
+                folder == self.data_dir.join("journal") || journal_bucket_folder(self, &folder);
             if is_journal {
                 journal_members += 1;
                 if journal_members > MAX_JOURNAL_ROUTING_MEMBERS {
@@ -509,18 +521,23 @@ impl Core {
                         return Err(backup_budget());
                     }
                 }
-                routed_entries.push((name.clone(), attrs));
                 if attrs.is_directory() {
-                    if folder == self.data_dir.join("journal") && journal_bucket_folder(self, &path) {
+                    if folder == self.data_dir.join("journal") && journal_bucket_folder(self, &path)
+                    {
+                        // Buckets route original facts. Empty or own-only
+                        // buckets are not additional backup inputs; each
+                        // nonempty bucket is still digested below.
                         queue.push(path);
                         continue;
                     }
                     if !path.starts_with(self.data_dir.join("actors")) {
                         return Err(private_evidence());
                     }
+                    routed_entries.push((name.clone(), attrs));
                     queue.push(path);
                     continue;
                 }
+                routed_entries.push((name.clone(), attrs));
                 record_kind(self, &path)?;
                 let protected = protected_inputs
                     .then(|| selected_inputs.iter().find(|f| Path::new(&f.path) == path))
@@ -637,22 +654,24 @@ impl Core {
                 if let Some(handle) = handle {
                     if selected {
                         if capture.selected_files.len() >= MAX_SELECTED_MEMBERS {
-                    return Err(backup_budget());
-                }
-                capture.selected_files.push((path, handle));
+                            return Err(backup_budget());
+                        }
+                        capture.selected_files.push((path, handle));
                     } else {
                         capture.handles.push(handle);
                     }
                 }
             }
-            digest_json(
-                &mut digest,
-                &DirectoryRoute {
-                    path: display(&folder),
-                    identity: guard.directory_identity()?,
-                    entries: sorted_entries(routed_entries, &folder),
-                },
-            )?;
+            if !journal_bucket_folder(self, &folder) || !routed_entries.is_empty() {
+                digest_json(
+                    &mut digest,
+                    &DirectoryRoute {
+                        path: display(&folder),
+                        identity: guard.directory_identity()?,
+                        entries: sorted_entries(routed_entries, &folder),
+                    },
+                )?;
+            }
             capture.guards.push(guard);
         }
         // Paths are temporary capture bookkeeping, not persisted routing facts.

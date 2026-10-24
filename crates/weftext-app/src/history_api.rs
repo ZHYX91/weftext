@@ -150,6 +150,7 @@ mod tests {
             operation_id: uuid::Uuid::new_v4().to_string(),
             draft_action: "none".into(),
             draft_source: None,
+            input_revision: None,
         };
         let result = core.restore_history(request.clone()).unwrap();
         let version_count = core.list_history(&doc.session_id).unwrap().versions.len();

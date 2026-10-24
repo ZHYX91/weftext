@@ -443,7 +443,7 @@ class SyncStructure(SyncCompound):
 
         sender = self.open(self.a, self.ra, Path('Folder/Left/Left.typ'))
         sender_draft = sender['source'] + '\nDirectory moved with unsaved sender draft 中文😀'
-        self.call(self.a, '/api/draft', sessionId=sender['sessionId'], baseId=sender['baseId'],
+        self.call(self.a, '/api/draft', inputRevision=1, sessionId=sender['sessionId'], baseId=sender['baseId'],
                   source=sender_draft)
         sender_before = tree_state(directory)
         request = {'operationId': uid(), 'root': str(self.ra),
@@ -829,7 +829,7 @@ class SyncStructure(SyncCompound):
         for name, relative in self.member_paths.items():
             doc = self.open(self.a, self.ra, relative)
             draft = doc['source'] + f'\nA ORIGINAL UNSAVED {name} RESOURCE DRAFT 🌿'
-            self.call(self.a, '/api/draft', sessionId=doc['sessionId'], baseId=doc['baseId'], source=draft)
+            self.call(self.a, '/api/draft', inputRevision=1, sessionId=doc['sessionId'], baseId=doc['baseId'], source=draft)
             self.member_sender_drafts[name] = draft
         self.member_sender_tree = tree_state(self.ra)
         self.member_before = tree_state(self.rb)

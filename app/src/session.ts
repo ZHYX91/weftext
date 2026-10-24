@@ -49,6 +49,9 @@ export class DocumentSession {
         this.recoveryContinuation = opened.recoveredDraft != null && opened.recoveredDraftWitness
             ? { sessionId: opened.sessionId, recordWitness: opened.recoveredDraftWitness, recoveredSource: opened.recoveredDraft } : null;
     }
+    get acknowledgedInputRevision(): number | null {
+        return this.lastDraftSource === this.source && this.lastDraftSerial === this.serial ? this.lastDraftRevision : null;
+    }
     get dirty(): boolean { return this.source !== this.baseSource; }
     get projectionCurrent(): boolean { return this.projection?.serial === this.serial && this.projection.source === this.source; }
     edit(source: string): void {

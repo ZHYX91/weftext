@@ -317,3 +317,12 @@ test("exact diff lanes reconstruct BOM, Unicode, mixed endings and trailing whit
     assert.equal(diff.filter(part => part.kind !== "removed").map(part => part.text).join(""), after);
   }
 });
+
+test("history restore freezes the acknowledged author revision even for a clean snapshot", async () => {
+  const f = fixture();
+  f.setCurrent({ ...original, inputRevision: 7 });
+  await f.controller.select("save1"); await f.controller.prepareRestore();
+  await f.controller.restore("none");
+  assert.equal(f.requests[0].inputRevision, 7);
+  assert.equal(f.requests[0].draftSource, original.source);
+});

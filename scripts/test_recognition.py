@@ -398,13 +398,13 @@ class LocalRecognition(RecognitionChecks, unittest.TestCase):
                     self.assertEqual((current.stat().st_dev, current.stat().st_ino), physical)
                     self.assertEqual(current.read_bytes(), original_source)
                     self.recognition('open', {**original_member, 'node': {'workspaceId': y['workspaceId'], 'nodeId': y['nodeId']}}, 409)
-                    journal = {p.name: p.read_bytes() for p in (self.data / 'journal').iterdir() if p.is_file()}
+                    journal = {p.name: p.read_bytes() for p in (self.data / 'journal').rglob('*') if p.is_file()}
                     retained = self.folder / 'TEST-retained-recognition-original.typ'
                     current.rename(retained); current.write_bytes(original_source)
                     try:
                         self.recognition('open', original_member, 409)
                         self.assertEqual(self.recognition('operation', {'target': target, 'operationId': operation})['status'], 'committed')
-                        self.assertEqual({p.name: p.read_bytes() for p in (self.data / 'journal').iterdir() if p.is_file()}, journal)
+                        self.assertEqual({p.name: p.read_bytes() for p in (self.data / 'journal').rglob('*') if p.is_file()}, journal)
                         self.assertEqual(retained.read_bytes(), original_source)
                     finally:
                         current.rename(self.folder / 'TEST-retained-recognition-substitute.typ')

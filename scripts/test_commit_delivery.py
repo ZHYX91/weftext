@@ -88,8 +88,8 @@ def run(executable, evidence):
         saved_as = call('/api/save-as', save_as)
         assert saved_as['status'] == 'saved' and saved_as['documentSourceMatchesCommit'] is True
         assert saved_as['document']['path'] == str(save_as_path)
-        as_plan = state / 'journal' / f"{save_as['operationId']}.plan.json"
-        as_commit = state / 'journal' / f"{save_as['operationId']}.commit.json"
+        as_plan = state / 'journal' / (save_as['operationId'])[:2] / f"{save_as['operationId']}.plan.json"
+        as_commit = state / 'journal' / (save_as['operationId'])[:2] / f"{save_as['operationId']}.commit.json"
         as_original_journal = (as_plan.read_bytes(), as_commit.read_bytes())
         as_original = save_as_path.read_bytes()
         as_physical = (save_as_path.stat().st_dev, save_as_path.stat().st_ino)
@@ -119,9 +119,9 @@ def run(executable, evidence):
         invalid_fence = fence(invalid, 'save')
         for malformed_digest in ['a' * 63, 'g' * 64]:
             call('/api/operations/settle', {**invalid_fence, 'wireDigest': malformed_digest}, 400)
-        assert not (state / 'journal' / f"{invalid['operationId']}.resolution.json").exists()
+        assert not (state / 'journal' / (invalid['operationId'])[:2] / f"{invalid['operationId']}.resolution.json").exists()
         assert call('/api/operations/settle', invalid_fence)['status'] == 'resolved'
-        decision = json.loads((state / 'journal' / f"{invalid['operationId']}.resolution.json").read_text('utf-8'))
+        decision = json.loads((state / 'journal' / (invalid['operationId'])[:2] / f"{invalid['operationId']}.resolution.json").read_text('utf-8'))
         assert decision['attempt']['wireDigest'] == invalid_fence['wireDigest']
         assert Path(doc['path']).read_text('utf-8') == waiting
         delayed = {**invalid, 'source': waiting + '\nlate corrected payload'}
@@ -193,7 +193,7 @@ def run(executable, evidence):
         x_bytes = Path(original_x['path']).read_bytes()
         identity = lambda file: [os.stat(file).st_dev, os.stat(file).st_ino]
         x_identity = identity(original_x['path'])
-        journal_files = [state / 'journal' / f"{original_request['operationId']}.{suffix}.json" for suffix in ('plan', 'commit', 'births', 'materialized')]
+        journal_files = [state / 'journal' / (original_request['operationId'])[:2] / f"{original_request['operationId']}.{suffix}.json" for suffix in ('plan', 'commit', 'births', 'materialized')]
         original_journal = {str(file): hashlib.sha256(file.read_bytes()).hexdigest() for file in journal_files if file.exists()}
         move = call('/api/operations/prepare', {'root': str(root), 'operationId': test_hosted.uid(), 'intent': {'kind': 'moveNode', 'source': original_receipt['path'], 'parent': str(Path(parent['path']).parent)}})
         moved = call('/api/operations/commit', {'operationId': move['operationId'], 'planId': move['planId']})
@@ -254,14 +254,14 @@ def run(executable, evidence):
         assert blocked['error']['code'] == 'operationCancelled' and not (root / 'NeverCreated').exists()
         backup = call('/api/operations/prepare', {'root': str(root), 'operationId': test_hosted.uid(), 'intent': {'kind': 'backupLibrary', 'destination': str(evidence / 'TEST-backup')}})
         assert call('/api/operations/commit', {'operationId': backup['operationId'], 'planId': backup['planId']})['status'] == 'committed'
-        assert not (evidence / 'TEST-backup/private/journal' / f'{cancelled}.resolution.json').exists()
+        assert not (evidence / 'TEST-backup/private/journal' / cancelled[:2] / f'{cancelled}.resolution.json').exists()
         # Reusing A's old root path for independently admitted B must neither
         # include A's private facts nor let A's bounded foreign header block B.
         reused = evidence / 'TEST-reused-library-root'
         library_a = call('/api/library/create', {'path': str(reused), 'operationId': test_hosted.uid()})
         a_request = {'root': str(reused), 'parent': str(reused), 'name': 'A', 'operationId': test_hosted.uid()}
         a_receipt = call('/api/note/create', a_request); a_doc = created_document(a_receipt)
-        call('/api/draft', {'sessionId': a_doc['sessionId'], 'source': a_doc['source'] + '\nA original private draft'})
+        call('/api/draft', {'inputRevision': 1, 'sessionId': a_doc['sessionId'], 'source': a_doc['source'] + '\nA original private draft'})
         device_input = evidence / 'TEST-device-input.typ'; device_input.write_text('device input', encoding='utf-8')
         device_doc = call('/api/open', {'path': str(device_input)})
         nested = reused / 'nested'; nested.mkdir()
@@ -271,9 +271,9 @@ def run(executable, evidence):
         ordinary = call('/api/open', {'path': str(ordinary_path)})
         ordinary_save = {'sessionId': ordinary['sessionId'], 'baseId': ordinary['baseId'], 'source': 'A PRIVATE ordinary Save S', 'operationId': test_hosted.uid()}
         call('/api/save', ordinary_save)
-        call('/api/draft', {'sessionId': ordinary['sessionId'], 'source': 'A PRIVATE later input Y'})
+        call('/api/draft', {'inputRevision': 1, 'sessionId': ordinary['sessionId'], 'source': 'A PRIVATE later input Y'})
         a_ids = set()
-        for file in (state / 'journal').glob('*.plan.json'):
+        for file in (state / 'journal').rglob('*.plan.json'):
             saved_plan = json.loads(file.read_text('utf-8'))
             scope = saved_plan.get('fileSave', {}).get('scope', {})
             if saved_plan.get('workspaceId') == library_a['workspaceId'] or scope.get('binding', {}).get('workspaceId') == library_a['workspaceId']:
@@ -282,32 +282,33 @@ def run(executable, evidence):
         a_private = evidence / 'TEST-A-complete-backup'
         a_backup = call('/api/operations/prepare', {'root': str(reused), 'operationId': test_hosted.uid(), 'intent': {'kind': 'backupLibrary', 'destination': str(a_private)}})
         call('/api/operations/commit', {'operationId': a_backup['operationId'], 'planId': a_backup['planId']})
-        assert all((a_private / 'private/journal' / f'{op}.plan.json').is_file() for op in (ordinary_as['operationId'], ordinary_save['operationId']))
-        a_journal = {file: file.read_bytes() for file in (state / 'journal').glob('*.json') if file.name.split('.')[0] in a_ids}
+        assert all((a_private / 'private/journal' / (op)[:2] / f'{op}.plan.json').is_file() for op in (ordinary_as['operationId'], ordinary_save['operationId']))
+        a_journal = {file: file.read_bytes() for file in (state / 'journal').rglob('*.json') if file.name.split('.')[0] in a_ids}
         retained_a = evidence / 'TEST-preserved-A-root'; reused.rename(retained_a)
         library_b = call('/api/library/create', {'path': str(reused), 'operationId': test_hosted.uid()})
         assert library_b['workspaceId'] != library_a['workspaceId']
-        call('/api/draft', {'sessionId': ordinary['sessionId'], 'source': 'A PRIVATE input after path reuse'})
+        call('/api/draft', {'inputRevision': 2, 'sessionId': ordinary['sessionId'], 'source': 'A PRIVATE input after path reuse'})
         stop(); start()  # The original scope must survive a Core restart.
         b_request = {**a_request, 'name': 'B', 'operationId': test_hosted.uid()}
         b_doc = created_document(call('/api/note/create', b_request))
-        call('/api/draft', {'sessionId': b_doc['sessionId'], 'source': b_doc['source'] + '\nB selected private draft'})
+        call('/api/draft', {'inputRevision': 1, 'sessionId': b_doc['sessionId'], 'source': b_doc['source'] + '\nB selected private draft'})
         b_backup = evidence / 'TEST-B-only-backup'
         b_plan = call('/api/operations/prepare', {'root': str(reused), 'operationId': test_hosted.uid(), 'intent': {'kind': 'backupLibrary', 'destination': str(b_backup)}})
         assert call('/api/operations/commit', {'operationId': b_plan['operationId'], 'planId': b_plan['planId']})['status'] == 'committed'
         for file, original in a_journal.items():
-            assert file.read_bytes() == original and not (b_backup / 'private/journal' / file.name).exists()
+            assert file.read_bytes() == original and not (b_backup / 'private' / file.relative_to(state)).exists()
         assert (retained_a / 'A/A.typ').read_text('utf-8') == a_doc['source']
         private_drafts = list((b_backup / 'private/drafts').glob('*.json'))
         assert private_drafts and all(json.loads(file.read_text('utf-8'))['scope']['binding']['workspaceId'] == library_b['workspaceId'] for file in private_drafts)
         orphan = test_hosted.uid()
-        original_evidence = state / 'journal' / f'{orphan}.install.json'
+        original_evidence = state / 'journal' / (orphan)[:2] / f'{orphan}.install.json'
+        original_evidence.parent.mkdir(exist_ok=True)
         original_evidence.write_bytes(b'TEST retained unknown install evidence')
         blocked = call('/api/operations/settle', fence({'operationId': orphan}, 'operation'), 409)
         assert blocked['error']['code'] == 'resolutionUnavailable'
         alias = call('/api/operations/settle', fence({'operationId': orphan.upper()}, 'operation'), 409)
         assert alias['error']['code'] == 'invalidOperationId'
-        assert not (state / 'journal' / f'{orphan}.resolution.json').exists()
+        assert not (state / 'journal' / (orphan)[:2] / f'{orphan}.resolution.json').exists()
         result['passed'] = True
     except BaseException:
         result['failure'] = traceback.format_exc()

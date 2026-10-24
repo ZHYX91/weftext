@@ -1226,8 +1226,7 @@ impl Core {
                 identity,
                 fingerprint,
             };
-            journal::private_create(
-                &self.backend,
+            self.create_private_record(
                 &self.journal_path(operation_id, "directory-reservation"),
                 &serde_json::to_vec(&new)?,
             )?;
@@ -1555,8 +1554,7 @@ impl Core {
                 registry_identity: identity,
                 fingerprint: fingerprint.into(),
             };
-            journal::private_create(
-                &self.backend,
+            self.create_private_record(
                 &self.journal_path(operation_id, "tag-reservation"),
                 &serde_json::to_vec(&new)?,
             )?;
@@ -1931,8 +1929,7 @@ impl Core {
                 registry_identity,
                 fingerprint,
             };
-            journal::private_create(
-                &self.backend,
+            self.create_private_record(
                 &self.journal_path(operation_id, "tag-reservation"),
                 &serde_json::to_vec(&new)?,
             )?;

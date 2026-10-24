@@ -613,7 +613,7 @@ const workspaceTools = new WorkspaceTools({
         return true;
     },
     embeddedQueries: () => current && sourceConsumersAvailable(current) ? current.queries.outputSelections() : [],
-    getDocument: () => current && !current.sourceTrashed && sourceConsumersAvailable(current) ? { sessionId: current.session.opened.sessionId, source: current.session.source, serial: current.session.serial, baseId: current.session.baseId, path: current.session.path, root: current.session.opened.root, nodeId: current.session.opened.nodeId, workspaceId: current.session.opened.workspaceId, dirty: current.session.dirty } : null,
+    getDocument: () => current && !current.sourceTrashed && sourceConsumersAvailable(current) ? { sessionId: current.session.opened.sessionId, source: current.session.source, serial: current.session.serial, baseId: current.session.baseId, path: current.session.path, root: current.session.opened.root, nodeId: current.session.opened.nodeId, workspaceId: current.session.opened.workspaceId, dirty: current.session.dirty, inputRevision: current.session.acknowledgedInputRevision ?? undefined } : null,
     selection: () => {
         if (!current)
             return undefined;
@@ -670,7 +670,7 @@ const workspaceTools = new WorkspaceTools({
                         return;
                     if (fresh && (fresh.source !== doc.session.baseSource || normalize(fresh.path) !== normalize(doc.session.path))) {
                         doc.externalSource = fresh.source;
-                        doc.comparisonTarget = fresh;
+                        setComparisonTarget(doc, fresh);
                         doc.session.error = uiMessage("shell.syncDiskChanged");
                     }
                     else if (unavailable)
@@ -836,7 +836,7 @@ const workspaceTools = new WorkspaceTools({
         else if (opened && doc) {
             doc.session.error = uiMessage("shell.fileOperationCompletedNewInputRetained");
             refreshChrome();
-            doc.comparisonTarget = opened;
+            setComparisonTarget(doc, opened);
             deliveryPending = doc.session.error;
         }
         if (receipt.documentDisposition === "created" && !opened) deliveryPending ||= uiMessage("shell.createdDocumentNotDelivered");
@@ -908,6 +908,7 @@ function historyContext(doc: LiveDocument | null): HistoryContext | null {
   const source = doc.writing.recoverySource() ?? session.source;
   return { ownerKey: doc.navigationKey, sessionId: session.opened.sessionId, source, serial: session.serial,
     baseId: session.baseId, baseSource: session.baseSource, path: session.path,
+    inputRevision: source === session.source ? session.acknowledgedInputRevision ?? undefined : undefined,
     root: session.opened.root, nodeId: session.opened.nodeId, workspaceId: session.opened.workspaceId,
     dirty: source !== session.baseSource, readOnly: doc.mode === "read" || readOnlySource(doc) || doc.sourceTrashed,
     savePending: session.savePending, unresolvedSave: !!pendingSave(doc) || !!session.opened.recoveredDraftConflict };
@@ -925,7 +926,7 @@ const historyPanel = new HistoryPanel({
         const fact = await api<Receipt & OriginalFact & { committedSource?: string; document?: OpenedDocument; documentSourceMatchesCommit?: boolean }>("/api/operations/status", { operationId: result.receipt.operationId });
         const opened = fact.document;
         if (doc.session.opened !== prior || fact.operationId !== result.receipt.operationId || fact.status !== "committed" || fact.baseId !== result.receipt.baseId || fact.path !== result.receipt.path || fact.committedSource !== result.source || !opened || opened.nodeId !== basis.nodeId || opened.workspaceId !== basis.workspaceId || opened.kind !== "managed" || opened.source !== result.source || fact.documentSourceMatchesCommit !== true || fact.documentError) {
-            if (opened && opened.nodeId === basis.nodeId && opened.workspaceId === basis.workspaceId) { doc.comparisonTarget = opened; doc.externalSource = opened.source; }
+            if (opened && opened.nodeId === basis.nodeId && opened.workspaceId === basis.workspaceId) { setComparisonTarget(doc, opened); doc.externalSource = opened.source; }
             throw new UiError(uiMessage("shell.restoreCommittedCurrentSessionChanged"));
         }
         const variants = [...(doc.session.opened.recoveredDraftVariants ?? []), ...(opened.recoveredDraftVariants ?? []), ...result.protectedDrafts];
@@ -950,7 +951,7 @@ const historyPanel = new HistoryPanel({
         if (!doc) throw new UiError(uiMessage("shell.compareOriginalBuffer"));
         const fact = await api<OriginalFact & { document?: OpenedDocument }>("/api/operations/status", { operationId });
         if (fact.operationId !== operationId || fact.status !== "committed" || !fact.document || fact.document.nodeId !== basis.nodeId || fact.document.workspaceId !== basis.workspaceId) throw new UiError(uiMessage("shell.originalCurrentObjectUnreadable"));
-        doc.comparisonTarget = fact.document; doc.externalSource = fact.document.source;
+        setComparisonTarget(doc, fact.document); doc.externalSource = fact.document.source;
         const prior = doc.session.opened;
         await showDraftComparison(doc);
         return await (doc.session.opened !== prior && !doc.comparisonTarget);
@@ -981,7 +982,7 @@ async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
         const restored = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
         // A delivered birth is not authority to replace an active writer.
         if (restored) {
-            restored.comparisonTarget = opened;
+            setComparisonTarget(restored, opened);
             restored.externalSource = opened.source;
             throw new UiError(uiMessage("shell.createdNodeAlreadyOpenPending"));
         }
@@ -1028,7 +1029,7 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
                 scheduleRender(existing, 0);
             } else {
                 existing.externalSource = candidate.source;
-                existing.comparisonTarget = candidate;
+                setComparisonTarget(existing, candidate);
                 existing.session.error = uiMessage("shell.openedTargetDiskChanged");
             }
             workspaceTools.assertLibraryChange(inventory);
@@ -1045,11 +1046,17 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
         } finally { finishNativeActivity(); }
     }
 }
+function setComparisonTarget(doc: LiveDocument, target: OpenedDocument): void {
+    const prior = doc.comparisonTarget;
+    doc.comparisonTarget = target;
+    if (prior && prior.sessionId !== target.sessionId && !ownsOpenedSession(prior.sessionId))
+        void releaseOpenedSession(prior.sessionId).catch(() => undefined);
+}
 function ownsOpenedSession(sessionId: string): boolean {
     return documents.some(document => document.session.opened.sessionId === sessionId || document.comparisonTarget?.sessionId === sessionId);
 }
-/** Only fresh, never adopted projections may be released. This does not prove
- * an author Draft or native surface safe to close. */
+/** Release only a handle no longer owned by an editor or comparison. A former
+ * writer must first hand off its durable input. This is no native close permit. */
 async function releaseOpenedSession(sessionId: string): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
     try {
@@ -2623,7 +2630,7 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
         }
         else if (fresh) {
             doc.externalSource = fresh.source;
-            doc.comparisonTarget = fresh;
+            setComparisonTarget(doc, fresh);
             doc.session.error = uiMessage("shell.returnTargetDiskChanged");
         }
         if (generation !== navigationGeneration)
@@ -2715,9 +2722,12 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
         }
         const retry = pendingSave(doc) !== undefined;
         // Freeze an ACKed source/revision together. Newer Y gets another cut.
-        if (!retry && (doc.session.lastDraftSource !== doc.session.source || doc.session.lastDraftRevision === null))
+        if (!retry && doc.session.acknowledgedInputRevision === null) {
+            doc.session.savePending = false;
+            refreshChrome();
             throw new UiError(uiMessage("shell.saveQueryReservationInputChanged"));
-        const request: NonNullable<LiveDocument["lastSave"]> = pendingSave(doc) ?? { source: doc.session.source, sourcePath: doc.session.path, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), sessionId: doc.session.opened.sessionId, path, inputRevision: doc.session.lastDraftRevision! };
+        }
+        const request: NonNullable<LiveDocument["lastSave"]> = pendingSave(doc) ?? { source: doc.session.source, sourcePath: doc.session.path, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), sessionId: doc.session.opened.sessionId, path, inputRevision: doc.session.acknowledgedInputRevision! };
         doc.lastSave = request;
         doc.session.savePending = true;
         refreshChrome();
@@ -2741,7 +2751,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
                 // The original physical creation must deliver its actual fresh Core Session.
                 const opened = receipt.document;
                 if (!opened || receipt.documentError || receipt.documentSourceMatchesCommit !== true || opened.path !== receipt.path || !canRebindSaveAs(request.source, opened)) {
-                    if (opened) { doc.comparisonTarget = opened; doc.externalSource = opened.source; }
+                    if (opened) { setComparisonTarget(doc, opened); doc.externalSource = opened.source; }
                     throw new UiError(uiMessage("shell.saveAsOriginalPhysicalDeliveryPending"));
                 }
                 await doc.writing.settleForSessionChange();
@@ -2758,7 +2768,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
                 if (!receipt.document || receipt.documentError || receipt.documentSourceMatchesCommit !== true || !rebindCommittedSave(doc.session, { ...request, sessionId: request.deliverySessionId ?? request.sessionId }, receipt.document)) {
                     if (receipt.document) {
                         doc.externalSource = receipt.document.source;
-                        doc.comparisonTarget = receipt.document;
+                        setComparisonTarget(doc, receipt.document);
                     }
                     throw new ApiError("committedDeliveryPending", uiMessage("shell.savedBasisChangedCheckDisk"));
                 }
@@ -2780,6 +2790,10 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             }
             doc.saveAsChangedTarget = undefined;
             doc.lastSave = undefined;
+            // The new target's input is durable and owns this editor now.
+            // Retire the old handle while retaining its original Draft/facts.
+            if (request.path && request.sessionId !== doc.session.opened.sessionId && !ownsOpenedSession(request.sessionId))
+                void releaseOpenedSession(request.sessionId).catch(() => undefined);
             if (doc === current) { renderSidebar(); refreshChrome(); }
             toast(doc.session.dirty ? uiMessage("shell.savedLaterInputInDraft") : uiMessage("shell.savedSentence"), false);
             if (querySaveNotice) toast(uiMessage("shell.savedQueriesNotRunnable"), true);
@@ -2921,7 +2935,7 @@ async function showDraftComparison(doc = current): Promise<void> {
         await doc.writing.settleForSessionChange();
         if (doc.session.opened.sessionId !== confirmed.sessionId || doc.session.source !== confirmed.source || doc.session.serial !== confirmed.serial || doc.editor.generation !== confirmed.generation) {
             doc.session.opened.recoveredDraftVariants = [...(doc.session.opened.recoveredDraftVariants ?? []), { path: fresh.path, baseSource: fresh.source, source: result.source, baseKnown: true }];
-            doc.comparisonTarget = fresh;
+            setComparisonTarget(doc, fresh);
             await persistDraft(doc);
             doc.session.error = uiMessage("shell.mergeConfirmationNewInput");
             if (doc === current)

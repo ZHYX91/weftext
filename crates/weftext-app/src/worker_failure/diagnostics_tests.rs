@@ -123,6 +123,8 @@ fn summary_is_closed_bounded_and_never_serializes_original_error_or_streams() {
         Kind::StdoutBudget,
         Kind::StderrBudget,
         Kind::Deadline,
+        #[cfg(target_os = "linux")]
+        Kind::Cancelled,
         Kind::Wait,
         Kind::NonzeroExit,
         Kind::OutputRejected,
@@ -156,6 +158,8 @@ fn summary_is_closed_bounded_and_never_serializes_original_error_or_streams() {
                 [
                     "cleanupConfirmed",
                     "cleanupIo",
+                    #[cfg(target_os = "linux")]
+                    "completion",
                     "context",
                     "event",
                     "exit",
@@ -258,6 +262,8 @@ fn largest_scalar_counts_and_os_codes_still_fit_one_fixed_record() {
         context: HostedContext::CitationRead,
         kind: Kind::SupervisionLost,
         exit: None,
+        #[cfg(target_os = "linux")]
+        completion: Some(weftext_worker_broker::Completion::SetupFailed),
         stdin_complete: false,
         stdout: stream(),
         stderr: stream(),
@@ -492,4 +498,31 @@ fn summary_queue_owns_only_safe_fixed_records_and_drops_a_disconnected_sink() {
     assert!(
         std::mem::size_of::<DiagnosticLine>() <= DIAGNOSTIC_BYTES + std::mem::size_of::<usize>()
     );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn safe_summary_retains_every_typed_broker_completion() {
+    use weftext_worker_broker::Completion;
+    for completion in [
+        Completion::Exited,
+        Completion::Cancelled,
+        Completion::Timeout,
+        Completion::Disconnected,
+        Completion::SetupFailed,
+    ] {
+        let mut failure = WorkerFailure::new(Kind::SupervisionLost);
+        failure.completion = Some(completion.clone());
+        let value: Value = serde_json::from_slice(
+            diagnostic_line(HostedContext::Editor, &failure)
+                .unwrap()
+                .as_bytes(),
+        )
+        .unwrap();
+        assert_eq!(
+            value["completion"],
+            serde_json::to_value(completion).unwrap()
+        );
+        assert_eq!(value["exit"], Value::Null);
+    }
 }

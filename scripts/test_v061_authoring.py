@@ -636,7 +636,7 @@ class RetainedHTTP(unittest.TestCase):
         old_basis, old_map = self.observe(b, receiver, source, 1)
         old_range = self.table(old_map)['range']
         draft = source + '\nB personal retained input 中文😀\n'
-        self.call(b, '/api/draft', {'sessionId': receiver['sessionId'], 'baseId': receiver['baseId'], 'source': draft})
+        self.call(b, '/api/draft', {'inputRevision': 1, 'sessionId': receiver['sessionId'], 'baseId': receiver['baseId'], 'source': draft})
         path = root_b / 'Note/Note.typ'
         file_identity = physical_identity(path)
         directory_identity = physical_identity(path.parent)
@@ -670,7 +670,7 @@ class RetainedHTTP(unittest.TestCase):
                                                   'action': {'kind': 'transpose'}}, status=422)
         self.call(b, '/api/edit', {**current_basis, 'sourceHash': old_map['sourceHash'],
                   'intent': {'kind': 'tableEdit', 'range': old_range, 'action': {'kind': 'transpose'}}}, 409)
-        self.call(b, '/api/save', {'sessionId': receiver['sessionId'], 'baseId': receiver['baseId'],
+        self.call(b, '/api/save', {'inputRevision': 1, 'sessionId': receiver['sessionId'], 'baseId': receiver['baseId'],
                   'source': draft, 'operationId': uid()}, 409)
         self.assertEqual(path.read_bytes(), updated.encode('utf-8'))
         self.close_server(b)
