@@ -65,7 +65,7 @@ impl Drop for Admission {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct Status {
     exit: crate::owned_process::Status,
     completion: Completion,
@@ -246,6 +246,37 @@ pub(super) async fn spawn(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn exact_broker_exit_reason_is_not_downgraded_to_nonzero_exit() {
+        let started = weftext_worker_broker::Started {
+            version: 1, job_id: "a".repeat(32), pid: 123, image_sha256: "b".repeat(64),
+        };
+        for (completion, kind, code, signal) in [
+            (Completion::Timeout, Kind::Deadline, None, Some(9)),
+            (Completion::Cancelled, Kind::Cancelled, None, Some(9)),
+            (Completion::Disconnected, Kind::SupervisionLost, None, Some(9)),
+            (Completion::SetupFailed, Kind::SupervisionLost, None, Some(9)),
+            (Completion::Exited, Kind::NonzeroExit, Some(7), None),
+        ] {
+            let receipt = Receipt {
+                version: 1, job_id: started.job_id.clone(),
+                completion: completion.clone(), exit_code: code, signal,
+                reaped: 1, cgroup_empty: true, pidfd_exited: true,
+            };
+            receipt.validate(&started).unwrap();
+            let status = Status::from_receipt(&receipt).unwrap();
+            assert_eq!(status.completion(), completion);
+            assert_eq!(status.failure_kind(), kind);
+            assert!(!status.success());
+        }
+        let success = Status::from_receipt(&Receipt {
+            version: 1, job_id: started.job_id,
+            completion: Completion::Exited, exit_code: Some(0), signal: None,
+            reaped: 1, cgroup_empty: true, pidfd_exited: true,
+        }).unwrap();
+        assert!(success.success());
+    }
+
     use super::*;
     #[tokio::test]
     async fn detached_caller_retains_admission_until_original_terminal() {

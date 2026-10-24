@@ -66,3 +66,8 @@ daemon 持有内核 pidfd 与该任务 cgroup，自己作为 subreaper。自然�
 `python3 -B scripts/test_linux_worker_broker_harness.py -v` 只检查普通 pipe、poll 和自有 helper 子进程，不启动产品 daemon 或改变 UID。实际部署 harness 的每个 case 共用一个 8 秒绝对截止时间，预留最后 0.5 秒给报告与精确回收；socket、stdin 写入、stdout/stderr 并行排空、result pipe 和 wait 都按剩余时间等待。helper 通过 held pidfd 取消，只有实际 waitpid 状态才记 `clientReaped`。超时、强制收尾、坏报告或未知状态均保留失败/原 bytes，不算 case 完成。合法 service fixture 实际清空五组 capabilities（含 bounding）、附加组并启用 NNP1；root peer 负例保持真实 UID0。daemon 45 秒内无法证明退出时记录 `cleanupUnknown`，保留仍持有自有树的 daemon 供管理员检查。
 
 合法 helper 报告还必须匹配实际退出终态：正常及 EOF 拒绝 case 要求 exit 0；ordinary peer 的 DAC 负例显式要求 exit 1，且错误必须为 connect 阶段的 `PermissionError` / `EACCES`，其它错误或退出均失败。初始 started 帧在 UTF-8/JSON 校验前保留为 `rawStartedHex`，完整 helper 报告亦保留 `rawResultHex`。daemon 已回收但非零或信号退出时，本次运行失败并保留真实状态；这与未知回收状态分别记录。普通 helper 回归只用自有子进程覆盖这些结果，以及正常、非零、信号和超时的终止路径。
+
+
+## v0.7 worker 终局与授权交付（开发切片）
+
+受控 Linux broker 的 Exited、Cancelled、Timeout、Disconnected、SetupFailed 原回执必须先证明 pidfd/cgroup 全树完成；App 私有 WorkerFailure 在退出码/信号之外保留准确 completion，区分正常非零、取消、超时与监督断链。私有原件不会被 HTTP diagnostics 公开。Hosted Notes 原生 worker 的成功和失败在交付前均复核原 Actor、resource、权限和冻结依赖；撤权后失败消息也不能返回旧私有数据。这里不是实际 Linux 安装或全量验收结论。
