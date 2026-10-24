@@ -717,7 +717,11 @@ impl Core {
                 ));
             }
         }
-        core.initialize_journal_layout(expected.is_none())?;
+        // Existing profiles are admitted by original physical and device
+        // identity before this point. They too must complete the one-time
+        // object-preserving relocation; refusing them would strand the
+        // original journal simply because the GUI uses open_existing().
+        core.initialize_journal_layout(true)?;
         core.load_journals()?;
         drop(original);
         Ok(core)
