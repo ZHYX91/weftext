@@ -1377,3 +1377,26 @@ mod journal_bucket_tests {
         assert_eq!(fs::read(&commit).unwrap(), before_commit);
     }
 }
+
+#[cfg(all(test, windows))]
+mod wrong_bucket_tests {
+    use super::*;
+    #[test]
+    fn wrong_bucket_plan_is_rejected_while_original_bytes_remain_untouched() {
+        let temp = tempfile::tempdir().unwrap();
+        let private = temp.path().join("private");
+        let core = Core::new(&private).unwrap();
+        let id = fresh();
+        let plan = Plan::file(id.clone(), hash(b"wrong-bucket"),
+            &temp.path().join("outside.typ"), None, b"S".to_vec(), None,
+            "retainedUnknown");
+        let original = serde_json::to_vec(&plan).unwrap();
+        let bucket = if journal_bucket(&id) == "00" { "01" } else { "00" };
+        let wrong = private.join("journal").join(bucket).join(format!("{id}.plan.json"));
+        std::fs::write(&wrong, &original).unwrap();
+        assert!(core.journal_entries().unwrap().collect::<Result<Vec<_>>>().is_err());
+        drop(core);
+        assert!(Core::new(&private).is_err());
+        assert_eq!(std::fs::read(&wrong).unwrap(), original);
+    }
+}

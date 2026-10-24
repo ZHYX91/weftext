@@ -4,6 +4,12 @@
 use super::*;
 use std::collections::BTreeSet;
 use weftext_messages::UiMessage;
+// Per-test-thread measurement; not a persistent cache or a witness.
+#[cfg(all(test, windows))]
+thread_local! {
+    static QUALIFIED_DRAFT_READ_CALLS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
 #[cfg(all(test, windows))]
 #[path = "draft_baseline_tests.rs"]
 mod baseline_tests;
@@ -673,6 +679,8 @@ impl Core {
         scope: &QualifiedInputScope,
         identity: &FileIdentity,
     ) -> Result<Option<(Draft, Vec<u8>)>> {
+        #[cfg(all(test, windows))]
+        QUALIFIED_DRAFT_READ_CALLS.with(|count| count.set(count.get() + 1));
         let guard = match ParentGuard::acquire(&self.backend, path) {
             Ok(guard) => guard,
             Err(error) if error.code == "missing" => return Ok(None),

@@ -68,3 +68,20 @@ fn a_frozen_cut_cannot_be_relabelled_with_other_source_bytes() {
     assert!(core.persist_draft(&doc.session_id, "legacy overwrote Y").is_err());
     assert_eq!(core.current_session_draft(&doc.session_id).unwrap().unwrap().source, "Y");
 }
+
+#[test]
+fn qualified_protected_draft_read_count_for_one_normal_persist() {
+    let temp = tempfile::tempdir().unwrap();
+    let note = temp.path().join("note.typ");
+    fs::write(&note, "B").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let doc = core.open(&note, None).unwrap();
+    core.persist_draft(&doc.session_id, "S").unwrap();
+    QUALIFIED_DRAFT_READ_CALLS.with(|count| count.set(0));
+    core.persist_draft(&doc.session_id, "T").unwrap();
+    let reads = QUALIFIED_DRAFT_READ_CALLS.with(std::cell::Cell::get);
+    // Windows/NTFS fixture: one complete read before merging, one exact
+    // protected read before replacement; no third scope-only payload read.
+    assert_eq!(reads, 2, "protected Draft reads: {reads}");
+    assert_eq!(core.current_session_draft(&doc.session_id).unwrap().unwrap().source, "T");
+}
