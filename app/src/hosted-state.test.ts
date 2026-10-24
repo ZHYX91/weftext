@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindHostedDraftReference, applySaveResult, draftDisposition, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
+import { bindHostedDraftReference, applySaveResult, draftDisposition, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, qualifyHostedDraft, hostedDocumentDraft, type HostedDraft } from "./hosted-state";
 test("offline source compares its original base and preserves newer input after a receipt", () => {
-  assert.equal(draftDisposition("base", {source:"offline",baseSource:"base"}), "restore");
+  assert.equal(draftDisposition("base", {source:"offline",baseSource:"base"}), "compare");
+  assert.equal(draftDisposition("base", {source:"offline",baseSource:"base",basis:{sessionId:"original",baseId:"original-base"}}), "restore");
   assert.equal(draftDisposition("someone else", {source:"offline",baseSource:"base"}), "compare");
-  assert.equal(draftDisposition("someone else", {source:"old saved",baseSource:"old saved"}), "current");
+  assert.equal(draftDisposition("someone else", {source:"old saved",baseSource:"old saved"}), "compare");
   assert.equal(draftDisposition("sent", {source:"new typing",baseSource:"old",pending:{resource:"Shared",operationId:"one",source:"sent"}}), "unknown");
   assert.deepEqual(applySaveResult({source:"new typing",baseSource:"old"}, "sent"), {source:"new typing",baseSource:"sent"});
 });
@@ -52,4 +53,13 @@ test("a new server actor epoch cannot look up old source, preview, input or orig
     assert.notEqual(hostedCachePrefix(kind, "a:b", "c", 1), hostedCachePrefix(kind, "a", "b:c", 1));
   }
   for (const generation of [NaN, -1, 0.5, Number.MAX_SAFE_INTEGER + 1]) assert.throws(() => hostedCachePrefix("office", "deployment", "actor", generation));
+});
+
+test("only the installed view identity qualifies a fresh projection; same-byte author caches keep an unknown basis",()=>{
+ const opened={sessionId:"fresh",baseId:"fresh-base",source:"B",viewInputId:"core-view"};
+ const view=hostedDocumentDraft(opened);assert.equal(view.inputId,"core-view");assert.equal(draftDisposition("B",view),"current");
+ const original={source:"Y",baseSource:"B",inputId:"actual-author",basis:{sessionId:"old",baseId:"old-base"}};
+ const restored=qualifyHostedDraft(opened,original);assert.equal(restored.basis,undefined);assert.equal(restored.inputId,"actual-author");assert.equal(restored.source,"Y");assert.equal(draftDisposition("B",restored),"compare");
+ const aba=qualifyHostedDraft(opened,{...original,source:"B",viewInputId:"old-view"});assert.equal(draftDisposition("B",aba),"compare");
+ const prior=hostedDocumentDraft({...opened,sessionId:"old",viewInputId:"old-view"});assert.deepEqual(qualifyHostedDraft(opened,prior),view);
 });

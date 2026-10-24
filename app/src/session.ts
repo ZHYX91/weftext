@@ -43,6 +43,7 @@ export class DocumentSession {
     readonly recoveryContinuation: { sessionId: string; recordWitness: string; recoveredSource: string } | null;
     recoveryContinuationSettled = false;
     constructor(public opened: OpenedDocument) {
+        if (opened.viewInputId && opened.recoveredDraft == null) this.inputId = opened.viewInputId;
         this.path = opened.path;
         this.baseId = opened.baseId;
         this.baseSource = opened.source;

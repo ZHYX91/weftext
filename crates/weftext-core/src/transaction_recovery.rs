@@ -176,6 +176,10 @@ impl Core {
                 self.validate_sync_recovery_cut(plan)?;
             }
             if action == "resumeOriginalPlan" {
+                // Requalify this original pending transaction before any
+                // continuation changes author bytes or namespaces. An unknown
+                // committed sequence cannot authorize effects until restart.
+                self.admit_journal_operation(plan)?;
                 if matches!(t.mutation, Mutation::Compound { .. }) {
                     self.resume_compound_namespaces(plan, &mut capture)
                         .map_err(|e| recovery_failure(plan, e))?;

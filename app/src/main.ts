@@ -140,6 +140,7 @@ interface LiveDocument {
         deliverySessionId?: string;
         deliveryEnded?: boolean;
         inputRevision?: number;
+        inputId: string;
     };
     externalSource?: string;
     comparisonTarget?: OpenedDocument;
@@ -191,11 +192,11 @@ function bodySnapshot(doc: LiveDocument) {
         owner = { sessionId, generation: crypto.randomUUID() };
         bodyOwners.set(doc, owner);
     }
-    return { doc, sessionId, generation: owner.generation, baseId: doc.session.baseId, source: doc.session.source, serial: doc.session.serial, editorGeneration: doc.editor.generation };
+    return { doc, sessionId, generation: owner.generation, baseId: doc.session.baseId, source: doc.session.source, serial: doc.session.serial, inputId: doc.session.inputId, editorGeneration: doc.editor.generation };
 }
 function currentBody(snapshot: ReturnType<typeof bodySnapshot>): boolean {
     const { doc } = snapshot;
-    return documents.includes(doc) && bodyOwners.get(doc)?.generation === snapshot.generation && doc.session.opened.sessionId === snapshot.sessionId && doc.session.baseId === snapshot.baseId && doc.session.source === snapshot.source && doc.session.serial === snapshot.serial && doc.editor.generation === snapshot.editorGeneration && doc.editor.source === snapshot.source && !doc.session.savePending && !doc.lastSave && !doc.editor.composing && !doc.writing.state.pending && !doc.writing.state.composing && !doc.writing.state.busy;
+    return documents.includes(doc) && bodyOwners.get(doc)?.generation === snapshot.generation && doc.session.opened.sessionId === snapshot.sessionId && doc.session.baseId === snapshot.baseId && doc.session.source === snapshot.source && doc.session.serial === snapshot.serial && doc.session.inputId === snapshot.inputId && doc.editor.generation === snapshot.editorGeneration && doc.editor.source === snapshot.source && !doc.session.savePending && !doc.lastSave && !doc.editor.composing && !doc.writing.state.pending && !doc.writing.state.composing && !doc.writing.state.busy;
 }
 let preparedBody: {
     request: string;
@@ -232,7 +233,7 @@ export const bodyCloseParticipant = {
             await doc.writing.settleForSessionChange();
             await persistDraft(doc);
             const snapshot = bodySnapshot(doc);
-            if (doc.session.lastDraftSource !== snapshot.source || doc.session.lastDraftSerial !== snapshot.serial)
+            if (doc.session.lastDraftSource !== snapshot.source || doc.session.lastDraftSerial !== snapshot.serial || doc.session.acknowledgedInputRevision === null)
                 throw new UiError(uiMessage("shell.closeNewInputAfterDraft"));
             const sourceDigest = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(snapshot.source)))].map(value => value.toString(16).padStart(2, "0")).join("");
             const result = await api<{
@@ -240,12 +241,13 @@ export const bodyCloseParticipant = {
                 baseId: string;
                 sourceDigest: string;
                 recordDigest: string;
-            }>("/api/desktop/document-flush", { sessionId: snapshot.sessionId, baseId: snapshot.baseId, sourceDigest });
-            if (!currentBody(snapshot) || !result || result.sessionId !== snapshot.sessionId || result.baseId !== snapshot.baseId || result.sourceDigest !== sourceDigest || typeof result.recordDigest !== "string" || !/^[a-f0-9]{64}$/.test(result.recordDigest))
+                evidence: "authorDraft" | "savedView";
+            }>("/api/desktop/document-flush", { sessionId: snapshot.sessionId, baseId: snapshot.baseId, sourceDigest, inputId: snapshot.inputId });
+            if (!currentBody(snapshot) || !result || result.sessionId !== snapshot.sessionId || result.baseId !== snapshot.baseId || result.sourceDigest !== sourceDigest || !["authorDraft", "savedView"].includes(result.evidence) || typeof result.recordDigest !== "string" || !/^[a-f0-9]{64}$/.test(result.recordDigest))
                 throw new UiError(uiMessage("shell.closeRecoveryUnconfirmed"));
             doc.writing.assertCloseReady();
             snapshots.push(snapshot);
-            proofs.push({ kind: "document" as const, ownerId: JSON.stringify([doc.session.opened.workspaceId ?? "local", doc.session.opened.nodeId ?? doc.session.path]), ownerGeneration: snapshot.generation, sessionId: snapshot.sessionId, baseId: snapshot.baseId, sourceDigest, recordDigest: result.recordDigest });
+            proofs.push({ kind: "document" as const, ownerId: JSON.stringify([doc.session.opened.workspaceId ?? "local", doc.session.opened.nodeId ?? doc.session.path]), ownerGeneration: snapshot.generation, sessionId: snapshot.sessionId, baseId: snapshot.baseId, sourceDigest, inputId: snapshot.inputId, evidence: result.evidence, recordDigest: result.recordDigest });
         }
         if (documents.length !== owned.length || owned.some((doc, at) => documents[at] !== doc) || snapshots.some(snapshot => !currentBody(snapshot)))
             throw new UiError(uiMessage("shell.closeBasisChanged"));
@@ -431,7 +433,7 @@ async function insertEverydayQuery(): Promise<void> {
         if (!doc?.session.opened.nodeId || !doc.session.opened.workspaceId)
             throw new UiError(uiMessage("shell.embeddedQueryRequirements"));
         await prepareSwitch();
-        const basis = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, baseId: doc.session.baseId };
+        const basis = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, inputId: doc.session.inputId, baseId: doc.session.baseId };
         const operation = operationId();
         await modal<void>(uiMessage("shell.insertEmbeddedQuery"), uiMessage("shell.embeddedQueryDescription"), (form, close) => {
             const label = el("input", "text-input");
@@ -523,7 +525,7 @@ async function insertEverydayQuery(): Promise<void> {
             submit.type = "submit";
             form.append(name, kind, where, shared, error, button(uiMessage("common.cancel"), () => close(null)), submit);
             const selection = () => JSON.stringify([kind.value, owners.value, definitions.value, mode.value, revision.value]);
-            const available = () => current === doc && doc.session.opened.sessionId === basis.sessionId && doc.session.baseId === basis.baseId && doc.session.source === basis.source && doc.session.serial === basis.serial && sourceConsumersAvailable(doc) && !doc.sourceTrashed && !readOnlySource(doc) && doc.mode !== "read";
+            const available = () => current === doc && doc.session.opened.sessionId === basis.sessionId && doc.session.baseId === basis.baseId && doc.session.source === basis.source && (doc.session.serial === basis.serial && (basis.inputId === undefined || doc.session.inputId === basis.inputId)) && sourceConsumersAvailable(doc) && !doc.sourceTrashed && !readOnlySource(doc) && doc.mode !== "read";
             form.onsubmit = event => {
                 event.preventDefault();
                 submit.disabled = true;
@@ -615,7 +617,7 @@ const workspaceTools = new WorkspaceTools({
         return true;
     },
     embeddedQueries: () => current && sourceConsumersAvailable(current) ? current.queries.outputSelections() : [],
-    getDocument: () => current && !current.sourceTrashed && sourceConsumersAvailable(current) ? { sessionId: current.session.opened.sessionId, source: current.session.source, serial: current.session.serial, baseId: current.session.baseId, path: current.session.path, root: current.session.opened.root, nodeId: current.session.opened.nodeId, workspaceId: current.session.opened.workspaceId, dirty: current.session.dirty, inputRevision: current.session.acknowledgedInputRevision ?? undefined } : null,
+    getDocument: () => current && !current.sourceTrashed && sourceConsumersAvailable(current) ? { sessionId: current.session.opened.sessionId, source: current.session.source, serial: current.session.serial, inputId: current.session.inputId, baseId: current.session.baseId, path: current.session.path, root: current.session.opened.root, nodeId: current.session.opened.nodeId, workspaceId: current.session.opened.workspaceId, dirty: current.session.dirty, inputRevision: current.session.acknowledgedInputRevision ?? undefined } : null,
     selection: () => {
         if (!current)
             return undefined;
@@ -728,7 +730,7 @@ const workspaceTools = new WorkspaceTools({
             if (receipt.documentSourceMatchesCommit !== true || receipt.committedSource !== returned.source) comparison("shell.queryCommittedDiskChanged");
             await doc.writing.settleForSessionChange();
             if (opened.sessionId !== basis.sessionId) opened = await api<OpenedDocument>("/api/open", { sessionId: basis.sessionId });
-            if (!documents.includes(doc) || doc.session.opened.sessionId !== basis.sessionId || opened.sessionId !== basis.sessionId || opened.source !== receipt.committedSource || opened.recoveredDraftConflict || doc.session.source !== basis.source || doc.session.serial !== basis.serial || doc.session.baseId !== basis.baseId)
+            if (!documents.includes(doc) || doc.session.opened.sessionId !== basis.sessionId || opened.sessionId !== basis.sessionId || opened.source !== receipt.committedSource || opened.recoveredDraftConflict || doc.session.source !== basis.source || (doc.session.serial !== basis.serial || (basis.inputId !== undefined && doc.session.inputId !== basis.inputId)) || doc.session.baseId !== basis.baseId)
                 comparison("shell.querySavedNewInputRetained");
             doc.session.opened = opened; doc.editor.clearTokens();
             if (doc.editor.source !== opened.source) doc.editor.applyCommitted(opened.source);
@@ -748,10 +750,10 @@ const workspaceTools = new WorkspaceTools({
     applyPatch: async (patch, basis) => libraryCloseActivity.run(async () => {
 
         const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
-        if (!doc || doc.session.source !== basis.source || doc.session.serial !== basis.serial || doc.session.baseId !== basis.baseId || doc.mode === "read" || readOnlySource(doc) || doc.writing.state.composing)
+        if (!doc || doc.session.source !== basis.source || (doc.session.serial !== basis.serial || (basis.inputId !== undefined && doc.session.inputId !== basis.inputId)) || doc.session.baseId !== basis.baseId || doc.mode === "read" || readOnlySource(doc) || doc.writing.state.composing)
             throw new UiError(uiMessage("shell.oldEditCannotApply"));
         await doc.writing.flush();
-        if (doc.session.source !== basis.source || doc.session.serial !== basis.serial)
+        if (doc.session.source !== basis.source || (doc.session.serial !== basis.serial || (basis.inputId !== undefined && doc.session.inputId !== basis.inputId)))
             throw new UiError(uiMessage("shell.inputEnteredDraft"));
         doc.editor.apply(patch.from, patch.to, patch.text);
         await persistDraft(doc);
@@ -813,7 +815,7 @@ const workspaceTools = new WorkspaceTools({
             if (current === doc)
                 renderContent();
         }
-        else if (opened && doc && opened.sessionId === doc.session.opened.sessionId && doc.session.source === context.source && doc.session.serial === context.serial && !doc.session.dirty) {
+        else if (opened && doc && opened.sessionId === doc.session.opened.sessionId && doc.session.source === context.source && doc.session.serial === context.serial && doc.session.inputId === context.inputId && !doc.session.dirty) {
             doc.session.opened = opened;
             doc.editor.clearTokens();
             if (doc.editor.source !== opened.source)
@@ -902,7 +904,7 @@ function historyContext(doc: LiveDocument | null): HistoryContext | null {
   if (!doc) return null;
   const { session } = doc;
   const source = doc.writing.recoverySource() ?? session.source;
-  return { ownerKey: doc.navigationKey, sessionId: session.opened.sessionId, source, serial: session.serial,
+  return { ownerKey: doc.navigationKey, sessionId: session.opened.sessionId, source, serial: session.serial, inputId: session.inputId,
     baseId: session.baseId, baseSource: session.baseSource, path: session.path,
     inputRevision: source === session.source ? session.acknowledgedInputRevision ?? undefined : undefined,
     root: session.opened.root, nodeId: session.opened.nodeId, workspaceId: session.opened.workspaceId,
@@ -1091,6 +1093,7 @@ async function releaseOpenedSession(sessionId: string): Promise<void> {
         try {
             const result = await api<{ released: boolean; sessionId: string }>("/api/session/release", { sessionId });
             if (result.released !== true || result.sessionId !== sessionId) throw new UiError(uiMessage("desktop.sessionReleaseFailed", { sessionId }));
+            for (const document of documents) document.retiringSessions?.delete(sessionId);
         } catch (error) {
             const item = el("div", "toast error", uiMessage("desktop.sessionReleaseFailed", { sessionId }));
             item.setAttribute("role", "alert");
@@ -1937,7 +1940,7 @@ function renderProjection(doc: LiveDocument): void {
     const groups = writingMap ? groupWritingRenderNodes(projection.tree, writingMap, doc.session.source) : [];
     const grouped = new Map(groups.flatMap(group => group.memberKeys.map(key => [key, group] as const)));
     const emptySlots = new Map((writingMap ? groupWritingEmptySlots(projection.tree, writingMap, doc.session.source) : []).map(slot => [slot.nodeKey, slot.region]));
-    doc.queries.beginProjection(projection.tree, { sessionId: doc.session.opened.sessionId, source: projection.source, serial: projection.serial });
+    doc.queries.beginProjection(projection.tree, { sessionId: doc.session.opened.sessionId, source: projection.source, serial: projection.serial, inputId: doc.session.inputId });
     function draw(node: RenderNode): Node {
         const query = doc.queries.forNode(node);
         if (query)
@@ -2218,8 +2221,8 @@ async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise
                 }
                 doc.session.recoveryContinuationSettled = true;
             }
-            const ack = await api<{ ok: boolean; inputRevision: number }>("/api/draft", { sessionId, source, inputRevision, inputId, baseId });
-            if (doc.session.opened.sessionId !== sessionId || !ack || ack.ok !== true || ack.inputRevision !== inputRevision) throw new UiError(uiMessage("shell.querySavedNewInputRetained"));
+            const ack = await api<{ ok: boolean; inputRevision: number; evidence: "authorDraft" | "savedView" }>("/api/draft", { sessionId, source, inputRevision, inputId, baseId });
+            if (doc.session.opened.sessionId !== sessionId || !ack || ack.ok !== true || !["authorDraft","savedView"].includes(ack.evidence) || ack.inputRevision !== inputRevision) throw new UiError(uiMessage("shell.querySavedNewInputRetained"));
             doc.session.acknowledgeDraft(source, serial, inputRevision, inputId);
             await retireHandedOffWriters(doc);
             doc.draftFailure = null;
@@ -2525,7 +2528,7 @@ function addDocument(opened: OpenedDocument): void {
         openDefinition: async (owner) => libraryCloseActivity.run(async () => {
             await acceptResolvedDocument(await api<OpenedDocument>("/api/data/open", { root: session.opened.root, entityKey: owner, lifecycle: "live" }));
         }),
-        basis: () => ({ sessionId: session.opened.sessionId, source: session.source, serial: session.serial }), mode: () => doc.mode,
+        basis: () => ({ sessionId: session.opened.sessionId, source: session.source, serial: session.serial, inputId: session.inputId }), mode: () => doc.mode,
         editable: () => !bodyCloseFrozen && sourceConsumersAvailable(doc) && current === doc && doc.mode !== "read" && !readOnlySource(doc) && !doc.sourceTrashed && !writing.state.composing,
         request: (path, basis) => {
             if (!sourceConsumersAvailable(doc))
@@ -2761,7 +2764,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             refreshChrome();
             throw new UiError(uiMessage("shell.saveQueryReservationInputChanged"));
         }
-        const request: NonNullable<LiveDocument["lastSave"]> = pendingSave(doc) ?? { source: doc.session.source, sourcePath: doc.session.path, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), sessionId: doc.session.opened.sessionId, path, inputRevision: doc.session.acknowledgedInputRevision! };
+        const request: NonNullable<LiveDocument["lastSave"]> = pendingSave(doc) ?? { source: doc.session.source, sourcePath: doc.session.path, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), sessionId: doc.session.opened.sessionId, path, inputRevision: doc.session.acknowledgedInputRevision!, inputId: doc.session.inputId };
         doc.lastSave = request;
         doc.session.savePending = true;
         refreshChrome();
@@ -2808,8 +2811,10 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
                 }
                 await doc.writing.settleForSessionChange();
                 if (doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) throw new UiError(uiMessage("shell.saveAsDeliverySessionChanged"));
+                const installView = doc.session.opened.sessionId !== opened.sessionId && doc.session.inputId === request.inputId && doc.session.source === request.source && opened.recoveredDraft == null;
                 if (doc.session.opened.sessionId !== opened.sessionId) (doc.retiringSessions ??= new Set()).add(doc.session.opened.sessionId);
                 doc.session.opened = opened;
+                if (installView && opened.viewInputId) { doc.session.inputId = opened.viewInputId; doc.editor.authorInputId = opened.viewInputId; }
                 request.deliverySessionId = opened.sessionId;
                 doc.editor.clearTokens();
                 doc.session.acknowledgeSave(request.source, opened.baseId, opened.path);
@@ -2929,7 +2934,7 @@ async function showDraftComparison(doc = current): Promise<void> {
         received = fresh;
         await doc.writing.settleForSessionChange();
         const initialMergeSource = doc.session.source;
-        const confirmed = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, generation: doc.editor.generation };
+        const confirmed = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, inputId: doc.session.inputId, generation: doc.editor.generation };
         const result = await modal<{
             action: "discardRecovered" | "mergeRecovered";
             source: string;
@@ -2989,7 +2994,7 @@ async function showDraftComparison(doc = current): Promise<void> {
         }
         await api("/api/draft/resolve", { sessionId: fresh.sessionId, action: result.action, source: result.action === "mergeRecovered" ? result.source : undefined });
         await doc.writing.settleForSessionChange();
-        if (doc.session.opened.sessionId !== confirmed.sessionId || doc.session.source !== confirmed.source || doc.session.serial !== confirmed.serial || doc.editor.generation !== confirmed.generation) {
+        if (doc.session.opened.sessionId !== confirmed.sessionId || doc.session.source !== confirmed.source || doc.session.serial !== confirmed.serial || doc.session.inputId !== confirmed.inputId || doc.editor.generation !== confirmed.generation) {
             doc.session.opened.recoveredDraftVariants = [...(doc.session.opened.recoveredDraftVariants ?? []), { path: fresh.path, baseSource: fresh.source, source: result.source, baseKnown: true }];
             setComparisonTarget(doc, fresh);
             await persistDraft(doc);
@@ -3000,6 +3005,7 @@ async function showDraftComparison(doc = current): Promise<void> {
         }
         fresh.recoveredDraftConflict = false;
         fresh.recoveredDraft = null;
+        const installDiskView = result.action === "discardRecovered" && doc.session.opened.sessionId !== fresh.sessionId;
         if (doc.session.opened.sessionId !== fresh.sessionId) (doc.retiringSessions ??= new Set()).add(doc.session.opened.sessionId);
         doc.session.opened = fresh;
         doc.editor.clearTokens();
@@ -3009,6 +3015,7 @@ async function showDraftComparison(doc = current): Promise<void> {
         doc.externalSource = undefined;
         doc.lastSave = undefined;
         doc.editor.apply(0, doc.editor.source.length, result.source);
+        if (installDiskView && fresh.viewInputId) { doc.session.inputId = fresh.viewInputId; doc.editor.authorInputId = fresh.viewInputId; }
         await persistDraft(doc);
         await retireHandedOffWriters(doc);
         setComparisonTarget(doc, undefined);

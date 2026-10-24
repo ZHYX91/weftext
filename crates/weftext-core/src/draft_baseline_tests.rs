@@ -39,6 +39,7 @@ fn committed_baselines_survive_redundant_persist_and_retire_without_history_budg
         assert!(record.alternatives.is_empty());
         let expected = hash(source.as_bytes());
         core.flush_document_draft(DocumentDraftFlush {
+            input_id: None,
             session_id: doc.session_id.clone(),
             base_id: doc.base_id.clone(),
             source_digest: expected,
@@ -298,6 +299,7 @@ fn saved_descendant_baselines_follow_original_directory_members_across_restart()
             let next = format!("{source}\nFurther input");
             core.persist_draft(&moved.session_id, &next).unwrap();
             core.flush_document_draft(DocumentDraftFlush {
+                input_id: None,
                 session_id: moved.session_id.clone(),
                 base_id: moved.base_id.clone(),
                 source_digest: hash(next.as_bytes()),
@@ -340,6 +342,7 @@ fn close_readback_qualifies_foreign_fi_before_malformed_or_oversized_body() {
         fs::write(&record, &bytes).unwrap();
         let error = core
             .flush_document_draft(DocumentDraftFlush {
+                input_id: None,
                 session_id: own.session_id.clone(),
                 base_id: own.base_id.clone(),
                 source_digest: hash(b"Own pending"),

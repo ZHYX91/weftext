@@ -11,6 +11,10 @@ export interface HostedSaveRequest {
     definitionReservations?: string[];
 }
 export interface HostedDraft {
+    /** Exact live producer and original Base; absent means retained/unknown. */
+    basis?: { sessionId: string; baseId: string };
+    inputId?: string;
+    viewInputId?: string;
     source: string;
     baseSource: string;
     reference?: string;
@@ -47,14 +51,24 @@ export function hostedCachePrefix(kind: "draft" | "field" | "review" | "office" 
 export function draftDisposition(saved: string, cached?: HostedDraft): "current" | "restore" | "compare" | "unknown" {
     if (cached?.pending)
         return "unknown";
-    if (!cached || cached.source === saved || cached.source === cached.baseSource)
-        return "current";
-    return cached.baseSource === saved ? "restore" : "compare";
+    if (!cached || (cached.viewInputId !== undefined && cached.inputId === cached.viewInputId)) return "current";
+    return cached.basis && cached.baseSource === saved ? "restore" : "compare";
 }
 export function applySaveResult(draft: HostedDraft, saved: string): HostedDraft {
     // Typing after dispatch must not be replaced by the older committed proposal.
     const { pending: _pending, ...retained } = draft;
     return { ...retained, baseSource: saved };
+}
+export function hostedDocumentDraft(opened: {sessionId:string; baseId:string; source:string; viewInputId?:string; recoveredDraft?:string; recoveredDraftBaseSource?:string}): HostedDraft {
+    return opened.recoveredDraft != null ? {source:opened.recoveredDraft,baseSource:opened.recoveredDraftBaseSource??opened.source} : {source:opened.source,baseSource:opened.source,basis:{sessionId:opened.sessionId,baseId:opened.baseId},inputId:opened.viewInputId,viewInputId:opened.viewInputId};
+}
+/** Rebind only an explicitly unedited saved projection. Actual author/unknown
+ * caches retain their original basis and identity across independent opens. */
+export function qualifyHostedDraft(opened: {sessionId: string; baseId: string; source: string; viewInputId?: string}, retained: HostedDraft): HostedDraft {
+    if (!retained.pending && retained.viewInputId !== undefined && retained.inputId === retained.viewInputId) {
+        return { ...retained, source: opened.source, baseSource: opened.source, inputId: opened.viewInputId, viewInputId: opened.viewInputId, basis: { sessionId: opened.sessionId, baseId: opened.baseId } };
+    }
+    return { ...retained, basis: retained.basis?.sessionId === opened.sessionId ? retained.basis : undefined };
 }
 /** Compute the full target cache before any editor/session is replaced. */
 export function hostedOpenedDraft(saved: string, retained: HostedDraft): HostedDraft {

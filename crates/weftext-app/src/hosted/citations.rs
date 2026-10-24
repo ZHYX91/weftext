@@ -925,37 +925,326 @@ async fn edit_native(
     } else {
         None
     };
-    locked(&state,move|inner|{
-        let(actor,session)=native_basis(inner,&auth,&basis,false,true)?;let profile=native_profile(inner,&actor,&session.resource,&basis.source)?;if profile["generation"].as_str()!=Some(req.generation.as_str()){return Err(changed());}
-        if matches!(req.intent["kind"].as_str(),Some("nativeCitationRename"|"nativeReferenceRename")) && profile["editor"]["renameAvailable"]!=true{return Err(ApiError::bad(UiMessage::error_api_hosted_citations_rename_qualification_unavailable()));}
-        let s=|key:&str|req.intent[key].as_str().ok_or_else(||ApiError::bad(UiMessage::error_api_hosted_required_field_missing(weftext_messages::params::ErrorApiHostedRequiredFieldMissing { field: key.into() })));let at=||req.intent["at"].as_u64().and_then(|value|usize::try_from(value).ok()).ok_or_else(||ApiError::bad(UiMessage::error_api_hosted_citations_insertion_position_required()));
-        let fail=|error:weftext_engine::EngineError|ApiError::from_engine(StatusCode::CONFLICT,"unsupportedCitationEdit",error);
-        let range=||serde_json::from_value::<weftext_engine::SourceRange>(req.intent["range"].clone()).map_err(|_|ApiError::bad(UiMessage::error_api_hosted_citations_source_range_required()));
-        let form=||serde_json::from_value::<weftext_engine::CitationForm>(req.intent["form"].clone()).map_err(|_|ApiError::bad(UiMessage::error_api_hosted_citations_unknown_citation_form()));
-        if req.intent["form"]=="normal" && matches!(s("kind")?,"nativeReferenceInsert"|"nativeReferenceInsertWithLabel") {
-            let from=if s("kind")?=="nativeReferenceInsertWithLabel"{req.intent["target"]["from"].as_u64().unwrap_or(u64::MAX) as usize}else{weftext_engine::inspect_native_citation_editor(&basis.source).targets.into_iter().find(|target|Some(target.label.as_str())==req.intent["label"].as_str()).map_or(usize::MAX,|target|target.range.from)};
-            let numbered=compiled.as_ref().and_then(|(output,_,_)|output.as_ref().ok()).and_then(|output|serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone()).ok()).and_then(|tree|crate::citation_api::reference_numbered_at(&tree,from)).unwrap_or(false);
-            if !numbered{return Err(reference_number_unavailable(compiled.as_ref().and_then(|(output,_,_)|output.as_ref().err())));}
-        }
-        if s("kind")?=="nativeReferenceInsert" && !weftext_engine::inspect_native_citation_editor(&basis.source).targets.iter().any(|target|Some(target.label.as_str())==req.intent["label"].as_str()&&matches!(target.kind.as_str(),"heading"|"figure"|"table"|"equation"|"footnote")){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_native_reference_target_unavailable()));}
-        let edited=match s("kind")?{
-            "nativeCitationInsert"=>{let work=s("work")?;let choice=profile["choices"].as_array().and_then(|choices|choices.iter().find(|choice|choice["reference"]==work && choice["citationReady"]==true)).ok_or_else(unavailable)?;weftext_engine::insert_native_citation(&basis.source,&basis.source_hash,at()?,work,choice["suggestedKey"].as_str().unwrap_or("work"),req.intent["key"].as_str().filter(|key|!key.is_empty()),form()?,req.intent["supplement"].as_str().unwrap_or("")).map_err(fail)?},
-            "nativeCitationUpdate"=>weftext_engine::update_native_citation_options(&basis.source,&basis.source_hash,&range()?,if req.intent["form"].is_null(){None}else{Some(form()?)},req.intent["supplement"].as_str()).map_err(fail)?,
-            "nativeCitationStyle"=>weftext_engine::update_native_citation_style(&basis.source,&basis.source_hash,&range()?,req.intent["style"].as_str().filter(|style|!style.is_empty())).map_err(fail)?,
-            "nativeCitationRename"=>weftext_engine::rename_native_citation_key(&basis.source,&basis.source_hash,s("old")?,s("new")?).map_err(fail)?,
-            "nativeCitationLink"=>{let target=s("target")?;let choice=profile["choices"].as_array().and_then(|choices|choices.iter().find(|choice|choice["reference"]==target)).ok_or_else(unavailable)?;weftext_engine::insert_native_link(&basis.source,&basis.source_hash,at()?,target,req.intent["text"].as_str().filter(|text|!text.is_empty()).unwrap_or(choice["title"].as_str().unwrap_or(""))).map_err(fail)?},
-            "nativeCitationLinkText"=>{let range=range()?;let link=weftext_knowledge::native_links(&basis.source).into_iter().find(|link|link.from==range.from && link.to==range.to && link.kind=="native").ok_or_else(changed)?;let reference=link.target.split('#').next().unwrap_or("");let title=profile["choices"].as_array().and_then(|choices|choices.iter().find(|choice|choice["reference"]==reference)).and_then(|choice|choice["title"].as_str()).ok_or_else(unavailable)?;weftext_engine::update_native_link_text(&basis.source,&basis.source_hash,&range,title).map_err(fail)?},
-            "nativeReferenceInsert"=>{let label=s("label")?;let target=weftext_engine::inspect_native_citation_editor(&basis.source).targets.into_iter().find(|target|target.label==label && target.unique).ok_or_else(unavailable)?;let Some((output,dependencies,environment))=compiled else{return Err(changed());};editor::validate_inputs(inner,&actor,&session.resource,&dependencies)?;environment.recheck(inner,&actor)?;let output=output.map_err(changed_after_worker)?;let labels=serde_json::from_value::<Vec<weftext_engine::CompiledLabel>>(output["labels"].clone()).unwrap_or_default();if output["ok"]!=true || !labels.iter().any(|entry|entry.label==label && entry.count==1 && entry.origins.iter().any(|origin|origin.is_main && origin.from==target.range.from)){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_unique_execution_origin_required()));}
-            if s("form")?=="text"{weftext_engine::insert_native_cross_link(&basis.source,&basis.source_hash,at()?,label,s("text")?).map_err(fail)?}else{if !matches!(s("form")?,"normal"|"page"){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_unknown_cross_reference_form()));}weftext_engine::insert_native_cross_reference(&basis.source,&basis.source_hash,at()?,label,s("form")?=="page").map_err(fail)?}},
-            "nativeReferenceInsertWithLabel"=>{let target=serde_json::from_value::<weftext_engine::SourceRange>(req.intent["target"].clone()).map_err(|_|ApiError::bad(UiMessage::error_api_hosted_citations_object_range_required()))?;let Some((output,dependencies,environment))=compiled else{return Err(changed());};editor::validate_inputs(inner,&actor,&session.resource,&dependencies)?;environment.recheck(inner,&actor)?;let output=output.map_err(changed_after_worker)?;let tree=serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone()).map_err(|_|changed())?;if output["ok"]!=true||!crate::citation_api::unlabelled_reference_targets(&basis.source,&tree).iter().any(|candidate|candidate["range"]==req.intent["target"]){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_unique_native_object_required()));}let form=s("form")?;if !matches!(form,"normal"|"page"){return Err(ApiError::bad(UiMessage::error_api_hosted_citations_labelled_reference_form_unsupported()));}weftext_engine::insert_native_cross_reference_with_label(&basis.source,&basis.source_hash,at()?,&target,s("label")?,form=="page").map_err(fail)?},
-            "nativeReferenceRename"=>weftext_engine::rename_native_label(&basis.source,&basis.source_hash,s("old")?,s("new")?).map_err(fail)?,
-            _=>return Err(ApiError::bad(UiMessage::error_api_hosted_citations_unknown_citation_operation())),
-        };
-        writing_api::validate_source(&edited.source,None)?;
-        let patches=edited.patches.iter().map(|patch|json!({"from":patch.utf16_from,"to":patch.utf16_to,"text":patch.insert,"expected":patch.expected,"byteFrom":patch.from,"byteTo":patch.to})).collect::<Vec<_>>();
-        Ok(Json(json!({"resource":session.resource,"serial":basis.serial,"sourceHash":basis.source_hash,"patchUnit":"utf16","source":edited.source,"patches":patches})))
-    }).await
+    locked(&state, move |inner| {
+        deliver_native_edit(inner, &auth, &req, &basis, compiled)
+    })
+    .await
 }
+type ReferenceCompile = (
+    Result<Value, ApiError>,
+    BTreeMap<String, String>,
+    library::Environment,
+);
+fn deliver_native_edit(
+    inner: &mut HostedInner,
+    auth: &Auth,
+    req: &NativeEdit,
+    basis: &NativeBasis,
+    compiled: Option<ReferenceCompile>,
+) -> ApiResult {
+    let (actor, session) = native_basis(inner, auth, basis, false, true)?;
+    let profile = native_profile(inner, &actor, &session.resource, &basis.source)?;
+    if profile["generation"].as_str() != Some(req.generation.as_str()) {
+        return Err(changed());
+    }
+    if let Some((_, dependencies, environment)) = &compiled {
+        editor::validate_inputs(inner, &actor, &session.resource, dependencies)?;
+        environment.recheck(inner, &actor)?;
+    }
+    if matches!(
+        req.intent["kind"].as_str(),
+        Some("nativeCitationRename" | "nativeReferenceRename")
+    ) && profile["editor"]["renameAvailable"] != true
+    {
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_citations_rename_qualification_unavailable(),
+        ));
+    }
+    let s = |key: &str| {
+        req.intent[key].as_str().ok_or_else(|| {
+            ApiError::bad(UiMessage::error_api_hosted_required_field_missing(
+                weftext_messages::params::ErrorApiHostedRequiredFieldMissing { field: key.into() },
+            ))
+        })
+    };
+    let at = || {
+        req.intent["at"]
+            .as_u64()
+            .and_then(|value| usize::try_from(value).ok())
+            .ok_or_else(|| {
+                ApiError::bad(UiMessage::error_api_hosted_citations_insertion_position_required())
+            })
+    };
+    let fail = |error: weftext_engine::EngineError| {
+        ApiError::from_engine(StatusCode::CONFLICT, "unsupportedCitationEdit", error)
+    };
+    let range = || {
+        serde_json::from_value::<weftext_engine::SourceRange>(req.intent["range"].clone()).map_err(
+            |_| ApiError::bad(UiMessage::error_api_hosted_citations_source_range_required()),
+        )
+    };
+    let form = || {
+        serde_json::from_value::<weftext_engine::CitationForm>(req.intent["form"].clone()).map_err(
+            |_| ApiError::bad(UiMessage::error_api_hosted_citations_unknown_citation_form()),
+        )
+    };
+    if req.intent["form"] == "normal"
+        && matches!(
+            s("kind")?,
+            "nativeReferenceInsert" | "nativeReferenceInsertWithLabel"
+        )
+    {
+        let from = if s("kind")? == "nativeReferenceInsertWithLabel" {
+            req.intent["target"]["from"].as_u64().unwrap_or(u64::MAX) as usize
+        } else {
+            weftext_engine::inspect_native_citation_editor(&basis.source)
+                .targets
+                .into_iter()
+                .find(|target| Some(target.label.as_str()) == req.intent["label"].as_str())
+                .map_or(usize::MAX, |target| target.range.from)
+        };
+        let numbered = compiled
+            .as_ref()
+            .and_then(|(output, _, _)| output.as_ref().ok())
+            .and_then(|output| {
+                serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone()).ok()
+            })
+            .and_then(|tree| crate::citation_api::reference_numbered_at(&tree, from))
+            .unwrap_or(false);
+        if !numbered {
+            return Err(reference_number_unavailable(
+                compiled
+                    .as_ref()
+                    .and_then(|(output, _, _)| output.as_ref().err()),
+            ));
+        }
+    }
+    if s("kind")? == "nativeReferenceInsert"
+        && !weftext_engine::inspect_native_citation_editor(&basis.source)
+            .targets
+            .iter()
+            .any(|target| {
+                Some(target.label.as_str()) == req.intent["label"].as_str()
+                    && matches!(
+                        target.kind.as_str(),
+                        "heading" | "figure" | "table" | "equation" | "footnote"
+                    )
+            })
+    {
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_citations_native_reference_target_unavailable(),
+        ));
+    }
+    let edited = match s("kind")? {
+        "nativeCitationInsert" => {
+            let work = s("work")?;
+            let choice = profile["choices"]
+                .as_array()
+                .and_then(|choices| {
+                    choices.iter().find(|choice| {
+                        choice["reference"] == work && choice["citationReady"] == true
+                    })
+                })
+                .ok_or_else(unavailable)?;
+            weftext_engine::insert_native_citation(
+                &basis.source,
+                &basis.source_hash,
+                at()?,
+                work,
+                choice["suggestedKey"].as_str().unwrap_or("work"),
+                req.intent["key"].as_str().filter(|key| !key.is_empty()),
+                form()?,
+                req.intent["supplement"].as_str().unwrap_or(""),
+            )
+            .map_err(fail)?
+        }
+        "nativeCitationUpdate" => weftext_engine::update_native_citation_options(
+            &basis.source,
+            &basis.source_hash,
+            &range()?,
+            if req.intent["form"].is_null() {
+                None
+            } else {
+                Some(form()?)
+            },
+            req.intent["supplement"].as_str(),
+        )
+        .map_err(fail)?,
+        "nativeCitationStyle" => weftext_engine::update_native_citation_style(
+            &basis.source,
+            &basis.source_hash,
+            &range()?,
+            req.intent["style"]
+                .as_str()
+                .filter(|style| !style.is_empty()),
+        )
+        .map_err(fail)?,
+        "nativeCitationRename" => weftext_engine::rename_native_citation_key(
+            &basis.source,
+            &basis.source_hash,
+            s("old")?,
+            s("new")?,
+        )
+        .map_err(fail)?,
+        "nativeCitationLink" => {
+            let target = s("target")?;
+            let choice = profile["choices"]
+                .as_array()
+                .and_then(|choices| choices.iter().find(|choice| choice["reference"] == target))
+                .ok_or_else(unavailable)?;
+            weftext_engine::insert_native_link(
+                &basis.source,
+                &basis.source_hash,
+                at()?,
+                target,
+                req.intent["text"]
+                    .as_str()
+                    .filter(|text| !text.is_empty())
+                    .unwrap_or(choice["title"].as_str().unwrap_or("")),
+            )
+            .map_err(fail)?
+        }
+        "nativeCitationLinkText" => {
+            let range = range()?;
+            let link = weftext_knowledge::native_links(&basis.source)
+                .into_iter()
+                .find(|link| {
+                    link.from == range.from && link.to == range.to && link.kind == "native"
+                })
+                .ok_or_else(changed)?;
+            let reference = link.target.split('#').next().unwrap_or("");
+            let title = profile["choices"]
+                .as_array()
+                .and_then(|choices| {
+                    choices
+                        .iter()
+                        .find(|choice| choice["reference"] == reference)
+                })
+                .and_then(|choice| choice["title"].as_str())
+                .ok_or_else(unavailable)?;
+            weftext_engine::update_native_link_text(
+                &basis.source,
+                &basis.source_hash,
+                &range,
+                title,
+            )
+            .map_err(fail)?
+        }
+        "nativeReferenceInsert" => {
+            let label = s("label")?;
+            let target = weftext_engine::inspect_native_citation_editor(&basis.source)
+                .targets
+                .into_iter()
+                .find(|target| target.label == label && target.unique)
+                .ok_or_else(unavailable)?;
+            let Some((output, dependencies, environment)) = compiled else {
+                return Err(changed());
+            };
+            editor::validate_inputs(inner, &actor, &session.resource, &dependencies)?;
+            environment.recheck(inner, &actor)?;
+            let output = output.map_err(changed_after_worker)?;
+            let labels = serde_json::from_value::<Vec<weftext_engine::CompiledLabel>>(
+                output["labels"].clone(),
+            )
+            .unwrap_or_default();
+            if output["ok"] != true
+                || !labels.iter().any(|entry| {
+                    entry.label == label
+                        && entry.count == 1
+                        && entry
+                            .origins
+                            .iter()
+                            .any(|origin| origin.is_main && origin.from == target.range.from)
+                })
+            {
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_citations_unique_execution_origin_required(),
+                ));
+            }
+            if s("form")? == "text" {
+                weftext_engine::insert_native_cross_link(
+                    &basis.source,
+                    &basis.source_hash,
+                    at()?,
+                    label,
+                    s("text")?,
+                )
+                .map_err(fail)?
+            } else {
+                if !matches!(s("form")?, "normal" | "page") {
+                    return Err(ApiError::bad(
+                        UiMessage::error_api_hosted_citations_unknown_cross_reference_form(),
+                    ));
+                }
+                weftext_engine::insert_native_cross_reference(
+                    &basis.source,
+                    &basis.source_hash,
+                    at()?,
+                    label,
+                    s("form")? == "page",
+                )
+                .map_err(fail)?
+            }
+        }
+        "nativeReferenceInsertWithLabel" => {
+            let target =
+                serde_json::from_value::<weftext_engine::SourceRange>(req.intent["target"].clone())
+                    .map_err(|_| {
+                        ApiError::bad(UiMessage::error_api_hosted_citations_object_range_required())
+                    })?;
+            let Some((output, dependencies, environment)) = compiled else {
+                return Err(changed());
+            };
+            editor::validate_inputs(inner, &actor, &session.resource, &dependencies)?;
+            environment.recheck(inner, &actor)?;
+            let output = output.map_err(changed_after_worker)?;
+            let tree = serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone())
+                .map_err(|_| changed())?;
+            if output["ok"] != true
+                || !crate::citation_api::unlabelled_reference_targets(&basis.source, &tree)
+                    .iter()
+                    .any(|candidate| candidate["range"] == req.intent["target"])
+            {
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_citations_unique_native_object_required(),
+                ));
+            }
+            let form = s("form")?;
+            if !matches!(form, "normal" | "page") {
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_citations_labelled_reference_form_unsupported(),
+                ));
+            }
+            weftext_engine::insert_native_cross_reference_with_label(
+                &basis.source,
+                &basis.source_hash,
+                at()?,
+                &target,
+                s("label")?,
+                form == "page",
+            )
+            .map_err(fail)?
+        }
+        "nativeReferenceRename" => weftext_engine::rename_native_label(
+            &basis.source,
+            &basis.source_hash,
+            s("old")?,
+            s("new")?,
+        )
+        .map_err(fail)?,
+        _ => {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_citations_unknown_citation_operation(),
+            ));
+        }
+    };
+    writing_api::validate_source(&edited.source, None)?;
+    let patches=edited.patches.iter().map(|patch|json!({"from":patch.utf16_from,"to":patch.utf16_to,"text":patch.insert,"expected":patch.expected,"byteFrom":patch.from,"byteTo":patch.to})).collect::<Vec<_>>();
+    Ok(Json(
+        json!({"resource":session.resource,"serial":basis.serial,"sourceHash":basis.source_hash,"patchUnit":"utf16","source":edited.source,"patches":patches}),
+    ))
+}
+
 async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
     Ok(Json(locked(&state,move|inner|{let actor=inner.actor(&auth)?;let ids=inner.files_view(&actor)?.keys().filter(|id|access(inner,&actor,id,false,false).is_ok()).cloned().collect::<Vec<_>>();let mut partial=false;let mut works=vec![];
         for id in ids {match selected(inner,&actor,std::slice::from_ref(&id)) {Ok(c)=> {let w=&c.works[0];let title=w.work.publication.member("title").and_then(weftext_data::NativeValue::text).map(str::to_owned).unwrap_or(inner.file(&id)?.title.clone());let grant=&inner.grant(&actor,&id)?;works.push(json!({"resource":id,"reference":w.work.entity_ref,"title":title,"status":"ready","use":true,"export":grant.citations.export && grant.outputs.bibliography.export,"download":grant.citations.export && grant.citations.download && grant.outputs.bibliography.export && grant.outputs.bibliography.download}));},Err(_)=> {partial=true;works.push(json!({"resource":id,"title":inner.file(&id)?.title,"status":"unavailable","use":true,"export":false,"download":false}));}}
@@ -1017,6 +1306,81 @@ async fn propose(
 mod tests {
     use super::*;
     const PRIVATE: &str = "PRIVATE WORK BODY 绝不交付";
+    #[test]
+    fn normal_reference_success_and_worker_failure_recheck_changed_actual_environment_before_interpretation()
+     {
+        for failure in [false, true] {
+            let (_temp, state, auth, doc, _) = fixture();
+            let mut inner = state.inner.lock().unwrap();
+            let source = doc["source"].as_str().unwrap().to_owned();
+            let basis = NativeBasis {
+                session_id: doc["sessionId"].as_str().unwrap().into(),
+                source: source.clone(),
+                serial: 1,
+                source_hash: weftext_engine::source_hash(&source),
+            };
+            let profile = native_profile(&mut inner, "alice", "Shared", &source).unwrap();
+            let req = NativeEdit {
+                session_id: basis.session_id.clone(),
+                source,
+                serial: basis.serial,
+                source_hash: basis.source_hash.clone(),
+                generation: profile["generation"].as_str().unwrap().into(),
+                intent: json!({"kind":"nativeReferenceInsert", "label":"not-numbered", "form":"normal", "at":0}),
+            };
+            let output = || {
+                if failure {
+                    Err(crate::worker_failure::diagnostics_tests::original_failure(
+                        crate::worker_failure::Kind::OutputRejected,
+                    ))
+                } else {
+                    Ok(json!({"ok":true,"tree":null}))
+                }
+            };
+            let (_, dependencies, environment) =
+                editor::freeze(&mut inner, "alice", "Shared", &basis.source).unwrap();
+            let first = deliver_native_edit(
+                &mut inner,
+                &auth,
+                &req,
+                &basis,
+                Some((output(), dependencies, environment)),
+            )
+            .err()
+            .unwrap();
+            assert_eq!(
+                first.explanation,
+                UiMessage::error_api_hosted_citations_reference_number_unavailable()
+            );
+            let (_, dependencies, environment) =
+                editor::freeze(&mut inner, "alice", "Shared", &basis.source).unwrap();
+            let root = inner.config.root.clone();
+            let settings = inner
+                .core
+                .read_config(&root, weftext_core::ConfigRole::WorkspaceSettings)
+                .unwrap();
+            std::fs::write(
+                settings.path,
+                br#"{"version":1,"defaultStyle":{"enabled":false}}"#,
+            )
+            .unwrap();
+            let error = deliver_native_edit(
+                &mut inner,
+                &auth,
+                &req,
+                &basis,
+                Some((output(), dependencies, environment)),
+            )
+            .err()
+            .unwrap();
+            assert_ne!(
+                error.explanation,
+                UiMessage::error_api_hosted_citations_reference_number_unavailable()
+            );
+            assert!(error.private_worker_failure.is_none());
+        }
+    }
+
     #[test]
     fn native_catalog_never_discloses_a_configured_path_with_another_expected_owner() {
         let (_temp, state, _auth, doc, _reference) = fixture();

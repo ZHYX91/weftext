@@ -4,6 +4,7 @@ import { applySourcePatches, sourceBoundary, type SourcePatch } from "./editor";
 import { utf8Offset } from "./writing";
 import type { QueryPlan } from "./query-panel";
 export interface DefinitionAuthorContext {
+    inputId?: string;
     resource: string;
     sessionId: string;
     baseId: string;
@@ -61,14 +62,15 @@ export interface DefinitionReceipt {
 }
 export type DefinitionPrepared = DefinitionReceipt & DefinitionProposal;
 export interface DefinitionRecord {
+    inputId?: string;
     operationId: string;
     resource: string;
     request?: DefinitionPrepareRequest;
     receipt?: DefinitionReceipt;
     applied?: boolean;
 }
-export function sameDefinitionBasis(context: DefinitionAuthorContext | null, request: DefinitionPrepareRequest): boolean {
-    return !!context && context.resource === request.resource && context.sessionId === request.sessionId && context.baseId === request.baseId && context.source === request.source && context.serial === request.serial && context.writable && !context.pending && !context.compare;
+export function sameDefinitionBasis(context: DefinitionAuthorContext | null, request: DefinitionPrepareRequest, inputId?: string): boolean {
+    return !!context && context.resource === request.resource && context.sessionId === request.sessionId && context.baseId === request.baseId && context.source === request.source && context.serial === request.serial && context.inputId === inputId && context.writable && !context.pending && !context.compare;
 }
 export function validateDefinitionPatches(source: string, proposal: DefinitionProposal): SourcePatch[] {
     if (proposal.patchUnit !== "utf16" || proposal.draftOnly !== true || !Array.isArray(proposal.patches) || typeof proposal.source !== "string" || !proposal.definition?.key)

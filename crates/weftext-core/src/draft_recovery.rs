@@ -131,6 +131,15 @@ pub struct DocumentDraftFlush {
     pub session_id: String,
     pub base_id: String,
     pub source_digest: String,
+    #[serde(default)]
+    pub input_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentDraftEvidence {
+    AuthorDraft,
+    SavedView,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -140,6 +149,7 @@ pub struct DocumentDraftReceipt {
     pub base_id: String,
     pub source_digest: String,
     pub record_digest: String,
+    pub evidence: DocumentDraftEvidence,
 }
 
 /// Explicitly continue the primary actually installed in a recovery editor.
@@ -187,10 +197,13 @@ impl Core {
                         })
                 }) {
                     self.validate_file_save_plan(plan)?;
+                    // A resolved/prepared attempt can share this Base with a
+                    // later actual commit. It cannot supply a historical basis.
+                    if !self.committed(&plan.operation_id)? {
+                        continue;
+                    }
                     let original = self.read_original_file_save_plan(plan)?;
-                    if serde_json::to_vec(&original)? != serde_json::to_vec(plan)?
-                        || !self.committed(&plan.operation_id)?
-                    {
+                    if serde_json::to_vec(&original)? != serde_json::to_vec(plan)? {
                         return Err(invalid());
                     }
                     if let Some(draft) = &session.conflicting_draft {
@@ -389,6 +402,26 @@ impl Core {
                 weftext_messages::UiMessage::error_core_draft_recovery_the_document_base_changed(),
             ));
         }
+        if session.draft_input.is_none() {
+            self.validate_acknowledged_input(&request.session_id)?;
+            if request.input_id.as_ref() != Some(&session.view_input_id)
+                || request.source_digest != hash(&session.bytes)
+            {
+                return Err(CoreError::new("draftFlushMismatch", UiMessage::error_core_draft_recovery_the_persisted_draft_does_not_contain_the_prepared_input()));
+            }
+            return Ok(DocumentDraftReceipt {
+                record_digest: hash(&serde_json::to_vec(&(
+                    &request.session_id,
+                    &request.base_id,
+                    &request.source_digest,
+                    &request.input_id,
+                ))?),
+                session_id: request.session_id,
+                base_id: request.base_id,
+                source_digest: request.source_digest,
+                evidence: DocumentDraftEvidence::SavedView,
+            });
+        }
         // Use the single qualified reader: both original scope and FI are
         // admitted on the retained handle before any author payload is read.
         let (draft, bytes) = self.current_session_draft_record(&request.session_id)?
@@ -402,7 +435,11 @@ impl Core {
                 weftext_messages::UiMessage::error_core_draft_recovery_this_input_producer_has_no_acknowledged_draft(),
             )
         })?;
-        if hash(input.source.as_bytes()) != request.source_digest
+        if request
+            .input_id
+            .as_ref()
+            .is_some_and(|id| input.input_id.as_ref() != Some(id))
+            || hash(input.source.as_bytes()) != request.source_digest
             || !std::iter::once(draft.proposal())
                 .chain(draft.alternatives.iter().cloned())
                 .any(|p| same_proposal(&p, input))
@@ -417,6 +454,7 @@ impl Core {
             base_id: request.base_id,
             source_digest: request.source_digest,
             record_digest: hash(&bytes),
+            evidence: DocumentDraftEvidence::AuthorDraft,
         })
     }
 
@@ -462,16 +500,32 @@ impl Core {
     /// An old ACK is evidence of an author cut, not a cache of the current
     /// private file's qualification. Recheck the producer's complete durable
     /// entry before acknowledging a retry or using a frozen save cut.
-    pub(super) fn validate_acknowledged_draft(&self, session_id: &str) -> Result<Draft> {
+    pub(super) fn validate_acknowledged_input(&self, session_id: &str) -> Result<Option<Draft>> {
         self.check_actor_session(session_id)?;
         let invalid = || {
             CoreError::new("draftChanged",
             UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again())
         };
-        let input = self.sessions[session_id]
-            .draft_input
-            .as_ref()
-            .ok_or_else(invalid)?;
+        let session = &self.sessions[session_id];
+        let Some(input) = session.draft_input.as_ref() else {
+            let cut = session
+                .draft_input_revision
+                .and_then(|revision| session.draft_cuts.get(&revision))
+                .ok_or_else(invalid)?;
+            if cut.input_id != session.view_input_id
+                || cut.source_digest != hash(&session.bytes)
+                || cut.basis_digest
+                    != hash(&serde_json::to_vec(&(
+                        Some(&session.base_id),
+                        None::<String>,
+                    ))?)
+            {
+                return Err(invalid());
+            }
+            self.check_session_base(session_id, &session.base_id)?;
+            self.validate_current_file_save_scope(&session.file_scope.clone()?, &session.path)?;
+            return Ok(None);
+        };
         let current = self
             .current_session_draft(session_id)?
             .ok_or_else(invalid)?;
@@ -481,7 +535,7 @@ impl Core {
         {
             return Err(invalid());
         }
-        Ok(current)
+        Ok(Some(current))
     }
 
     pub(super) fn store_session_draft(
@@ -945,6 +999,7 @@ mod flush_tests {
 
     fn flush(core: &mut Core, doc: &OpenedDocument, source: &str) -> DocumentDraftReceipt {
         core.flush_document_draft(DocumentDraftFlush {
+            input_id: None,
             session_id: doc.session_id.clone(),
             base_id: doc.base_id.clone(),
             source_digest: hash(source.as_bytes()),
@@ -1215,6 +1270,7 @@ mod flush_tests {
         assert!(core.sessions[&last.session_id].draft_input.is_none());
         assert!(
             core.flush_document_draft(DocumentDraftFlush {
+                input_id: None,
                 session_id: last.session_id.clone(),
                 base_id: last.base_id.clone(),
                 source_digest: hash(source.as_bytes())
@@ -1231,6 +1287,7 @@ mod flush_tests {
         let mut core = Core::new(temp.path().join("state")).unwrap();
         let opened = core.open(&path, Some(temp.path().to_path_buf())).unwrap();
         let request = |source: &str, base: &str| DocumentDraftFlush {
+            input_id: None,
             session_id: opened.session_id.clone(),
             base_id: base.into(),
             source_digest: hash(source.as_bytes()),
@@ -1275,6 +1332,7 @@ mod flush_tests {
         fs::write(&record_path, &changed).unwrap();
         assert!(
             core.flush_document_draft(DocumentDraftFlush {
+                input_id: None,
                 session_id: opened.session_id,
                 base_id: opened.base_id,
                 source_digest: hash(b"draft")

@@ -1146,14 +1146,15 @@ async fn verify(state: &crate::AppState, proofs: Vec<Proof>) -> bool {
                 Proof::Document {
                     session_id,
                     base_id,
-                    source_digest,
+                    source_digest, input_id, evidence, record_digest,
                     ..
                 } => {
-                    core.flush_document_draft(weftext_core::DocumentDraftFlush {
+                    let receipt = core.flush_document_draft(weftext_core::DocumentDraftFlush {
                         session_id,
                         base_id,
-                        source_digest,
+                        source_digest, input_id,
                     })?;
+                    if receipt.evidence != evidence || receipt.record_digest != record_digest { return Err(weftext_core::CoreError::new("draftFlushMismatch", weftext_messages::UiMessage::error_core_draft_recovery_the_persisted_draft_does_not_contain_the_prepared_input())); }
                 }
                 Proof::Capture {
                     draft_id,
@@ -1195,8 +1196,8 @@ async fn draft_call(
     let result = crate::core_call(state, move |core| match request {
         close::DraftRequest::Persist { body } => {
             let revision = body.input_revision;
-            core.persist_draft_ordered(body)?;
-            Ok(serde_json::json!({"ok":true,"inputRevision":revision}))
+            let evidence = core.persist_draft_ordered(body)?;
+            Ok(serde_json::json!({"ok":true,"inputRevision":revision,"evidence":evidence}))
         }
         close::DraftRequest::Resume { body } => {
             core.resume_recovered_draft(body)?;
@@ -1218,15 +1219,16 @@ async fn retire(state: &crate::AppState, proofs: Vec<Proof>, sessions: Vec<Strin
             if let Proof::Document {
                 session_id,
                 base_id,
-                source_digest,
+                source_digest, input_id, evidence, record_digest,
                 ..
             } = proof
             {
-                core.flush_document_draft(weftext_core::DocumentDraftFlush {
+                let receipt = core.flush_document_draft(weftext_core::DocumentDraftFlush {
                     session_id: session_id.clone(),
                     base_id,
-                    source_digest,
+                    source_digest, input_id,
                 })?;
+                if receipt.evidence != evidence || receipt.record_digest != record_digest { return Err(weftext_core::CoreError::new("draftFlushMismatch", weftext_messages::UiMessage::error_core_draft_recovery_the_persisted_draft_does_not_contain_the_prepared_input())); }
             }
         }
         // This set was built only by real successful native producer calls on

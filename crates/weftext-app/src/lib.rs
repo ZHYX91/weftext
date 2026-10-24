@@ -847,8 +847,10 @@ async fn draft(
     RequestJson(req): RequestJson<DraftRequest>,
 ) -> ApiResult {
     let revision = req.input_revision;
-    core_call(&state, move |c| c.persist_draft_ordered(req)).await?;
-    Ok(Json(json!({"ok":true,"inputRevision":revision})))
+    let evidence = core_call(&state, move |c| c.persist_draft_ordered(req)).await?;
+    Ok(Json(
+        json!({"ok":true,"inputRevision":revision,"evidence":evidence}),
+    ))
 }
 async fn resume_draft(
     State(state): State<AppState>,

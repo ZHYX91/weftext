@@ -89,6 +89,8 @@ export interface FormReferences {
     messages: UiText[];
 }
 export interface DocumentBasis {
+    /** Client-side author identity; not a transport revision. */
+    inputId?: string;
     sessionId: string;
     source: string;
     serial: number;
@@ -98,7 +100,7 @@ export interface DocumentBasis {
     nodeId?: string;
     workspaceId?: string;
     dirty?: boolean;
-    /** Present only when this exact source and serial have a durable Draft ACK. */
+    /** Present only when this exact input identity, source and serial have a Core-qualified author Draft or saved-view cut. */
     inputRevision?: number;
 }
 export interface SourcePatch {

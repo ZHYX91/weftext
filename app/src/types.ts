@@ -12,6 +12,7 @@ export interface DraftInput {
 }
 
 export interface OpenedDocument {
+    viewInputId?: string;
   sessionId: string;
   path: string;
   root: string;

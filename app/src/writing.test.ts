@@ -1,4 +1,6 @@
 import test from "node:test";
+import { SourceEditor } from "./editor";
+import { restoreBufferDisposition } from "./history-state";
 import { decodeWritingMap, decodeEditorMapResponse } from "./writing";
 import { locale, message, UiError, uiTextValue } from "./ui-locale";
 import { descriptionUiText } from "./ui-diagnostics";
@@ -549,4 +551,16 @@ test("a reviewed-merge snapshot becomes stale during delayed resolution even whe
   complete(); await resolving; await controller.settleForSessionChange();
   assert.equal(session.source, confirmed.source); assert.equal(controller.isSnapshotCurrent(confirmed), false);
   assert.equal(session.opened.sessionId, original.sessionId); editor.redo(); assert.equal(session.source, "后续输入\r\n"); controller.dispose();
+});
+
+test("real pending literal ABA changes the author identity while accepted source and serial stay unchanged", async () => {
+ const editor = new Buffer("S"); const identity={authorInputId:crypto.randomUUID()};
+ const basis={sessionId:"session",path:"note.typ",root:"",baseId:"base",baseSource:"S",source:"S",serial:0,inputId:identity.authorInputId,dirty:false,selectedVersionId:"version",selectedSource:"X"};
+ let requests=0;
+ const controller=new WritingController({editor,basis:()=>({sessionId:"session",source:editor.source,serial:0}),editable:()=>true,debounceMs:60000,
+  onPendingSource:()=>SourceEditor.prototype.markAuthorInput.call(identity as SourceEditor),request:async()=>{requests++;throw new Error("ABA should not require an engine edit");}});
+ const snapshot=map("S");controller.installMap(snapshot,"S",0);const range=snapshot.literalRegions[0].range;
+ controller.stageLiteral(range,"S","T");controller.stageLiteral(range,"S","S");await controller.flush();
+ assert.equal(editor.source,"S");assert.equal(editor.generation,0);assert.equal(requests,0);assert.notEqual(identity.authorInputId,basis.inputId);
+ assert.equal(restoreBufferDisposition(basis,{...basis,inputId:identity.authorInputId}),"retainDraft");controller.dispose();
 });

@@ -123,3 +123,10 @@ test("a pending save without its frozen resource remains unsupported and preserv
     assert.equal(storage.values.get(prefix + "Alias"), raw);
   }
 });
+
+test("view identity and original basis survive the existing cache codec without borrowing a fresh producer",()=>{
+ const {cache,storage}=create();const inputId=crypto.randomUUID(),sessionId=crypto.randomUUID(),baseId=crypto.randomUUID();
+ const draft:HostedDraft={source:"Y",baseSource:"S",inputId,viewInputId:crypto.randomUUID(),basis:{sessionId,baseId}};
+ cache.write("owner",draft);assert.deepEqual(fresh(storage).read("owner"),draft);
+ for(const bad of [{...draft,inputId:"not-an-identity"},{...draft,basis:{sessionId,baseId:"wrong"}}])assert.throws(()=>cache.write("bad",bad));
+});

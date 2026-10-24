@@ -514,6 +514,17 @@ impl Core {
     pub fn reopen_local_session(&mut self, session_id: &str) -> Result<OpenedDocument> {
         self.sync_local_owner()?;
         self.check_actor_session(session_id)?;
+        let path = self.sessions[session_id].path.clone();
+        self.reopen_author_session(session_id, &path)
+    }
+    /// Refresh only the currently qualified original actor's live writer.
+    /// Changed external bytes still yield an independent comparison Session.
+    pub fn reopen_author_session(
+        &mut self,
+        session_id: &str,
+        configured_path: &Path,
+    ) -> Result<OpenedDocument> {
+        self.check_actor_session(session_id)?;
         let original = self.sessions.get(session_id).unwrap().clone();
         let unavailable = || {
             CoreError::new(
@@ -522,6 +533,14 @@ impl Core {
             )
         };
         let scope = original.file_scope.clone()?;
+        self.validate_current_file_save_scope(&scope, configured_path)?;
+        let configured_guard = ParentGuard::acquire(&self.backend, configured_path)?;
+        let configured_file = configured_guard.open_file(false, false)?;
+        if stamp(&configured_file)?.identity != original.stamp.identity {
+            return Err(unavailable());
+        }
+        drop(configured_file);
+        drop(configured_guard);
         self.validate_current_file_save_scope(&scope, &original.path)?;
         let guard = ParentGuard::acquire(&self.backend, &original.path)?;
         let file = guard.open_file(false, false)?;
@@ -576,6 +595,7 @@ impl Core {
         self.sessions.insert(
             session_id.to_owned(),
             Session {
+                view_input_id: original.view_input_id.clone(),
                 draft_producer_id: original.draft_producer_id,
                 draft_input: original.draft_input,
                 draft_input_revision: original.draft_input_revision,
@@ -586,6 +606,7 @@ impl Core {
             },
         );
         document.session_id = session_id.to_owned();
+        document.view_input_id = original.view_input_id;
         Ok(document)
     }
 

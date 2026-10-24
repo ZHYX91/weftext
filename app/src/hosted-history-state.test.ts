@@ -14,7 +14,7 @@ import { history, isolateHistory, undo, undoDepth } from "@codemirror/commands";
 
 const record: HostedHistoryRecord = {
   request: { resource: "owner", sessionId: "session", baseId: "baseC", versionId: "versionA", operationId: "restore", source: "C😀\r\n", serial: 3, sourceHash: "hashC", draftAction: "retain" },
-  basis: { resource: "owner", path: "resource:owner", root: "", nodeId: "node", workspaceId: "workspace", sessionId: "session", baseId: "baseC", baseSource: "C😀\r\n", source: "C😀\r\n", serial: 3, dirty: false, selectedVersionId: "versionA", selectedSource: "A\r\n" },
+  basis: { inputId:"00000000-0000-4000-8000-000000000001", resource: "owner", path: "resource:owner", root: "", nodeId: "node", workspaceId: "workspace", sessionId: "session", baseId: "baseC", baseSource: "C😀\r\n", source: "C😀\r\n", serial: 3, dirty: false, selectedVersionId: "versionA", selectedSource: "A\r\n" },
 };
 const committed: HostedHistoryStatus = { resource: "owner", operationId: "restore", status: "committed", resultStatus: "available", resultBasis: "current", currentRevision: "original-revision", result: { receipt: { operationId: "restore", status: "saved", path: "resource:owner", baseId: "baseA", revisionId: "original-revision" }, source: "A\r\n", versionId: "versionA", protectedDrafts: [{ path: "resource:owner", source: "D😀\r\n", baseSource: "C😀\r\n", baseKnown: true }] } };
 
@@ -108,21 +108,21 @@ const hostedFunctions=hostedSource.statements.filter(node=>ts.isFunctionDeclarat
 assert.equal(hostedFunctions.length,consumerNames.length);
 const hostedConsumer=ts.transpileModule(hostedFunctions.map(node=>node.getText(hostedSource)).join("\n"),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
 function historyConsumerFixture(later=false) {
- const original={resource:"owner",sessionId:"session",baseId:"baseC",source:"C😀\r\n",rights:{write:true}};
- const fresh={...original,sessionId:"fresh-writer",baseId:"baseA",source:"A\r\n"};
+ const original={resource:"owner",sessionId:"session",baseId:"baseC",viewInputId:"00000000-0000-4000-8000-000000000001",source:"C😀\r\n",rights:{write:true}};
+ const fresh={...original,sessionId:original.sessionId,baseId:"baseA",source:"A\r\n"};
  const calls:any[]=[],closed:string[]=[], elements=new Map<string,any>();
  let rejectAck=false;
- const source={value:later?"new Y":"C😀\r\n",serial:later?4:3,authorInputId:crypto.randomUUID(),disabled:false,
+ const source={value:later?"new Y":"C😀\r\n",serial:later?4:3,authorInputId:later?crypto.randomUUID():"00000000-0000-4000-8000-000000000001",disabled:false,
   flush:async()=>{},open(_session:string,_resource:string,value:string){this.value=value;},refreshQueries(){},
   applyHistorySource(value:string){this.value=value;this.serial++;}};
- const context:any={doc:original,draft:{source:source.value,baseSource:original.source},source,requestEpoch:1,compareRequired:false,
+ const context:any={doc:original,draft:{source:source.value,baseSource:original.source,basis:{sessionId:original.sessionId,baseId:original.baseId}},source,requestEpoch:1,compareRequired:false,
   OrderedDraft,orderedDrafts:new WeakMap(),hostedWriterRetirements:new Map(),currentHostedHistoryResult,restoreBufferDisposition,
   uiMessage:message,UiError,HostedError:class extends Error{},sessionAudience:()=>({credential:"original",epoch:1}),
   closeOwnedSession:async(id:string)=>{closed.push(id);},
   el:(id:string)=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);},setUiText(){},retain(){},controls(){},
   history:{installStatus:(original:HostedHistoryRecord,incoming:HostedHistoryStatus)=>hostedHistoryStatus(original,incoming),documentChanged(){ }},
   queries:{authorChanged(){},refreshCatalog:async()=>{}},knowledgeAuthorChanged(){},readReference:async()=>{},
-  request:async(path:string,body:any)=>{calls.push([path,body]);if(path==="open")return fresh;if(path==="history/status")return committed;if(path==="draft"){if(rejectAck)throw new Error("ACK delivery failed");return {status:"draftRetained",inputRevision:body.inputRevision};}throw new Error(`unexpected ${path}`);},
+  request:async(path:string,body:any)=>{calls.push([path,body]);if(path==="open")return fresh;if(path==="history/status")return committed;if(path==="draft"){if(rejectAck)throw new Error("ACK delivery failed");return {status:"inputAcknowledged",evidence:"authorDraft",inputRevision:body.inputRevision};}throw new Error(`unexpected ${path}`);},
  };
  vm.createContext(context);vm.runInContext(hostedConsumer,context);
  return {context,original,fresh,calls,closed,elements,reject:(value:boolean)=>{rejectAck=value;}};
@@ -130,15 +130,15 @@ function historyConsumerFixture(later=false) {
 test("real hosted restore consumer preserves Y on its original Base and persists that basis before retiring the old writer",async()=>{
  const f=historyConsumerFixture(true), original=structuredClone(record);original.status=structuredClone(committed);
  assert.equal(await f.context.acknowledgeHistory(original),"superseded");assert.equal(f.context.source.value,"new Y");assert.equal(f.context.draft.baseSource,"C😀\r\n");assert.equal(f.context.compareRequired,true);
- const input=f.calls.find(([path])=>path==="draft")[1];assert.equal(input.source,"new Y");assert.equal(input.retainedBaseSource,"C😀\r\n");assert.equal(input.baseId,undefined);assert.equal(f.calls.some(([path])=>path==="draft/resolve"),false);assert.deepEqual(f.closed,["session"]);
+ const input=f.calls.find(([path])=>path==="draft")[1];assert.equal(input.source,"new Y");assert.equal(input.retainedBaseSource,undefined);assert.equal(input.baseId,"baseC");assert.equal(f.calls.some(([path])=>path==="draft/resolve"),false);assert.deepEqual(f.closed,[]);
 });
 test("real hosted clean restore installs the committed output and acknowledges the target before writer retirement",async()=>{
  const f=historyConsumerFixture(),original=structuredClone(record);original.status=structuredClone(committed);
  assert.equal(await f.context.acknowledgeHistory(original),"applied");assert.equal(f.context.source.value,"A\r\n");assert.equal(f.context.draft.baseSource,"A\r\n");assert.equal(f.context.compareRequired,false);
- const input=f.calls.find(([path])=>path==="draft")[1];assert.equal(input.baseId,"baseA");assert.equal(input.retainedBaseSource,undefined);assert.deepEqual(f.closed,["session"]);
+ const input=f.calls.find(([path])=>path==="draft")[1];assert.equal(input.baseId,"baseA");assert.equal(input.retainedBaseSource,undefined);assert.deepEqual(f.closed,[]);
 });
 test("failed target ACK keeps the old hosted writer handle until the same target's actual ACK succeeds",async()=>{
  const f=historyConsumerFixture(true),original=structuredClone(record);original.status=structuredClone(committed);f.reject(true);
- await assert.rejects(f.context.acknowledgeHistory(original),/ACK delivery failed/);assert.deepEqual(f.closed,[]);assert.equal(f.context.hostedWriterRetirements.get("fresh-writer")[0].sessionId,"session");
- f.reject(false);await f.context.persistHostedDraft(f.context.doc);assert.deepEqual(f.closed,["session"]);assert.equal(f.context.hostedWriterRetirements.size,0);assert.equal(f.context.draft.baseSource,"C😀\r\n");
+ await assert.rejects(f.context.acknowledgeHistory(original),/ACK delivery failed/);assert.deepEqual(f.closed,[]);assert.equal(f.context.doc.sessionId,"session");
+ f.reject(false);await f.context.persistHostedDraft(f.context.doc);assert.deepEqual(f.closed,[]);assert.equal(f.context.hostedWriterRetirements.size,0);assert.equal(f.context.draft.baseSource,"C😀\r\n");
 });

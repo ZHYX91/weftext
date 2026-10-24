@@ -802,7 +802,7 @@ fn deliver_proofread_result<T>(
     if actor != b.actor {
         return Err(changed());
     }
-    validate_basis(inner, &b, true)?;
+    validate_basis(inner, b, true)?;
     editor::validate_inputs(inner, &actor, &b.resource, evidence.inputs)?;
     evidence.environment.recheck(inner, &actor)?;
     if let Some(profile) = evidence.processing {

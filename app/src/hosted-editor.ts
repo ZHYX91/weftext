@@ -6,7 +6,7 @@ import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidi
 import { SourceEditor, sourceBoundary, type SourcePatch } from "./editor";
 import { everydayWritingCommands } from "./everyday-writing";
 import type { EverydayCommand } from "./everyday-navigation";
-import { EmbeddedQueryController, sameQueryBasis, type EmbeddedQueryBasis } from "./embedded-query";
+import { EmbeddedQueryController, sameQueryBasis, queryBasisWire, type EmbeddedQueryBasis } from "./embedded-query";
 import type { QueryPlan, QueryResult, QueryRow } from "./query-panel";
 import type { FrozenQuery } from "./export-state";
 import type { AuthorInputFactory } from "./author-input";
@@ -161,7 +161,7 @@ export class HostedEditor {
             saved.editor.settlePersonalSave(operationId, committed);
     }
     restorePersonalInput(value: string, origin: InputOrigin, baseHash: string, basis: EmbeddedQueryBasis): void {
-        if (!this.editor || this.blocked || this.paused || this.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis))
+        if (!this.editor || this.blocked || this.paused || this.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial, inputId: this.authorInputId }, basis))
             throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
         this.editor.restorePersonalInput(value, origin, baseHash);
         this.schedule(0);
@@ -220,7 +220,7 @@ export class HostedEditor {
         this.queryHost?.modeChanged?.();
     }
     locateNodeFragment(origin: Origin, basis: EmbeddedQueryBasis): void {
-        if (!this.editor || this.writing?.state.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis) || origin.isMain !== true || origin.path !== `resource:${this.resource}` || !sourceBoundary(basis.source, origin.utf16From) || !sourceBoundary(basis.source, origin.utf16To) || basis.source.slice(origin.utf16From, origin.utf16To) !== origin.raw)
+        if (!this.editor || this.writing?.state.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial, inputId: this.authorInputId }, basis) || origin.isMain !== true || origin.path !== `resource:${this.resource}` || !sourceBoundary(basis.source, origin.utf16From) || !sourceBoundary(basis.source, origin.utf16To) || basis.source.slice(origin.utf16From, origin.utf16To) !== origin.raw)
             throw new UiError(uiMessage("hostedEditor.targetDraftChangedDuringLocation"));
         // Selecting the actual native author range changes neither source nor Undo.
         this.mode = "source";
@@ -240,19 +240,19 @@ export class HostedEditor {
         this.paint(true);
     }
     async flush(): Promise<void> { await this.writing?.settleForSessionChange(); }
-    async historyBasis(settle = false): Promise<EmbeddedQueryBasis> {
+    async historyBasis(settle = false): Promise<EmbeddedQueryBasis & { inputId: string }> {
         if (settle)
             await this.flush();
-        const basis = { sessionId: this.sessionId, source: this.value, serial: this.serial };
+        const basis = { sessionId: this.sessionId, source: this.value, serial: this.serial, inputId: this.authorInputId };
         if (!this.editor || !basis.sessionId)
             throw new UiError(uiMessage("hostedEditor.bodySessionChangedNoRegistration"));
-        await this.request("editor/map", basis);
-        if (!this.editor || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis))
+        await this.request("editor/map", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial });
+        if (!this.editor || basis.inputId !== this.authorInputId || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial, inputId: this.authorInputId }, basis))
             throw new UiError(uiMessage("hostedEditor.draftChangedDuringRead"));
         return basis;
     }
-    applyHistorySource(value: string, basis: EmbeddedQueryBasis): void {
-        if (!this.editor || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis))
+    applyHistorySource(value: string, basis: EmbeddedQueryBasis & { inputId?: string }): void {
+        if (!this.editor || basis.inputId !== this.authorInputId || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial, inputId: this.authorInputId }, basis))
             throw new UiError(uiMessage("hostedEditor.recoveryNewInputRetained"));
         this.editor.applyPatches(basis.source, [{ from: 0, to: basis.source.length, expected: basis.source, insert: value }], undefined, "input.commit.result");
         this.schedule(0);
@@ -280,15 +280,15 @@ export class HostedEditor {
     }[] { return this.queries?.outputSelections() ?? []; }
     async prepareQueryBasis(): Promise<EmbeddedQueryBasis> {
         await this.flush();
-        const basis = { sessionId: this.sessionId, source: this.value, serial: this.serial };
+        const basis = { sessionId: this.sessionId, source: this.value, serial: this.serial, inputId: this.authorInputId };
         if (!this.editor || this.blocked || this.mode === "read" || this.writing?.state.composing)
             throw new UiError(uiMessage("hostedEditor.savedDefinitionRequiresWritableBody"));
-        await this.request("editor/map", basis);
-        if (!sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis) || this.blocked || this.viewMode === "read")
+        await this.request("editor/map", queryBasisWire(basis));
+        if (!sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial, inputId: this.authorInputId }, basis) || this.blocked || this.viewMode === "read")
             throw new UiError(uiMessage("hostedEditor.registrationBasisChangedCheckPlan"));
         return basis;
     }
-    open(sessionId: string, resource: string, source: string): void {
+    open(sessionId: string, resource: string, source: string, inputId?: string): void {
         this.checkNavigationCapacity(resource);
         this.paused = false;
         // Reopening the same retained draft changes its Base/session, not Undo.
@@ -321,7 +321,7 @@ export class HostedEditor {
                     saved.writing.dispose();
                     saved.editor.destroy();
                 }
-                this.editor = new SourceEditor(source, () => { this.queries?.invalidate(); this.changed(); this.schedule(); }, this.save, () => this.queryHost?.personalInputChanged?.());
+                this.editor = new SourceEditor(source, () => { this.queries?.invalidate(); this.changed(); this.schedule(); }, this.save, () => this.queryHost?.personalInputChanged?.(), inputId);
                 const editor = this.editor, identity = {resource};
                 this.editorIdentities.set(editor, identity);
                 this.writing = new WritingController({ editor,
@@ -362,7 +362,7 @@ export class HostedEditor {
                         catalog: async () => (await this.request<{
                             formSchema?: import("./data-panel").DataSchema;
                         }>("query/catalog")).formSchema ?? null,
-                        basis: () => ({ sessionId: this.sessionId, source: this.value, serial: this.serial }), mode: () => this.mode,
+                        basis: () => ({ sessionId: this.sessionId, source: this.value, serial: this.serial, inputId: this.authorInputId }), mode: () => this.mode,
                         editable: () => this.editor === editor && !this.blocked && this.mode !== "read" && !this.writing?.state.composing,
                         request: (path, body) => {
                             const routes: Record<string, string> = { "/api/query/embedded/discover": "query/embedded/discover", "/api/query/embedded/run": "query/embedded/run", "/api/query/embedded/edit": "query/embedded/edit" };
@@ -389,6 +389,7 @@ export class HostedEditor {
         else if (this.editor.source !== source) {
             this.editor.apply(0, this.editor.source.length, source);
         }
+        if (inputId) this.editor.authorInputId = inputId;
         this.sessionId = sessionId;
         this.projection = undefined;
         this.generation++;
@@ -529,7 +530,7 @@ export class HostedEditor {
         return this.request("editor/edit", request);
     }
     async applyQueryPatches(patches: SourcePatch[], basis: EmbeddedQueryBasis, event = "input.query.proposal"): Promise<void> {
-        if (!this.editor || this.blocked || this.mode === "read" || this.writing?.state.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis))
+        if (!this.editor || this.blocked || this.mode === "read" || this.writing?.state.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial, inputId: this.authorInputId }, basis))
             throw new UiError(uiMessage("hostedEditor.queryProposalBasisChanged"));
         this.editor.applyPatches(basis.source, patches, undefined, event);
         this.schedule(0);
@@ -690,7 +691,7 @@ export class HostedEditor {
             return;
         }
         const current = this.current(), writable = current && !this.blocked && this.mode === "write";
-        this.queries?.beginProjection(projection.tree, { sessionId: this.sessionId, source: editor.source, serial: editor.generation });
+        this.queries?.beginProjection(projection.tree, { sessionId: this.sessionId, source: editor.source, serial: editor.generation, inputId: editor.authorInputId });
         if (this.mode === "source") {
             const visit = (item: RenderNode): void => {
                 const query = this.queries?.forNode(item);

@@ -251,12 +251,12 @@ export class HostedQueryDefinitions {
         label.prepend(approval);
         const apply = action(sameSource ? uiMessage("definitionProposal.restorePatch") : uiMessage("definitionProposal.replaceDraft"), () => this.perform(async () => {
             const current = this.author.context();
-            if (!approval.checked || !current || current.resource !== context.resource || current.sessionId !== context.sessionId || current.baseId !== context.baseId || current.source !== context.source || current.serial !== context.serial || current.pending || current.compare || !current.writable)
+            if (!approval.checked || !current || current.resource !== context.resource || current.sessionId !== context.sessionId || current.baseId !== context.baseId || current.source !== context.source || current.serial !== context.serial || current.inputId !== context.inputId || current.pending || current.compare || !current.writable)
                 throw new UiError(uiMessage("definitionProposal.restoreBasisChanged"));
             const epoch = this.epoch, basis = await this.author.prepareBasis();
             if (epoch !== this.epoch || !this.records.includes(record))
                 return;
-            if (basis.source !== context.source || basis.sessionId !== context.sessionId || basis.serial !== context.serial)
+            if (basis.source !== context.source || basis.sessionId !== context.sessionId || basis.serial !== context.serial || basis.inputId !== context.inputId)
                 throw new UiError(uiMessage("definitionProposal.registrationBasisChanged"));
             const patches: SourcePatch[] = sameSource ? validateDefinitionPatches(context.source, proposal) : [{ from: 0, to: context.source.length, expected: context.source, insert: proposal.source }];
             if ((current.definitionReservations?.length ?? 0) >= 32 && !current.definitionReservations?.includes(record.operationId))
@@ -300,12 +300,12 @@ export class HostedQueryDefinitions {
                 throw new UiError(uiMessage("definitionProposal.creationUnavailable"));
             const basis = await this.author.prepareBasis();
             const context = this.author.context();
-            if (epoch !== this.epoch || !context || context.resource !== before.resource || context.baseId !== before.baseId || context.sessionId !== basis.sessionId || context.serial !== basis.serial || context.source !== basis.source)
+            if (epoch !== this.epoch || !context || context.resource !== before.resource || context.baseId !== before.baseId || context.sessionId !== basis.sessionId || context.serial !== basis.serial || context.inputId !== basis.inputId || context.source !== basis.source)
                 throw new UiError(uiMessage("definitionProposal.creationBasisChanged"));
             const sourceHash = await digest(context.source);
-            if (epoch !== this.epoch || !this.author.context() || this.author.context()!.source !== context.source || this.author.context()!.serial !== context.serial)
+            if (epoch !== this.epoch || !this.author.context() || this.author.context()!.source !== context.source || this.author.context()!.serial !== context.serial || this.author.context()!.inputId !== context.inputId)
                 throw new UiError(uiMessage("definitionProposal.sourceChangedBeforeReserve"));
-            const operationId = crypto.randomUUID(), request: DefinitionPrepareRequest = { resource: context.resource, sessionId: context.sessionId, baseId: context.baseId, source: context.source, serial: context.serial, sourceHash, operationId, label, plan }, record: DefinitionRecord = { operationId, resource: context.resource, request };
+            const operationId = crypto.randomUUID(), request: DefinitionPrepareRequest = { resource: context.resource, sessionId: context.sessionId, baseId: context.baseId, source: context.source, serial: context.serial, sourceHash, operationId, label, plan }, record: DefinitionRecord = { operationId, resource: context.resource, inputId: context.inputId, request };
             const records = [...this.records, record];
             this.persist(records, true);
             this.records = records;
@@ -329,9 +329,9 @@ export class HostedQueryDefinitions {
         }
         const proposal = validatePreparedDefinition(record.request, incoming);
         this.install(record, { operationId: incoming.operationId, resource: incoming.resource, status: incoming.status, key: incoming.key, binding: incoming.binding, saveOperationId: incoming.saveOperationId, proposal });
-        if (allowApply && incoming.canApply === true && incoming.recoveryOnly === false && sameDefinitionBasis(this.author.context(), record.request)) {
+        if (allowApply && incoming.canApply === true && incoming.recoveryOnly === false && sameDefinitionBasis(this.author.context(), record.request, record.inputId)) {
             this.author.reservations(record.resource, [record.receipt!], true);
-            await this.author.apply(validateDefinitionPatches(record.request.source, proposal), record.request);
+            await this.author.apply(validateDefinitionPatches(record.request.source, proposal), { ...record.request, inputId: record.inputId });
             if (!this.currentOperation(record, epoch, generation))
                 return;
             record.applied = true;

@@ -25,3 +25,8 @@ test("original operation terminal delivery drops earlier preview and never subst
   assert.equal(cancelled.receipt?.proposal, undefined); assert.equal(cancelled.request, request);
   assert.throws(() => retainDefinitionReceipt(record, { operationId: request.operationId, resource: "other", status: "reserved" }));
 });
+
+test("a no-transaction ABA cannot auto-apply a frozen definition on equal source and serial",()=>{
+ assert.equal(sameDefinitionBasis({...context,inputId:"new-input"},request,"frozen-input"),false);
+ assert.equal(sameDefinitionBasis({...context,inputId:"frozen-input"},request,"frozen-input"),true);
+});

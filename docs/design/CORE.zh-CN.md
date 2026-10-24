@@ -589,6 +589,10 @@ Draft reader 从当前真实位置逆向遍历同 workspace 的原 committed rel
 
 普通保存、定义保存及原事务内同物理文件的搬移交付，刷新仍活动的原 Session，不另建输入 producer。刷新先核原保存 Session 或原事务捕获的文件 FI，再核当前文件 FI、Node、actor 与完整原 scope；保留原 producer、完整 Draft witness、已确认输入和冲突状态。文件实际基准未变时也保留 BaseId，重复 status 不使同一编辑器的请求失效。若实际基准已变且不匹配原事务捕获基准与原提交 observation，返回独立比较 Session，不更新原 writer 的基准或输入。保存失联后的查询显式携带冻结请求的原 Session；不带 Session 的通用回执查询及 SaveAs 仍返回独立 Session，不能从回执推导延续权。迟到输入继续属于原 writer，多窗口的独立提案不按文本合并；重启后仍走完整记录 CAS 的显式恢复。
 
+Core 在合格打开已保存投影时签发 `viewInputId`。有序 ACK 明确返回 `authorDraft` 或 `savedView` 证据；hosted 响应使用 `inputAcknowledged`，不宣称作者 Draft 已落盘。只有该准确身份、活动 Session、Base、FI、scope 与已保存正文一致时，才能确认不新增作者 Draft 的视图 cut。输入、Undo 和 pending literal 编辑均产生新的 `inputId`，包括没有正文 transaction 的同文 ABA。生成／历史结果刷新原 writer；最终消费者在最后一次 await 后比较输入身份。未知或不同 producer 的缓存即使与 fresh open 同文，也保留原 Base 与输入身份。被动检查点不能制造独立 Proposal、自动保存来签发 baseline，或消费另一 producer 的同文输入。
+
+正文关闭回读明确返回 `authorDraft` 或 `savedView` 证据。作者证明沿完整合格 Draft 原件核准确输入；视图证明重核 Core 签发身份与原受保护文件观察，不写 Draft 或作者文件。两者均进入现有 prepare／freeze／最终核验门，绑定原 surface 和编辑代次，并只在同 surface 的 Core 调用成功后登记 Session 归属。若另一 writer 已修改当前保存正文，既有 baseline 仍沿其持久原件证明关闭。关闭／ACK 失败未知时，保留原凭据和内存句柄；准确目标输入确认后，还须收到关闭或明确过期回执才能结清，不能改写已知保存事实。
+
 Draft 的每条主／备选输入区分普通 `proposal` 与 `committedBaseline { operationId }`。只有真实普通保存提交后，Core 才能签发后者。原 `FileSaveData` v4 在 fingerprint 和原 commit 中绑定准确 `draftProducerId`；Plan 将 `fileSave, identity` 放在作者载荷之前。消费基线前，在同一保护句柄上先核这两项原元数据，再有界读取并重核持久 Plan 与保留事实一致，走现有唯一 commit 校验器，核 scope、FI、producer、已知 Base、准确 afterimage 及已提交搬移路径。证据缺失、损坏或不一致须失败并保留当前完整 Draft，不能把加载时缓存当作原件。
 
 关闭回读复用同一受保护 Draft 记录读取入口，先核原 scope 与 FI，再读正文，并以原完整字节计算回执。搬移路径证明同时覆盖原 files 与 Relocate／Compound 的 leaf／members，按准确 FI 和最具体原映射核对；完整新记录通过资格后才归档。历史／比较仅合并来源已知且 producer、完整输入、角色和原号均相同的投影；未知来源及显式保留的当前缓冲区不按同文折叠。
@@ -619,3 +623,6 @@ HTTP 与原生 Draft 写入必须携带同一活动 producer 递增的 `inputRev
 旧 UI Base 的迟到 ACK 只能从同 Session、物理文件和合格 scope 的原已提交 Plan 解释；普通 S 提交可接续为 S，生成／恢复 X 不使 Y 自动变成基于 X。没有已知 Base 的缓存输入显式提交 `retainedBaseSource`，保为未知基础的 proposal 并要求比较。缺少两种基础、同时给出两种或任意未知 baseId 均拒绝。HTTP、WebUI 和原生的活动编辑路径共用此合同。独立同步 CLI 等同步生产者可在从未接受有序 ACK 的独立 Session 上无序保存；已开始有序输入的 Session 不能退回此入口。
 
 worker 的 Started 表示已原子出生的同一受控 job 的身份，在子进程 exec setup 资格确定之前发送。SetupFailed 也必须先完成原 cgroup 空、pidfd 退出及 reap 再交付原 receipt；收不到有效终局时关闭准入。清理后可信 Timeout／Disconnected／SetupFailed 可以修正早到的管道 I/O 分类，保留原 I/O 事实；清理产生的 Cancelled 不能覆盖原预算或 I/O 原因。Query、proofread 和 Office 同族的失败 Result 经过各自既有交付授权与依赖终检后才展开。
+
+
+容量准入计算当前发布所占的物理位置，以及各原 pending Plan 仍缺的规范结算成员。既有 pending 可以消费自己的预留，包括再次留下 flush 残件后；其他 pending 的预留不被侵占。临时文件不抵扣规范成员，也不删除原件腾空间。续跑原事务在首次继续产生作者或 namespace 效果前重核序号与容量；已发布 commit 的结果不确定时，拒绝这类效果，直到重启从原件重建序号。

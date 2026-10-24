@@ -2198,9 +2198,9 @@ async fn deliver_legacy_result<T>(
     req: &Prepare,
     evidence: Arc<LegacyEvidence>,
     result: Result<T, ApiError>,
-) -> Result<T, ApiError> {
-    recheck_legacy(state, auth, actor, req, evidence).await?;
-    result
+) -> Result<(Job, T), ApiError> {
+    let job = recheck_legacy(state, auth, actor, req, evidence).await?;
+    Ok((job, result?))
 }
 async fn prepare_legacy(
     state: HostedState,
@@ -2329,7 +2329,8 @@ async fn prepare_legacy(
             .map_err(|_| failed())?
     }
     .await;
-    let docx = deliver_legacy_result(&state, &auth, &actor, &req, evidence.clone(), docx).await?;
+    let (_, docx) =
+        deliver_legacy_result(&state, &auth, &actor, &req, evidence.clone(), docx).await?;
     let stage = LegacyStage {
         schema_version: 1,
         conversion_layout: Some("flatV1".into()),
@@ -2354,10 +2355,12 @@ async fn prepare_legacy(
     let save_dir = dir.clone();
     let save_stage = stage.clone();
     let save_bytes = docx.bytes.clone();
-    crate::work::spawn_blocking(move || write_stage(&save_dir, &save_stage, &save_bytes))
-        .await
-        .map_err(|_| failed())??;
-    recheck_legacy(&state, &auth, &actor, &req, evidence.clone()).await?;
+    let staged =
+        crate::work::spawn_blocking(move || write_stage(&save_dir, &save_stage, &save_bytes))
+            .await
+            .map_err(|_| failed())
+            .and_then(|result| result);
+    deliver_legacy_result(&state, &auth, &actor, &req, evidence.clone(), staged).await?;
     ensure_owned(stage_root(&dir)?, &conversions, true)?;
     let result = super::super::legacy_office::convert_once(
         &flat.request_id,
@@ -2366,8 +2369,9 @@ async fn prepare_legacy(
         cancel.clone(),
     )
     .await
-    .map_err(|_| failed())?;
-    let mut job = recheck_legacy(&state, &auth, &actor, &req, evidence.clone()).await?;
+    .map_err(|_| failed());
+    let (mut job, result) =
+        deliver_legacy_result(&state, &auth, &actor, &req, evidence.clone(), result).await?;
     let mut metadata = result.metadata();
     metadata["requestId"] = json!(req.request_id);
     job.preview["legacy"] = metadata;
@@ -2578,12 +2582,12 @@ fn deliver_export_result<T>(
     if inner.actor(auth)? != actor {
         return Err(expired());
     }
-    let job = lookup(inner, &actor, &key.1, false)?
+    let job = lookup(inner, actor, &key.1, false)?
         .filter(|j| j.status == "pending")
         .ok_or_else(failed)?;
     witness_check(inner, &evidence.witnesses)?;
     if let Some(citations) = &evidence.citations {
-        citations.validate(inner, &actor)?;
+        citations.validate(inner, actor)?;
     }
     if let Some(w) = &evidence.native_witness {
         inner
@@ -2592,10 +2596,10 @@ fn deliver_export_result<T>(
             .map_err(|_| failed())?;
     }
     if let Some(source) = &req.source {
-        check_draft(inner, &actor, &req, source)?;
+        check_draft(inner, actor, req, source)?;
     }
     if let Some(environment) = &evidence.environment {
-        environment.recheck(inner, &actor)?;
+        environment.recheck(inner, actor)?;
     }
     Ok((job, converted?))
 }
@@ -3128,9 +3132,55 @@ mod tests {
                 .export = false;
             let error = deliver_legacy_result(&state, &auth, "alice", &req, evidence, result())
                 .await
-                .unwrap_err();
+                .err()
+                .unwrap();
             assert!(error.private_worker_failure.is_none());
         }
+    }
+    #[tokio::test]
+    async fn legacy_actual_stage_io_failure_still_rechecks_the_frozen_grant() {
+        let (_temp, state, auth, _, _, _) = history_api::test_fixture();
+        let (req, dir, _, stage, _generated) = seed_legacy(&state, false);
+        let evidence = {
+            let mut inner = state.inner.lock().unwrap();
+            let mut cut = capture(&mut inner, "alice", &req).unwrap();
+            let epoch = cut.job.epoch;
+            inner
+                .office
+                .jobs
+                .insert(("alice".into(), req.request_id.clone()), cut.job);
+            Arc::new(LegacyEvidence {
+                witnesses: std::mem::take(&mut cut.witnesses),
+                environment: cut.environment,
+                citations: cut.citations,
+                epoch,
+            })
+        };
+        // The owned create-only stage already exists. This is an actual disk
+        // publication failure, with original frozen bytes retained.
+        let before = std::fs::read(dir.join("frozen.docx")).unwrap();
+        let failure = write_stage(&dir, &stage, &before);
+        assert!(failure.is_err());
+        state
+            .inner
+            .lock()
+            .unwrap()
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .grants
+            .get_mut("Shared")
+            .unwrap()
+            .office
+            .doc
+            .export = false;
+        let error = deliver_legacy_result(&state, &auth, "alice", &req, evidence, failure)
+            .await
+            .err()
+            .unwrap();
+        assert_eq!(error.status, StatusCode::NOT_FOUND);
+        assert_eq!(std::fs::read(dir.join("frozen.docx")).unwrap(), before);
     }
     #[test]
     fn legacy_formats_require_separate_grants_and_uploaded_docx_inspection_does_not_grant_docx_output()

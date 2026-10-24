@@ -565,3 +565,247 @@ fn ordered_ack_cannot_borrow_an_unknown_base_or_retransmit_a_different_generatio
             .base_known
     );
 }
+
+#[test]
+fn resolved_attempt_on_the_same_base_cannot_hide_the_actual_committed_historical_basis() {
+    let temp = tempfile::tempdir().unwrap();
+    let note = temp.path().join("note.typ");
+    fs::write(&note, "B").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let doc = core.open(&note, None).unwrap();
+    core.persist_draft_ordered(actual_input(&doc, "S", 1, &fresh()))
+        .unwrap();
+    let earlier = "00000000-0000-4000-8000-000000000001".to_string();
+    hosted::set_test_failpoint("saveStaged");
+    assert_eq!(
+        core.save_ordered(
+            SaveRequest {
+                session_id: doc.session_id.clone(),
+                base_id: doc.base_id.clone(),
+                source: "S".into(),
+                operation_id: earlier.clone()
+            },
+            1
+        )
+        .unwrap_err()
+        .code,
+        "injectedFailure"
+    );
+    core.resolve_recovery(&earlier, "keepCurrent").unwrap();
+    core.save_ordered_derived(
+        SaveRequest {
+            session_id: doc.session_id.clone(),
+            base_id: doc.base_id.clone(),
+            source: "generated X".into(),
+            operation_id: "ffffffff-ffff-4fff-8fff-ffffffffffff".into(),
+        },
+        "S".into(),
+        1,
+    )
+    .unwrap();
+    core.persist_draft_ordered(actual_input(&doc, "Y", 2, &fresh()))
+        .unwrap();
+    let draft = core
+        .current_session_draft(&doc.session_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(draft.source, "Y");
+    assert_eq!(draft.base_source, "B");
+    assert!(core.sessions[&doc.session_id].conflicting_draft.is_some());
+}
+
+fn installed_view_cut(doc: &OpenedDocument, revision: u64) -> DraftInputRequest {
+    DraftInputRequest {
+        session_id: doc.session_id.clone(),
+        source: doc.source.clone(),
+        input_revision: revision,
+        input_id: doc.view_input_id.clone(),
+        base_id: Some(doc.base_id.clone()),
+        retained_base_source: None,
+    }
+}
+
+#[test]
+fn retry_evidence_retains_the_original_cut_class_without_borrowing_newer_author_input() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("note.typ");
+    fs::write(&path, "B").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let doc = core.open(&path, None).unwrap();
+    let view = installed_view_cut(&doc, 1);
+    assert_eq!(
+        core.persist_draft_ordered(view.clone()).unwrap(),
+        DocumentDraftEvidence::SavedView
+    );
+    core.persist_test_input(&doc.session_id, "S", 2).unwrap();
+    assert_eq!(
+        core.persist_draft_ordered(view).unwrap(),
+        DocumentDraftEvidence::SavedView
+    );
+    assert_eq!(core.sessions[&doc.session_id].draft_input_revision, Some(2));
+    assert_eq!(
+        core.current_session_draft(&doc.session_id)
+            .unwrap()
+            .unwrap()
+            .source,
+        "S"
+    );
+}
+#[test]
+fn saved_view_checkpoints_and_close_do_not_create_phantom_proposals_for_later_writers() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("note.typ");
+    let profile = temp.path().join("private");
+    fs::write(&path, "B").unwrap();
+    let mut core = Core::new(&profile).unwrap();
+    let a = core.open(&path, None).unwrap();
+    for revision in 1..=3 {
+        assert_eq!(
+            core.persist_draft_ordered(installed_view_cut(&a, revision))
+                .unwrap(),
+            DocumentDraftEvidence::SavedView
+        );
+        let refreshed = core.reopen_local_session(&a.session_id).unwrap();
+        assert_eq!(refreshed.view_input_id, a.view_input_id);
+        assert_eq!(core.sessions[&a.session_id].view_input_id, a.view_input_id);
+    }
+    assert!(core.current_session_draft(&a.session_id).unwrap().is_none());
+    let proof = core
+        .flush_document_draft(DocumentDraftFlush {
+            session_id: a.session_id.clone(),
+            base_id: a.base_id.clone(),
+            source_digest: hash(b"B"),
+            input_id: Some(a.view_input_id.clone()),
+        })
+        .unwrap();
+    assert_eq!(proof.evidence, DocumentDraftEvidence::SavedView);
+    assert!(core.operations.is_empty());
+    assert_eq!(fs::read(&path).unwrap(), b"B");
+    core.close_session(&a.session_id).unwrap();
+    let b = core.open(&path, None).unwrap();
+    core.persist_test_input(&b.session_id, "Y", 1).unwrap();
+    core.save_ordered(
+        SaveRequest {
+            session_id: b.session_id.clone(),
+            base_id: b.base_id.clone(),
+            source: "Y".into(),
+            operation_id: fresh(),
+        },
+        1,
+    )
+    .unwrap();
+    assert!(
+        core.current_session_draft(&b.session_id)
+            .unwrap()
+            .unwrap()
+            .alternatives
+            .is_empty()
+    );
+    core.close_session(&b.session_id).unwrap();
+    drop(core);
+    let mut core = Core::new(profile).unwrap();
+    let reopened = core.open(&path, None).unwrap();
+    assert_eq!(reopened.source, "Y");
+    assert!(reopened.recovered_draft.is_none());
+}
+#[test]
+fn first_author_aba_unknown_and_independent_equal_input_cannot_borrow_the_installed_view_identity()
+{
+    for unknown in [false, true] {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("note.typ");
+        fs::write(&path, "B").unwrap();
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        let a = core.open(&path, None).unwrap();
+        let mut input = installed_view_cut(&a, 1);
+        input.input_id = fresh();
+        if unknown {
+            input.base_id = None;
+            input.retained_base_source = Some("B".into());
+        }
+        core.persist_draft_ordered(input).unwrap();
+        let record = core.current_session_draft(&a.session_id).unwrap().unwrap();
+        assert_eq!(record.role, DraftRole::Proposal);
+        assert_eq!(record.base_known, !unknown);
+        let b = core.open(&path, None).unwrap();
+        core.persist_draft_ordered(installed_view_cut(&b, 1))
+            .unwrap();
+        assert_eq!(
+            core.current_session_draft(&b.session_id)
+                .unwrap()
+                .unwrap()
+                .source,
+            "B"
+        );
+        core.persist_test_input(&b.session_id, "Y", 2).unwrap();
+        assert!(
+            core.current_session_draft(&b.session_id)
+                .unwrap()
+                .unwrap()
+                .alternatives
+                .iter()
+                .any(|entry| entry.source == "B")
+        );
+    }
+}
+#[test]
+fn installed_view_proof_rechecks_file_identity_bytes_base_and_exact_input_id() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("note.typ");
+    fs::write(&path, "B").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let doc = core.open(&path, None).unwrap();
+    core.persist_draft_ordered(installed_view_cut(&doc, 1))
+        .unwrap();
+    let proof = |id| DocumentDraftFlush {
+        session_id: doc.session_id.clone(),
+        base_id: doc.base_id.clone(),
+        source_digest: hash(b"B"),
+        input_id: Some(id),
+    };
+    assert!(core.flush_document_draft(proof(fresh())).is_err());
+    fs::rename(&path, temp.path().join("original.typ")).unwrap();
+    fs::write(&path, "B").unwrap();
+    assert!(
+        core.flush_document_draft(proof(doc.view_input_id.clone()))
+            .is_err()
+    );
+    assert!(core.sessions[&doc.session_id].draft_input.is_none());
+}
+#[test]
+fn an_installed_view_can_freeze_generated_save_without_inventing_an_author_beforeimage() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("note.typ");
+    fs::write(&path, "B").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let doc = core.open(&path, None).unwrap();
+    core.persist_draft_ordered(installed_view_cut(&doc, 1))
+        .unwrap();
+    let saved = core
+        .save_ordered_derived(
+            SaveRequest {
+                session_id: doc.session_id.clone(),
+                base_id: doc.base_id.clone(),
+                source: "X".into(),
+                operation_id: fresh(),
+            },
+            "B".into(),
+            1,
+        )
+        .unwrap();
+    assert!(saved.recovery_issue.is_none());
+    let current = core.reopen_local_session(&doc.session_id).unwrap();
+    assert_eq!(current.session_id, doc.session_id);
+    core.persist_draft_ordered(DraftInputRequest {
+        source: "X".into(),
+        ..installed_view_cut(&current, 2)
+    })
+    .unwrap();
+    let record = core
+        .current_session_draft(&doc.session_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(record.source, "X");
+    assert!(record.alternatives.is_empty());
+    assert!(matches!(record.role, DraftRole::CommittedBaseline { .. }));
+}

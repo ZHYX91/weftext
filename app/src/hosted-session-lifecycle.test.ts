@@ -9,12 +9,13 @@ import ts from "typescript";
 import { HostedDraftCache } from "./hosted-draft-cache";
 import { PersonalInputRecovery } from "./personal-input-recovery";
 import type { PersonalInputBundle } from "./personal-input-storage";
-import { applySaveResult, hostedOpenedDraft } from "./hosted-state";
+import { OrderedDraft } from "./ordered-draft";
+import { applySaveResult, hostedOpenedDraft, hostedDocumentDraft, qualifyHostedDraft } from "./hosted-state";
 
 // Execute the production lifecycle functions and their actual logout/pagehide
 // registrations. DOM/editor panels and HTTP are the only substituted boundaries.
 const sourceFile = ts.createSourceFile("hosted.ts", readFileSync(new URL("./hosted.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = new Set(["sessionAudience", "closeOwnedSession", "releaseViewSessions", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus"]);
+const names = new Set(["sessionAudience", "closeOwnedSession", "releaseViewSessions", "retryHostedRetirements", "capturedDraftAck", "queueHostedWriterRetirement", "retireHostedWriters", "hostedInput", "draftOrder", "persistHostedDraft", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus"]);
 const statements = sourceFile.statements.filter(node =>
   ts.isFunctionDeclaration(node) && !!node.name && names.has(node.name.text)
   || ts.isClassDeclaration(node) && node.name?.text === "HostedError"
@@ -32,6 +33,7 @@ async function fixture() {
     return nodes.get(id);
   };
   const context: any = {
+    hostedWriterRetirements: new Map(), orderedDrafts:new WeakMap(), OrderedDraft, hostedDocumentDraft, qualifyHostedDraft,
     ApiError, UiError, uiMessage, locale, uiTextValue, setUiText, errorUiText, displayMessage, uiDisplayParameter, localeDisposals: 0, interfaceLocale: { dispose() { context.localeDisposals++; } }, mountInterfaceLocale() {},
     el, window: { addEventListener(name: string, listener: (event: any) => void) { const prior = listeners.get(name); listeners.set(name, event => { prior?.(event); listener(event); }); } },
     document: { querySelectorAll() { return []; } },
@@ -50,7 +52,7 @@ async function fixture() {
     clearNodeNavigation() {}, clearTimeout, AbortSignal,
     status(message: unknown) { context.lastStatus = uiTextValue(message); },
     sessionStorage: { getItem(key: string) { return storage.get(key) ?? null; }, setItem(key: string, value: string) { storage.set(key, value); }, removeItem(key: string) { storage.delete(key); } },
-    fetch: async (url: string, options: RequestInit) => { calls.push({ url, options }); return { arrayBuffer: async () => new ArrayBuffer(0) }; },
+    fetch: async (url: string, options: RequestInit) => { calls.push({ url, options }); return {ok:true,status:200,json:async()=>url.endsWith("/draft")?{status:"inputAcknowledged",evidence:"authorDraft",inputRevision:JSON.parse(options.body as string).inputRevision}:{closed:true},arrayBuffer: async () => new ArrayBuffer(0) }; },
     request: async () => ({ active: true }),
   };
   for (const name of ["latexAuthoring", "diagramAuthoring", "recognitionPanel", "source", "knowledgeLinks", "citations", "navigationRegistry", "contentImport", "ownerBackup", "fields", "review", "queries", "office", "history", "library", "media", "structures"]) {
@@ -80,6 +82,7 @@ test("logout releases the original document before clearing its credential and a
     f.context.identity = { actor: "alice", deployment: "space", generation: 0 };
     f.context.token = "alice-credential";
     f.nodes.get("logout").onclick();
+    await f.context.retryHostedRetirements();
     assert.equal(f.context.doc, undefined); assert.equal(f.context.token, ""); assert.equal(f.context.identity, undefined);
     assert.equal(f.calls.length, index + 1, "logout must dispatch the owned-session close");
     assert.equal(f.calls[index].url, "/api/hosted/close");
@@ -108,6 +111,7 @@ test("pagehide preserves a back-forward cached page, but final departure release
   f.context.retiredStructureSessions.add("alice-retired");
   handler({ persisted: true }); assert.equal(f.calls.length, 0); assert.equal(f.context.localeDisposals, 0);
   handler({ persisted: false });
+  await f.context.retryHostedRetirements();
   assert.equal(f.context.localeDisposals, 1);
   assert.deepEqual(f.calls.map(call => JSON.parse(call.options.body as string).sessionId).sort(), ["alice-original", "alice-retired"]);
   assert.equal(f.cleared.length, 0); assert.equal(f.context.source.value, "unsaved draft");
@@ -188,4 +192,22 @@ test("alias recovery queries only the frozen resource, retains unknown input and
     assert.equal(requests.some(call => ["save", "operation/settle"].includes(call.path)), false);
     assert.equal(f.calls.length, 1); assert.equal(JSON.parse(f.calls[0].options.body as string).sessionId, terminal ? "alice-original" : "new-alias-session");
   }
+});
+
+test("an acknowledged target keeps a failed close handle until the original credential confirms expiry", async()=>{
+ const f=await fixture();const previous={...f.context.doc};const target={...previous,sessionId:"target",baseId:"base",source:"B"};
+ Object.assign(f.context,{doc:target,draft:{source:"Y",baseSource:"B",basis:{sessionId:"target",baseId:"base"}},source:{value:"Y",serial:1,authorInputId:crypto.randomUUID()},request:async(_path:string,wire:any)=>({status:"inputAcknowledged",evidence:"authorDraft",inputRevision:wire.inputRevision})});
+ f.context.queueHostedWriterRetirement(previous,target);let closed=0;
+ f.context.fetch=async(_path:string,options:any)=>{closed++;assert.equal(options.headers.Authorization,"Bearer alice-credential");return {ok:false,status:closed===1?500:410,arrayBuffer:async()=>new ArrayBuffer(0)};};
+ await assert.rejects(f.context.persistHostedDraft(target));assert.ok(f.context.hostedWriterRetirements.has(previous.sessionId));assert.equal(f.context.source.value,"Y");
+ await f.context.persistHostedDraft(target);assert.equal(closed,2);assert.equal(f.context.hostedWriterRetirements.size,0);
+});
+test("departure retains both writers across a failed target ACK and retries only with their original actor",async()=>{
+ const f=await fixture();const previous={...f.context.doc};const target={...previous,sessionId:"target",baseId:"base",source:"B"};
+ Object.assign(f.context,{doc:target,draft:{source:"Y",baseSource:"B",basis:{sessionId:"target",baseId:"base"}},source:{value:"Y",serial:1,authorInputId:crypto.randomUUID()}});
+ f.context.queueHostedWriterRetirement(previous,target);let accept=false;const calls:string[]=[];
+ f.context.fetch=async(path:string,options:any)=>{assert.equal(options.headers.Authorization,"Bearer alice-credential");calls.push(path);return {ok:accept,status:accept?200:500,json:async()=>path.endsWith("/draft")?{status:"inputAcknowledged",evidence:"authorDraft",inputRevision:JSON.parse(options.body).inputRevision}:{closed:true},arrayBuffer:async()=>new ArrayBuffer(0)};};
+ f.context.releaseViewSessions();await f.context.retryHostedRetirements();assert.equal(calls.some(path=>path.endsWith("/close")),false);assert.equal(f.context.hostedWriterRetirements.size,2);
+ f.context.token="bob-credential";f.context.identity={actor:"bob",generation:1,deployment:"space"};accept=true;await f.context.retryHostedRetirements();
+ assert.equal(f.context.hostedWriterRetirements.size,0);assert.equal(calls.filter(path=>path.endsWith("/close")).length,2);assert.equal(f.context.token,"bob-credential");
 });

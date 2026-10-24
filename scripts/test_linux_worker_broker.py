@@ -415,6 +415,11 @@ def app_pump_cases(args, policy, cases):
         metadata = artifact.lstat()
         require(stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0 and not metadata.st_mode & 0o022,
                 "pump artifact must be an administrator-owned regular file")
+    target_test = "worker_capture_tests::real_broker_pump_retains_terminal_cause_after_pipe_failure_and_cleanup"
+    listed = subprocess.run([str(args.app_test_binary), "--list"], env={}, cwd=deployment,
+                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            timeout=30, check=True).stdout.decode(errors="replace")
+    require(f"{target_test}: test" in listed.splitlines(), "actual App pump test missing from binary")
     fake = deployment / "bin" / (args.evidence.name + "-setup-failed.elf")
     with fake.open("xb") as stream:
         stream.write(b"\x7fELF" + bytes(60))
@@ -449,7 +454,7 @@ def app_pump_cases(args, policy, cases):
                        "WEFTEXT_WORKER_PUMP_TEST_POLICY": str(config), "WEFTEXT_WORKER_PUMP_TEST_CASE": case}
                 command = ["/usr/bin/setpriv", "--reuid=981", "--regid=981", "--clear-groups", "--bounding-set=-all",
                            "--inh-caps=-all", "--ambient-caps=-all", "--no-new-privs", "--", str(args.app_test_binary),
-                           "--include-ignored", "--test-threads=1", "real_broker_pump_retains_terminal_cause", "--nocapture"]
+                           "--include-ignored", "--test-threads=1", "--exact", target_test, "--nocapture"]
                 record["command"] = command
                 app = subprocess.Popen(command, env=env, cwd=deployment, stdin=subprocess.DEVNULL,
                                        stdout=app_log, stderr=subprocess.STDOUT, close_fds=True)
@@ -467,6 +472,10 @@ def app_pump_cases(args, policy, cases):
                 code = app.wait(timeout=30)
                 record.update(appExit=code, appReaped=True)
                 require(code == 0, f"actual App pump case failed: {case}")
+                output = (args.evidence / f"pump-{case}-app.log").read_text(errors="replace")
+                require("running 1 test" in output and f"test {target_test} ... ok" in output
+                        and "test result: ok. 1 passed; 0 failed; 0 ignored;" in output,
+                        f"actual App pump test did not execute exactly once: {case}")
             finally:
                 if app is not None and app.poll() is None:
                     app.kill()

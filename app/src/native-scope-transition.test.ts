@@ -523,3 +523,32 @@ test("a successful explicit comparison retires old handles only after the new wr
   assert.equal(f.session.opened.sessionId, fresh.sessionId); assert.equal(f.session.source, "M"); assert.equal(f.doc.comparisonTarget, undefined);
   assert.deepEqual(f.released, [f.prior.sessionId, f.comparison.sessionId]);
 });
+
+test("literal ABA without an ACK or source transaction cannot consume a clean history or Query result", async () => {
+ for (const action of ["history", "query", "structure"]) {
+  const f=deliveryFixture(); const basis={...f.basis};
+  f.session.inputId=crypto.randomUUID(); f.session.inputId=crypto.randomUUID();
+  assert.equal(f.session.source,"S");assert.equal(f.session.serial,0);assert.equal(f.doc.editor.generation,0);
+  f.context.api=async()=>f.fact;
+  if(action==="history") await assert.rejects(f.context.historyRestored(f.result,basis));
+  else if(action==="query") await assert.rejects(f.context.queryDelivery({...f.fact,document:{...f.comparison,sessionId:f.prior.sessionId}},basis));
+  else await assert.rejects(f.context.structuralDelivery({operationId:"generated",status:"committed",documentDisposition:"updated",document:{...f.prior,source:"X",baseId:"generated"}},basis));
+  assert.equal(f.session.source,"S");assert.equal(f.doc.editor.source,"S");assert.equal(f.session.baseId,"old-base");
+ }
+});
+
+test("SaveAs installs the actual new saved-view identity only when the frozen author input has not changed",async()=>{
+ for(const aba of [false,true]) {
+  const f=fixture(),sent=deferred<void>(),reply=deferred<any>();const prior={sessionId:"original",root:f.original.root,source:"B",baseId:"B-base",path:`${f.original.root}/original.typ`,kind:"ordinary"};
+  const session=new DocumentSession(prior);session.edit("S");const originalInput=session.inputId;
+  const target={...prior,sessionId:"target",viewInputId:crypto.randomUUID(),source:"S",baseId:"target-base",path:`${f.original.root}/copy.typ`};
+  const doc:any={session,writing:{state:{composing:false},settleForSessionChange:async()=>{}},editor:{authorInputId:session.inputId,clearTokens(){}},sourceTrashed:false};Object.assign(f.context,{current:doc,documents:[doc]});let acknowledged:string|undefined;
+  Object.assign(f.context,{historyPanel:{hasPending:()=>false},historyContext:()=>({}),refreshChrome(){},renderSidebar(){},operationId:()=>"save-as",originalCommitted,submitOriginal,TerminatedAttempt,ApiError,errorUiText,rebindCommittedSave,canRebindSaveAs,fileSaveReceipt,
+   persistDraft:async()=>{if(session.opened.sessionId==="target")acknowledged=session.inputId;session.acknowledgeDraft(session.source,session.serial,session.issueDraftRevision());},
+   api:async(route:string)=>{if(route==="/api/save-as"){sent.resolve();return reply.promise;}assert.equal(route,"/api/library/open");return f.original;}});
+  const saving=f.context.saveDocument(doc,target.path);await sent.promise;
+  if(aba){session.inputId=crypto.randomUUID();session.inputId=crypto.randomUUID();doc.editor.authorInputId=session.inputId;}
+  const current=session.inputId;reply.resolve({operationId:"save-as",status:"saved",path:target.path,baseId:target.baseId,committedSource:"S",document:target,documentSourceMatchesCommit:true});await saving;
+  assert.equal(session.serial,1);assert.equal(session.source,"S");assert.equal(acknowledged,aba?current:target.viewInputId);if(aba)assert.notEqual(acknowledged,originalInput);
+ }
+});

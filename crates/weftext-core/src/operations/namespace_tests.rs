@@ -1,5 +1,6 @@
 use super::*;
 use crate::test_support::{FixtureRoots, open_core};
+use std::fs;
 
 #[cfg(target_os = "linux")]
 #[test]
@@ -111,7 +112,7 @@ fn pending_subtree_uses_components_and_completion_keeps_the_sibling_base() {
     #[cfg(windows)]
     assert_eq!(
         core.open(
-            &Path::new(&child.path).with_file_name("a.TYP"),
+            Path::new(&child.path).with_file_name("a.TYP"),
             Some(root.clone())
         )
         .unwrap_err()

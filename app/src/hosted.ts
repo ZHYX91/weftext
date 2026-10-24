@@ -49,7 +49,7 @@ import { currentHostedHistoryResult, unavailableCommittedHistory, type HostedHis
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
 import type { HostedQueryRow } from "./hosted-query-state";
 import { RecognitionPanel } from "./recognition-panel";
-import { bindHostedDraftReference, draftDisposition, applySaveResult, freezeHostedSave, hostedOpenedDraft, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
+import { bindHostedDraftReference, draftDisposition, applySaveResult, freezeHostedSave, hostedOpenedDraft, hostedDocumentDraft, qualifyHostedDraft, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
 type Rights = {
     read: boolean;
     write: boolean;
@@ -57,6 +57,7 @@ type Rights = {
     download: boolean;
 };
 type Doc = {
+    viewInputId?: string;
     resource: string;
     title: string;
     sessionId: string;
@@ -376,24 +377,56 @@ el<HTMLButtonElement>("diagram").onclick = () => { void diagramAuthoring.open().
 const retiredStructureSessions = new Set<string>();
 const retiredStructureSources = new Set<string>();
 function sessionAudience() { return { authorization: authorizationEpoch, credential: token, actor: identity?.actor, generation: identity?.generation, deployment: identity?.deployment }; }
-async function closeOwnedSession(sessionId: string, captured: Pick<HostedNodeAudience, "authorization" | "credential" | "actor" | "generation" | "deployment">): Promise<void> {
-    // Disposing a former coordinate must never be interpreted as revoking a
-    // different view. Even after logout, use only the original credential, never
-    // the next actor's token. Cleanup has no global error or content delivery.
-    if (!captured.credential)
-        return;
-    try {
-        const response = await fetch("/api/hosted/close", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${captured.credential}` }, body: JSON.stringify({ sessionId }), cache: "no-store", keepalive: true, signal: AbortSignal.timeout(10000) });
-        await response.arrayBuffer();
-    }
-    catch { /* The server lease also bounds abandoned sessions when delivery fails. */ }
+type HostedSessionAudience = Pick<HostedNodeAudience, "authorization" | "credential" | "actor" | "generation" | "deployment">;
+async function closeOwnedSession(sessionId: string, captured: HostedSessionAudience): Promise<void> {
+    const entry = hostedWriterRetirements.get(sessionId) ?? { sessionId, audience: captured };
+    hostedWriterRetirements.set(sessionId, entry);
+    if (entry.waitFor) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+    if (entry.closing) return entry.closing;
+    const closing = (async () => {
+        if (!entry.audience.credential) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+        const response = await fetch("/api/hosted/close", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${entry.audience.credential}` }, body: JSON.stringify({ sessionId }), cache: "no-store", keepalive: true, signal: AbortSignal.timeout(10000) });
+        if (response.status === 410) await response.arrayBuffer();
+        else if (!response.ok || (await response.json()).closed !== true) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+        if (hostedWriterRetirements.get(sessionId) === entry) hostedWriterRetirements.delete(sessionId);
+    })();
+    entry.closing = closing;
+    try { await closing; } finally { if (entry.closing === closing) entry.closing = undefined; }
 }
 function releaseViewSessions() {
-    const captured = sessionAudience(), sessions = new Set(retiredStructureSessions);
-    if (doc)
-        sessions.add(doc.sessionId);
-    for (const id of sessions)
-        void closeOwnedSession(id, captured);
+    const captured = sessionAudience(), selected = doc;
+    const sessions = new Set(retiredStructureSessions);
+    if (selected) sessions.add(selected.sessionId);
+    for (const id of sessions) {
+        const waiting = selected && Array.from(hostedWriterRetirements.values()).some(entry => entry.waitFor?.target.sessionId === selected.sessionId);
+        const entry = hostedWriterRetirements.get(id) ?? { sessionId: id, audience: captured };
+        if (selected && waiting) entry.waitFor = { target: selected, input: hostedInput(selected), audience: captured };
+        hostedWriterRetirements.set(id, entry);
+    }
+    // All handles, including target-ACK failures and close failures, stay in
+    // this single transient ownership set until their actual terminal reply.
+    void retryHostedRetirements().catch(() => { /* retain original credentials and handles */ });
+}
+async function retryHostedRetirements(): Promise<void> {
+    const waiting = new Map<string, NonNullable<HostedSessionRetirement["waitFor"]>>();
+    for (const entry of hostedWriterRetirements.values()) if (entry.waitFor) waiting.set(entry.waitFor.target.sessionId, entry.waitFor);
+    for (const cut of waiting.values()) {
+        try {
+            await draftOrder(cut.target).persist(cut.input, wire => capturedDraftAck(wire, cut.audience));
+            if (draftOrder(cut.target).acknowledged(cut.input) === undefined) continue;
+            for (const entry of hostedWriterRetirements.values()) if (entry.waitFor?.target.sessionId === cut.target.sessionId) entry.waitFor = undefined;
+        } catch { /* No former writer can retire ahead of the exact target cut. */ }
+    }
+    for (const entry of Array.from(hostedWriterRetirements.values())) if (!entry.waitFor) {
+        try { await closeOwnedSession(entry.sessionId, entry.audience); } catch { /* retain for the next owned cleanup */ }
+    }
+}
+async function capturedDraftAck(wire: Parameters<Parameters<OrderedDraft["persist"]>[1]>[0], captured: HostedSessionAudience): Promise<{ inputRevision: number }> {
+    const response = await fetch("/api/hosted/draft", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${captured.credential}` }, body: JSON.stringify(wire), cache: "no-store", keepalive: true, signal: AbortSignal.timeout(10000) });
+    if (!response.ok) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+    const ack = await response.json();
+    if (ack.status !== "inputAcknowledged" || !["authorDraft","savedView"].includes(ack.evidence) || ack.inputRevision !== wire.inputRevision) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+    return ack;
 }
 async function refreshOpenSession() {
     const selected = doc, captured = sessionAudience();
@@ -428,7 +461,7 @@ const office: HostedOffice = new HostedOffice(el("office"), request, () => doc ?
     identity: hostedIdentity, basis: () => source.historyBasis(true), embeddedQueries: () => source.outputSelections(), authorizationChanged: authorizationsChanged,
 });
 const queries = new HostedQuery(el("query"), request, openQueryResource, (id, metadata) => office.setQuery(id, metadata), {
-    context: () => doc ? { resource: doc.resource, sessionId: doc.sessionId, baseId: doc.baseId, source: source.value, serial: source.serial, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending, compare: compareRequired, definitionReservations: draft?.definitionReservations } : null,
+    context: () => doc ? { resource: doc.resource, sessionId: doc.sessionId, baseId: doc.baseId, source: source.value, serial: source.serial, inputId: source.authorInputId, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending, compare: compareRequired, definitionReservations: draft?.definitionReservations } : null,
     prepareBasis: () => source.prepareQueryBasis(),
     apply: (patches, basis) => source.applyQueryPatches(patches, basis, "input.query.definition.proposal"),
     authorInputs,
@@ -441,7 +474,7 @@ const queries = new HostedQuery(el("query"), request, openQueryResource, (id, me
 }, () => source.queryInputsChanged(), navigateResource, { canEdit: (resource, fieldId) => fields.canEdit(resource, fieldId), open: (resource, fieldId) => fields.openGranted(resource, fieldId) });
 const knowledgeLinks = new HostedKnowledgeLinks(el("knowledge-links"), (path, body, signal) => request(path, body, false, 0, signal), {
     identity: hostedIdentity,
-    context: () => doc && identity && !source.pausedSession ? { actor: identity.actor, deployment: identity.deployment, generation: identity.generation, credential: token, epoch: requestEpoch, authorization: authorizationEpoch, resource: doc.resource, sessionId: doc.sessionId, source: source.value, serial: source.serial, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending || history.hasPending(doc.resource), compare: compareRequired } : null,
+    context: () => doc && identity && !source.pausedSession ? { actor: identity.actor, deployment: identity.deployment, generation: identity.generation, credential: token, epoch: requestEpoch, authorization: authorizationEpoch, resource: doc.resource, sessionId: doc.sessionId, source: source.value, serial: source.serial, inputId: source.authorInputId, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending || history.hasPending(doc.resource), compare: compareRequired } : null,
     flush: async () => { await source.historyBasis(true); },
     apply: async (patches, basis, event) => { retain(); await source.applyQueryPatches(patches, basis, event); },
     navigate: reference => reference.startsWith("weftext-resource://") ? navigateResource(reference) : navigateReference(reference),
@@ -478,7 +511,7 @@ function authorizationsChanged(message: UiText, current: {
 }
 const citations = new HostedCitations(el("citations"), request, {
     identity: hostedIdentity,
-    context: () => doc && identity && !source.pausedSession ? { actor: identity.actor, deployment: identity.deployment, generation: identity.generation, credential: token, epoch: requestEpoch, authorization: authorizationEpoch, resource: doc.resource, sessionId: doc.sessionId, source: source.value, serial: source.serial, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending || history.hasPending(doc.resource), compare: compareRequired } : null,
+    context: () => doc && identity && !source.pausedSession ? { actor: identity.actor, deployment: identity.deployment, generation: identity.generation, credential: token, epoch: requestEpoch, authorization: authorizationEpoch, resource: doc.resource, sessionId: doc.sessionId, source: source.value, serial: source.serial, inputId: source.authorInputId, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending || history.hasPending(doc.resource), compare: compareRequired } : null,
     basis: () => source.historyBasis(true), apply: async (patches, basis) => { retain(); await source.applyQueryPatches(patches, basis, "input.citation.proposal"); },
     authorInputs, selection: () => source.selection, select: (from, to) => source.selectSourceRange(from, to), navigate: navigateReference, authorizationChanged: authorizationsChanged,
 });
@@ -504,7 +537,7 @@ recognitionButton.onclick = () => { void recognitionPanel.open().catch(error => 
 el("workspace").querySelector("article > .actions")!.append(recognitionButton);
 const ownerBackup = new HostedOwnerBackup(el("owner-backup"), request, { identity: hostedIdentity, authorizationChanged: authorizationsChanged });
 const history = new HostedHistory(el("history-list"), request, {
-    context: () => doc && draft ? { resource: doc.resource, sessionId: doc.sessionId, path: `resource:${doc.resource}`, root: "", baseId: doc.baseId, baseSource: doc.source, source: source.value, serial: source.serial, inputRevision: draftOrder(doc).acknowledged(hostedInput(doc)), dirty: source.value !== doc.source, readOnly: !doc.rights.write || source.viewMode === "read", savePending: !!draft.pending, unresolvedSave: compareRequired } : null,
+    context: () => doc && draft ? { resource: doc.resource, sessionId: doc.sessionId, path: `resource:${doc.resource}`, root: "", baseId: doc.baseId, baseSource: doc.source, source: source.value, serial: source.serial, inputId: source.authorInputId, inputRevision: draftOrder(doc).acknowledged(hostedInput(doc)), dirty: source.value !== doc.source, readOnly: !doc.rights.write || source.viewMode === "read", savePending: !!draft.pending, unresolvedSave: compareRequired } : null,
     basis: hostedHistoryBasis, pendingChanged: () => { controls(); queries.authorChanged(); knowledgeAuthorChanged(); scheduleCurrentDraft(); }, restored: acknowledgeHistory, finishUnavailable: finishUnavailableHistory,
 });
 const library = new HostedLibrary(el("library"), request, async (role) => {
@@ -630,7 +663,7 @@ async function openStructureResult(result: NonNullable<StructureReceipt["result"
         }
         else {
             requestEpoch++;
-            installDocument(fresh, cached(fresh.resource) ?? { source: fresh.recoveredDraft ?? fresh.source, baseSource: fresh.recoveredDraftBaseSource ?? fresh.source, reference: ref.reference });
+            installDocument(fresh, cached(fresh.resource) ?? { ...hostedDocumentDraft(fresh), reference: ref.reference });
             adopted = true;
         }
         if (selected)
@@ -730,7 +763,8 @@ async function navigateReference(reference: string) {
             catch {
                 throw new UiError(uiMessage("hostedShell.targetRecoveryUnparseable"));
             }
-            targetDraft = nodeTargetDraft(target.source, target.recoveredDraft, target.recoveredDraftBaseSource, source.pausedSession && draft?.reference === parts.base ? { ...draft, source: source.value } : local);
+            const retained = source.pausedSession && draft?.reference === parts.base ? { ...draft, source: source.value } : local;
+            targetDraft = retained === undefined && target.recoveredDraft == null ? hostedDocumentDraft(target) : nodeTargetDraft(target.source, target.recoveredDraft, target.recoveredDraftBaseSource, retained);
         }
         const retainedAlias = !currentTarget && source.pausedSession && draft?.reference === parts.base;
         const basis: HostedNodeBasis = { sessionId: target.sessionId, source: currentTarget ? source.value : targetDraft.source, serial: currentTarget || retainedAlias ? source.serial : source.retainedSourceSerial(target.resource, targetDraft.source), sourceHash: await nodeSourceHash(currentTarget ? source.value : targetDraft.source) };
@@ -759,7 +793,7 @@ async function navigateReference(reference: string) {
             installDocument(target, targetDraft);
             adopted = true;
             if (prior)
-                void closeOwnedSession(prior.sessionId, captured);
+                void closeOwnedSession(prior.sessionId, captured).catch(() => {});
             scheduleCurrentDraft();
         }
         adoptedAudience = nodeAudience();
@@ -814,7 +848,8 @@ async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied
     await source.flush();
     if (epoch !== requestEpoch || doc !== selected || !draft)
         throw new UiError(uiMessage("hostedShell.objectChangedRestoreReceiptRetained"));
-    const fresh = await request<Doc>("open", { resource: selected.resource });
+    const audience = sessionAudience();
+    const fresh = await request<Doc>("open", { resource: selected.resource, sessionId: selected.sessionId });
     let adopted = false;
     try {
         const confirmed = await request<HostedHistoryStatus>("history/status", { resource: record.request.resource, operationId: record.request.operationId });
@@ -823,20 +858,25 @@ async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied
         const accepted = history.installStatus(record, confirmed);
         if (!accepted.result)
             throw new UiError(uiMessage("hostedShell.restoreResultNoCurrentDeliveryRight"));
-        const installed = currentHostedHistoryResult(record, fresh.source, accepted), buffer = { sessionId: selected.sessionId, source: source.value, serial: source.serial };
+        const installed = currentHostedHistoryResult(record, fresh.source, accepted), buffer = { sessionId: selected.sessionId, source: source.value, serial: source.serial, inputId: source.authorInputId };
         const current: HistoryContext = { ...buffer, path: `resource:${selected.resource}`, root: "", baseId: selected.baseId, baseSource: selected.source, dirty: buffer.source !== selected.source, nodeId: record.basis.nodeId, workspaceId: record.basis.workspaceId };
-        const replaceClean = installed && restoreBufferDisposition(record.basis, current) === "replaceClean";
+        const replaceClean = installed && fresh.sessionId === selected.sessionId && !fresh.recoveredDraftConflict && restoreBufferDisposition(record.basis, current) === "replaceClean";
         if (replaceClean) source.applyHistorySource(accepted.result.source, buffer);
         const retainedSource = source.value, originalDraftBase = draft.baseSource;
-        doc = fresh;
-        source.open(fresh.sessionId, fresh.resource, retainedSource);
-        source.disabled = !fresh.rights.write;
-        draft = { ...draft, source: retainedSource, baseSource: replaceClean ? fresh.source : originalDraftBase };
+        // Keep the initiating producer. A returned comparison never grants
+        // a different writer permission to adopt this editor's later input.
+        const target = fresh.sessionId === selected.sessionId ? fresh : selected;
+        if (target !== selected) orderedDrafts.set(target, draftOrder(selected));
+        doc = target;
+        source.open(target.sessionId, target.resource, retainedSource);
+        source.disabled = !target.rights.write;
+        draft = { ...draft, source: retainedSource, baseSource: replaceClean ? fresh.source : originalDraftBase,
+            basis: replaceClean ? { sessionId: target.sessionId, baseId: target.baseId } : draft.basis };
         compareRequired = !replaceClean;
         el("comparison").hidden = replaceClean;
         setUiText(el("current"), replaceClean ? "" : fresh.source);
         setUiText(el("title"), fresh.title);
-        adopted = true;
+        adopted = target === fresh;
         retain();
         history.documentChanged();
         controls();
@@ -844,15 +884,13 @@ async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied
         knowledgeAuthorChanged();
         void queries.refreshCatalog();
         void readReference(fresh, epoch);
-        queueHostedWriterRetirement(selected,fresh);
-        if (fresh.rights.write) await persistHostedDraft(fresh,retainedSource);
-        else if (replaceClean) await retireHostedWriters(fresh);
+        if (target.rights.write) await persistHostedDraft(target,retainedSource);
         return replaceClean ? "applied" : "superseded";
     }
     finally {
-        if (!adopted) {
+        if (!adopted && fresh.sessionId !== selected.sessionId) {
             try {
-                await request("close", { sessionId: fresh.sessionId });
+                await closeOwnedSession(fresh.sessionId, audience);
             }
             catch { /* Keep the original receipt even if session cleanup became unavailable. */ }
         }
@@ -1143,6 +1181,7 @@ function retain(): Promise<BrowserProposalAck | undefined> {
     if (!doc || !draft)
         return Promise.resolve(undefined);
     draft.source = source.value;
+    draft.inputId = source.authorInputId;
     // Storage failure is visible and prevents a save request that could lose an
     // unknown operation receipt on reload.
     const write = persistPersonalInputs();
@@ -1403,7 +1442,7 @@ async function open(resource: string) {
             return;
         if (opened.resource !== resource)
             throw new UiError(uiMessage("hostedShell.openReceiptTargetMismatch"));
-        let targetDraft = cached(resource) ?? { source: opened.recoveredDraft ?? opened.source, baseSource: opened.recoveredDraftBaseSource ?? opened.source };
+        let targetDraft = cached(resource) ?? hostedDocumentDraft(opened);
         let alias = false, recoveredSave = false;
         if (prior && draft?.reference && source.pausedSession && prior.resource !== resource) {
             const ref = await request<{
@@ -1445,7 +1484,7 @@ async function open(resource: string) {
         await retain();
         if (!current())
             return;
-        targetDraft = hostedOpenedDraft(opened.source, targetDraft);
+        targetDraft = hostedOpenedDraft(opened.source, qualifyHostedDraft(opened, targetDraft));
         // A quota failure must happen while the original editor and session still
         // exist. This exact prepared cache is not written again during install.
         try {
@@ -1474,13 +1513,14 @@ async function open(resource: string) {
 function installDocument(opened: Doc, retainedDraft: HostedDraft, recoveredSave = false, stagedCache = false) {
     clearNodeNavigation();
     doc = opened;
-    draft = stagedCache ? retainedDraft : hostedOpenedDraft(opened.source, retainedDraft);
+    const qualified = qualifyHostedDraft(opened, retainedDraft);
+    draft = stagedCache ? qualified : hostedOpenedDraft(opened.source, qualified);
     const epoch = requestEpoch;
     installingDocument = true;
     if (opened.recoveredDraft != null && opened.recoveredDraftWitness && draft.source === opened.recoveredDraft)
         recoveryContinuations.set(opened, null);
     try {
-        source.open(opened.sessionId, opened.resource, draft.source);
+        source.open(opened.sessionId, opened.resource, draft.source, draft.inputId);
         source.disabled = !opened.rights.write;
     }
     finally {
@@ -1519,29 +1559,35 @@ document.addEventListener("keydown", event => {
     }
 });
 const orderedDrafts = new WeakMap<Doc, OrderedDraft>();
-const hostedWriterRetirements = new Map<string, {sessionId:string; audience:ReturnType<typeof sessionAudience>}[]>();
+type HostedSessionRetirement = {
+    sessionId: string;
+    audience: HostedSessionAudience;
+    waitFor?: { target: Doc; input: ReturnType<typeof hostedInput>; audience: HostedSessionAudience };
+    closing?: Promise<void>;
+};
+const hostedWriterRetirements = new Map<string, HostedSessionRetirement>();
 function queueHostedWriterRetirement(previous: Doc, target: Doc): void {
-    const retained = hostedWriterRetirements.get(previous.sessionId) ?? [];
-    hostedWriterRetirements.delete(previous.sessionId);
-    const pending = hostedWriterRetirements.get(target.sessionId) ?? [];
-    for (const entry of [...retained, {sessionId:previous.sessionId,audience:sessionAudience()}])
-        if (entry.sessionId !== target.sessionId && !pending.some(item => item.sessionId === entry.sessionId)) pending.push(entry);
-    hostedWriterRetirements.set(target.sessionId,pending);
+    if (previous.sessionId === target.sessionId) return;
+    const cut = { target, input: hostedInput(target), audience: sessionAudience() };
+    for (const entry of hostedWriterRetirements.values()) if (entry.waitFor?.target.sessionId === previous.sessionId) entry.waitFor = cut;
+    hostedWriterRetirements.set(previous.sessionId, { sessionId: previous.sessionId, audience: sessionAudience(), waitFor: cut });
 }
 async function retireHostedWriters(selected: Doc): Promise<void> {
-    const pending=hostedWriterRetirements.get(selected.sessionId);
-    if (!pending) return;
-    while(pending.length) { await closeOwnedSession(pending[0].sessionId,pending[0].audience); pending.shift(); }
-    hostedWriterRetirements.delete(selected.sessionId);
+    const input = hostedInput(selected);
+    if (draftOrder(selected).acknowledged(input) === undefined) return;
+    for (const entry of Array.from(hostedWriterRetirements.values())) if (entry.waitFor?.target.sessionId === selected.sessionId) {
+        entry.waitFor = undefined;
+    }
+    for (const entry of Array.from(hostedWriterRetirements.values())) if (!entry.waitFor) await closeOwnedSession(entry.sessionId, entry.audience);
 }
 
 function draftOrder(selected: Doc): OrderedDraft { let order = orderedDrafts.get(selected); if (!order) { order = new OrderedDraft(); orderedDrafts.set(selected, order); } return order; }
 function hostedInput(selected: Doc, value = source.value) {
     return { sessionId: selected.sessionId, source: value, serial: source.serial, inputId: source.authorInputId,
-        ...(doc === selected && draft && draft.baseSource !== selected.source ? { retainedBaseSource: draft.baseSource } : { baseId: selected.baseId }) };
+        ...(doc === selected && draft ? draft.basis?.sessionId === selected.sessionId ? { baseId: draft.basis.baseId } : { retainedBaseSource: draft.baseSource } : { baseId: selected.baseId }) };
 }
 async function persistHostedDraft(selected: Doc, value = source.value): Promise<number> {
-    const revision = await draftOrder(selected).persist(hostedInput(selected, value), async wire => { const ack = await request<{ status: string; inputRevision: number }>("draft", wire); if (ack.status !== "draftRetained") throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged")); return ack; });    if (doc === selected && draftOrder(selected).acknowledged(hostedInput(selected)) === revision) await retireHostedWriters(selected);
+    const revision = await draftOrder(selected).persist(hostedInput(selected, value), async wire => { const ack = await request<{ status: string; inputRevision: number; evidence: "authorDraft" | "savedView" }>("draft", wire); if (ack.status !== "inputAcknowledged" || !["authorDraft","savedView"].includes(ack.evidence)) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged")); return ack; });    if (doc === selected && draftOrder(selected).acknowledged(hostedInput(selected)) === revision) await retireHostedWriters(selected);
     return revision;
 }
 async function hostedHistoryBasis(settle: boolean) {

@@ -148,3 +148,8 @@ test("native close cannot retire an embedded arrangement waiting for its author 
   await assert.rejects((controller as any).arrange({ occurrence: occurrence(), unique: true }, "remove"));
   controller.thawAfterClose(); controller.dispose();
 });
+
+test("same-byte source and serial cannot reuse a prior author generation",()=>{
+ const basis={sessionId:"writer",source:"S",serial:0,inputId:"before"};
+ assert.equal(sameQueryBasis({...basis,inputId:"after-ABA"},basis),false);assert.equal(sameQueryBasis({...basis},basis),true);
+});

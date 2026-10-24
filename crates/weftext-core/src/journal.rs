@@ -586,9 +586,14 @@ impl Core {
                     UiMessage::error_core_journal_commit_sequence_exhausted(),
                 )
             })?;
-        self.admit_journal_capacity(&plan.operation_id, Some(plan))
+        self.admit_journal_capacity(&plan.operation_id, Some(plan), None)
     }
-    fn admit_journal_capacity(&self, id: &str, candidate: Option<&Plan>) -> Result<()> {
+    fn admit_journal_capacity(
+        &self,
+        id: &str,
+        candidate: Option<&Plan>,
+        publication: Option<&str>,
+    ) -> Result<()> {
         let bucket = journal_bucket(id);
         let path = self.data_dir.join("journal").join(&bucket);
         self.backend.create_private_directory(&path)?;
@@ -617,7 +622,31 @@ impl Core {
         // Derive outstanding reservations from the original pending Plans on
         // every admission, including after restart. Terminal operations only
         // consume their actual retained entries.
-        let mut reserved_write = false;
+        // A create-only publication first occupies one physical temporary
+        // slot. Count the resulting canonical member and only then derive
+        // what the original pending Plans still require. Residues themselves
+        // never earn settlement credit, and other writers keep their reserve.
+        let own_reserved_publication = (candidate.is_some()
+            || publication.is_some_and(|name| journal_record_suffix(id, name).is_some()))
+            && self.operations.contains_key(id)
+            && !terminal_names.contains(id);
+        if let Some(name) = publication {
+            used = used.saturating_add(1);
+            if used > JOURNAL_BUCKET_LIMIT {
+                return Err(CoreError::new(
+                    "budget",
+                    UiMessage::error_core_backend_private_namespace_budget(),
+                ));
+            }
+            if let Some(suffix) = journal_record_suffix(id, name) {
+                if !suffix.starts_with("recovery-observations-") {
+                    *counts.entry(id.to_owned()).or_default() += 1;
+                }
+                if matches!(suffix, "commit" | "resolution") {
+                    terminal_names.insert(id.to_owned());
+                }
+            }
+        }
         for pending in self.operations.values().filter(|p| {
             candidate.is_none_or(|plan| p.operation_id != plan.operation_id)
                 && journal_bucket(&p.operation_id) == bucket
@@ -629,7 +658,6 @@ impl Core {
             if !terminal_names.contains(&pending.operation_id) {
                 let remaining = journal_record_budget(pending)
                     .saturating_sub(*counts.get(&pending.operation_id).unwrap_or(&0));
-                reserved_write |= pending.operation_id == id && remaining > 0;
                 used = used.saturating_add(remaining);
             }
         }
@@ -637,10 +665,14 @@ impl Core {
             journal_record_budget(plan)
                 .saturating_sub(*counts.get(&plan.operation_id).unwrap_or(&0))
         } else {
-            usize::from(!reserved_write)
+            0
         });
-        // Keep one slot available for a flushed temporary publication.
-        if used >= JOURNAL_BUCKET_LIMIT {
+        // New author effects retain one temporary slot. An actual record
+        // publication may consume this writer's own reserved slot, including
+        // after a flushed attempt; no unrelated reservation is discharged.
+        if used > JOURNAL_BUCKET_LIMIT
+            || (!own_reserved_publication && used == JOURNAL_BUCKET_LIMIT)
+        {
             return Err(CoreError::new(
                 "budget",
                 UiMessage::error_core_backend_private_namespace_budget(),
@@ -667,7 +699,7 @@ impl Core {
                     UiMessage::error_core_journal_journal_filename_invalid(),
                 ));
             }
-            self.admit_journal_capacity(id, None)?;
+            self.admit_journal_capacity(id, None, Some(name))?;
             return publish_private_record(&self.backend, path, bytes);
         }
         private_create(&self.backend, path, bytes)
@@ -1638,11 +1670,35 @@ mod journal_bucket_tests {
             "budget"
         );
         assert!(!core.journal_path(&denied, "resolution").exists());
+        hosted::set_test_failpoint("privateRecordFlushed");
+        assert_eq!(
+            core.resolve_recovery(&id, "keepCurrent").unwrap_err().code,
+            "injectedFailure"
+        );
+        let retained = fs::read_dir(&bucket)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "pending")
+            })
+            .map(|path| {
+                let bytes = fs::read(&path).unwrap();
+                (path, bytes)
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(retained.len(), 32);
+        drop(core);
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        core.admit_journal_operation(&core.operations[&id]).unwrap();
         assert_eq!(
             core.resolve_recovery(&id, "keepCurrent").unwrap().status,
             "resolved"
         );
         assert!(residues.iter().all(|path| path.is_file()));
+        for (path, bytes) in retained {
+            assert_eq!(fs::read(path).unwrap(), bytes);
+        }
         assert_eq!(fs::read_to_string(note).unwrap(), "B");
     }
 

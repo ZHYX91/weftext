@@ -4,7 +4,7 @@ export type SurfaceKind = "library" | "capture";
 export type CloseRequest = Readonly<{ surfaceId: string; surfaceEpoch: string; closeAttemptId: string }>;
 export type DocumentCloseProof = Readonly<{
   kind: "document"; ownerId: string; ownerGeneration: string; sessionId: string;
-  baseId: string; sourceDigest: string; recordDigest: string; pendingOperationId?: string;
+  baseId: string; sourceDigest: string; inputId?: string; evidence: "authorDraft" | "savedView"; recordDigest: string; pendingOperationId?: string;
 }>;
 export type CaptureCloseProof = Readonly<{
   kind: "capture"; ownerId: string; ownerGeneration: string; draftId: string;
