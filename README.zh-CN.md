@@ -23,7 +23,7 @@ Weftext 是以**原生 Typst（`.typ`）文件**为作者源的知识与写作�
 | **0.6.0 Windows／NTFS** | 原既定 v0.6 范围在同一最终优化程序上通过 HTTP、相关浏览器和真实 NAS HTTPS 验收，**但没有正式公开发布**；该结论不自动延伸至其他平台。 |
 | **0.6.2 本地交付候选** | 初始 Windows 本地／自托管识别链路覆盖 PDF 文本层、PNG／JPEG OCR、首批公文与数电普通发票；独立运行时、部分结果和复杂版式限制仍需核对。 |
 | **0.6.3-rc.4 候选** | 导航、属性／Query、标签、关系图、只读标题结构等切片已接入；**整版验收尚未完成**。 |
-| **v0.7 开发分支** | GUI／CLI、碎片采集、提醒、语言与宿主基础以及保存恢复逻辑正在整合。只代表开发切片，**不代表 v0.7 产品或安装包已验收**。 |
+| **v0.7 开发分支** | 已整合 GUI／CLI、碎片采集、提醒、语言与宿主基础、保存恢复和原生作者关闭生命周期，并接入受控 Linux Render／Notes 服务路径。各候选的检查与实测证据分别记录；完整桌面、安装及跨平台验收仍未完成，**不代表 v0.7 产品或安装包已验收**。 |
 
 各阶段真实记录、支持矩阵与未完成项分别见[本地候选说明](docs/MVP.zh-CN.md)、[路线图](docs/ROADMAP.zh-CN.md)和[验收工作流](docs/WORKFLOW.zh-CN.md)。不要把较早候选的通过记录直接套用到当前提交。
 
@@ -44,6 +44,6 @@ Weftext 是以**原生 Typst（`.typ`）文件**为作者源的知识与写作�
 
 - [需求与范围](docs/REQUIREMENTS.zh-CN.md) · [技术设计](docs/design/README.zh-CN.md) · [实施顺序](docs/design/INTEGRATION.zh-CN.md)
 - [固定设计评审](docs/design/REVIEW.zh-CN.md) · [本地候选](docs/MVP.zh-CN.md) · [Server / WebUI](docs/SERVER.zh-CN.md)
-- [CLI](docs/CLI.zh-CN.md) · [路线图](docs/ROADMAP.zh-CN.md) · [开发、验收与发布](docs/WORKFLOW.zh-CN.md)
+- [CLI](docs/CLI.zh-CN.md) · [Linux 受控工作进程](docs/LINUX-WORKERS.zh-CN.md) · [路线图](docs/ROADMAP.zh-CN.md) · [开发、验收与发布](docs/WORKFLOW.zh-CN.md)
 
 设计检查、真实产品测试和正式发布是三个不同的结论；通过文档检查不表示候选已经可供正式使用。
