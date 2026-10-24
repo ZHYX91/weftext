@@ -77,7 +77,16 @@ impl Core {
             .file_save
             .as_ref()
             .ok_or_else(file_save_scope::unsupported_scope)?;
-        if data.version != 2 {
+        if data.version != 3 {
+            return Err(file_save_scope::unsupported_scope());
+        }
+        let canonical_digest = data.author_input_digest.as_ref().is_some_and(|digest|
+            digest.len() == 64 && digest.bytes().all(|byte|
+                byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte)));
+        if (data.input_revision == 0 && data.author_input_digest.is_some())
+            || (data.input_revision > 0
+                && (data.input_revision > 9_007_199_254_740_991 || !canonical_digest))
+        {
             return Err(file_save_scope::unsupported_scope());
         }
         valid_operation_id(&data.session_id)?;

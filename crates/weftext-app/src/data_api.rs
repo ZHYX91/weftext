@@ -81,6 +81,7 @@ struct DefinitionSaveRequest {
     source: String,
     serial: u64,
     source_hash: Option<String>,
+    input_revision: Option<u64>,
     base_id: String,
     key: Option<String>,
     label: String,
@@ -2899,12 +2900,17 @@ async fn save_definition(
             })?;
         let operation_id = req.operation_id.clone();
         let session_id = req.session_id.clone();
-        let outcome = core.save(SaveRequest {
+        let revision = req.input_revision;
+        let intent = SaveRequest {
             session_id: req.session_id,
             base_id: req.base_id,
             source: patch.source.clone(),
             operation_id: req.operation_id,
-        })?;
+        };
+        let outcome = match revision {
+            Some(revision) => core.save_ordered_derived(intent, req.source.clone(), revision)?,
+            None => core.save(intent)?,
+        };
         let document = core
             .refresh_local_saved_session(&operation_id, &session_id)
             .map(|(_, document)| document);
@@ -2942,12 +2948,12 @@ fn replay_saved_definition(
     // Original author identity is checked before any optional schema/result
     // delivery. The journal already retains the exact submitted save bytes.
     let outcome = core
-        .saved_outcome_for_request(&SaveRequest {
+        .saved_outcome_for_request_revision(&SaveRequest {
             session_id: req.session_id.clone(),
             base_id: req.base_id.clone(),
             source: original.source.clone(),
             operation_id: req.operation_id.clone(),
-        })?
+        }, req.input_revision, Some(&req.source))?
         .ok_or_else(|| {
             CoreError::new(
                 "recoveryPending",
@@ -4442,6 +4448,7 @@ mod tests {
             source,
             serial: 1,
             source_hash: None,
+            input_revision: None,
             base_id: document["baseId"].as_str().unwrap().into(),
             key,
             label: "weftext-query-status".into(),

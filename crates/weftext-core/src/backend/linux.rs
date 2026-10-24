@@ -274,7 +274,7 @@ impl ControlledRoot {
         root.check_fence()?;
         // Admission validates the existing complete namespace. It never treats
         // unenumerated entries or partial scans as proof of exclusive authority.
-        root.validate_tree(&root.directory, 0, &mut 0)?;
+        root.validate_tree(&root.directory, 0, &mut 0, Path::new(""))?;
         Ok(root)
     }
     pub(super) fn check_fence(&self) -> Result<()> {
@@ -389,7 +389,7 @@ impl ControlledRoot {
         }
         Ok(())
     }
-    fn validate_tree(&self, directory: &File, depth: usize, used: &mut usize) -> Result<()> {
+    fn validate_tree(&self, directory: &File, depth: usize, used: &mut usize, relative: &Path) -> Result<()> {
         self.verify_object(directory, true)?;
         if depth > 128 {
             return Err(error("budget", UiMessage::error_core_posix_depth_budget()));
@@ -422,7 +422,19 @@ impl ControlledRoot {
             )?;
             self.verify_object(&file, entry.is_directory())?;
             if entry.is_directory() {
-                self.validate_tree(&file, depth + 1, used)?;
+                let next = relative.join(&name);
+                // Only the canonical flat journal's 256 exact hexadecimal
+                // buckets receive a separate 5000-entry admission allowance.
+                // They are still fully traversed and ownership-verified.
+                let journal_bucket = relative.file_name() == Some(OsStr::new("journal"))
+                    && name.to_str().is_some_and(|name| name.len() == 2
+                        && name.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
+                if journal_bucket {
+                    let mut bucket_count = 0;
+                    self.validate_tree(&file, depth + 1, &mut bucket_count, &next)?;
+                } else {
+                    self.validate_tree(&file, depth + 1, used, &next)?;
+                }
             }
         }
         Ok(())

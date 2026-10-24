@@ -8,6 +8,8 @@ pub(crate) fn save_fingerprint(
     restore: Option<&history::RestoreBinding>,
     scope: QualifiedInputScope,
     producer: &str,
+    input_revision: u64,
+    author_digest: Option<&str>,
 ) -> Result<String> {
     file_save_scope::fingerprint(
         "save",
@@ -18,7 +20,8 @@ pub(crate) fn save_fingerprint(
             Some(request.base_id.clone()),
             scope,
             producer.to_owned(),
-        ),
+        ).with_input_revision(input_revision)
+            .with_author_digest(author_digest.map(str::to_owned)),
         restore,
     )
 }
@@ -587,6 +590,8 @@ impl Core {
             Session {
                 draft_producer_id: original.draft_producer_id,
                 draft_input: original.draft_input,
+                draft_input_revision: original.draft_input_revision,
+                draft_cuts: original.draft_cuts,
                 draft_witness: original.draft_witness,
                 conflicting_draft: original.conflicting_draft,
                 ..refreshed
@@ -706,20 +711,37 @@ impl Core {
     /// Verify the complete original source-save intent without a live Session
     /// and without executing save again. The original Plan owns its path.
     pub fn saved_outcome_for_request(&self, request: &SaveRequest) -> Result<Option<SaveOutcome>> {
+        self.saved_outcome_for_request_revision(request, None, None)
+    }
+    /// A status/delivery replay never changes the original frozen author cut.
+    /// When supplied, the client cut must match the frozen Plan participant;
+    /// a generic status lookup still has no producer or writer transfer rights.
+    pub fn saved_outcome_for_request_revision(
+        &self,
+        request: &SaveRequest,
+        expected_revision: Option<u64>,
+        expected_author_source: Option<&str>,
+    ) -> Result<Option<SaveOutcome>> {
         self.sync_local_owner()?;
         valid_operation_id(&request.operation_id)?;
         let Some(plan) = self.operations.get(&request.operation_id) else {
             return Ok(None);
         };
         self.validate_file_save_plan(plan)?;
+        let expected_digest = expected_author_source.map(|source| hash(source.as_bytes()));
         if plan.kind != "save"
             || plan.transaction.is_some()
+            || expected_revision.is_some_and(|revision|
+                plan.file_save.as_ref().unwrap().input_revision != revision
+                    || expected_digest.as_deref() != plan.file_save.as_ref().unwrap().author_input_digest.as_deref())
             || save_fingerprint(
                 request,
                 Path::new(&plan.path),
                 None,
                 plan.file_save.as_ref().unwrap().scope.clone(),
                 &plan.file_save.as_ref().unwrap().draft_producer_id,
+                plan.file_save.as_ref().unwrap().input_revision,
+                plan.file_save.as_ref().unwrap().author_input_digest.as_deref(),
             )? != plan.fingerprint
         {
             return Err(CoreError::new(

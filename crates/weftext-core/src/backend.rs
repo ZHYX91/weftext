@@ -228,9 +228,16 @@ impl BackendContext {
         ParentGuard::acquire(self, path.as_ref())?.open_read_guard_file()
     }
     pub(crate) fn read_dir(&self, path: impl AsRef<Path>) -> Result<ScopedDirectoryEntries> {
+        self.read_dir_bounded(path, 5000)
+    }
+    /// Explicit one-time migration may inspect a larger *complete* directory
+    /// under its own physical guard. Normal product enumeration stays at 5000.
+    pub(crate) fn read_dir_bounded(
+        &self, path: impl AsRef<Path>, limit: usize,
+    ) -> Result<ScopedDirectoryEntries> {
         let path = path.as_ref();
         let guard = ParentGuard::acquire(self, &path.join(".private-enumeration"))?;
-        let (entries, complete) = guard.directory_entries(5000)?;
+        let (entries, complete) = guard.directory_entries(limit)?;
         if !complete {
             return Err(CoreError::new(
                 "budget",

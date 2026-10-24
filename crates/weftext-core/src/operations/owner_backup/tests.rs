@@ -100,10 +100,11 @@ fn owner_backup_reused_root_locator_excludes_original_foreign_workspace_and_all_
             .unwrap();
         let private = f.temp.path().join("only-B/private");
         let journal = private.join("journal");
-        for name in fs::read_dir(&journal)
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        {
+        for name in fs::read_dir(&journal).unwrap().flat_map(|bucket| {
+            fs::read_dir(bucket.unwrap().path()).unwrap()
+                .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+        }) {
             assert!(
                 !a_plans
                     .iter()
@@ -362,6 +363,7 @@ fn owner_backup_preserves_current_ordinary_family_and_excludes_original_a_after_
             assert!(
                 !b_private
                     .join("journal")
+                    .join(&id[..2])
                     .join(format!("{id}.plan.json"))
                     .exists()
             );
@@ -369,6 +371,7 @@ fn owner_backup_preserves_current_ordinary_family_and_excludes_original_a_after_
         assert!(
             b_private
                 .join("journal")
+                .join(&b_id[..2])
                 .join(format!("{b_id}.plan.json"))
                 .is_file()
         );

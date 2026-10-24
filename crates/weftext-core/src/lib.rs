@@ -113,7 +113,7 @@ pub use operations::{
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 #[cfg(all(test, windows))]
 use std::fs;
 #[cfg(all(test, windows))]
@@ -465,7 +465,7 @@ pub struct OpenedDocument {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recovered_draft_witness: Option<String>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SaveRequest {
     pub session_id: String,
@@ -538,6 +538,10 @@ struct Session {
     draft_producer_id: String,
     draft_witness: Option<String>,
     draft_input: Option<DraftAlternative>,
+    // Monotonic ACK within one active producer, not a transferable capability.
+    draft_input_revision: Option<u64>,
+    // Bounded transient admission digests, not another durable author source.
+    draft_cuts: BTreeMap<u64, String>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -584,6 +588,7 @@ pub struct Core {
     data_dir: PathBuf,
     sessions: HashMap<String, Session>,
     operations: HashMap<String, journal::Plan>,
+    committed_sequence: std::sync::atomic::AtomicU64,
     snapshots: HashMap<String, operations::SnapshotBinding>,
     style_bases: HashMap<String, operations::StyleBasis>,
     admitted_cuts: HashMap<String, operations::AdmittedBasis>,
@@ -697,6 +702,7 @@ impl Core {
             data_dir,
             sessions: HashMap::new(),
             operations: HashMap::new(),
+            committed_sequence: std::sync::atomic::AtomicU64::new(0),
             snapshots: HashMap::new(),
             style_bases: HashMap::new(),
             admitted_cuts: HashMap::new(),
@@ -711,6 +717,11 @@ impl Core {
                 ));
             }
         }
+        // Existing profiles are admitted by original physical and device
+        // identity before this point. They too must complete the one-time
+        // object-preserving relocation; refusing them would strand the
+        // original journal simply because the GUI uses open_existing().
+        core.initialize_journal_layout(true)?;
         core.load_journals()?;
         drop(original);
         Ok(core)
@@ -861,6 +872,8 @@ impl Core {
                 draft_producer_id: fresh(),
                 draft_witness,
                 draft_input: None,
+                draft_input_revision: None,
+                draft_cuts: BTreeMap::new(),
             },
         );
         Ok(OpenedDocument {
@@ -880,7 +893,36 @@ impl Core {
         })
     }
     pub fn persist_draft(&mut self, session_id: &str, source: &str) -> Result<()> {
+        // A legacy/unversioned surface cannot silently overwrite a newer
+        // acknowledged ordered author cut in the same live Session.
+        if self.sessions.get(session_id).is_some_and(|s| s.draft_input_revision.is_some()) {
+            return Err(CoreError::new("draftChanged",
+                UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again()));
+        }
         self.persist_draft_with_role(session_id, source, draft_recovery::DraftRole::Proposal)
+    }
+    /// The original author revision is acknowledged only after the exact
+    /// proposal has been persisted by Core. A retry cannot make it current.
+    pub fn persist_draft_ordered(&mut self, session_id: &str, source: &str, revision: u64) -> Result<()> {
+        let invalid = || CoreError::new("draftChanged",
+            UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again());
+        if revision == 0 || revision > 9_007_199_254_740_991 { return Err(invalid()); }
+        let session = self.sessions.get(session_id)
+            .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
+        if let Some(previous) = session.draft_input_revision
+            && revision <= previous
+        {
+            return if session.draft_cuts.get(&revision).is_some_and(|digest| *digest == hash(source.as_bytes()))
+                { Ok(()) } else { Err(invalid()) };
+        }
+        self.persist_draft_with_role(session_id, source, draft_recovery::DraftRole::Proposal)?;
+        let session = self.sessions.get_mut(session_id).unwrap();
+        session.draft_input_revision = Some(revision);
+        session.draft_cuts.insert(revision, hash(source.as_bytes()));
+        // Delayed saves older than this bounded window fail closed; they never
+        // gain permission to overwrite current input merely from a stale ID.
+        while session.draft_cuts.len() > 8192 { session.draft_cuts.pop_first(); }
+        Ok(())
     }
     fn persist_draft_with_role(
         &mut self,
@@ -894,7 +936,8 @@ impl Core {
             CoreError::new("sessionMissing", UiMessage::error_reopen_file_session())
         })?;
         let draft = Draft {
-            scope: self.draft_scope_for_session(session_id, session.conflicting_draft.as_ref())?,
+            // store_session_draft performs the single complete protected read.
+            scope: self.draft_scope_for_session_unread(session_id, session.conflicting_draft.as_ref())?,
             path: display(&session.path),
             base_source: session
                 .conflicting_draft
@@ -984,10 +1027,24 @@ impl Core {
     pub fn save(&mut self, request: SaveRequest) -> Result<SaveOutcome> {
         self.save_with_restore(request, None)
     }
-    fn save_with_restore(
+    /// A frozen S may commit after Y was ACKed, but must not replace Y.
+    pub fn save_ordered(&mut self, request: SaveRequest, input_revision: u64) -> Result<SaveOutcome> {
+        let author_cut = request.source.clone();
+        self.save_with_restore_revision(request, None, Some((input_revision, author_cut)))
+    }
+    /// A definition generated by Core is derived from this exact ACKed input,
+    /// rather than falsely claiming the generated bytes were typed by the UI.
+    pub fn save_ordered_derived(&mut self, request: SaveRequest, author_cut: String, input_revision: u64) -> Result<SaveOutcome> {
+        self.save_with_restore_revision(request, None, Some((input_revision, author_cut)))
+    }
+    fn save_with_restore(&mut self, request: SaveRequest, restore: Option<history::RestoreBinding>) -> Result<SaveOutcome> {
+        self.save_with_restore_revision(request, restore, None)
+    }
+    fn save_with_restore_revision(
         &mut self,
         request: SaveRequest,
         restore: Option<history::RestoreBinding>,
+        input_revision: Option<(u64, String)>,
     ) -> Result<SaveOutcome> {
         self.check_actor_session(&request.session_id)?;
         valid_operation_id(&request.operation_id)?;
@@ -1015,16 +1072,32 @@ impl Core {
                     session.draft_producer_id.clone(),
                 )
             };
+        let author_digest = input_revision.as_ref().map(|(_, author)| hash(author.as_bytes()));
         let fingerprint = original_delivery::save_fingerprint(
             &request,
             &original_path,
             restore.as_ref(),
             scope.clone(),
             &producer,
+            input_revision.as_ref().map_or(0, |(revision, _)| *revision),
+            author_digest.as_deref(),
         )?;
         if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
             return Ok(SaveOutcome::committed(receipt));
         }
+        let later_ack = match &input_revision {
+            Some((frozen, author_cut)) => {
+                let valid = *frozen != 0 && *frozen <= 9_007_199_254_740_991
+                    && session.draft_cuts.get(frozen).is_some_and(|digest| *digest == hash(author_cut.as_bytes()));
+                if !valid {
+                    return Err(CoreError::new("draftChanged",
+                        UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again()));
+                }
+                session.draft_input_revision.is_some_and(|current| current > *frozen)
+            }
+            // Direct Core/CLI writes still cannot replace a versioned author.
+            None => session.draft_input_revision.is_some(),
+        };
         self.validate_current_file_save_scope(&scope, &session.path)?;
         if request.base_id != session.base_id {
             let draft = Draft {
@@ -1041,17 +1114,18 @@ impl Core {
                 producer_id: Some(session.draft_producer_id.clone()),
                 role: draft_recovery::DraftRole::Proposal,
             };
-            let draft = self.store_session_draft(&request.session_id, draft)?;
-            self.sessions
-                .get_mut(&request.session_id)
-                .unwrap()
-                .conflicting_draft = Some(draft);
+            if !later_ack {
+                let draft = self.store_session_draft(&request.session_id, draft)?;
+                self.sessions.get_mut(&request.session_id).unwrap().conflicting_draft = Some(draft);
+            }
             return Err(CoreError::new(
                 "staleBase",
                 UiMessage::error_save_base_unknown(),
             ));
         }
-        self.persist_draft(&request.session_id, &request.source)?;
+        if !later_ack {
+            self.persist_draft_with_role(&request.session_id, &request.source, draft_recovery::DraftRole::Proposal)?;
+        }
         if session.conflicting_draft.is_some() {
             return Err(CoreError::new(
                 "draftConflict",
@@ -1102,7 +1176,8 @@ impl Core {
             Some(request.base_id.clone()),
             scope,
             producer,
-        ));
+        ).with_input_revision(input_revision.as_ref().map_or(0, |(revision, _)| *revision))
+            .with_author_digest(author_digest));
         plan.receipt = Some(Receipt {
             revision_id: None,
             operation_id: request.operation_id,
@@ -1158,7 +1233,19 @@ impl Core {
             },
         );
         #[cfg(all(test, windows))]
-        let draft_update = hosted::definition_test_failpoint("saveDraftUpdate").and_then(|()| {
+        let draft_update = if later_ack { Ok(()) } else {
+            hosted::definition_test_failpoint("saveDraftUpdate").and_then(|()| {
+                self.persist_draft_with_role(
+                    &request.session_id,
+                    &request.source,
+                    draft_recovery::DraftRole::CommittedBaseline {
+                        operation_id: receipt.operation_id.clone(),
+                    },
+                )
+            })
+        };
+        #[cfg(not(all(test, windows)))]
+        let draft_update = if later_ack { Ok(()) } else {
             self.persist_draft_with_role(
                 &request.session_id,
                 &request.source,
@@ -1166,15 +1253,7 @@ impl Core {
                     operation_id: receipt.operation_id.clone(),
                 },
             )
-        });
-        #[cfg(not(all(test, windows)))]
-        let draft_update = self.persist_draft_with_role(
-            &request.session_id,
-            &request.source,
-            draft_recovery::DraftRole::CommittedBaseline {
-                operation_id: receipt.operation_id.clone(),
-            },
-        );
+        };
         let recovery_issue = draft_update.err().map(|error| {
             let code = error.code.clone();
             CoreError::new(
@@ -1189,6 +1268,12 @@ impl Core {
         })
     }
     pub fn save_as(&mut self, request: SaveAsRequest) -> Result<SaveOutcome> {
+        self.save_as_with_revision(request, None)
+    }
+    pub fn save_as_ordered(&mut self, request: SaveAsRequest, input_revision: u64) -> Result<SaveOutcome> {
+        self.save_as_with_revision(request, Some(input_revision))
+    }
+    fn save_as_with_revision(&mut self, request: SaveAsRequest, input_revision: Option<u64>) -> Result<SaveOutcome> {
         self.check_actor_session(&request.session_id)?;
         valid_operation_id(&request.operation_id)?;
         self.check_attempt_not_cancelled(&request.operation_id)?;
@@ -1209,14 +1294,30 @@ impl Core {
                 None,
                 plan.file_save.as_ref().unwrap().scope.clone(),
                 plan.file_save.as_ref().unwrap().draft_producer_id.clone(),
-            );
+            ).with_input_revision(input_revision.unwrap_or(0))
+                .with_author_digest(input_revision.map(|_| hash(request.source.as_bytes())));
             let fingerprint =
                 file_save_scope::fingerprint("saveAs", &path, &request.source, &data, None)?;
             if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
                 return Ok(SaveOutcome::committed(receipt));
             }
         }
-        self.persist_draft(&request.session_id, &request.source)?;
+        let later_ack = match input_revision {
+            Some(frozen) => {
+                if frozen == 0 || frozen > 9_007_199_254_740_991
+                    || !session.draft_cuts.get(&frozen)
+                        .is_some_and(|digest| *digest == hash(request.source.as_bytes()))
+                {
+                    return Err(CoreError::new("draftChanged",
+                        UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again()));
+                }
+                session.draft_input_revision.is_some_and(|current| current > frozen)
+            }
+            None => session.draft_input_revision.is_some(),
+        };
+        if !later_ack {
+            self.persist_draft_with_role(&request.session_id, &request.source, draft_recovery::DraftRole::Proposal)?;
+        }
         self.check_pending(&path)?;
         if path == session.path {
             return Err(CoreError::new(
@@ -1230,7 +1331,8 @@ impl Core {
             None,
             self.capture_file_save_scope(&path)?,
             session.draft_producer_id.clone(),
-        );
+        ).with_input_revision(input_revision.unwrap_or(0))
+            .with_author_digest(input_revision.map(|_| hash(request.source.as_bytes())));
         let fingerprint =
             file_save_scope::fingerprint("saveAs", &path, &request.source, &data, None)?;
         let mut plan = journal::Plan::file(

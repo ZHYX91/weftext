@@ -34,7 +34,7 @@ impl ReminderJournalFence {
         let mut handles = BTreeMap::new();
         let mut record_order = Vec::new();
         let mut total_bytes = 0u64;
-        for entry in core.backend.read_dir(&journal)? {
+        for entry in core.journal_entries()? {
             let path = entry?.path();
             let name = path.file_name().unwrap_or_default().to_string_lossy();
             let Some((operation, role)) = name.split_once('.') else {
@@ -50,9 +50,8 @@ impl ReminderJournalFence {
             }
             let guard = ParentGuard::acquire(&core.backend, &path)?;
             let parent = guard.directory_identity()?;
-            if parent != directory_identity {
-                return Err(changed());
-            }
+            // Every journal bucket is a different qualified parent. Each
+            // exact record retains its own parent/bytes/identity witness.
             let mut file = guard.open_read_guard_file()?;
             let original = stamp(&file)?;
             total_bytes = total_bytes

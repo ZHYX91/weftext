@@ -22,8 +22,8 @@ const MAX_OPERATION_BYTES: usize = 64 * 1024 * 1024;
 const MAX_OPERATION_FILES: usize = 5000;
 // A single observation-name cut retains the original enumeration's directory
 // guard. It carries no accepted revision or source qualification authority.
-struct ObservationRecordPaths {
-    _directory: backend::ScopedDirectoryEntries,
+struct ObservationRecordPaths<'a> {
+    _directory: journal::JournalEntries<'a>,
     paths: Vec<PathBuf>,
 }
 pub(crate) fn observation_record_name_matches(name: &str, operation_id: &str) -> bool {
@@ -32,7 +32,7 @@ pub(crate) fn observation_record_name_matches(name: &str, operation_id: &str) ->
             || (suffix.starts_with(".recovery-observations-") && suffix.ends_with(".json"))
     })
 }
-impl ObservationRecordPaths {
+impl ObservationRecordPaths<'_> {
     fn relevant_names(&self, plans: &[&journal::Plan]) -> BTreeSet<PathBuf> {
         self.paths
             .iter()
@@ -1089,8 +1089,8 @@ impl Core {
         let records = self.observation_record_paths()?;
         self.read_observation_facts_from_paths(operation_id, &records)
     }
-    fn observation_record_paths(&self) -> Result<ObservationRecordPaths> {
-        let mut directory = self.backend.read_dir(self.data_dir.join("journal"))?;
+    fn observation_record_paths(&self) -> Result<ObservationRecordPaths<'_>> {
+        let mut directory = self.journal_entries()?;
         let paths = directory
             .by_ref()
             .map(|entry| entry.map(|entry| entry.path()))
@@ -1102,7 +1102,7 @@ impl Core {
     }
     fn check_observation_record_paths(
         &self,
-        records: &ObservationRecordPaths,
+        records: &ObservationRecordPaths<'_>,
         plans: &[&journal::Plan],
     ) -> Result<()> {
         if records.relevant_names(plans) != self.observation_record_paths()?.relevant_names(plans) {
@@ -1116,7 +1116,7 @@ impl Core {
     fn read_observation_facts_from_paths(
         &self,
         operation_id: &str,
-        records: &ObservationRecordPaths,
+        records: &ObservationRecordPaths<'_>,
     ) -> Result<Vec<RevisionFact>> {
         let paths = records.paths.iter().filter(|path| {
             observation_record_name_matches(

@@ -101,8 +101,8 @@ test("literal editing refuses changed raw ranges and escapes native control punc
 
 test("an older draft persistence response cannot acknowledge newer input", () => {
   const session = new DocumentSession(opened);
-  session.acknowledgeDraft("新", 4);
-  session.acknowledgeDraft("旧", 2);
+  session.acknowledgeDraft("新", 4, 1);
+  session.acknowledgeDraft("旧", 2, 2);
   assert.equal(session.lastDraftSource, "新");
   assert.equal(session.lastDraftSerial, 4);
 });

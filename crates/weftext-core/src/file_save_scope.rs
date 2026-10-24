@@ -72,6 +72,12 @@ pub(crate) struct FileSaveData {
     pub version: u8,
     pub session_id: String,
     pub draft_producer_id: String,
+    pub input_revision: u64,
+    /// The original author cut is distinct from a Core-derived afterimage.
+    /// Its digest is signed by the same original Plan fingerprint, not stored
+    /// as another full body or producer history.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_input_digest: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_id: Option<String>,
     pub scope: QualifiedInputScope,
@@ -84,12 +90,22 @@ impl FileSaveData {
         draft_producer_id: String,
     ) -> Self {
         Self {
-            version: 2,
+            version: 3,
             session_id,
             draft_producer_id,
+            input_revision: 0,
+            author_input_digest: None,
             base_id,
             scope,
         }
+    }
+    pub(crate) fn with_input_revision(mut self, input_revision: u64) -> Self {
+        self.input_revision = input_revision;
+        self
+    }
+    pub(crate) fn with_author_digest(mut self, digest: Option<String>) -> Self {
+        self.author_input_digest = digest;
+        self
     }
 }
 pub(crate) fn unsupported_scope() -> CoreError {

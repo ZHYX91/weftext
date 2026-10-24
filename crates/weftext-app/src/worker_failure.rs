@@ -14,6 +14,7 @@ pub(crate) enum Kind {
     StdoutBudget,
     StderrBudget,
     Deadline,
+    Cancelled,
     Wait,
     NonzeroExit,
     OutputRejected,
@@ -37,6 +38,8 @@ impl fmt::Debug for StreamCapture {
 pub(crate) struct WorkerFailure {
     pub kind: Kind,
     pub exit: Option<crate::owned_process::ProcessExit>,
+    #[cfg(target_os = "linux")]
+    pub completion: Option<weftext_worker_broker::Completion>,
     pub stdin_complete: bool,
     pub stdout: StreamCapture,
     pub stderr: StreamCapture,
@@ -49,6 +52,8 @@ impl WorkerFailure {
         Self {
             kind,
             exit: None,
+            #[cfg(target_os = "linux")]
+            completion: None,
             stdin_complete: false,
             stdout: Default::default(),
             stderr: Default::default(),

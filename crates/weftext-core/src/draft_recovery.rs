@@ -4,9 +4,18 @@
 use super::*;
 use std::collections::BTreeSet;
 use weftext_messages::UiMessage;
+// Per-test-thread measurement; not a persistent cache or a witness.
+#[cfg(all(test, windows))]
+thread_local! {
+    static QUALIFIED_DRAFT_READ_CALLS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
 #[cfg(all(test, windows))]
 #[path = "draft_baseline_tests.rs"]
 mod baseline_tests;
+#[cfg(all(test, windows))]
+#[path = "draft_input_order_tests.rs"]
+mod input_order_tests;
 const MAX_DRAFT_RECORD_BYTES: usize = 16 * 1024 * 1024;
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
@@ -351,7 +360,7 @@ impl Core {
             .sessions
             .get(session_id)
             .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
-        let scope = self.draft_scope_for_session(session_id, session.conflicting_draft.as_ref())?;
+        let scope = self.draft_scope_for_session_unread(session_id, session.conflicting_draft.as_ref())?;
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
         let Some((draft, bytes)) =
             self.read_draft_record(&path, &scope, &session.stamp.identity)?
@@ -469,7 +478,7 @@ impl Core {
             .file_scope
             .clone()
     }
-    pub(crate) fn draft_scope_for_session(
+    pub(crate) fn draft_scope_for_session_unread(
         &self,
         session_id: &str,
         retained: Option<&Draft>,
@@ -486,6 +495,15 @@ impl Core {
                 UiMessage::error_core_original_scope_draft_retained_scope_differs(),
             ));
         }
+        Ok(scope)
+    }
+    pub(crate) fn draft_scope_for_session(
+        &self,
+        session_id: &str,
+        retained: Option<&Draft>,
+    ) -> Result<QualifiedInputScope> {
+        let scope = self.draft_scope_for_session_unread(session_id, retained)?;
+        let session = &self.sessions[session_id];
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
         if let Some((original, _)) =
             self.read_draft_record(&path, &scope, &session.stamp.identity)?
@@ -661,6 +679,8 @@ impl Core {
         scope: &QualifiedInputScope,
         identity: &FileIdentity,
     ) -> Result<Option<(Draft, Vec<u8>)>> {
+        #[cfg(all(test, windows))]
+        QUALIFIED_DRAFT_READ_CALLS.with(|count| count.set(count.get() + 1));
         let guard = match ParentGuard::acquire(&self.backend, path) {
             Ok(guard) => guard,
             Err(error) if error.code == "missing" => return Ok(None),

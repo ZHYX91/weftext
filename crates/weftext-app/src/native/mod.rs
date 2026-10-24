@@ -1194,8 +1194,11 @@ async fn draft_call(
     let acknowledges = request.acknowledges_input();
     let result = crate::core_call(state, move |core| match request {
         close::DraftRequest::Persist { body } => {
-            core.persist_draft(&body.session_id, &body.source)?;
-            Ok(serde_json::json!({"ok":true}))
+            match body.input_revision {
+                Some(revision) => core.persist_draft_ordered(&body.session_id, &body.source, revision)?,
+                None => core.persist_draft(&body.session_id, &body.source)?,
+            }
+            Ok(serde_json::json!({"ok":true,"inputRevision":body.input_revision}))
         }
         close::DraftRequest::Resume { body } => {
             core.resume_recovered_draft(body)?;

@@ -7,7 +7,14 @@ use crate::journal::Plan;
 use std::io::{Seek, SeekFrom};
 use weftext_messages::UiMessage;
 
+// The 256 shard directory entries are metadata overhead rather than new
+// author payload; original selected-file budgets remain enforced separately.
+// Every physical journal bucket is individually bounded by 5000 records.
+// Routing can scan all buckets, while the actual selected backup is still
+// limited by the existing author-byte budget and a 5000-member cap.
 const MAX_ROUTING_MEMBERS: usize = 5000;
+const MAX_JOURNAL_ROUTING_MEMBERS: usize = 256 * 5000 + 256;
+const MAX_SELECTED_MEMBERS: usize = 5000;
 const PRIVATE_ROOTS: [&str; 7] = [
     "journal",
     "drafts",
@@ -26,6 +33,12 @@ enum RecordKind {
     Output,
     Capture,
 }
+fn journal_bucket_folder(core: &Core, path: &Path) -> bool {
+    path.parent() == Some(core.data_dir.join("journal").as_path())
+        && path.file_name().and_then(std::ffi::OsStr::to_str).is_some_and(|name| {
+            name.len() == 2 && name.bytes().all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        })
+}
 fn record_kind(core: &Core, path: &Path) -> Result<RecordKind> {
     let relative = path
         .strip_prefix(&core.data_dir)
@@ -36,7 +49,7 @@ fn record_kind(core: &Core, path: &Path) -> Result<RecordKind> {
         .collect::<Option<Vec<_>>>()
         .ok_or_else(private_evidence)?;
     match parts.as_slice() {
-        ["journal", _] => Ok(RecordKind::Journal),
+        ["journal", _, _] if path.parent().is_some_and(|parent| journal_bucket_folder(core, parent)) => Ok(RecordKind::Journal),
         ["drafts" | "draft-history", _] => Ok(RecordKind::Draft),
         ["actors", _, "drafts" | "draft-history", _] => Ok(RecordKind::Draft),
         ["actors", _, "operations", _] => Ok(RecordKind::Actor),
@@ -382,7 +395,7 @@ impl Core {
             &self.backend,
             &self.data_dir.join(".backup-private-prospective"),
         )?;
-        let (base_entries, complete) = base_guard.directory_entries(MAX_ROUTING_MEMBERS)?;
+        let (base_entries, complete) = base_guard.directory_entries(5000)?;
         if !complete {
             return Err(backup_budget());
         }
@@ -443,16 +456,25 @@ impl Core {
             }
         }
         let mut members = 0usize;
+        let mut journal_members = 0usize;
         while let Some(folder) = queue.pop() {
-            members += 1;
-            if members > MAX_ROUTING_MEMBERS {
-                return Err(backup_budget());
+            let is_journal = folder == self.data_dir.join("journal")
+                || journal_bucket_folder(self, &folder);
+            if is_journal {
+                journal_members += 1;
+                if journal_members > MAX_JOURNAL_ROUTING_MEMBERS {
+                    return Err(backup_budget());
+                }
+            } else {
+                members += 1;
+                if members > MAX_ROUTING_MEMBERS {
+                    return Err(backup_budget());
+                }
             }
             let guard =
                 ParentGuard::acquire(&self.backend, &folder.join(".backup-private-prospective"))?;
             let own_limit = own.map_or(0, own_suffix_limit);
-            let (mut entries, complete) =
-                guard.directory_entries(MAX_ROUTING_MEMBERS + own_limit)?;
+            let (mut entries, complete) = guard.directory_entries(5000 + own_limit)?;
             if !complete {
                 return Err(backup_budget());
             }
@@ -463,7 +485,7 @@ impl Core {
                 if attrs.is_unsupported() {
                     return Err(private_evidence());
                 }
-                if folder == self.data_dir.join("journal")
+                if journal_bucket_folder(self, &folder)
                     && own.is_some_and(|p| {
                         name.to_string_lossy()
                             .starts_with(&format!("{}.", p.operation_id))
@@ -476,12 +498,23 @@ impl Core {
                     capture.handles.push(own_file);
                     continue;
                 }
-                members += 1;
-                if members > MAX_ROUTING_MEMBERS {
-                    return Err(backup_budget());
+                if is_journal {
+                    journal_members += 1;
+                    if journal_members > MAX_JOURNAL_ROUTING_MEMBERS {
+                        return Err(backup_budget());
+                    }
+                } else {
+                    members += 1;
+                    if members > MAX_ROUTING_MEMBERS {
+                        return Err(backup_budget());
+                    }
                 }
                 routed_entries.push((name.clone(), attrs));
                 if attrs.is_directory() {
+                    if folder == self.data_dir.join("journal") && journal_bucket_folder(self, &path) {
+                        queue.push(path);
+                        continue;
+                    }
                     if !path.starts_with(self.data_dir.join("actors")) {
                         return Err(private_evidence());
                     }
@@ -509,7 +542,7 @@ impl Core {
                     let file_guard = ParentGuard::acquire(&self.backend, &path)?;
                     let mut file = file_guard.open_read_guard_file()?;
                     let actual = stamp(&file)?;
-                    let (selected, route) = if folder == self.data_dir.join("journal") {
+                    let (selected, route) = if journal_bucket_folder(self, &folder) {
                         let text = name.to_string_lossy();
                         let id = text.split('.').next().ok_or_else(private_evidence)?;
                         let suffix = qualified_journal_suffix(id, &text)?;
@@ -603,7 +636,10 @@ impl Core {
                 }
                 if let Some(handle) = handle {
                     if selected {
-                        capture.selected_files.push((path, handle));
+                        if capture.selected_files.len() >= MAX_SELECTED_MEMBERS {
+                    return Err(backup_budget());
+                }
+                capture.selected_files.push((path, handle));
                     } else {
                         capture.handles.push(handle);
                     }
