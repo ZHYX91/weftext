@@ -1,4 +1,5 @@
 import { LibraryCloseActivity } from "./library-native-close";
+import { originalSaveAsSelection } from "./save-as-origin";
 import { NativeSurface, type CloseRequest } from "./native-host";
 import { nativeApiIdle, freezeNativeApi, thawNativeApi } from "./api";
 import { assertNativeProposalOwnersCloseReady, freezeNativeProposalOwnersForClose, thawNativeProposalOwnersAfterClose } from "./native-proposal-owners";
@@ -977,75 +978,71 @@ async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
         workspaceTools.invalidateQueryEnvironment(opened.root);
         await prepareSwitch();
         const restored = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
-        if (restored && (pendingSave(restored) || opened.source !== restored.session.baseSource)) {
-            restored.comparisonTarget = opened; restored.externalSource = opened.source;
+        // A delivered birth is not authority to replace an active writer.
+        if (restored) {
+            restored.comparisonTarget = opened;
+            restored.externalSource = opened.source;
             throw new UiError(uiMessage("shell.createdNodeAlreadyOpenPending"));
         }
-        if (restored) {
-            await restored.writing.settleForSessionChange();
-            workspaceTools.assertLibraryChange(inventory);
-            restored.session.opened = opened;
-            restored.editor.clearTokens();
-            restored.sourceTrashed = false;
-            restored.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
-            restored.lastSave = undefined;
-            restored.session.projection = null;
-            await persistDraft(restored);
-            workspaceTools.assertLibraryChange(inventory);
-            current = restored;
-            activeSourceOrigin = null;
-            renderContent();
-            scheduleRender(restored, 0);
-        }
-        else
-            addDocument(opened);
+        addDocument(opened);
         await refreshInventory();
     } finally { finishNativeActivity(); }
 }
 async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
+    let refreshed: OpenedDocument | null = null;
     try {
-        try {
+        workspaceTools.assertLibraryChange(inventory);
+        const generation = ++navigationGeneration;
+        await prepareSwitch();
+        if (generation !== navigationGeneration) return;
+        const existing = opened.nodeId && opened.workspaceId ? documents.find(item =>
+            item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId
+            && readOnlySource(item) === (opened.readOnly === true || opened.kind === "trash" || opened.kind === "managedTrash")) : undefined;
+        if (!existing) {
+            addDocument(opened);
+        } else {
+            await existing.writing.settleForSessionChange();
+            if (generation !== navigationGeneration || !documents.includes(existing)) return;
             workspaceTools.assertLibraryChange(inventory);
-            const generation = ++navigationGeneration;
-            await prepareSwitch();
-            if (generation !== navigationGeneration)
-                return;
-            const existing = opened.nodeId && opened.workspaceId ? documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId
-                && readOnlySource(item) === (opened.readOnly === true || opened.kind === "trash" || opened.kind === "managedTrash")) : undefined;
-            if (!existing)
-                addDocument(opened);
-            else {
-                await existing.writing.settleForSessionChange();
-                if (generation !== navigationGeneration || !documents.includes(existing))
-                    return;
-                workspaceTools.assertLibraryChange(inventory);
-                if (existing.session.baseSource === opened.source) {
-                    existing.session.opened = opened;
-                    existing.editor.clearTokens();
-                    existing.sourceTrashed = false;
-                    existing.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
-                    existing.session.projection = null;
-                    existing.lastSave = undefined;
-                    await persistDraft(existing);
-                    scheduleRender(existing, 0);
+            // A new Core Session cannot take this editor's producer merely
+            // because the NodeID and source string happen to match.
+            if (!readOnlySource(existing) && !pendingSave(existing)) {
+                try {
+                    refreshed = await api<OpenedDocument>("/api/open", { sessionId: existing.session.opened.sessionId });
+                } catch (error) {
+                    existing.session.error = joinUiText([uiMessage("shell.originalFileSessionUnavailable"), error instanceof Error ? errorUiText(error) : String(error)]);
                 }
-                else {
-                    existing.externalSource = opened.source;
-                    existing.comparisonTarget = opened;
-                    existing.session.error = uiMessage("shell.openedTargetDiskChanged");
-                }
-                workspaceTools.assertLibraryChange(inventory);
-                current = existing;
-                activeSourceOrigin = null;
-                renderContent();
-                renderSidebar();
+                if (generation !== navigationGeneration || !documents.includes(existing)) return;
             }
-            shell.classList.remove("sidebar-open");
-        } finally {
-            if (!ownsOpenedSession(opened.sessionId)) await releaseOpenedSession(opened.sessionId);
+            const candidate = refreshed ?? opened;
+            if (candidate.sessionId === existing.session.opened.sessionId
+                && candidate.source === existing.session.baseSource && !pendingSave(existing)) {
+                existing.session.opened = candidate;
+                existing.editor.clearTokens();
+                existing.sourceTrashed = false;
+                existing.session.acknowledgeSave(candidate.source, candidate.baseId, candidate.path);
+                existing.session.projection = null;
+                await persistDraft(existing);
+                scheduleRender(existing, 0);
+            } else {
+                existing.externalSource = candidate.source;
+                existing.comparisonTarget = candidate;
+                existing.session.error = uiMessage("shell.openedTargetDiskChanged");
+            }
+            workspaceTools.assertLibraryChange(inventory);
+            current = existing;
+            activeSourceOrigin = null;
+            renderContent();
+            renderSidebar();
         }
-    } finally { finishNativeActivity(); }
+        shell.classList.remove("sidebar-open");
+    } finally {
+        try {
+            if (refreshed && !ownsOpenedSession(refreshed.sessionId)) await releaseOpenedSession(refreshed.sessionId);
+            if (!ownsOpenedSession(opened.sessionId)) await releaseOpenedSession(opened.sessionId);
+        } finally { finishNativeActivity(); }
+    }
 }
 function ownsOpenedSession(sessionId: string): boolean {
     return documents.some(document => document.session.opened.sessionId === sessionId || document.comparisonTarget?.sessionId === sessionId);
@@ -2572,9 +2569,16 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
             return;
         const prior = doc.session.opened;
         try {
-            fresh = prior.nodeId && prior.workspaceId && !readOnlySource(doc) ? await api<OpenedDocument>("/api/data/open", { root: prior.root, entityKey: `weftext-node://${prior.workspaceId}/${prior.nodeId}` }) : await api<OpenedDocument>("/api/open", { sessionId: prior.sessionId });
+            fresh = await api<OpenedDocument>("/api/open", { sessionId: prior.sessionId });
         } catch (error) {
             doc.session.error = joinUiText([uiMessage("shell.originalFileSessionUnavailable"), error instanceof Error ? errorUiText(error) : String(error)]);
+            // An entity lookup can only supply a comparison after losing the
+            // original Session, never another producer for this editor.
+            if (prior.nodeId && prior.workspaceId && !readOnlySource(doc)) {
+                try {
+                    fresh = await api<OpenedDocument>("/api/data/open", { root: prior.root, entityKey: `weftext-node://${prior.workspaceId}/${prior.nodeId}` });
+                } catch { /* leave the original local input untouched */ }
+            }
         }
         if (generation !== navigationGeneration)
             return;
@@ -2606,7 +2610,7 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
             saved.inventory = latest;
         }
         workspaceTools.assertLibraryChange(saved ? saved.inventory : inventory);
-        if (fresh?.source === doc.session.baseSource) {
+        if (fresh?.sessionId === prior.sessionId && fresh.source === doc.session.baseSource) {
             doc.session.opened = fresh;
             doc.session.acknowledgeSave(fresh.source, fresh.baseId, fresh.path);
             doc.sourceTrashed = false;
@@ -2800,11 +2804,18 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
 async function saveAs(): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
     try {
-        if (!current)
-            return;
-        const path = await pathDialog("saveAs");
-        if (path)
-            await saveDocument(current, path);
+        const owner = current;
+        if (!owner) return;
+        const originalSession = owner.session.opened.sessionId;
+        let selected: { owner: LiveDocument; path: string } | null;
+        try {
+            selected = await originalSaveAsSelection(owner, originalSession,
+                () => pathDialog("saveAs"),
+                () => ({ owner: current, session: owner.session.opened.sessionId, active: documents.includes(owner) }));
+        } catch {
+            throw new UiError(uiMessage("shell.saveAsDeliverySessionChanged"));
+        }
+        if (selected) await saveDocument(selected.owner, selected.path);
     } finally { finishNativeActivity(); }
 }
 async function inspectSaveAsDelivery(operationId: string): Promise<void> {
