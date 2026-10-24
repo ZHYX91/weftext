@@ -751,10 +751,11 @@ impl Core {
                 continue;
             }
             let pending_path = Path::new(&p.path);
-            let a = display(pending_path).to_lowercase();
-            let b = display(path).to_lowercase();
-            let affects = a == b
-                || (p.kind == "createLibrary" && b.starts_with(&(a + "\\")))
+            let same = backend::namespace_path_compare(pending_path, path)?
+                == std::cmp::Ordering::Equal;
+            let nested_library = p.kind == "createLibrary"
+                && backend::namespace_relative_path(path, pending_path)?.is_some();
+            let affects = same || nested_library
                 || p.transaction.as_ref().is_some_and(|t| t.affects(path));
             if !affects {
                 continue;

@@ -9,7 +9,11 @@ use weftext_messages::UiMessage;
 
 // The 256 shard directory entries are metadata overhead rather than new
 // author payload; original selected-file budgets remain enforced separately.
-const MAX_ROUTING_MEMBERS: usize = 5256;
+// Every physical journal bucket is individually bounded by 5000 records.
+// Routing can scan all buckets, while the actual selected backup is still
+// limited by the existing author-byte budget and a 5000-member cap.
+const MAX_ROUTING_MEMBERS: usize = 256 * 5000 + 5256;
+const MAX_SELECTED_MEMBERS: usize = 5000;
 const PRIVATE_ROOTS: [&str; 7] = [
     "journal",
     "drafts",
@@ -390,7 +394,7 @@ impl Core {
             &self.backend,
             &self.data_dir.join(".backup-private-prospective"),
         )?;
-        let (base_entries, complete) = base_guard.directory_entries(MAX_ROUTING_MEMBERS)?;
+        let (base_entries, complete) = base_guard.directory_entries(5000)?;
         if !complete {
             return Err(backup_budget());
         }
@@ -460,7 +464,11 @@ impl Core {
                 ParentGuard::acquire(&self.backend, &folder.join(".backup-private-prospective"))?;
             let own_limit = own.map_or(0, own_suffix_limit);
             let (mut entries, complete) =
-                guard.directory_entries(MAX_ROUTING_MEMBERS + own_limit)?;
+                guard.directory_entries(if journal_bucket_folder(self, &folder) {
+                    5000 + own_limit
+                } else {
+                    5000 + own_limit
+                })?;
             if !complete {
                 return Err(backup_budget());
             }
@@ -615,7 +623,10 @@ impl Core {
                 }
                 if let Some(handle) = handle {
                     if selected {
-                        capture.selected_files.push((path, handle));
+                        if capture.selected_files.len() >= MAX_SELECTED_MEMBERS {
+                    return Err(backup_budget());
+                }
+                capture.selected_files.push((path, handle));
                     } else {
                         capture.handles.push(handle);
                     }
