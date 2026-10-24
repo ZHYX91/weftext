@@ -569,6 +569,7 @@ struct CreateNote {
 struct DraftRequest {
     session_id: String,
     source: String,
+    input_revision: Option<u64>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -776,23 +777,51 @@ async fn create_note(
         .await
         .map(Json)
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FrozenSaveRequest {
+    session_id: String,
+    base_id: String,
+    source: String,
+    operation_id: String,
+    input_revision: Option<u64>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FrozenSaveAsRequest {
+    session_id: String,
+    path: String,
+    source: String,
+    operation_id: String,
+    input_revision: Option<u64>,
+}
 async fn save(
     State(state): State<AppState>,
-    RequestJson(req): RequestJson<SaveRequest>,
+    RequestJson(req): RequestJson<FrozenSaveRequest>,
 ) -> ApiResult {
     let id = req.operation_id.clone();
     let session = req.session_id.clone();
-    let output = value(core_call(&state, move |c| c.save(req)).await?)?;
+    let input_revision = req.input_revision;
+    let request = SaveRequest { session_id: req.session_id, base_id: req.base_id, source: req.source, operation_id: req.operation_id };
+    let output = value(core_call(&state, move |c| match input_revision {
+        Some(revision) => c.save_ordered(request, revision),
+        None => c.save(request),
+    }).await?)?;
     Ok(Json(
         knowledge_api::file_save_delivery(&state, id, output, Some(session)).await,
     ))
 }
 async fn save_as(
     State(state): State<AppState>,
-    RequestJson(req): RequestJson<SaveAsRequest>,
+    RequestJson(req): RequestJson<FrozenSaveAsRequest>,
 ) -> ApiResult {
     let id = req.operation_id.clone();
-    let output = value(core_call(&state, move |c| c.save_as(req)).await?)?;
+    let input_revision = req.input_revision;
+    let request = SaveAsRequest { session_id: req.session_id, path: req.path, source: req.source, operation_id: req.operation_id };
+    let output = value(core_call(&state, move |c| match input_revision {
+        Some(revision) => c.save_as_ordered(request, revision),
+        None => c.save_as(request),
+    }).await?)?;
     Ok(Json(
         knowledge_api::file_save_delivery(&state, id, output, None).await,
     ))
@@ -801,11 +830,12 @@ async fn draft(
     State(state): State<AppState>,
     RequestJson(req): RequestJson<DraftRequest>,
 ) -> ApiResult {
-    core_call(&state, move |c| {
-        c.persist_draft(&req.session_id, &req.source)
-    })
-    .await?;
-    Ok(Json(json!({"ok":true})))
+    let revision = req.input_revision;
+    core_call(&state, move |c| match revision {
+        Some(revision) => c.persist_draft_ordered(&req.session_id, &req.source, revision),
+        None => c.persist_draft(&req.session_id, &req.source),
+    }).await?;
+    Ok(Json(json!({"ok":true,"inputRevision":revision})))
 }
 async fn resume_draft(
     State(state): State<AppState>,

@@ -137,6 +137,7 @@ interface LiveDocument {
         receipt?: Receipt & OriginalFact;
         deliverySessionId?: string;
         deliveryEnded?: boolean;
+        inputRevision?: number;
     };
     externalSource?: string;
     comparisonTarget?: OpenedDocument;
@@ -2171,6 +2172,7 @@ async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise
         const source = proposedSource ?? doc.writing.recoverySource() ?? doc.session.source;
         const serial = doc.session.serial;
         const sessionId = doc.session.opened.sessionId;
+        const inputRevision = doc.session.issueDraftRevision();
         const request = doc.draftChain.catch(() => undefined).then(async () => libraryCloseActivity.run(async () => {
 
             const recovery = doc.session.recoveryContinuation;
@@ -2181,9 +2183,9 @@ async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise
                 }
                 doc.session.recoveryContinuationSettled = true;
             }
-            await api("/api/draft", { sessionId, source });
-            if (doc.session.opened.sessionId !== sessionId) throw new UiError(uiMessage("shell.querySavedNewInputRetained"));
-            doc.session.acknowledgeDraft(source, serial);
+            const ack = await api<{ ok: boolean; inputRevision: number }>("/api/draft", { sessionId, source, inputRevision });
+            if (doc.session.opened.sessionId !== sessionId || !ack || ack.ok !== true || ack.inputRevision !== inputRevision) throw new UiError(uiMessage("shell.querySavedNewInputRetained"));
+            doc.session.acknowledgeDraft(source, serial, inputRevision);
             doc.draftFailure = null;
 
         }));
@@ -2712,15 +2714,18 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             }
         }
         const retry = pendingSave(doc) !== undefined;
-        const request: NonNullable<LiveDocument["lastSave"]> = pendingSave(doc) ?? { source: doc.session.source, sourcePath: doc.session.path, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), sessionId: doc.session.opened.sessionId, path };
+        // Freeze an ACKed source/revision together. Newer Y gets another cut.
+        if (!retry && (doc.session.lastDraftSource !== doc.session.source || doc.session.lastDraftRevision === null))
+            throw new UiError(uiMessage("shell.saveQueryReservationInputChanged"));
+        const request: NonNullable<LiveDocument["lastSave"]> = pendingSave(doc) ?? { source: doc.session.source, sourcePath: doc.session.path, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), sessionId: doc.session.opened.sessionId, path, inputRevision: doc.session.lastDraftRevision! };
         doc.lastSave = request;
         doc.session.savePending = true;
         refreshChrome();
         let receiptReceived = false;
         try {
             const payload = request.path
-                ? { sessionId: request.sessionId, path: request.path, source: request.source, operationId: request.operationId }
-                : { sessionId: request.sessionId, baseId: request.baseId, source: request.source, operationId: request.operationId };
+                ? { sessionId: request.sessionId, path: request.path, source: request.source, operationId: request.operationId, inputRevision: request.inputRevision }
+                : { sessionId: request.sessionId, baseId: request.baseId, source: request.source, operationId: request.operationId, inputRevision: request.inputRevision };
             const receipt = fileSaveReceipt(await submitOriginal(api, request.path ? "/api/save-as" : "/api/save", payload, request.path ? "saveAs" : "save", retry), request);
             if (!originalCommitted(receipt)) throw new ApiError(receipt.status, uiMessage("shell.saveUnconfirmedDraftRetained"));
             receiptReceived = true;

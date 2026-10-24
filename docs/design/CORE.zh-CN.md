@@ -598,3 +598,8 @@ Draft 的每条主／备选输入区分普通 `proposal` 与 `committedBaseline 
 所有私有 ActorOperation 读取先在同一 ParentGuard 保护句柄上逐字节读取既有顺序首部 `scope, library?, actor, resource, fingerprint, coreOperationId`（总计 8 KiB、单值 2 KiB），严格核原 scope tuple、原 Plan 和实际 actor/resource/库资格，再有界读取正文并重核元数据一致。Server 的原保存 status 必需原 resource，读取授权在进入 Core 前完成。定义枚举对已证明的其他 resource 只读首部，不读取或计入其正文预算；畸形原 tuple 不能借外域跳过。无 namespace library 绑定的原输入仍必须与当前受信库的 WorkspaceId 和根 FI 一致。纯 noInput fence 则在 4 KiB 内完整核其无输入事实，不能用未核的首部声明掩盖作者内容。
 
 Draft 持久布局必需先 `scope, identity`，再正文；历史枚举仅在原 scope 和 FI 均匹配后计入 128 条／16 MiB 预算。准确 restore 引用若 scope 或 FI 不符直接拒绝，保原 commit 与回执，只报告结果暂不可交付。资格通过后从同一个受保护句柄有界读取、严格反序列化并联核首部；旧布局原件保留，明确 unsupported，不增加旧／新双 reader 或平行 metadata 账本。定义保存 admission sidecar 也先核其原 file-save Plan 和既有 coreOperationId/saveOperationId/actor/resource 首部，再读取预约正文。
+
+
+### v0.7 author input ordering (development candidate)
+
+The live Core producer acknowledges strictly increasing input revisions only after the Draft is durable. A frozen file-save intent binds its original acknowledged revision into its fileSave participant/fingerprint; a later acknowledged proposal cannot be overwritten or reclassified by an older save that arrives afterward. Missing revision is not permission to replace a versioned proposal. Original operation retry retains its frozen participants, and distinct producers/Undo remain independent. This changes the developing fileSave profile (version 3); retained original bytes are not deleted or silently upgraded. The stage requires product/browser and failure-injection verification before acceptance.

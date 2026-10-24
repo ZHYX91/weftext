@@ -81,6 +81,7 @@ struct DefinitionSaveRequest {
     source: String,
     serial: u64,
     source_hash: Option<String>,
+    input_revision: Option<u64>,
     base_id: String,
     key: Option<String>,
     label: String,
@@ -2899,12 +2900,17 @@ async fn save_definition(
             })?;
         let operation_id = req.operation_id.clone();
         let session_id = req.session_id.clone();
-        let outcome = core.save(SaveRequest {
+        let revision = req.input_revision;
+        let intent = SaveRequest {
             session_id: req.session_id,
             base_id: req.base_id,
             source: patch.source.clone(),
             operation_id: req.operation_id,
-        })?;
+        };
+        let outcome = match revision {
+            Some(revision) => core.save_ordered(intent, revision)?,
+            None => core.save(intent)?,
+        };
         let document = core
             .refresh_local_saved_session(&operation_id, &session_id)
             .map(|(_, document)| document);
@@ -4442,6 +4448,7 @@ mod tests {
             source,
             serial: 1,
             source_hash: None,
+            input_revision: None,
             base_id: document["baseId"].as_str().unwrap().into(),
             key,
             label: "weftext-query-status".into(),

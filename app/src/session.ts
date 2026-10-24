@@ -31,6 +31,9 @@ export class DocumentSession {
     savePending = false;
     lastDraftSource: string | null = null;
     lastDraftSerial = -1;
+    lastDraftRevision: number | null = null;
+    private nextDraftRevision = 0;
+    issueDraftRevision(): number { return ++this.nextDraftRevision; }
     error: UiText | null = null;
     recovered: boolean;
     /** Only the recovery primary actually installed in this editor may be
@@ -68,11 +71,11 @@ export class DocumentSession {
         this.recovered = false;
         this.error = null;
     }
-    acknowledgeDraft(source: string, serial: number): void {
-        if (serial < this.lastDraftSerial)
-            return;
+    acknowledgeDraft(source: string, serial: number, revision: number): void {
+        if (serial < this.lastDraftSerial) return;
         this.lastDraftSerial = serial;
         this.lastDraftSource = source;
+        this.lastDraftRevision = revision;
     }
 }
 /** Install only the same original owner's verified saved bytes. A fresh

@@ -7,6 +7,9 @@ use weftext_messages::UiMessage;
 #[cfg(all(test, windows))]
 #[path = "draft_baseline_tests.rs"]
 mod baseline_tests;
+#[cfg(all(test, windows))]
+#[path = "draft_input_order_tests.rs"]
+mod input_order_tests;
 const MAX_DRAFT_RECORD_BYTES: usize = 16 * 1024 * 1024;
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
