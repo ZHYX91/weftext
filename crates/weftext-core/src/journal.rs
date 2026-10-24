@@ -314,7 +314,25 @@ impl Iterator for JournalEntries<'_> {
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             if let Some(current) = self.current.as_mut() {
-                if let Some(entry) = current.next() { return Some(entry); }
+                if let Some(entry) = current.next() {
+                    // A file in the wrong bucket is not a valid original
+                    // record, even when its filename parses as a Plan ID.
+                    let entry = match entry {
+                        Ok(entry) => entry,
+                        Err(error) => return Some(Err(error)),
+                    };
+                    let file = entry.file_name();
+                    let name = file.to_string_lossy();
+                    let id = name.split('.').next().unwrap_or("");
+                    if valid_operation_id(id).is_err()
+                        || entry.path().parent().and_then(Path::file_name).and_then(|p| p.to_str())
+                            != Some(journal_bucket(id).as_str())
+                    {
+                        return Some(Err(CoreError::new("privateEvidence",
+                            UiMessage::error_core_journal_journal_filename_invalid())));
+                    }
+                    return Some(Ok(entry));
+                }
                 self.current = None;
             }
             let bucket = match self.root.next()? {
@@ -340,44 +358,77 @@ impl Core {
     /// One-time relocation under the original Core instance lock. Rename
     /// preserves source file objects and exact bytes. An interrupted conversion
     /// resumes from the remaining flat names; active readers never use two paths.
+    /// One-time conversion of original objects under the Core instance lock.
+    /// First enumerate the entire old flat namespace with an explicit finite
+    /// migration budget, before introducing all 256 buckets: otherwise a
+    /// previously valid 4900-member flat directory could exceed 5000 merely
+    /// because we created the new bucket folders.
+    ///
+    /// The rename preserves each original file object and byte contents.
+    /// Crashing between moves leaves a resumable set of original flat names;
+    /// product readers never use two paths after admission.
     pub(crate) fn initialize_journal_layout(&self, may_convert: bool) -> Result<()> {
+        const MAX_LEGACY_ENTRIES: usize = 65_536 + JOURNAL_BUCKETS;
         let root = self.data_dir.join("journal");
-        if may_convert {
-            for bucket in 0..JOURNAL_BUCKETS {
-                self.backend.create_private_directory(&root.join(format!("{bucket:02x}")))?;
-            }
-        }
-        let original = self.backend.read_dir(&root)?.collect::<Result<Vec<_>>>()?;
-        for entry in original {
-            let name = entry.file_name();
-            if name.to_str().is_some_and(valid_journal_bucket) {
-                let _ = self.backend.read_dir(entry.path())?;
+        let existing = self.backend.read_dir_bounded(&root, MAX_LEGACY_ENTRIES)?
+            .map(|entry| entry.map(|entry| entry.path()))
+            .collect::<Result<Vec<_>>>()?;
+        let mut flat = std::collections::BTreeMap::<String, Vec<PathBuf>>::new();
+        let mut buckets = std::collections::BTreeSet::<String>::new();
+        for path in existing {
+            let name = path.file_name().and_then(|part| part.to_str()).ok_or_else(|| {
+                CoreError::new("privateEvidence",
+                    UiMessage::error_core_journal_journal_filename_invalid())
+            })?;
+            if valid_journal_bucket(name) {
+                buckets.insert(name.to_owned());
                 continue;
             }
-            let name = name.to_str().ok_or_else(|| CoreError::new(
-                "privateEvidence", UiMessage::error_core_journal_journal_filename_invalid()))?;
             let id = name.split('.').next().unwrap_or("");
             valid_operation_id(id)?;
             if !may_convert {
                 return Err(CoreError::new("unsupportedFileSaveEvidence",
                     UiMessage::error_core_file_save_scope_retained_file_save_scope_unsupported()));
             }
-            let target = root.join(journal_bucket(id)).join(name);
-            if self.backend.entry_exists(&target)? {
-                return Err(CoreError::new("privateEvidence",
-                    UiMessage::error_core_journal_journal_filename_invalid()));
+            flat.entry(journal_bucket(id)).or_default().push(path);
+        }
+        for bucket in 0..JOURNAL_BUCKETS {
+            let name = format!("{bucket:02x}");
+            let target_dir = root.join(&name);
+            if !buckets.contains(&name) {
+                if !may_convert {
+                    return Err(CoreError::new("privateEvidence",
+                        UiMessage::error_core_journal_journal_filename_invalid()));
+                }
+                self.backend.create_private_directory(&target_dir)?;
             }
-            let guard = ParentGuard::acquire(&self.backend, &entry.path())?;
-            let old = guard.open_read_guard_file()?;
-            let identity = stamp(&old)?.identity;
-            drop(old); drop(guard);
-            backend::publish_private_create(&self.backend, &entry.path(), &target)?;
-            let guard = ParentGuard::acquire(&self.backend, &target)?;
-            let new = guard.open_read_guard_file()?;
-            if stamp(&new)?.identity != identity {
-                return Err(CoreError::new("privateEvidence",
-                    UiMessage::error_core_original_scope_save_plan_participants_or_receipt_invalid()));
+            // Existing buckets are actual directories, not trusted names.
+            let _ = self.backend.read_dir(&target_dir)?;
+            if let Some(files) = flat.remove(&name) {
+                for old_path in files {
+                    let leaf = old_path.file_name().ok_or_else(|| CoreError::new(
+                        "privateEvidence", UiMessage::error_core_journal_journal_filename_invalid()))?;
+                    let target = target_dir.join(leaf);
+                    if self.backend.entry_exists(&target)? {
+                        return Err(CoreError::new("privateEvidence",
+                            UiMessage::error_core_journal_journal_filename_invalid()));
+                    }
+                    let guard = ParentGuard::acquire(&self.backend, &old_path)?;
+                    let file = guard.open_read_guard_file()?;
+                    let identity = stamp(&file)?.identity;
+                    drop(file);
+                    drop(guard);
+                    backend::publish_private_create(&self.backend, &old_path, &target)?;
+                    let guard = ParentGuard::acquire(&self.backend, &target)?;
+                    let file = guard.open_read_guard_file()?;
+                    if stamp(&file)?.identity != identity {
+                        return Err(CoreError::new("privateEvidence",
+                            UiMessage::error_core_original_scope_save_plan_participants_or_receipt_invalid()));
+                    }
+                }
             }
+            // No partial success: every bucket must remain fully enumerable.
+            let _ = self.backend.read_dir(&target_dir)?;
         }
         Ok(())
     }
