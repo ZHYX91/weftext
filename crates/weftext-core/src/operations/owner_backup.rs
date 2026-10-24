@@ -12,7 +12,8 @@ use weftext_messages::UiMessage;
 // Every physical journal bucket is individually bounded by 5000 records.
 // Routing can scan all buckets, while the actual selected backup is still
 // limited by the existing author-byte budget and a 5000-member cap.
-const MAX_ROUTING_MEMBERS: usize = 256 * 5000 + 5256;
+const MAX_ROUTING_MEMBERS: usize = 5000;
+const MAX_JOURNAL_ROUTING_MEMBERS: usize = 256 * 5000 + 256;
 const MAX_SELECTED_MEMBERS: usize = 5000;
 const PRIVATE_ROOTS: [&str; 7] = [
     "journal",
@@ -455,20 +456,25 @@ impl Core {
             }
         }
         let mut members = 0usize;
+        let mut journal_members = 0usize;
         while let Some(folder) = queue.pop() {
-            members += 1;
-            if members > MAX_ROUTING_MEMBERS {
-                return Err(backup_budget());
+            let is_journal = folder == self.data_dir.join("journal")
+                || journal_bucket_folder(self, &folder);
+            if is_journal {
+                journal_members += 1;
+                if journal_members > MAX_JOURNAL_ROUTING_MEMBERS {
+                    return Err(backup_budget());
+                }
+            } else {
+                members += 1;
+                if members > MAX_ROUTING_MEMBERS {
+                    return Err(backup_budget());
+                }
             }
             let guard =
                 ParentGuard::acquire(&self.backend, &folder.join(".backup-private-prospective"))?;
             let own_limit = own.map_or(0, own_suffix_limit);
-            let (mut entries, complete) =
-                guard.directory_entries(if journal_bucket_folder(self, &folder) {
-                    5000 + own_limit
-                } else {
-                    5000 + own_limit
-                })?;
+            let (mut entries, complete) = guard.directory_entries(5000 + own_limit)?;
             if !complete {
                 return Err(backup_budget());
             }
@@ -492,9 +498,16 @@ impl Core {
                     capture.handles.push(own_file);
                     continue;
                 }
-                members += 1;
-                if members > MAX_ROUTING_MEMBERS {
-                    return Err(backup_budget());
+                if is_journal {
+                    journal_members += 1;
+                    if journal_members > MAX_JOURNAL_ROUTING_MEMBERS {
+                        return Err(backup_budget());
+                    }
+                } else {
+                    members += 1;
+                    if members > MAX_ROUTING_MEMBERS {
+                        return Err(backup_budget());
+                    }
                 }
                 routed_entries.push((name.clone(), attrs));
                 if attrs.is_directory() {
