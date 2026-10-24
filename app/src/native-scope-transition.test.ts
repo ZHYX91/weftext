@@ -181,12 +181,12 @@ test("activateDocument refuses a blocked saved library before changing the activ
   assert.deepEqual(f.effects, []); assert.deepEqual(f.released, []);
 });
 
-test("activateDocument rechecks deferred inventory before editing saved navigation or adopting the fresh Session", async () => {
+test("activateDocument rechecks deferred inventory without adopting an unrelated Session", async () => {
   const f = fixture(), before = f.savedMain(), { doc, saved, prior } = f.target();
   const serialized = JSON.stringify(saved), response = deferred<any>(), entered = deferred<void>();
   const fresh = { ...prior, sessionId: "fresh-unadopted", baseId: "new-base" };
   f.context.api = async (route: string) => {
-    if (route === "/api/data/open") return fresh;
+    if (route === "/api/open") return { ...fresh, sessionId: prior.sessionId };
     assert.equal(route, "/api/library/open"); entered.resolve(); return response.promise;
   };
   const switching = f.context.activateDocument(doc); await entered.promise;
@@ -194,7 +194,7 @@ test("activateDocument rechecks deferred inventory before editing saved navigati
   await assert.rejects(switching, (error: unknown) => error instanceof UiError);
   f.assertOriginal(before); assert.equal(doc.session.opened, prior);
   assert.equal(f.context.navigationContexts.get(doc), saved); assert.equal(JSON.stringify(saved), serialized);
-  assert.deepEqual(f.effects, []); assert.deepEqual(f.released, [fresh.sessionId]);
+  assert.deepEqual(f.effects, []); assert.deepEqual(f.released, []);
 });
 
 test("renderSidebar rejects a context mismatch before disposing the current contents or changing navigation layout", () => {
@@ -220,11 +220,13 @@ test("the actual WorkspaceTools setter rejects a frozen Query even while its own
   assert.equal(f.workspace.library, f.original); assert.equal(f.query.root, f.original.root); assert.deepEqual(f.effects, []);
 });
 
-test("activateDocument keeps an adopted fresh Session when a later proposal prevents navigation publication after persistence", async () => {
+test("activateDocument retains the exact original Session when navigation publication is blocked after persistence", async () => {
   const f = fixture(), before = f.savedMain(), { doc, saved, prior } = f.target();
   const serialized = JSON.stringify(saved), persistence = deferred<void>(), entered = deferred<void>();
-  const fresh = { ...prior, sessionId: "fresh-already-adopted", baseId: "new-base" };
-  f.context.api = async (route: string) => route === "/api/data/open" ? fresh : { ...f.next, entries: [] };
+  const fresh = { ...prior, baseId: "new-base" };
+  f.context.api = async (route: string) => route === "/api/open" ? fresh : { ...f.next, entries: [] };
+  f.context.sidebar = { querySelector: () => null };
+  Object.assign(doc.editor, { view: { focus() {} } });
   f.context.persistDraft = async (owner: any) => {
     assert.equal(owner, doc); assert.equal(owner.session.opened, fresh);
     entered.resolve(); await persistence.promise;
@@ -253,6 +255,12 @@ test("saveDocument retains its exact committed receipt and adopted Session when 
   };
   f.context.current = doc; f.context.documents = [doc]; const before = f.savedMain();
   f.query.draftFlags.add("advanced");
+  // The stub must model an actual Core input ACK before the save may freeze
+  // S; an unacknowledged source cannot gain author-commit eligibility.
+  f.context.persistDraft = async (owner: any) => {
+    const revision = owner.session.issueDraftRevision();
+    owner.session.acknowledgeDraft(owner.session.source, owner.session.serial, revision);
+  };
   let request: any, validated: FileSaveReceipt | undefined;
   const routes: string[] = [];
   Object.assign(f.context, {
@@ -285,11 +293,11 @@ test("saveDocument retains its exact committed receipt and adopted Session when 
   assert.equal(f.effects.includes("sidebar"), false);
 });
 
-test("activateDocument publishes an admitted saved context and keeps its adopted fresh Session", async () => {
+test("activateDocument publishes an admitted context without inventing another writer producer", async () => {
   const f = fixture(), { doc, saved, prior } = f.target(), serialized = JSON.stringify(saved);
-  const fresh = { ...prior, sessionId: "admitted-activation", baseId: "fresh-base" };
+  const fresh = { ...prior, baseId: "fresh-base" };
   const latest = { ...f.next, entries: [] };
-  f.context.api = async (route: string) => route === "/api/data/open" ? fresh : latest;
+  f.context.api = async (route: string) => route === "/api/open" ? fresh : latest;
   f.context.sidebar = { querySelector: () => null };
   Object.assign(doc.editor, { view: { focus() { f.effects.push("focus"); } } });
   await f.context.activateDocument(doc);
