@@ -354,7 +354,7 @@ impl Core {
             .sessions
             .get(session_id)
             .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
-        let scope = self.draft_scope_for_session(session_id, session.conflicting_draft.as_ref())?;
+        let scope = self.draft_scope_for_session_unread(session_id, session.conflicting_draft.as_ref())?;
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
         let Some((draft, bytes)) =
             self.read_draft_record(&path, &scope, &session.stamp.identity)?
