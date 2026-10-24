@@ -2948,12 +2948,12 @@ fn replay_saved_definition(
     // Original author identity is checked before any optional schema/result
     // delivery. The journal already retains the exact submitted save bytes.
     let outcome = core
-        .saved_outcome_for_request(&SaveRequest {
+        .saved_outcome_for_request_revision(&SaveRequest {
             session_id: req.session_id.clone(),
             base_id: req.base_id.clone(),
             source: original.source.clone(),
             operation_id: req.operation_id.clone(),
-        })?
+        }, req.input_revision)?
         .ok_or_else(|| {
             CoreError::new(
                 "recoveryPending",

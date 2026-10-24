@@ -709,6 +709,16 @@ impl Core {
     /// Verify the complete original source-save intent without a live Session
     /// and without executing save again. The original Plan owns its path.
     pub fn saved_outcome_for_request(&self, request: &SaveRequest) -> Result<Option<SaveOutcome>> {
+        self.saved_outcome_for_request_revision(request, None)
+    }
+    /// A status/delivery replay never changes the original frozen author cut.
+    /// When supplied, the client cut must match the frozen Plan participant;
+    /// a generic status lookup still has no producer or writer transfer rights.
+    pub fn saved_outcome_for_request_revision(
+        &self,
+        request: &SaveRequest,
+        expected_revision: Option<u64>,
+    ) -> Result<Option<SaveOutcome>> {
         self.sync_local_owner()?;
         valid_operation_id(&request.operation_id)?;
         let Some(plan) = self.operations.get(&request.operation_id) else {
@@ -717,6 +727,8 @@ impl Core {
         self.validate_file_save_plan(plan)?;
         if plan.kind != "save"
             || plan.transaction.is_some()
+            || expected_revision.is_some_and(|revision|
+                plan.file_save.as_ref().unwrap().input_revision != revision)
             || save_fingerprint(
                 request,
                 Path::new(&plan.path),
