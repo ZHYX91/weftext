@@ -292,14 +292,114 @@ fn decode_journal_plan(path: &Path, bytes: &[u8]) -> Result<Plan> {
     Ok(plan)
 }
 
+// Partition original journal facts by their canonical operation ID. There is
+// no secondary index or alternative durable commit authority.
+const JOURNAL_BUCKETS: usize = 256;
+const JOURNAL_BUCKET_LIMIT: usize = 5000;
+const JOURNAL_ADMISSION_MARGIN: usize = 32;
+fn journal_bucket(id: &str) -> String {
+    id.get(..2).filter(|part| part.bytes().all(|b| b.is_ascii_hexdigit()))
+        .unwrap_or("00").to_ascii_lowercase()
+}
+fn valid_journal_bucket(name: &str) -> bool {
+    name.len() == 2 && name.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+pub(crate) struct JournalEntries<'a> {
+    backend: &'a BackendContext,
+    root: backend::ScopedDirectoryEntries,
+    current: Option<backend::ScopedDirectoryEntries>,
+}
+impl Iterator for JournalEntries<'_> {
+    type Item = Result<backend::ScopedDirectoryEntry>;
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(current) = self.current.as_mut() {
+                if let Some(entry) = current.next() { return Some(entry); }
+                self.current = None;
+            }
+            let bucket = match self.root.next()? {
+                Ok(bucket) => bucket,
+                Err(error) => return Some(Err(error)),
+            };
+            if !bucket.file_name().to_str().is_some_and(valid_journal_bucket) {
+                return Some(Err(CoreError::new("privateEvidence",
+                    UiMessage::error_core_journal_journal_filename_invalid())));
+            }
+            match self.backend.read_dir(bucket.path()) {
+                Ok(entries) => self.current = Some(entries),
+                Err(error) => return Some(Err(error)),
+            }
+        }
+    }
+}
 impl Core {
     pub(crate) fn journal_path(&self, id: &str, suffix: &str) -> PathBuf {
-        self.data_dir
-            .join("journal")
+        self.data_dir.join("journal").join(journal_bucket(id))
             .join(format!("{id}.{suffix}.json"))
     }
+    /// One-time relocation under the original Core instance lock. Rename
+    /// preserves source file objects and exact bytes. An interrupted conversion
+    /// resumes from the remaining flat names; active readers never use two paths.
+    pub(crate) fn initialize_journal_layout(&self, may_convert: bool) -> Result<()> {
+        let root = self.data_dir.join("journal");
+        if may_convert {
+            for bucket in 0..JOURNAL_BUCKETS {
+                self.backend.create_private_directory(&root.join(format!("{bucket:02x}")))?;
+            }
+        }
+        let original = self.backend.read_dir(&root)?.collect::<Result<Vec<_>>>()?;
+        for entry in original {
+            let name = entry.file_name();
+            if name.to_str().is_some_and(valid_journal_bucket) {
+                let _ = self.backend.read_dir(entry.path())?;
+                continue;
+            }
+            let name = name.to_str().ok_or_else(|| CoreError::new(
+                "privateEvidence", UiMessage::error_core_journal_journal_filename_invalid()))?;
+            let id = name.split('.').next().unwrap_or("");
+            valid_operation_id(id)?;
+            if !may_convert {
+                return Err(CoreError::new("unsupportedFileSaveEvidence",
+                    UiMessage::error_core_file_save_scope_retained_file_save_scope_unsupported()));
+            }
+            let target = root.join(journal_bucket(id)).join(name);
+            if self.backend.entry_exists(&target)? {
+                return Err(CoreError::new("privateEvidence",
+                    UiMessage::error_core_journal_journal_filename_invalid()));
+            }
+            let guard = ParentGuard::acquire(&self.backend, &entry.path())?;
+            let old = guard.open_read_guard_file()?;
+            let identity = stamp(&old)?.identity;
+            drop(old); drop(guard);
+            backend::publish_private_create(&self.backend, &entry.path(), &target)?;
+            let guard = ParentGuard::acquire(&self.backend, &target)?;
+            let new = guard.open_read_guard_file()?;
+            if stamp(&new)?.identity != identity {
+                return Err(CoreError::new("privateEvidence",
+                    UiMessage::error_core_original_scope_save_plan_participants_or_receipt_invalid()));
+            }
+        }
+        Ok(())
+    }
+    /// Keep each source bucket's protected directory guard alive until its
+    /// entire bounded slice has been enumerated.
+    pub(crate) fn journal_entries(&self) -> Result<JournalEntries<'_>> {
+        Ok(JournalEntries {
+            backend: &self.backend,
+            root: self.backend.read_dir(self.data_dir.join("journal"))?,
+            current: None,
+        })
+    }
+    fn admit_journal_operation(&self, id: &str) -> Result<()> {
+        let path = self.data_dir.join("journal").join(journal_bucket(id));
+        if self.backend.read_dir(path)?.count() >= JOURNAL_BUCKET_LIMIT - JOURNAL_ADMISSION_MARGIN {
+            return Err(CoreError::new("budget",
+                UiMessage::error_core_backend_private_namespace_budget()));
+        }
+        Ok(())
+    }
     pub(crate) fn load_journals(&mut self) -> Result<()> {
-        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
+        for entry in self.journal_entries()? {
             let path = entry?.path();
             if path
                 .file_name()
@@ -309,17 +409,21 @@ impl Core {
                 self.operations.insert(plan.operation_id.clone(), plan);
             }
         }
-        // All committed decisions must have their original Plan, even if no
-        // caller happens to query that operation during this process lifetime.
-        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
+        // Decode every original committed fact once on startup; the
+        // in-process watermark is reconstructed, never an extra fact ledger.
+        let mut maximum = 0u64;
+        for entry in self.journal_entries()? {
             let name = entry?.file_name();
             if let Some(id) = name
                 .to_str()
                 .and_then(|name| name.strip_suffix(".commit.json"))
             {
-                self.committed_record(id)?;
+                let commit = self.committed_record(id)?.ok_or_else(|| CoreError::new(
+                    "invalidState", UiMessage::error_core_journal_original_commit_evidence_invalid()))?;
+                maximum = maximum.max(commit.commit_sequence);
             }
         }
+        self.committed_sequence.store(maximum, std::sync::atomic::Ordering::Relaxed);
         self.validate_resolution_namespace()
     }
     pub(crate) fn read_journal_plan(&self, path: &Path) -> Result<Plan> {
@@ -368,6 +472,7 @@ impl Core {
             ));
         }
         self.validate_operation_pending(&plan)?;
+        self.admit_journal_operation(&plan.operation_id)?;
         self.freeze_sync_publication(&mut plan)?;
         // A plan contains complete exact preimage/afterimage before any user write.
         private_create(
@@ -395,13 +500,8 @@ impl Core {
         Ok(Some(record))
     }
     pub(crate) fn commit(&self, plan: &Plan) -> Result<()> {
-        let mut maximum = 0;
-        for candidate in self.operations.values() {
-            if let Some(record) = self.committed_record(&candidate.operation_id)? {
-                maximum = maximum.max(record.commit_sequence);
-            }
-        }
-        let sequence = maximum.checked_add(1).ok_or_else(|| {
+        let sequence = self.committed_sequence.load(std::sync::atomic::Ordering::Relaxed)
+            .checked_add(1).ok_or_else(|| {
             CoreError::new(
                 "invalidState",
                 UiMessage::error_core_journal_commit_sequence_exhausted(),
@@ -411,13 +511,21 @@ impl Core {
             .duration_since(std::time::UNIX_EPOCH)
             .ok()
             .and_then(|duration| u64::try_from(duration.as_millis()).ok());
-        private_create(
+        let published = private_create(
             &self.backend,
             &self.journal_path(&plan.operation_id, "commit"),
             &serde_json::to_vec(
                 &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint,"receipt":plan.receipt,"fileSave":plan.file_save,"storageProfile":STORAGE_PROFILE,"savedAtUnixMs":saved_at,"commitSequence":sequence}),
             )?,
-        )
+        );
+        if published.is_ok() {
+            self.committed_sequence.store(sequence, std::sync::atomic::Ordering::Relaxed);
+        } else {
+            // A possibly published commit makes the watermark unavailable
+            // until complete original evidence is reloaded at restart.
+            self.committed_sequence.store(u64::MAX, std::sync::atomic::Ordering::Relaxed);
+        }
+        published
     }
     pub(crate) fn commit_sequence(&self, id: &str) -> Result<u64> {
         self.committed_record(id)?
@@ -484,7 +592,7 @@ impl Core {
     ) -> Result<Option<hosted::ActorLibraryBinding>> {
         valid_operation_id(id)?;
         let mut scope = None;
-        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
+        for entry in self.journal_entries()? {
             let entry = entry?;
             let name = entry.file_name();
             let name = name.to_str().ok_or_else(|| {
@@ -582,7 +690,7 @@ impl Core {
         Ok(scope)
     }
     fn validate_resolution_namespace(&self) -> Result<()> {
-        for entry in self.backend.read_dir(self.data_dir.join("journal"))? {
+        for entry in self.journal_entries()? {
             let entry = entry?;
             let name = entry.file_name();
             let name = name.to_str().ok_or_else(|| {
@@ -1006,6 +1114,16 @@ pub(crate) fn private_create(
     path: &Path,
     bytes: &[u8],
 ) -> Result<()> {
+    // Bound every journal-record producer, including reservation-only writes,
+    // before introducing a file that would make its bucket unreadable.
+    if let Some(parent) = path.parent()
+        && parent.parent().and_then(Path::file_name) == Some(std::ffi::OsStr::new("journal"))
+        && parent.file_name().and_then(std::ffi::OsStr::to_str).is_some_and(valid_journal_bucket)
+        && backend.read_dir(parent)?.count() >= JOURNAL_BUCKET_LIMIT - 1
+    {
+        return Err(CoreError::new("budget",
+            UiMessage::error_core_backend_private_namespace_budget()));
+    }
     let temporary = path.with_extension(format!("{}.pending", fresh()));
     let guard = ParentGuard::acquire(backend, &temporary)?;
     let mut file = guard.open_file(true, true)?;

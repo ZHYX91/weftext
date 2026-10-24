@@ -586,6 +586,7 @@ pub struct Core {
     data_dir: PathBuf,
     sessions: HashMap<String, Session>,
     operations: HashMap<String, journal::Plan>,
+    committed_sequence: std::sync::atomic::AtomicU64,
     snapshots: HashMap<String, operations::SnapshotBinding>,
     style_bases: HashMap<String, operations::StyleBasis>,
     admitted_cuts: HashMap<String, operations::AdmittedBasis>,
@@ -699,6 +700,7 @@ impl Core {
             data_dir,
             sessions: HashMap::new(),
             operations: HashMap::new(),
+            committed_sequence: std::sync::atomic::AtomicU64::new(0),
             snapshots: HashMap::new(),
             style_bases: HashMap::new(),
             admitted_cuts: HashMap::new(),
@@ -713,6 +715,7 @@ impl Core {
                 ));
             }
         }
+        core.initialize_journal_layout(expected.is_none())?;
         core.load_journals()?;
         drop(original);
         Ok(core)
