@@ -209,10 +209,13 @@ async fn edit(
         let output =
             super::super::notes_edit_from_worker_with(input, command, &state.workers).await;
         return locked(&state, move |inner| {
-            let (actor, session, _) = qualify(inner, &auth, &basis, false, true)?;
-            validate_inputs(inner, &actor, &session.resource, &dependencies)?;
-            environment.recheck(inner, &actor)?;
-            Ok(Json(output?.edit))
+            let permitted = (|| {
+                let (actor, session, _) = qualify(inner, &auth, &basis, false, true)?;
+                validate_inputs(inner, &actor, &session.resource, &dependencies)?;
+                environment.recheck(inner, &actor)?;
+                Ok(())
+            })();
+            Ok(Json(terminal_native_notes_result(permitted, output)?.edit))
         })
         .await;
     }
@@ -404,6 +407,16 @@ pub(super) fn validate_inputs(
     }
     Ok(())
 }
+// One Notes-specific terminal handoff. Old frozen worker outputs and typed
+// worker failures cannot leave this endpoint before permission revalidation.
+fn terminal_native_notes_result<T>(
+    permitted: Result<(), ApiError>,
+    work: Result<T, ApiError>,
+) -> Result<T, ApiError> {
+    permitted?;
+    work
+}
+
 fn preview_worker_failure(original: ApiError) -> ApiError {
     ApiError::new(
         StatusCode::UNPROCESSABLE_ENTITY,
@@ -433,6 +446,22 @@ pub(super) async fn compile_frozen(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_notes_worker_success_and_failure_cannot_bypass_revocation() {
+        let denied = || Err(ApiError::new(StatusCode::FORBIDDEN, "permissionDenied",
+            UiMessage::error_api_hosted_editor_native_edit_unsupported()));
+        assert_eq!(terminal_native_notes_result(
+            denied(), Ok(serde_json::json!({"protected": "source"})))
+            .unwrap_err().code, "permissionDenied");
+        assert_eq!(terminal_native_notes_result::<serde_json::Value>(
+            denied(), Err(ApiError::new(StatusCode::UNPROCESSABLE_ENTITY,
+                "workerFailed", UiMessage::error_api_worker_transport_failed())))
+            .unwrap_err().code, "permissionDenied");
+        assert_eq!(terminal_native_notes_result(
+            Ok(()), Ok(serde_json::json!({"valid": true}))).unwrap(),
+            serde_json::json!({"valid": true}));
+    }
 
     #[tokio::test]
     async fn authorized_preview_preserves_only_the_original_private_worker_facts() {
