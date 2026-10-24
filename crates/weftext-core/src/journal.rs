@@ -392,43 +392,41 @@ impl Core {
             }
             flat.entry(journal_bucket(id)).or_default().push(path);
         }
-        for bucket in 0..JOURNAL_BUCKETS {
-            let name = format!("{bucket:02x}");
+        // Only create buckets containing real retained files. No empty
+        // 256-folder skeleton and no unverifiable auxiliary index.
+        for (name, files) in flat {
             let target_dir = root.join(&name);
             if !buckets.contains(&name) {
-                if !may_convert {
+                self.backend.create_private_directory(&target_dir)?;
+            }
+            let _ = self.backend.read_dir(&target_dir)?;
+            for old_path in files {
+                let leaf = old_path.file_name().ok_or_else(|| CoreError::new(
+                    "privateEvidence", UiMessage::error_core_journal_journal_filename_invalid()))?;
+                let target = target_dir.join(leaf);
+                if self.backend.entry_exists(&target)? {
                     return Err(CoreError::new("privateEvidence",
                         UiMessage::error_core_journal_journal_filename_invalid()));
                 }
-                self.backend.create_private_directory(&target_dir)?;
-            }
-            // Existing buckets are actual directories, not trusted names.
-            let _ = self.backend.read_dir(&target_dir)?;
-            if let Some(files) = flat.remove(&name) {
-                for old_path in files {
-                    let leaf = old_path.file_name().ok_or_else(|| CoreError::new(
-                        "privateEvidence", UiMessage::error_core_journal_journal_filename_invalid()))?;
-                    let target = target_dir.join(leaf);
-                    if self.backend.entry_exists(&target)? {
-                        return Err(CoreError::new("privateEvidence",
-                            UiMessage::error_core_journal_journal_filename_invalid()));
-                    }
-                    let guard = ParentGuard::acquire(&self.backend, &old_path)?;
-                    let file = guard.open_read_guard_file()?;
-                    let identity = stamp(&file)?.identity;
-                    drop(file);
-                    drop(guard);
-                    backend::publish_private_create(&self.backend, &old_path, &target)?;
-                    let guard = ParentGuard::acquire(&self.backend, &target)?;
-                    let file = guard.open_read_guard_file()?;
-                    if stamp(&file)?.identity != identity {
-                        return Err(CoreError::new("privateEvidence",
-                            UiMessage::error_core_original_scope_save_plan_participants_or_receipt_invalid()));
-                    }
+                let guard = ParentGuard::acquire(&self.backend, &old_path)?;
+                let file = guard.open_read_guard_file()?;
+                let identity = stamp(&file)?.identity;
+                drop(file);
+                drop(guard);
+                backend::publish_private_create(&self.backend, &old_path, &target)?;
+                let guard = ParentGuard::acquire(&self.backend, &target)?;
+                let file = guard.open_read_guard_file()?;
+                if stamp(&file)?.identity != identity {
+                    return Err(CoreError::new("privateEvidence",
+                        UiMessage::error_core_original_scope_save_plan_participants_or_receipt_invalid()));
                 }
             }
-            // No partial success: every bucket must remain fully enumerable.
             let _ = self.backend.read_dir(&target_dir)?;
+        }
+        // Empty or already migrated profiles still verify every existing
+        // shard, including physical directory type and bounded membership.
+        for name in buckets {
+            let _ = self.backend.read_dir(root.join(name))?;
         }
         Ok(())
     }
@@ -443,7 +441,8 @@ impl Core {
     }
     fn admit_journal_operation(&self, id: &str) -> Result<()> {
         let path = self.data_dir.join("journal").join(journal_bucket(id));
-        if self.backend.read_dir(path)?.count() >= JOURNAL_BUCKET_LIMIT - JOURNAL_ADMISSION_MARGIN {
+        self.backend.create_private_directory(&path)?;
+        if self.backend.read_dir(&path)?.count() >= JOURNAL_BUCKET_LIMIT - JOURNAL_ADMISSION_MARGIN {
             return Err(CoreError::new("budget",
                 UiMessage::error_core_backend_private_namespace_budget()));
         }
@@ -1174,10 +1173,12 @@ pub(crate) fn private_create(
     if let Some(parent) = path.parent()
         && parent.parent().and_then(Path::file_name) == Some(std::ffi::OsStr::new("journal"))
         && parent.file_name().and_then(std::ffi::OsStr::to_str).is_some_and(valid_journal_bucket)
-        && backend.read_dir(parent)?.count() >= JOURNAL_BUCKET_LIMIT - 1
     {
-        return Err(CoreError::new("budget",
-            UiMessage::error_core_backend_private_namespace_budget()));
+        backend.create_private_directory(parent)?;
+        if backend.read_dir(parent)?.count() >= JOURNAL_BUCKET_LIMIT - 1 {
+            return Err(CoreError::new("budget",
+                UiMessage::error_core_backend_private_namespace_budget()));
+        }
     }
     let temporary = path.with_extension(format!("{}.pending", fresh()));
     let guard = ParentGuard::acquire(backend, &temporary)?;
@@ -1392,7 +1393,9 @@ mod wrong_bucket_tests {
             "retainedUnknown");
         let original = serde_json::to_vec(&plan).unwrap();
         let bucket = if journal_bucket(&id) == "00" { "01" } else { "00" };
-        let wrong = private.join("journal").join(bucket).join(format!("{id}.plan.json"));
+        let wrong_dir = private.join("journal").join(bucket);
+        std::fs::create_dir_all(&wrong_dir).unwrap();
+        let wrong = wrong_dir.join(format!("{id}.plan.json"));
         std::fs::write(&wrong, &original).unwrap();
         assert!(core.journal_entries().unwrap().collect::<Result<Vec<_>>>().is_err());
         drop(core);
