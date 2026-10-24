@@ -1,3 +1,5 @@
+import { registerNativeProposalOwner } from "./native-proposal-owners";
+import { ProposalCloseGuard } from "./proposal-close-guard";
 import { joinUiText } from "./ui-locale";
 import { decodeApiErrorBody, apiErrorUiText, type ApiErrorBody } from "./api-error";
 import { decodeCoreDescription, coreDescriptionUiText, type CoreDescription } from "./ui-diagnostics";
@@ -117,6 +119,16 @@ function validRequest(value: LibraryCreationRequest): boolean {
 }
 /** The exact native bytes and original ID are retained before the first write. */
 export class LibraryCreationController {
+    private readonly closeGuard = new ProposalCloseGuard();
+    private readonly releaseCloseOwner: () => void;
+    assertCloseReady(): void { this.closeGuard.assertReady(this.busy || this.request !== null || this.proposal !== null || this.recoveryError !== null || this.draftEdited || !!this.draft.path || this.draft.rootMode !== undefined); }
+    freezeForClose(): boolean { return this.closeGuard.freeze(this.busy || this.request !== null || this.proposal !== null || this.recoveryError !== null || this.draftEdited || !!this.draft.path || this.draft.rootMode !== undefined); }
+    thawAfterClose(): void { this.closeGuard.thaw(); }
+    bindCloseGuard(element: HTMLElement): void { this.closeGuard.bind(element); }
+    runCloseTracked<T>(operation: () => Promise<T>): Promise<T> { return this.closeGuard.run(operation); }
+    /** Hiding retains the live original owner; it is not a native-close acknowledgement. */
+    assertCanHide(): void { this.closeGuard.assertMutable(); this.closeGuard.assertReady(this.busy); }
+
     draft: CreationDraft = { path: "", language: '"zh"', region: '"CN"', defaults: null };
     request: LibraryCreationRequest | null = null;
     receipt: LibraryCreationReceipt | null = null;
@@ -124,8 +136,10 @@ export class LibraryCreationController {
     recovery: LibraryCreationRecovery | null = null;
     recoveryError: string | null = null;
     busy = false;
+    private draftEdited = false;
     constructor(readonly host: LibraryCreationHost, private storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> = localStorage) {
         const raw = storage.getItem(key);
+        this.releaseCloseOwner = registerNativeProposalOwner(this);
         if (!raw)
             return;
         try {
@@ -142,30 +156,35 @@ export class LibraryCreationController {
     }
     get locked(): boolean { return this.busy || this.request !== null || this.recoveryError !== null; }
     async load(): Promise<void> {
-        if (this.request || this.recoveryError)
-            return;
-        if (this.draft.defaults) {
-            if (!this.draft.defaults.rootPresets)
-                this.draft.defaults.rootPresets = (await this.host.defaults()).rootPresets;
+        return this.closeGuard.run(async () => {
+            if (this.request || this.recoveryError)
+                return;
+            if (this.draft.defaults) {
+                if (!this.draft.defaults.rootPresets)
+                    this.draft.defaults.rootPresets = (await this.host.defaults()).rootPresets;
+                this.retain();
+                return;
+            }
+            const defaults = await this.host.defaults();
+            if (!defaultsValid(defaults))
+                throw new UiError(uiMessage("libraryCreation.initialStyleUnparseable"));
+            this.draft.defaults = structuredClone(defaults);
+            this.draft.language = defaults.controls.find(c => c.key === "text.lang")!.value;
+            this.draft.region = defaults.controls.find(c => c.key === "text.region")!.value;
             this.retain();
-            return;
-        }
-        const defaults = await this.host.defaults();
-        if (!defaultsValid(defaults))
-            throw new UiError(uiMessage("libraryCreation.initialStyleUnparseable"));
-        this.draft.defaults = structuredClone(defaults);
-        this.draft.language = defaults.controls.find(c => c.key === "text.lang")!.value;
-        this.draft.region = defaults.controls.find(c => c.key === "text.region")!.value;
-        this.retain();
+        });
     }
     change(update: Partial<Pick<CreationDraft, "path" | "language" | "region" | "rootMode" | "rootTitle" | "queries">>): void {
+        if (this.closeGuard.frozen) throw new UiError(uiMessage("shell.closeAuthorInputPending"));
         if (this.locked)
             throw new UiError(uiMessage("libraryCreation.originalResultUnconfirmed"));
+        this.draftEdited = true;
         this.draft = { ...this.draft, ...update };
         this.proposal = null;
         this.retain();
     }
     preview(): void {
+        if (this.closeGuard.frozen) throw new UiError(uiMessage("shell.closeAuthorInputPending"));
         if (this.locked || !this.draft.defaults)
             throw new UiError(uiMessage("libraryCreation.readInitialStyleOrConfirmOriginal"));
         const path = this.draft.path.trim();
@@ -180,74 +199,100 @@ export class LibraryCreationController {
         }
     }
     async create(): Promise<LibraryCreationReceipt> {
-        if (this.busy || this.recoveryError || !this.request && !this.proposal)
-            throw new UiError(uiMessage("libraryCreation.previewCreationFirst"));
-        if (!this.request) {
-            this.request = structuredClone(this.proposal!);
+        return this.closeGuard.run(async () => {
+            if (this.busy || this.recoveryError || !this.request && !this.proposal)
+                throw new UiError(uiMessage("libraryCreation.previewCreationFirst"));
+            if (!this.request) {
+                this.request = structuredClone(this.proposal!);
+                try {
+                    this.retain();
+                }
+                catch (error) {
+                    this.request = null;
+                    throw error;
+                }
+            }
+            this.busy = true;
             try {
+                const receipt = typedCreationReceipt(this.receipt ? await this.host.delivery(this.request.operationId) : await this.host.create(structuredClone(this.request)));
+                if (receipt.operationId !== this.request.operationId || receipt.status !== "committed" || !receipt.workspaceId || !receipt.root || this.receipt && (receipt.workspaceId !== this.receipt.workspaceId || receipt.root !== this.receipt.root))
+                    throw new UiError(uiMessage("libraryCreation.receiptOperationMismatch"));
+                this.receipt = typedCreationReceipt(structuredClone(receipt));
                 this.retain();
+                return receipt;
             }
-            catch (error) {
-                this.request = null;
-                throw error;
+            finally {
+                this.busy = false;
             }
-        }
-        this.busy = true;
-        try {
-            const receipt = typedCreationReceipt(this.receipt ? await this.host.delivery(this.request.operationId) : await this.host.create(structuredClone(this.request)));
-            if (receipt.operationId !== this.request.operationId || receipt.status !== "committed" || !receipt.workspaceId || !receipt.root || this.receipt && (receipt.workspaceId !== this.receipt.workspaceId || receipt.root !== this.receipt.root))
-                throw new UiError(uiMessage("libraryCreation.receiptOperationMismatch"));
-            this.receipt = typedCreationReceipt(structuredClone(receipt));
-            this.retain();
-            return receipt;
-        }
-        finally {
-            this.busy = false;
-        }
+        });
     }
     async inspect(): Promise<void> {
-        if (!this.request || this.busy)
-            throw new UiError(uiMessage("libraryCreation.noOriginalToCheck"));
-        this.busy = true;
-        try {
-            this.installRecovery(await this.host.inspect(this.request.operationId));
-        }
-        finally {
-            this.busy = false;
-        }
+        return this.closeGuard.run(async () => {
+            if (!this.request || this.busy)
+                throw new UiError(uiMessage("libraryCreation.noOriginalToCheck"));
+            this.busy = true;
+            try {
+                this.installRecovery(await this.host.inspect(this.request.operationId));
+            }
+            finally {
+                this.busy = false;
+            }
+        });
     }
     async resolve(action: string): Promise<void> {
-        if (!this.request || this.busy || !this.recovery?.allowedActions?.includes(action))
-            throw new UiError(uiMessage("libraryCreation.checkAllowedRecoveryAction"));
-        this.busy = true;
-        try {
-            this.installRecovery(await this.host.resolve(this.request.operationId, action));
-        }
-        finally {
-            this.busy = false;
-        }
+        return this.closeGuard.run(async () => {
+            if (!this.request || this.busy || !this.recovery?.allowedActions?.includes(action))
+                throw new UiError(uiMessage("libraryCreation.checkAllowedRecoveryAction"));
+            this.busy = true;
+            try {
+                this.installRecovery(await this.host.resolve(this.request.operationId, action));
+            }
+            finally {
+                this.busy = false;
+            }
+        });
     }
     async cancel(): Promise<void> {
-        if (!this.request || this.busy || !this.host.cancel)
-            throw new UiError(uiMessage("libraryCreation.originalCannotEnd"));
-        this.busy = true;
-        try {
-            this.installRecovery(await this.host.cancel(structuredClone(this.request)));
-        }
-        finally {
-            this.busy = false;
-        }
+        return this.closeGuard.run(async () => {
+            if (!this.request || this.busy || !this.host.cancel)
+                throw new UiError(uiMessage("libraryCreation.originalCannotEnd"));
+            this.busy = true;
+            try {
+                this.installRecovery(await this.host.cancel(structuredClone(this.request)));
+            }
+            finally {
+                this.busy = false;
+            }
+        });
     }
-  async deliver(): Promise<LibraryCreationReceipt> {
-    const receipt = await this.create();
-    this.busy = true;
-    try {
-      if (receipt.deliveryError) throw new UiError(joinUiText([uiMessage("libraryCreation.committedDeliveryPendingPrefix"), apiErrorUiText(receipt.deliveryError!)]));
-      await this.host.deliver(receipt);
-      this.storage.removeItem(key);
-      return receipt;
-    } finally { this.busy = false; }
-  }
+    async deliver(): Promise<LibraryCreationReceipt> {
+        return this.closeGuard.run(async () => {
+            const receipt = await this.create();
+            this.busy = true;
+            try {
+                if (receipt.deliveryError) throw new UiError(joinUiText([uiMessage("libraryCreation.committedDeliveryPendingPrefix"), apiErrorUiText(receipt.deliveryError)]));
+                await this.host.deliver(receipt);
+                this.storage.removeItem(key);
+                this.request = this.proposal = null;
+                this.draft = { path: "", language: '"zh"', region: '"CN"', defaults: null };
+                this.draftEdited = false;
+                return receipt;
+            }
+            finally { this.busy = false; }
+        });
+    }
+    /** Explicit dismissal cancels only local, unsubmitted creation input. */
+    dismiss(): void {
+        if (this.closeGuard.frozen) throw new UiError(uiMessage("shell.closeAuthorInputPending"));
+        this.closeGuard.assertReady(this.busy || this.request !== null || this.recoveryError !== null);
+        this.storage.removeItem(key);
+        this.proposal = null;
+        this.draft = { path: "", language: '"zh"', region: '"CN"', defaults: null };
+        this.draftEdited = false;
+        this.assertCloseReady();
+        this.closeGuard.freeze(false);
+        this.releaseCloseOwner();
+    }
     private installRecovery(result: LibraryCreationRecovery): void {
         if (!this.request || result.operationId !== this.request.operationId)
             throw new UiError(uiMessage("libraryCreation.recoveryOperationMismatch"));
@@ -274,17 +319,33 @@ export class LibraryCreationController {
     }
 }
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text: UiText = ""): HTMLElementTagNameMap[K] => { const e = document.createElement(tag); setUiText(e, text); return e; };
+interface CreationDialogResult {
+    receipt: LibraryCreationReceipt | null;
+    retained: boolean;
+}
+// A hidden original keeps its actual controller, host and bound DOM. Reopening
+// must not reconstruct a second registered owner from the recovery record.
+let retainedCreation: Promise<() => Promise<CreationDialogResult>> | null = null;
 let activeCreation: Promise<LibraryCreationReceipt | null> | null = null;
 export function openLibraryCreation(host: LibraryCreationHost): Promise<LibraryCreationReceipt | null> {
-    if (!activeCreation)
-        activeCreation = showLibraryCreation(host).finally(() => { activeCreation = null; });
+    if (!activeCreation) {
+        const retained = retainedCreation ??= createLibraryCreationDialog(host);
+        activeCreation = retained.then(show => show(), error => {
+            if (retainedCreation === retained) retainedCreation = null;
+            throw error;
+        }).then(result => {
+            if (!result.retained && retainedCreation === retained) retainedCreation = null;
+            return result.receipt;
+        }).finally(() => { activeCreation = null; });
+    }
     return activeCreation;
 }
-async function showLibraryCreation(host: LibraryCreationHost): Promise<LibraryCreationReceipt | null> {
+async function createLibraryCreationDialog(host: LibraryCreationHost): Promise<() => Promise<CreationDialogResult>> {
     const controller = new LibraryCreationController(host);
-    await controller.load();
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    let loadError: unknown;
+    try { await controller.load(); } catch (error) { loadError = error; }
     const dialog = el("dialog");
+    controller.bindCloseGuard(dialog);
     dialog.className = "modal library-creation-dialog";
     setUiAttr(dialog, "aria-label", uiMessage("libraryCreation.dialogLabel"));
     const path = el("input");
@@ -328,7 +389,7 @@ async function showLibraryCreation(host: LibraryCreationHost): Promise<LibraryCr
         b.onclick = () => {
             void (async () => {
                 try {
-                    if (composing)
+                    if (!dialog.open || composing)
                         return;
                     const promise = run();
                     draw();
@@ -403,7 +464,7 @@ async function showLibraryCreation(host: LibraryCreationHost): Promise<LibraryCr
                 const b = el("button", ({ keepCurrent: uiMessage("libraryCreation.keepStateEndOriginal"), adoptAfterImages: uiMessage("libraryCreation.verifyOriginalWrittenContents"), resumeOriginalPlan: uiMessage("libraryCreation.continueOnlyMissingParts") } as Record<string, UiText>)[action] ?? action);
                 b.type = "button";
                 b.disabled = controller.busy;
-                b.onclick = () => { void controller.resolve(action).then(draw).catch(error => { setUiText(message, String(error)); draw(); }); };
+                b.onclick = () => { if (dialog.open) void controller.resolve(action).then(draw).catch(error => { setUiText(message, String(error)); draw(); }); };
                 preview.append(b);
             }
         }
@@ -442,20 +503,31 @@ async function showLibraryCreation(host: LibraryCreationHost): Promise<LibraryCr
     dialog.addEventListener("compositionend", () => { composing = false; });
     dialog.addEventListener("keydown", event => event.stopPropagation());
     dialog.append(el("h2", uiMessage("shell.createLibrary")), el("p", uiMessage("libraryCreation.createLibraryDescription")), path, el("label", uiMessage("libraryCreation.documentLanguage")), language, el("label", uiMessage("libraryCreation.documentRegion")), region, el("label", uiMessage("libraryCreation.initialRootContent")), rootMode, rootTitle, queryChoices, preview, message, actions);
-    document.body.append(dialog);
-    draw();
-    dialog.showModal();
-    path.focus();
-    return new Promise(resolve => {
+    if (loadError !== undefined) setUiText(message, errorUiText(loadError));
+    dialog.addEventListener("cancel", event => { event.preventDefault(); finish(null); });
+    return () => new Promise(resolve => {
+        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        let settled = false;
         finish = value => {
-            if (controller.busy || composing)
+            if (settled || controller.busy || composing)
                 return;
+            const retained = value === null && (controller.request !== null || controller.recoveryError !== null);
+            try {
+                if (retained) controller.assertCanHide();
+                else controller.dismiss();
+            }
+            catch (error) { setUiText(message, errorUiText(error)); return; }
+            settled = true;
+            finish = () => {};
             dialog.close();
             dialog.remove();
             if (previousFocus?.isConnected)
                 previousFocus.focus();
-            resolve(value);
+            resolve({ receipt: value, retained });
         };
-        dialog.addEventListener("cancel", event => { event.preventDefault(); finish(null); });
+        document.body.append(dialog);
+        draw();
+        dialog.showModal();
+        path.focus();
     });
 }

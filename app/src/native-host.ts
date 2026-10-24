@@ -44,9 +44,11 @@ export class NativeSurface {
   private binding?: { surfaceId: string; surfaceEpoch: string };
   private pending?: CloseRequest & ClosePrepared;
   private preparing?: CloseRequest;
+  private activeAttempt?: CloseRequest;
   private frozen = false;
   private readonly participants = new Map<string, CloseParticipant>();
   private ready = false;
+  private readonly listeners = new Set<(message: Record<string, unknown>) => void>();
 
   constructor(readonly kind: SurfaceKind) {
     const changed = (): void => {
@@ -60,6 +62,19 @@ export class NativeSurface {
     document.addEventListener("compositionstart", () => { this.composing = true; changed(); }, true);
     document.addEventListener("compositionend", () => { this.composing = false; changed(); }, true);
     bridge()?.addEventListener("message", event => { void this.receive(event.data); });
+  }
+
+  get isNative(): boolean { return bridge() !== undefined; }
+  reportFailed(): void { bridge()?.postMessage({ type: "surface-failed", kind: this.kind }); }
+  /** Fixed product messages still pass the host's typed protocol and original
+   * surface checks. Callers cannot supply or replace an incarnation binding. */
+  post(value: Record<string, unknown>): void {
+    if (!this.binding || !bridge()) throw new Error("The original native surface is not bound");
+    this.send(value);
+  }
+  listen(listener: (message: Record<string, unknown>) => void): () => void {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
   }
 
   register(owner: string, participant: CloseParticipant): () => void {
@@ -92,24 +107,53 @@ export class NativeSurface {
   private async receive(value: unknown): Promise<void> {
     if (!value || typeof value !== "object") return;
     const message = value as Record<string, unknown>;
-    if (message.type === "surface-bound" && typeof message.surfaceId === "string" && typeof message.surfaceEpoch === "string") {
-      this.binding = { surfaceId: message.surfaceId, surfaceEpoch: message.surfaceEpoch };
-      bindNativeDraftSurface(this.binding);
+    if (message.type === "surface-bound") {
+      if (![message.surfaceId, message.surfaceEpoch].every(item => typeof item === "string" && item.length > 0 && item.length <= 128)) return;
+      const binding = { surfaceId: message.surfaceId as string, surfaceEpoch: message.surfaceEpoch as string };
+      if (this.binding) {
+        if (this.binding.surfaceId !== binding.surfaceId || this.binding.surfaceEpoch !== binding.surfaceEpoch) this.reportFailed();
+        return;
+      }
+      try { bindNativeDraftSurface(binding); }
+      catch { this.reportFailed(); return; }
+      this.binding = binding;
       this.send({ type: "surface-edited", surfaceEditRevision: this.editRevision });
       return;
     }
-    if (message.type === "close-cancelled") { this.pending = undefined; this.preparing = undefined; this.thaw(); return; }
+    if (message.type === "close-cancelled") {
+      if (!isRequest(value) || !this.binding || value.surfaceId !== this.binding.surfaceId || value.surfaceEpoch !== this.binding.surfaceEpoch
+        || this.activeAttempt?.closeAttemptId !== value.closeAttemptId) return;
+      this.pending = undefined; this.preparing = undefined; this.activeAttempt = undefined; this.thaw(); return;
+    }
+    if (message.type !== "prepare-close" && message.type !== "commit-close") {
+      if (this.binding && message.surfaceId === this.binding.surfaceId && message.surfaceEpoch === this.binding.surfaceEpoch)
+        for (const listener of this.listeners) listener(message);
+      return;
+    }
     if (!isRequest(value) || !this.binding || value.surfaceId !== this.binding.surfaceId || value.surfaceEpoch !== this.binding.surfaceEpoch) return;
     const request = value;
     if (message.type === "prepare-close") {
+      // Repeated control messages do not restart the original asynchronous
+      // owner or replace the identity needed to thaw an already frozen cut.
+      if (this.activeAttempt?.closeAttemptId === request.closeAttemptId) return;
+      if (this.frozen) {
+        this.send({ type: "close-blocked", closeAttemptId: request.closeAttemptId, reason: "The original close is still frozen" });
+        return;
+      }
       this.pending = undefined;
       this.preparing = request;
+      this.activeAttempt = request;
       const serial = this.editRevision;
       try {
         if (!this.ready || this.composing || this.frozen) throw new Error("Author input has not settled");
         const proofs: CloseProof[] = [];
-        for (const participant of this.participants.values()) proofs.push(...await participant.prepare(request));
-        if (this.composing || serial !== this.editRevision || this.preparing !== request) throw new Error("Author input or close ownership changed while preparing close");
+        for (const participant of this.participants.values()) {
+          proofs.push(...await participant.prepare(request));
+          // Cancellation or supersession may arrive at any await. Do not
+          // start another producer on behalf of a retired close attempt.
+          if (!this.ready || this.composing || serial !== this.editRevision || this.preparing !== request)
+            throw new Error("Author input or close ownership changed while preparing close");
+        }
         this.pending = { ...request, surfaceEditRevision: serial, proofs };
         this.send({ type: "close-prepared", closeAttemptId: request.closeAttemptId, surfaceEditRevision: serial, proofs });
       } catch (error) {
@@ -121,6 +165,7 @@ export class NativeSurface {
         this.send({ type: "close-blocked", closeAttemptId: request.closeAttemptId, reason: "Prepared author input is no longer current" });
         return;
       }
+      if (this.frozen) return;
       this.frozen = true;
       document.documentElement.inert = true;
       try {

@@ -1,3 +1,5 @@
+import { ProposalCloseGuard } from "./proposal-close-guard";
+import { registerNativeProposalOwner } from "./native-proposal-owners";
 import type { PanelHost } from "./data-panel";
 import type { OpenedDocument } from "./types";
 import type { ReminderDelivery, ReminderRecordsPage, ReminderScheduleCursor, ReminderSchedulePage, ReminderSettings } from "./reminder-types";
@@ -9,6 +11,12 @@ interface Pending { route: string; request: Record<string, unknown> }
 /** One bounded, explicit personal status view. All queue entries are fresh
  * saved-source projections; delivery rows are the original Core effect ledger. */
 export class ReminderOverview {
+  private readonly closeGuard = new ProposalCloseGuard();
+  assertCloseReady(): void { this.closeGuard.assertReady(this.pending.size !== 0 || this.inFlight.size !== 0); }
+  assertDismissReady(): void { this.closeGuard.assertMutable(); this.assertCloseReady(); }
+  bindDialog(dialog: HTMLDialogElement): void { this.closeGuard.bind(dialog); }
+  freezeForClose(): boolean { return this.closeGuard.freeze(this.pending.size !== 0 || this.inFlight.size !== 0); }
+  thawAfterClose(): void { this.closeGuard.thaw(); }
   readonly element = document.createElement("section");
   private readonly settingsHost = document.createElement("section");
   private readonly queueHost = document.createElement("section");
@@ -23,11 +31,12 @@ export class ReminderOverview {
   private readonly inFlight = new Set<Pending>();
 
   constructor(private readonly host: PanelHost) {
+    this.closeGuard.bind(this.element);
     this.element.className = "reminder-overview quick-capture";
     this.element.append(this.settingsHost, this.queueHost, this.recordsHost);
   }
   dispose(): void { this.disposed = true; this.generation++; this.settingsScope.dispose(); this.queueScope.dispose(); this.recordsScope.dispose(); }
-  private current(generation: number): boolean { return !this.disposed && generation === this.generation; }
+  private current(generation: number): boolean { return !this.disposed && !this.closeGuard.frozen && generation === this.generation; }
   private text(scope: LocaleScope, key: LabelKey, tag: "p" | "h2" | "h3" | "span" = "p"): HTMLElement {
     const node = document.createElement(tag); scope.bindText(node, message(key)); return node;
   }
@@ -41,26 +50,34 @@ export class ReminderOverview {
     node.onclick = () => {
       if (!current() || node.matches(":disabled")) return;
       node.disabled = true;
-      void action(current).catch(error => { if (current()) this.detail(host, scope, errorUiText(error)); })
-        .finally(() => { if (current()) node.disabled = false; });
+      void this.closeGuard.run(async () => {
+        try { await action(current); }
+        catch (error) { if (current()) this.detail(host, scope, errorUiText(error)); }
+        finally { if (current()) node.disabled = false; }
+      });
     };
     return node;
   }
   async refresh(): Promise<void> {
-    if (this.disposed) return;
-    const generation = ++this.generation;
-    this.settingsScope.dispose(); this.settingsScope = new LocaleScope();
-    this.settingsHost.replaceChildren(this.text(this.settingsScope, "reminder.overview", "h2"), this.button(this.settingsHost, this.settingsScope, "reminder.refresh", () => this.refresh()));
-    try {
-      const settings = await this.host.request<ReminderSettings>("/api/reminders/settings", {});
-      if (!this.current(generation)) return;
-      this.settings = settings; this.renderSettings(settings);
-    } catch (error) {
-      if (!this.current(generation)) return;
-      this.settings = null; this.settingsHost.append(this.text(this.settingsScope, "reminder.unavailable"));
-      this.detail(this.settingsHost, this.settingsScope, errorUiText(error));
-    }
-    if (this.current(generation)) await Promise.allSettled([this.loadQueue(null, generation), this.loadRecords(null, generation)]);
+    return this.closeGuard.run(async () => {
+      if (this.disposed) return;
+      const generation = ++this.generation;
+      this.settingsScope.dispose(); this.settingsScope = new LocaleScope();
+      this.settingsHost.replaceChildren(this.text(this.settingsScope, "reminder.overview", "h2"), this.button(this.settingsHost, this.settingsScope, "reminder.refresh", () => this.refresh()));
+      try {
+        const settings = await this.host.request<ReminderSettings>("/api/reminders/settings", {});
+        if (!this.current(generation)) return;
+        this.settings = settings; this.renderSettings(settings);
+      } catch (error) {
+        if (!this.current(generation)) return;
+        this.settings = null; this.settingsHost.append(this.text(this.settingsScope, "reminder.unavailable"));
+        this.detail(this.settingsHost, this.settingsScope, errorUiText(error));
+        for (const [target, pending] of this.pending) {
+          const row = document.createElement("section"); this.pendingControls(row, target, pending); this.settingsHost.append(row);
+        }
+      }
+      if (this.current(generation)) await Promise.allSettled([this.loadQueue(null, generation), this.loadRecords(null, generation)]);
+    });
   }
   private pendingControls(row: HTMLElement, target: string, pending: Pending): void {
     const retry = this.button(row, this.settingsScope, "reminder.retryOriginal", () => this.submit(target, pending));
@@ -88,20 +105,22 @@ export class ReminderOverview {
     }
   }
   private async submit(target: string, pending: Pending): Promise<void> {
-    if (this.inFlight.has(pending) || this.pending.get(target) !== pending) return;
-    this.inFlight.add(pending);
-    let failure: UiText | undefined;
-    let original = false;
-    try {
-      await this.host.request(pending.route, structuredClone(pending.request));
-      original = this.pending.get(target) === pending;
-      if (original) this.pending.delete(target);
-    } catch (error) { original = this.pending.get(target) === pending; failure = errorUiText(error); }
-    finally { this.inFlight.delete(pending); }
-    if (!original || this.disposed) return;
-    const generation = this.generation;
-    await this.refresh();
-    if (failure !== undefined && this.current(generation + 1)) this.detail(this.settingsHost, this.settingsScope, failure);
+    return this.closeGuard.run(async () => {
+      if (this.inFlight.has(pending) || this.pending.get(target) !== pending) return;
+      this.inFlight.add(pending);
+      let failure: UiText | undefined;
+      let original = false;
+      try {
+        await this.host.request(pending.route, structuredClone(pending.request));
+        original = this.pending.get(target) === pending;
+        if (original) this.pending.delete(target);
+      } catch (error) { original = this.pending.get(target) === pending; failure = errorUiText(error); }
+      finally { this.inFlight.delete(pending); }
+      if (!original || this.disposed) return;
+      const generation = this.generation;
+      await this.refresh();
+      if (failure !== undefined && this.current(generation + 1)) this.detail(this.settingsHost, this.settingsScope, failure);
+    });
   }
   private delivery(host: HTMLElement, scope: LocaleScope, status: ReminderDelivery): void {
     if (status.invalidated) host.append(this.text(scope, "reminder.cancelled"));
@@ -114,70 +133,74 @@ export class ReminderOverview {
     }));
   }
   private async loadQueue(cursor: ReminderScheduleCursor | null, generation: number): Promise<void> {
-    if (!this.current(generation)) return;
-    try {
-      const page = await this.host.request<ReminderSchedulePage>("/api/reminders/schedule", { cursor });
+    return this.closeGuard.run(async () => {
       if (!this.current(generation)) return;
-      this.queueScope.dispose(); this.queueScope = new LocaleScope();
-      this.queueHost.replaceChildren(this.text(this.queueScope, "reminder.label", "h3"));
-      if (cursor === null && page.complete && !page.next && !page.entries.length && !page.issues.length) this.queueHost.append(this.text(this.queueScope, "reminder.noScheduledTasks"));
-      for (const entry of page.entries) {
-        const row = document.createElement("section"); row.className = "data-property";
-        this.detail(row, this.queueScope, entry.candidate.root);
-        if (entry.candidate.resolution.triggerInstant) this.detail(row, this.queueScope, entry.candidate.resolution.triggerInstant);
-        if (entry.eligibility?.retained) this.delivery(row, this.queueScope, entry.eligibility.retained);
-        else if (entry.eligibility?.timing === "missed") { const text = document.createElement("p"); this.queueScope.bindText(text, message("reminder.missed", { count: 1 })); row.append(text); }
-        else if (entry.eligibility) row.append(this.text(this.queueScope, entry.eligibility.timing === "due" ? "reminder.due" : "reminder.upcoming"));
-        if (entry.issue) { row.append(this.text(this.queueScope, "reminder.unavailable")); this.detail(row, this.queueScope, entry.issue.message); }
-        for (const diagnostic of entry.candidate.resolution.diagnostics) this.detail(row, this.queueScope, diagnostic);
-        this.queueHost.append(row);
-      }
-      for (const issue of page.issues) {
-        const row = document.createElement("section"); row.className = "data-warning";
-        row.append(this.text(this.queueScope, "reminder.unavailable")); this.detail(row, this.queueScope, issue.message);
-        if (this.settings) {
-          const revision = this.settings.settingsRevision;
-          row.append(this.button(row, this.queueScope, "reminder.disable", async () => {
-            const target = JSON.stringify([issue.owner, issue.reminderId]);
-            const pending = this.pending.get(target) ?? { route: "/api/reminders/subscription", request: { root: "", owner: structuredClone(issue.owner), reminderId: issue.reminderId, enabled: false, expectedRevision: revision, mutationId: crypto.randomUUID() } };
-            this.pending.set(target, pending); await this.submit(target, pending);
-          }));
+      try {
+        const page = await this.host.request<ReminderSchedulePage>("/api/reminders/schedule", { cursor });
+        if (!this.current(generation)) return;
+        this.queueScope.dispose(); this.queueScope = new LocaleScope();
+        this.queueHost.replaceChildren(this.text(this.queueScope, "reminder.label", "h3"));
+        if (cursor === null && page.complete && !page.next && !page.entries.length && !page.issues.length) this.queueHost.append(this.text(this.queueScope, "reminder.noScheduledTasks"));
+        for (const entry of page.entries) {
+          const row = document.createElement("section"); row.className = "data-property";
+          this.detail(row, this.queueScope, entry.candidate.root);
+          if (entry.candidate.resolution.triggerInstant) this.detail(row, this.queueScope, entry.candidate.resolution.triggerInstant);
+          if (entry.eligibility?.retained) this.delivery(row, this.queueScope, entry.eligibility.retained);
+          else if (entry.eligibility?.timing === "missed") { const text = document.createElement("p"); this.queueScope.bindText(text, message("reminder.missed", { count: 1 })); row.append(text); }
+          else if (entry.eligibility) row.append(this.text(this.queueScope, entry.eligibility.timing === "due" ? "reminder.due" : "reminder.upcoming"));
+          if (entry.issue) { row.append(this.text(this.queueScope, "reminder.unavailable")); this.detail(row, this.queueScope, entry.issue.message); }
+          for (const diagnostic of entry.candidate.resolution.diagnostics) this.detail(row, this.queueScope, diagnostic);
+          this.queueHost.append(row);
         }
-        this.queueHost.append(row);
+        for (const issue of page.issues) {
+          const row = document.createElement("section"); row.className = "data-warning";
+          row.append(this.text(this.queueScope, "reminder.unavailable")); this.detail(row, this.queueScope, issue.message);
+          if (this.settings) {
+            const revision = this.settings.settingsRevision;
+            row.append(this.button(row, this.queueScope, "reminder.disable", async () => {
+              const target = JSON.stringify([issue.owner, issue.reminderId]);
+              const pending = this.pending.get(target) ?? { route: "/api/reminders/subscription", request: { root: "", owner: structuredClone(issue.owner), reminderId: issue.reminderId, enabled: false, expectedRevision: revision, mutationId: crypto.randomUUID() } };
+              this.pending.set(target, pending); await this.submit(target, pending);
+            }));
+          }
+          this.queueHost.append(row);
+        }
+        if (page.next) { const next = page.next; this.queueHost.append(this.button(this.queueHost, this.queueScope, "reminder.more", () => this.loadQueue(next, generation))); }
+      } catch (error) {
+        if (!this.current(generation)) return;
+        this.queueScope.dispose(); this.queueScope = new LocaleScope();
+        this.queueHost.replaceChildren(this.text(this.queueScope, "reminder.unavailable")); this.detail(this.queueHost, this.queueScope, errorUiText(error));
       }
-      if (page.next) { const next = page.next; this.queueHost.append(this.button(this.queueHost, this.queueScope, "reminder.more", () => this.loadQueue(next, generation))); }
-    } catch (error) {
-      if (!this.current(generation)) return;
-      this.queueScope.dispose(); this.queueScope = new LocaleScope();
-      this.queueHost.replaceChildren(this.text(this.queueScope, "reminder.unavailable")); this.detail(this.queueHost, this.queueScope, errorUiText(error));
-    }
+    });
   }
   private async loadRecords(after: string | null, generation: number): Promise<void> {
-    if (!this.current(generation)) return;
-    try {
-      const page = await this.host.request<ReminderRecordsPage>("/api/reminders/records", { after });
+    return this.closeGuard.run(async () => {
       if (!this.current(generation)) return;
-      this.recordsScope.dispose(); this.recordsScope = new LocaleScope();
-      this.recordsHost.replaceChildren(this.text(this.recordsScope, "reminder.deliveryRecords", "h3"));
-      if (after === null && !page.records.length) this.recordsHost.append(this.text(this.recordsScope, "reminder.noDeliveryRecords"));
-      for (const record of page.records) {
-        const row = document.createElement("section"); row.className = "data-property"; row.dataset.executionKey = record.status.executionKey;
-        const library = this.settings?.libraries.find(library => library.workspaceId === record.owner.workspaceId);
-        if (library) this.detail(row, this.recordsScope, library.root);
-        this.detail(row, this.recordsScope, record.triggerInstant); this.delivery(row, this.recordsScope, record.status);
-        if (this.host.openResolved) row.append(this.button(row, this.recordsScope, "reminder.openTask", async current => {
-          await this.host.prepareAction?.(); if (!current()) return;
-          const document = await this.host.request<OpenedDocument>("/api/reminders/open", { executionKey: record.status.executionKey });
-          await this.host.openResolved!(document);
-        }));
-        this.recordsHost.append(row);
+      try {
+        const page = await this.host.request<ReminderRecordsPage>("/api/reminders/records", { after });
+        if (!this.current(generation)) return;
+        this.recordsScope.dispose(); this.recordsScope = new LocaleScope();
+        this.recordsHost.replaceChildren(this.text(this.recordsScope, "reminder.deliveryRecords", "h3"));
+        if (after === null && !page.records.length) this.recordsHost.append(this.text(this.recordsScope, "reminder.noDeliveryRecords"));
+        for (const record of page.records) {
+          const row = document.createElement("section"); row.className = "data-property"; row.dataset.executionKey = record.status.executionKey;
+          const library = this.settings?.libraries.find(library => library.workspaceId === record.owner.workspaceId);
+          if (library) this.detail(row, this.recordsScope, library.root);
+          this.detail(row, this.recordsScope, record.triggerInstant); this.delivery(row, this.recordsScope, record.status);
+          if (this.host.openResolved) row.append(this.button(row, this.recordsScope, "reminder.openTask", async current => {
+            await this.host.prepareAction?.(); if (!current()) return;
+            const document = await this.host.request<OpenedDocument>("/api/reminders/open", { executionKey: record.status.executionKey });
+            await this.host.openResolved!(document);
+          }));
+          this.recordsHost.append(row);
+        }
+        if (page.next) { const next = page.next; this.recordsHost.append(this.button(this.recordsHost, this.recordsScope, "reminder.more", () => this.loadRecords(next, generation))); }
+      } catch (error) {
+        if (!this.current(generation)) return;
+        this.recordsScope.dispose(); this.recordsScope = new LocaleScope();
+        this.recordsHost.replaceChildren(this.text(this.recordsScope, "reminder.unavailable")); this.detail(this.recordsHost, this.recordsScope, errorUiText(error));
       }
-      if (page.next) { const next = page.next; this.recordsHost.append(this.button(this.recordsHost, this.recordsScope, "reminder.more", () => this.loadRecords(next, generation))); }
-    } catch (error) {
-      if (!this.current(generation)) return;
-      this.recordsScope.dispose(); this.recordsScope = new LocaleScope();
-      this.recordsHost.replaceChildren(this.text(this.recordsScope, "reminder.unavailable")); this.detail(this.recordsHost, this.recordsScope, errorUiText(error));
-    }
+    });
   }
 }
 
@@ -186,8 +209,20 @@ export function openReminderOverview(host: PanelHost): HTMLDialogElement {
   const dialog = document.createElement("dialog"); dialog.className = "capture-dialog reminder-overview-dialog";
   const scope = new LocaleScope(); scope.bindAttr(dialog, "aria-label", message("reminder.overview"));
   const close = document.createElement("button"); close.type = "button"; close.className = "data-button capture-close"; scope.bindText(close, message("common.close"));
-  close.onclick = () => dialog.close();
-  const overview = new ReminderOverview(host); dialog.append(close, overview.element);
-  dialog.addEventListener("close", () => { overview.dispose(); scope.dispose(); dialog.remove(); }, { once: true });
+  const overview = new ReminderOverview(host), unregister = registerNativeProposalOwner(overview);
+  overview.bindDialog(dialog);
+  dialog.append(close, overview.element);
+  const dismiss = (): void => {
+    try { overview.assertDismissReady(); }
+    catch (error) { host.notify(errorUiText(error), true); return; }
+    dialog.close();
+  };
+  close.onclick = dismiss;
+  dialog.addEventListener("cancel", event => { event.preventDefault(); dismiss(); });
+  dialog.addEventListener("close", () => {
+    try { overview.assertDismissReady(); }
+    catch (error) { host.notify(errorUiText(error), true); dialog.showModal(); return; }
+    unregister(); overview.dispose(); scope.dispose(); dialog.remove();
+  });
   document.body.append(dialog); dialog.showModal(); void overview.refresh(); return dialog;
 }

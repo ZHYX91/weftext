@@ -3,6 +3,7 @@ import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidi
 import { action, ui, type DocumentBasis, type PanelHost } from "./data-panel";
 import { DiagramController, diagramOccurrences, diagramPatch, type DiagramOccurrence } from "./diagram-state";
 import { renderDiagramPng } from "./diagram-render";
+import { createNativeProposalOwner } from "./native-proposal-owners";
 import "./diagram.css";
 /** Host supplies the same current-draft and permission checked patch route. */
 export class DiagramPanel {
@@ -17,6 +18,16 @@ export class DiagramPanel {
         this.dialogs.clear();
     }
     async open(): Promise<void> {
+        const opening = createNativeProposalOwner(uiMessage("hostedShell.mermaidDiagram"));
+        const endOpening = opening.begin();
+        try { await this.openPrepared(); }
+        finally {
+            endOpening();
+            opening.setPending(false);
+            opening.release();
+        }
+    }
+    private async openPrepared(): Promise<void> {
         if (!this.editable()) {
             this.host.notify(uiMessage("diagramPanel.noteNotEditable"), true);
             return;
@@ -34,24 +45,51 @@ export class DiagramPanel {
                 retained.dialog.showModal();
             return;
         }
-        const item = this.create(basis);
+        const item = this.create(basis, () => this.dialogs.delete(key));
         this.dialogs.set(key, item);
         document.body.append(item.dialog);
         item.dialog.showModal();
     }
-    private create(basis: DocumentBasis): {
+    private create(basis: DocumentBasis, forget: () => void): {
         dialog: HTMLDialogElement;
         clear(): void;
     } {
-        let disposed = false;
-        const authorInputs = this.host.authorInputs?.(basis);
+        let disposed = false, active = 0, applying = false;
         const dialog = ui("dialog", "modal diagram-panel");
+        const owner = createNativeProposalOwner(uiMessage("hostedShell.mermaidDiagram"), () => {
+            if (!disposed && !dialog.open) dialog.showModal();
+        });
+        const run = async (operation: () => Promise<void>): Promise<void> => {
+            const end = owner.begin();
+            active++;
+            try { await operation(); }
+            finally {
+                active--;
+                end();
+                if (disposed && active === 0) owner.release();
+            }
+        };
+        const authorInputs = this.host.authorInputs?.(basis);
         const title = ui("h2", "", uiMessage("hostedShell.mermaidDiagram"));
         title.id = `diagram-${crypto.randomUUID()}`;
         dialog.setAttribute("aria-labelledby", title.id);
-        const close = action(uiMessage("diagramPanel.closeKeepInput"), () => { controller.cancel(); draw(); dialog.close(); }, "data-button compact");
+        const hide = (): void => {
+            if (disposed || applying) return;
+            owner.assertMutable();
+            controller.cancel();
+            draw();
+            dialog.close();
+        };
+        const close = action(uiMessage("diagramPanel.closeKeepInput"), hide, "data-button compact");
+        const discard = action(uiMessage("common.cancel"), () => {
+            if (disposed || applying) return;
+            owner.assertMutable();
+            const checkpoint = authorInputs?.inspect();
+            clear();
+            if (checkpoint) authorInputs?.acknowledge(checkpoint, "discarded");
+        }, "data-button compact");
         const header = ui("header", "diagram-header");
-        header.append(title, close);
+        header.append(title, close, discard);
         let source = ui("textarea", "data-input diagram-source");
         source.rows = 10;
         source.spellcheck = false;
@@ -83,53 +121,65 @@ export class DiagramPanel {
         status.setAttribute("role", "status");
         status.setAttribute("aria-live", "polite");
         let imageUrl: string | null = null;
-        const generate = action(uiMessage("diagramPanel.generatePngPreview"), async () => {
+        const generate = action(uiMessage("diagramPanel.generatePngPreview"), () => run(async () => {
+            if (disposed || applying) return;
             status.className = "data-help";
             setUiText(status, uiMessage("diagramPanel.generatingOffline"));
             const pending = controller.render();
             draw();
             try {
-                if (await pending)
+                if (await pending && !disposed)
                     setUiText(status, displayMessage("diagramPanel.pngGeneratedSummary", { p0: controller.image!.width, p1: controller.image!.height }));
             }
             catch (error) {
+                if (disposed) return;
                 status.className = "data-warning";
                 setUiText(status, errorUiText(error));
             }
             finally {
                 draw();
             }
-        }, "data-button");
-        const commit = action(uiMessage("diagramPanel.confirmImageWriteDraft"), async () => {
-            if (!controller.image || disposed)
+        }), "data-button");
+        const commit = action(uiMessage("diagramPanel.confirmImageWriteDraft"), () => run(async () => {
+            if (!controller.image || disposed || applying)
                 return;
-            commit.disabled = true;
+            applying = true;
+            draw();
+            const checkpoint = authorInputs?.inspect();
             try {
+                if (checkpoint?.nativePending || checkpoint?.pendingDeliveries)
+                    throw new UiError(uiMessage("shell.closeAuthorInputPending"));
                 const current = this.host.getDocument();
                 if (!this.editable() || !current || current.sessionId !== basis.sessionId || current.serial !== basis.serial || current.baseId !== basis.baseId || current.source !== basis.source)
                     throw new UiError(uiMessage("diagramPanel.noteOrPermissionChanged"));
                 const patch = diagramPatch(basis, controller.image, selected);
                 await this.host.applyPatch(patch, basis);
+                owner.assertMutable();
                 if (disposed)
                     return;
+                inputs.delete(selectionKey);
+                // Other locations can contain retained, unapplied source.
+                // Applying this location must not acknowledge those inputs.
+                if (inputs.size === 0 && checkpoint) authorInputs?.acknowledge(checkpoint, "applied");
                 controller.cancel();
-                draw();
                 dialog.close();
                 this.host.notify(uiMessage("diagramPanel.diagramWrittenToDraft"));
+                if (inputs.size === 0) clear();
             }
             catch (error) {
                 if (disposed)
                     return;
                 status.className = "data-warning";
                 setUiText(status, errorUiText(error));
-                draw();
             }
-        }, "data-button primary");
+            finally { applying = false; draw(); }
+        }), "data-button primary");
         function draw(): void {
             if (disposed)
                 return;
-            generate.disabled = controller.busy;
-            commit.disabled = controller.busy || !controller.image;
+            generate.disabled = applying || controller.busy;
+            commit.disabled = applying || controller.busy || !controller.image;
+            source.disabled = width.disabled = choose.disabled = close.disabled = discard.disabled = applying;
             preview.replaceChildren();
             if (imageUrl) {
                 URL.revokeObjectURL(imageUrl);
@@ -143,17 +193,19 @@ export class DiagramPanel {
                 preview.append(image);
             }
         }
-        const changed = (): void => { controller.edit(source.value, Number(width.value)); draw(); setUiText(status, uiMessage("diagramPanel.sourceOrSizeChanged")); };
+        const changed = (): void => { if (disposed || applying) return; owner.assertMutable(); controller.edit(source.value, Number(width.value)); draw(); setUiText(status, uiMessage("diagramPanel.sourceOrSizeChanged")); };
         authorInputs?.bind(source, `diagram:${selectionKey}:source`);
         authorInputs?.bind(width, `diagram:${selectionKey}:width`);
         source.oninput = changed;
         width.oninput = changed;
-        choose.onchange = () => { inputs.set(selectionKey, { source: source.value, width: width.value }); authorInputs?.invalidate(`diagram:${selectionKey}:source`); authorInputs?.invalidate(`diagram:${selectionKey}:width`); const replacement = source.cloneNode(false) as HTMLTextAreaElement; source.replaceWith(replacement); source = replacement; source.oninput = changed; const newWidth = width.cloneNode(false) as HTMLInputElement; width.replaceWith(newWidth); width = newWidth; width.oninput = changed; selectionKey = choose.value; selected = selectionKey === "new" ? undefined : occurrences[Number(selectionKey)]; const retained = inputs.get(selectionKey); source.value = retained?.source ?? selected?.source ?? "flowchart LR\n  A[开始] --> B[完成]"; width.value = retained?.width ?? "1200"; authorInputs?.bind(source, `diagram:${selectionKey}:source`); authorInputs?.bind(width, `diagram:${selectionKey}:width`); changed(); };
+        choose.onchange = () => { if (disposed || applying) return; owner.assertMutable(); inputs.set(selectionKey, { source: source.value, width: width.value }); authorInputs?.invalidate(`diagram:${selectionKey}:source`); authorInputs?.invalidate(`diagram:${selectionKey}:width`); const replacement = source.cloneNode(false) as HTMLTextAreaElement; source.replaceWith(replacement); source = replacement; source.oninput = changed; const newWidth = width.cloneNode(false) as HTMLInputElement; width.replaceWith(newWidth); width = newWidth; width.oninput = changed; selectionKey = choose.value; selected = selectionKey === "new" ? undefined : occurrences[Number(selectionKey)]; const retained = inputs.get(selectionKey); source.value = retained?.source ?? selected?.source ?? "flowchart LR\n  A[开始] --> B[完成]"; width.value = retained?.width ?? "1200"; authorInputs?.bind(source, `diagram:${selectionKey}:source`); authorInputs?.bind(width, `diagram:${selectionKey}:width`); changed(); };
         const controls = ui("div", "diagram-actions");
         controls.append(generate, commit);
         dialog.append(header, ui("p", "data-help", uiMessage("diagramPanel.sourceAndPngDescription")), choose, source, ui("label", "data-label", uiMessage("diagramPanel.pngWidthRange")), width, preview, status, controls);
-        dialog.addEventListener("cancel", event => { event.preventDefault(); controller.cancel(); draw(); dialog.close(); });
-        return { dialog, clear: () => {
+        dialog.addEventListener("cancel", event => { event.preventDefault(); hide(); });
+        const clear = (): void => {
+                if (disposed) return;
+                owner.assertMutable();
                 disposed = true;
                 authorInputs?.retire();
                 controller.edit("");
@@ -170,6 +222,10 @@ export class DiagramPanel {
                 imageUrl = null;
                 dialog.close();
                 dialog.remove();
-            } };
+                forget();
+                owner.setPending(false);
+                if (active === 0) owner.release();
+            };
+        return { dialog, clear };
     }
 }

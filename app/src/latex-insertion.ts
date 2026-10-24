@@ -5,6 +5,7 @@ import { nativeElement } from "./native-node";
 import { sourceBoundary } from "./editor";
 import type { PanelHost } from "./data-panel";
 import type { RenderNode } from "./types";
+import { createNativeProposalOwner } from "./native-proposal-owners";
 type Host = PanelHost & {
     selection?(): {
         from: number;
@@ -26,17 +27,27 @@ export class LatexInsertionPanel {
         dialog: HTMLDialogElement;
         panel: LatexMathPanel;
         source: string;
+        dispose(): void;
     }>();
     constructor(private host: Host) { }
     clear(): void {
-        for (const item of this.dialogs.values()) {
-            item.panel.destroy();
-            item.dialog.close();
-            item.dialog.remove();
-        }
+        for (const item of this.dialogs.values()) item.dispose();
         this.dialogs.clear();
     }
     async open(): Promise<void> {
+        // Opening is itself asynchronous: a close cannot freeze between the
+        // prepared basis and creation of the dialog that owns the proposal.
+        const opening = createNativeProposalOwner(uiMessage("hostedShell.latexEquation"));
+        const endOpening = opening.begin();
+        try {
+            await this.openPrepared();
+        } finally {
+            endOpening();
+            opening.setPending(false);
+            opening.release();
+        }
+    }
+    private async openPrepared(): Promise<void> {
         await this.host.prepareAction?.();
         const basis = this.host.getDocument();
         if (!basis || this.host.editable?.() === false)
@@ -57,17 +68,46 @@ export class LatexInsertionPanel {
         const proposed = (text: string): string => basis.source.slice(0, selection.from) + text + basis.source.slice(selection.to);
         const dialog = document.createElement("dialog");
         dialog.className = "modal writing-dialog latex-insertion";
+        let disposed = false, active = 0, applying = false;
+        const owner = createNativeProposalOwner(uiMessage("hostedShell.latexEquation"), () => {
+            if (!disposed && !dialog.open) dialog.showModal();
+        });
+        const authorInputs = this.host.authorInputs?.(basis);
+        const run = async <T>(operation: () => Promise<T>): Promise<T> => {
+            const end = owner.begin();
+            active++;
+            try { return await operation(); }
+            finally {
+                active--;
+                end();
+                if (disposed && active === 0) owner.release();
+            }
+        };
+        const dispose = (): void => {
+            if (disposed) return;
+            owner.assertMutable();
+            disposed = true;
+            panel.destroy();
+            dialog.close();
+            dialog.remove();
+            this.dialogs.delete(key);
+            owner.setPending(false);
+            // Revocation removes the DOM, but cannot retire an outstanding
+            // preview or host delivery from the native close proof.
+            if (active === 0) owner.release();
+        };
         const close = document.createElement("button");
         close.type = "button";
         setUiText(close, uiMessage("common.close"));
         const panel = createLatexMathPanel({
-            authorInputs: this.host.authorInputs?.(basis),
-            preview: async (result) => {
-                if (!current())
+            authorInputs,
+            preview: result => run(async () => {
+                if (disposed || !current())
                     throw new UiError(uiMessage("latexInsertion.noteOrSelectionBasisChanged"));
                 const candidate = proposed(result.typst);
                 const resultView = await this.host.request<Preview>("/api/editor/preview", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, proposalSource: candidate });
-                if (!current() || resultView.source !== candidate || resultView.serial !== basis.serial)
+                owner.assertMutable();
+                if (disposed || !current() || resultView.source !== candidate || resultView.serial !== basis.serial)
                     throw new UiError(uiMessage("latexInsertion.draftChangedDuringPreview"));
                 if (!resultView.ok || !resultView.tree)
                     throw new UiError(resultView.message || uiMessage("latexInsertion.nativeFormulaCompileFailed"));
@@ -93,17 +133,41 @@ export class LatexInsertionPanel {
                 };
                 view.append(draw(resultView.tree));
                 return view;
-            },
-            apply: async (result) => {
-                if (!current())
+            }),
+            apply: result => run(async () => {
+                if (disposed || !current())
                     throw new UiError(uiMessage("latexInsertion.noteOrEligibilityChanged"));
-                await this.host.applyPatch({ from: selection.from, to: selection.to, text: result.typst }, basis);
-                this.host.notify(uiMessage("latexInsertion.formulaEnteredDraft"));
+                const checkpoint = authorInputs?.inspect();
+                if (checkpoint?.nativePending || checkpoint?.pendingDeliveries)
+                    throw new UiError(uiMessage("shell.closeAuthorInputPending"));
+                applying = true;
+                close.disabled = true;
+                try {
+                    await this.host.applyPatch({ from: selection.from, to: selection.to, text: result.typst }, basis);
+                    owner.assertMutable();
+                    if (disposed) return;
+                    if (checkpoint) authorInputs?.acknowledge(checkpoint, "applied");
+                    this.host.notify(uiMessage("latexInsertion.formulaEnteredDraft"));
+                    dispose();
+                } finally {
+                    applying = false;
+                    if (!disposed) close.disabled = false;
+                }
+            }),
+            cancel: () => {
+                if (disposed || applying) return;
+                owner.assertMutable();
+                const checkpoint = authorInputs?.inspect();
+                dispose();
+                // Retirement fences late composition events before the real
+                // owner acknowledges this explicit discard.
+                if (checkpoint) authorInputs?.acknowledge(checkpoint, "discarded");
             },
         });
-        this.dialogs.set(key, { dialog, panel, source: basis.source });
-        close.onclick = () => dialog.close();
-        dialog.addEventListener("cancel", event => { event.preventDefault(); dialog.close(); });
+        this.dialogs.set(key, { dialog, panel, source: basis.source, dispose });
+        const hide = (): void => { if (!disposed && !applying) { owner.assertMutable(); dialog.close(); } };
+        close.onclick = hide;
+        dialog.addEventListener("cancel", event => { event.preventDefault(); hide(); });
         const position = document.createElement("p");
         setUiText(position, selection.from === selection.to ? uiMessage("latexInsertion.insertConfirmationHint") : uiMessage("latexInsertion.replaceConfirmationHint"));
         dialog.append(close, position, panel.element);

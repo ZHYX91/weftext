@@ -2,6 +2,8 @@ import { ApiError, decodeApiError } from "./api-error";
 import { message } from "./ui-locale";
 import { readStrictJsonResponse, StrictJsonError } from "./strict-json";
 export { ApiError } from "./api-error";
+import { beginNativeRequest } from "./native-api-gate";
+export { nativeApiIdle, freezeNativeApi, thawNativeApi } from "./native-api-gate";
 
 const fragment = new URLSearchParams(location.hash.slice(1));
 const suppliedToken = fragment.get("token");
@@ -29,6 +31,8 @@ function responseError(data: unknown, status: number): ApiError {
 }
 
 export async function api<T>(path: string, body?: unknown): Promise<T> {
+  const finish = beginNativeRequest();
+  try {
   const native = nativeDraftRequest(path, body);
   if (native) {
     const data: unknown = await native;
@@ -38,13 +42,17 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
   const response = await send(path, body), data = await json(response);
   if (!response.ok || data && typeof data === "object" && !Array.isArray(data) && Object.keys(data).length === 1 && Object.hasOwn(data, "error")) throw responseError(data, response.status);
   return data as T;
+  } finally { finish(); }
 }
 
 export const operationId = (): string => crypto.randomUUID();
 
 export async function apiBlob(path: string, body: unknown): Promise<Blob> {
+  const finish = beginNativeRequest();
+  try {
   const response = await send(path, body);
   if (!response.ok) throw responseError(await json(response), response.status);
-  return response.blob();
+  return await response.blob();
+  } finally { finish(); }
 }
 import { nativeDraftRequest } from "./native-draft";

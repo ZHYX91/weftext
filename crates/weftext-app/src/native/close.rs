@@ -25,6 +25,23 @@ pub(super) struct Request {
     deny_unknown_fields
 )]
 pub(super) enum Message {
+    RequestClose {
+        surface_id: String,
+        surface_epoch: String,
+    },
+    CaptureOpen {
+        surface_id: String,
+        surface_epoch: String,
+        request_id: String,
+        draft_id: String,
+        operation_id: String,
+    },
+    DocumentDelivered {
+        surface_id: String,
+        surface_epoch: String,
+        delivery_id: String,
+        accepted: bool,
+    },
     DraftCall {
         surface_id: String,
         surface_epoch: String,
@@ -32,6 +49,9 @@ pub(super) enum Message {
         request: DraftRequest,
     },
     SurfaceReady {
+        kind: SurfaceKind,
+    },
+    SurfaceFailed {
         kind: SurfaceKind,
     },
     SurfaceUnready {
@@ -66,6 +86,99 @@ pub(super) enum Message {
         surface_id: String,
         surface_epoch: String,
     },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct CaptureOpen {
+    pub surface_id: String,
+    pub surface_epoch: String,
+    pub request_id: String,
+    pub draft_id: String,
+    pub operation_id: String,
+}
+impl CaptureOpen {
+    pub fn valid(&self) -> bool {
+        [
+            &self.surface_id,
+            &self.surface_epoch,
+            &self.request_id,
+            &self.draft_id,
+            &self.operation_id,
+        ]
+        .into_iter()
+        .all(|value| crate::broker::canonical_uuid(value))
+    }
+}
+
+/// This is a single original operation's delivery, not an acceptance receipt.
+/// Only the bound Library incarnation may acknowledge an actually posted value.
+/// The target owns the exact new Session from binding until its own retirement;
+/// even a rejected/unknown browser response never deletes an author Draft.
+pub(super) struct CaptureDelivery {
+    pub request: CaptureOpen,
+    target: Option<DeliveryTarget>,
+    posted: bool,
+}
+struct DeliveryTarget {
+    surface_id: String,
+    surface_epoch: String,
+    session_id: String,
+}
+impl CaptureDelivery {
+    pub fn new(request: CaptureOpen) -> Option<Self> {
+        request.valid().then_some(Self {
+            request,
+            target: None,
+            posted: false,
+        })
+    }
+    pub fn owns(&self, request: &CaptureOpen) -> bool {
+        &self.request == request
+    }
+    pub fn bind(&mut self, surface_id: &str, surface_epoch: &str, session_id: &str) -> bool {
+        if self.target.is_some()
+            || ![surface_id, surface_epoch, session_id]
+                .into_iter()
+                .all(crate::broker::canonical_uuid)
+        {
+            return false;
+        }
+        self.target = Some(DeliveryTarget {
+            surface_id: surface_id.into(),
+            surface_epoch: surface_epoch.into(),
+            session_id: session_id.into(),
+        });
+        true
+    }
+    pub fn mark_posted(&mut self, delivery_id: &str) -> bool {
+        if self.target.is_none() || self.posted || delivery_id != self.request.request_id {
+            return false;
+        }
+        self.posted = true;
+        true
+    }
+    pub fn acknowledges(&self, surface_id: &str, surface_epoch: &str, delivery_id: &str) -> bool {
+        self.posted
+            && delivery_id == self.request.request_id
+            && self.targets(surface_id, surface_epoch)
+    }
+    pub fn targets(&self, surface_id: &str, surface_epoch: &str) -> bool {
+        self.target.as_ref().is_some_and(|target| {
+            target.surface_id == surface_id && target.surface_epoch == surface_epoch
+        })
+    }
+    pub fn undelivered_session(&self) -> Option<&str> {
+        if self.posted { None } else { self.session_id() }
+    }
+    pub fn blocks(&self, surface_id: &str, surface_epoch: &str) -> bool {
+        (self.request.surface_id == surface_id && self.request.surface_epoch == surface_epoch)
+            || self.targets(surface_id, surface_epoch)
+    }
+    pub fn session_id(&self) -> Option<&str> {
+        self.target
+            .as_ref()
+            .map(|target| target.session_id.as_str())
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -245,6 +358,25 @@ impl Gate {
         });
         Some(request)
     }
+    pub fn owns_surface(&self, kind: SurfaceKind, surface_id: &str, surface_epoch: &str) -> bool {
+        self.kind == kind && self.id == surface_id && self.epoch == surface_epoch
+    }
+    /// Generic host payloads acquire the real target incarnation once. A
+    /// caller-supplied coordinate is never overwritten or rebound to this view.
+    pub fn bind_message(&self, mut message: serde_json::Value) -> Option<serde_json::Value> {
+        let object = message.as_object_mut()?;
+        if object.contains_key("surfaceId") || object.contains_key("surfaceEpoch") {
+            return None;
+        }
+        object.insert("surfaceId".into(), self.id.clone().into());
+        object.insert("surfaceEpoch".into(), self.epoch.clone().into());
+        Some(message)
+    }
+    /// Snapshot before any mutation that can invalidate the attempt. Its exact
+    /// identity is required for cancellation; a later attempt must stay frozen.
+    pub fn current_request(&self) -> Option<Request> {
+        self.attempt.as_ref().map(|attempt| attempt.request.clone())
+    }
     fn matches(&self, request: &Request, serial: u64) -> bool {
         request.surface_id == self.id
             && request.surface_epoch == self.epoch
@@ -381,6 +513,154 @@ impl Gate {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn capture_request() -> CaptureOpen {
+        CaptureOpen {
+            surface_id: uuid::Uuid::new_v4().to_string(),
+            surface_epoch: uuid::Uuid::new_v4().to_string(),
+            request_id: uuid::Uuid::new_v4().to_string(),
+            draft_id: uuid::Uuid::new_v4().to_string(),
+            operation_id: uuid::Uuid::new_v4().to_string(),
+        }
+    }
+    #[test]
+    fn capture_close_is_bound_to_its_own_ready_surface_and_uses_the_original_gate() {
+        let mut capture = Gate::new(SurfaceKind::Capture);
+        assert!(capture.owns_surface(SurfaceKind::Capture, &capture.id, &capture.epoch));
+        assert!(!capture.owns_surface(SurfaceKind::Library, &capture.id, &capture.epoch));
+        assert!(!capture.owns_surface(
+            SurfaceKind::Capture,
+            &capture.id,
+            &uuid::Uuid::new_v4().to_string()
+        ));
+        assert!(capture.begin().is_none());
+        capture.ready = true;
+        let attempt = capture.begin().unwrap();
+        assert!(capture.prepared(&attempt, 0, vec![]).is_none());
+        assert!(!capture.permitted());
+        assert!(capture.begin().is_none());
+    }
+    #[test]
+    fn capture_delivery_cannot_acknowledge_queued_or_different_original_results() {
+        let request = capture_request();
+        let mut delivery = CaptureDelivery::new(request.clone()).unwrap();
+        let target = uuid::Uuid::new_v4().to_string();
+        let epoch = uuid::Uuid::new_v4().to_string();
+        let session = uuid::Uuid::new_v4().to_string();
+        assert!(delivery.blocks(&request.surface_id, &request.surface_epoch));
+        assert!(!delivery.blocks(&target, &epoch));
+        assert!(!delivery.mark_posted(&request.request_id));
+        assert!(delivery.bind(&target, &epoch, &session));
+        assert_eq!(delivery.session_id(), Some(session.as_str()));
+        assert_eq!(delivery.undelivered_session(), Some(session.as_str()));
+        assert!(delivery.blocks(&target, &epoch));
+        assert!(!delivery.acknowledges(&target, &epoch, &request.request_id));
+        assert!(!delivery.bind(&target, &uuid::Uuid::new_v4().to_string(), &session));
+        let mut changed = request.clone();
+        changed.operation_id = uuid::Uuid::new_v4().to_string();
+        assert!(!delivery.owns(&changed));
+        changed = request.clone();
+        changed.draft_id = uuid::Uuid::new_v4().to_string();
+        assert!(!delivery.owns(&changed));
+        assert!(delivery.mark_posted(&request.request_id));
+        assert_eq!(delivery.undelivered_session(), None);
+        assert!(delivery.acknowledges(&target, &epoch, &request.request_id));
+        assert!(!delivery.acknowledges(
+            &target,
+            &uuid::Uuid::new_v4().to_string(),
+            &request.request_id
+        ));
+        assert!(!delivery.acknowledges(
+            &request.surface_id,
+            &request.surface_epoch,
+            &request.request_id
+        ));
+        assert!(!delivery.acknowledges(&target, &epoch, &uuid::Uuid::new_v4().to_string()));
+        assert!(!delivery.mark_posted(&request.request_id));
+    }
+    #[test]
+    fn capture_protocol_rejects_noncanonical_ids_and_untyped_delivery_values() {
+        let mut request = capture_request();
+        request.draft_id = "../another-record".into();
+        assert!(CaptureDelivery::new(request).is_none());
+        assert!(
+            serde_json::from_value::<Message>(serde_json::json!({
+                "type":"document-delivered", "surfaceId":"a", "surfaceEpoch":"b",
+                "deliveryId":"c", "accepted":"true"
+            }))
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<Message>(serde_json::json!({
+                "type":"request-close", "surfaceId":"a", "surfaceEpoch":"b", "proofs":[]
+            }))
+            .is_err()
+        );
+        assert!(matches!(
+            serde_json::from_value::<Message>(serde_json::json!({
+                "type":"request-close", "surfaceId":"a", "surfaceEpoch":"b"
+            }))
+            .unwrap(),
+            Message::RequestClose { .. }
+        ));
+    }
+    #[test]
+    fn host_deliveries_bind_the_target_once_and_reject_recreated_surface_rebinding() {
+        let target = Gate::new(SurfaceKind::Library);
+        let message = target.bind_message(serde_json::json!({
+            "type": "open-document", "document": { "sessionId": uuid::Uuid::new_v4().to_string() }
+        })).unwrap();
+        assert_eq!(message["surfaceId"], target.id);
+        assert_eq!(message["surfaceEpoch"], target.epoch);
+        let reopened = Gate::new(SurfaceKind::Library);
+        assert!(reopened.bind_message(message).is_none());
+        assert!(
+            target
+                .bind_message(serde_json::json!({
+                    "type": "open-reminders", "surfaceId": target.id
+                }))
+                .is_none()
+        );
+        assert!(
+            target
+                .bind_message(serde_json::json!({
+                    "type": "open-reminders", "surfaceEpoch": reopened.epoch
+                }))
+                .is_none()
+        );
+        assert!(target.bind_message(serde_json::Value::Null).is_none());
+    }
+    #[test]
+    fn invalidation_retains_the_exact_cancelled_attempt_and_rejects_its_late_verification() {
+        let mut gate = Gate::new(SurfaceKind::Library);
+        gate.ready = true;
+        let old = gate.begin().unwrap();
+        assert!(gate.prepared(&old, 0, vec![]).is_some());
+        assert!(gate.verified(&old, 0));
+        assert!(gate.frozen(&old, 0).is_some());
+        let cancelled = gate.current_request().unwrap();
+        assert!(gate.draft_call());
+        assert!(gate.current_request().is_none());
+        assert_eq!(cancelled.surface_id, old.surface_id);
+        assert_eq!(cancelled.surface_epoch, old.surface_epoch);
+        assert_eq!(cancelled.close_attempt_id, old.close_attempt_id);
+        let current = gate.begin().unwrap();
+        assert_ne!(current.close_attempt_id, cancelled.close_attempt_id);
+        assert!(!gate.final_verified(&cancelled, 0));
+        assert!(gate.owns_attempt(&current));
+        let cancelled = gate.current_request().unwrap();
+        assert!(gate.edited(&gate.id.clone(), &gate.epoch.clone(), 1));
+        assert!(gate.current_request().is_none());
+        let current = gate.begin().unwrap();
+        assert!(!gate.owns_attempt(&cancelled));
+        assert!(gate.owns_attempt(&current));
+        let mut wrong_epoch = current.clone();
+        wrong_epoch.surface_epoch = uuid::Uuid::new_v4().to_string();
+        assert!(!gate.owns_attempt(&wrong_epoch));
+        assert_eq!(
+            gate.current_request().unwrap().close_attempt_id,
+            current.close_attempt_id
+        );
+    }
     #[test]
     fn reactivation_supersedes_a_frozen_attempt_without_reusing_its_late_core_result() {
         let mut gate = Gate::new(SurfaceKind::Library);

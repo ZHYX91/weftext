@@ -178,6 +178,9 @@ impl Desktop {
         Ok(())
     }
     fn refresh(&self) -> Result<(), ServeError> {
+        self.refresh_with_information(None)
+    }
+    fn refresh_with_information(&self, information: Option<UiMessage>) -> Result<(), ServeError> {
         self.thread
             .sender
             .send(ui::Command::Preferences {
@@ -185,6 +188,7 @@ impl Desktop {
                 preferences: self.preferences.effective_preferences(),
                 startup: self.startup,
                 cli_service: self.continuation.cli_active(),
+                information,
             })
             .map_err(|_| error("nativeDispatcher", "The native dispatcher is unavailable"))
     }
@@ -637,6 +641,17 @@ async fn run_owner(
                                     continue;
                                 };
                                 match notice {
+                                    ui::Notice::CaptureOpen(request)=>{
+                                        let opened=match open_capture_document(&state,&profile,&url,&mut desktop,&continuation,&request).await {
+                                            Ok(opened)=>Some(opened),
+                                            Err(error)=>{if error.code=="sessionRetirementUnknown"{failure.get_or_insert(error);}None}
+                                        };
+                                        let session=opened.as_ref().map(|opened|opened.session_id.clone());
+                                        if desktop.as_ref().unwrap().thread.sender.send(ui::Command::CaptureResult{request,opened:opened.map(Box::new)}).is_err(){
+                                            if let Some(session)=session {let _=retire(&state,Vec::new(),vec![session]).await;}
+                                            failure.get_or_insert(error("captureDeliveryUnknown","The original Capture delivery could not be dispatched; the author record remains retained"));
+                                        }
+                                    }
                                     ui::Notice::Draft{surface_id,surface_epoch,request_id,request}=>{
                                         let authority=state.clone();let sender=desktop.as_ref().unwrap().thread.sender.clone();
                                         proofs.spawn(async move{
@@ -1065,6 +1080,65 @@ async fn open_document(
             )
         })
 }
+async fn open_capture_document(
+    state: &crate::AppState,
+    profile: &weftext_core::QualifiedProfile,
+    url: &str,
+    desktop: &mut Option<Desktop>,
+    continuation: &Arc<crate::broker::lifetime::ServiceContinuation>,
+    request: &close::CaptureOpen,
+) -> Result<weftext_core::OpenedDocument, ServeError> {
+    let draft = request.draft_id.clone();
+    let operation = request.operation_id.clone();
+    // Core qualifies the original committed operation/member and creates one
+    // fresh Session. No path, UI receipt or cached Session substitutes for it.
+    let opened = crate::core_call(state, move |core| {
+        core.open_capture_result(&draft, &operation)
+    })
+    .await
+    .map_err(|_| {
+        error(
+            "captureResultUnavailable",
+            "The original Capture result is unavailable",
+        )
+    })?;
+    let prepared = match serde_json::to_value(&opened) {
+        Ok(value) => crate::remember(state, &value).map_err(|_| {
+            error(
+                "captureResultUnavailable",
+                "The original Capture Session could not be registered",
+            )
+        }),
+        Err(_) => Err(error(
+            "captureResultUnavailable",
+            "The original Capture result could not be encoded",
+        )),
+    };
+    let prepared = match prepared {
+        Ok(()) => {
+            activate(
+                state,
+                profile,
+                url,
+                desktop,
+                Activation::Library,
+                continuation,
+            )
+            .await
+        }
+        Err(error) => Err(error),
+    };
+    if let Err(failure) = prepared {
+        if !retire(state, Vec::new(), vec![opened.session_id]).await {
+            return Err(error(
+                "sessionRetirementUnknown",
+                "The undelivered original Capture Session retirement was not confirmed; its author record remains retained",
+            ));
+        }
+        return Err(failure);
+    }
+    Ok(opened)
+}
 async fn verify(state: &crate::AppState, proofs: Vec<Proof>) -> bool {
     crate::core_call(state, move |core| {
         for proof in proofs {
@@ -1207,9 +1281,9 @@ async fn update_preference(
         }
         _ => return Ok(()),
     }
-    let revision = desktop.preferences.revision;
-    desktop.preferences = crate::core_call(state, move |core| {
-        core.update_desktop_preferences(revision, preferences)
+    let previous = desktop.preferences.clone();
+    let (current, information) = crate::core_call(state, move |core| {
+        persist_preference_change(core, previous, preferences)
     })
     .await
     .map_err(|_| {
@@ -1218,6 +1292,7 @@ async fn update_preference(
             "The desktop preference changed or could not be durably stored",
         )
     })?;
+    desktop.preferences = current;
     if matches!(action, tray::Action::LoginStartup) {
         desktop.startup = match startup::request(
             profile,
@@ -1240,5 +1315,113 @@ async fn update_preference(
             }
         };
     }
-    desktop.refresh()
+    desktop.refresh_with_information(information)
+}
+
+/// A notice accompanies only this explicit successful off-to-on change. Reading
+/// settings, reopening a window or changing another intent cannot acknowledge it.
+/// No durable "seen" flag is invented from merely queueing a native dialog.
+fn persist_preference_change(
+    core: &mut weftext_core::Core,
+    previous: weftext_core::DesktopPreferencesSnapshot,
+    preferences: weftext_core::DesktopPreferences,
+) -> weftext_core::Result<(weftext_core::DesktopPreferencesSnapshot, Option<UiMessage>)> {
+    let was_resident = previous.effective_preferences().resident;
+    let current = core.update_desktop_preferences(previous.revision, preferences)?;
+    let information = (!was_resident && current.effective_preferences().resident)
+        .then(UiMessage::desktop_resident_enabled);
+    Ok((current, information))
+}
+
+#[cfg(test)]
+mod preference_tests {
+    use super::*;
+    use weftext_core::{Core, DesktopPreferences};
+
+    #[test]
+    fn first_resident_enable_after_other_preferences_is_explained_and_durable() {
+        let directory = tempfile::tempdir().unwrap();
+        let data = directory.path().join("core");
+        let mut core = Core::new(&data).unwrap();
+        let initial = core.desktop_preferences().unwrap();
+        let other_settings = DesktopPreferences {
+            open_library_on_launch: true,
+            ..Default::default()
+        };
+        let (before, information) =
+            persist_preference_change(&mut core, initial, other_settings).unwrap();
+        assert!(information.is_none());
+        let enabled = DesktopPreferences {
+            resident: true,
+            ..other_settings
+        };
+        let (current, information) = persist_preference_change(&mut core, before, enabled).unwrap();
+        assert_eq!(information.unwrap().key(), "desktop.residentEnabled");
+        assert_eq!(current.preferences, enabled);
+        assert_eq!(current.revision, 2);
+        drop(core);
+        let mut reopened = Core::new(&data).unwrap();
+        assert_eq!(reopened.desktop_preferences().unwrap(), current);
+        // Reasserting existing residency after reopening is not another enable.
+        let (_, information) = persist_preference_change(&mut reopened, current, enabled).unwrap();
+        assert!(information.is_none());
+    }
+
+    #[test]
+    fn disabling_and_other_intents_are_silent_but_explicit_reenable_is_explained() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut core = Core::new(directory.path().join("core")).unwrap();
+        let initial = core.desktop_preferences().unwrap();
+        let enabled = DesktopPreferences {
+            resident: true,
+            ..Default::default()
+        };
+        let (current, _) = persist_preference_change(&mut core, initial, enabled).unwrap();
+        let other_settings = DesktopPreferences {
+            open_library_on_launch: true,
+            login_startup_requested: true,
+            ..enabled
+        };
+        let (current, information) =
+            persist_preference_change(&mut core, current, other_settings).unwrap();
+        assert!(information.is_none());
+        let disabled = DesktopPreferences {
+            resident: false,
+            ..other_settings
+        };
+        let (current, information) =
+            persist_preference_change(&mut core, current, disabled).unwrap();
+        assert!(information.is_none());
+        let (current, information) =
+            persist_preference_change(&mut core, current, other_settings).unwrap();
+        assert_eq!(information.unwrap().key(), "desktop.residentEnabled");
+        assert_eq!(current.preferences, other_settings);
+    }
+
+    #[test]
+    fn rejected_resident_enable_has_no_success_notice_and_retains_current_settings() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut core = Core::new(directory.path().join("core")).unwrap();
+        let stale = core.desktop_preferences().unwrap();
+        let original = core
+            .update_desktop_preferences(
+                stale.revision,
+                DesktopPreferences {
+                    open_library_on_launch: true,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+        let failure = persist_preference_change(
+            &mut core,
+            stale,
+            DesktopPreferences {
+                resident: true,
+                ..Default::default()
+            },
+        )
+        .unwrap_err();
+        assert_eq!(failure.code, "deviceStateConflict");
+        assert_eq!(core.desktop_preferences().unwrap(), original);
+    }
 }

@@ -38,7 +38,7 @@ test("late acknowledgement of an earlier close cannot replace the newer prepared
   f.surface.markReady(); f.deliver(bound); f.deliver(close("prepare-close", "first")); f.deliver(close("prepare-close", "second"));
   second.resolve([proof]); await f.tick(); first.resolve([proof]); await f.tick(); f.deliver(close("commit-close", "second")); await f.tick();
   assert.equal(frozen, 1); assert.equal(f.messages.at(-1)?.type, "close-frozen"); assert.equal(f.messages.at(-1)?.closeAttemptId, "second");
-  f.deliver({ type: "close-cancelled" }); await f.tick(); assert.equal(f.root.inert, false);
+  f.deliver(close("close-cancelled", "second")); await f.tick(); assert.equal(f.root.inert, false);
 }));
 
 test("one producer refusing synchronous freeze thaws every producer and keeps the surface", () => fixture(async f => {
@@ -72,4 +72,70 @@ test("unsupported raw UTF16 is rejected before native transmission and is never 
   const source = "A\ud800B";
   await assert.rejects(nativeDraftRequest("/api/draft", { sessionId: "actual-session", source })!, /raw UTF16/);
   assert.equal(source.charCodeAt(1), 0xd800); assert.equal(f.messages.length, before);
+}));
+
+test("only the exact current close attempt may thaw a frozen author and an edited attempt keeps its cancellation identity", () => fixture(async f => {
+  let thawed = 0;
+  f.surface.register("body", { prepare: async () => [proof], freeze: () => true, thaw: () => { thawed++; } });
+  f.surface.markReady(); f.deliver(bound); f.deliver(close("prepare-close", "current")); await f.tick();
+  f.deliver(close("commit-close", "current")); await f.tick(); assert.equal(f.root.inert, true);
+  for (const message of [{ type: "close-cancelled" }, close("close-cancelled", "old"), { ...close("close-cancelled", "current"), surfaceEpoch: "old-epoch" }]) {
+    f.deliver(message); await f.tick(); assert.equal(f.root.inert, true); assert.equal(thawed, 0);
+  }
+  f.fire("input");
+  f.deliver(close("close-cancelled", "current")); await f.tick();
+  assert.equal(f.root.inert, false); assert.equal(thawed, 1);
+}));
+
+test("host actions need the exact bound incarnation and a new bound message cannot replace it", () => fixture(async f => {
+  const delivered: Record<string, unknown>[] = [];
+  f.surface.register("body", participant(async () => [proof])); f.surface.listen(message => delivered.push(message));
+  f.surface.markReady(); f.deliver(bound);
+  for (const message of [{ type: "open-reminders" }, { ...bound, type: "open-reminders", surfaceEpoch: "old-epoch" }]) f.deliver(message);
+  f.deliver({ ...bound, type: "open-reminders" });
+  f.deliver({ ...bound, surfaceEpoch: "replacement" }); await f.tick();
+  assert.equal(delivered.length, 1); assert.equal(f.messages.at(-1)?.type, "surface-failed");
+  f.surface.post({ type: "document-delivered", deliveryId: "original", accepted: false });
+  assert.equal(f.messages.at(-1)?.surfaceEpoch, bound.surfaceEpoch);
+}));
+
+test("a second prepare cannot replace the cancellation identity of a frozen attempt", () => fixture(async f => {
+  let thawed = 0;
+  f.surface.register("body", { prepare: async () => [proof], freeze: () => true, thaw: () => { thawed++; } });
+  f.surface.markReady(); f.deliver(bound);
+  f.deliver(close("prepare-close", "original")); await f.tick();
+  f.deliver(close("commit-close", "original")); await f.tick();
+  f.deliver(close("prepare-close", "late")); await f.tick();
+  assert.equal(f.root.inert, true);
+  f.deliver(close("close-cancelled", "late")); await f.tick();
+  assert.equal(f.root.inert, true); assert.equal(thawed, 0);
+  f.deliver(close("close-cancelled", "original")); await f.tick();
+  assert.equal(f.root.inert, false); assert.equal(thawed, 1);
+}));
+
+test("cancellation during persistence stops preparation before entering the next producer", () => fixture(async f => {
+  const first = deferred<readonly CloseProof[]>(); let later = 0;
+  f.surface.register("body", participant(() => first.promise));
+  f.surface.register("proposal", participant(async () => { later++; return []; }));
+  f.surface.markReady(); f.deliver(bound);
+  f.deliver(close("prepare-close", "cancelled"));
+  f.deliver(close("close-cancelled", "cancelled"));
+  first.resolve([proof]); await f.tick();
+  assert.equal(later, 0);
+  assert.equal(f.messages.some(message => message.type === "close-prepared"), false);
+  assert.equal(f.root.inert, false);
+}));
+
+test("duplicate preparation and commit do not restart or thaw the original producer", () => fixture(async f => {
+  const held = deferred<readonly CloseProof[]>(); let prepared = 0, frozen = 0, thawed = 0;
+  f.surface.register("body", { prepare: () => { prepared++; return held.promise; }, freeze: () => ++frozen === 1, thaw: () => { thawed++; } });
+  f.surface.markReady(); f.deliver(bound);
+  f.deliver(close("prepare-close", "original"));
+  f.deliver(close("prepare-close", "original"));
+  held.resolve([proof]); await f.tick();
+  assert.equal(prepared, 1);
+  f.deliver(close("commit-close", "original")); await f.tick();
+  f.deliver(close("commit-close", "original")); await f.tick();
+  assert.equal(frozen, 1); assert.equal(thawed, 0); assert.equal(f.root.inert, true);
+  f.deliver(close("close-cancelled", "original"));
 }));

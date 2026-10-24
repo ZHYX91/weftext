@@ -1,3 +1,5 @@
+import { registerNativeProposalOwner } from "./native-proposal-owners";
+import { ProposalCloseGuard } from "./proposal-close-guard";
 import { disposeUiTree, uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { decodeProofreadingOptions, type ProofreadRule } from "./proofreading-panel";
@@ -52,6 +54,14 @@ interface Retained {
 }
 /** Saves the frozen request before network IO. Reopening queries its original ID. */
 export class ProcessingSettingsController {
+    private readonly closeGuard = new ProposalCloseGuard();
+    private readonly releaseCloseOwner = registerNativeProposalOwner(this);
+    assertCloseReady(): void { this.closeGuard.assertReady(this.dirty || this.locked); }
+    freezeForClose(): boolean { return this.closeGuard.freeze(this.dirty || this.locked); }
+    thawAfterClose(): void { this.closeGuard.thaw(); }
+    bindCloseGuard(element: HTMLElement): void { this.closeGuard.bind(element); }
+    runCloseTracked<T>(operation: () => Promise<T>): Promise<T> { return this.closeGuard.run(operation); }
+
     state: ProcessingRead | null = null;
     source = "";
     pending: Retained["pending"];
@@ -88,96 +98,111 @@ export class ProcessingSettingsController {
             this.recoveryError = raw;
         }
     }
+    dismiss(): void { this.assertCloseReady(); this.closeGuard.freeze(false); this.releaseCloseOwner(); }
     get locked(): boolean { return this.busy || !!this.pending || this.recoveryError !== null; }
     get dirty(): boolean { return !!this.state && this.source !== JSON.stringify(this.state.processing ?? defaultProcessingDocument(), null, 2); }
     async load(): Promise<void> {
-        if (this.locked || this.dirty)
-            throw new UiError(uiMessage("processingSettings.pendingOrDraftRequired"));
-        this.install(await this.host.read());
+        return this.closeGuard.run(async () => {
+            if (this.locked || this.dirty)
+                throw new UiError(uiMessage("processingSettings.pendingOrDraftRequired"));
+            this.install(await this.host.read());
+        });
     }
     edit(source: string): void {
+        if (this.closeGuard.frozen) throw new UiError(uiMessage("shell.closeAuthorInputPending"));
         if (this.locked)
             throw new UiError(uiMessage("processingSettings.operationPending"));
         this.source = source;
         this.retain();
     }
     resetDraft(): void {
+        if (this.closeGuard.frozen) throw new UiError(uiMessage("shell.closeAuthorInputPending"));
         if (this.locked || !this.state)
             throw new UiError(uiMessage("processingSettings.confirmOriginalRequired"));
         this.source = JSON.stringify(this.state.processing ?? defaultProcessingDocument(), null, 2);
         this.retain();
     }
     async prepare(reset = false): Promise<void> {
-        if (!this.state || this.locked)
-            throw new UiError(uiMessage("processingSettings.readOriginalRequired"));
-        const processing = reset ? null : decodeProcessingDocument(JSON.parse(this.source));
-        this.pending = { request: { operationId: crypto.randomUUID(), baseId: this.state.baseId, beforeSource: this.state.beforeSource, processing } };
-        try {
-            this.retain();
-        }
-        catch (error) {
-            this.pending = undefined;
-            throw error;
-        }
-        this.busy = true;
-        try {
-            this.accept(await this.host.prepare(structuredClone(this.pending.request)));
-        }
-        finally {
-            this.busy = false;
-        }
+        return this.closeGuard.run(async () => {
+            if (!this.state || this.locked)
+                throw new UiError(uiMessage("processingSettings.readOriginalRequired"));
+            const processing = reset ? null : decodeProcessingDocument(JSON.parse(this.source));
+            this.pending = { request: { operationId: crypto.randomUUID(), baseId: this.state.baseId, beforeSource: this.state.beforeSource, processing } };
+            try {
+                this.retain();
+            }
+            catch (error) {
+                this.pending = undefined;
+                throw error;
+            }
+            this.busy = true;
+            try {
+                this.accept(await this.host.prepare(structuredClone(this.pending.request)));
+            }
+            finally {
+                this.busy = false;
+            }
+        });
     }
     async status(): Promise<void> {
-        if (!this.pending || this.busy)
-            throw new UiError(uiMessage("processingSettings.noPendingOperation"));
-        this.busy = true;
-        try {
-            this.accept(await this.host.status(structuredClone(this.pending.request)));
-            await this.finishTerminal();
-        }
-        finally {
-            this.busy = false;
-        }
+        return this.closeGuard.run(async () => {
+            if (!this.pending || this.busy)
+                throw new UiError(uiMessage("processingSettings.noPendingOperation"));
+            this.busy = true;
+            try {
+                this.accept(await this.host.status(structuredClone(this.pending.request)));
+                await this.finishTerminal();
+            }
+            finally {
+                this.busy = false;
+            }
+        });
     }
     async retryPrepare(): Promise<void> {
-        if (!this.pending || this.busy)
-            throw new UiError(uiMessage("processingSettings.noPrepareToRetry"));
-        this.busy = true;
-        try {
-            this.accept(await this.host.prepare(structuredClone(this.pending.request)));
-            await this.finishTerminal();
-        }
-        finally {
-            this.busy = false;
-        }
+        return this.closeGuard.run(async () => {
+            if (!this.pending || this.busy)
+                throw new UiError(uiMessage("processingSettings.noPrepareToRetry"));
+            this.busy = true;
+            try {
+                this.accept(await this.host.prepare(structuredClone(this.pending.request)));
+                await this.finishTerminal();
+            }
+            finally {
+                this.busy = false;
+            }
+        });
     }
     async settle(): Promise<void> {
-        if (!this.pending || this.busy)
-            throw new UiError(uiMessage("processingSettings.noOperationToSettle"));
-        this.busy = true;
-        try {
-            this.accept(await this.host.settle(structuredClone(this.pending.request)));
-            await this.finishTerminal();
-        }
-        finally {
-            this.busy = false;
-        }
+        return this.closeGuard.run(async () => {
+            if (!this.pending || this.busy)
+                throw new UiError(uiMessage("processingSettings.noOperationToSettle"));
+            this.busy = true;
+            try {
+                this.accept(await this.host.settle(structuredClone(this.pending.request)));
+                await this.finishTerminal();
+            }
+            finally {
+                this.busy = false;
+            }
+        });
     }
     async apply(): Promise<void> {
-        if (!this.pending?.operation?.planId || this.pending.operation.status !== "prepared" || this.busy)
-            throw new UiError(uiMessage("processingSettings.previewOriginalRequired"));
-        this.busy = true;
-        try {
-            this.accept(await this.host.apply({ request: structuredClone(this.pending.request), planId: this.pending.operation.planId }));
-            if ((this.pending?.operation?.status as string | undefined) === "committed") {
-                const fresh = await this.host.read();
-                this.install(fresh);
-                await this.host.onApplied?.();
+        return this.closeGuard.run(async () => {
+            if (!this.pending?.operation?.planId || this.pending.operation.status !== "prepared" || this.busy)
+                throw new UiError(uiMessage("processingSettings.previewOriginalRequired"));
+            this.busy = true;
+            try {
+                this.accept(await this.host.apply({ request: structuredClone(this.pending.request), planId: this.pending.operation.planId }));
+                if ((this.pending?.operation?.status as string | undefined) === "committed") {
+                    const fresh = await this.host.read();
+                    this.install(fresh);
+                    await this.host.onApplied?.();
+                }
             }
-        }
-        finally {
-            this.busy = false;
-        }
+            finally {
+                this.busy = false;
+            }
+        });
     }
     private accept(value: unknown): void {
         const operation = decodeProcessingOperation(value);
@@ -214,9 +239,12 @@ export class ProcessingSettingsController {
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, text: UiText = ""): HTMLElementTagNameMap[K] => { const e = document.createElement(tag); setUiText(e, text); return e; };
 export async function openProcessingSettingsPanel(host: ProcessingSettingsHost): Promise<void> {
     const controller = new ProcessingSettingsController(host);
-    if (!controller.pending && !controller.dirty && !controller.recoveryError)
-        await controller.load();
+    let loadError: unknown;
+    if (!controller.pending && !controller.dirty && !controller.recoveryError) {
+        try { await controller.load(); } catch (error) { loadError = error; }
+    }
     const dialog = el("dialog");
+    controller.bindCloseGuard(dialog);
     dialog.className = "modal library-style-panel";
     const title = el("h2", uiMessage("processingSettings.title"));
     setUiAttr(dialog, "aria-label", uiMessage("processingSettings.title"));
@@ -263,7 +291,7 @@ export async function openProcessingSettingsPanel(host: ProcessingSettingsHost):
     const apply = action(uiMessage("processingSettings.applyPreview"), () => controller.apply());
     const reset = action(uiMessage("processingSettings.discardInput"), () => controller.resetDraft());
     const clear = action(uiMessage("processingSettings.previewRemoveDefaults"), () => controller.prepare(true));
-    const close = action(uiMessage("common.close"), () => { dialog.close(); });
+    const close = action(uiMessage("common.close"), () => { controller.dismiss(); dialog.close(); });
     function draw(): void {
         source.value = controller.source;
         source.disabled = controller.locked;
@@ -313,12 +341,14 @@ export async function openProcessingSettingsPanel(host: ProcessingSettingsHost):
     dialog.append(title, el("p", uiMessage("processingSettings.languageIndependenceHelp")), warning, languages, source, message, operationSummary, preview, actions);
     document.body.append(dialog);
     draw();
+    if (loadError !== undefined) setUiText(message, errorUiText(loadError));
     dialog.showModal();
     await new Promise<void>(resolve => {
         dialog.addEventListener("close", () => { disposeUiTree(dialog); dialog.remove(); resolve(); }, { once: true });
         dialog.addEventListener("cancel", e => {
-            if (controller.busy)
-                e.preventDefault();
+            e.preventDefault();
+            try { controller.dismiss(); dialog.close(); }
+            catch (error) { setUiText(message, errorUiText(error)); }
         });
     });
 }

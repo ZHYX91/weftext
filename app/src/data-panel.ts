@@ -2,6 +2,7 @@ import { reminderForm, type ReminderRawInput } from "./reminder-form";
 import { nativeControlAddress } from "./native-control-identity";
 import { newReminder } from "./reminder-values";
 import { ReminderDeviceControl } from "./reminder-device-control";
+import { ProposalCloseGuard } from "./proposal-close-guard";
 import type { OpenedDocument } from "./types";
 import { apiErrorUiText, decodeApiErrorBody, type ApiErrorBody } from "./api-error";
 export * from "./native-value-form";
@@ -17,6 +18,14 @@ interface FieldDraft {
     original?: string;
     binding?: string;
     rawInputs?: Record<string, string>;
+    revision?: number;
+}
+interface SchemaProposal {
+    source: string;
+    beforeSource: string;
+    beforeRevision: string | null;
+    plan?: { planId: string; operationId: string };
+    preview?: unknown;
 }
 export class DataPanel {
     readonly element = ui("aside", "data-panel");
@@ -29,6 +38,11 @@ export class DataPanel {
     private pinned = new Set<string>();
     private schemaRead: SchemaRead | null = null;
     private draftCache = new Map<string, Map<string, FieldDraft>>();
+    private readonly closeGuard = new ProposalCloseGuard();
+    private readonly typeDrafts = new Map<string, string[]>();
+    private readonly typeInstalling = new Set<string>();
+    private readonly schemaDrafts = new Map<string, SchemaProposal>();
+    private readonly schemaInstalling = new Set<string>();
     private references = emptyReferences();
     private referencesRoot = "";
     private composing = false;
@@ -39,13 +53,20 @@ export class DataPanel {
     private reminderDisposers: (() => void)[] = [];
     private readonly reminderDevice: ReminderDeviceControl;
     constructor(private readonly host: PanelHost) {
+        this.closeGuard.bind(this.element);
         this.reminderDevice = new ReminderDeviceControl(host);
         setUiAttr(this.element, "aria-label", uiMessage("dataPanel.regionLabel"));
         this.element.append(ui("p", "data-empty", uiMessage("dataPanel.openNoteHelp")));
+        // Invalid raw text never reaches the typed changed callback. Record it
+        // on its owning input event; close proof reads only the retained owners.
+        for (const event of ["input", "change"]) this.element.addEventListener(event, () => {
+            if (!this.closeGuard.frozen) this.rememberInputs();
+        });
         this.element.addEventListener("compositionstart", () => { this.composing = true; });
         this.element.addEventListener("compositionend", () => {
             this.composing = false;
             requestAnimationFrame(() => {
+                if (this.closeGuard.frozen) return;
                 if (!this.composing && this.pendingRender) {
                     this.pendingRender = false;
                     this.render();
@@ -53,7 +74,37 @@ export class DataPanel {
             });
         });
     }
+    private hasUnresolved(): boolean {
+        return this.typeDrafts.size > 0 || this.schemaDrafts.size > 0 ||
+            [this.drafts, ...this.draftCache.values()].some(drafts => [...drafts.values()].some(draft => draft.changed || !!Object.keys(draft.rawInputs ?? {}).length));
+    }
+    private discardAllButton(afterDiscard?: () => void): HTMLButtonElement {
+        return action(uiMessage("dataPanel.discardAllFormChanges"), () => {
+            try { this.closeGuard.assertReady(false); }
+            catch (error) { this.host.notify(errorUiText(error), true); return; }
+            this.drafts.clear(); this.draftCache.clear(); this.typeDrafts.clear(); this.schemaDrafts.clear();
+            if (afterDiscard) afterDiscard();
+            else if (this.basis) this.render();
+            else {
+                this.element.replaceChildren(ui("p", "data-empty", uiMessage("dataPanel.openNoteHelp")));
+                if (this.reminderDevice.hasPending()) this.element.append(this.reminderDevice.element);
+            }
+        }, "data-button compact");
+    }
+    assertCloseReady(): void { this.closeGuard.assertReady(this.hasUnresolved()); this.reminderDevice.assertCloseReady(); }
+    freezeForClose(): boolean {
+        try { this.assertCloseReady(); } catch { return false; }
+        if (!this.closeGuard.freeze(this.hasUnresolved())) return false;
+        try { if (this.reminderDevice.freezeForClose()) return true; }
+        catch { this.closeGuard.thaw(); return false; }
+        this.closeGuard.thaw(); return false;
+    }
+    thawAfterClose(): void { this.closeGuard.thaw(); this.reminderDevice.thawAfterClose(); }
     async refresh(): Promise<void> {
+        if (this.closeGuard.frozen) return;
+        return this.closeGuard.run(() => this.refreshOwned());
+    }
+    private async refreshOwned(): Promise<void> {
         this.rememberInputs();
         const basis = this.host.getDocument();
         const generation = ++this.generation;
@@ -67,6 +118,8 @@ export class DataPanel {
             this.reminderDisposers.splice(0).forEach(dispose => dispose());
             this.reminderDevice.retire();
             this.element.replaceChildren(ui("p", "data-empty", uiMessage("dataPanel.openNoteHelp")));
+            if (this.hasUnresolved()) this.element.append(this.discardAllButton());
+            if (this.reminderDevice.hasPending()) this.element.append(this.reminderDevice.element);
             return;
         }
         if (!this.basis || identity(this.basis) !== identity(basis)) {
@@ -103,11 +156,15 @@ export class DataPanel {
             }
             this.render();
             if (basis.workspaceId)
-                void loadFormReferences(this.host, basis.root, this.references, this.element, () => generation === this.generation && this.referencesRoot === basis.root);
+                await loadFormReferences(this.host, basis.root, this.references, this.element, () => !this.closeGuard.frozen && generation === this.generation && this.referencesRoot === basis.root);
         }
         catch (error) {
-            if (generation === this.generation)
-                this.element.replaceChildren(ui("h2", "", uiMessage("dataPanel.title")), ui("p", "data-warning", error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse")), action(uiMessage("dataPanel.retryRead"), () => this.refresh()));
+            if (generation === this.generation) {
+                const discard = this.discardAllButton(() => discard.remove());
+                this.element.replaceChildren(ui("h2", "", uiMessage("dataPanel.title")), ui("p", "data-warning", error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse")), action(uiMessage("dataPanel.retryRead"), () => this.refresh()), discard);
+                this.reminderDevice.retire();
+                if (this.reminderDevice.hasPending()) this.element.append(this.reminderDevice.element);
+            }
         }
         finally {
             if (generation === this.generation)
@@ -115,6 +172,7 @@ export class DataPanel {
         }
     }
     private render(): void {
+        if (this.closeGuard.frozen) return;
         if (this.composing) {
             this.pendingRender = true;
             return;
@@ -133,6 +191,7 @@ export class DataPanel {
         this.element.replaceChildren();
         const heading = ui("div", "data-panel-heading");
         heading.append(ui("h2", "", uiMessage("dataPanel.title")), action(uiMessage("common.refresh"), () => this.refresh(), "data-button compact"));
+        heading.append(this.discardAllButton());
         this.element.append(heading);
         const status = ui("p", projection.qualification === "qualified" || projection.qualification === "certified" ? "data-help" : "data-warning", displayMessage("dataPanel.qualification", { p0: uiDisplayParameter(projection.qualification) }));
         this.element.append(status);
@@ -151,8 +210,9 @@ export class DataPanel {
         this.reminderDevice.retire();
         if (this.basis && fieldsForTypes(schema, projection.types).some(item => item.field.id === "tasks/reminder")) {
             this.element.append(this.reminderDevice.element);
-            void this.reminderDevice.refresh(this.basis);
+            void this.closeGuard.run(() => this.reminderDevice.refresh(this.basis!));
         }
+        else if (this.reminderDevice.hasPending()) this.element.append(this.reminderDevice.element);
         if (projection.unknownFields.length) {
             const unknown = ui("details", "data-unknown-fields");
             unknown.append(ui("summary", "", displayMessage("dataPanel.unknownFieldsDisclosure", { p0: projection.unknownFields.length })));
@@ -179,15 +239,16 @@ export class DataPanel {
     }
     private renderTypes(schema: DataSchema, tokens: string[]): void {
         const basis = this.basis;
+        const identity = this.draftIdentity!;
         const details = ui("details", "data-type-picker");
         details.append(ui("summary", "", displayMessage("dataPanel.typesDisclosure", { p0: uiDisplayParameter(tokens.length ? joinUiText(tokens.map(token => typeNames[token] ?? token), "、") : uiMessage("dataPanel.ordinaryNote")) })));
-        const selected = new Set(tokens);
+        const selected = new Set(this.typeDrafts.get(identity) ?? tokens);
         const choices = ui("div", "data-type-options");
         const aliases = schema.types.map(type => { const alias = Object.entries(schema.aliases).find(([, id]) => id === type.id)?.[0] ?? type.id; return { alias, id: type.id }; });
         for (const { alias, id } of aliases) {
             const checkbox = ui("input");
             checkbox.type = "checkbox";
-            checkbox.checked = tokens.includes(alias) || tokens.includes(id);
+            checkbox.checked = selected.has(alias) || selected.has(id);
             const label = labelFor(typeNames[alias] ?? alias, checkbox);
             label.prepend(checkbox);
             choices.append(label);
@@ -196,6 +257,9 @@ export class DataPanel {
                 selected.delete(alias);
                 if (checkbox.checked)
                     selected.add(alias);
+                const next = [...selected];
+                if (!this.typeInstalling.has(identity) && JSON.stringify([...next].sort()) === JSON.stringify([...tokens].sort())) this.typeDrafts.delete(identity);
+                else this.typeDrafts.set(identity, next);
                 setUiText(warnings, joinUiText(typeConflicts(schema, [...selected]), "；"));
             };
         }
@@ -204,16 +268,18 @@ export class DataPanel {
         if (unknown.length)
             choices.append(ui("p", "data-warning", displayMessage("dataPanel.unregisteredTypes", { p0: uiDisplayParameter(unknown.join("、")) })));
         const warnings = ui("p", "data-warning");
-        const apply = action(uiMessage("dataPanel.applyTypes"), () => this.applyTypes([...selected], basis));
+        const apply = action(uiMessage("dataPanel.applyTypes"), () => this.applyTypes([...selected], basis, identity));
+        const discard = action(uiMessage("dataPanel.discardFormChanges"), () => { this.typeDrafts.delete(identity); this.render(); });
         if (this.projection?.readOnly) {
             apply.disabled = true;
             choices.querySelectorAll<HTMLInputElement>("input").forEach(input => { input.disabled = true; });
             details.append(ui("p", "data-help", uiMessage("dataPanel.readOnlyHelp")));
         }
-        details.append(choices, warnings, apply);
+        details.append(choices, warnings, apply, discard);
         this.element.append(details);
     }
     private renderFields(): void {
+        if (this.closeGuard.frozen) return;
         if (this.composing) {
             this.pendingRender = true;
             return;
@@ -241,7 +307,7 @@ export class DataPanel {
         groups.advanced.append(ui("summary", "", uiMessage("dataPanel.moreFields")));
         groups.advanced.open = this.advancedOpen;
         groups.advanced.ontoggle = () => {
-            if (groups.advanced.isConnected)
+            if (!this.closeGuard.frozen && groups.advanced.isConnected)
                 this.advancedOpen = groups.advanced.open;
         };
         const matching = declared.filter(({ field }) => `${uiTextValue(field.key)} ${uiTextValue(fieldNames[field.key] ?? "")}`.toLowerCase().includes(this.filter.toLowerCase()));
@@ -299,7 +365,7 @@ export class DataPanel {
                 if (schemaChanged && draft.changed)
                     wrapper.append(ui("p", "data-warning", uiMessage("dataPanel.fieldBindingChanged")), ui("pre", "data-readonly-source", JSON.stringify({ value: draft.value, rawInputs: draft.rawInputs }, null, 2)));
                 else {
-                    const changed = (next: NativeValue): void => { draft.value = next; draft.changed = true; apply.disabled = conflicted; };
+                    const changed = (next: NativeValue): void => { if (this.closeGuard.frozen) return; draft.value = next; draft.changed = true; draft.revision = (draft.revision ?? 0) + 1; apply.disabled = conflicted; };
                     if (field.id === "tasks/reminder") {
                         const form = reminderForm(draft.value, schema, changed, { fieldId: field.id, path: [] });
                         wrapper.append(form.element);
@@ -324,7 +390,7 @@ export class DataPanel {
                 }
                 controls.append(apply, action(uiMessage("dataPanel.discardFormChanges"), () => { this.drafts.delete(field.key); this.renderFields(); }));
                 if (field.nullable && draft.value.kind !== "none")
-                    controls.append(action(uiMessage("dataPanel.setExplicitNone"), () => { draft.value = { kind: "none" }; draft.changed = true; this.renderFields(); }));
+                    controls.append(action(uiMessage("dataPanel.setExplicitNone"), () => { draft.value = { kind: "none" }; draft.changed = true; draft.revision = (draft.revision ?? 0) + 1; this.renderFields(); }));
                 wrapper.append(controls);
             }
             const group = this.pinned.has(field.id) ? groups.pinned : commonFields.has(field.key) || required || this.filter ? groups.common : groups.advanced;
@@ -359,14 +425,24 @@ export class DataPanel {
                     raw[key] = control.value;
                     draft.changed = true;
                 }
+            if (JSON.stringify(raw) !== JSON.stringify(draft.rawInputs ?? {})) draft.revision = (draft.revision ?? 0) + 1;
             if (Object.keys(raw).length)
                 draft.rawInputs = raw;
             else if (wrapper.querySelector("input,select,textarea"))
                 delete draft.rawInputs;
         }
     }
-    private async applyField(key: string, value: NativeValue, basis: DocumentBasis | null): Promise<void> { await this.patch("/api/data/edit", { key, path: [], value }, basis); }
-    private async applyTypes(types: string[], basis: DocumentBasis | null): Promise<void> {
+    private async applyField(key: string, value: NativeValue, basis: DocumentBasis | null): Promise<void> {
+        if (this.closeGuard.frozen) return;
+        const drafts = this.drafts, draft = drafts.get(key), revision = draft?.revision;
+        await this.closeGuard.run(async () => {
+            if (!await this.patch("/api/data/edit", { key, path: [], value }, basis)) return;
+            if (drafts.get(key) === draft && draft?.revision === revision) drafts.delete(key);
+            await this.refresh();
+        });
+    }
+    private async applyTypes(types: string[], basis: DocumentBasis | null, identity: string): Promise<void> {
+        if (this.closeGuard.frozen || this.typeInstalling.has(identity)) return;
         if (this.schema) {
             const conflicts = typeConflicts(this.schema, types);
             if (conflicts.length) {
@@ -374,22 +450,30 @@ export class DataPanel {
                 return;
             }
         }
-        await this.patch("/api/data/types", { types }, basis);
+        const draft = this.typeDrafts.get(identity);
+        await this.closeGuard.run(async () => {
+            this.typeInstalling.add(identity);
+            try {
+                if (!await this.patch("/api/data/types", { types }, basis)) return;
+                if (this.typeDrafts.get(identity) === draft) this.typeDrafts.delete(identity);
+                await this.refresh();
+            } finally { this.typeInstalling.delete(identity); }
+        });
     }
-    private async patch(route: string, request: Record<string, unknown>, basis: DocumentBasis | null): Promise<void> {
+    private async patch(route: string, request: Record<string, unknown>, basis: DocumentBasis | null): Promise<boolean> {
         if (this.composing) {
             this.host.notify(uiMessage("dataPanel.compositionPending"), true);
-            return;
+            return false;
         }
         if (this.host.canEdit?.() === false) {
             this.host.notify(uiMessage("dataPanel.editUnavailable"), true);
-            return;
+            return false;
         }
         if (!basis)
-            return;
+            return false;
         if (this.host.getDocument()?.source !== basis.source || this.host.getDocument()?.sessionId !== basis.sessionId || this.host.getDocument()?.serial !== basis.serial) {
             this.host.notify(uiMessage("dataPanel.sourceBasisChanged"), true);
-            return;
+            return false;
         }
         this.element.setAttribute("aria-busy", "true");
         try {
@@ -400,13 +484,12 @@ export class DataPanel {
                 source?: string;
             }>(route, { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, ...request });
             await this.host.applyPatch(decodeSourcePatch(result, basis.source), basis);
-            if (typeof request.key === "string")
-                this.drafts.delete(request.key);
-            await this.refresh();
             this.host.notify(uiMessage("dataPanel.applied"));
+            return true;
         }
         catch (error) {
             this.host.notify(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"), true);
+            return false;
         }
         finally {
             this.element.removeAttribute("aria-busy");
@@ -417,23 +500,60 @@ export class DataPanel {
         if (!read?.canInstall || !this.basis || this.projection?.readOnly)
             return;
         const basis = this.basis;
+        const root = basis.root;
+        const retained = this.schemaDrafts.get(root);
         const details = ui("details", "schema-settings");
         details.append(ui("summary", "", uiMessage("schemaSettings.disclosure")), ui("p", "data-help", displayMessage("schemaSettings.installScopeHelp", { p0: uiDisplayParameter(read.builtinDefault ? uiMessage("schemaSettings.builtinDefault") : uiMessage("schemaSettings.installed")) })));
         const source = ui("textarea", "data-input schema-source");
         source.rows = 10;
-        source.value = read.source;
+        source.value = retained?.source ?? read.source;
+        source.oninput = () => {
+            const proposal: SchemaProposal = { source: source.value, beforeSource: retained?.beforeSource ?? read.source, beforeRevision: retained ? retained.beforeRevision : read.revision };
+            if (proposal.source === read.source && !this.schemaInstalling.has(root)) this.schemaDrafts.delete(root);
+            else this.schemaDrafts.set(root, proposal);
+            previewHost.replaceChildren();
+        };
         setUiAttr(source, "aria-label", uiMessage("schemaSettings.sourceLabel"));
         details.append(source);
         const previewHost = ui("div", "schema-preview");
         details.append(previewHost);
+        const showProposal = (proposal: SchemaProposal): void => {
+            previewHost.replaceChildren(ui("pre", "", diagnosticText(proposal.preview)));
+            const plan = proposal.plan;
+            if (plan) previewHost.append(action(uiMessage("schemaSettings.install"), async () => {
+                if (this.closeGuard.frozen || this.schemaInstalling.has(root) || this.schemaDrafts.get(root) !== proposal) return;
+                if (this.host.getDocument()?.root !== root || this.host.canEdit?.() === false || this.composing) {
+                    this.host.notify(uiMessage("schemaSettings.installContextChanged"), true);
+                    return;
+                }
+                await this.closeGuard.run(async () => {
+                    this.schemaInstalling.add(root);
+                    try {
+                        await this.host.request("/api/data/schema/install", plan);
+                        this.host.environmentChanged?.(root);
+                        if (this.schemaDrafts.get(root) === proposal) this.schemaDrafts.delete(root);
+                        this.host.notify(uiMessage("schemaSettings.installedNotice"));
+                        await this.refresh();
+                    } catch (error) {
+                        this.host.notify(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"), true);
+                    } finally { this.schemaInstalling.delete(root); }
+                });
+            }, "data-button primary"));
+            else previewHost.append(ui("p", "data-warning", uiMessage("schemaSettings.noExecutablePlan")));
+        };
+        if (retained?.preview !== undefined) showProposal(retained);
         const prepare = action(uiMessage("schemaSettings.prepare"), async () => {
+            if (this.closeGuard.frozen) return;
             if (this.host.getDocument()?.root !== basis.root || this.host.canEdit?.() === false || this.composing) {
                 this.host.notify(uiMessage("schemaSettings.contextChanged"), true);
                 return;
             }
+            const proposal: SchemaProposal = { source: source.value, beforeSource: retained?.beforeSource ?? read.source, beforeRevision: retained ? retained.beforeRevision : read.revision };
+            this.schemaDrafts.set(root, proposal);
             prepare.disabled = true;
+            const finish = this.closeGuard.begin();
             try {
-                JSON.parse(source.value);
+                JSON.parse(proposal.source);
                 const result = await this.host.request<{
                     planId?: string;
                     operationId?: string;
@@ -442,36 +562,22 @@ export class DataPanel {
                     };
                     preview?: unknown;
                     diagnostics?: unknown[];
-                }>("/api/data/schema/prepare", { root: basis.root, source: source.value, beforeSource: read.source, beforeRevision: read.revision, operationId: crypto.randomUUID() });
-                previewHost.replaceChildren(ui("pre", "", diagnosticText(result.preview ?? result.diagnostics ?? result)));
+                }>("/api/data/schema/prepare", { root, source: proposal.source, beforeSource: proposal.beforeSource, beforeRevision: proposal.beforeRevision, operationId: crypto.randomUUID() });
+                if (this.schemaDrafts.get(root) !== proposal) return;
                 const planId = result.planId ?? result.plan?.planId;
-                if (planId && result.operationId)
-                    previewHost.append(action(uiMessage("schemaSettings.install"), async () => {
-                        if (this.host.getDocument()?.root !== basis.root || this.host.canEdit?.() === false || this.composing) {
-                            this.host.notify(uiMessage("schemaSettings.installContextChanged"), true);
-                            return;
-                        }
-                        try {
-                            await this.host.request("/api/data/schema/install", { operationId: result.operationId, planId });
-                            this.host.environmentChanged?.(basis.root);
-                            this.host.notify(uiMessage("schemaSettings.installedNotice"));
-                            await this.refresh();
-                        }
-                        catch (error) {
-                            this.host.notify(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"), true);
-                        }
-                    }, "data-button primary"));
-                else
-                    previewHost.append(ui("p", "data-warning", uiMessage("schemaSettings.noExecutablePlan")));
+                proposal.preview = result.preview ?? result.diagnostics ?? result;
+                if (planId && result.operationId) proposal.plan = { planId, operationId: result.operationId };
+                showProposal(proposal);
             }
             catch (error) {
                 previewHost.replaceChildren(ui("p", "data-warning", error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse")));
             }
             finally {
                 prepare.disabled = false;
+                finish();
             }
         });
-        details.append(prepare);
+        details.append(prepare, action(uiMessage("dataPanel.discardFormChanges"), () => { this.schemaDrafts.delete(root); this.render(); }));
         this.element.append(details);
     }
 }
@@ -483,25 +589,45 @@ export class QuickCapture {
     readonly element = ui("section", "quick-capture");
     private operationId: string | null = null;
     private pending: Record<string, unknown> | null = null;
+    private pendingRevision: number | null = null;
     private schema: DataSchema | null = null;
     private references = emptyReferences();
     private reminderDisposers: (() => void)[] = [];
+    private readonly closeGuard = new ProposalCloseGuard();
+    private dirty = false;
+    private inputRevision = 0;
+    private submitting = false;
+    private initializing = false;
+    private markInput(): void { if (!this.closeGuard.frozen) { this.dirty = true; this.inputRevision++; } }
+    assertCloseReady(): void { this.closeGuard.assertReady(this.dirty || this.pending !== null); }
+    freezeForClose(): boolean { return this.closeGuard.freeze(this.dirty || this.pending !== null); }
+    thawAfterClose(): void { this.closeGuard.thaw(); }
     dispose(): void { this.reminderDisposers.splice(0).forEach(dispose => dispose()); }
-    constructor(private readonly host: PanelHost, private context: CaptureContext) { setUiAttr(this.element, "aria-label", uiMessage("quickCapture.title")); }
+    constructor(private readonly host: PanelHost, private context: CaptureContext) {
+        setUiAttr(this.element, "aria-label", uiMessage("quickCapture.title"));
+        this.closeGuard.bind(this.element);
+        for (const event of ["input", "change"]) this.element.addEventListener(event, () => this.markInput(), true);
+    }
     async initialize(): Promise<void> {
+        if (this.closeGuard.frozen || this.schema || this.initializing) return;
+        const finish = this.closeGuard.begin();
+        this.initializing = true;
         try {
             const result = await this.host.request<DataSchema | {
                 schema: DataSchema;
             }>("/api/data/schema", { root: this.context.root });
             this.schema = "schema" in result ? result.schema : result;
             this.render();
-            void loadFormReferences(this.host, this.context.root, this.references, this.element);
+            await loadFormReferences(this.host, this.context.root, this.references, this.element, () => !this.closeGuard.frozen);
         }
         catch (error) {
-            this.element.replaceChildren(ui("p", "data-warning", (error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"))), action(uiMessage("common.retry"), () => this.initialize()));
+            if (this.schema) this.host.notify(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"), true);
+            else this.element.replaceChildren(ui("p", "data-warning", (error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"))), action(uiMessage("common.retry"), () => this.initialize()));
         }
+        finally { this.initializing = false; finish(); }
     }
     updateContext(): void {
+        if (this.closeGuard.frozen) return;
         const template = this.element.querySelector<HTMLButtonElement>(".capture-template-entry");
         const help = this.element.querySelector<HTMLElement>(".capture-template-help");
         if (!template || !help)
@@ -511,6 +637,7 @@ export class QuickCapture {
         setUiText(help, template.disabled ? uiMessage("quickCapture.openLibraryNoteForTemplate") : uiMessage("quickCapture.templateWizardHelp"));
     }
     private render(): void {
+        if (this.closeGuard.frozen) return;
         this.dispose();
         if (!this.schema)
             return;
@@ -518,12 +645,15 @@ export class QuickCapture {
         const form = ui("form", "capture-form");
         form.append(ui("h2", "", uiMessage("quickCapture.title")));
         const template = action(uiMessage("quickCapture.openTemplateWizard"), async () => {
+            if (this.closeGuard.frozen) return;
+            const finish = this.closeGuard.begin();
             try {
                 await this.host.openTemplates?.();
             }
             catch (error) {
                 this.host.notify(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"), true);
             }
+            finally { finish(); }
         }, "data-button capture-template-entry");
         form.append(template, ui("p", "data-help capture-template-help"));
         const name = ui("input", "data-input");
@@ -556,13 +686,15 @@ export class QuickCapture {
                 const heading = container instanceof HTMLDetailsElement ? ui("summary", "", fieldNames[field.key] ?? field.key) : ui("h3", "", () => `${uiTextValue(fieldNames[field.key] ?? field.key)}${uiTextValue(required ? " *" : "")}`);
                 container.append(heading);
                 const addEditor = (): void => {
+                    this.markInput();
                     const value = field.id === "tasks/reminder" ? newReminder("absolute") : emptyNativeValue(field.shape, schema);
                     values.set(field.key, value);
+                    const changed = (next: NativeValue): void => { if (this.closeGuard.frozen) return; this.markInput(); values.set(field.key, next); };
                     if (field.id === "tasks/reminder") {
-                        const form = reminderForm(value, schema, next => values.set(field.key, next), {fieldId:field.id,path:[]});
+                        const form = reminderForm(value, schema, changed, {fieldId:field.id,path:[]});
                         container.append(form.element);
                         this.reminderDisposers.push(form.dispose);
-                    } else container.append(valueEditor(field.shape, value, schema, next => values.set(field.key, next), fieldNames[field.key] ?? field.key, {fieldId:field.id,path:[]}, 0, this.references));
+                    } else container.append(valueEditor(field.shape, value, schema, changed, fieldNames[field.key] ?? field.key, {fieldId:field.id,path:[]}, 0, this.references));
                 };
                 if (required)
                     addEditor();
@@ -578,21 +710,33 @@ export class QuickCapture {
         feedback.setAttribute("aria-live", "polite");
         const submit = ui("button", "data-button primary", uiMessage("quickCapture.createOpen"));
         submit.type = "submit";
-        form.append(feedback, submit);
+        const discard = action(uiMessage("dataPanel.discardFormChanges"), () => {
+            if (this.pending || this.submitting || this.closeGuard.frozen) return;
+            this.dirty = false; this.inputRevision++; this.render();
+        });
+        form.append(feedback, submit, discard);
         this.element.replaceChildren(form);
         this.updateContext();
         form.onsubmit = event => {
             event.preventDefault();
+            if (this.submitting || this.closeGuard.frozen) return;
             if (!form.reportValidity())
                 return;
             void (async () => {
+                const finish = this.closeGuard.begin();
+                this.submitting = true;
                 const retry = this.pending !== null;
                 submit.disabled = true;
-                this.operationId ??= crypto.randomUUID();
-                this.pending ??= { root: this.context.root, parent: parent.value, name: name.value, title: title.value || undefined, types: type.value ? [type.value] : [], fields: Object.fromEntries(values), body: body.value, operationId: this.operationId };
-                const submitted = this.pending;
+                discard.disabled = true;
                 let receiptReceived = false;
                 try {
+                    this.operationId ??= crypto.randomUUID();
+                    if (!this.pending) {
+                        this.pending = structuredClone({ root: this.context.root, parent: parent.value, name: name.value, title: title.value || undefined, types: type.value ? [type.value] : [], fields: Object.fromEntries(values), body: body.value, operationId: this.operationId });
+                        this.pendingRevision = this.inputRevision;
+                    }
+                    const submitted = this.pending;
+                    const submittedRevision = this.pendingRevision;
                     const result = await submitOriginal<OriginalFact & {
                         document?: OpenedDocument;
                         documentError?: ApiErrorBody;
@@ -611,10 +755,12 @@ export class QuickCapture {
                     if (!this.host.created)
                         throw new UiError(uiMessage("capture.createdDocumentDeliveryRequired"));
                     await this.host.created(document);
-                    const unchanged = name.value === submitted.name && parent.value === submitted.parent && (title.value || undefined) === submitted.title && body.value === submitted.body && JSON.stringify(type.value ? [type.value] : []) === JSON.stringify(submitted.types) && JSON.stringify(Object.fromEntries(values)) === JSON.stringify(submitted.fields);
+                    const unchanged = this.inputRevision === submittedRevision && name.value === submitted.name && parent.value === submitted.parent && (title.value || undefined) === submitted.title && body.value === submitted.body && JSON.stringify(type.value ? [type.value] : []) === JSON.stringify(submitted.types) && JSON.stringify(Object.fromEntries(values)) === JSON.stringify(submitted.fields);
                     this.operationId = null;
                     this.pending = null;
+                    this.pendingRevision = null;
                     if (unchanged) {
+                        this.dirty = false;
                         name.value = "";
                         title.value = "";
                         body.value = "";
@@ -625,18 +771,22 @@ export class QuickCapture {
                     feedback.className = "data-help";
                     setUiText(feedback, unchanged ? uiMessage("quickCapture.createdOpened") : uiMessage("quickCapture.createdWithNewInput"));
                     this.updateContext();
-                    void loadFormReferences(this.host, this.context.root, this.references, this.element);
+                    await loadFormReferences(this.host, this.context.root, this.references, this.element, () => !this.closeGuard.frozen);
                 }
                 catch (error) {
                     if (!receiptReceived && error instanceof TerminatedAttempt) {
                         this.operationId = null;
                         this.pending = null;
+                        this.pendingRevision = null;
                     }
                     feedback.className = "data-warning";
                     setUiText(feedback, () => `${uiTextValue(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse"))}${uiTextValue(this.pending ? uiMessage("quickCapture.originalCreateRetainedSuffix") : uiMessage("quickCapture.originalInputRetainedSuffix"))}`);
                 }
                 finally {
                     submit.disabled = false;
+                    discard.disabled = this.pending !== null;
+                    this.submitting = false;
+                    finish();
                 }
             })();
         };

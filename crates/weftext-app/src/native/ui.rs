@@ -2,7 +2,7 @@
 //! kernel wake also lets the Core supervisor quiesce after a dispatcher fault.
 use super::{
     apartment::Sta,
-    close::{Gate, Message, Proof, Request, SurfaceKind},
+    close::{CaptureDelivery, CaptureOpen, Gate, Message, Proof, Request, SurfaceKind},
     events::{Event, Queue, Wake},
     terminal::{Outcome, Terminal},
     tray::{Action, Tray},
@@ -55,6 +55,8 @@ pub(super) enum Command {
         preferences: weftext_core::DesktopPreferences,
         startup: super::startup::Observation,
         cli_service: bool,
+        // Present only after this user action's Core write and strict readback.
+        information: Option<UiMessage>,
     },
     Popup,
     Feedback(UiMessage),
@@ -72,10 +74,15 @@ pub(super) enum Command {
         body: serde_json::Value,
         session_ack: Option<String>,
     },
+    CaptureResult {
+        request: CaptureOpen,
+        opened: Option<Box<weftext_core::OpenedDocument>>,
+    },
     BeginExit,
     CancelClose,
 }
 pub(super) enum Notice {
+    CaptureOpen(CaptureOpen),
     Draft {
         surface_id: String,
         surface_epoch: String,
@@ -216,10 +223,16 @@ struct Surface {
     gate: Gate,
     address: String,
     requested: bool,
-    after_ready: Vec<(serde_json::Value, bool)>,
+    after_ready: Vec<PendingPost>,
     sessions: std::collections::BTreeSet<String>,
     draft_calls: std::collections::BTreeSet<String>,
+    capture_requests: std::collections::BTreeSet<String>,
     exposed: bool,
+}
+struct PendingPost {
+    message: serde_json::Value,
+    activate: bool,
+    delivery_id: Option<String>,
 }
 struct Reducer {
     dispatcher: Window,
@@ -241,6 +254,7 @@ struct Reducer {
     owner_lifetime: Arc<crate::broker::lifetime::ServiceContinuation>,
     admission_epoch: u64,
     visibility: crate::broker::lifetime::VisibilityFence,
+    capture_delivery: Option<CaptureDelivery>,
 }
 fn id(kind: SurfaceKind) -> u64 {
     match kind {
@@ -329,6 +343,14 @@ impl Reducer {
         let Some(surface) = self.surfaces.get_mut(&key) else {
             return Ok(());
         };
+        if self
+            .capture_delivery
+            .as_ref()
+            .is_some_and(|delivery| delivery.blocks(&surface.gate.id, &surface.gate.epoch))
+        {
+            self.blocked()?;
+            return Ok(());
+        }
         let Some(request) = surface.gate.begin() else {
             if !surface.gate.ready {
                 self.blocked()?;
@@ -349,9 +371,12 @@ impl Reducer {
         }
         self.global_exit = false;
         for surface in self.surfaces.values_mut() {
+            let request = surface.gate.current_request();
             surface.gate.cancel();
-            if let Some(view) = &surface.view {
-                view.post(&serde_json::json!({"type":"close-cancelled"}))?;
+            if let Some(request) = request
+                && let Some(view) = &surface.view
+            {
+                view.post(&message("close-cancelled", &request))?;
             }
         }
         Ok(())
@@ -369,6 +394,142 @@ impl Reducer {
                 windows::core::w!("Weftext"),
                 MB_OK | MB_ICONINFORMATION,
             );
+        }
+        Ok(())
+    }
+    fn capture_result(&self, request: &CaptureOpen, accepted: bool) -> Result<()> {
+        if let Some(surface) = self.surfaces.get(&id(SurfaceKind::Capture))
+            && surface.gate.id == request.surface_id
+            && surface.gate.epoch == request.surface_epoch
+        {
+            surface
+                .view
+                .as_ref()
+                .ok_or_else(failed)?
+                .post(&serde_json::json!({
+                    "type":"capture-open-result", "surfaceId":request.surface_id,
+                    "surfaceEpoch":request.surface_epoch, "requestId":request.request_id,
+                    "accepted":accepted
+                }))?;
+        }
+        Ok(())
+    }
+    fn retire_undelivered(&self, opened: weftext_core::OpenedDocument) -> Result<()> {
+        self.notice(Notice::Closed {
+            proofs: Vec::new(),
+            sessions: vec![opened.session_id],
+        })
+    }
+    fn reject_capture_delivery(&mut self) -> Result<()> {
+        let Some(delivery) = self.capture_delivery.take() else {
+            return Ok(());
+        };
+        for surface in self.surfaces.values_mut() {
+            surface.after_ready.retain(|pending| {
+                pending.delivery_id.as_deref() != Some(delivery.request.request_id.as_str())
+            });
+            if delivery.targets(&surface.gate.id, &surface.gate.epoch)
+                && let Some(session) = delivery.undelivered_session()
+            {
+                surface.sessions.remove(session);
+            }
+        }
+        // A queued value has never reached any browser consumer. A posted
+        // value can already have a live author even if its reply was lost;
+        // retain that Session with its Library until the original close gate.
+        if let Some(session) = delivery.undelivered_session() {
+            self.notice(Notice::Closed {
+                proofs: Vec::new(),
+                sessions: vec![session.to_owned()],
+            })?;
+        }
+        self.capture_result(&delivery.request, false)
+    }
+    fn capture_opened(
+        &mut self,
+        request: CaptureOpen,
+        opened: Option<weftext_core::OpenedDocument>,
+    ) -> Result<()> {
+        if !self
+            .capture_delivery
+            .as_ref()
+            .is_some_and(|delivery| delivery.owns(&request))
+        {
+            if let Some(opened) = opened {
+                self.retire_undelivered(opened)?;
+            }
+            return Ok(());
+        }
+        let source_live = self
+            .surfaces
+            .get(&id(SurfaceKind::Capture))
+            .is_some_and(|surface| {
+                surface.gate.id == request.surface_id
+                    && surface.gate.epoch == request.surface_epoch
+                    && surface.gate.ready
+                    && surface.window.state.live_hwnd().is_some()
+                    && !surface.window.state.destroying.get()
+            });
+        if !source_live || self.fatal || self.global_exit {
+            if let Some(opened) = opened {
+                self.retire_undelivered(opened)?;
+            }
+            self.capture_delivery = None;
+            self.capture_result(&request, false)?;
+            return Ok(());
+        }
+        let Some(opened) = opened else {
+            self.capture_delivery = None;
+            self.capture_result(&request, false)?;
+            return Ok(());
+        };
+        let Some(surface) = self.surfaces.get_mut(&id(SurfaceKind::Library)) else {
+            self.capture_delivery = None;
+            self.retire_undelivered(opened)?;
+            self.capture_result(&request, false)?;
+            return Ok(());
+        };
+        if surface.sessions.len() >= 32768
+            || surface.after_ready.len() >= 64
+            || surface.window.state.live_hwnd().is_none()
+            || surface.window.state.destroying.get()
+        {
+            self.capture_delivery = None;
+            self.retire_undelivered(opened)?;
+            self.capture_result(&request, false)?;
+            return Ok(());
+        }
+        let message = surface.gate.bind_message(serde_json::json!({"type":"open-document", "deliveryId":request.request_id, "document":opened})).ok_or_else(failed)?;
+        let delivery = self.capture_delivery.as_mut().ok_or_else(failed)?;
+        if !delivery.bind(&surface.gate.id, &surface.gate.epoch, &opened.session_id) {
+            return Err(failed());
+        }
+        // Before either posting or queuing, the target owns this exact Session.
+        // Rejected and unknown deliveries stay in its retirement set, never in
+        // a different/recreated Library or the original Capture author record.
+        surface.sessions.insert(opened.session_id);
+        if surface.gate.ready {
+            if surface
+                .view
+                .as_ref()
+                .ok_or_else(failed)?
+                .post(&message)
+                .is_err()
+            {
+                self.capture_delivery = None;
+                self.capture_result(&request, false)?;
+                return Ok(());
+            }
+            if !delivery.mark_posted(&request.request_id) {
+                return Err(failed());
+            }
+            surface.window.show();
+        } else {
+            surface.after_ready.push(PendingPost {
+                message,
+                activate: true,
+                delivery_id: Some(request.request_id),
+            });
         }
         Ok(())
     }
@@ -393,10 +554,12 @@ impl Reducer {
                 self.admission_epoch = admission_epoch;
                 let key = id(kind);
                 if let Some(surface) = self.surfaces.get_mut(&key) {
+                    let request = surface.gate.current_request();
                     if surface.gate.reactivate()
+                        && let Some(request) = request
                         && let Some(view) = &surface.view
                     {
-                        view.post(&serde_json::json!({"type":"close-cancelled"}))?;
+                        view.post(&message("close-cancelled", &request))?;
                     }
                     // Repeated launch must not expose an unready controller
                     // before its real producer barriers have registered.
@@ -422,6 +585,7 @@ impl Reducer {
                         after_ready: Vec::new(),
                         sessions: Default::default(),
                         draft_calls: Default::default(),
+                        capture_requests: Default::default(),
                         exposed: false,
                     },
                 );
@@ -435,13 +599,18 @@ impl Reducer {
                 let Some(surface) = self.surfaces.get_mut(&id(kind)) else {
                     return Err(failed());
                 };
+                let message = surface.gate.bind_message(message).ok_or_else(failed)?;
                 if surface.gate.ready {
                     surface.view.as_ref().ok_or_else(failed)?.post(&message)?;
                     if activate {
                         surface.window.show();
                     }
                 } else if surface.after_ready.len() < 64 {
-                    surface.after_ready.push((message, activate));
+                    surface.after_ready.push(PendingPost {
+                        message,
+                        activate,
+                        delivery_id: None,
+                    });
                 } else {
                     return Err(failed());
                 }
@@ -451,6 +620,7 @@ impl Reducer {
                 preferences,
                 startup,
                 cli_service,
+                information,
             } => {
                 self.locale = locale;
                 self.preferences = preferences;
@@ -463,6 +633,18 @@ impl Reducer {
                     }
                     .render(locale);
                     surface.window.set_title(&title)?;
+                }
+                if let Some(message) = information {
+                    // This is a consequence of the user's explicit tray action;
+                    // no startup, background read or settings refresh supplies it.
+                    unsafe {
+                        MessageBoxW(
+                            self.dispatcher.state.live_hwnd(),
+                            &HSTRING::from(message.render(self.locale)),
+                            windows::core::w!("Weftext"),
+                            MB_OK | MB_ICONINFORMATION,
+                        );
+                    }
                 }
             }
             Command::Popup => {
@@ -497,7 +679,12 @@ impl Reducer {
                 if !surface.gate.owns_attempt(&request) {
                     return Ok(());
                 }
-                if !valid || !surface.draft_calls.is_empty() {
+                if !valid
+                    || !surface.draft_calls.is_empty()
+                    || self.capture_delivery.as_ref().is_some_and(|delivery| {
+                        delivery.blocks(&surface.gate.id, &surface.gate.epoch)
+                    })
+                {
                     self.blocked()?;
                     return Ok(());
                 }
@@ -537,6 +724,12 @@ impl Reducer {
                 let Some(surface) = self.surfaces.values_mut().find(|surface| {
                     surface.gate.id == surface_id && surface.gate.epoch == surface_epoch
                 }) else {
+                    if let Some(session) = session_ack {
+                        self.notice(Notice::Closed {
+                            proofs: Vec::new(),
+                            sessions: vec![session],
+                        })?;
+                    }
                     return Ok(());
                 };
                 if !surface.draft_calls.remove(&request_id) {
@@ -549,6 +742,9 @@ impl Reducer {
                     surface.sessions.insert(session);
                 }
                 surface.view.as_ref().ok_or_else(failed)?.post(&serde_json::json!({"type":"core-draft-result","surfaceId":surface_id,"surfaceEpoch":surface_epoch,"requestId":request_id,"body":body}))?;
+            }
+            Command::CaptureResult { request, opened } => {
+                self.capture_opened(request, opened.map(|opened| *opened))?
             }
             Command::BeginExit => {
                 if self.global_exit {
@@ -718,6 +914,84 @@ impl Reducer {
                     }
                 };
                 match incoming {
+                    Message::RequestClose {
+                        surface_id,
+                        surface_epoch,
+                    } => {
+                        if surface.gate.owns_surface(
+                            SurfaceKind::Capture,
+                            &surface_id,
+                            &surface_epoch,
+                        ) {
+                            self.begin_close(key)?;
+                        }
+                    }
+                    Message::CaptureOpen {
+                        surface_id,
+                        surface_epoch,
+                        request_id,
+                        draft_id,
+                        operation_id,
+                    } => {
+                        let request = CaptureOpen {
+                            surface_id,
+                            surface_epoch,
+                            request_id,
+                            draft_id,
+                            operation_id,
+                        };
+                        if !surface.gate.owns_surface(
+                            SurfaceKind::Capture,
+                            &request.surface_id,
+                            &request.surface_epoch,
+                        ) {
+                            return Ok(());
+                        }
+                        if !request.valid() {
+                            return Err(failed());
+                        }
+                        if self
+                            .capture_delivery
+                            .as_ref()
+                            .is_some_and(|delivery| delivery.owns(&request))
+                        {
+                            return Ok(());
+                        }
+                        if !surface.gate.ready
+                            || surface.gate.closing()
+                            || self.global_exit
+                            || self.fatal
+                            || self.capture_delivery.is_some()
+                            || surface.capture_requests.len() >= 32768
+                            || !surface.capture_requests.insert(request.request_id.clone())
+                        {
+                            self.capture_result(&request, false)?;
+                            return Ok(());
+                        }
+                        self.capture_delivery = CaptureDelivery::new(request.clone());
+                        self.notice(Notice::CaptureOpen(request))?;
+                    }
+                    Message::DocumentDelivered {
+                        surface_id,
+                        surface_epoch,
+                        delivery_id,
+                        accepted,
+                    } => {
+                        if !surface.gate.owns_surface(
+                            SurfaceKind::Library,
+                            &surface_id,
+                            &surface_epoch,
+                        ) || !self.capture_delivery.as_ref().is_some_and(|delivery| {
+                            delivery.acknowledges(&surface_id, &surface_epoch, &delivery_id)
+                                && delivery
+                                    .session_id()
+                                    .is_some_and(|session| surface.sessions.contains(session))
+                        }) {
+                            return Ok(());
+                        }
+                        let delivery = self.capture_delivery.take().ok_or_else(failed)?;
+                        self.capture_result(&delivery.request, accepted)?;
+                    }
                     Message::DraftCall {
                         surface_id,
                         surface_epoch,
@@ -734,8 +1008,14 @@ impl Reducer {
                         {
                             return Err(failed());
                         }
+                        let cancelled = surface.gate.current_request();
                         let invalidated = surface.gate.draft_call();
                         if invalidated {
+                            if let Some(request) = cancelled
+                                && let Some(view) = &surface.view
+                            {
+                                view.post(&message("close-cancelled", &request))?;
+                            }
                             self.cancel_all()?;
                             self.notice(Notice::CloseBlocked)?;
                         }
@@ -757,24 +1037,75 @@ impl Reducer {
                         self.cancel_all()?;
                         self.notice(Notice::CloseBlocked)?;
                     }
+                    Message::SurfaceFailed { kind } => {
+                        if kind != surface.gate.kind {
+                            return Err(failed());
+                        }
+                        let rejects_delivery =
+                            self.capture_delivery.as_ref().is_some_and(|delivery| {
+                                delivery.blocks(&surface.gate.id, &surface.gate.epoch)
+                            });
+                        surface.gate.ready = false;
+                        self.cancel_all()?;
+                        self.notice(Notice::CloseBlocked)?;
+                        if rejects_delivery {
+                            self.reject_capture_delivery()?;
+                        }
+                        let surface = self.surfaces.get(&key).ok_or_else(failed)?;
+                        let can_destroy = !surface.exposed
+                            && surface.sessions.is_empty()
+                            && surface.draft_calls.is_empty();
+                        self.command(Command::Feedback(UiMessage::native_host_start_failed()))?;
+                        // A never-exposed bootstrap with no producer or result
+                        // ownership can be retried with a fresh incarnation.
+                        // Every exposed/owned surface remains intact and blocked.
+                        if can_destroy {
+                            self.destroy_surface(key)?;
+                        }
+                    }
                     Message::SurfaceReady { kind } => {
                         if kind != surface.gate.kind || surface.gate.ready {
                             return Err(failed());
                         }
                         surface.gate.ready = true;
+                        let view = surface.view.as_ref().ok_or_else(failed)?;
+                        view.post(&serde_json::json!({"type":"surface-bound","surfaceId":surface.gate.id,"surfaceEpoch":surface.gate.epoch}))?;
+                        view.show()?;
+                        // These COM calls can fail while the HWND is still
+                        // hidden. Publish exposure only after they succeed;
+                        // their callbacks merely enqueue work for this reducer.
                         if !surface.exposed {
                             surface.exposed = true;
                             self.exposed.fetch_add(1, Ordering::AcqRel);
                         }
-                        let view = surface.view.as_ref().ok_or_else(failed)?;
-                        view.post(&serde_json::json!({"type":"surface-bound","surfaceId":surface.gate.id,"surfaceEpoch":surface.gate.epoch}))?;
-                        view.show()?;
                         surface.window.show();
-                        for (message, activate) in surface.after_ready.drain(..) {
-                            view.post(&message)?;
-                            if activate {
+                        let mut rejected_delivery = None;
+                        for pending in surface.after_ready.drain(..) {
+                            if let Some(delivery_id) = &pending.delivery_id {
+                                let Some(delivery) = self
+                                    .capture_delivery
+                                    .as_mut()
+                                    .filter(|delivery| delivery.request.request_id == *delivery_id)
+                                else {
+                                    continue;
+                                };
+                                if view.post(&pending.message).is_err() {
+                                    rejected_delivery = Some(delivery.request.clone());
+                                    continue;
+                                }
+                                if !delivery.mark_posted(delivery_id) {
+                                    return Err(failed());
+                                }
+                            } else {
+                                view.post(&pending.message)?;
+                            }
+                            if pending.activate {
                                 surface.window.show();
                             }
+                        }
+                        if let Some(request) = rejected_delivery {
+                            self.capture_delivery = None;
+                            self.capture_result(&request, false)?;
                         }
                     }
                     Message::SurfaceEdited {
@@ -782,14 +1113,19 @@ impl Reducer {
                         surface_epoch,
                         surface_edit_revision,
                     } => {
-                        let closing = surface.gate.closing();
+                        let cancelled = surface.gate.current_request();
                         if !surface
                             .gate
                             .edited(&surface_id, &surface_epoch, surface_edit_revision)
                         {
                             return Err(failed());
                         }
-                        if closing && !surface.gate.closing() {
+                        if let Some(request) = cancelled
+                            && !surface.gate.closing()
+                        {
+                            if let Some(view) = &surface.view {
+                                view.post(&message("close-cancelled", &request))?;
+                            }
                             self.cancel_all()?;
                             self.notice(Notice::CloseBlocked)?;
                         }
@@ -801,7 +1137,11 @@ impl Reducer {
                         surface_edit_revision,
                         proofs,
                     } => {
-                        if !surface.draft_calls.is_empty() {
+                        if !surface.draft_calls.is_empty()
+                            || self.capture_delivery.as_ref().is_some_and(|delivery| {
+                                delivery.blocks(&surface.gate.id, &surface.gate.epoch)
+                            })
+                        {
                             self.blocked()?;
                             return Ok(());
                         }
@@ -831,7 +1171,11 @@ impl Reducer {
                         close_attempt_id,
                         surface_edit_revision,
                     } => {
-                        if !surface.draft_calls.is_empty() {
+                        if !surface.draft_calls.is_empty()
+                            || self.capture_delivery.as_ref().is_some_and(|delivery| {
+                                delivery.blocks(&surface.gate.id, &surface.gate.epoch)
+                            })
+                        {
                             self.blocked()?;
                             return Ok(());
                         }
@@ -962,6 +1306,7 @@ fn run(
         owner_lifetime,
         admission_epoch: 0,
         visibility: Default::default(),
+        capture_delivery: None,
     };
     if reducer.environment(user_data).is_err() {
         reducer.fail();

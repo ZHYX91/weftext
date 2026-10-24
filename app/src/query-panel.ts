@@ -1,3 +1,4 @@
+import { ProposalCloseGuard } from "./proposal-close-guard";
 import { joinUiText } from "./ui-locale";
 import { apiErrorUiText, decodeApiErrorBody, type ApiErrorBody } from "./api-error";
 import type { UiMessage } from "./ui-locale";
@@ -240,7 +241,21 @@ interface PeriodLookup {
     diagnostics?: unknown[];
 }
 /** Period creation is a separate explicit Core action after actual resolution. */
-class PeriodNavigator {
+export class PeriodNavigator {
+    // query-child-close-ownership-v1
+    private readonly closeGuard = new ProposalCloseGuard();
+    private lookupDraft = JSON.stringify({ seriesKey: "", kind: "day", key: "" });
+    private lookupBaseline = this.lookupDraft;
+    private creationDraft = "";
+    private creationBaseline = "";
+    private unresolved(): boolean {
+        return this.pending !== null || this.lookupDraft !== this.lookupBaseline || this.creationDraft !== this.creationBaseline;
+    }
+    assertCloseReady(): void { this.closeGuard.assertReady(this.unresolved()); }
+    freezeForClose(): boolean { return this.closeGuard.freeze(this.unresolved()); }
+    thawAfterClose(): void { this.closeGuard.thaw(); }
+    private lookupInput(): string { return JSON.stringify({ seriesKey: this.series.value, kind: this.kind.value, key: this.key.value }); }
+    private creationInput(): string { return JSON.stringify({ parent: this.parent.value, name: this.name.value, title: this.title.value, body: this.body.value }); }
     readonly element = ui("details", "query-period-navigation");
     private readonly series = ui("input", "data-input");
     private readonly kind = selectControl([["day", message("periodNavigation.day")], ["week", message("periodNavigation.week")], ["month", message("periodNavigation.month")], ["quarter", message("periodNavigation.quarter")], ["year", message("periodNavigation.year")]], "day");
@@ -258,6 +273,7 @@ class PeriodNavigator {
     private schemaAvailable = true;
     private readonly schemaMessage = ui("p", "data-warning");
     constructor(private readonly host: PanelHost, private root: string, scope: () => string) {
+        this.closeGuard.bind(this.element);
         this.element.append(ui("summary", "", message("periodNavigation.disclosure")));
         setUiAttr(this.series, "placeholder", message("periodNavigation.seriesPlaceholder"));
         setUiAttr(this.series, "aria-label", message("periodNavigation.seriesLabel"));
@@ -282,132 +298,174 @@ class PeriodNavigator {
         this.createButton.disabled = true;
         creation.append(labeled(message("periodNavigation.parent"), this.parent), labeled(message("periodNavigation.requiredName"), this.name), labeled(message("periodNavigation.optionalTitle"), this.title), labeled(message("periodNavigation.nativeBody"), this.body), this.createButton, ui("p", "data-help", message("periodNavigation.uniqueSeriesHelp")));
         this.element.append(creation);
-        for (const input of [this.series, this.key, this.kind])
-            input.addEventListener("change", () => { this.lookupGeneration++; this.loading = false; this.result = null; this.createButton.disabled = !this.pending; this.resultHost.replaceChildren(ui("p", "data-help", message("periodNavigation.changedLookup"))); });
+        // Authored raw values live in this owner even when validation rejects them.
+        this.lookupBaseline = this.lookupDraft = this.lookupInput();
+        this.creationBaseline = this.creationDraft = this.creationInput();
+        const retainLookup = (): void => {
+            if (this.closeGuard.frozen) return;
+            this.lookupDraft = this.lookupInput();
+            this.lookupGeneration++;
+            this.result = null;
+            this.createButton.disabled = this.loading || !this.pending;
+            this.resultHost.replaceChildren(ui("p", "data-help", message("periodNavigation.changedLookup")));
+        };
+        const retainCreation = (): void => {
+            if (!this.closeGuard.frozen) this.creationDraft = this.creationInput();
+        };
+        for (const input of [this.series, this.key, this.kind]) {
+            input.addEventListener("input", retainLookup);
+            input.addEventListener("change", retainLookup);
+        }
+        for (const input of [this.parent, this.name, this.title, this.body]) {
+            input.addEventListener("input", retainCreation);
+            input.addEventListener("change", retainCreation);
+        }
     }
-    setSchemaAvailable(available: boolean): void { this.schemaAvailable = available; this.schemaMessage.hidden = available; setUiText(this.schemaMessage, available ? "" : message("periodNavigation.schemaUnavailable")); }
+    setSchemaAvailable(available: boolean): void { if (this.closeGuard.frozen) return; this.schemaAvailable = available; this.schemaMessage.hidden = available; setUiText(this.schemaMessage, available ? "" : message("periodNavigation.schemaUnavailable")); }
     private async lookup(steps = 0): Promise<void> {
-        if (!this.schemaAvailable) {
-            this.host.notify(message("periodNavigation.definitionUnavailable"), true);
-            return;
-        }
-        if (this.loading)
-            return;
-        if (!this.series.value || !this.key.value) {
-            this.host.notify(message("periodNavigation.exactKeyRequired"), true);
-            return;
-        }
-        const generation = ++this.lookupGeneration;
-        const basis = { seriesKey: this.series.value, kind: this.kind.value, key: this.key.value };
-        this.loading = true;
-        this.createButton.disabled = true;
-        this.resultHost.replaceChildren(ui("p", "data-help", message("periodNavigation.resolving")));
+        if (this.closeGuard.frozen) return;
+        const endClose = this.closeGuard.begin();
         try {
-            const result = await this.host.request<PeriodLookup>("/api/data/period/resolve", { root: this.root, ...basis, ...(steps ? { steps } : {}) });
-            if (generation !== this.lookupGeneration || this.series.value !== basis.seriesKey || this.kind.value !== basis.kind || this.key.value !== basis.key)
+            if (!this.schemaAvailable) {
+                this.host.notify(message("periodNavigation.definitionUnavailable"), true);
                 return;
-            this.result = result;
-            const actualKey = nativeMember(result.period, "key");
-            if (actualKey?.kind === "text")
-                this.key.value = actualKey.value;
-            this.resultHost.replaceChildren(ui("p", "data-help", displayMessage("periodNavigation.resolvedPeriod", { p0: uiDisplayParameter(formatNativeValue(result.period)) })), ui("p", "data-help", displayMessage("periodNavigation.resolvedBounds", { p0: uiDisplayParameter(formatNativeValue(result.bounds)) })), ui("p", result.coverage === "complete" ? "query-result-status" : "data-warning", displayMessage("periodNavigation.lookupSummary", { p0: uiDisplayParameter(result.coverage === "complete" ? message("periodNavigation.completeFrozenScope") : message("periodNavigation.partialScope")), p1: result.matches.length, p2: uiDisplayParameter(result.policy.multiplicity === "unique" ? message("periodNavigation.uniqueSeries") : message("periodNavigation.multipleSeries")) })));
-            for (const row of result.matches)
-                this.resultHost.append(action(rowTitle(row), async () => {
-                    try {
-                        await this.host.prepareAction?.();
-                        if (row.entityKey) {
-                            if (!this.host.openResolved)
-                                throw new UiError(message("queryValidation.stableOpenRequired"));
-                            const opened = await this.host.request<OpenedDocument>("/api/data/open", { root: this.root, entityKey: row.entityKey });
-                            await this.host.openResolved(opened);
-                        }
-                        else if (row.path)
-                            await this.host.openDocument(row.path, this.root);
-                        else
-                            throw new UiError(message("periodNavigation.existingTargetUnavailable"));
-                    }
-                    catch (error) {
-                        this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
-                    }
-                }, "query-row-title"));
-            result.diagnostics?.forEach(item => this.resultHost.append(ui("p", "data-warning", diagnosticText(item))));
-            if (!result.matches.length)
-                this.resultHost.append(ui("p", "data-help", result.coverage === "complete" ? message("periodNavigation.completeNoMatch") : message("periodNavigation.partialNoMatch")));
-            this.createButton.disabled = !result.canCreate && !this.pending;
-        }
-        catch (error) {
-            if (generation === this.lookupGeneration) {
-                this.result = null;
-                this.resultHost.replaceChildren(ui("p", "data-warning", error instanceof Error ? errorUiText(error) : message("error.invalidResponse")));
-                this.createButton.disabled = !this.pending;
             }
-        }
-        finally {
-            if (generation === this.lookupGeneration)
-                this.loading = false;
-        }
+            if (this.loading)
+                return;
+            if (!this.series.value || !this.key.value) {
+                this.host.notify(message("periodNavigation.exactKeyRequired"), true);
+                return;
+            }
+            const generation = ++this.lookupGeneration;
+            const basis = { seriesKey: this.series.value, kind: this.kind.value, key: this.key.value };
+            this.loading = true;
+            this.createButton.disabled = true;
+            this.resultHost.replaceChildren(ui("p", "data-help", message("periodNavigation.resolving")));
+            try {
+                const result = await this.host.request<PeriodLookup>("/api/data/period/resolve", { root: this.root, ...basis, ...(steps ? { steps } : {}) });
+                if (this.closeGuard.frozen || generation !== this.lookupGeneration || this.series.value !== basis.seriesKey || this.kind.value !== basis.kind || this.key.value !== basis.key)
+                    return;
+                this.result = result;
+                const actualKey = nativeMember(result.period, "key");
+                if (actualKey?.kind === "text")
+                    this.key.value = actualKey.value;
+                this.lookupBaseline = this.lookupDraft = this.lookupInput();
+                this.resultHost.replaceChildren(ui("p", "data-help", displayMessage("periodNavigation.resolvedPeriod", { p0: uiDisplayParameter(formatNativeValue(result.period)) })), ui("p", "data-help", displayMessage("periodNavigation.resolvedBounds", { p0: uiDisplayParameter(formatNativeValue(result.bounds)) })), ui("p", result.coverage === "complete" ? "query-result-status" : "data-warning", displayMessage("periodNavigation.lookupSummary", { p0: uiDisplayParameter(result.coverage === "complete" ? message("periodNavigation.completeFrozenScope") : message("periodNavigation.partialScope")), p1: result.matches.length, p2: uiDisplayParameter(result.policy.multiplicity === "unique" ? message("periodNavigation.uniqueSeries") : message("periodNavigation.multipleSeries")) })));
+                for (const row of result.matches)
+                    this.resultHost.append(action(rowTitle(row), async () => {
+                        if (this.closeGuard.frozen) return;
+                        const endOpen = this.closeGuard.begin();
+                        try {
+                            await this.host.prepareAction?.();
+                            if (this.closeGuard.frozen) return;
+                            if (row.entityKey) {
+                                if (!this.host.openResolved)
+                                    throw new UiError(message("queryValidation.stableOpenRequired"));
+                                const opened = await this.host.request<OpenedDocument>("/api/data/open", { root: this.root, entityKey: row.entityKey });
+                                if (this.closeGuard.frozen) return;
+                                await this.host.openResolved(opened);
+                            }
+                            else if (row.path)
+                                await this.host.openDocument(row.path, this.root);
+                            else
+                                throw new UiError(message("periodNavigation.existingTargetUnavailable"));
+                        }
+                        catch (error) {
+                            if (!this.closeGuard.frozen) this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
+                        }
+                        finally { endOpen(); }
+                    }, "query-row-title"));
+                result.diagnostics?.forEach(item => this.resultHost.append(ui("p", "data-warning", diagnosticText(item))));
+                if (!result.matches.length)
+                    this.resultHost.append(ui("p", "data-help", result.coverage === "complete" ? message("periodNavigation.completeNoMatch") : message("periodNavigation.partialNoMatch")));
+                this.createButton.disabled = !result.canCreate && !this.pending;
+            }
+            catch (error) {
+                if (!this.closeGuard.frozen && generation === this.lookupGeneration) {
+                    this.result = null;
+                    this.resultHost.replaceChildren(ui("p", "data-warning", error instanceof Error ? errorUiText(error) : message("error.invalidResponse")));
+                    this.createButton.disabled = !this.pending;
+                }
+            }
+            finally {
+                if (!this.closeGuard.frozen) {
+                    this.loading = false;
+                    this.createButton.disabled = !this.pending && !this.result?.canCreate;
+                }
+            }
+        } finally { endClose(); }
     }
     private async create(): Promise<void> {
-        if (!this.schemaAvailable && !this.pending) {
-            this.host.notify(message("periodNavigation.definitionUnavailable"), true);
-            return;
-        }
-        if ((!this.result?.canCreate && !this.pending) || this.loading)
-            return;
-        if (!this.name.value || !this.parent.value) {
-            this.host.notify(message("periodNavigation.creationLocationRequired"), true);
-            return;
-        }
-        const retry = this.pending !== null;
-        const actualKey = this.result ? nativeMember(this.result.period, "key") : undefined;
-        this.pending ??= { root: this.root, parent: this.parent.value, name: this.name.value, seriesKey: this.series.value, kind: this.kind.value, key: actualKey?.kind === "text" ? actualKey.value : this.key.value, title: this.title.value || undefined, body: this.body.value, operationId: crypto.randomUUID() };
-        const submitted = this.pending;
-        let receiptReceived = false;
-        this.loading = true;
-        this.createButton.disabled = true;
+        if (this.closeGuard.frozen) return;
+        const endClose = this.closeGuard.begin();
         try {
-            const result = await submitOriginal<OriginalFact & {
-                document?: OpenedDocument;
-                documentError?: ApiErrorBody;
-            }>(this.host.request, "/api/data/period/create", this.pending, "period", retry);
-            receiptReceived = true;
-            if (result.status !== "committed")
-                throw new UiError(message("queryDefinition.periodCommittedReceiptRequired"));
-            const document = result.document;
-            const documentError = result.documentError === undefined ? undefined : decodeApiErrorBody(result.documentError);
-            if (result.documentError !== undefined && !documentError) throw new UiError(message("error.invalidResponse"));
-            const deliveryError = result.deliveryError === undefined ? undefined : decodeApiErrorBody(result.deliveryError);
-            if (result.deliveryError !== undefined && !deliveryError) throw new UiError(message("error.invalidResponse"));
-            const deliveryErrors = [documentError, deliveryError].filter((error): error is ApiErrorBody => !!error);
-            if (deliveryErrors.length || !document)
-                throw new UiError(displayMessage("periodNavigation.submittedOpenPending", { p0: uiDisplayParameter(deliveryErrors.length ? joinUiText(deliveryErrors.map(apiErrorUiText), "\n") : message("common.confirmOriginalOperation")) }));
-            if (!this.host.created)
-                throw new UiError(message("queryDefinition.periodDocumentDeliveryRequired"));
-            await this.host.created(document);
-            const unchanged = this.name.value === submitted.name && this.parent.value === submitted.parent && (this.title.value || undefined) === submitted.title && this.body.value === submitted.body && this.series.value === submitted.seriesKey && this.kind.value === submitted.kind && this.key.value === submitted.key;
-            this.pending = null;
-            if (unchanged) {
-                this.name.value = "";
-                this.title.value = "";
-                this.body.value = "";
+            if (!this.schemaAvailable && !this.pending) {
+                this.host.notify(message("periodNavigation.definitionUnavailable"), true);
+                return;
             }
-            this.host.notify(unchanged ? message("periodNavigation.createdOpened") : message("periodNavigation.createdWithNewInput"));
-            this.loading = false;
-            await this.lookup();
-        }
-        catch (error) {
-            if (!receiptReceived && error instanceof TerminatedAttempt) {
+            if ((!this.result?.canCreate && !this.pending) || this.loading)
+                return;
+        if (!this.pending && (!this.name.value || !this.parent.value)) {
+                this.host.notify(message("periodNavigation.creationLocationRequired"), true);
+                return;
+            }
+            const retry = this.pending !== null;
+            const actualKey = this.result ? nativeMember(this.result.period, "key") : undefined;
+            this.pending ??= { root: this.root, parent: this.parent.value, name: this.name.value, seriesKey: this.series.value, kind: this.kind.value, key: actualKey?.kind === "text" ? actualKey.value : this.key.value, title: this.title.value || undefined, body: this.body.value, operationId: crypto.randomUUID() };
+            const submitted = this.pending;
+            let receiptReceived = false;
+            this.loading = true;
+            this.createButton.disabled = true;
+            try {
+                const result = await submitOriginal<OriginalFact & {
+                    document?: OpenedDocument;
+                    documentError?: ApiErrorBody;
+                }>(this.host.request, "/api/data/period/create", this.pending, "period", retry);
+                if (this.closeGuard.frozen) return;
+                receiptReceived = true;
+                if (result.status !== "committed")
+                    throw new UiError(message("queryDefinition.periodCommittedReceiptRequired"));
+                const document = result.document;
+                const documentError = result.documentError === undefined ? undefined : decodeApiErrorBody(result.documentError);
+                if (result.documentError !== undefined && !documentError) throw new UiError(message("error.invalidResponse"));
+                const deliveryError = result.deliveryError === undefined ? undefined : decodeApiErrorBody(result.deliveryError);
+                if (result.deliveryError !== undefined && !deliveryError) throw new UiError(message("error.invalidResponse"));
+                const deliveryErrors = [documentError, deliveryError].filter((error): error is ApiErrorBody => !!error);
+                if (deliveryErrors.length || !document)
+                    throw new UiError(displayMessage("periodNavigation.submittedOpenPending", { p0: uiDisplayParameter(deliveryErrors.length ? joinUiText(deliveryErrors.map(apiErrorUiText), "\n") : message("common.confirmOriginalOperation")) }));
+                if (!this.host.created)
+                    throw new UiError(message("queryDefinition.periodDocumentDeliveryRequired"));
+                await this.host.created(document);
+                if (this.closeGuard.frozen) return;
+                const unchanged = this.name.value === submitted.name && this.parent.value === submitted.parent && (this.title.value || undefined) === submitted.title && this.body.value === submitted.body && this.series.value === submitted.seriesKey && this.kind.value === submitted.kind && this.key.value === submitted.key;
                 this.pending = null;
-                this.result = null;
+                if (unchanged) {
+                    this.name.value = "";
+                    this.title.value = "";
+                    this.body.value = "";
+                    this.creationBaseline = this.creationDraft = this.creationInput();
+                }
+                this.host.notify(unchanged ? message("periodNavigation.createdOpened") : message("periodNavigation.createdWithNewInput"));
+                this.loading = false;
+                await this.lookup();
             }
-            const hint = this.pending ? displayMessage("periodNavigation.originalOperationRetained", { p0: String(this.pending.seriesKey), p1: String(this.pending.key) }) : message("periodNavigation.lookupBeforeCreating");
-            this.resultHost.append(ui("p", "data-warning", () => `${uiTextValue(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))}${uiTextValue(hint)}`));
-        }
-        finally {
-            this.loading = false;
-            this.createButton.disabled = !this.pending && !this.result?.canCreate;
-            setUiText(this.createButton, this.pending ? message("periodNavigation.confirmPreviousCreation") : message("periodNavigation.createOpen"));
-        }
+            catch (error) {
+                if (this.closeGuard.frozen) return;
+                if (!receiptReceived && error instanceof TerminatedAttempt) {
+                    this.pending = null;
+                    this.result = null;
+                }
+                const hint = this.pending ? displayMessage("periodNavigation.originalOperationRetained", { p0: String(this.pending.seriesKey), p1: String(this.pending.key) }) : message("periodNavigation.lookupBeforeCreating");
+                this.resultHost.append(ui("p", "data-warning", () => `${uiTextValue(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))}${uiTextValue(hint)}`));
+            }
+            finally {
+                if (!this.closeGuard.frozen) {
+                    this.loading = false;
+                    this.createButton.disabled = !this.pending && !this.result?.canCreate;
+                    setUiText(this.createButton, this.pending ? message("periodNavigation.confirmPreviousCreation") : message("periodNavigation.createOpen"));
+                }
+            }
+        } finally { endClose(); }
     }
 }
 interface TagRegistry {
@@ -430,7 +488,17 @@ interface NavigationPreparation {
         changes?: unknown[];
     };
 }
-class NavigationControls {
+export class NavigationControls {
+    // query-child-close-ownership-v1
+    private readonly closeGuard = new ProposalCloseGuard();
+    private createNameDraft = "";
+    private appliedParentRef: string | null = null;
+    private unresolved(): boolean {
+        return this.pending !== null || this.recoveryError !== undefined || this.createNameDraft !== "" || this.parentRef !== this.appliedParentRef;
+    }
+    assertCloseReady(): void { this.closeGuard.assertReady(this.unresolved()); }
+    freezeForClose(): boolean { return this.closeGuard.freeze(this.unresolved()); }
+    thawAfterClose(): void { this.closeGuard.thaw(); }
     readonly element = ui("details", "query-registered-navigation");
     private readonly tagsHost = ui("div", "registered-tag-list");
     private readonly status = ui("p", "data-help");
@@ -457,6 +525,10 @@ class NavigationControls {
         recoveredPlanId?: string;
     } | null = null;
     constructor(private host: PanelHost, private root: string, private workspaceId: string, private scopePath: () => string, private chooseTag: (ref: string, label: string, mode: TagMatchMode) => void, private saveShortcut: (ref: string, label: string, kind: "directory" | "tag", matchMode?: TagMatchMode) => void, private tagField: () => string | undefined, private registryChanged: () => void) {
+        this.closeGuard.bind(this.element);
+        const retainName = (): void => { if (!this.closeGuard.frozen) this.createNameDraft = this.createName.value; };
+        this.createName.addEventListener("input", retainName);
+        this.createName.addEventListener("change", retainName);
         this.element.append(ui("summary", "", message("tagNavigation.disclosure")), action(message("tagNavigation.readRegistry"), () => this.loadTags()), action(message("tagNavigation.addCurrentDirectoryShortcut"), () => this.addDirectory()));
         try {
             const raw = localStorage.getItem(this.pendingKey());
@@ -474,7 +546,7 @@ class NavigationControls {
         setUiAttr(this.createName, "placeholder", message("tagNavigation.newNameLabel"));
         setUiAttr(this.createName, "aria-label", message("tagNavigation.newNameLabel"));
         this.element.append(this.tagsHost, this.createName, this.parentHost, action(message("tagNavigation.createTag"), () => this.createTag(false)), action(message("tagNavigation.createAssignSaved"), () => this.createTag(true)), action(message("tagNavigation.confirmOriginal"), () => this.resume()), action(message("tagNavigation.cancelOriginal"), async () => {
-            if (this.busy || !this.pending)
+            if (this.closeGuard.frozen || this.busy || !this.pending)
                 return;
             this.pending.cancelRequested = true;
             this.persistPending();
@@ -482,21 +554,26 @@ class NavigationControls {
         }), this.status, ui("p", "data-help", message("tagNavigation.treeScopeHelp")));
     }
     private async createTag(assign: boolean): Promise<void> {
+        if (this.closeGuard.frozen) return;
+        const endClose = this.closeGuard.begin();
         try {
-            if (!this.createName.value)
-                return;
-            if (!this.registry)
-                await this.loadTags();
-            if (!this.registry || !this.tree)
-                return;
-            const basis = assign ? this.host.getDocument() : null, fieldId = this.tagField();
-            if (assign && (!basis || basis.root !== this.root || basis.dirty !== false || this.host.canEdit?.() === false || !fieldId || !this.host.applyOperationReceipt))
-                throw new UiError(message("tagNavigation.savedNoteRequired"));
-            await this.mutate("/api/navigation/create-tag", { displayName: this.createName.value, parentRef: this.parentRef, baseId: this.registry.baseId, ...(assign && basis ? { assignment: { path: basis.path, baseId: basis.baseId, fieldId } } : {}) }, this.createName.value, "tag", basis ?? undefined);
-        }
-        catch (error) {
-            setUiText(this.status, (error instanceof Error ? errorUiText(error) : message("error.invalidResponse")));
-        }
+            try {
+                if (!this.createName.value)
+                    return;
+                if (!this.registry)
+                    await this.loadTags();
+                if (this.closeGuard.frozen || !this.registry || !this.tree)
+                    return;
+                const basis = assign ? this.host.getDocument() : null, fieldId = this.tagField();
+                if (assign && (!basis || basis.root !== this.root || basis.dirty !== false || this.host.canEdit?.() === false || !fieldId || !this.host.applyOperationReceipt))
+                    throw new UiError(message("tagNavigation.savedNoteRequired"));
+                await this.mutate("/api/navigation/create-tag", { displayName: this.createName.value, parentRef: this.parentRef, baseId: this.registry.baseId, ...(assign && basis ? { assignment: { path: basis.path, baseId: basis.baseId, fieldId } } : {}) }, this.createName.value, "tag", basis ?? undefined);
+            }
+            catch (error) {
+                if (this.closeGuard.frozen) return;
+                setUiText(this.status, (error instanceof Error ? errorUiText(error) : message("error.invalidResponse")));
+            }
+        } finally { endClose(); }
     }
     private pendingKey(): string { return `weftext-navigation-operation:${JSON.stringify([this.workspaceId, this.root])}`; }
     private persistPending(): void {
@@ -506,41 +583,47 @@ class NavigationControls {
             localStorage.removeItem(this.pendingKey());
     }
     private async loadTags(): Promise<void> {
-        const read = ++this.registryRead;
-        setUiText(this.status, message("tagNavigation.readingRegistry"));
-        this.tree = null;
-        this.createName.oninput = null;
-        this.parentHost.replaceChildren();
-        this.tagsHost.replaceChildren();
+        if (this.closeGuard.frozen) return;
+        const endClose = this.closeGuard.begin();
         try {
-            const registry = await this.host.request<TagRegistry>("/api/navigation/tags", { root: this.root });
-            if (read !== this.registryRead)
-                return;
-            this.registry = registry;
-            this.tree = new TagTree(registry.tags.map(tag => ({ ...tag, reference: tag.tagRef })), registry.complete === true);
-            this.renderTags();
-            this.parentHost.append(tagPicker(this.tree, { label: message("tagNavigation.newParentLabel"), value: this.parentRef ?? "", root: true, changed: ref => { this.parentRef = ref; } }));
-            const duplicates = ui("div", "data-help");
-            const showNames = () => {
-                duplicates.replaceChildren();
-                const same = this.registry!.tags.filter(tag => tag.displayName === this.createName.value);
-                if (same.length)
-                    duplicates.append(ui("p", "", displayMessage("tagNavigation.sameNameWarning", { p0: same.length })), ...same.slice(0, 100).map(tag => ui("p", "", this.tree!.label(tag.tagRef))));
-            };
-            this.createName.oninput = showNames;
-            showNames();
-            this.parentHost.append(duplicates);
-            setUiText(this.status, this.recoveryError ?? message("tagNavigation.completeRegistryRead"));
-        }
-        catch (error) {
-            if (read !== this.registryRead)
-                return;
-            this.registry = null;
+            const read = ++this.registryRead;
+            setUiText(this.status, message("tagNavigation.readingRegistry"));
+            this.tree = null;
+            this.createName.oninput = null;
+            this.parentHost.replaceChildren();
             this.tagsHost.replaceChildren();
-            setUiText(this.status, displayMessage("tagNavigation.registryUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")) }));
-        }
+            try {
+                const registry = await this.host.request<TagRegistry>("/api/navigation/tags", { root: this.root });
+                if (this.closeGuard.frozen || read !== this.registryRead)
+                    return;
+                this.registry = registry;
+                this.tree = new TagTree(registry.tags.map(tag => ({ ...tag, reference: tag.tagRef })), registry.complete === true);
+                this.renderTags();
+                this.parentHost.append(tagPicker(this.tree, { label: message("tagNavigation.newParentLabel"), value: this.parentRef ?? "", root: true, changed: ref => { if (!this.closeGuard.frozen) this.parentRef = ref; } }));
+                const duplicates = ui("div", "data-help");
+                const showNames = () => {
+                    if (this.closeGuard.frozen) return;
+                    duplicates.replaceChildren();
+                    const same = this.registry!.tags.filter(tag => tag.displayName === this.createName.value);
+                    if (same.length)
+                        duplicates.append(ui("p", "", displayMessage("tagNavigation.sameNameWarning", { p0: same.length })), ...same.slice(0, 100).map(tag => ui("p", "", this.tree!.label(tag.tagRef))));
+                };
+                this.createName.oninput = showNames;
+                showNames();
+                this.parentHost.append(duplicates);
+                setUiText(this.status, this.recoveryError ?? message("tagNavigation.completeRegistryRead"));
+            }
+            catch (error) {
+                if (this.closeGuard.frozen || read !== this.registryRead)
+                    return;
+                this.registry = null;
+                this.tagsHost.replaceChildren();
+                setUiText(this.status, displayMessage("tagNavigation.registryUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")) }));
+            }
+        } finally { endClose(); }
     }
     private renderTags(): void {
+        if (this.closeGuard.frozen) return;
         const tree = this.tree;
         this.tagsHost.replaceChildren();
         if (!tree)
@@ -551,6 +634,7 @@ class NavigationControls {
         setUiAttr(search, "aria-label", message("tagNavigation.searchLabel"));
         const rows = ui("div");
         const render = () => {
+            if (this.closeGuard.frozen) return;
             rows.replaceChildren();
             const page = this.search ? tree.page(this.search, this.offset) : tree.visible(this.expanded, this.offset);
             this.offset = page.offset;
@@ -581,7 +665,7 @@ class NavigationControls {
                 const full = ui("details");
                 full.append(ui("summary", "", message("tagNavigation.completePath")));
                 full.ontoggle = () => {
-                    if (full.open && full.childElementCount === 1)
+                    if (!this.closeGuard.frozen && full.open && full.childElementCount === 1)
                         full.append(ui("p", "", tree.label(tag.reference, true)));
                 };
                 row.append(full);
@@ -593,182 +677,222 @@ class NavigationControls {
             next.disabled = page.offset + page.items.length >= page.total;
             rows.append(previous, next);
         };
-        search.oninput = () => { this.search = search.value; this.offset = 0; render(); };
+        search.oninput = () => { if (this.closeGuard.frozen) return; this.search = search.value; this.offset = 0; render(); };
         this.tagsHost.append(search, rows);
         render();
     }
     private async move(reference: string): Promise<void> {
-        const tree = this.tree, tag = tree?.byRef.get(reference);
-        if (!tree || !tag || !this.registry)
-            return;
-        const parent = tag.parentTagId === null ? null : tree.byId.get(tag.parentTagId)!.reference;
-        const chosen = await new Promise<{
-            parent: string | null;
-        } | null>(resolve => { const dialog = ui("dialog", "data-confirm-dialog"), form = ui("form"); form.method = "dialog"; let next = parent; form.append(ui("h2", "", message("tagNavigation.parentDialogTitle")), ui("p", "", tree.label(reference)), tagPicker(tree, { label: message("tagNavigation.parentLabel"), value: parent ?? "", root: true, excludedRoot: tag.tagId, changed: ref => { next = ref; } })); const cancel = ui("button", "data-button", message("common.cancel")); cancel.value = "cancel"; const prepare = ui("button", "data-button primary", message("tagNavigation.previewParentChange")); prepare.value = "prepare"; form.append(cancel, prepare); dialog.append(form); document.body.append(dialog); dialog.addEventListener("close", () => { const accepted = dialog.returnValue === "prepare"; dialog.remove(); resolve(accepted ? { parent: next } : null); }, { once: true }); dialog.showModal(); });
-        if (chosen && chosen.parent !== parent)
-            await this.mutate("/api/navigation/move-tag", { tagRef: reference, parentRef: chosen.parent, baseId: this.registry.baseId }, tree.label(reference));
+        if (this.closeGuard.frozen) return;
+        const endClose = this.closeGuard.begin();
+        try {
+            const tree = this.tree, tag = tree?.byRef.get(reference);
+            if (!tree || !tag || !this.registry)
+                return;
+            const parent = tag.parentTagId === null ? null : tree.byId.get(tag.parentTagId)!.reference;
+            const chosen = await new Promise<{
+                parent: string | null;
+            } | null>(resolve => { const dialog = ui("dialog", "data-confirm-dialog"), form = ui("form"); form.method = "dialog"; let next = parent; form.append(ui("h2", "", message("tagNavigation.parentDialogTitle")), ui("p", "", tree.label(reference)), tagPicker(tree, { label: message("tagNavigation.parentLabel"), value: parent ?? "", root: true, excludedRoot: tag.tagId, changed: ref => { next = ref; } })); const cancel = ui("button", "data-button", message("common.cancel")); cancel.value = "cancel"; const prepare = ui("button", "data-button primary", message("tagNavigation.previewParentChange")); prepare.value = "prepare"; form.append(cancel, prepare); dialog.append(form); document.body.append(dialog); dialog.addEventListener("close", () => { const accepted = dialog.returnValue === "prepare"; dialog.remove(); resolve(accepted ? { parent: next } : null); }, { once: true }); dialog.showModal(); });
+            if (!this.closeGuard.frozen && chosen && chosen.parent !== parent)
+                await this.mutate("/api/navigation/move-tag", { tagRef: reference, parentRef: chosen.parent, baseId: this.registry.baseId }, tree.label(reference));
+        } finally { endClose(); }
     }
     private async addDirectory(): Promise<void> {
+        if (this.closeGuard.frozen) return;
+        const endClose = this.closeGuard.begin();
         try {
-            const path = this.scopePath();
-            const target = await this.host.request<NavigationTarget>(path.startsWith("weftext-directory://") || path.startsWith("weftext-node://") ? "/api/navigation/resolve" : "/api/navigation/capture", { root: this.root, ...(path.startsWith("weftext-directory://") || path.startsWith("weftext-node://") ? { targetRef: path } : { path }) });
-            if (target.status === "managed" && target.targetRef) {
-                this.saveShortcut(target.targetRef, target.label, "directory");
-                setUiText(this.status, message("tagNavigation.directoryShortcutAdded"));
-                return;
-            }
-            if (target.status !== "unmanaged" || !target.path)
-                throw new UiError(displayMessage("tagNavigation.directoryTargetState", { p0: uiDisplayParameter(target.status === "missing" ? message("tagNavigation.missingTarget") : message("tagNavigation.unavailableIdentity")) }));
-            await this.mutate("/api/navigation/admit-directory", { path: target.path }, target.label, "directory");
-        }
-        catch (error) {
-            setUiText(this.status, error instanceof Error ? errorUiText(error) : message("error.invalidResponse"));
-        }
-    }
-    private async mutate(route: string, payload: Record<string, unknown>, label: string, addKind?: "directory" | "tag", context?: DocumentBasis): Promise<void> {
-        if (this.recoveryError) {
-            setUiText(this.status, this.recoveryError);
-            return;
-        }
-        if (this.pending) {
-            await this.resume();
-            return;
-        }
-        this.pending = { route, body: { root: this.root, ...payload, operationId: crypto.randomUUID() }, label, addKind, context };
-        try {
-            this.persistPending();
-            await this.resume();
-        }
-        catch (error) {
-            setUiText(this.status, displayMessage("tagNavigation.persistenceBeforeSendFailed", { p0: uiDisplayParameter((error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))) }));
-        }
-    }
-    private async resume(): Promise<void> {
-        if (this.busy)
-            return;
-        if (!this.pending) {
-            setUiText(this.status, this.recoveryError ?? message("tagNavigation.noPendingOperation"));
-            return;
-        }
-        const pending = this.pending;
-        this.busy = true;
-        try {
-            this.persistPending(); // A retry must satisfy the same durable-before-effect boundary.
-            let recovering = !!pending.confirmed;
-            if (!pending.cancelRequested) {
-                if (!pending.prepared) {
-                    pending.prepared = await this.host.request<NavigationPreparation>(pending.route, structuredClone(pending.body));
-                    if (pending.prepared.preview.operationId !== pending.body.operationId)
-                        throw new UiError(message("tagNavigation.preparationMismatch"));
-                    this.persistPending();
-                }
-                if (!pending.confirmed) {
-                    if (!await this.confirm(pending))
-                        pending.cancelRequested = true;
-                    else
-                        pending.confirmed = true;
-                    this.persistPending();
-                }
-            }
-            if (pending.cancelRequested) {
-                const expected = { operationId: String(pending.body.operationId), planId: pending.prepared?.preview.planId ?? pending.recoveredPlanId ?? null };
-                const cancelled = await this.host.request<{
-                    operationId: string;
-                    planId: string | null;
-                    status: string;
-                }>("/api/navigation/cancel", { root: this.root, ...expected });
-                if (tagCancellationStatus(expected, cancelled) === "resolved") {
-                    this.pending = null;
-                    this.persistPending();
-                    setUiText(this.status, message("tagNavigation.originalEnded"));
+            try {
+                const path = this.scopePath();
+                const target = await this.host.request<NavigationTarget>(path.startsWith("weftext-directory://") || path.startsWith("weftext-node://") ? "/api/navigation/resolve" : "/api/navigation/capture", { root: this.root, ...(path.startsWith("weftext-directory://") || path.startsWith("weftext-node://") ? { targetRef: path } : { path }) });
+                if (this.closeGuard.frozen) return;
+                if (target.status === "managed" && target.targetRef) {
+                    this.saveShortcut(target.targetRef, target.label, "directory");
+                    setUiText(this.status, message("tagNavigation.directoryShortcutAdded"));
                     return;
                 }
-                if (typeof cancelled.planId !== "string")
-                    throw new UiError(message("tagNavigation.committedPlanIdMissing"));
-                pending.recoveredPlanId = cancelled.planId;
-                this.persistPending();
-                recovering = true;
+                if (target.status !== "unmanaged" || !target.path)
+                    throw new UiError(displayMessage("tagNavigation.directoryTargetState", { p0: uiDisplayParameter(target.status === "missing" ? message("tagNavigation.missingTarget") : message("tagNavigation.unavailableIdentity")) }));
+                await this.mutate("/api/navigation/admit-directory", { path: target.path }, target.label, "directory");
             }
-            const planId = pending.prepared?.preview.planId ?? pending.recoveredPlanId;
-            if (!planId)
-                throw new UiError(message("tagNavigation.originalPlanIdMissing"));
-            const expected = { operationId: String(pending.body.operationId), planId };
-            let committed = false, receipt: {
-                operationId?: string;
-                planId?: string;
-                status?: string;
-                receipt?: {
-                    status?: string;
-                };
-            } | undefined;
-            if (recovering) {
-                receipt = await this.host.request("/api/operations/status", { operationId: expected.operationId, context: pending.context });
-                committed = tagOperationStatus(expected, receipt!) === "committed";
+            catch (error) {
+                if (this.closeGuard.frozen) return;
+                setUiText(this.status, error instanceof Error ? errorUiText(error) : message("error.invalidResponse"));
             }
-            if (pending.cancelRequested && !committed)
-                throw new UiError(message("tagNavigation.cancelCommitUnconfirmed"));
-            if (!committed) {
-                receipt = await this.host.request("/api/operations/commit", { ...expected, context: pending.context });
-                if (tagOperationStatus(expected, receipt!) !== "committed")
-                    throw new UiError(message("tagNavigation.registrationUnconfirmed"));
+        } finally { endClose(); }
+    }
+    private async mutate(route: string, payload: Record<string, unknown>, label: string, addKind?: "directory" | "tag", context?: DocumentBasis): Promise<void> {
+        if (this.closeGuard.frozen) return;
+        const endClose = this.closeGuard.begin();
+        try {
+            if (this.recoveryError) {
+                setUiText(this.status, this.recoveryError);
+                return;
             }
-            this.registryChanged();
-            if (pending.context) {
-                await this.host.applyOperationReceipt?.(receipt, pending.context);
-                const current = this.host.getDocument();
-                if (current && current.root === pending.context.root && current.path === pending.context.path && current.sessionId !== pending.context.sessionId)
-                    this.host.notify(message("tagNavigation.assignmentCommittedSessionChanged"));
+            if (this.pending) {
+                await this.resume();
+                return;
             }
-            if (pending.addKind && pending.prepared)
-                this.saveShortcut(pending.prepared.targetRef, pending.label, pending.addKind, pending.addKind === "tag" ? "subtree" : undefined);
-            else if (pending.addKind)
-                this.host.notify(message("tagNavigation.committedWithoutPreparation"));
-            if (pending.route.endsWith("create-tag") && this.createName.value === pending.body.displayName)
-                this.createName.value = "";
-            this.pending = null;
-            this.persistPending();
-            setUiText(this.status, message("tagNavigation.registrationComplete"));
-            await this.loadTags();
-        }
-        catch (error) {
-            let persistence: UiText = "";
+            this.pending = { route, body: { root: this.root, ...payload, operationId: crypto.randomUUID() }, label, addKind, context };
             try {
                 this.persistPending();
+                await this.resume();
             }
-            catch (storageError) {
-                persistence = displayMessage("tagNavigation.recoveryPersistenceFailed", { p0: uiDisplayParameter((storageError instanceof Error ? errorUiText(storageError) : message("error.invalidResponse"))) });
+            catch (error) {
+                if (this.closeGuard.frozen) return;
+                setUiText(this.status, displayMessage("tagNavigation.persistenceBeforeSendFailed", { p0: uiDisplayParameter((error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))) }));
             }
-            setUiText(this.status, displayMessage("tagNavigation.originalRetained", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")), p1: uiDisplayParameter(persistence) }));
-        }
-        finally {
-            this.busy = false;
-        }
+        } finally { endClose(); }
+    }
+    private async resume(): Promise<void> {
+        if (this.closeGuard.frozen) return;
+        const endClose = this.closeGuard.begin();
+        try {
+            if (this.busy)
+                return;
+            if (!this.pending) {
+                setUiText(this.status, this.recoveryError ?? message("tagNavigation.noPendingOperation"));
+                return;
+            }
+            const pending = this.pending;
+            this.busy = true;
+            try {
+                this.persistPending(); // A retry must satisfy the same durable-before-effect boundary.
+                let recovering = !!pending.confirmed;
+                if (!pending.cancelRequested) {
+                    if (!pending.prepared) {
+                        const prepared = await this.host.request<NavigationPreparation>(pending.route, structuredClone(pending.body));
+                        if (this.closeGuard.frozen) return;
+                        pending.prepared = prepared;
+                        if (pending.prepared.preview.operationId !== pending.body.operationId)
+                            throw new UiError(message("tagNavigation.preparationMismatch"));
+                        this.persistPending();
+                    }
+                    if (!pending.confirmed) {
+                        const confirmed = await this.confirm(pending);
+                        if (this.closeGuard.frozen) return;
+                        if (!confirmed)
+                            pending.cancelRequested = true;
+                        else
+                            pending.confirmed = true;
+                        this.persistPending();
+                    }
+                }
+                if (pending.cancelRequested) {
+                    const expected = { operationId: String(pending.body.operationId), planId: pending.prepared?.preview.planId ?? pending.recoveredPlanId ?? null };
+                    const cancelled = await this.host.request<{
+                        operationId: string;
+                        planId: string | null;
+                        status: string;
+                    }>("/api/navigation/cancel", { root: this.root, ...expected });
+                    if (this.closeGuard.frozen) return;
+                    if (tagCancellationStatus(expected, cancelled) === "resolved") {
+                        this.pending = null;
+                        this.persistPending();
+                        setUiText(this.status, message("tagNavigation.originalEnded"));
+                        return;
+                    }
+                    if (typeof cancelled.planId !== "string")
+                        throw new UiError(message("tagNavigation.committedPlanIdMissing"));
+                    pending.recoveredPlanId = cancelled.planId;
+                    this.persistPending();
+                    recovering = true;
+                }
+                const planId = pending.prepared?.preview.planId ?? pending.recoveredPlanId;
+                if (!planId)
+                    throw new UiError(message("tagNavigation.originalPlanIdMissing"));
+                const expected = { operationId: String(pending.body.operationId), planId };
+                let committed = false, receipt: {
+                    operationId?: string;
+                    planId?: string;
+                    status?: string;
+                    receipt?: {
+                        status?: string;
+                    };
+                } | undefined;
+                if (recovering) {
+                    receipt = await this.host.request("/api/operations/status", { operationId: expected.operationId, context: pending.context });
+                    if (this.closeGuard.frozen) return;
+                    committed = tagOperationStatus(expected, receipt!) === "committed";
+                }
+                if (pending.cancelRequested && !committed)
+                    throw new UiError(message("tagNavigation.cancelCommitUnconfirmed"));
+                if (!committed) {
+                    receipt = await this.host.request("/api/operations/commit", { ...expected, context: pending.context });
+                    if (this.closeGuard.frozen) return;
+                    if (tagOperationStatus(expected, receipt!) !== "committed")
+                        throw new UiError(message("tagNavigation.registrationUnconfirmed"));
+                }
+                if (this.closeGuard.frozen) return;
+                this.registryChanged();
+                if (pending.context) {
+                    if (!this.host.applyOperationReceipt)
+                        throw new UiError(message("tagNavigation.savedNoteRequired"));
+                    await this.host.applyOperationReceipt(receipt, pending.context);
+                    if (this.closeGuard.frozen) return;
+                    const current = this.host.getDocument();
+                    if (current && current.root === pending.context.root && current.path === pending.context.path && current.sessionId !== pending.context.sessionId)
+                        this.host.notify(message("tagNavigation.assignmentCommittedSessionChanged"));
+                }
+                if (pending.addKind && pending.prepared)
+                    this.saveShortcut(pending.prepared.targetRef, pending.label, pending.addKind, pending.addKind === "tag" ? "subtree" : undefined);
+                else if (pending.addKind)
+                    this.host.notify(message("tagNavigation.committedWithoutPreparation"));
+                if (pending.route.endsWith("create-tag")) {
+                    if (this.createName.value === pending.body.displayName) {
+                        this.createName.value = "";
+                        this.createNameDraft = "";
+                    }
+                    this.appliedParentRef = typeof pending.body.parentRef === "string" ? pending.body.parentRef : null;
+                }
+                this.pending = null;
+                this.persistPending();
+                setUiText(this.status, message("tagNavigation.registrationComplete"));
+                await this.loadTags();
+            }
+            catch (error) {
+                if (this.closeGuard.frozen) return;
+                let persistence: UiText = "";
+                try {
+                    this.persistPending();
+                }
+                catch (storageError) {
+                    persistence = displayMessage("tagNavigation.recoveryPersistenceFailed", { p0: uiDisplayParameter((storageError instanceof Error ? errorUiText(storageError) : message("error.invalidResponse"))) });
+                }
+                setUiText(this.status, displayMessage("tagNavigation.originalRetained", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")), p1: uiDisplayParameter(persistence) }));
+            }
+            finally {
+                if (!this.closeGuard.frozen) this.busy = false;
+            }
+        } finally { endClose(); }
     }
     private async confirm(pending: NonNullable<NavigationControls["pending"]>): Promise<boolean> {
-        return await new Promise(resolve => {
-            const dialog = ui("dialog", "data-confirm-dialog"), form = ui("form");
-            form.method = "dialog";
-            const title = pending.route.endsWith("admit-directory") ? message("tagNavigation.directoryConfirmationTitle") : pending.route.endsWith("rename-tag") ? message("tagNavigation.renameConfirmationTitle") : pending.route.endsWith("move-tag") ? message("tagNavigation.parentDialogTitle") : pending.context ? message("tagNavigation.createAssignConfirmationTitle") : message("tagNavigation.createConfirmationTitle");
-            form.append(ui("h2", "", title), ui("p", "", pending.label));
-            if (pending.route.endsWith("admit-directory"))
-                form.append(ui("p", "data-help", message("tagNavigation.directoryConfirmationHelp")));
-            if (pending.context) {
-                const path = pending.context.path;
-                form.append(ui("p", "data-help", displayMessage("tagNavigation.assignmentConfirmationHelp", { p0: path })));
-            }
-            const preview = ui("details");
-            preview.append(ui("summary", "", message("tagNavigation.exactPlanDisclosure")), ui("pre", "", JSON.stringify(pending.prepared?.preview, null, 2)));
-            form.append(preview);
-            const cancel = ui("button", "data-button", message("common.cancel"));
-            cancel.value = "cancel";
-            const commit = ui("button", "data-button primary", message("tagNavigation.commitPreview"));
-            commit.value = "apply";
-            form.append(cancel, commit);
-            dialog.append(form);
-            document.body.append(dialog);
-            dialog.addEventListener("close", () => { const accepted = dialog.returnValue === "apply"; dialog.remove(); resolve(accepted); }, { once: true });
-            dialog.showModal();
-        });
+        if (this.closeGuard.frozen) return false;
+        const endClose = this.closeGuard.begin();
+        try {
+            return await new Promise(resolve => {
+                const dialog = ui("dialog", "data-confirm-dialog"), form = ui("form");
+                form.method = "dialog";
+                const title = pending.route.endsWith("admit-directory") ? message("tagNavigation.directoryConfirmationTitle") : pending.route.endsWith("rename-tag") ? message("tagNavigation.renameConfirmationTitle") : pending.route.endsWith("move-tag") ? message("tagNavigation.parentDialogTitle") : pending.context ? message("tagNavigation.createAssignConfirmationTitle") : message("tagNavigation.createConfirmationTitle");
+                form.append(ui("h2", "", title), ui("p", "", pending.label));
+                if (pending.route.endsWith("admit-directory"))
+                    form.append(ui("p", "data-help", message("tagNavigation.directoryConfirmationHelp")));
+                if (pending.context) {
+                    const path = pending.context.path;
+                    form.append(ui("p", "data-help", displayMessage("tagNavigation.assignmentConfirmationHelp", { p0: path })));
+                }
+                const preview = ui("details");
+                preview.append(ui("summary", "", message("tagNavigation.exactPlanDisclosure")), ui("pre", "", JSON.stringify(pending.prepared?.preview, null, 2)));
+                form.append(preview);
+                const cancel = ui("button", "data-button", message("common.cancel"));
+                cancel.value = "cancel";
+                const commit = ui("button", "data-button primary", message("tagNavigation.commitPreview"));
+                commit.value = "apply";
+                form.append(cancel, commit);
+                dialog.append(form);
+                document.body.append(dialog);
+                dialog.addEventListener("close", () => { const accepted = dialog.returnValue === "apply"; dialog.remove(); resolve(accepted); }, { once: true });
+                dialog.showModal();
+            });
+        } finally { endClose(); }
     }
 }
 export interface QueryRow {
@@ -1141,12 +1265,68 @@ function selectControl(options: [
     string,
     UiText
 ][], value: string): HTMLSelectElement { const input = ui("select", "data-input"); options.forEach(([key, label]) => { const option = ui("option", "", label); option.value = key; input.append(option); }); input.value = value; return input; }
+interface QueryInlineDraft {
+    value: NativeValue;
+    raw: Record<string, string>;
+    binding: string;
+    revision: number;
+}
 export class QueryPanel {
-    private inlineDrafts = new Map<string, {
-        value: NativeValue;
-        raw: Record<string, string>;
-        binding: string;
-    }>();
+    private readonly closeGuard = new ProposalCloseGuard();
+    private readonly draftFlags = new Set<string>();
+    private discardQueryProposals(): void {
+        this.closeGuard.assertMutable();
+        this.advancedDraft = JSON.stringify(this.getPlan(), null, 2);
+        this.parameterDraft = "{}";
+        this.definitionName = this.expression = this.search = "";
+        this.draftFlags.clear();
+        for (const update of this.controlUpdates ?? []) update(true);
+        this.renderControls();
+    }
+    private transientProposal(): boolean { return this.draftFlags.size !== 0 || this.definitionName.length !== 0; }
+    private unresolved(): boolean { return this.inlineDrafts.size !== 0 || this.savedPending !== null || this.transientProposal(); }
+    private closeOwners(): (QuickCapture | PeriodNavigator | NavigationControls)[] { return [...this.captureForms.values(), ...this.periodNavigators.values(), ...this.navigationControls.values()]; }
+    assertCloseReady(): void { this.closeGuard.assertReady(this.unresolved()); for (const owner of this.closeOwners()) owner.assertCloseReady(); }
+    freezeForClose(): boolean {
+        try { this.assertCloseReady(); } catch { return false; }
+        const frozen: (QuickCapture | PeriodNavigator | NavigationControls)[] = [];
+        try {
+            for (const owner of this.closeOwners()) {
+                frozen.push(owner);
+                if (!owner.freezeForClose()) throw new Error("Query proposal owner refused close");
+            }
+            if (!this.closeGuard.freeze(this.unresolved())) throw new Error("Query proposal changed during close");
+        }
+        catch {
+            for (const owner of frozen.reverse()) owner.thawAfterClose();
+            this.closeGuard.thaw();
+            return false;
+        }
+        clearTimeout(this.searchTimer);
+        this.thumbnailDisposers.splice(0).forEach(dispose => dispose());
+        return true;
+    }
+    thawAfterClose(): void { this.closeGuard.thaw(); for (const owner of this.closeOwners()) owner.thawAfterClose(); this.renderResults(); }
+    private action(label: UiText, run: () => void | Promise<void>, className = "data-button"): HTMLButtonElement {
+        return action(label, () => this.closeGuard.run(async () => { await run(); }).catch(error => this.host.notify(errorUiText(error), true)), className);
+    }
+    private inlineDrafts = new Map<string, QueryInlineDraft>();
+    private retainInlineDraft(key: string, draft: QueryInlineDraft, value?: NativeValue, raw?: Record<string, string>): void {
+        if (this.closeGuard.frozen) return;
+        if (value !== undefined) draft.value = value;
+        if (raw !== undefined) draft.raw = raw;
+        draft.revision++;
+        this.inlineDrafts.set(key, draft);
+    }
+    private async applyInlineDraft(row: QueryRow, field: SchemaField, key: string, draft: QueryInlineDraft): Promise<void> {
+        return this.closeGuard.run(async () => {
+            const revision = draft.revision, submitted = structuredClone(draft.value);
+            await this.changeTaskField(row, field.key, submitted, field.id, () => {
+                if (this.inlineDrafts.get(key) === draft && draft.revision === revision)
+                    this.inlineDrafts.delete(key);
+            });
+        });
+    }
     readonly element = ui("section", "query-panel");
     private root: string | null = null;
     private workspaceId?: string;
@@ -1212,15 +1392,26 @@ export class QueryPanel {
     private readonly resultsHost = ui("div", "query-results");
     private readonly controlsHost = ui("div", "query-controls");
     private readonly navigationHost = ui("nav", "query-facets");
-    constructor(private readonly host: PanelHost, private readonly exportResult?: (query: FrozenQuery) => void | Promise<void>) { setUiAttr(this.element, "aria-label", message("queryPanel.title")); setUiAttr(this.navigationHost, "aria-label", message("queryPanel.valueNavigationTitle")); this.element.append(this.controlsHost, this.navigationHost, this.resultsHost); this.renderControls(); this.renderResults(); }
+    constructor(private readonly host: PanelHost, private readonly exportResult?: (query: FrozenQuery) => void | Promise<void>) { this.closeGuard.bind(this.element); setUiAttr(this.element, "aria-label", message("queryPanel.title")); setUiAttr(this.navigationHost, "aria-label", message("queryPanel.valueNavigationTitle")); this.element.append(this.controlsHost, this.navigationHost, this.resultsHost); this.renderControls(); this.renderResults(); }
+    /** New-library creation must settle proposals before opening its original-operation dialog. */
+    assertLibraryDeparture(): void {
+        this.closeGuard.assertMutable();
+        if (this.transientProposal()) throw new UiError(message("shell.closeAuthorInputPending"));
+    }
+    /** Validate before a caller publishes any matching shell or panel context. */
+    assertLibraryChange(library: { root: string; workspaceId?: string } | null): void {
+        this.closeGuard.assertMutable();
+        if (this.root !== (library?.root ?? null) || this.workspaceId !== library?.workspaceId)
+            this.assertLibraryDeparture();
+    }
     setLibrary(library: {
         root: string;
         workspaceId?: string;
     } | null): void {
-        if (this.root !== library?.root || this.workspaceId !== library?.workspaceId)
-            this.tagReferences = { nodes: [], state: "unavailable", messages: [] };
-        if (this.root === library?.root && this.workspaceId === library?.workspaceId)
+        this.assertLibraryChange(library);
+        if (this.root === (library?.root ?? null) && this.workspaceId === library?.workspaceId)
             return;
+        this.tagReferences = { nodes: [], state: "unavailable", messages: [] };
         this.refreshQueue.invalidate();
         this.environmentEpoch++;
         this.loading = false;
@@ -1253,6 +1444,7 @@ export class QueryPanel {
             void this.refresh();
     }
     setScope(directory: string | null, identity?: string): void {
+        if (this.closeGuard.frozen) return;
         if (directory === this.navigationDirectory && (identity ?? null) === this.navigationScopeIdentity)
             return;
         this.navigationDirectory = directory;
@@ -1260,6 +1452,7 @@ export class QueryPanel {
         this.applyScope(directory, identity);
     }
     private applyScope(directory: string | null, identity?: string): void {
+        if (this.closeGuard.frozen) return;
         this.savedSelection = null;
         this.savedPlan = null;
         this.definitionRevision = null;
@@ -1275,6 +1468,7 @@ export class QueryPanel {
             void this.refresh();
     }
     documentChanged(): void {
+        if (this.closeGuard.frozen) return;
         const document = this.host.getDocument();
         const selected = document?.root === this.root && document.nodeId && this.workspaceId ? `weftext-node://${this.workspaceId}/${document.nodeId}` : null;
         if (selected !== this.selected) {
@@ -1284,6 +1478,7 @@ export class QueryPanel {
         this.renderControls();
     }
     setSearch(text: string, includeBody: boolean): void {
+        if (this.closeGuard.frozen) return;
         if (text === this.search && includeBody === this.includeBody)
             return;
         this.savedSelection = null;
@@ -1296,7 +1491,7 @@ export class QueryPanel {
         if (this.root && this.workspaceId)
             this.searchTimer = setTimeout(() => { void this.refresh(); }, 300);
     }
-    setPlan(plan: QueryPlan): void { this.adoptPlan(plan); this.renderControls(); void this.refresh(); }
+    setPlan(plan: QueryPlan): void { if (this.closeGuard.frozen) return; this.draftFlags.delete("advanced"); this.adoptPlan(plan); this.renderControls(); void this.refresh(); }
     private adoptPlan(plan: QueryPlan): void { this.savedSelection = null; this.savedPlan = null; this.definitionRevision = null; this.exactPlan = structuredClone(plan); this.advancedDraft = JSON.stringify(plan, null, 2); this.directory = plan.scope.directory ?? null; this.scopeIdentity = this.directory?.startsWith("weftext-") ? this.directory : null; this.descendants = plan.scope.descendants; this.lifecycle = plan.scope.lifecycle; this.types = [...plan.types]; this.conditions = []; this.search = ""; this.expression = ""; this.group = plan.group; this.take = plan.take ?? 200; this.loadPreferences(); }
     private libraryIdentity(): string { return this.workspaceId ? `weftext-workspace://${this.workspaceId}` : this.root ?? ""; }
     private preferenceKey(): string { const predicates = [...this.conditions.map(item => item.expr), ...((this.exactPlan?.where ?? this.expression).trim() ? [(this.exactPlan?.where ?? this.expression).trim()] : []), ...(this.search ? [composeWhere(this.search, this.includeBody, [], "")!] : []), ...(this.exactPlan ? [JSON.stringify(this.exactPlan)] : [])]; return `weftext-query-view:${viewPreferenceIdentity(this.libraryIdentity(), this.scopeIdentity ?? this.directory ?? "@library", this.types, predicates, this.savedSelection ?? undefined)}`; }
@@ -1348,15 +1543,17 @@ export class QueryPanel {
     }
     private fieldByKey(key: string): string | undefined { return this.schema?.fields.find(field => field.key === key)?.id; }
     private async resolveScopeLocator(generation: number): Promise<void> {
-        if (!this.root || !this.scopeIdentity)
-            return;
-        const targetRef = this.scopeIdentity;
-        const target = await this.host.request<NavigationTarget>("/api/navigation/resolve", { root: this.root, targetRef });
-        if (generation !== this.generation)
-            return;
-        if (target.status !== "managed" || target.targetRef !== targetRef || !target.path)
-            throw new UiError(message("queryValidation.directoryIdentityUnavailable"));
-        this.directory = target.path;
+        return this.closeGuard.run(async () => {
+            if (!this.root || !this.scopeIdentity)
+                return;
+            const targetRef = this.scopeIdentity;
+            const target = await this.host.request<NavigationTarget>("/api/navigation/resolve", { root: this.root, targetRef });
+            if (generation !== this.generation)
+                return;
+            if (target.status !== "managed" || target.targetRef !== targetRef || !target.path)
+                throw new UiError(message("queryValidation.directoryIdentityUnavailable"));
+            this.directory = target.path;
+        });
     }
     private planInputs(): QueryPlanInputs {
         return structuredClone({ scope: this.scopeIdentity ?? this.directory, descendants: this.descendants, lifecycle: this.lifecycle,
@@ -1378,6 +1575,7 @@ export class QueryPanel {
     }
     /** A successful author/configuration mutation retires read work, never a Draft edit. */
     environmentChanged(root: string): void {
+        if (this.closeGuard.frozen) return;
         const coordinate = (value: string) => value.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
         if (!this.root || coordinate(this.root) !== coordinate(root))
             return;
@@ -1391,141 +1589,150 @@ export class QueryPanel {
         if (pending) {
             pending.epoch = this.environmentEpoch;
             this.loading = true;
-            void this.refreshQueue.request(this.intentKey(pending), pending);
+            void this.closeGuard.run(() => this.refreshQueue.request(this.intentKey(pending), pending));
         }
         this.renderResults();
     }
     async refresh(): Promise<void> {
-        clearTimeout(this.searchTimer);
-        if (!this.root || !this.workspaceId) {
-            this.refreshQueue.invalidate();
-            this.loading = false;
-            this.renderResults();
-            return;
-        }
-        try {
-            const intent = this.refreshIntent();
-            this.generation++;
-            this.loading = true;
-            this.error = null;
-            if (this.result)
-                this.result = { ...this.result, freshness: "stale", superseded: true };
-            this.renderResults();
-            await this.refreshQueue.request(this.intentKey(intent), intent);
-        }
-        catch (error) {
-            this.refreshQueue.invalidate();
-            this.loading = false;
-            this.error = error instanceof Error ? errorUiText(error) : message("error.invalidResponse");
-            this.renderResults();
-        }
-    }
-    private async resolveIntentScope(root: string, scope: string | null, current: () => boolean): Promise<string | null> {
-        if (!scope || !scope.startsWith("weftext-"))
-            return scope;
-        const target = await this.host.request<NavigationTarget>("/api/navigation/resolve", { root, targetRef: scope });
-        if (!current())
-            return null;
-        if (target.status !== "managed" || target.targetRef !== scope || !target.path)
-            throw new UiError(message("queryValidation.directoryIdentityUnavailable"));
-        return target.path;
-    }
-    private async executeRefresh(intent: QueryRefreshIntent, selected: () => boolean): Promise<void> {
-        const key = this.intentKey(intent);
-        const current = (): boolean => {
-            if (!selected())
-                return false;
-            try {
-                return this.intentKey(this.refreshIntent()) === key;
-            }
-            catch {
-                return false;
-            }
-        };
-        try {
-            if (!current())
-                return;
-            const schemaResult = await this.host.request<DataSchema | {
-                schema: DataSchema;
-            }>("/api/data/schema", { root: intent.root });
-            if (!current())
-                return;
-            const schema = "schema" in schemaResult ? schemaResult.schema : schemaResult;
-            const directory = await this.resolveIntentScope(intent.root, intent.inputs.scope, current);
-            if (!current())
-                return;
-            this.schema = schema;
-            if (intent.inputs.scope?.startsWith("weftext-"))
-                this.directory = directory;
-            this.renderControls();
-            if (intent.selection) {
-                const selection = intent.selection;
-                const response = await this.host.request<QueryResult & {
-                    result?: QueryResult;
-                    definitionRevision?: string;
-                    definition?: SavedQuery;
-                    definitionChanged?: boolean;
-                }>("/api/query/definition/run", { root: intent.root, owner: selection.owner, parameters: intent.parameters, selection: { mode: selection.mode, key: selection.key, ...(selection.mode === "pinned" ? { revision: selection.revision } : {}) } });
-                if (!current())
-                    return;
-                const savedPlan = response.definition?.plan ?? null;
-                const savedDirectory = await this.resolveIntentScope(intent.root, savedPlan?.scope.directory ?? null, current);
-                if (!current())
-                    return;
-                const previous = this.definitionRevision;
-                this.definitionRevision = response.definitionRevision ?? selection.revision ?? null;
-                this.result = decodeLocalQueryResult(response.result);
-                this.savedPlan = savedPlan;
-                this.resultPlan = savedPlan;
-                if (savedPlan) {
-                    this.exactPlan = structuredClone(savedPlan);
-                    this.directory = savedDirectory;
-                    this.scopeIdentity = savedPlan.scope.directory?.startsWith("weftext-") ? savedPlan.scope.directory : null;
-                    this.descendants = savedPlan.scope.descendants;
-                    this.lifecycle = savedPlan.scope.lifecycle;
-                    this.types = [...savedPlan.types];
-                    this.conditions = [];
-                    this.search = "";
-                    this.expression = "";
-                    this.group = savedPlan.group;
-                }
-                if (selection.mode === "current" && (response.definitionChanged || previous && this.definitionRevision !== previous))
-                    this.host.notify(message("queryStatus.savedDefinitionUpdated"));
-                else if (selection.mode === "pinned" && response.definitionChanged)
-                    this.host.notify(message("queryStatus.pinnedDefinitionDiffers"));
-            }
-            else {
-                const errors = intent.inputs.exactPlan ? [] : preferenceFieldErrors(intent.inputs.preference, schema);
-                if (errors.length)
-                    throw new UiError(joinUiText(errors, "；"));
-                const plan = planForInputs(intent.inputs, schema), result = await this.host.request<QueryResult>("/api/query/run", { root: intent.root, plan, parameters: intent.parameters });
-                if (!current())
-                    return;
-                this.result = decodeLocalQueryResult(result);
-                this.resultPlan = plan;
-                if (this.selected && !result.rows.some(row => (row.entityKey ?? row.key) === this.selected))
-                    this.host.notify(result.coverage === "complete" && result.freshness === "current" ? message("queryStatus.selectionLeftResult") : message("queryStatus.selectionCoverageUnknown"));
-            }
-            this.previewCache.clear();
-            this.renderNavigation();
-        }
-        catch (error) {
-            if (current()) {
-                this.error = error instanceof Error ? errorUiText(error) : message("error.invalidResponse");
-                if (intent.selection)
-                    this.result = null;
-            }
-        }
-        finally {
-            if (selected()) {
+        return this.closeGuard.run(async () => {
+            clearTimeout(this.searchTimer);
+            if (!this.root || !this.workspaceId) {
+                this.refreshQueue.invalidate();
                 this.loading = false;
-                this.renderControls();
+                this.renderResults();
+                return;
+            }
+            try {
+                const intent = this.refreshIntent();
+                this.generation++;
+                this.loading = true;
+                this.error = null;
+                if (this.result)
+                    this.result = { ...this.result, freshness: "stale", superseded: true };
+                this.renderResults();
+                await this.refreshQueue.request(this.intentKey(intent), intent);
+            }
+            catch (error) {
+                this.refreshQueue.invalidate();
+                this.loading = false;
+                this.error = error instanceof Error ? errorUiText(error) : message("error.invalidResponse");
                 this.renderResults();
             }
-        }
+        });
+    }
+    private async resolveIntentScope(root: string, scope: string | null, current: () => boolean): Promise<string | null> {
+        return this.closeGuard.run(async () => {
+            if (!scope || !scope.startsWith("weftext-"))
+                return scope;
+            const target = await this.host.request<NavigationTarget>("/api/navigation/resolve", { root, targetRef: scope });
+            if (!current())
+                return null;
+            if (target.status !== "managed" || target.targetRef !== scope || !target.path)
+                throw new UiError(message("queryValidation.directoryIdentityUnavailable"));
+            return target.path;
+        });
+    }
+    private async executeRefresh(intent: QueryRefreshIntent, selected: () => boolean): Promise<void> {
+        return this.closeGuard.run(async () => {
+            const key = this.intentKey(intent);
+            const current = (): boolean => {
+                if (this.closeGuard.frozen || !selected())
+                    return false;
+                try {
+                    return this.intentKey(this.refreshIntent()) === key;
+                }
+                catch {
+                    return false;
+                }
+            };
+            try {
+                if (!current())
+                    return;
+                const schemaResult = await this.host.request<DataSchema | {
+                    schema: DataSchema;
+                }>("/api/data/schema", { root: intent.root });
+                if (!current())
+                    return;
+                const schema = "schema" in schemaResult ? schemaResult.schema : schemaResult;
+                const directory = await this.resolveIntentScope(intent.root, intent.inputs.scope, current);
+                if (!current())
+                    return;
+                this.schema = schema;
+                if (intent.inputs.scope?.startsWith("weftext-"))
+                    this.directory = directory;
+                this.renderControls();
+                if (intent.selection) {
+                    const selection = intent.selection;
+                    const response = await this.host.request<QueryResult & {
+                        result?: QueryResult;
+                        definitionRevision?: string;
+                        definition?: SavedQuery;
+                        definitionChanged?: boolean;
+                    }>("/api/query/definition/run", { root: intent.root, owner: selection.owner, parameters: intent.parameters, selection: { mode: selection.mode, key: selection.key, ...(selection.mode === "pinned" ? { revision: selection.revision } : {}) } });
+                    if (!current())
+                        return;
+                    const savedPlan = response.definition?.plan ?? null;
+                    const savedDirectory = await this.resolveIntentScope(intent.root, savedPlan?.scope.directory ?? null, current);
+                    if (!current())
+                        return;
+                    const previous = this.definitionRevision;
+                    this.definitionRevision = response.definitionRevision ?? selection.revision ?? null;
+                    this.result = decodeLocalQueryResult(response.result);
+                    this.savedPlan = savedPlan;
+                    this.resultPlan = savedPlan;
+                    if (savedPlan) {
+                        this.exactPlan = structuredClone(savedPlan);
+                        this.directory = savedDirectory;
+                        this.scopeIdentity = savedPlan.scope.directory?.startsWith("weftext-") ? savedPlan.scope.directory : null;
+                        this.descendants = savedPlan.scope.descendants;
+                        this.lifecycle = savedPlan.scope.lifecycle;
+                        this.types = [...savedPlan.types];
+                        this.conditions = [];
+                        this.search = "";
+                        this.expression = "";
+                        this.group = savedPlan.group;
+                    }
+                    if (selection.mode === "current" && (response.definitionChanged || previous && this.definitionRevision !== previous))
+                        this.host.notify(message("queryStatus.savedDefinitionUpdated"));
+                    else if (selection.mode === "pinned" && response.definitionChanged)
+                        this.host.notify(message("queryStatus.pinnedDefinitionDiffers"));
+                }
+                else {
+                    const errors = intent.inputs.exactPlan ? [] : preferenceFieldErrors(intent.inputs.preference, schema);
+                    if (errors.length)
+                        throw new UiError(joinUiText(errors, "；"));
+                    const plan = planForInputs(intent.inputs, schema), result = await this.host.request<QueryResult>("/api/query/run", { root: intent.root, plan, parameters: intent.parameters });
+                    if (!current())
+                        return;
+                    this.result = decodeLocalQueryResult(result);
+                    this.resultPlan = plan;
+                    if (this.selected && !result.rows.some(row => (row.entityKey ?? row.key) === this.selected))
+                        this.host.notify(result.coverage === "complete" && result.freshness === "current" ? message("queryStatus.selectionLeftResult") : message("queryStatus.selectionCoverageUnknown"));
+                }
+                if (intent.inputs.search === this.search) this.draftFlags.delete("search");
+                if (intent.inputs.expression === this.expression) this.draftFlags.delete("expression");
+                this.previewCache.clear();
+                this.renderNavigation();
+            }
+            catch (error) {
+                if (current()) {
+                    this.error = error instanceof Error ? errorUiText(error) : message("error.invalidResponse");
+                    if (intent.selection)
+                        this.result = null;
+                }
+            }
+            finally {
+                if (!this.closeGuard.frozen && selected()) {
+                    this.loading = false;
+                    this.renderControls();
+                    this.renderResults();
+                }
+            }
+        });
     }
     /** Controls own their native nodes for the library lifetime; read delivery only patches state. */
     private renderControls(): void {
+        if (this.closeGuard.frozen) return;
         const context = JSON.stringify([this.root, this.workspaceId]), reset = this.controlsContext !== context;
         this.controlsContext = context;
         if (!this.controlUpdates)
@@ -1537,9 +1744,9 @@ export class QueryPanel {
     }
     private draftInput(input: HTMLInputElement | HTMLTextAreaElement, read: () => string, write: (value: string) => void): (reset: boolean) => void {
         let composing = false;
-        input.oninput = () => write(input.value);
-        input.addEventListener("compositionstart", () => { composing = true; });
-        input.addEventListener("compositionend", () => { composing = false; write(input.value); });
+        input.oninput = () => { if (!this.closeGuard.frozen) write(input.value); };
+        input.addEventListener("compositionstart", () => { if (!this.closeGuard.frozen) composing = true; });
+        input.addEventListener("compositionend", () => { if (!this.closeGuard.frozen) { composing = false; write(input.value); } });
         return reset => {
             if ((reset || !composing) && input.value !== read())
                 input.value = read();
@@ -1547,9 +1754,11 @@ export class QueryPanel {
     }
     private mountControls(): void {
         this.controlUpdates = [];
-        const heading = ui("div", "query-heading"), capture = action(message("queryCapture.title"), () => this.showCapture(), "data-button primary");
-        heading.append(ui("h2", "", message("queryPanel.libraryTitle")), action(message("common.refresh"), () => this.refresh(), "data-button compact"), capture);
-        const savedNotice = ui("p", "query-result-status"), copy = action(message("queryPanel.copyDefinitionToTemporary"), () => {
+        const heading = ui("div", "query-heading"), capture = this.action(message("queryCapture.title"), () => this.showCapture(), "data-button primary");
+        heading.append(ui("h2", "", message("queryPanel.libraryTitle")), this.action(message("common.refresh"), () => this.refresh(), "data-button compact"), capture,
+            this.action(message("common.cancel"), () => this.discardQueryProposals()),
+            this.action(message("queryEdit.discardAllFieldInputs"), () => { this.inlineDrafts.clear(); this.renderResults(); }));
+        const savedNotice = ui("p", "query-result-status"), copy = this.action(message("queryPanel.copyDefinitionToTemporary"), () => {
             const plan = this.savedPlan;
             this.savedSelection = null;
             this.savedPlan = null;
@@ -1567,10 +1776,10 @@ export class QueryPanel {
         setUiAttr(search, "placeholder", message("queryPanel.searchTitlePlaceholder"));
         setUiAttr(search, "aria-label", message("queryPanel.searchTitleLabel"));
         run.type = "submit";
-        const updateSearch = this.draftInput(search, () => this.search, value => { this.search = value; });
-        searchForm.append(search, run);
+        const updateSearch = this.draftInput(search, () => this.search, value => { this.search = value; this.draftFlags.add("search"); });
+        searchForm.append(search, run, this.action(message("common.cancel"), () => { this.search = ""; search.value = ""; this.draftFlags.delete("search"); }));
         searchForm.onsubmit = event => { event.preventDefault(); void this.refresh(); };
-        const scopeRow = ui("div", "query-scope-row"), scopeText = ui("span", "query-scope"), all = action(message("queryPanel.wholeLibrary"), () => this.applyScope(null), "data-button compact");
+        const scopeRow = ui("div", "query-scope-row"), scopeText = ui("span", "query-scope"), all = this.action(message("queryPanel.wholeLibrary"), () => this.applyScope(null), "data-button compact");
         const descendants = ui("input"), body = ui("input"), lifecycle = selectControl([["live", message("queryPanel.liveNotes")], ["trash", message("queryPanel.readOnlyTrash")]], this.lifecycle);
         descendants.type = body.type = "checkbox";
         descendants.onchange = () => { this.descendants = descendants.checked; void this.refresh(); };
@@ -1593,7 +1802,7 @@ export class QueryPanel {
             this.savePreferences();
             void this.refresh();
         };
-        const descending = action("", () => { this.preference.descending = !this.preference.descending; this.savePreferences(); this.renderControls(); void this.refresh(); }, "data-button compact");
+        const descending = this.action("", () => { this.preference.descending = !this.preference.descending; this.savePreferences(); this.renderControls(); void this.refresh(); }, "data-button compact");
         const summary = ui("input"), thumbnails = ui("input");
         summary.type = thumbnails.type = "checkbox";
         summary.onchange = () => { this.preference.summaries = summary.checked; this.savePreferences(); void this.refresh(); };
@@ -1618,11 +1827,11 @@ export class QueryPanel {
             if (nextChips !== chipsKey) {
                 chipsKey = nextChips;
                 chips.replaceChildren();
-                this.types.forEach(token => chips.append(action(displayMessage("queryPanel.typeChip", { p0: uiDisplayParameter(typeNames[token] ?? token) }), () => { this.types = this.types.filter(item => item !== token); this.contextChanged(); }, "query-chip")));
+                this.types.forEach(token => chips.append(this.action(displayMessage("queryPanel.typeChip", { p0: uiDisplayParameter(typeNames[token] ?? token) }), () => { this.types = this.types.filter(item => item !== token); this.contextChanged(); }, "query-chip")));
                 this.conditions.forEach(condition => {
-                    chips.append(action(() => `${uiTextValue(condition.label)} ×`, () => { this.conditions = this.conditions.filter(item => item.id !== condition.id); this.contextChanged(); }, "query-chip"));
+                    chips.append(this.action(() => `${uiTextValue(condition.label)} ×`, () => { this.conditions = this.conditions.filter(item => item.id !== condition.id); this.contextChanged(); }, "query-chip"));
                     if (condition.tag)
-                        chips.append(action(condition.tag.mode === "subtree" ? message("queryPanel.switchToExactTag") : message("queryPanel.switchToSubtreeTag"), () => { const tag = condition.tag!; this.conditions = this.conditions.filter(item => item.id !== condition.id); this.applyTag(tag.reference, tag.label, tag.mode === "subtree" ? "exact" : "subtree"); }, "data-button compact"));
+                        chips.append(this.action(condition.tag.mode === "subtree" ? message("queryPanel.switchToExactTag") : message("queryPanel.switchToSubtreeTag"), () => { const tag = condition.tag!; this.conditions = this.conditions.filter(item => item.id !== condition.id); this.applyTag(tag.reference, tag.label, tag.mode === "subtree" ? "exact" : "subtree"); }, "data-button compact"));
                 });
             }
             for (const button of chips.querySelectorAll("button"))
@@ -1676,7 +1885,11 @@ export class QueryPanel {
         const add = ui("button", "data-button", message("queryFilter.add"));
         add.type = "submit";
         filterForm.append(labeled(message("queryFilter.fieldLabel"), field), labeled(message("queryFilter.conditionLabel"), operator), branchLabel, value, add);
-        builder.append(filterForm, filterMessage);
+        for (const control of [field, operator, branch, value]) {
+            control.addEventListener("input", () => this.draftFlags.add("filter"));
+            control.addEventListener("change", () => this.draftFlags.add("filter"));
+        }
+        builder.append(filterForm, filterMessage, this.action(message("common.cancel"), () => { value.value = ""; this.draftFlags.delete("filter"); }));
         filterForm.onsubmit = event => {
             event.preventDefault();
             try {
@@ -1704,6 +1917,7 @@ export class QueryPanel {
                 }
                 const selectedKey = selected.key, operatorKey = operator.value, rawValue = value.value;
                 const operatorLabels: Readonly<Record<string, UiText>> = { "==": message("queryOperator.equals"), "!=": message("queryOperator.notEquals"), ">": message("queryOperator.greaterThan"), ">=": message("queryOperator.atLeast"), "<": message("queryOperator.lessThan"), "<=": message("queryOperator.atMost"), contains: message("queryOperator.containsText"), absent: message("queryValue.absent"), null: message("queryOperator.explicitNone") };
+                this.draftFlags.delete("filter");
                 this.conditions.push({ id: crypto.randomUUID(), label: () => `${uiTextValue(fieldNames[selectedKey] ?? selectedKey)} ${uiTextValue(operatorLabels[operatorKey] ?? operatorKey)} ${rawValue}`, expr: condition });
                 this.contextChanged();
             }
@@ -1715,8 +1929,8 @@ export class QueryPanel {
         expression.rows = 3;
         setUiAttr(expression, "placeholder", 'phones.exists(p, p.number == "138…" && p.label == "工作")');
         setUiAttr(expression, "aria-label", message("queryFilter.advancedDisclosure"));
-        const updateExpression = this.draftInput(expression, () => this.expression, input => { this.expression = input; });
-        builder.append(labeled(message("queryFilter.celLabel"), expression), action(message("queryFilter.applyCel"), () => this.refresh()));
+        const updateExpression = this.draftInput(expression, () => this.expression, input => { this.expression = input; this.draftFlags.add("expression"); });
+        builder.append(labeled(message("queryFilter.celLabel"), expression), this.action(message("queryFilter.applyCel"), () => this.refresh()), this.action(message("common.cancel"), () => { this.expression = ""; expression.value = ""; this.draftFlags.delete("expression"); }));
         const columns = ui("fieldset", "query-columns");
         columns.append(ui("legend", "", message("queryFilter.projectionLabel")));
         const columnRows = new Map<string, {
@@ -1746,7 +1960,8 @@ export class QueryPanel {
         const aggregateSubmit = ui("button", "data-button", message("queryAggregate.run")), aggregateMessage = ui("p", "data-warning");
         aggregateSubmit.type = "submit";
         aggregateForm.append(labeled(message("queryAggregate.groupLabel"), groupKey), labeled(message("queryValue.aggregateFallback"), op), labeled(message("queryAggregate.numericFieldLabel"), amount), aggregateSubmit);
-        builder.append(aggregateForm, aggregateMessage);
+        for (const control of [groupKey, op, amount]) control.addEventListener("change", () => this.draftFlags.add("aggregate"));
+        builder.append(aggregateForm, aggregateMessage, this.action(message("common.cancel"), () => { groupKey.value = amount.value = ""; op.value = "count"; this.draftFlags.delete("aggregate"); this.renderControls(); }));
         aggregateForm.onsubmit = event => {
             event.preventDefault();
             const schema = this.schema, groupField = schema?.fields.find(item => item.id === groupKey.value), amountField = schema?.fields.find(item => item.id === amount.value);
@@ -1754,28 +1969,31 @@ export class QueryPanel {
                 this.host.notify(message("queryAggregate.unavailableOriginalField"), true);
                 return;
             }
+            this.draftFlags.delete("aggregate");
             this.group = { keys: groupField ? [{ name: groupField.key, expr: fieldExpr(groupField.id) }] : [], aggregates: [{ name: op.value === "count" ? "count" : "amount", op: op.value as "count", ...(op.value === "count" ? {} : { expr: fieldExpr(amountField!.id) }) }] };
             this.preference.chartField = op.value === "count" ? "count" : "amount";
             this.renderControls();
             void this.refresh();
         };
-        const grouped = ui("div"), returnRows = action(message("queryAggregate.returnToNotes"), () => { this.group = undefined; this.renderControls(); void this.refresh(); });
+        const grouped = ui("div"), returnRows = this.action(message("queryAggregate.returnToNotes"), () => { this.group = undefined; this.renderControls(); void this.refresh(); });
         grouped.append(ui("p", "data-help", message("queryAggregate.partialInputHelp")), returnRows);
         builder.append(grouped);
         const limit = ui("input", "data-input");
         limit.type = "number";
         limit.min = "1";
         limit.max = "10000";
+        limit.addEventListener("input", () => this.draftFlags.add("limit"));
         limit.onchange = () => {
             const next = Number(limit.value);
             if (Number.isInteger(next) && next >= 1 && next <= 10000) {
+                this.draftFlags.delete("limit");
                 this.take = next;
                 void this.refresh();
             }
         };
         let priorLimit = this.take;
         limit.value = String(priorLimit);
-        builder.append(labeled(message("queryPanel.displayLimitLabel"), limit), action(message("queryView.resetLocal"), () => { this.preference = defaultPreference(); this.savePreferences(); this.renderControls(); void this.refresh(); }));
+        builder.append(labeled(message("queryPanel.displayLimitLabel"), limit), this.action(message("common.cancel"), () => { limit.value = String(this.take); this.draftFlags.delete("limit"); }), this.action(message("queryView.resetLocal"), () => { this.preference = defaultPreference(); this.savePreferences(); this.renderControls(); void this.refresh(); }));
         this.controlsHost.append(builder);
         this.controlUpdates!.push(reset => {
             const schema = this.schema, fields = schema?.fields ?? [], locked = !schema || !!this.savedSelection || !!this.exactPlan;
@@ -1880,16 +2098,17 @@ export class QueryPanel {
         setUiAttr(parameterInput, "aria-label", message("queryAdvanced.parametersLabel"));
         let planInitialized = false;
         planInput.addEventListener("compositionstart", () => { planInitialized = true; });
-        const updatePlan = this.draftInput(planInput, () => this.advancedDraft, value => { this.advancedDraft = value; planInitialized = true; });
-        const updateParameters = this.draftInput(parameterInput, () => this.parameterDraft, value => { this.parameterDraft = value; });
+        const updatePlan = this.draftInput(planInput, () => this.advancedDraft, value => { this.advancedDraft = value; this.draftFlags.add("advanced"); planInitialized = true; });
+        const updateParameters = this.draftInput(parameterInput, () => this.parameterDraft, value => { this.parameterDraft = value; this.draftFlags.add("parameters"); });
         const feedback = ui("p", "data-help", message("queryAdvanced.planHelp"));
         feedback.setAttribute("aria-live", "polite");
-        section.append(action(message("queryAdvanced.loadCurrentPlan"), () => { this.advancedDraft = JSON.stringify(this.getPlan(), null, 2); planInput.value = this.advancedDraft; planInitialized = true; }), labeled(message("queryAdvanced.planField"), planInput), labeled(message("queryAdvanced.parametersField"), parameterInput));
-        section.append(action(message("queryAdvanced.runPlan"), async () => {
+        section.append(this.action(message("queryAdvanced.loadCurrentPlan"), () => { this.draftFlags.delete("advanced"); this.advancedDraft = JSON.stringify(this.getPlan(), null, 2); planInput.value = this.advancedDraft; planInitialized = true; }), labeled(message("queryAdvanced.planField"), planInput), labeled(message("queryAdvanced.parametersField"), parameterInput));
+        section.append(this.action(message("queryAdvanced.runPlan"), async () => {
             try {
                 const plan = parseQueryPlan(planInput.value);
                 parseQueryParameters(parameterInput.value);
                 this.parameterDraft = parameterInput.value;
+                this.draftFlags.delete("parameters");
                 this.advancedOpen = true;
                 this.setPlan(plan);
             }
@@ -1897,10 +2116,11 @@ export class QueryPanel {
                 feedback.className = "data-warning";
                 setUiText(feedback, error instanceof Error ? errorUiText(error) : message("error.invalidResponse"));
             }
-        }, "data-button primary"), action(message("queryAdvanced.rerunParameters"), async () => {
+        }, "data-button primary"), this.action(message("queryAdvanced.rerunParameters"), async () => {
             try {
                 parseQueryParameters(parameterInput.value);
                 this.parameterDraft = parameterInput.value;
+                this.draftFlags.delete("parameters");
                 await this.refresh();
             }
             catch (error) {
@@ -1908,17 +2128,22 @@ export class QueryPanel {
                 setUiText(feedback, error instanceof Error ? errorUiText(error) : message("error.invalidResponse"));
             }
         }));
-        const back = action(message("queryAdvanced.returnToVisual"), () => { this.exactPlan = null; this.group = undefined; this.expression = ""; this.conditions = []; this.loadPreferences(); this.renderControls(); void this.refresh(); });
-        const example = action(message("queryAdvanced.loadUnnestExample"), () => {
+        const back = this.action(message("queryAdvanced.returnToVisual"), () => { this.exactPlan = null; this.group = undefined; this.expression = ""; this.conditions = []; this.loadPreferences(); this.renderControls(); void this.refresh(); });
+        const example = this.action(message("queryAdvanced.loadUnnestExample"), () => {
             const multivalue = this.schema?.fields.find(field => field.key === "phones" && resolveShape(field.shape, this.schema!).kind === "list") ?? this.schema?.fields.find(field => resolveShape(field.shape, this.schema!).kind === "list");
             if (!multivalue)
                 return;
             const plan: QueryPlan = { scope: { ...(this.scopeIdentity || this.directory ? { directory: this.scopeIdentity ?? this.directory! } : {}), descendants: this.descendants, lifecycle: this.lifecycle }, types: [...this.types], select: [{ name: "title", expr: "title" }, { name: "item", expr: "item" }], order: [], unnest: { array: fieldExpr(multivalue.id), binding: "item" }, take: this.take };
             this.advancedDraft = JSON.stringify(plan, null, 2);
+            this.draftFlags.add("advanced");
             planInput.value = this.advancedDraft;
             planInitialized = true;
         });
-        section.append(back, example, feedback, ui("p", "data-help", message("queryAdvanced.nativeSyntaxHelp")));
+        section.append(this.action(message("common.cancel"), () => {
+            this.advancedDraft = JSON.stringify(this.getPlan(), null, 2); this.parameterDraft = "{}";
+            this.draftFlags.delete("advanced"); this.draftFlags.delete("parameters");
+            planInput.value = this.advancedDraft; parameterInput.value = this.parameterDraft;
+        }), back, example, feedback, ui("p", "data-help", message("queryAdvanced.nativeSyntaxHelp")));
         this.controlsHost.append(section);
         this.controlUpdates!.push(reset => {
             if (reset)
@@ -1955,7 +2180,7 @@ export class QueryPanel {
             if (facet.value?.kind !== "text")
                 return;
             const token = facet.value.value;
-            this.navigationHost.append(action(() => `${uiTextValue(typeNames[token] ?? token)} · ${uiTextValue(facet.count)}`, () => {
+            this.navigationHost.append(this.action(() => `${uiTextValue(typeNames[token] ?? token)} · ${uiTextValue(facet.count)}`, () => {
                 this.savedSelection = null;
                 this.savedPlan = null;
                 this.definitionRevision = null;
@@ -1966,7 +2191,7 @@ export class QueryPanel {
         });
         for (const facet of facets) {
             const label = facet.missing ? message("queryValue.absent") : facet.label ?? formatNativeValue(facet.value);
-            const button = action(() => `${uiTextValue(fieldNames[facet.key] ?? facet.key)}：${uiTextValue(label)} · ${uiTextValue(facet.count)}`, () => {
+            const button = this.action(() => `${uiTextValue(fieldNames[facet.key] ?? facet.key)}：${uiTextValue(label)} · ${uiTextValue(facet.count)}`, () => {
                 try {
                     const expr = facetPredicate(facet, this.schema!);
                     this.savedSelection = null;
@@ -1985,7 +2210,7 @@ export class QueryPanel {
     private mountShortcutControls(): void {
         const shortcuts = ui("details", "query-shortcuts"), warning = ui("div"), list = ui("div"), recent = ui("div");
         shortcuts.append(ui("summary", "", message("queryShortcut.disclosure")));
-        shortcuts.append(action(message("queryShortcut.addCurrent"), () => {
+        shortcuts.append(this.action(message("queryShortcut.addCurrent"), () => {
             const label = window.prompt(uiTextValue(message("queryShortcut.namePrompt")), this.savedSelection?.label || this.search || uiTextValue(message("queryShortcut.defaultNewName")));
             if (!label)
                 return;
@@ -2007,7 +2232,7 @@ export class QueryPanel {
                 shortcuts.open = false;
             if (this.shortcutError) {
                 const key = `weftext-query-shortcuts:${this.libraryIdentity()}`, raw = localStorage.getItem(key);
-                warning.append(ui("p", "data-warning", this.shortcutError), ui("pre", "", raw ?? ""), action(message("queryShortcut.backupResetInvalid"), () => {
+                warning.append(ui("p", "data-warning", this.shortcutError), ui("pre", "", raw ?? ""), this.action(message("queryShortcut.backupResetInvalid"), () => {
                     if (raw !== null)
                         localStorage.setItem(`${key}:preserved:${crypto.randomUUID()}`, raw);
                     localStorage.setItem(key, JSON.stringify({ version: 2, items: [] }));
@@ -2017,7 +2242,7 @@ export class QueryPanel {
             }
             this.shortcuts.forEach((shortcut, index) => {
                 const row = ui("div", "query-shortcut-row"), label = shortcut.kind === "tag" ? () => `${uiTextValue(shortcut.label)} · ${uiTextValue(shortcut.matchMode === "subtree" ? message("tagNavigation.subtreeMode") : message("tagNavigation.exactEntry"))}` : shortcut.label;
-                row.append(action(label, async () => {
+                row.append(this.action(label, async () => {
                     if (shortcut.kind === "directory" || shortcut.kind === "tag")
                         await this.openNavigationShortcut(shortcut);
                     else if (shortcut.kind === "savedQuery" && shortcut.definition)
@@ -2027,7 +2252,7 @@ export class QueryPanel {
                     else if (shortcut.path)
                         await this.openTarget(shortcut.path, shortcut.entityKey);
                 }, "data-button"));
-                const up = action(message("queryShortcut.moveUp"), () => {
+                const up = this.action(message("queryShortcut.moveUp"), () => {
                     if (index === 0)
                         return;
                     [this.shortcuts[index - 1], this.shortcuts[index]] = [this.shortcuts[index], this.shortcuts[index - 1]];
@@ -2035,11 +2260,11 @@ export class QueryPanel {
                     this.renderControls();
                 }, "data-button compact");
                 up.disabled = index === 0;
-                row.append(up, action(message("queryShortcut.remove"), () => { this.shortcuts = this.shortcuts.filter(item => item.id !== shortcut.id); this.saveShortcuts(); this.renderControls(); }, "data-button compact"));
+                row.append(up, this.action(message("queryShortcut.remove"), () => { this.shortcuts = this.shortcuts.filter(item => item.id !== shortcut.id); this.saveShortcuts(); this.renderControls(); }, "data-button compact"));
                 list.append(row);
             });
             for (const item of this.recent)
-                recent.append(action(displayMessage("queryShortcut.recentEntry", { p0: uiDisplayParameter(item.label), p1: uiDisplayParameter(item.lifecycle === "trash" ? message("queryShortcut.trashSuffix") : "") }), () => this.openTarget(item.path, item.entityKey, item.lifecycle, item.revision), "query-recent"));
+                recent.append(this.action(displayMessage("queryShortcut.recentEntry", { p0: uiDisplayParameter(item.label), p1: uiDisplayParameter(item.lifecycle === "trash" ? message("queryShortcut.trashSuffix") : "") }), () => this.openTarget(item.path, item.entityKey, item.lifecycle, item.revision), "query-recent"));
         });
     }
     private saveShortcuts(): void {
@@ -2102,27 +2327,29 @@ export class QueryPanel {
         }
     }
     private async openNavigationShortcut(shortcut: Shortcut): Promise<void> {
-        try {
-            if (!shortcut.targetRef)
-                throw new UiError(message("queryShortcut.stableTargetMissing"));
-            const root = this.root, workspace = this.workspaceId, target = await this.host.request<NavigationTarget>("/api/navigation/resolve", { root, targetRef: shortcut.targetRef });
-            if (root !== this.root || workspace !== this.workspaceId)
-                return;
-            if (target.status !== "managed" || target.targetRef !== shortcut.targetRef)
-                throw new UiError(displayMessage("queryShortcut.targetState", { p0: uiDisplayParameter(target.status === "missing" ? message("queryShortcut.targetMissing") : message("tagNavigation.unavailableIdentity")) }));
-            if (shortcut.kind === "tag") {
-                if (!shortcut.matchMode)
-                    throw new UiError(message("queryShortcut.tagModeMissing"));
-                this.applyTag(shortcut.targetRef, `${target.displayName ?? target.label} · ${shortcut.targetRef.slice(shortcut.targetRef.lastIndexOf("/") + 1)}`, shortcut.matchMode);
+        return this.closeGuard.run(async () => {
+            try {
+                if (!shortcut.targetRef)
+                    throw new UiError(message("queryShortcut.stableTargetMissing"));
+                const root = this.root, workspace = this.workspaceId, target = await this.host.request<NavigationTarget>("/api/navigation/resolve", { root, targetRef: shortcut.targetRef });
+                if (root !== this.root || workspace !== this.workspaceId)
+                    return;
+                if (target.status !== "managed" || target.targetRef !== shortcut.targetRef)
+                    throw new UiError(displayMessage("queryShortcut.targetState", { p0: uiDisplayParameter(target.status === "missing" ? message("queryShortcut.targetMissing") : message("tagNavigation.unavailableIdentity")) }));
+                if (shortcut.kind === "tag") {
+                    if (!shortcut.matchMode)
+                        throw new UiError(message("queryShortcut.tagModeMissing"));
+                    this.applyTag(shortcut.targetRef, `${target.displayName ?? target.label} · ${shortcut.targetRef.slice(shortcut.targetRef.lastIndexOf("/") + 1)}`, shortcut.matchMode);
+                }
+                else if (target.path)
+                    this.applyScope(target.path, shortcut.targetRef);
+                else
+                    throw new UiError(message("queryShortcut.directoryUnavailable"));
             }
-            else if (target.path)
-                this.applyScope(target.path, shortcut.targetRef);
-            else
-                throw new UiError(message("queryShortcut.directoryUnavailable"));
-        }
-        catch (error) {
-            this.host.notify(displayMessage("queryShortcut.targetUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")) }), true);
-        }
+            catch (error) {
+                this.host.notify(displayMessage("queryShortcut.targetUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")) }), true);
+            }
+        });
     }
     private mountSavedControls(): void {
         const section = ui("details", "query-saved-definitions"), unavailable = ui("p", "data-help", message("queryDefinition.openOwnerRequired")), definitionsHost = ui("div", "saved-query-definitions"), version = ui("p", "data-help"), rows = ui("div");
@@ -2148,7 +2375,7 @@ export class QueryPanel {
             title: HTMLElement;
             edited: boolean;
         }>();
-        const load = action(message("queryDefinition.readCurrentNote"), async () => {
+        const load = this.action(message("queryDefinition.readCurrentNote"), async () => {
             const context = owner();
             if (!context)
                 return;
@@ -2167,13 +2394,13 @@ export class QueryPanel {
                         revision.value = result.ownerRevision ?? "";
                         row = { element, definition, title, mode, revision, edited: false };
                         const currentRow = row;
-                        mode.onchange = () => { currentRow.edited = true; };
-                        revision.oninput = () => { currentRow.edited = true; };
-                        element.append(title, labeled(message("queryDefinition.readModeLabel"), mode), labeled(message("queryDefinition.pinnedRevisionLabel"), revision), action(message("queryDefinition.openAndQuery"), () => {
+                        mode.onchange = () => { currentRow.edited = true; this.draftFlags.add(`saved:${context.owner}:${definition.key}`); };
+                        revision.oninput = () => { currentRow.edited = true; this.draftFlags.add(`saved:${context.owner}:${definition.key}`); };
+                        element.append(title, labeled(message("queryDefinition.readModeLabel"), mode), labeled(message("queryDefinition.pinnedRevisionLabel"), revision), this.action(message("queryDefinition.openAndQuery"), () => {
                             if (owner()?.identity !== context.identity)
                                 throw new UiError(message("queryDefinition.ownerChangedRetained"));
                             return this.runSaved({ owner: context.owner, key: currentRow.definition.key, label: currentRow.definition.label.replace(/^weftext-query-/, ""), mode: mode.value as "current" | "pinned", ...(mode.value === "pinned" ? { revision: revision.value } : {}) });
-                        }, "data-button primary"), action(message("queryDefinition.updateAndSaveNote"), () => {
+                        }, "data-button primary"), this.action(message("queryDefinition.updateAndSaveNote"), () => {
                             if (owner()?.identity !== context.identity)
                                 throw new UiError(message("queryDefinition.ownerChangedBeforeSave"));
                             return this.saveDefinition(currentRow.definition.label, currentRow.definition.key);
@@ -2208,8 +2435,8 @@ export class QueryPanel {
         setUiAttr(label, "placeholder", message("queryDefinition.namePlaceholder"));
         setUiAttr(label, "aria-label", message("queryDefinition.nameLabel"));
         const updateLabel = this.draftInput(label, () => this.definitionName, value => { this.definitionName = value; });
-        const save = action(message("queryDefinition.saveQueryAndNote"), () => this.saveDefinition(label.value));
-        section.append(unavailable, load, definitionsHost, label, save, ui("p", "data-help", message("queryDefinition.saveScopeHelp")));
+        const save = this.action(message("queryDefinition.saveQueryAndNote"), () => this.saveDefinition(label.value));
+        section.append(unavailable, load, definitionsHost, label, save, this.action(message("common.cancel"), () => { this.definitionName = ""; label.value = ""; }), ui("p", "data-help", message("queryDefinition.saveScopeHelp")));
         this.savedHost.append(section);
         this.controlUpdates!.push(reset => {
             const context = owner(), next = context?.identity ?? "";
@@ -2221,8 +2448,10 @@ export class QueryPanel {
                 setUiText(version, "");
                 load.disabled = false;
             }
-            if (reset)
+            if (reset) {
                 section.open = false;
+                for (const row of loaded.values()) { row.mode.value = "current"; row.revision.value = ""; row.edited = false; }
+            }
             unavailable.hidden = !!context;
             load.hidden = definitionsHost.hidden = label.hidden = save.hidden = !context;
             setUiText(save, this.savedPending ? message("queryDefinition.confirmPreviousSave") : message("queryDefinition.saveQueryAndNote"));
@@ -2251,67 +2480,74 @@ export class QueryPanel {
             this.periodHost.replaceChildren();
     }
     private async saveDefinition(label: string, key?: string): Promise<void> {
-        if (!this.host.savedDefinition) {
-            this.host.notify(message("queryDefinition.saveReceiptUnavailable"), true);
-            return;
-        }
-        try {
-            await this.host.prepareAction?.();
-        }
-        catch (error) {
-            this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
-            return;
-        }
-        const basis = this.host.getDocument();
-        if (!basis?.nodeId || basis.root !== this.root || (!label.trim() && !this.savedPending)) {
-            this.host.notify(message("queryDefinition.noteAndNameRequired"), true);
-            return;
-        }
-        const nativeLabel = label.startsWith("weftext-query-") ? label : `weftext-query-${label}`;
-        if (!this.savedPending && !/^weftext-query-[\p{L}\p{N}_-]+$/u.test(nativeLabel)) {
-            this.host.notify(message("queryDefinition.invalidName"), true);
-            return;
-        }
-        const retry = this.savedPending !== null;
-        this.savedPending ??= { basis: { ...basis }, body: { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, baseId: basis.baseId, key, label: nativeLabel, plan: this.getPlan(), operationId: crypto.randomUUID() } };
-        const pending = this.savedPending;
-        let receiptReceived = false;
-        try {
-            const result = await submitOriginal<OriginalFact & {
-                document?: unknown;
-                definition?: SavedQuery;
-                definitionRevision?: string;
-            }>(this.host.request, "/api/query/definition/save", pending.body, "save", retry);
-            receiptReceived = true;
-            await this.host.savedDefinition(result, pending.basis);
-            this.savedPending = null;
-            this.host.notify(message("queryDefinition.saved"));
-            this.renderControls();
-            await this.refresh();
-        }
-        catch (error) {
-            const code = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
-            if (code === "committedResultUnavailable")
-                this.environmentChanged(pending.basis.root);
-            if (!receiptReceived && error instanceof TerminatedAttempt)
+        return this.closeGuard.run(async () => {
+            if (!this.host.savedDefinition) {
+                this.host.notify(message("queryDefinition.saveReceiptUnavailable"), true);
+                return;
+            }
+            try {
+                await this.host.prepareAction?.();
+            }
+            catch (error) {
+                this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
+                return;
+            }
+            const basis = this.host.getDocument();
+            if (!basis?.nodeId || basis.root !== this.root || (!label.trim() && !this.savedPending)) {
+                this.host.notify(message("queryDefinition.noteAndNameRequired"), true);
+                return;
+            }
+            const nativeLabel = label.startsWith("weftext-query-") ? label : `weftext-query-${label}`;
+            if (!this.savedPending && !/^weftext-query-[\p{L}\p{N}_-]+$/u.test(nativeLabel)) {
+                this.host.notify(message("queryDefinition.invalidName"), true);
+                return;
+            }
+            const retry = this.savedPending !== null;
+            this.savedPending ??= { basis: { ...basis }, body: { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, baseId: basis.baseId, key, label: nativeLabel, plan: this.getPlan(), operationId: crypto.randomUUID() } };
+            const pending = this.savedPending;
+            let receiptReceived = false;
+            try {
+                const result = await submitOriginal<OriginalFact & {
+                    document?: unknown;
+                    definition?: SavedQuery;
+                    definitionRevision?: string;
+                }>(this.host.request, "/api/query/definition/save", pending.body, "save", retry);
+                receiptReceived = true;
+                await this.host.savedDefinition(result, pending.basis);
                 this.savedPending = null;
-            this.host.notify(() => `${uiTextValue(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))}${uiTextValue(this.savedPending ? message("queryDefinition.originalSaveRetainedSuffix") : message("queryDefinition.originalDraftRetainedSuffix"))}`, true);
-            this.renderControls();
-        }
+                if (this.definitionName === label) this.definitionName = "";
+                this.host.notify(message("queryDefinition.saved"));
+                this.renderControls();
+                await this.refresh();
+            }
+            catch (error) {
+                const code = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
+                if (code === "committedResultUnavailable")
+                    this.environmentChanged(pending.basis.root);
+                if (!receiptReceived && error instanceof TerminatedAttempt)
+                    this.savedPending = null;
+                this.host.notify(() => `${uiTextValue(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))}${uiTextValue(this.savedPending ? message("queryDefinition.originalSaveRetainedSuffix") : message("queryDefinition.originalDraftRetainedSuffix"))}`, true);
+                this.renderControls();
+            }
+        });
     }
     private async runSaved(selection: SavedSelection): Promise<void> {
-        if (!this.root || selection.mode === "pinned" && !selection.revision) {
-            this.host.notify(message("queryDefinition.historicalRevisionRequired"), true);
-            return;
-        }
-        const prior = this.preferenceKey();
-        this.savedSelection = structuredClone(selection);
-        if (this.preferenceKey() !== prior)
-            this.loadPreferences();
-        this.renderControls();
-        await this.refresh();
+        return this.closeGuard.run(async () => {
+            if (!this.root || selection.mode === "pinned" && !selection.revision) {
+                this.host.notify(message("queryDefinition.historicalRevisionRequired"), true);
+                return;
+            }
+            const prior = this.preferenceKey();
+            this.savedSelection = structuredClone(selection);
+            this.draftFlags.delete(`saved:${selection.owner}:${selection.key}`);
+            if (this.preferenceKey() !== prior)
+                this.loadPreferences();
+            this.renderControls();
+            await this.refresh();
+        });
     }
     private renderResults(): void {
+        if (this.closeGuard.frozen) return;
         this.thumbnailDisposers.forEach(dispose => dispose());
         this.thumbnailDisposers = [];
         const scrollTop = this.resultsHost.scrollTop;
@@ -2331,7 +2567,7 @@ export class QueryPanel {
         if (this.error) {
             const error = ui("div", "query-error");
             error.setAttribute("role", "alert");
-            error.append(ui("p", "data-warning", displayMessage("queryStatus.failed", { p0: uiDisplayParameter(this.error) })), action(message("queryPanel.retryQuery"), () => this.refresh()));
+            error.append(ui("p", "data-warning", displayMessage("queryStatus.failed", { p0: uiDisplayParameter(this.error) })), this.action(message("queryPanel.retryQuery"), () => this.refresh()));
             this.resultsHost.append(error);
         }
         if (!this.result)
@@ -2342,7 +2578,7 @@ export class QueryPanel {
         this.resultsHost.append(status);
         if (this.exportResult) {
             const result = displayResult;
-            const output = action(message("queryPanel.outputResults"), async () => {
+            const output = this.action(message("queryPanel.outputResults"), async () => {
                 if (!result.queryId) {
                     this.host.notify(message("queryValidation.frozenOutputIdMissing"), true);
                     return;
@@ -2392,7 +2628,7 @@ export class QueryPanel {
         this.resultsHost.scrollTop = scrollTop;
     }
     private rowOpen(row: QueryRow): HTMLButtonElement {
-        const button = action(rowTitle(row), async () => {
+        const button = this.action(rowTitle(row), async () => {
             if (!row.path) {
                 this.host.notify(message("queryValidation.generatedRowReadOnly"), true);
                 return;
@@ -2432,12 +2668,12 @@ export class QueryPanel {
         const controls = ui("div", "query-row-actions");
         const key = row.entityKey ?? row.key;
         const pinned = this.preference.pinned.includes(key);
-        const pin = action(pinned ? message("queryView.unpin") : message("queryView.pin"), () => { this.preference.pinned = pinned ? this.preference.pinned.filter(item => item !== key) : [...this.preference.pinned, key]; this.savePreferences(false); this.renderResults(); }, "data-button compact");
+        const pin = this.action(pinned ? message("queryView.unpin") : message("queryView.pin"), () => { this.preference.pinned = pinned ? this.preference.pinned.filter(item => item !== key) : [...this.preference.pinned, key]; this.savePreferences(false); this.renderResults(); }, "data-button compact");
         pin.setAttribute("aria-pressed", String(pinned));
         controls.append(pin);
         if (row.entityKey && row.path && queryRowLifecycle(row, this.resultPlan) === "live") {
             const target = {entityKey:row.entityKey,path:row.path};
-            controls.append(action(message("queryShortcut.addRow"), () => {
+            controls.append(this.action(message("queryShortcut.addRow"), () => {
                 if (!this.shortcuts.some(item => item.entityKey === target.entityKey))
                     this.shortcuts.push({ id: crypto.randomUUID(), label: uiTextValue(rowTitle(row)), kind: "node", ...target });
                 this.saveShortcuts();
@@ -2455,32 +2691,32 @@ export class QueryPanel {
                 const section = ui("section"), shape = resolveShape(field.shape, this.schema);
                 if (!["scalar", "enum", "union"].includes(shape.kind) && field.key !== "tags")
                     continue;
-                const key = JSON.stringify([this.root, row.entityKey, field.id]), binding = JSON.stringify([field.shape, this.schema.definitions]), draft = this.inlineDrafts.get(key) ?? { value: structuredClone(cell.value), raw: {}, binding };
+                const key = JSON.stringify([this.root, row.entityKey, field.id]), binding = JSON.stringify([field.shape, this.schema.definitions]), draft = this.inlineDrafts.get(key) ?? { value: structuredClone(cell.value), raw: {}, binding, revision: 0 };
                 section.append(ui("strong", "", fieldNames[field.key] ?? field.key));
                 if (draft.binding !== binding) {
-                    section.append(ui("p", "data-warning", message("queryEdit.fieldShapeChanged")), ui("pre", "", JSON.stringify(draft, null, 2)), action(message("queryEdit.discardOldFieldInput"), () => { this.inlineDrafts.delete(key); this.renderResults(); }));
+                    section.append(ui("p", "data-warning", message("queryEdit.fieldShapeChanged")), ui("pre", "", JSON.stringify(draft, null, 2)), this.action(message("queryEdit.discardOldFieldInput"), () => { this.inlineDrafts.delete(key); this.renderResults(); }));
                     edit.append(section);
                     continue;
                 }
-                section.append(valueEditor(field.shape, draft.value, this.schema, next => { draft.value = next; this.inlineDrafts.set(key, draft); }, displayMessage("queryEdit.resultFieldLabel", { p0: uiDisplayParameter(fieldNames[field.key] ?? field.key) }), { fieldId: field.id, path: [] }, 0, this.tagReferences));
+                section.append(valueEditor(field.shape, draft.value, this.schema, next => this.retainInlineDraft(key, draft, next), displayMessage("queryEdit.resultFieldLabel", { p0: uiDisplayParameter(fieldNames[field.key] ?? field.key) }), { fieldId: field.id, path: [] }, 0, this.tagReferences));
                 if (field.key === "tags" && this.root)
-                    section.append(action(message("queryEdit.readTagCatalog"), async () => { const root = this.root!, generation = this.generation; await loadTagFormReferences(this.host, root, this.tagReferences, this.element, () => root === this.root && generation === this.generation); }));
+                    section.append(this.action(message("queryEdit.readTagCatalog"), async () => { const root = this.root!, generation = this.generation; await loadTagFormReferences(this.host, root, this.tagReferences, this.element, () => root === this.root && generation === this.generation); }));
                 for (const [id, control] of nativeFormControls(section))
                     if (id in draft.raw) {
                         control.value = draft.raw[id];
                         control.dispatchEvent(new Event("input", { bubbles: true }));
                     }
-                const retain = () => { draft.raw = Object.fromEntries(nativeFormControls(section).filter(([, control]) => !control.validity.valid).map(([id, control]) => [id, control.value])); this.inlineDrafts.set(key, draft); };
+                const retain = () => this.retainInlineDraft(key, draft, undefined, Object.fromEntries(nativeFormControls(section).filter(([, control]) => !control.validity.valid).map(([id, control]) => [id, control.value])));
                 section.addEventListener("input", retain);
                 section.addEventListener("change", retain);
-                section.append(action(message("queryEdit.applyField"), async () => {
+                section.append(this.action(message("queryEdit.applyField"), async () => {
                     const invalid = section.querySelector<HTMLInputElement>(":invalid");
                     if (invalid) {
                         invalid.reportValidity();
                         return;
                     }
-                    await this.changeTaskField(row, field.key, draft.value, field.id, () => { this.inlineDrafts.delete(key); });
-                }));
+                    await this.applyInlineDraft(row, field, key, draft);
+                }), this.action(message("queryEdit.discardOldFieldInput"), () => { this.inlineDrafts.delete(key); this.renderResults(); }));
                 edit.append(section);
             }
             if (edit.querySelector("section"))
@@ -2488,7 +2724,7 @@ export class QueryPanel {
         }
         if (!row.readOnly && queryRowLifecycle(row, this.resultPlan) === "live" && row.path && hasDirectStatusProjection(this.resultPlan, this.schema) && status?.state === "value" && status.value?.kind === "text" && ["open", "done", "cancelled"].includes(status.value.value)) {
             const next = status.value.value === "done" ? "open" : "done";
-            controls.append(action(displayMessage("queryEdit.statusAction", { p0: uiDisplayParameter(next === "done" ? message("queryEdit.doneStatus") : message("queryEdit.openStatus")) }), () => this.changeTaskField(row, "status", { kind: "text", value: next }), "data-button compact"));
+            controls.append(this.action(displayMessage("queryEdit.statusAction", { p0: uiDisplayParameter(next === "done" ? message("queryEdit.doneStatus") : message("queryEdit.openStatus")) }), () => this.changeTaskField(row, "status", { kind: "text", value: next }), "data-button compact"));
         }
         return controls;
     }
@@ -2664,101 +2900,112 @@ export class QueryPanel {
             this.resultsHost.append(ui("p", "data-warning", displayMessage("queryView.nonNumericRows", { p0: rows.length - samples.length })));
     }
     private async changeTaskField(row: QueryRow, key: string, value: NativeValue, expectedFieldId = this.schema?.fields.find(field => field.key === key)?.id, applied?: () => void): Promise<void> {
-        if (this.host.canEdit?.() === false) {
-            this.host.notify(message("queryEdit.sessionReadOnly"), true);
-            return;
-        }
-        if (row.readOnly || !row.path || queryRowLifecycle(row, this.resultPlan) !== "live") {
-            this.host.notify(message("queryEdit.rowWriteTargetMissing"), true);
-            return;
-        }
-        try {
-            await this.host.prepareAction?.();
-            const target = row.entityKey ? await this.openStrong(row.entityKey) : { path: row.path, nodeId: undefined };
-            if (!row.entityKey)
-                await this.host.openDocument(target.path, this.root ?? undefined);
-            const basis = this.host.getDocument();
-            if (!basis || (target.nodeId ? basis.nodeId !== target.nodeId : basis.path !== target.path))
-                throw new UiError(message("queryEdit.documentIdentityMismatch"));
-            const projection = decodeProjection(await this.host.request<NoteProjection | {
-                projection: NoteProjection;
-            }>("/api/data/project", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial }));
-            const projected = projection.fields.find(field => field.key === key);
-            if (!projected?.writable || projected.cell.state !== "value" || !expectedFieldId || projected.fieldId !== expectedFieldId)
-                throw new UiError(message("queryEdit.fieldIdentityChanged"));
-            if (!await this.confirmChange(key, projected.cell.value, value))
+        return this.closeGuard.run(async () => {
+            if (this.host.canEdit?.() === false) {
+                this.host.notify(message("queryEdit.sessionReadOnly"), true);
                 return;
-            const result = await this.host.request<SourcePatch | {
-                edit: SourcePatch;
-            } | {
-                patches: SourcePatch[];
-                source?: string;
-            }>("/api/data/edit", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, key, path: [], value });
-            await this.host.applyPatch(decodeSourcePatch(result, basis.source), basis);
-            applied?.();
-            if (this.result) {
-                this.result.freshness = "stale";
-                this.result.superseded = true;
             }
-            this.renderResults();
-            this.host.notify(displayMessage("queryEdit.fieldApplied", { p0: uiDisplayParameter(fieldNames[key] ?? key) }));
-        }
-        catch (error) {
-            this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
-        }
-    }
-    private async openTarget(path: string, entityKey?: string, lifecycle: "live" | "trash" = "live", revision?: string): Promise<void> {
-        try {
-            if (entityKey)
-                await this.openStrong(entityKey, lifecycle, revision);
-            else {
-                if (lifecycle === "trash")
-                    throw new UiError(message("queryValidation.trashTargetIdentityMissing"));
-                await this.host.openDocument(path, this.root ?? undefined);
+            if (row.readOnly || !row.path || queryRowLifecycle(row, this.resultPlan) !== "live") {
+                this.host.notify(message("queryEdit.rowWriteTargetMissing"), true);
+                return;
             }
-        }
-        catch (error) {
-            this.host.notify(displayMessage("queryShortcut.openTargetUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")) }), true);
-        }
-    }
-    private async openStrong(entityKey: string, lifecycle: "live" | "trash" = "live", revision?: string): Promise<OpenedDocument> {
-        if (!this.host.openResolved)
-            throw new UiError(message("queryValidation.stableOpenUnavailable"));
-        if (lifecycle === "trash" && !revision)
-            throw new UiError(message("queryValidation.trashSourceBasisMissing"));
-        const opened = await this.host.request<OpenedDocument>("/api/data/open", { root: this.root, entityKey, lifecycle, ...(lifecycle === "trash" ? { revision } : {}) });
-        await this.host.openResolved(opened);
-        return opened;
-    }
-    private async confirmChange(key: string, before: NativeValue | undefined, after: NativeValue): Promise<boolean> {
-        return await new Promise(resolve => { const dialog = ui("dialog", "data-confirm-dialog"); const form = ui("form"); form.method = "dialog"; form.append(ui("h2", "", displayMessage("queryEdit.confirmationTitle", { p0: uiDisplayParameter(fieldNames[key] ?? key) })), ui("p", "", () => `${uiTextValue(formatNativeValue(before))} → ${uiTextValue(formatNativeValue(after))}`), ui("p", "data-help", message("queryEdit.confirmationHelp"))); const cancel = ui("button", "data-button", message("common.cancel")); cancel.value = "cancel"; const apply = ui("button", "data-button primary", message("queryEdit.applyDraft")); apply.value = "apply"; form.append(cancel, apply); dialog.append(form); document.body.append(dialog); dialog.addEventListener("close", () => { const accepted = dialog.returnValue === "apply"; dialog.remove(); resolve(accepted); }, { once: true }); dialog.showModal(); });
-    }
-    private async showCapture(): Promise<void> {
-        if (!this.root || !this.workspaceId)
-            return;
-        if (this.captureDialog) {
-            this.captureForms.get(this.root)?.updateContext();
-            this.captureDialog.showModal();
-            return;
-        }
-        if (this.scopeIdentity) {
             try {
-                await this.resolveScopeLocator(this.generation);
+                await this.host.prepareAction?.();
+                const target = row.entityKey ? await this.openStrong(row.entityKey) : { path: row.path, nodeId: undefined };
+                if (!row.entityKey)
+                    await this.host.openDocument(target.path, this.root ?? undefined);
+                const basis = this.host.getDocument();
+                if (!basis || (target.nodeId ? basis.nodeId !== target.nodeId : basis.path !== target.path))
+                    throw new UiError(message("queryEdit.documentIdentityMismatch"));
+                const projection = decodeProjection(await this.host.request<NoteProjection | {
+                    projection: NoteProjection;
+                }>("/api/data/project", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial }));
+                const projected = projection.fields.find(field => field.key === key);
+                if (!projected?.writable || projected.cell.state !== "value" || !expectedFieldId || projected.fieldId !== expectedFieldId)
+                    throw new UiError(message("queryEdit.fieldIdentityChanged"));
+                if (!await this.confirmChange(key, projected.cell.value, value))
+                    return;
+                const result = await this.host.request<SourcePatch | {
+                    edit: SourcePatch;
+                } | {
+                    patches: SourcePatch[];
+                    source?: string;
+                }>("/api/data/edit", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, key, path: [], value });
+                await this.host.applyPatch(decodeSourcePatch(result, basis.source), basis);
+                applied?.();
+                if (this.result) {
+                    this.result.freshness = "stale";
+                    this.result.superseded = true;
+                }
+                this.renderResults();
+                this.host.notify(displayMessage("queryEdit.fieldApplied", { p0: uiDisplayParameter(fieldNames[key] ?? key) }));
             }
             catch (error) {
                 this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
+            }
+        });
+    }
+    private async openTarget(path: string, entityKey?: string, lifecycle: "live" | "trash" = "live", revision?: string): Promise<void> {
+        return this.closeGuard.run(async () => {
+            try {
+                if (entityKey)
+                    await this.openStrong(entityKey, lifecycle, revision);
+                else {
+                    if (lifecycle === "trash")
+                        throw new UiError(message("queryValidation.trashTargetIdentityMissing"));
+                    await this.host.openDocument(path, this.root ?? undefined);
+                }
+            }
+            catch (error) {
+                this.host.notify(displayMessage("queryShortcut.openTargetUnavailable", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : message("error.invalidResponse")) }), true);
+            }
+        });
+    }
+    private async openStrong(entityKey: string, lifecycle: "live" | "trash" = "live", revision?: string): Promise<OpenedDocument> {
+        return this.closeGuard.run(async () => {
+            if (!this.host.openResolved)
+                throw new UiError(message("queryValidation.stableOpenUnavailable"));
+            if (lifecycle === "trash" && !revision)
+                throw new UiError(message("queryValidation.trashSourceBasisMissing"));
+            const opened = await this.host.request<OpenedDocument>("/api/data/open", { root: this.root, entityKey, lifecycle, ...(lifecycle === "trash" ? { revision } : {}) });
+            await this.host.openResolved(opened);
+            return opened;
+        });
+    }
+    private async confirmChange(key: string, before: NativeValue | undefined, after: NativeValue): Promise<boolean> {
+        return this.closeGuard.run(async () => {
+            return await new Promise(resolve => { const dialog = ui("dialog", "data-confirm-dialog"); const form = ui("form"); form.method = "dialog"; form.append(ui("h2", "", displayMessage("queryEdit.confirmationTitle", { p0: uiDisplayParameter(fieldNames[key] ?? key) })), ui("p", "", () => `${uiTextValue(formatNativeValue(before))} → ${uiTextValue(formatNativeValue(after))}`), ui("p", "data-help", message("queryEdit.confirmationHelp"))); const cancel = ui("button", "data-button", message("common.cancel")); cancel.value = "cancel"; const apply = ui("button", "data-button primary", message("queryEdit.applyDraft")); apply.value = "apply"; form.append(cancel, apply); dialog.append(form); document.body.append(dialog); dialog.addEventListener("close", () => { const accepted = dialog.returnValue === "apply"; dialog.remove(); resolve(accepted); }, { once: true }); dialog.showModal(); });
+        });
+    }
+    private async showCapture(): Promise<void> {
+        return this.closeGuard.run(async () => {
+            if (!this.root || !this.workspaceId)
+                return;
+            if (this.captureDialog) {
+                this.captureForms.get(this.root)?.updateContext();
+                this.captureDialog.showModal();
                 return;
             }
-        }
-        const dialog = ui("dialog", "capture-dialog");
-        this.captureDialog = dialog;
-        this.captureDialogs.set(this.root, dialog);
-        const captureHost: PanelHost = { ...this.host, ...(this.host.openTemplates ? { openTemplates: async () => { dialog.close(); await this.host.openTemplates!(); } } : {}) };
-        const capture = new QuickCapture(captureHost, { root: this.root, parent: this.directory ?? this.root });
-        this.captureForms.set(this.root, capture);
-        dialog.append(action(message("capture.closeRetained"), () => { dialog.close(); }, "data-button capture-close"), capture.element);
-        document.body.append(dialog);
-        dialog.showModal();
-        await capture.initialize();
+            if (this.scopeIdentity) {
+                try {
+                    await this.resolveScopeLocator(this.generation);
+                }
+                catch (error) {
+                    this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
+                    return;
+                }
+            }
+            const dialog = ui("dialog", "capture-dialog");
+            this.closeGuard.bind(dialog);
+            this.captureDialog = dialog;
+            this.captureDialogs.set(this.root, dialog);
+            const captureHost: PanelHost = { ...this.host, ...(this.host.openTemplates ? { openTemplates: async () => { dialog.close(); await this.host.openTemplates!(); } } : {}) };
+            const capture = new QuickCapture(captureHost, { root: this.root, parent: this.directory ?? this.root });
+            this.captureForms.set(this.root, capture);
+            dialog.append(this.action(message("capture.closeRetained"), () => { dialog.close(); }, "data-button capture-close"), capture.element);
+            document.body.append(dialog);
+            dialog.showModal();
+            await capture.initialize();
+        });
     }
 }

@@ -1,3 +1,4 @@
+import { ProposalCloseGuard } from "./proposal-close-guard";
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, parseUiMessage, UiError, type UiText } from "./ui-locale";
 import { disposeUiTree, joinUiText } from "./ui-locale";
@@ -219,7 +220,7 @@ export interface KnowledgeHost {
     context(): KnowledgeContext | null;
     load(context: KnowledgeContext): Promise<KnowledgeSnapshot>;
     /** A fresh preparation must qualify the current Draft and freeze every effect. */
-    prepare(intent: KnowledgeIntent, context: KnowledgeContext): Promise<KnowledgePlan>;
+    prepare(intent: KnowledgeIntent, context: KnowledgeContext, operationId: string): Promise<KnowledgePlan>;
     commit(plan: KnowledgePlan, context: KnowledgeContext): Promise<KnowledgeReceipt>;
     navigate(target: string | KnowledgeNodeRef): void | Promise<void>;
     notify(message: UiText, error?: boolean): void;
@@ -240,6 +241,9 @@ export interface KnowledgeHost {
 }
 export type KnowledgePanelTab = "links" | "graph" | "headings" | "citations" | "mentions" | "annotations" | "proofreading" | "files" | "templates";
 export interface KnowledgePanel {
+    assertCloseReady(): void;
+    freezeForClose(): boolean;
+    thawAfterClose(): void;
     backgroundEnabled(): boolean;
     refresh(): Promise<void>;
     selectTab(tab: KnowledgePanelTab): void;
@@ -255,7 +259,7 @@ function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", 
         setUiText(value, text);
     return value;
 }
-function action(label: UiText, run: () => unknown | Promise<unknown>, className = "knowledge-button"): HTMLButtonElement {
+function createAction(label: UiText, run: () => unknown | Promise<unknown>, className = "knowledge-button"): HTMLButtonElement {
     const value = element("button", className, label);
     value.type = "button";
     value.onclick = () => { void Promise.resolve(run()).catch(() => { }); };
@@ -297,6 +301,23 @@ function nativeTree(node: RenderNode): Node {
 }
 /** Mount beside the shared editor. No independent source, history or persistence store. */
 export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost): KnowledgePanel {
+    const closeGuard = new ProposalCloseGuard();
+    closeGuard.bind(container);
+    // Input events belong to this owner; mounting or scanning controls is never proof of a draft.
+    let authorProposal = false;
+    const authoredInput = (): void => {
+        closeGuard.assertMutable();
+        if (["annotations", "files", "templates", "citations"].includes(tab) || tab === "links" && relationFilter === "citations")
+            authorProposal = true;
+    };
+    container.addEventListener("input", authoredInput, true);
+    container.addEventListener("change", authoredInput, true);
+    function action(label: UiText, run: () => unknown | Promise<unknown>, className = "knowledge-button"): HTMLButtonElement {
+        return createAction(label, () => closeGuard.run(async () => {
+            if (disposed) return;
+            return await run();
+        }).catch(report), className);
+    }
     container.classList.add("knowledge-panel");
     setUiAttr(container, "aria-label", uiMessage("knowledge.title"));
     const gate = new KnowledgeReadGate();
@@ -329,7 +350,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         }
         catch { /* Saving reports its own error. */ }
         rules = new PersonalRelationRules(next => localStorage.setItem(key, JSON.stringify(next)), stored);
-        diagnosticView = new RelationshipDiagnosticsView(rules, node => Promise.resolve(host.navigate(node.reference)), async (issue) => {
+        diagnosticView = new RelationshipDiagnosticsView(rules, node => closeGuard.run(() => Promise.resolve(host.navigate(node.reference))), async (issue) => closeGuard.run(async () => {
             if (!sameKnowledgeBasis(snapshotBasis, host.context()))
                 throw new UiError(uiMessage("knowledge.diagnosticBasisChanged"));
             const current = host.context();
@@ -346,13 +367,15 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             }
             if (issue.from !== undefined && issue.to !== undefined)
                 host.selectSource?.(issue.from, issue.to);
-        }, report);
+        }), report);
     }
     let surface: HTMLElement | null = null;
     let mappings: KnowledgeTextMapping[] = [];
     let overlay: HTMLElement | null = null;
     let popover: HTMLElement | null = null;
     let popoverAnchor: HTMLElement | null = null;
+    type PendingPreparation = { operationId: string; title: UiText; intent: KnowledgeIntent; context: KnowledgeContext; prepared: boolean };
+    let pendingPreparation: PendingPreparation | null = null;
     let pendingPlan: {
         plan: KnowledgePlan;
         context: KnowledgeContext;
@@ -432,6 +455,9 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     container.addEventListener("focusout", onBlur);
     function report(error: unknown): void { const message = error instanceof Error ? errorUiText(error) : typeof error === "string" ? error : parseUiMessage(error) ?? uiMessage("error.invalidResponse"); setUiText(status, message); host.notify(message, true); }
     async function copy(text: string): Promise<void> {
+        return closeGuard.run(() => copyActive(text));
+    }
+    async function copyActive(text: string): Promise<void> {
         try {
             if (host.copy)
                 await host.copy(text);
@@ -443,7 +469,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             report(error);
         }
     }
-    function navigate(target: string | KnowledgeNodeRef): void { void Promise.resolve(host.navigate(target)).catch(report); }
+    function navigate(target: string | KnowledgeNodeRef): void { void closeGuard.run(() => Promise.resolve(host.navigate(target))).catch(report); }
     function section(title: UiText, description?: UiText): HTMLElement {
         const value = element("section", "knowledge-section");
         value.append(element("h3", "", title));
@@ -699,10 +725,13 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             dialog.showModal();
         });
     }
-    async function perform(title: UiText, intent: KnowledgeIntent): Promise<boolean> {
+    async function perform(title: UiText, intent: KnowledgeIntent, retry?: PendingPreparation): Promise<boolean> {
+        return closeGuard.run(() => performActive(title, intent, retry));
+    }
+    async function performActive(title: UiText, intent: KnowledgeIntent, retry?: PendingPreparation): Promise<boolean> {
         if (busy)
             return false;
-        if (pendingPlan) {
+        if (pendingPlan || pendingPreparation && pendingPreparation !== retry) {
             host.notify(uiMessage("knowledge.previousOperationUnconfirmed"), true);
             return false;
         }
@@ -710,15 +739,19 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         setUiText(status, uiMessage("knowledge.preparingExactChanges"));
         try {
             const actionBasis = host.context();
-            await host.beforeAction?.();
-            const context = host.context();
+            if (!retry) await host.beforeAction?.();
+            const context = retry?.context ?? host.context();
             if (!context)
                 throw new UiError(uiMessage("knowledge.openCurrentNoteFirst"));
             if ((["mentionConvert", "linkConvert"].includes(intent.kind) || intent.kind.startsWith("nativeCitation") || intent.kind.startsWith("nativeReference")) && host.canEditSource?.() === false)
                 throw new UiError(uiMessage("knowledge.switchToEditingForReferences"));
-            if (!sameKnowledgeBasis(actionBasis, context))
+            if (!sameKnowledgeBasis(actionBasis, context) || !sameKnowledgeBasis(context, host.context()))
                 throw new UiError(uiMessage("knowledge.inputEnteredSharedDraft"));
-            const deliveredPlan = await host.prepare(intent, context);
+            const original = retry ?? { operationId: crypto.randomUUID(), title, intent: structuredClone(intent), context: structuredClone(context), prepared: false };
+            pendingPreparation = original;
+            const deliveredPlan = await host.prepare(structuredClone(original.intent), original.context, original.operationId);
+            if (deliveredPlan.operationId !== original.operationId) throw new UiError(uiMessage("error.invalidResponse"));
+            original.prepared = true;
             if (deliveredPlan.losses !== undefined && !Array.isArray(deliveredPlan.losses))
                 throw new UiError(uiMessage("error.invalidResponse"));
             const plan = { ...deliveredPlan, ...(deliveredPlan.losses ? { losses: deliveredPlan.losses.map(decodeKnowledgeLoss) } : {}) };
@@ -727,6 +760,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             if (!sameKnowledgeBasis(context, host.context()))
                 throw new UiError(uiMessage("knowledge.draftOrNoteChangedDuringPreparation"));
             if (!await confirmPlan(title, plan)) {
+                pendingPreparation = null;
                 setUiText(status, uiMessage("knowledge.cancelledInputRetained"));
                 return false;
             }
@@ -735,6 +769,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             if (!sameKnowledgeBasis(context, host.context()))
                 throw new UiError(uiMessage("knowledge.draftChangedBeforeConfirmation"));
             pendingPlan = { plan, context };
+            pendingPreparation = null;
             const receipt = decodeKnowledgeDelivery(await host.commit(plan, context));
             if (receipt.operationId !== plan.operationId) throw new UiError(uiMessage("error.invalidResponse"));
             pendingPlan.receipt = receipt;
@@ -755,6 +790,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             return true;
         }
         catch (error) {
+            if (pendingPreparation && !pendingPreparation.prepared && !retainPendingKnowledgePlan(false, error)) pendingPreparation = null;
             if (pendingPlan && !retainPendingKnowledgePlan(pendingPlan.plan.draftOnly === true, error))
                 pendingPlan = null;
             report(error);
@@ -763,9 +799,26 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         }
         finally {
             busy = false;
+            render();
         }
     }
+    async function inspectPreparation(): Promise<void> {
+        const original = pendingPreparation;
+        if (!original || !host.inspectOperation || busy) return;
+        busy = true;
+        try {
+            const receipt = decodeKnowledgeDelivery(await host.inspectOperation(original.operationId, original.context));
+            if (receipt.operationId !== original.operationId) throw new UiError(uiMessage("error.invalidResponse"));
+            if (receipt.status === "prepared") original.prepared = true;
+            else if (receipt.status === "resolved" || committedDeliveryComplete(receipt)) pendingPreparation = null;
+            setUiText(status, displayMessage("knowledge.originalOperationStatus", { p0: receipt.status }));
+        } catch (error) { report(error); }
+        finally { busy = false; render(); }
+    }
     async function inspectPending(): Promise<void> {
+        return closeGuard.run(() => inspectPendingActive());
+    }
+    async function inspectPendingActive(): Promise<void> {
         if (busy || !pendingPlan || !host.inspectOperation)
             return;
         const pending = pendingPlan;
@@ -1163,7 +1216,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             mediaDraft = null;
         }
         if (host.mountMedia && !mediaController)
-            mediaController = host.mountMedia(mediaContainer, target => { mediaDraft = target; }, mediaDraft ?? undefined);
+            mediaController = host.mountMedia(mediaContainer, target => { closeGuard.assertMutable(); mediaDraft = target; authorProposal = true; }, mediaDraft ?? undefined);
         if (!host.mountMedia)
             group.append(element("p", "knowledge-empty", uiMessage("knowledge.resourcePreviewUnavailable")));
         else
@@ -1292,7 +1345,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                         mediaController?.dispose();
                         mediaController = null;
                         mediaContainer.replaceChildren();
-                        mediaDraft = target;
+                        mediaDraft = target; authorProposal = true;
                         annotationTarget = "media";
                         tab = "annotations";
                         render();
@@ -1484,7 +1537,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         group.append(details);
         for (const [index, parameter] of draft.parameters.entries()) {
             const row = element("article", "knowledge-card");
-            row.append(element("strong", "", parameter.name), element("p", "knowledge-help", () => `${uiTextValue(({ markup: uiMessage("knowledge.parameterMarkup"), string: uiMessage("knowledge.parameterStringLiteral"), bool: uiMessage("knowledge.parameterBooleanLiteral"), int: uiMessage("knowledge.parameterIntegerLiteral") })[parameter.kind])} · UTF-16 [${uiTextValue(parameter.from)}, ${uiTextValue(parameter.to)})`), action(uiMessage("knowledge.removeParameter"), () => { draft!.parameters.splice(index, 1); render(); }));
+            row.append(element("strong", "", parameter.name), element("p", "knowledge-help", () => `${uiTextValue(({ markup: uiMessage("knowledge.parameterMarkup"), string: uiMessage("knowledge.parameterStringLiteral"), bool: uiMessage("knowledge.parameterBooleanLiteral"), int: uiMessage("knowledge.parameterIntegerLiteral") })[parameter.kind])} · UTF-16 [${uiTextValue(parameter.from)}, ${uiTextValue(parameter.to)})`), action(uiMessage("knowledge.removeParameter"), () => { authorProposal = true; draft!.parameters.splice(index, 1); render(); }));
             details.append(row);
         }
         const slotName = input(draft.slot.name, uiMessage("knowledge.parameterNamePlaceholder"));
@@ -1551,6 +1604,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 report(uiMessage("knowledge.defaultIntegerExactDecimal"));
                 return;
             }
+            authorProposal = true;
             draft!.parameters.push({ name: draft!.slot.name, kind: draft!.slot.kind, from: selection.from, to: selection.to, nullable: draft!.slot.nullable, ...(draft!.slot.defaultMode === "value" ? { default: draft!.slot.defaultValue } : draft!.slot.defaultMode === "none" ? { default: null } : {}) });
             draft!.basis = current;
             draft!.slot.name = "";
@@ -1611,6 +1665,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                     const registration = registrationDrafts.get(context.sessionId);
                     if (!registration)
                         return;
+                    authorProposal = true;
                     registration.templateId = template.id;
                     registration.title = template.title;
                     registration.description = template.description ?? "";
@@ -1701,6 +1756,9 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         }
     }
     async function openGraphSource(edge: GraphEdge, node: GraphNode): Promise<void> {
+        return closeGuard.run(() => openGraphSourceActive(edge, node));
+    }
+    async function openGraphSourceActive(edge: GraphEdge, node: GraphNode): Promise<void> {
         if (!sameKnowledgeBasis(snapshotBasis, host.context()))
             throw new UiError(uiMessage("knowledge.graphBasisChanged"));
         await host.navigate(node.reference);
@@ -1715,6 +1773,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             host.notify(displayMessage("knowledge.authorSourceOpenedEditField", { p0: uiDisplayParameter(edge.fieldId ?? "") }));
     }
     function openHeading(heading: StructureHeading): void {
+        closeGuard.assertMutable();
         if (!sameKnowledgeBasis(snapshotBasis, host.context())) {
             host.notify(uiMessage("knowledge.headingBasisChanged"), true);
             return;
@@ -1726,8 +1785,44 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         if (!host.revealHeading?.(heading))
             host.notify(uiMessage("knowledge.generatedHeadingSourceUnavailable"), true);
     }
+    function discardAuthorProposals(): void {
+        closeGuard.assertReady(busy || pendingPlan !== null || pendingPreparation !== null || composing);
+        closeGuard.assertMutable();
+        annotationBody = "";
+        suggestionReplacement = "";
+        annotationKind = "comment";
+        annotationTarget = "whole_document";
+        annotationSelection = undefined;
+        annotationSelectionBasis = null;
+        replies.clear();
+        citationInputs.clear();
+        reconfirmations.clear();
+        fileDrafts.clear();
+        templateDrafts.clear();
+        registrationDrafts.clear();
+        mediaDraft = null;
+        mediaController?.dispose();
+        mediaController = null;
+        mediaSession = null;
+        authorProposal = false;
+        render();
+    }
+    function assertCloseReady(): void {
+        try {
+            closeGuard.assertReady(authorProposal || busy || pendingPlan !== null || pendingPreparation !== null || composing);
+            proofreading.assertCloseReady();
+        } catch (error) { render(); throw error; }
+    }
+    function freezeForClose(): boolean {
+        try { assertCloseReady(); } catch { return false; }
+        if (!closeGuard.freeze(false)) return false;
+        if (!proofreading.freezeForClose()) { closeGuard.thaw(); return false; }
+        gate.invalidate();
+        return true;
+    }
+    function thawAfterClose(): void { proofreading.thawAfterClose(); closeGuard.thaw(); }
     function render(): void {
-        if (disposed)
+        if (disposed || closeGuard.frozen)
             return;
         deferredRender = false;
         const focused = document.activeElement instanceof HTMLElement && container.contains(document.activeElement) ? document.activeElement : null;
@@ -1739,6 +1834,11 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         heading.append(element("strong", "", uiMessage("knowledge.title")), action(uiMessage("reminder.refresh"), refresh, "knowledge-refresh"));
         if (loading)
             heading.append(action(uiMessage("knowledge.stopWaiting"), () => { gate.invalidate(); loading = false; clearOverlay(); setUiText(status, uiMessage("knowledge.scanWaitStopped")); render(); }));
+        if (authorProposal) {
+            heading.append(createAction(uiMessage("processingSettings.discardInput"), () => {
+                try { discardAuthorProposals(); } catch (error) { report(error); }
+            }));
+        }
         container.append(heading);
         const tabs = element("div", "knowledge-tabs");
         tabs.setAttribute("role", "tablist");
@@ -1761,6 +1861,18 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             tabs.append(control);
         }
         container.append(tabs, status);
+        if (pendingPreparation) {
+            const original = pendingPreparation;
+            const pending = element("div", "knowledge-warning", displayMessage("knowledge.originalOperationUnconfirmed", { p0: uiDisplayParameter(original.operationId) }));
+            pending.append(action(uiMessage("common.retry"), () => perform(original.title, original.intent, original)));
+            if (host.inspectOperation) pending.append(action(uiMessage("knowledge.checkOriginalOperation"), inspectPreparation));
+            if (original.prepared) pending.append(action(uiMessage("common.cancel"), () => {
+                if (busy || pendingPreparation !== original) return;
+                pendingPreparation = null;
+                render();
+            }));
+            container.append(pending);
+        }
         if (pendingPlan) {
             const pending = element("div", "knowledge-warning", displayMessage("knowledge.originalOperationUnconfirmed", { p0: uiDisplayParameter(pendingPlan.plan.operationId) }));
             if (host.inspectOperation)
@@ -1788,7 +1900,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             renderLinks(body);
         }
         else if (tab === "graph")
-            graph.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.graph : undefined, `${host.context()?.workspaceId}/${host.context()?.nodeId}`, { open: node => host.navigate(node.reference), source: openGraphSource, error: report });
+            graph.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.graph : undefined, `${host.context()?.workspaceId}/${host.context()?.nodeId}`, { open: node => closeGuard.run(() => Promise.resolve(host.navigate(node.reference))), source: openGraphSource, error: report });
         else if (tab === "headings")
             headings.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.headingStructure : undefined, openHeading);
         else if (tab === "citations") {
@@ -1820,6 +1932,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             container.querySelector<HTMLElement>(`[data-knowledge-focus="${CSS.escape(focusKey)}"]`)?.focus();
     }
     async function refresh(strict = false): Promise<void> {
+        if (closeGuard.frozen || disposed) return;
         const context = host.context();
         const generation = gate.begin();
         if ((context?.sessionId ?? "") !== graphSession) {
@@ -1847,7 +1960,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             render();
         try {
             const next = await host.load(context);
-            if (disposed || !gate.accepts(generation, context, host.context()))
+            if (closeGuard.frozen || disposed || !gate.accepts(generation, context, host.context()))
                 return;
             snapshot = decodeKnowledgeSnapshot(next);
             snapshotBasis = context;
@@ -1860,7 +1973,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             drawOverlay();
         }
         catch (error) {
-            if (gate.accepts(generation, context, host.context())) {
+            if (!closeGuard.frozen && !disposed && gate.accepts(generation, context, host.context())) {
                 loading = false;
                 snapshotBasis = null;
                 clearOverlay();
@@ -1876,10 +1989,12 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     }
     render();
     return {
+        assertCloseReady, freezeForClose, thawAfterClose,
         backgroundEnabled: () => enabled || problemHints,
         refresh,
-        selectTab(next) { tab = next; render(); },
+        selectTab(next) { closeGuard.assertMutable(); tab = next; render(); },
         attachSurface(next, nextMappings = []) {
+            closeGuard.assertMutable();
             clearOverlay();
             surface = next;
             mappings = nextMappings;
@@ -1887,6 +2002,6 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 surface.classList.add("knowledge-surface");
             drawOverlay();
         },
-        dispose() { disposed = true; gate.invalidate(); graph.clear(); headings.clear(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); snapshot = null; snapshotBasis = null; window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); disposeUiTree(container); container.replaceChildren(); },
+        dispose() { assertCloseReady(); disposed = true; gate.invalidate(); graph.clear(); headings.clear(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); snapshot = null; snapshotBasis = null; window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.removeEventListener("input", authoredInput, true); container.removeEventListener("change", authoredInput, true); disposeUiTree(container); container.replaceChildren(); },
     };
 }

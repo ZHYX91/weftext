@@ -365,6 +365,7 @@ function referenceDescriptions(value:unknown):UiText[] {
 }
 
 export async function loadTagFormReferences(host: PanelHost, root: string, references: FormReferences, container: HTMLElement, accepts = (): boolean => true): Promise<void> {
+    if (!accepts()) return;
     references.tagTree = undefined;
     try {
         const result = await host.request<{
@@ -409,6 +410,7 @@ function populateReferenceChoices(select: HTMLSelectElement, references: FormRef
 }
 function referenceStatus(references: FormReferences): UiText { return ({ loading: uiMessage("referenceForm.loadingHelp"), ready: uiMessage("referenceForm.exactChoiceHelp"), partial: uiMessage("referenceForm.partialHelp"), unavailable: uiMessage("referenceForm.unavailableHelp") })[references.state]; }
 export async function loadFormReferences(host: PanelHost, root: string, references: FormReferences, container: HTMLElement, accepts = (): boolean => true): Promise<void> {
+    if (!accepts()) return;
     references.state = "loading";
     const results = await Promise.allSettled([host.request<{
             nodes: {

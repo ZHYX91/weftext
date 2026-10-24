@@ -2,6 +2,7 @@ import { message } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { QueryRefreshQueue, queryRefreshKey } from "./query-refresh";
+import { ProposalCloseGuard } from "./proposal-close-guard";
 import { QueryPanel, defaultPreference, queryPlanRefreshInput, type QueryPlanInputs, type QueryResult } from "./query-panel";
 
 const deferred = () => { let resolve!: () => void; const promise = new Promise<void>(done => { resolve = done; }); return { promise, resolve }; };
@@ -11,6 +12,7 @@ const result=(cutId:string):QueryResult=>localQueryResult({cutId});
 /** Exercise the real panel's controller paths without mounting its rendering shell. */
 function panelHarness(request: (path: string, body: unknown) => Promise<unknown>) {
   const state = { root: "D:/notes", workspaceId: "workspace", environmentEpoch: 0, generation: 0, directory: null, scopeIdentity: null,
+    closeGuard: new ProposalCloseGuard(), draftFlags: new Set<string>(),
     descendants: true, lifecycle: "live", types: [], search: "", includeBody: false, conditions: [], expression: "", exactPlan: null,
     group: undefined, take: 200, preference: defaultPreference(), schema: null, result: null as QueryResult | null, savedSelection: null, savedPlan: null,
     definitionRevision: null, selected: null, savedPending: null as unknown, parameterDraft: "{}", loading: false, error: null, previewCache: new Map(),

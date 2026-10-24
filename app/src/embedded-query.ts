@@ -246,6 +246,8 @@ export class EmbeddedQueryController {
     private mounts = new Map<HTMLElement, EmbeddedQueryAssociation>();
     private dialog: HTMLDialogElement | null = null;
     private associations = new Map<string, EmbeddedQueryAssociation>();
+    private closeFrozen = false;
+    private authorWork = 0;
     constructor(private readonly host: EmbeddedQueryHost) { }
     dispose(): void {
         for (const state of this.states.values())
@@ -261,7 +263,9 @@ export class EmbeddedQueryController {
         this.mounts.clear();
         this.associations.clear();
     }
-    get hasUnappliedAuthorInputs(): boolean { return !!this.dialog?.open || [...this.states.values()].some(state => !!state.planDraft); }
+    get hasUnappliedAuthorInputs(): boolean { return this.authorWork > 0 || !!this.dialog?.open || [...this.states.values()].some(state => !!state.planDraft || !!state.pendingEdit); }
+    freezeForClose(): boolean { if (this.closeFrozen || this.hasUnappliedAuthorInputs) return false; this.closeFrozen = true; return true; }
+    thawAfterClose(): void { this.closeFrozen = false; }
     get hasQueries(): boolean { return !!this.discovery?.occurrences.length; }
     get occurrences(): readonly EmbeddedQueryOccurrence[] { return this.discovery?.occurrences ?? []; }
     outputSelections(): EmbeddedQuerySelection[] {
@@ -380,7 +384,7 @@ export class EmbeddedQueryController {
         return mount;
     }
     private current(association: EmbeddedQueryAssociation): boolean { return !!association.occurrence && sameQueryBasis(this.discoveryBasis, this.host.basis()) && exactQueryOccurrence(this.host.basis().source, association.occurrence); }
-    private canWrite(association: EmbeddedQueryAssociation): boolean { return this.host.editable() && association.unique && association.occurrence?.writable === true && association.occurrence.range.writable; }
+    private canWrite(association: EmbeddedQueryAssociation): boolean { return !this.closeFrozen && this.host.editable() && association.unique && association.occurrence?.writable === true && association.occurrence.range.writable; }
     private refresh(item: EmbeddedQueryOccurrence): void {
         for (const [mount, association] of this.mounts)
             if (association.occurrence?.id === item.id)
@@ -801,6 +805,9 @@ export class EmbeddedQueryController {
         dialog.showModal();
     }
     private async arrange(association: EmbeddedQueryAssociation, command: "up" | "down" | "remove"): Promise<void> {
+        if (this.closeFrozen) throw new UiError(message("embeddedQuery.arrangementWriteUnavailable"));
+        this.authorWork++;
+        try {
         const item = association.occurrence;
         if (!item || !this.current(association) || !this.canWrite(association) || this.host.mode() === "read")
             throw new UiError(message("embeddedQuery.arrangementWriteUnavailable"));
@@ -814,11 +821,15 @@ export class EmbeddedQueryController {
         const patches = validateQueryArrangement(basis, item, occurrences, command, result, hash);
         this.pendingFocus = command === "remove" ? occurrences.find(q => q.id !== item.id)?.label ?? null : item.label;
         await this.host.apply(patches, basis, `input.query.${command}`);
+        } finally { this.authorWork--; }
     }
     private async edit(association: EmbeddedQueryAssociation, proposal: {
         plan?: QueryPlan;
         replacement?: string;
     }, event: string, expectedBasis?: EmbeddedQueryBasis): Promise<void> {
+        if (this.closeFrozen) throw new UiError(message("embeddedQuery.editSourceUnavailable"));
+        this.authorWork++;
+        try {
         const item = association.occurrence;
         if (!item || !this.current(association) || !this.canWrite(association) || this.host.mode() === "read")
             throw new UiError(message("embeddedQuery.editSourceUnavailable"));
@@ -832,6 +843,7 @@ export class EmbeddedQueryController {
         const patches = validateEmbeddedEdit(basis, item, result, this.discovery?.sourceHash);
         if (patches.length)
             await this.host.apply(patches, basis, event);
+        } finally { this.authorWork--; }
     }
     private async editSource(association: EmbeddedQueryAssociation): Promise<void> {
         const item = association.occurrence;

@@ -1,3 +1,4 @@
+import { ProposalCloseGuard } from "./proposal-close-guard";
 import { joinUiText } from "./ui-locale";
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, disposeUiTree, UiError, type UiText } from "./ui-locale";
@@ -33,6 +34,9 @@ export interface LibraryTrashHost {
 }
 export interface LibraryTrashController {
     open(root: string): Promise<void>;
+    assertCloseReady(): void;
+    freezeForClose(): boolean;
+    thawAfterClose(): void;
 }
 export interface RestoreRequest {
     operationId: string;
@@ -65,117 +69,133 @@ function openedDocument(value: unknown, nodeId?: string): value is OpenedDocumen
 }
 /** Retains the original request across UI lifetimes; status reads never execute it. */
 export class LibraryTrashRestoreFlow {
+    private readonly closeGuard = new ProposalCloseGuard();
+    assertCloseReady(): void { this.closeGuard.assertReady(this.busy || this.blocksNewRestore); }
+    freezeForClose(): boolean { return this.closeGuard.freeze(this.busy || this.blocksNewRestore); }
+    thawAfterClose(): void { this.closeGuard.thaw(); }
+    bindCloseGuard(element: HTMLElement): void { this.closeGuard.bind(element); }
+    runCloseTracked<T>(operation: () => Promise<T>): Promise<T> { return this.closeGuard.run(operation); }
+
     pending: PendingRestore | null = null;
     busy = false;
     constructor(private readonly host: LibraryTrashHost, private readonly newId: () => string = () => crypto.randomUUID()) { }
     get blocksNewRestore(): boolean { return Boolean(this.pending && !this.pending.delivered && this.pending.state !== "failed"); }
     async prepare(root: string, entry: LibraryTrashEntry, parent: string, name: string): Promise<void> {
-        if (this.busy || this.blocksNewRestore)
-            throw new UiError(uiMessage("libraryTrash.resolveOriginalBeforeNew"));
-        if (!parent.trim() || !name.trim())
-            throw new UiError(uiMessage("libraryTrash.locationAndNameRequired"));
-        const request: RestoreRequest = Object.freeze({ operationId: this.newId(), root, intent: Object.freeze({ kind: "restoreNode" as const, trashOperationId: entry.operationId, ...(entry.nodeId !== undefined ? { nodeId: entry.nodeId } : {}), parent, name }) });
-        this.pending = { request, confirmed: false, state: "preparing", delivered: false, message: uiMessage("libraryTrash.preparingExactChanges") };
-        this.busy = true;
-        try {
-            const plan = await this.host.request<KnowledgePlan>("/api/operations/prepare", request);
-            if (plan.operationId !== request.operationId || typeof plan.planId !== "string" || !plan.planId)
-                throw new UiError(uiMessage("libraryTrash.prepareRequestMismatch"));
-            if (plan.losses !== undefined && !Array.isArray(plan.losses)) throw new UiError(uiMessage("error.invalidResponse"));
-            this.pending.plan = { ...plan, ...(plan.losses ? { losses: plan.losses.map(decodeKnowledgeLoss) } : {}) };
-            this.pending.state = "prepared";
-            this.pending.message = uiMessage("libraryTrash.checkLocationAndAllChanges");
-        }
-        catch (error) {
-            this.pending.state = terminalErrorCodes.has(errorCode(error)) ? "failed" : "unknown";
-            this.pending.message = joinUiText([errorMessage(error), this.pending.state === "unknown" ? uiMessage("libraryTrash.originalRequestRetainedSuffix") : ""]);
-            throw error;
-        }
-        finally {
-            this.busy = false;
-        }
+        return this.closeGuard.run(async () => {
+            if (this.busy || this.blocksNewRestore)
+                throw new UiError(uiMessage("libraryTrash.resolveOriginalBeforeNew"));
+            if (!parent.trim() || !name.trim())
+                throw new UiError(uiMessage("libraryTrash.locationAndNameRequired"));
+            const request: RestoreRequest = Object.freeze({ operationId: this.newId(), root, intent: Object.freeze({ kind: "restoreNode" as const, trashOperationId: entry.operationId, ...(entry.nodeId !== undefined ? { nodeId: entry.nodeId } : {}), parent, name }) });
+            this.pending = { request, confirmed: false, state: "preparing", delivered: false, message: uiMessage("libraryTrash.preparingExactChanges") };
+            this.busy = true;
+            try {
+                const plan = await this.host.request<KnowledgePlan>("/api/operations/prepare", request);
+                if (plan.operationId !== request.operationId || typeof plan.planId !== "string" || !plan.planId)
+                    throw new UiError(uiMessage("libraryTrash.prepareRequestMismatch"));
+                if (plan.losses !== undefined && !Array.isArray(plan.losses)) throw new UiError(uiMessage("error.invalidResponse"));
+                this.pending.plan = { ...plan, ...(plan.losses ? { losses: plan.losses.map(decodeKnowledgeLoss) } : {}) };
+                this.pending.state = "prepared";
+                this.pending.message = uiMessage("libraryTrash.checkLocationAndAllChanges");
+            }
+            catch (error) {
+                this.pending.state = terminalErrorCodes.has(errorCode(error)) ? "failed" : "unknown";
+                this.pending.message = joinUiText([errorMessage(error), this.pending.state === "unknown" ? uiMessage("libraryTrash.originalRequestRetainedSuffix") : ""]);
+                throw error;
+            }
+            finally {
+                this.busy = false;
+            }
+        });
     }
     cancelPrepared(): void {
+        if (this.closeGuard.frozen) throw new UiError(uiMessage("shell.closeAuthorInputPending"));
         if (!this.busy && this.pending?.state === "prepared" && !this.pending.confirmed)
             this.pending = null;
     }
     async confirmAndCommit(): Promise<void> {
-        const pending = this.pending;
-        if (this.busy || !pending?.plan || pending.state !== "prepared")
-            throw new UiError(uiMessage("libraryTrash.noConfirmablePreparedRestore"));
-        pending.confirmed = true;
-        pending.state = "committing";
-        pending.message = uiMessage("libraryTrash.executingConfirmedRestore");
-        this.busy = true;
-        try {
-            const receipt = await this.host.request<KnowledgeReceipt>("/api/operations/commit", { operationId: pending.request.operationId, planId: pending.plan.planId });
-            await this.receive(receipt);
-        }
-        catch (error) {
-            this.recordCommitError(error);
-            throw error;
-        }
-        finally {
-            this.busy = false;
-        }
+        return this.closeGuard.run(async () => {
+            const pending = this.pending;
+            if (this.busy || !pending?.plan || pending.state !== "prepared")
+                throw new UiError(uiMessage("libraryTrash.noConfirmablePreparedRestore"));
+            pending.confirmed = true;
+            pending.state = "committing";
+            pending.message = uiMessage("libraryTrash.executingConfirmedRestore");
+            this.busy = true;
+            try {
+                const receipt = await this.host.request<KnowledgeReceipt>("/api/operations/commit", { operationId: pending.request.operationId, planId: pending.plan.planId });
+                await this.receive(receipt);
+            }
+            catch (error) {
+                this.recordCommitError(error);
+                throw error;
+            }
+            finally {
+                this.busy = false;
+            }
+        });
     }
     async reconcile(): Promise<void> {
-        const pending = this.pending;
-        if (!pending || this.busy)
-            return;
-        this.busy = true;
-        pending.message = uiMessage("libraryTrash.checkingOriginalResult");
-        try {
-            const result = decodeKnowledgeDelivery(await this.host.request<KnowledgeReceipt & Partial<KnowledgePlan>>("/api/operations/status", { operationId: pending.request.operationId }));
-            if (result.operationId !== pending.request.operationId)
-                throw new UiError(uiMessage("libraryTrash.statusOtherOperation"));
-            if (pending.state === "committed" && result.status !== "committed")
-                throw new UiError(uiMessage("libraryTrash.committedStatusCannotRegress"));
-            if (result.status === "prepared" && typeof result.planId === "string") {
-                if (!result.planId || result.losses !== undefined && !Array.isArray(result.losses)) throw new UiError(uiMessage("error.invalidResponse"));
-                if (pending.plan && pending.plan.planId !== result.planId)
-                    throw new UiError(uiMessage("libraryTrash.originalPrepareIdChanged"));
-                pending.plan = { ...result, planId: result.planId, operationId: pending.request.operationId, ...(result.losses ? { losses: result.losses.map(decodeKnowledgeLoss) } : {}) };
-                pending.state = "prepared";
-                pending.message = pending.confirmed ? uiMessage("libraryTrash.originalStillPrepared") : uiMessage("libraryTrash.originalPreparationFound");
+        return this.closeGuard.run(async () => {
+            const pending = this.pending;
+            if (!pending || this.busy)
+                return;
+            this.busy = true;
+            pending.message = uiMessage("libraryTrash.checkingOriginalResult");
+            try {
+                const result = decodeKnowledgeDelivery(await this.host.request<KnowledgeReceipt & Partial<KnowledgePlan>>("/api/operations/status", { operationId: pending.request.operationId }));
+                if (result.operationId !== pending.request.operationId)
+                    throw new UiError(uiMessage("libraryTrash.statusOtherOperation"));
+                if (pending.state === "committed" && result.status !== "committed")
+                    throw new UiError(uiMessage("libraryTrash.committedStatusCannotRegress"));
+                if (result.status === "prepared" && typeof result.planId === "string") {
+                    if (!result.planId || result.losses !== undefined && !Array.isArray(result.losses)) throw new UiError(uiMessage("error.invalidResponse"));
+                    if (pending.plan && pending.plan.planId !== result.planId)
+                        throw new UiError(uiMessage("libraryTrash.originalPrepareIdChanged"));
+                    pending.plan = { ...result, planId: result.planId, operationId: pending.request.operationId, ...(result.losses ? { losses: result.losses.map(decodeKnowledgeLoss) } : {}) };
+                    pending.state = "prepared";
+                    pending.message = pending.confirmed ? uiMessage("libraryTrash.originalStillPrepared") : uiMessage("libraryTrash.originalPreparationFound");
+                }
+                else
+                    await this.receive(result);
             }
-            else
-                await this.receive(result);
-        }
-        catch (error) {
-            if (pending.state !== "committed")
-                pending.state = "unknown";
-            pending.message = displayMessage("libraryTrash.failureOriginalRecordRetained", { p0: uiDisplayParameter(errorMessage(error)) });
-            throw error;
-        }
-        finally {
-            this.busy = false;
-        }
+            catch (error) {
+                if (pending.state !== "committed")
+                    pending.state = "unknown";
+                pending.message = displayMessage("libraryTrash.failureOriginalRecordRetained", { p0: uiDisplayParameter(errorMessage(error)) });
+                throw error;
+            }
+            finally {
+                this.busy = false;
+            }
+        });
     }
     async deliverCommitted(): Promise<void> {
-        const pending = this.pending;
-        if (!pending || pending.state !== "committed" || pending.delivered)
-            return;
-        const document = pending.receipt?.document;
-        if (!pending.receipt || !committedDeliveryComplete(pending.receipt) || !openedDocument(document, pending.request.intent.nodeId)) {
-            // Explicit delivery retry rechecks the original fact before reusing a
-            // previously failed callback; a commit/status read never recurses.
-            if (!this.busy) { await this.reconcile(); return; }
-            pending.message = joinUiText([uiMessage("libraryTrash.restoredOpenInformationUnavailable"), ...(pending.receipt ? knowledgeDeliveryErrors(pending.receipt) : [])], "\n");
-            return;
-        }
-        try {
-            pending.receipt = await deliverCommitted(pending.receipt, async () => { await this.host.created(document); });
-            if (!committedDeliveryComplete(pending.receipt))
-                throw new UiError(joinUiText([uiMessage("libraryTrash.restoredOpenInformationUnavailable"), ...knowledgeDeliveryErrors(pending.receipt)], "\n"));
-            pending.delivered = true;
-            pending.message = uiMessage("libraryTrash.restoredOpened");
-            this.host.notify(pending.message);
-        }
-        catch (error) {
-            pending.message = displayMessage("libraryTrash.restoredOpenIncomplete", { p0: uiDisplayParameter(errorMessage(error)) });
-            throw error;
-        }
+        return this.closeGuard.run(async () => {
+            const pending = this.pending;
+            if (!pending || pending.state !== "committed" || pending.delivered)
+                return;
+            const document = pending.receipt?.document;
+            if (!pending.receipt || !committedDeliveryComplete(pending.receipt) || !openedDocument(document, pending.request.intent.nodeId)) {
+                // Explicit delivery retry rechecks the original fact before reusing a
+                // previously failed callback; a commit/status read never recurses.
+                if (!this.busy) { await this.reconcile(); return; }
+                pending.message = joinUiText([uiMessage("libraryTrash.restoredOpenInformationUnavailable"), ...(pending.receipt ? knowledgeDeliveryErrors(pending.receipt) : [])], "\n");
+                return;
+            }
+            try {
+                pending.receipt = await deliverCommitted(pending.receipt, async () => { await this.host.created(document); });
+                if (!committedDeliveryComplete(pending.receipt))
+                    throw new UiError(joinUiText([uiMessage("libraryTrash.restoredOpenInformationUnavailable"), ...knowledgeDeliveryErrors(pending.receipt)], "\n"));
+                pending.delivered = true;
+                pending.message = uiMessage("libraryTrash.restoredOpened");
+                this.host.notify(pending.message);
+            }
+            catch (error) {
+                pending.message = displayMessage("libraryTrash.restoredOpenIncomplete", { p0: uiDisplayParameter(errorMessage(error)) });
+                throw error;
+            }
+        });
     }
     private async receive(value: KnowledgeReceipt): Promise<void> {
         const pending = this.pending;
@@ -223,6 +243,9 @@ function field(title: UiText, value: string): {
 export function createLibraryTrashController(host: LibraryTrashHost): LibraryTrashController {
     const flow = new LibraryTrashRestoreFlow(host);
     const drafts = new Map<string, LibraryTrashDraft>();
+    const closeGuard = new ProposalCloseGuard();
+    let draftEdited = false;
+    const assertCloseReady = (): void => { closeGuard.assertReady(draftEdited); flow.assertCloseReady(); };
     let active: {
         dialog: HTMLDialogElement;
         root: string;
@@ -230,12 +253,22 @@ export function createLibraryTrashController(host: LibraryTrashHost): LibraryTra
         close(): void;
     } | null = null;
     return {
+        assertCloseReady,
+        freezeForClose: () => {
+            if (!closeGuard.freeze(draftEdited)) return false;
+            if (!flow.freezeForClose()) { closeGuard.thaw(); return false; }
+            return true;
+        },
+        thawAfterClose: () => { closeGuard.thaw(); flow.thawAfterClose(); },
         async open(root: string): Promise<void> {
+            if (closeGuard.frozen) throw new UiError(uiMessage("shell.closeAuthorInputPending"));
             if (active) {
                 active.dialog.focus();
                 return active.promise;
             }
             const dialog = el("dialog", "knowledge-dialog library-trash-dialog");
+            closeGuard.bind(dialog);
+            flow.bindCloseGuard(dialog);
             setUiAttr(dialog, "aria-label", uiMessage("libraryTrash.title"));
             dialog.append(el("h2", "", uiMessage("libraryTrash.title")), el("p", "knowledge-help", uiMessage("libraryTrash.description")), el("p", "knowledge-address", root));
             const status = el("p", "knowledge-help");
@@ -248,6 +281,13 @@ export function createLibraryTrashController(host: LibraryTrashHost): LibraryTra
             const close = (): void => {
                 if (closed)
                     return;
+                try {
+                    closeGuard.assertReady(false);
+                    flow.assertCloseReady();
+                }
+                catch (error) { setUiText(status, errorMessage(error)); return; }
+                drafts.clear();
+                draftEdited = false;
                 closed = true;
                 dialog.close();
                 disposeUiTree(dialog);
@@ -275,16 +315,18 @@ export function createLibraryTrashController(host: LibraryTrashHost): LibraryTra
                 });
             };
             const load = async (): Promise<void> => {
-                setUiText(status, uiMessage("libraryTrash.readingRecords"));
-                const result = await host.request<{
-                    trash: LibraryTrashEntry[];
-                }>("/api/knowledge/trash", { root });
-                if (closed)
-                    return;
-                entries = result.trash;
-                loaded = true;
-                setUiText(status, flow.pending?.delivered ? flow.pending.message : "");
-                render();
+                return closeGuard.run(async () => {
+                    setUiText(status, uiMessage("libraryTrash.readingRecords"));
+                    const result = await host.request<{
+                        trash: LibraryTrashEntry[];
+                    }>("/api/knowledge/trash", { root });
+                    if (closed)
+                        return;
+                    entries = result.trash;
+                    loaded = true;
+                    setUiText(status, flow.pending?.delivered ? flow.pending.message : "");
+                    render();
+                });
             };
             const renderPreview = (pending: PendingRestore): void => {
                 pendingHost.append(el("h3", "", pending.confirmed ? uiMessage("libraryTrash.confirmedOriginalRestore") : uiMessage("libraryTrash.restorePreview")), el("p", "knowledge-help", displayMessage("libraryTrash.restoreNameSummary", { p0: uiDisplayParameter(pending.request.intent.name) })), el("p", "knowledge-address", displayMessage("libraryTrash.targetParentSummary", { p0: uiDisplayParameter(pending.request.intent.parent) })));
@@ -354,8 +396,8 @@ export function createLibraryTrashController(host: LibraryTrashHost): LibraryTra
                     if (entry.path)
                         card.append(el("p", "knowledge-address", entry.path));
                     const name = field(uiMessage("knowledge.restoreName"), draft.name), parent = field(uiMessage("knowledge.targetParentFullPath"), draft.parent);
-                    name.input.oninput = () => { draft!.name = name.input.value; };
-                    parent.input.oninput = () => { draft!.parent = parent.input.value; };
+                    name.input.oninput = () => { draftEdited = true; draft!.name = name.input.value; };
+                    parent.input.oninput = () => { draftEdited = true; draft!.parent = parent.input.value; };
                     const prepare = button(uiMessage("knowledge.prepareRestore"), async () => { lock(); await flow.prepare(root, entry, parent.input.value, name.input.value); });
                     prepare.disabled = flow.busy || flow.blocksNewRestore;
                     name.input.disabled = parent.input.disabled = flow.busy;

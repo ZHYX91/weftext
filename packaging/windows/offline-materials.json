@@ -30,6 +30,47 @@
           "sourceUrl": "https://visualstudio.microsoft.com/license-terms/vs2026-ga-visualcpp-v14-redist-runtime/"
         }
       ]
+    },
+    {
+      "id": "webview2",
+      "kind": "evergreen-standalone",
+      "filename": "MicrosoftEdgeWebView2RuntimeInstallerX64.exe",
+      "sha256": "9b0142e22e8daa92855d746ae4d1e9eeef561ccaf67d1dd452165c4af3df3191",
+      "size": 214823632,
+      "version": "156.0.4314.42",
+      "payloadArchitectures": [
+        "x64"
+      ],
+      "sourceUrl": "https://go.microsoft.com/fwlink/?linkid=2124701",
+      "finalUrl": "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/d6c50665-06a3-4ebe-8bde-7e408a78f093/MicrosoftEdgeWebView2RuntimeInstallerX64.exe",
+      "publisherSubject": "C=US, S=Washington, L=Redmond, O=Microsoft Corporation, CN=Microsoft Corporation",
+      "signerCertificateSha256": "cb97e8e85e8e9321fb2646e9574efd17669b3b0581d24262ac7c8a227433a244",
+      "licenseFiles": [
+        {
+          "file": "packaging/windows/licenses/webview2-runtime/Microsoft-Edge-WebView2-Runtime-LICENSE.json",
+          "sha256": "e15b53f476b66f8335c18436998256dc9862b210242a8e4c7f7e14d2de53591d",
+          "size": 24429,
+          "sourceUrl": "https://developer.microsoft.com/microsoft-edge/api/eula/webview2?locale=en-us"
+        },
+        {
+          "file": "packaging/windows/licenses/webview2-runtime/Microsoft-Edge-WebView2-Runtime-LICENSE.html",
+          "sha256": "ce6fa83e57c338256e5cabe9e1eea83076c271b0fdb253408213eeb08859d7b6",
+          "size": 21639,
+          "sourceUrl": "https://developer.microsoft.com/microsoft-edge/api/eula/webview2?locale=en-us"
+        },
+        {
+          "file": "packaging/windows/licenses/webview2-runtime/Microsoft-Edge-WebView2-Runtime-LICENSE.txt",
+          "sha256": "6baacc3835a9d617ee9136e179c305510e9d5ce709f5de6c32090daded5bc9e6",
+          "size": 19049,
+          "sourceUrl": "https://developer.microsoft.com/microsoft-edge/api/eula/webview2?locale=en-us"
+        },
+        {
+          "file": "packaging/windows/licenses/webview2-runtime/EdgeUpdate-NOTICE.TXT",
+          "sha256": "91d3fc490565ded7621ff5198960e501b6db857d5dd45af2fe7c3ecd141145f5",
+          "size": 4172,
+          "sourceUrl": "https://msedge.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/d6c50665-06a3-4ebe-8bde-7e408a78f093/MicrosoftEdgeWebView2RuntimeInstallerX64.exe"
+        }
+      ]
     }
   ]
 }

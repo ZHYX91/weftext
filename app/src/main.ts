@@ -1,3 +1,7 @@
+import { LibraryCloseActivity } from "./library-native-close";
+import { NativeSurface, type CloseRequest } from "./native-host";
+import { nativeApiIdle, freezeNativeApi, thawNativeApi } from "./api";
+import { assertNativeProposalOwnersCloseReady, freezeNativeProposalOwnersForClose, thawNativeProposalOwnersAfterClose } from "./native-proposal-owners";
 import { joinUiText } from "./ui-locale";
 import {apiErrorUiText,type ApiErrorBody} from "./api-error";
 import { InterfaceLocaleControl, localLocalePreferences } from "./ui-locale-settings";
@@ -91,7 +95,7 @@ function button(label: UiText, onClick: () => void | Promise<void>, className = 
         result.append(icon(iconName));
     if (label)
         result.append(uiTextNode(label));
-    result.onclick = () => { void Promise.resolve(onClick()).catch(showError); };
+    result.onclick = () => { void Promise.resolve().then(() => { libraryCloseActivity.assertAvailable(); return onClick(); }).catch(showError); };
     return result;
 }
 const basename = (path: string): string => path.replaceAll("\\", "/").split("/").filter(Boolean).at(-1) ?? path;
@@ -167,6 +171,11 @@ app.append(shell, toastHost);
 let inventory: Inventory | null = null;
 let documents: LiveDocument[] = [];
 let bodyCloseFrozen = false;
+const libraryCloseActivity = new LibraryCloseActivity();
+const nativeSurface = new NativeSurface("library");
+let nativeStartupFinished = false;
+window.addEventListener("error", () => { if (!nativeStartupFinished) nativeSurface.reportFailed(); });
+window.addEventListener("unhandledrejection", () => { if (!nativeStartupFinished) nativeSurface.reportFailed(); });
 const bodyOwners = new WeakMap<LiveDocument, {
     sessionId: string;
     generation: string;
@@ -182,17 +191,24 @@ function bodySnapshot(doc: LiveDocument) {
 }
 function currentBody(snapshot: ReturnType<typeof bodySnapshot>): boolean {
     const { doc } = snapshot;
-    return documents.includes(doc) && bodyOwners.get(doc)?.generation === snapshot.generation && doc.session.opened.sessionId === snapshot.sessionId && doc.session.baseId === snapshot.baseId && doc.session.source === snapshot.source && doc.session.serial === snapshot.serial && doc.editor.generation === snapshot.editorGeneration && doc.editor.source === snapshot.source && !doc.session.savePending && !doc.lastSave && !doc.editor.composing && !doc.writing.state.composing && !doc.writing.state.busy;
+    return documents.includes(doc) && bodyOwners.get(doc)?.generation === snapshot.generation && doc.session.opened.sessionId === snapshot.sessionId && doc.session.baseId === snapshot.baseId && doc.session.source === snapshot.source && doc.session.serial === snapshot.serial && doc.editor.generation === snapshot.editorGeneration && doc.editor.source === snapshot.source && !doc.session.savePending && !doc.lastSave && !doc.editor.composing && !doc.writing.state.pending && !doc.writing.state.composing && !doc.writing.state.busy;
 }
 let preparedBody: {
     request: string;
     snapshots: ReturnType<typeof bodySnapshot>[];
 } | undefined;
+const frozenBodyRenders = new Set<LiveDocument>();
 function thawBodyClose(): void {
     bodyCloseFrozen = false;
     preparedBody = undefined;
-    for (const doc of documents)
+    for (const doc of documents) {
+        doc.writing.thawAfterClose();
+        doc.queries.thawAfterClose();
+        doc.authoringAssets.thawAfterClose();
         doc.editor.thawAfterClose(doc.mode === "read" || doc.mode === "write" || readOnlySource(doc));
+    }
+    for (const doc of frozenBodyRenders) if (documents.includes(doc)) scheduleRender(doc, 0);
+    frozenBodyRenders.clear();
 }
 /** Body-only close preparation. Other producer owners must supply their own
  * Core proof or block close; this never marks the whole surface ready. */
@@ -203,7 +219,10 @@ export const bodyCloseParticipant = {
             throw new UiError(uiMessage("shell.closePreparationFrozen"));
         const owned = [...documents], snapshots: ReturnType<typeof bodySnapshot>[] = [], proofs = [];
         for (const doc of owned) {
-            doc.writing.assertCloseReady();
+            // Existing literal input can settle into Core; later staged input must
+            // fail the strict checks after the asynchronous checkpoint and at freeze.
+            doc.writing.assertCloseReady({ allowPendingLiteral: true });
+            doc.authoringAssets.assertCloseReady();
             if (doc.editor.composing || doc.session.savePending || doc.lastSave || doc.queries.hasUnappliedAuthorInputs)
                 throw new UiError(uiMessage("shell.closeAuthorInputPending"));
             await doc.writing.settleForSessionChange();
@@ -240,11 +259,16 @@ export const bodyCloseParticipant = {
             return false;
         }
         bodyCloseFrozen = true;
-        for (const snapshot of preparedBody.snapshots)
-            if (!snapshot.doc.editor.freezeForClose()) {
+        for (const snapshot of preparedBody.snapshots) {
+            if (!snapshot.doc.writing.freezeForClose() || !snapshot.doc.queries.freezeForClose() || !snapshot.doc.authoringAssets.freezeForClose() || !snapshot.doc.editor.freezeForClose()) {
                 thawBodyClose();
                 return false;
             }
+            if (snapshot.doc.renderTimer !== undefined) frozenBodyRenders.add(snapshot.doc);
+            clearTimeout(snapshot.doc.renderTimer);
+            clearTimeout(snapshot.doc.draftTimer);
+            snapshot.doc.renderTimer = snapshot.doc.draftTimer = undefined;
+        }
         return true;
     },
     thaw: thawBodyClose,
@@ -301,6 +325,7 @@ function restoreNavigation(doc: LiveDocument): void {
     const saved = navigationContexts.get(doc);
     if (!saved)
         return;
+    workspaceTools.assertLibraryChange(saved.inventory);
     inventory = saved.inventory;
     query = saved.query;
     selectedFolder = saved.folder;
@@ -326,24 +351,27 @@ function everydayEntries(): EverydayEntry[] {
     return [...entries.values()];
 }
 async function openInventoryEntry(entry: InventoryEntry, root: string, workspaceId?: string): Promise<void> {
-    if (!entry.nodeId || !workspaceId) {
-        await openDocument(entry.path, root);
-        return;
-    }
-    const generation = ++navigationGeneration;
-    await prepareSwitch();
-    if (generation !== navigationGeneration)
-        return;
-    const opened = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${workspaceId}/${entry.nodeId}` });
-    if (generation !== navigationGeneration) {
-        await releaseOpenedSession(opened.sessionId);
-        return;
-    }
-    if (opened.nodeId !== entry.nodeId || opened.workspaceId !== workspaceId) {
-        await releaseOpenedSession(opened.sessionId);
-        throw new UiError(uiMessage("shell.returnTargetMismatch"));
-    }
-    await acceptResolvedDocument(opened);
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (!entry.nodeId || !workspaceId) {
+            await openDocument(entry.path, root);
+            return;
+        }
+        const generation = ++navigationGeneration;
+        await prepareSwitch();
+        if (generation !== navigationGeneration)
+            return;
+        const opened = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${workspaceId}/${entry.nodeId}` });
+        if (generation !== navigationGeneration) {
+            await releaseOpenedSession(opened.sessionId);
+            return;
+        }
+        if (opened.nodeId !== entry.nodeId || opened.workspaceId !== workspaceId) {
+            await releaseOpenedSession(opened.sessionId);
+            throw new UiError(uiMessage("shell.returnTargetMismatch"));
+        }
+        await acceptResolvedDocument(opened);
+    } finally { finishNativeActivity(); }
 }
 function everydayCommands(): EverydayCommand[] {
     const doc = current;
@@ -353,9 +381,9 @@ function everydayCommands(): EverydayCommand[] {
         { id: "new-note", label: uiMessage("shell.newNote"), unavailable: !inventory?.workspaceId ? uiMessage("shell.openLibraryFirst") : undefined, run: createNote },
         { id: "open-file", label: uiMessage("shell.openOutsideTypst"), run: openOutsideFile },
         { id: "save", label: uiMessage("shell.saveCurrentNote"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: () => saveDocument(doc!) },
-        { id: "resources", label: uiMessage("shell.browseImportResources"), run: async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("files"); } },
-        { id: "relationship-graph", label: uiMessage("shell.openRelationshipGraph"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("graph"); } },
-        { id: "heading-structure", label: uiMessage("shell.openHeadingStructure"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings"); } },
+        { id: "resources", label: uiMessage("shell.browseImportResources"), run: () => libraryCloseActivity.run(async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("files"); }) },
+        { id: "relationship-graph", label: uiMessage("shell.openRelationshipGraph"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: () => libraryCloseActivity.run(async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("graph"); }) },
+        { id: "heading-structure", label: uiMessage("shell.openHeadingStructure"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: () => libraryCloseActivity.run(async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings"); }) },
         ...everydayWritingCommands(doc?.writing, !!doc && sourceConsumersAvailable(doc) && doc.mode !== "read" && !readOnlySource(doc) && !doc.writing.state.composing && !doc.editor.composing, insertEverydayQuery),
     ];
 }
@@ -364,19 +392,22 @@ function showRecent(): void {
     openEverydayPicker(uiMessage("shell.recentVisits"), everydayNavigation.recent.flatMap(key => entries.filter(entry => entry.key === key)), toast);
 }
 async function stepNavigation(direction: -1 | 1): Promise<void> {
-    const key = everydayNavigation.target(direction), target = documents.find(doc => doc.navigationKey === key);
-    if (!key || !target)
-        return;
-    navigatingHistory = true;
+    const finishNativeActivity = libraryCloseActivity.begin();
     try {
-        await activateDocument(target);
-        if (current === target)
-            everydayNavigation.arrive(direction, key);
-    }
-    finally {
-        navigatingHistory = false;
-        renderEverydayBar();
-    }
+        const key = everydayNavigation.target(direction), target = documents.find(doc => doc.navigationKey === key);
+        if (!key || !target)
+            return;
+        navigatingHistory = true;
+        try {
+            await activateDocument(target);
+            if (current === target)
+                everydayNavigation.arrive(direction, key);
+        }
+        finally {
+            navigatingHistory = false;
+            renderEverydayBar();
+        }
+    } finally { finishNativeActivity(); }
 }
 function renderEverydayBar(): void {
     if (current && !navigatingHistory)
@@ -390,150 +421,157 @@ function renderEverydayBar(): void {
     everydayBar.append(button(uiMessage("shell.quickOpen"), () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), toast)), button(uiMessage("shell.recentVisits"), showRecent), button(uiMessage("cli.commandsHeading"), () => openEverydayMenu(uiMessage("cli.commandsHeading"), everydayCommands(), toast)), button(uiMessage("shell.insertBlockActions"), () => openEverydayMenu(uiMessage("shell.insertBlockActions"), everydayCommands().filter(item => /^(insert-|convert-|move-|undo|redo|resources)/.test(item.id)), toast)));
 }
 async function insertEverydayQuery(): Promise<void> {
-    const doc = current;
-    if (!doc?.session.opened.nodeId || !doc.session.opened.workspaceId)
-        throw new UiError(uiMessage("shell.embeddedQueryRequirements"));
-    await prepareSwitch();
-    const basis = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, baseId: doc.session.baseId };
-    const operation = operationId();
-    await modal<void>(uiMessage("shell.insertEmbeddedQuery"), uiMessage("shell.embeddedQueryDescription"), (form, close) => {
-        const label = el("input", "text-input");
-        label.value = "笔记列表";
-        label.required = true;
-        const condition = el("input", "text-input");
-        setUiAttr(condition, "placeholder", uiMessage("shell.queryEmptyScopePlaceholder"));
-        const name = el("label", "field-label", uiMessage("shell.queryName"));
-        name.append(label);
-        const where = el("label", "field-label", uiMessage("shell.queryFilter"));
-        where.append(condition);
-        const kind = el("select", "text-input");
-        setUiAttr(kind, "aria-label", uiMessage("shell.querySource"));
-        for (const [value, text] of [["new", uiMessage("shell.queryNewDefinition")], ["call", uiMessage("shell.queryReuseSavedDefinition")]] as const) {
-            const option = el("option", "", text);
-            option.value = value;
-            kind.append(option);
-        }
-        const shared = el("fieldset");
-        shared.hidden = true;
-        shared.append(el("legend", "", uiMessage("shell.querySelectDefinitionOwner")));
-        const owners = el("select", "text-input");
-        setUiAttr(owners, "aria-label", uiMessage("shell.queryDefinitionOwnerNote"));
-        const definitions = el("select", "text-input");
-        setUiAttr(definitions, "aria-label", uiMessage("shell.queryReusedDefinition"));
-        const mode = el("select", "text-input");
-        setUiAttr(mode, "aria-label", uiMessage("shell.queryReuseVersionMode"));
-        for (const [value, text] of [["current", uiMessage("queryPanel.currentDefinition")], ["pinned", uiMessage("shell.queryPinExactVersion")]] as const) {
-            const option = el("option", "", text);
-            option.value = value;
-            mode.append(option);
-        }
-        const revision = el("input", "text-input");
-        setUiAttr(revision, "aria-label", uiMessage("shell.queryReusedExactVersion"));
-        revision.disabled = true;
-        mode.onchange = () => { revision.disabled = mode.value !== "pinned"; };
-        if (inventory?.root === doc.session.opened.root)
-            for (const entry of inventory.entries.filter(entry => entry.kind === "node" && entry.identityStatus === "admitted" && entry.nodeId)) {
-                const option = el("option", "", entry.title || entry.name);
-                option.value = `weftext-node://${doc.session.opened.workspaceId}/${entry.nodeId}`;
-                owners.append(option);
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        const doc = current;
+        if (!doc?.session.opened.nodeId || !doc.session.opened.workspaceId)
+            throw new UiError(uiMessage("shell.embeddedQueryRequirements"));
+        await prepareSwitch();
+        const basis = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, baseId: doc.session.baseId };
+        const operation = operationId();
+        await modal<void>(uiMessage("shell.insertEmbeddedQuery"), uiMessage("shell.embeddedQueryDescription"), (form, close) => {
+            const label = el("input", "text-input");
+            label.value = "笔记列表";
+            label.required = true;
+            const condition = el("input", "text-input");
+            setUiAttr(condition, "placeholder", uiMessage("shell.queryEmptyScopePlaceholder"));
+            const name = el("label", "field-label", uiMessage("shell.queryName"));
+            name.append(label);
+            const where = el("label", "field-label", uiMessage("shell.queryFilter"));
+            where.append(condition);
+            const kind = el("select", "text-input");
+            setUiAttr(kind, "aria-label", uiMessage("shell.querySource"));
+            for (const [value, text] of [["new", uiMessage("shell.queryNewDefinition")], ["call", uiMessage("shell.queryReuseSavedDefinition")]] as const) {
+                const option = el("option", "", text);
+                option.value = value;
+                kind.append(option);
             }
-        let loadedOwner = "";
-        const load = button(uiMessage("shell.queryLoadOwnerDefinitions"), async () => {
-            const owner = owners.value;
-            if (!owner)
-                throw new UiError(uiMessage("shell.querySelectActualOwnerFirst"));
-            load.disabled = true;
-            try {
-                const result = await api<{
-                    ownerRevision: string | null;
-                    definitions: {
-                        key: string;
-                        label: string;
-                    }[];
-                }>("/api/query/definitions", { root: doc.session.opened.root, owner });
-                if (!form.isConnected || owners.value !== owner)
-                    return;
-                definitions.replaceChildren();
-                for (const definition of result.definitions) {
-                    const option = el("option", "", definition.label.replace(/^weftext-query-/, ""));
-                    option.value = definition.key;
-                    definitions.append(option);
+            const shared = el("fieldset");
+            shared.hidden = true;
+            shared.append(el("legend", "", uiMessage("shell.querySelectDefinitionOwner")));
+            const owners = el("select", "text-input");
+            setUiAttr(owners, "aria-label", uiMessage("shell.queryDefinitionOwnerNote"));
+            const definitions = el("select", "text-input");
+            setUiAttr(definitions, "aria-label", uiMessage("shell.queryReusedDefinition"));
+            const mode = el("select", "text-input");
+            setUiAttr(mode, "aria-label", uiMessage("shell.queryReuseVersionMode"));
+            for (const [value, text] of [["current", uiMessage("queryPanel.currentDefinition")], ["pinned", uiMessage("shell.queryPinExactVersion")]] as const) {
+                const option = el("option", "", text);
+                option.value = value;
+                mode.append(option);
+            }
+            const revision = el("input", "text-input");
+            setUiAttr(revision, "aria-label", uiMessage("shell.queryReusedExactVersion"));
+            revision.disabled = true;
+            mode.onchange = () => { revision.disabled = mode.value !== "pinned"; };
+            if (inventory?.root === doc.session.opened.root)
+                for (const entry of inventory.entries.filter(entry => entry.kind === "node" && entry.identityStatus === "admitted" && entry.nodeId)) {
+                    const option = el("option", "", entry.title || entry.name);
+                    option.value = `weftext-node://${doc.session.opened.workspaceId}/${entry.nodeId}`;
+                    owners.append(option);
                 }
-                revision.value = result.ownerRevision ?? "";
-                loadedOwner = owner;
-                if (!result.definitions.length) {
-                    setUiText(error, uiMessage("shell.queryOwnerHasNoDefinition"));
+            let loadedOwner = "";
+            const load = button(uiMessage("shell.queryLoadOwnerDefinitions"), async () => libraryCloseActivity.run(async () => {
+
+                const owner = owners.value;
+                if (!owner)
+                    throw new UiError(uiMessage("shell.querySelectActualOwnerFirst"));
+                load.disabled = true;
+                try {
+                    const result = await api<{
+                        ownerRevision: string | null;
+                        definitions: {
+                            key: string;
+                            label: string;
+                        }[];
+                    }>("/api/query/definitions", { root: doc.session.opened.root, owner });
+                    if (!form.isConnected || owners.value !== owner)
+                        return;
+                    definitions.replaceChildren();
+                    for (const definition of result.definitions) {
+                        const option = el("option", "", definition.label.replace(/^weftext-query-/, ""));
+                        option.value = definition.key;
+                        definitions.append(option);
+                    }
+                    revision.value = result.ownerRevision ?? "";
+                    loadedOwner = owner;
+                    if (!result.definitions.length) {
+                        setUiText(error, uiMessage("shell.queryOwnerHasNoDefinition"));
+                        error.hidden = false;
+                    }
+                }
+                catch (failure) {
+                    setUiText(error, failure instanceof Error ? errorUiText(failure) : String(failure));
                     error.hidden = false;
                 }
-            }
-            catch (failure) {
-                setUiText(error, failure instanceof Error ? errorUiText(failure) : String(failure));
-                error.hidden = false;
-            }
-            finally {
-                load.disabled = false;
-            }
-        });
-        owners.onchange = () => { definitions.replaceChildren(); loadedOwner = ""; };
-        shared.append(owners, load, definitions, mode, revision, el("p", "field-help", uiMessage("shell.queryReuseDescription")));
-        kind.onchange = () => { shared.hidden = kind.value !== "call"; where.hidden = kind.value === "call"; };
-        const error = el("p", "writing-error");
-        error.setAttribute("role", "alert");
-        error.hidden = true;
-        const submit = el("button", "button-primary", uiMessage("shell.insertQuery"));
-        submit.type = "submit";
-        form.append(name, kind, where, shared, error, button(uiMessage("common.cancel"), () => close(null)), submit);
-        const selection = () => JSON.stringify([kind.value, owners.value, definitions.value, mode.value, revision.value]);
-        const available = () => current === doc && doc.session.opened.sessionId === basis.sessionId && doc.session.baseId === basis.baseId && doc.session.source === basis.source && doc.session.serial === basis.serial && sourceConsumersAvailable(doc) && !doc.sourceTrashed && !readOnlySource(doc) && doc.mode !== "read";
-        form.onsubmit = event => {
-            event.preventDefault();
-            submit.disabled = true;
+                finally {
+                    load.disabled = false;
+                }
+
+            }));
+            owners.onchange = () => { definitions.replaceChildren(); loadedOwner = ""; };
+            shared.append(owners, load, definitions, mode, revision, el("p", "field-help", uiMessage("shell.queryReuseDescription")));
+            kind.onchange = () => { shared.hidden = kind.value !== "call"; where.hidden = kind.value === "call"; };
+            const error = el("p", "writing-error");
+            error.setAttribute("role", "alert");
             error.hidden = true;
-            void (async () => {
-                if (!available())
-                    throw new UiError(uiMessage("shell.querySourceChangedDuringConfirmation"));
-                const nameValue = label.value, conditionValue = condition.value, selected = selection();
-                const nativeName = nameValue.trim().replace(/\s+/g, "-");
-                if (!/^[\p{L}\p{N}_.:-]+$/u.test(nativeName))
-                    throw new UiError(uiMessage("shell.queryNameCharacters"));
-                let plan: import("./query-panel").QueryPlan = { scope: { descendants: true, lifecycle: "live" }, types: [], ...(conditionValue ? { where: conditionValue } : {}), select: [{ name: "title", expr: "title" }], order: [], take: 100 };
-                if (kind.value === "call") {
-                    if (loadedOwner !== owners.value || !definitions.value || mode.value === "pinned" && !revision.value)
-                        throw new UiError(uiMessage("shell.querySelectExactDefinitionVersion"));
-                    plan = { scope: { descendants: true, lifecycle: "live" }, types: [], select: [], order: [], advanced: { call: { owner: owners.value, selection: mode.value === "pinned" ? { mode: "pinned", key: definitions.value, revision: revision.value } : { mode: "current", key: definitions.value }, arguments: {} } } };
-                }
-                const result = await api<{
-                    draftOnly: boolean;
-                    source: string;
-                    serial: number;
-                    patchUnit: string;
-                    patches: {
-                        from: number;
-                        to: number;
-                        text: string;
-                        expected: string;
-                    }[];
-                }>("/api/query/definition/draft", { ...basis, operationId: operation, label: `weftext-query-${nativeName}`, plan });
-                if (!available() || !form.isConnected || label.value !== nameValue || condition.value !== conditionValue || selection() !== selected || !result.draftOnly || result.serial !== basis.serial || result.patchUnit !== "utf16")
-                    throw new UiError(uiMessage("shell.queryProposalOrInputChanged"));
-                const patches = result.patches.map(patch => ({ ...patch, insert: patch.text }));
-                if (applySourcePatches(basis.source, patches) !== result.source)
-                    throw new UiError(uiMessage("shell.queryPatchMismatch"));
-                doc.editor.applyPatches(basis.source, patches, undefined, "input.query.insert");
-                close(undefined);
-                await persistDraft(doc);
-                scheduleRender(doc, 0);
-            })().catch(failure => {
-                if (!form.isConnected) {
-                    showError(failure);
-                    return;
-                }
-                setUiText(error, failure instanceof ApiError && failure.code === "schemaRevisionRequired" ? uiMessage("shell.queryInstallFieldsFirst") : failure instanceof Error ? errorUiText(failure) : String(failure));
-                error.hidden = false;
-                submit.disabled = false;
-            });
-        };
-    });
+            const submit = el("button", "button-primary", uiMessage("shell.insertQuery"));
+            submit.type = "submit";
+            form.append(name, kind, where, shared, error, button(uiMessage("common.cancel"), () => close(null)), submit);
+            const selection = () => JSON.stringify([kind.value, owners.value, definitions.value, mode.value, revision.value]);
+            const available = () => current === doc && doc.session.opened.sessionId === basis.sessionId && doc.session.baseId === basis.baseId && doc.session.source === basis.source && doc.session.serial === basis.serial && sourceConsumersAvailable(doc) && !doc.sourceTrashed && !readOnlySource(doc) && doc.mode !== "read";
+            form.onsubmit = event => {
+                event.preventDefault();
+                submit.disabled = true;
+                error.hidden = true;
+                void (async () => libraryCloseActivity.run(async () => {
+
+                    if (!available())
+                        throw new UiError(uiMessage("shell.querySourceChangedDuringConfirmation"));
+                    const nameValue = label.value, conditionValue = condition.value, selected = selection();
+                    const nativeName = nameValue.trim().replace(/\s+/g, "-");
+                    if (!/^[\p{L}\p{N}_.:-]+$/u.test(nativeName))
+                        throw new UiError(uiMessage("shell.queryNameCharacters"));
+                    let plan: import("./query-panel").QueryPlan = { scope: { descendants: true, lifecycle: "live" }, types: [], ...(conditionValue ? { where: conditionValue } : {}), select: [{ name: "title", expr: "title" }], order: [], take: 100 };
+                    if (kind.value === "call") {
+                        if (loadedOwner !== owners.value || !definitions.value || mode.value === "pinned" && !revision.value)
+                            throw new UiError(uiMessage("shell.querySelectExactDefinitionVersion"));
+                        plan = { scope: { descendants: true, lifecycle: "live" }, types: [], select: [], order: [], advanced: { call: { owner: owners.value, selection: mode.value === "pinned" ? { mode: "pinned", key: definitions.value, revision: revision.value } : { mode: "current", key: definitions.value }, arguments: {} } } };
+                    }
+                    const result = await api<{
+                        draftOnly: boolean;
+                        source: string;
+                        serial: number;
+                        patchUnit: string;
+                        patches: {
+                            from: number;
+                            to: number;
+                            text: string;
+                            expected: string;
+                        }[];
+                    }>("/api/query/definition/draft", { ...basis, operationId: operation, label: `weftext-query-${nativeName}`, plan });
+                    if (!available() || !form.isConnected || label.value !== nameValue || condition.value !== conditionValue || selection() !== selected || !result.draftOnly || result.serial !== basis.serial || result.patchUnit !== "utf16")
+                        throw new UiError(uiMessage("shell.queryProposalOrInputChanged"));
+                    const patches = result.patches.map(patch => ({ ...patch, insert: patch.text }));
+                    if (applySourcePatches(basis.source, patches) !== result.source)
+                        throw new UiError(uiMessage("shell.queryPatchMismatch"));
+                    doc.editor.applyPatches(basis.source, patches, undefined, "input.query.insert");
+                    close(undefined);
+                    await persistDraft(doc);
+                    scheduleRender(doc, 0);
+
+                }))().catch(failure => {
+                    if (!form.isConnected) {
+                        showError(failure);
+                        return;
+                    }
+                    setUiText(error, failure instanceof ApiError && failure.code === "schemaRevisionRequired" ? uiMessage("shell.queryInstallFieldsFirst") : failure instanceof Error ? errorUiText(failure) : String(failure));
+                    error.hidden = false;
+                    submit.disabled = false;
+                });
+            };
+        });
+    } finally { finishNativeActivity(); }
 }
 let projectionMappings: KnowledgeTextMapping[] = [];
 let readingSelection: {
@@ -547,13 +585,15 @@ const recognitionPanel = new RecognitionPanel({
     committed: root => workspaceTools.invalidateQueryEnvironment(root),
     target: () => current ? { sessionId: current.session.opened.sessionId, parent: selectedFolder ?? current.session.opened.root, name: "资料导入" } : null,
     notify: toast,
-    created: async (receipt, target) => {
+    created: async (receipt, target) => libraryCloseActivity.run(async () => {
+
         const node = receipt.nodeRefs[0];
         if (!node) throw new UiError(uiMessage("shell.importCreatedNoteUnavailable"));
         await prepareSwitch();
         const opened = await api<OpenedDocument>("/api/recognition/open", { operationId: receipt.operationId, target, node });
         await acceptCreatedDocument(opened);
-    },
+
+    }),
 });
 let recognitionSession = "";
 const workspaceTools = new WorkspaceTools({
@@ -581,11 +621,14 @@ const workspaceTools = new WorkspaceTools({
         return range.from === range.to ? undefined : range;
     },
     beforeAction: prepareSwitch, notify: toast, openDocument, openResolved: acceptResolvedDocument, releaseOpenedSession,
-    refreshLibrary: async (root) => {
+    refreshLibrary: async (root) => libraryCloseActivity.run(async () => {
+
         if (inventory && normalize(inventory.root) === normalize(root))
             await refreshInventory();
-    },
-    syncApplied: async (root) => {
+
+    }),
+    syncApplied: async (root) => libraryCloseActivity.run(async () => {
+
         workspaceTools.invalidateQueryEnvironment(root);
         if (inventory && normalize(inventory.root) === normalize(root))
             await refreshInventory();
@@ -658,9 +701,11 @@ const workspaceTools = new WorkspaceTools({
         }
         await workspaceTools.refreshAfterSync(root);
         renderSidebar();
-    },
-    canEditSource: () => !!current && sourceConsumersAvailable(current) && current.mode !== "read" && !readOnlySource(current) && !current.writing.state.composing,
-    savedDefinition: async (result, basis) => {
+
+    }),
+    canEditSource: () => !bodyCloseFrozen && !!current && sourceConsumersAvailable(current) && current.mode !== "read" && !readOnlySource(current) && !current.writing.state.composing,
+    savedDefinition: async (result, basis) => libraryCloseActivity.run(async () => {
+
         const receipt = result as {
             document?: OpenedDocument;
             committedSource?: string;
@@ -697,7 +742,8 @@ const workspaceTools = new WorkspaceTools({
         scheduleRender(doc, 0);
         await refreshInventory();
         refreshChrome();
-    },
+
+    }),
     selectSource: (from, to) => {
         if (current) {
             current.mode = "source";
@@ -706,7 +752,8 @@ const workspaceTools = new WorkspaceTools({
             current.editor.select(from, to);
         }
     },
-    applyPatch: async (patch, basis) => {
+    applyPatch: async (patch, basis) => libraryCloseActivity.run(async () => {
+
         const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
         if (!doc || doc.session.source !== basis.source || doc.session.serial !== basis.serial || doc.session.baseId !== basis.baseId || doc.mode === "read" || readOnlySource(doc) || doc.writing.state.composing)
             throw new UiError(uiMessage("shell.oldEditCannotApply"));
@@ -716,9 +763,11 @@ const workspaceTools = new WorkspaceTools({
         doc.editor.apply(patch.from, patch.to, patch.text);
         await persistDraft(doc);
         scheduleRender(doc, 0);
-    },
+
+    }),
     created: acceptCreatedDocument,
-    navigate: async (target) => {
+    navigate: async (target) => libraryCloseActivity.run(async () => {
+
         if (typeof target === "string")
             await navigateLink(target);
         else {
@@ -727,8 +776,10 @@ const workspaceTools = new WorkspaceTools({
             await prepareSwitch();
             await acceptResolvedDocument(await api<OpenedDocument>("/api/data/open", { root: inventory.root, entityKey: `weftext-node://${target.workspaceId}/${target.nodeId}` }));
         }
-    },
-    applyReceipt: async (receipt, context) => {
+
+    }),
+    applyReceipt: async (receipt, context) => libraryCloseActivity.run(async () => {
+
         if (!originalCommitted(receipt)) throw new UiError(uiMessage("shell.originalCommittedReceiptRequired"));
         workspaceTools.invalidateQueryEnvironment(context.root);
         const opened = receipt.document as OpenedDocument | undefined;
@@ -752,7 +803,7 @@ const workspaceTools = new WorkspaceTools({
         else if (opened && receipt.documentDisposition === "created") {
             const receiving = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
             if (current === doc || receiving === current) await acceptCreatedDocument(opened);
-            else deliveryPending = displayMessage("shell.createdReturnForOriginalDelivery", {name:uiDisplayParameter(basename(opened.path))});
+            else deliveryPending = displayMessage("shell.createdReturnForOriginalDelivery", { name: uiDisplayParameter(basename(opened.path)) });
         }
         else if (opened && doc && opened.source === doc.session.baseSource) {
             // Namespace changes keep the same saved bytes. Preserve newer local input,
@@ -824,8 +875,10 @@ const workspaceTools = new WorkspaceTools({
         }
         await refreshInventory();
         if (deliveryPending) throw new UiError(deliveryPending);
-    },
-    stylesChanged: async (root) => {
+
+    }),
+    stylesChanged: async (root) => libraryCloseActivity.run(async () => {
+
         pagedPreview?.invalidate(uiMessage("shell.libraryStyleRecompiling"));
         for (const doc of documents.filter(item => normalize(item.session.opened.root) === normalize(root))) {
             doc.session.projection = null;
@@ -835,7 +888,8 @@ const workspaceTools = new WorkspaceTools({
         if (current?.layout === "paged")
             await pagedPreview?.render();
         await refreshInventory();
-    },
+
+    }),
 });
 workspace.insertBefore(workspaceTools.bar, workspaceBody);
 const interfaceLocale = new InterfaceLocaleControl(localLocalePreferences(api));
@@ -859,117 +913,139 @@ function historyContext(doc: LiveDocument | null): HistoryContext | null {
 const historyPanel = new HistoryPanel({
   getDocument: () => historyContext(current), request: api, prepareRestore: prepareSwitch, notify: toast,
   restorePending: () => { refreshChrome(); },
-  restored: async (result, basis) => {
-    if (result.receipt.status === "saved") workspaceTools.invalidateQueryEnvironment(basis.root);
-    const doc = documents.find(item => item.navigationKey === basis.ownerKey && item.session.opened.nodeId === basis.nodeId && item.session.opened.workspaceId === basis.workspaceId);
-    if (!doc) throw new UiError(uiMessage("shell.olderVersionSavedReopen"));
-    await doc.writing.settleForSessionChange();
-    const prior = doc.session.opened;
-    const fact = await api<Receipt & OriginalFact & { committedSource?: string; document?: OpenedDocument; documentSourceMatchesCommit?: boolean }>("/api/operations/status", { operationId: result.receipt.operationId });
-    const opened = fact.document;
-    if (doc.session.opened !== prior || fact.operationId !== result.receipt.operationId || fact.status !== "committed" || fact.baseId !== result.receipt.baseId || fact.path !== result.receipt.path || fact.committedSource !== result.source || !opened || opened.nodeId !== basis.nodeId || opened.workspaceId !== basis.workspaceId || opened.kind !== "managed" || opened.source !== result.source || fact.documentSourceMatchesCommit !== true || fact.documentError) {
-      if (opened && opened.nodeId === basis.nodeId && opened.workspaceId === basis.workspaceId) { doc.comparisonTarget = opened; doc.externalSource = opened.source; }
-      throw new UiError(uiMessage("shell.restoreCommittedCurrentSessionChanged"));
-    }
-    const variants = [...(doc.session.opened.recoveredDraftVariants ?? []), ...(opened.recoveredDraftVariants ?? []), ...result.protectedDrafts];
-    if (opened.recoveredDraftConflict) await api("/api/draft/resolve", { sessionId: opened.sessionId, action: "mergeRecovered", source: doc.session.source });
-    await doc.writing.settleForSessionChange();
-    if (doc.session.opened !== prior) throw new UiError(uiMessage("shell.deliverySessionChanged"));
-    const disposition = restoreBufferDisposition(basis, historyContext(doc));
-    if (disposition === "unrelated" || result.receipt.status !== "saved") throw new UiError(uiMessage("shell.restoreReceiptNoteMismatch"));
-    opened.recoveredDraftVariants = uniqueRetainedDrafts(variants);
-    // Keep the shared editor and Undo. Only a still-clean, unchanged buffer adopts
-    // the restored text; any original or late input remains a Draft over the new Base.
-    if (disposition === "replaceClean" && doc.editor.source !== result.source) doc.editor.apply(0, doc.editor.source.length, result.source);
-    doc.session.opened = opened; opened.recoveredDraftConflict = false;
-    doc.session.acknowledgeSave(result.source, opened.baseId, opened.path);
-    doc.lastSave = undefined; doc.session.projection = null; doc.editor.clearTokens(); doc.queries.invalidate();
-    await persistDraft(doc); scheduleRender(doc, 0); await refreshInventory(); refreshChrome();
-  },
-  finishDelivery: async (operationId, basis) => {
-    const doc = documents.find(item => item.navigationKey === basis.ownerKey && item.session.opened.nodeId === basis.nodeId && item.session.opened.workspaceId === basis.workspaceId);
-    if (!doc) throw new UiError(uiMessage("shell.compareOriginalBuffer"));
-    const fact = await api<OriginalFact & { document?: OpenedDocument }>("/api/operations/status", { operationId });
-    if (fact.operationId !== operationId || fact.status !== "committed" || !fact.document || fact.document.nodeId !== basis.nodeId || fact.document.workspaceId !== basis.workspaceId) throw new UiError(uiMessage("shell.originalCurrentObjectUnreadable"));
-    doc.comparisonTarget = fact.document; doc.externalSource = fact.document.source;
-    const prior = doc.session.opened;
-    await showDraftComparison(doc);
-    return doc.session.opened !== prior && !doc.comparisonTarget;
-  },
+  restored: async (result, basis) => libraryCloseActivity.run(async () => {
+
+        if (result.receipt.status === "saved") workspaceTools.invalidateQueryEnvironment(basis.root);
+        const doc = documents.find(item => item.navigationKey === basis.ownerKey && item.session.opened.nodeId === basis.nodeId && item.session.opened.workspaceId === basis.workspaceId);
+        if (!doc) throw new UiError(uiMessage("shell.olderVersionSavedReopen"));
+        await doc.writing.settleForSessionChange();
+        const prior = doc.session.opened;
+        const fact = await api<Receipt & OriginalFact & { committedSource?: string; document?: OpenedDocument; documentSourceMatchesCommit?: boolean }>("/api/operations/status", { operationId: result.receipt.operationId });
+        const opened = fact.document;
+        if (doc.session.opened !== prior || fact.operationId !== result.receipt.operationId || fact.status !== "committed" || fact.baseId !== result.receipt.baseId || fact.path !== result.receipt.path || fact.committedSource !== result.source || !opened || opened.nodeId !== basis.nodeId || opened.workspaceId !== basis.workspaceId || opened.kind !== "managed" || opened.source !== result.source || fact.documentSourceMatchesCommit !== true || fact.documentError) {
+            if (opened && opened.nodeId === basis.nodeId && opened.workspaceId === basis.workspaceId) { doc.comparisonTarget = opened; doc.externalSource = opened.source; }
+            throw new UiError(uiMessage("shell.restoreCommittedCurrentSessionChanged"));
+        }
+        const variants = [...(doc.session.opened.recoveredDraftVariants ?? []), ...(opened.recoveredDraftVariants ?? []), ...result.protectedDrafts];
+        if (opened.recoveredDraftConflict) await api("/api/draft/resolve", { sessionId: opened.sessionId, action: "mergeRecovered", source: doc.session.source });
+        await doc.writing.settleForSessionChange();
+        if (doc.session.opened !== prior) throw new UiError(uiMessage("shell.deliverySessionChanged"));
+        const disposition = restoreBufferDisposition(basis, historyContext(doc));
+        if (disposition === "unrelated" || result.receipt.status !== "saved") throw new UiError(uiMessage("shell.restoreReceiptNoteMismatch"));
+        opened.recoveredDraftVariants = uniqueRetainedDrafts(variants);
+        // Keep the shared editor and Undo. Only a still-clean, unchanged buffer adopts
+        // the restored text; any original or late input remains a Draft over the new Base.
+        if (disposition === "replaceClean" && doc.editor.source !== result.source) doc.editor.apply(0, doc.editor.source.length, result.source);
+        doc.session.opened = opened; opened.recoveredDraftConflict = false;
+        doc.session.acknowledgeSave(result.source, opened.baseId, opened.path);
+        doc.lastSave = undefined; doc.session.projection = null; doc.editor.clearTokens(); doc.queries.invalidate();
+        await persistDraft(doc); scheduleRender(doc, 0); await refreshInventory(); refreshChrome();
+
+    }),
+  finishDelivery: async (operationId, basis) => libraryCloseActivity.run(async () => {
+
+        const doc = documents.find(item => item.navigationKey === basis.ownerKey && item.session.opened.nodeId === basis.nodeId && item.session.opened.workspaceId === basis.workspaceId);
+        if (!doc) throw new UiError(uiMessage("shell.compareOriginalBuffer"));
+        const fact = await api<OriginalFact & { document?: OpenedDocument }>("/api/operations/status", { operationId });
+        if (fact.operationId !== operationId || fact.status !== "committed" || !fact.document || fact.document.nodeId !== basis.nodeId || fact.document.workspaceId !== basis.workspaceId) throw new UiError(uiMessage("shell.originalCurrentObjectUnreadable"));
+        doc.comparisonTarget = fact.document; doc.externalSource = fact.document.source;
+        const prior = doc.session.opened;
+        await showDraftComparison(doc);
+        return await (doc.session.opened !== prior && !doc.comparisonTarget);
+
+    }),
 });
 function saveBusy(doc: LiveDocument): boolean { return doc.session.savePending || historyPanel.hasPending(historyContext(doc)); }
 function pendingSave(doc: LiveDocument): LiveDocument["lastSave"] { return doc.lastSave?.deliveryEnded ? undefined : doc.lastSave; }
 
 async function refreshInventory(): Promise<void> {
-    if (inventory)
-        inventory = await api<Inventory>("/api/library/open", { path: inventory.root });
-    renderSidebar();
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (inventory) {
+            const next = await api<Inventory>("/api/library/open", { path: inventory.root });
+            workspaceTools.assertLibraryChange(next);
+            inventory = next;
+        }
+        renderSidebar();
+    } finally { finishNativeActivity(); }
 }
 async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
-    if (!opened.nodeId || !opened.workspaceId || opened.kind !== "managed") throw new UiError(uiMessage("shell.createdNodeIdentityRequired"));
-    workspaceTools.invalidateQueryEnvironment(opened.root);
-    await prepareSwitch();
-    const restored = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
-    if (restored && (pendingSave(restored) || opened.source !== restored.session.baseSource)) {
-        restored.comparisonTarget = opened; restored.externalSource = opened.source;
-        throw new UiError(uiMessage("shell.createdNodeAlreadyOpenPending"));
-    }
-    if (restored) {
-        await restored.writing.settleForSessionChange();
-        restored.session.opened = opened;
-        restored.editor.clearTokens();
-        restored.sourceTrashed = false;
-        restored.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
-        restored.lastSave = undefined;
-        restored.session.projection = null;
-        await persistDraft(restored);
-        current = restored;
-        activeSourceOrigin = null;
-        renderContent();
-        scheduleRender(restored, 0);
-    }
-    else
-        addDocument(opened);
-    await refreshInventory();
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (!opened.nodeId || !opened.workspaceId || opened.kind !== "managed") throw new UiError(uiMessage("shell.createdNodeIdentityRequired"));
+        workspaceTools.assertLibraryChange(inventory);
+        workspaceTools.invalidateQueryEnvironment(opened.root);
+        await prepareSwitch();
+        const restored = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
+        if (restored && (pendingSave(restored) || opened.source !== restored.session.baseSource)) {
+            restored.comparisonTarget = opened; restored.externalSource = opened.source;
+            throw new UiError(uiMessage("shell.createdNodeAlreadyOpenPending"));
+        }
+        if (restored) {
+            await restored.writing.settleForSessionChange();
+            workspaceTools.assertLibraryChange(inventory);
+            restored.session.opened = opened;
+            restored.editor.clearTokens();
+            restored.sourceTrashed = false;
+            restored.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
+            restored.lastSave = undefined;
+            restored.session.projection = null;
+            await persistDraft(restored);
+            workspaceTools.assertLibraryChange(inventory);
+            current = restored;
+            activeSourceOrigin = null;
+            renderContent();
+            scheduleRender(restored, 0);
+        }
+        else
+            addDocument(opened);
+        await refreshInventory();
+    } finally { finishNativeActivity(); }
 }
 async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
+    const finishNativeActivity = libraryCloseActivity.begin();
     try {
-    const generation = ++navigationGeneration;
-    await prepareSwitch();
-    if (generation !== navigationGeneration)
-        return;
-    const existing = opened.nodeId && opened.workspaceId ? documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId
-        && readOnlySource(item) === (opened.readOnly === true || opened.kind === "trash" || opened.kind === "managedTrash")) : undefined;
-    if (!existing)
-        addDocument(opened);
-    else {
-        await existing.writing.settleForSessionChange();
-        if (generation !== navigationGeneration || !documents.includes(existing))
-            return;
-        if (existing.session.baseSource === opened.source) {
-            existing.session.opened = opened;
-            existing.editor.clearTokens();
-            existing.sourceTrashed = false;
-            existing.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
-            existing.session.projection = null;
-            existing.lastSave = undefined;
-            await persistDraft(existing);
-            scheduleRender(existing, 0);
+        try {
+            workspaceTools.assertLibraryChange(inventory);
+            const generation = ++navigationGeneration;
+            await prepareSwitch();
+            if (generation !== navigationGeneration)
+                return;
+            const existing = opened.nodeId && opened.workspaceId ? documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId
+                && readOnlySource(item) === (opened.readOnly === true || opened.kind === "trash" || opened.kind === "managedTrash")) : undefined;
+            if (!existing)
+                addDocument(opened);
+            else {
+                await existing.writing.settleForSessionChange();
+                if (generation !== navigationGeneration || !documents.includes(existing))
+                    return;
+                workspaceTools.assertLibraryChange(inventory);
+                if (existing.session.baseSource === opened.source) {
+                    existing.session.opened = opened;
+                    existing.editor.clearTokens();
+                    existing.sourceTrashed = false;
+                    existing.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
+                    existing.session.projection = null;
+                    existing.lastSave = undefined;
+                    await persistDraft(existing);
+                    scheduleRender(existing, 0);
+                }
+                else {
+                    existing.externalSource = opened.source;
+                    existing.comparisonTarget = opened;
+                    existing.session.error = uiMessage("shell.openedTargetDiskChanged");
+                }
+                workspaceTools.assertLibraryChange(inventory);
+                current = existing;
+                activeSourceOrigin = null;
+                renderContent();
+                renderSidebar();
+            }
+            shell.classList.remove("sidebar-open");
+        } finally {
+            if (!ownsOpenedSession(opened.sessionId)) await releaseOpenedSession(opened.sessionId);
         }
-        else {
-            existing.externalSource = opened.source;
-            existing.comparisonTarget = opened;
-            existing.session.error = uiMessage("shell.openedTargetDiskChanged");
-        }
-        current = existing;
-        activeSourceOrigin = null;
-        renderContent();
-        renderSidebar();
-    }
-    shell.classList.remove("sidebar-open");
-    } finally {
-        if (!ownsOpenedSession(opened.sessionId)) await releaseOpenedSession(opened.sessionId);
-    }
+    } finally { finishNativeActivity(); }
 }
 function ownsOpenedSession(sessionId: string): boolean {
     return documents.some(document => document.session.opened.sessionId === sessionId || document.comparisonTarget?.sessionId === sessionId);
@@ -977,18 +1053,21 @@ function ownsOpenedSession(sessionId: string): boolean {
 /** Only fresh, never adopted projections may be released. This does not prove
  * an author Draft or native surface safe to close. */
 async function releaseOpenedSession(sessionId: string): Promise<void> {
-    if (ownsOpenedSession(sessionId)) throw new UiError(uiMessage("desktop.sessionAlreadyAdopted"));
+    const finishNativeActivity = libraryCloseActivity.begin();
     try {
-        const result = await api<{ released: boolean; sessionId: string }>("/api/session/release", { sessionId });
-        if (result.released !== true || result.sessionId !== sessionId) throw new UiError(uiMessage("desktop.sessionReleaseFailed", { sessionId }));
-    } catch (error) {
-        const item = el("div", "toast error", uiMessage("desktop.sessionReleaseFailed", { sessionId }));
-        item.setAttribute("role", "alert");
-        const dismiss = button("", () => item.remove(), "icon-button", "close");
-        setUiAttr(dismiss, "aria-label", uiMessage("common.close"));
-        item.append(dismiss); toastHost.append(item);
-        throw error;
-    }
+        if (ownsOpenedSession(sessionId)) throw new UiError(uiMessage("desktop.sessionAlreadyAdopted"));
+        try {
+            const result = await api<{ released: boolean; sessionId: string }>("/api/session/release", { sessionId });
+            if (result.released !== true || result.sessionId !== sessionId) throw new UiError(uiMessage("desktop.sessionReleaseFailed", { sessionId }));
+        } catch (error) {
+            const item = el("div", "toast error", uiMessage("desktop.sessionReleaseFailed", { sessionId }));
+            item.setAttribute("role", "alert");
+            const dismiss = button("", () => item.remove(), "icon-button", "close");
+            setUiAttr(dismiss, "aria-label", uiMessage("common.close"));
+            item.append(dismiss); toastHost.append(item);
+            throw error;
+        }
+    } finally { finishNativeActivity(); }
 }
 function toast(message: UiText, error = false): void {
     const item = el("div", `toast ${error ? "error" : ""}`, message);
@@ -998,68 +1077,75 @@ function toast(message: UiText, error = false): void {
 function showError(error: unknown): void { toast(error instanceof Error ? errorUiText(error) : String(error), true); }
 function setBusy(target: HTMLButtonElement, busy: boolean): void { target.disabled = busy; target.classList.toggle("busy", busy); }
 async function modal<T>(title: UiText, description: UiText, build: (form: HTMLFormElement, close: (value: T | null) => void) => void): Promise<T | null> {
-    const trigger = document.activeElement as HTMLElement | null;
-    const dialog = el("dialog", "modal");
-    setUiAttr(dialog, "aria-label", title);
-    const closeButton = button("", () => close(null), "icon-button", "close");
-    setUiAttr(closeButton, "aria-label", displayMessage("shell.closeDocument", { p0: uiDisplayParameter(title) }));
-    const heading = el("div", "modal-heading");
-    heading.append(el("h2", "", title), closeButton);
-    dialog.append(heading, el("p", "modal-description", description));
-    const form = el("form", "modal-form");
-    dialog.append(form);
-    document.body.append(dialog);
-    let resolve!: (value: T | null) => void;
-    const result = new Promise<T | null>(r => { resolve = r; });
-    function close(value: T | null): void {
-        dialog.close();
-        dialog.remove();
-        if (trigger?.isConnected)
-            trigger.focus({ preventScroll: true });
-        resolve(value);
-    }
-    dialog.addEventListener("cancel", event => { event.preventDefault(); close(null); });
-    build(form, close);
-    dialog.showModal();
-    setTimeout(() => form.querySelector<HTMLElement>("input,textarea,button")?.focus(), 20);
-    return result;
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        const trigger = document.activeElement as HTMLElement | null;
+        const dialog = el("dialog", "modal");
+        setUiAttr(dialog, "aria-label", title);
+        const closeButton = button("", () => close(null), "icon-button", "close");
+        setUiAttr(closeButton, "aria-label", displayMessage("shell.closeDocument", { p0: uiDisplayParameter(title) }));
+        const heading = el("div", "modal-heading");
+        heading.append(el("h2", "", title), closeButton);
+        dialog.append(heading, el("p", "modal-description", description));
+        const form = el("form", "modal-form");
+        dialog.append(form);
+        document.body.append(dialog);
+        let resolve!: (value: T | null) => void;
+        const result = new Promise<T | null>(r => { resolve = r; });
+        function close(value: T | null): void {
+            dialog.close();
+            dialog.remove();
+            if (trigger?.isConnected)
+                trigger.focus({ preventScroll: true });
+            resolve(value);
+        }
+        dialog.addEventListener("cancel", event => { event.preventDefault(); close(null); });
+        build(form, close);
+        dialog.showModal();
+        setTimeout(() => form.querySelector<HTMLElement>("input,textarea,button")?.focus(), 20);
+        return await (result);
+    } finally { finishNativeActivity(); }
 }
 async function pathDialog(kind: "openLibrary" | "createLibrary" | "file" | "saveAs"): Promise<string | null> {
-    const config = {
-        openLibrary: [uiMessage("shell.openLibrary"), uiMessage("shell.openLibraryDescription"), uiMessage("shell.folderPath"), uiMessage("common.open")],
-        createLibrary: [uiMessage("shell.createLibrary"), uiMessage("shell.createLibraryDescription"), uiMessage("shell.newFolderPath"), uiMessage("shell.createLibrary")],
-        file: [uiMessage("shell.openTypstFile"), uiMessage("shell.openTypstFileDescription"), uiMessage("shell.filePath"), uiMessage("shell.openFile")],
-        saveAs: [uiMessage("shell.saveAs"), uiMessage("shell.saveAsDescription"), uiMessage("shell.filePath"), uiMessage("shell.saveAs")],
-    }[kind];
-    return modal<string>(config[0], config[1], (form, close) => {
-        const label = el("label", "field-label", config[2]);
-        const input = el("input", "text-input");
-        input.required = true;
-        setUiAttr(input, "placeholder", kind.includes("Library") ? uiMessage("shell.libraryPathPlaceholder") : uiMessage("shell.filePathPlaceholder"));
-        if (kind === "saveAs" && current)
-            input.value = current.session.path;
-        label.append(input);
-        form.append(label);
-        if (kind === "openLibrary" && inventory) {
-            const recent = button(displayMessage("shell.currentPath", { p0: uiDisplayParameter(inventory.root) }), () => { input.value = inventory!.root; input.focus(); }, "recent-path");
-            form.append(recent);
-        }
-        const actions = el("div", "modal-actions");
-        actions.append(button(uiMessage("common.cancel"), () => close(null), "button-secondary"));
-        const submit = el("button", "button-primary", config[3]);
-        submit.type = "submit";
-        actions.append(submit);
-        form.append(actions);
-        form.onsubmit = event => {
-            event.preventDefault();
-            if (input.value.trim())
-                close(input.value.trim());
-        };
-    });
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        const config = {
+            openLibrary: [uiMessage("shell.openLibrary"), uiMessage("shell.openLibraryDescription"), uiMessage("shell.folderPath"), uiMessage("common.open")],
+            createLibrary: [uiMessage("shell.createLibrary"), uiMessage("shell.createLibraryDescription"), uiMessage("shell.newFolderPath"), uiMessage("shell.createLibrary")],
+            file: [uiMessage("shell.openTypstFile"), uiMessage("shell.openTypstFileDescription"), uiMessage("shell.filePath"), uiMessage("shell.openFile")],
+            saveAs: [uiMessage("shell.saveAs"), uiMessage("shell.saveAsDescription"), uiMessage("shell.filePath"), uiMessage("shell.saveAs")],
+        }[kind];
+        return await (modal<string>(config[0], config[1], (form, close) => {
+            const label = el("label", "field-label", config[2]);
+            const input = el("input", "text-input");
+            input.required = true;
+            setUiAttr(input, "placeholder", kind.includes("Library") ? uiMessage("shell.libraryPathPlaceholder") : uiMessage("shell.filePathPlaceholder"));
+            if (kind === "saveAs" && current)
+                input.value = current.session.path;
+            label.append(input);
+            form.append(label);
+            if (kind === "openLibrary" && inventory) {
+                const recent = button(displayMessage("shell.currentPath", { p0: uiDisplayParameter(inventory.root) }), () => { input.value = inventory!.root; input.focus(); }, "recent-path");
+                form.append(recent);
+            }
+            const actions = el("div", "modal-actions");
+            actions.append(button(uiMessage("common.cancel"), () => close(null), "button-secondary"));
+            const submit = el("button", "button-primary", config[3]);
+            submit.type = "submit";
+            actions.append(submit);
+            form.append(actions);
+            form.onsubmit = event => {
+                event.preventDefault();
+                if (input.value.trim())
+                    close(input.value.trim());
+            };
+        }));
+    } finally { finishNativeActivity(); }
 }
 function renderSidebar(): void {
     if (sidebarComposing)
         return;
+    workspaceTools.assertLibraryChange(inventory);
     nodeContents?.dispose();
     nodeContents = undefined;
     navigationLayout.captureSidebarState();
@@ -1216,6 +1302,7 @@ function renderSidebar(): void {
 }
 function toggleFolder(path: string): void { collapsed.has(path) ? collapsed.delete(path) : collapsed.add(path); renderSidebar(); }
 function browseFolder(path: string | null): void {
+    workspaceTools.assertLibraryChange(inventory);
     const old = selectedFolder ?? inventory?.root;
     if (old)
         folderViews.set(normalize(old), { query, scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0 });
@@ -1231,24 +1318,31 @@ function browseFolder(path: string | null): void {
 function nodeMenu(entries: InventoryEntry[], folder?: string): void {
     const selected = entries.filter(entry => entry.path.toLowerCase().endsWith(".typ")), root = inventory?.root, workspaceId = inventory?.workspaceId;
     const commands: EverydayCommand[] = [
-        { id: "node-open", label: uiMessage("shell.openSelectedNote"), unavailable: !selected.length || !root ? uiMessage("shell.selectedItemMainFileUnavailable") : undefined, run: async () => {
+        { id: "node-open", label: uiMessage("shell.openSelectedNote"), unavailable: !selected.length || !root ? uiMessage("shell.selectedItemMainFileUnavailable") : undefined, run: async () => libraryCloseActivity.run(async () => {
+
                 for (const entry of selected)
                     await openInventoryEntry(entry, root!, workspaceId);
-            } },
+
+            }) },
         { id: "node-preview", label: uiMessage("shell.previewSelectedItem"), run: () => previewNodes(entries) },
         { id: "node-copy-path", label: uiMessage("shell.copySelectedFullPath"), run: () => navigator.clipboard.writeText(entries.map(entry => entry.path).join("\n")) },
-        { id: "node-operations", label: uiMessage("shell.wholeNodeFileActions"), detail: uiMessage("shell.openExactNoteBeforeFileImpact"), unavailable: selected.length !== 1 || !root ? uiMessage("shell.oneExactNodePerOperation") : undefined, run: async () => { await openInventoryEntry(selected[0], root!, workspaceId); await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("files"); } },
+        { id: "node-operations", label: uiMessage("shell.wholeNodeFileActions"), detail: uiMessage("shell.openExactNoteBeforeFileImpact"), unavailable: selected.length !== 1 || !root ? uiMessage("shell.oneExactNodePerOperation") : undefined, run: async () => libraryCloseActivity.run(async () => {
+                await openInventoryEntry(selected[0], root!, workspaceId); await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("files");
+            }) },
     ];
     if (folder)
         commands.unshift({ id: "node-browse", label: uiMessage("shell.browseNodeContents"), run: () => browseFolder(folder) });
     openEverydayMenu(entries.length === 1 ? displayMessage("shell.entryActions", { p0: uiDisplayParameter(entries[0].title || entries[0].name) }) : displayMessage("shell.selectedItemActions", { p0: entries.length }), commands, toast, false);
 }
 async function previewNodes(entries: InventoryEntry[]): Promise<void> {
-    await modal(uiMessage("shell.itemPreview"), uiMessage("shell.itemPreviewDescription"), (form, close) => {
-        for (const entry of entries)
-            form.append(el("strong", "", entry.title || entry.name), el("pre", "", () => `${uiTextValue(entry.relativePath)}\n${uiTextValue(labelStatus[entry.identityStatus] ?? entry.identityStatus)}\n${uiTextValue(entry.excerpt ?? uiMessage("shell.itemSummaryUnavailable"))}`));
-        form.append(button(uiMessage("common.close"), () => close(null)));
-    });
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        await modal(uiMessage("shell.itemPreview"), uiMessage("shell.itemPreviewDescription"), (form, close) => {
+            for (const entry of entries)
+                form.append(el("strong", "", entry.title || entry.name), el("pre", "", () => `${uiTextValue(entry.relativePath)}\n${uiTextValue(labelStatus[entry.identityStatus] ?? entry.identityStatus)}\n${uiTextValue(entry.excerpt ?? uiMessage("shell.itemSummaryUnavailable"))}`));
+            form.append(button(uiMessage("common.close"), () => close(null)));
+        });
+    } finally { finishNativeActivity(); }
 }
 function renderNodeContents(host: HTMLElement, folder: string): void {
     if (!inventory)
@@ -1259,13 +1353,17 @@ function renderNodeContents(host: HTMLElement, folder: string): void {
     nodeContents = mountNodeContents(panel, selected, folder, query, contentSelections, {
         request: api, readBlob: apiBlob, browse: browseFolder, menu: nodeMenu, preview: previewNodes, notify: toast,
         open: entry => entry.kind === "directory" ? browseFolder(entry.path) : openInventoryEntry(entry, selected.root, selected.workspaceId),
-        changed: async () => {
+        changed: async () => libraryCloseActivity.run(async () => {
+
             workspaceTools.invalidateQueryEnvironment(selected.root);
             if (inventory === selected) {
-                inventory = await api<Inventory>("/api/library/open", { path: selected.root });
+                const next = await api<Inventory>("/api/library/open", { path: selected.root });
+                workspaceTools.assertLibraryChange(next);
+                inventory = next;
                 renderSidebar();
             }
-        },
+
+        }),
     });
 }
 function renderTopbar(): void {
@@ -1442,7 +1540,7 @@ function localPersonalNumbering(doc: LiveDocument) {
 function localAuthoringEnvironment(doc: LiveDocument): AuthoringPanelsEnvironment {
     const readable = () => current === doc && sourceConsumersAvailable(doc) && !doc.sourceTrashed;
     return {
-        controller: doc.writing, readable, editable: () => readable() && !readOnlySource(doc) && doc.mode !== "read" && !saveBusy(doc) && !pendingSave(doc),
+        controller: doc.writing, readable, editable: () => !bodyCloseFrozen && readable() && !readOnlySource(doc) && doc.mode !== "read" && !saveBusy(doc) && !pendingSave(doc),
         projection: () => readable() && doc.session.projectionCurrent ? doc.session.projection : null,
         selection: () => doc.editor.selection, requestEdit: request => api("/api/edit", request), previewProposal: request => api("/api/editor/preview", request),
         revealSource: range => revealWritingSource(doc, range), revealRendered: key => {
@@ -1455,23 +1553,38 @@ function localAuthoringEnvironment(doc: LiveDocument): AuthoringPanelsEnvironmen
             target.focus({ preventScroll: true });
             return true;
         },
-        ensureEndnoteModule: async () => { await doc.authoringAssets.install(); toast(uiMessage("shell.endnoteResourcesVerified")); },
-        recoverEndnoteModule: async () => { const receipt = await doc.authoringAssets.recover(); toast(receipt ? displayMessage("shell.originalEndnoteModuleStatus", { p0: uiDisplayParameter(receipt.status) }) : uiMessage("shell.noPendingEndnoteModule")); },
-        retryEndnoteModule: async () => { await doc.authoringAssets.retryOriginal(); toast(uiMessage("shell.endnoteModuleConfirmedBodyUnsaved")); },
-        restartEndnoteModule: async () => { await doc.authoringAssets.restartAfterCancelled(); toast(uiMessage("shell.cancelledModuleReprepared")); },
-        settleEndnoteModule: async () => { const receipt = await doc.authoringAssets.settleOriginal(); toast(displayMessage("shell.originalModuleStatus", { p0: uiDisplayParameter(receipt.status) })); },
+        ensureEndnoteModule: async () => libraryCloseActivity.run(async () => {
+            await doc.authoringAssets.install(); toast(uiMessage("shell.endnoteResourcesVerified"));
+        }),
+        recoverEndnoteModule: async () => libraryCloseActivity.run(async () => {
+            const receipt = await doc.authoringAssets.recover(); toast(receipt ? displayMessage("shell.originalEndnoteModuleStatus", { p0: uiDisplayParameter(receipt.status) }) : uiMessage("shell.noPendingEndnoteModule"));
+        }),
+        retryEndnoteModule: async () => libraryCloseActivity.run(async () => {
+            await doc.authoringAssets.retryOriginal(); toast(uiMessage("shell.endnoteModuleConfirmedBodyUnsaved"));
+        }),
+        restartEndnoteModule: async () => libraryCloseActivity.run(async () => {
+            await doc.authoringAssets.restartAfterCancelled(); toast(uiMessage("shell.cancelledModuleReprepared"));
+        }),
+        settleEndnoteModule: async () => libraryCloseActivity.run(async () => {
+            const receipt = await doc.authoringAssets.settleOriginal(); toast(displayMessage("shell.originalModuleStatus", { p0: uiDisplayParameter(receipt.status) }));
+        }),
         pendingInput: value => { noteInputRecovery.add(localPersonalAudience(), value); toast(uiMessage("shell.unappliedNoteInputRetained")); }, onError: showError,
     };
 }
 async function openLocalNumbering(doc: LiveDocument): Promise<void> {
-    await doc.writing.deferUntilCompositionEnds(() => doc.writing.flush());
-    if (current !== doc)
-        throw new UiError(uiMessage("shell.noteSwitchedNumberingNotOpened"));
-    const keys = localPersonalNumbering(doc);
-    await openNumberingPanel(numberingHost(localAuthoringEnvironment(doc), { ...keys, display: enabled => {
-            if (current === doc && renderHost)
-                displayPersonalHeadings(renderHost, enabled);
-        } }));
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        await doc.writing.deferUntilCompositionEnds(() => doc.writing.flush());
+        if (current !== doc)
+            throw new UiError(uiMessage("shell.noteSwitchedNumberingNotOpened"));
+        const keys = localPersonalNumbering(doc);
+        await openNumberingPanel(numberingHost(localAuthoringEnvironment(doc), {
+            ...keys, display: enabled => {
+                if (current === doc && renderHost)
+                    displayPersonalHeadings(renderHost, enabled);
+            }
+        }));
+    } finally { finishNativeActivity(); }
 }
 function renderDocument(): void {
     if (!current)
@@ -1499,7 +1612,9 @@ function renderDocument(): void {
         layout.append(option);
     }
     layout.value = doc.layout;
-    layout.onchange = () => { void doc.writing.deferUntilCompositionEnds(async () => { await doc.writing.flush(); doc.layout = layout.value as LiveDocument["layout"]; renderContent(); }).catch(showError); };
+    layout.onchange = () => { void doc.writing.deferUntilCompositionEnds(async () => libraryCloseActivity.run(async () => {
+            await doc.writing.flush(); doc.layout = layout.value as LiveDocument["layout"]; renderContent();
+        })).catch(showError); };
     controls.append(layout);
     if (doc.mode === "source") {
         const preview = button(previewVisible ? uiMessage("shell.collapsePreview") : uiMessage("shell.showPreview"), () => { previewVisible = !previewVisible; localStorage.setItem("weftext-preview", String(previewVisible)); renderContent(); }, "text-button preview-toggle", "eye");
@@ -1517,7 +1632,9 @@ function renderDocument(): void {
     content.append(caption);
     doc.notesMount?.dispose();
     const authoring = el("section", "document-authoring-controls"), notes = el("div", "document-notes-summary");
-    authoring.append(button(uiMessage("shell.numberingControls"), () => openLocalNumbering(doc), "text-button"), button(uiMessage("shell.outlineHeadingStructure"), async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings"); }, "text-button"), notes);
+    authoring.append(button(uiMessage("shell.numberingControls"), () => openLocalNumbering(doc), "text-button"), button(uiMessage("shell.outlineHeadingStructure"), async () => libraryCloseActivity.run(async () => {
+        await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings");
+    }), "text-button"), notes);
     content.append(authoring);
     doc.notesMount = mountDocumentNotes(notes, documentNotesHost(localAuthoringEnvironment(doc)));
     if (doc.session.opened.recoveredDraftConflict) {
@@ -1995,28 +2112,31 @@ function renderDiagnostics(doc: LiveDocument): void {
     content.append(details);
 }
 async function changeMode(mode: ViewMode): Promise<void> {
-    if (!current)
-        return;
-    if (current.writing.state.composing) {
-        const doc = current;
-        await doc.writing.deferUntilCompositionEnds(() => {
-            if (current === doc)
-                return changeMode(mode);
-        });
-        return;
-    }
-    if (mode === "source" || mode === "styled")
-        await current.writing.settleForSessionChange();
-    else
-        await flushLiteral();
-    if (flowScroll && flowHasProjection)
-        current.scroll[current.mode] = flowScroll.scrollTop;
-    current.editor.clearReveal();
-    current.mode = mode;
-    current.queries.modeChanged();
-    activeSourceOrigin = null;
-    localStorage.setItem("weftext-view", mode);
-    renderContent();
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (!current)
+            return;
+        if (current.writing.state.composing) {
+            const doc = current;
+            await doc.writing.deferUntilCompositionEnds(() => {
+                if (current === doc)
+                    return changeMode(mode);
+            });
+            return;
+        }
+        if (mode === "source" || mode === "styled")
+            await current.writing.settleForSessionChange();
+        else
+            await flushLiteral();
+        if (flowScroll && flowHasProjection)
+            current.scroll[current.mode] = flowScroll.scrollTop;
+        current.editor.clearReveal();
+        current.mode = mode;
+        current.queries.modeChanged();
+        activeSourceOrigin = null;
+        localStorage.setItem("weftext-view", mode);
+        renderContent();
+    } finally { finishNativeActivity(); }
 }
 function revealSource(origin: Origin): void {
     if (!current || !origin.isMain || !current.session.projectionCurrent)
@@ -2043,43 +2163,49 @@ function revealWritingSource(doc: LiveDocument, range: WritingRange): void {
         return;
     revealSource({ ...range, path: doc.session.path, syntaxKind: "structure", isMain: true });
 }
-function scheduleDraft(doc: LiveDocument): void { clearTimeout(doc.draftTimer); doc.draftTimer = setTimeout(() => { void persistDraft(doc).catch(showError); }, 450); }
+function scheduleDraft(doc: LiveDocument): void { clearTimeout(doc.draftTimer); doc.draftTimer = setTimeout(() => { doc.draftTimer = undefined; void persistDraft(doc).catch(showError); }, 450); }
 async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise<void> {
-    if (bodyCloseFrozen)
-        throw new UiError(uiMessage("shell.closeRecoveryWriteFrozen"));
-    clearTimeout(doc.draftTimer);
-    const source = proposedSource ?? doc.writing.recoverySource() ?? doc.session.source;
-    const serial = doc.session.serial;
-    const sessionId = doc.session.opened.sessionId;
-    const request = doc.draftChain.catch(() => undefined).then(async () => {
-        const recovery = doc.session.recoveryContinuation;
-        if (!doc.session.recoveryContinuationSettled && recovery?.sessionId === sessionId) {
-            try { await api("/api/draft/resume", recovery); }
-            catch (error) {
-                if (!(error instanceof ApiError) || !["draftChanged", "draftProducerActive", "draftProducerUnavailable"].includes(error.code)) throw error;
-            }
-            doc.session.recoveryContinuationSettled = true;
-        }
-        await api("/api/draft", { sessionId, source });
-        if (doc.session.opened.sessionId !== sessionId) throw new UiError(uiMessage("shell.querySavedNewInputRetained"));
-        doc.session.acknowledgeDraft(source, serial);
-        doc.draftFailure = null;
-    });
-    doc.draftChain = request;
+    const finishNativeActivity = libraryCloseActivity.begin();
     try {
-        await request;
-    }
-    catch (error) {
-        const failure = error instanceof ApiError && error.code === "tooLarge"
-            ? new ApiError(error.code, uiMessage("shell.sourceSizeLimitExceeded"), error.diagnostics, error.details, error.causes)
-            : error;
-        doc.draftFailure = failure instanceof Error ? errorUiText(failure) : String(failure);
-        throw failure;
-    }
-    finally {
-        if (doc === current)
-            renderStatus();
-    }
+        if (bodyCloseFrozen)
+            throw new UiError(uiMessage("shell.closeRecoveryWriteFrozen"));
+        clearTimeout(doc.draftTimer);
+        doc.draftTimer = undefined;
+        const source = proposedSource ?? doc.writing.recoverySource() ?? doc.session.source;
+        const serial = doc.session.serial;
+        const sessionId = doc.session.opened.sessionId;
+        const request = doc.draftChain.catch(() => undefined).then(async () => libraryCloseActivity.run(async () => {
+
+            const recovery = doc.session.recoveryContinuation;
+            if (!doc.session.recoveryContinuationSettled && recovery?.sessionId === sessionId) {
+                try { await api("/api/draft/resume", recovery); }
+                catch (error) {
+                    if (!(error instanceof ApiError) || !["draftChanged", "draftProducerActive", "draftProducerUnavailable"].includes(error.code)) throw error;
+                }
+                doc.session.recoveryContinuationSettled = true;
+            }
+            await api("/api/draft", { sessionId, source });
+            if (doc.session.opened.sessionId !== sessionId) throw new UiError(uiMessage("shell.querySavedNewInputRetained"));
+            doc.session.acknowledgeDraft(source, serial);
+            doc.draftFailure = null;
+
+        }));
+        doc.draftChain = request;
+        try {
+            await request;
+        }
+        catch (error) {
+            const failure = error instanceof ApiError && error.code === "tooLarge"
+                ? new ApiError(error.code, uiMessage("shell.sourceSizeLimitExceeded"), error.diagnostics, error.details, error.causes)
+                : error;
+            doc.draftFailure = failure instanceof Error ? errorUiText(failure) : String(failure);
+            throw failure;
+        }
+        finally {
+            if (doc === current)
+                renderStatus();
+        }
+    } finally { finishNativeActivity(); }
 }
 function scheduleRender(doc: LiveDocument, delay = 300): void {
     doc.renderGeneration++;
@@ -2089,176 +2215,216 @@ function scheduleRender(doc: LiveDocument, delay = 300): void {
             refreshChrome();
         return;
     }
-    doc.renderTimer = setTimeout(() => { void compile(doc); }, delay);
+    doc.renderTimer = setTimeout(() => { doc.renderTimer = undefined; void compile(doc).catch(showError); }, delay);
 }
 async function compile(doc: LiveDocument): Promise<void> {
-    clearTimeout(doc.renderTimer);
-    if (!sourceConsumersAvailable(doc))
-        return;
-    const source = doc.session.source;
-    const serial = doc.session.serial;
-    const generation = doc.renderGeneration;
-    const sessionId = doc.session.opened.sessionId;
-    const syntaxBasis = doc.editor.syntaxBasis();
-    doc.rendering++;
-    if (doc === current)
-        renderStatus();
-    if (doc === current && doc.layout === "paged")
-        void pagedPreview?.render({ sessionId: doc.session.opened.sessionId, source, serial });
+    const finishNativeActivity = libraryCloseActivity.begin();
     try {
-        const basis = { sessionId: doc.session.opened.sessionId, source, serial };
-        const hadQueries = doc.queries.hasQueries;
-        const [result, editorMap] = await Promise.all([
-            api<RenderOutput>("/api/render", basis),
-            api<unknown>("/api/editor-map", basis).then(value => decodeEditorMapResponse(value, basis.serial)),
-            doc.queries.discover(basis),
-        ]);
-        if (!sourceConsumersAvailable(doc) || generation !== doc.renderGeneration || sessionId !== doc.session.opened.sessionId)
+        clearTimeout(doc.renderTimer);
+        if (!sourceConsumersAvailable(doc))
             return;
-        if (result.sourceInfo.notes?.sourceHash === editorMap.sourceHash)
-            editorMap.notes = result.sourceInfo.notes;
-        if (doc.session.acceptProjection(result)) {
-            // Map observers consume the accepted projection as well as its source.
-            // Publish it before notifying them so initial notes controls can enable.
-            doc.writing.installMap(editorMap, source, serial);
-            doc.editor.tokens(result.sourceInfo.syntaxTokens, doc.mode === "styled", syntaxBasis);
-            if (doc === current) {
-                if (doc.layout === "paged" && hadQueries !== doc.queries.hasQueries)
-                    renderContent();
-                else
-                    renderProjection(doc);
-                if (result.diagnostics.length)
-                    renderDiagnostics(doc);
-                else
-                    content.querySelector(".diagnostics")?.remove();
-                scrollFragment(doc);
+        const source = doc.session.source;
+        const serial = doc.session.serial;
+        const generation = doc.renderGeneration;
+        const sessionId = doc.session.opened.sessionId;
+        const syntaxBasis = doc.editor.syntaxBasis();
+        doc.rendering++;
+        if (doc === current)
+            renderStatus();
+        if (doc === current && doc.layout === "paged")
+            void pagedPreview?.render({ sessionId: doc.session.opened.sessionId, source, serial });
+        try {
+            const basis = { sessionId: doc.session.opened.sessionId, source, serial };
+            const hadQueries = doc.queries.hasQueries;
+            const [result, editorMap] = await Promise.all([
+                api<RenderOutput>("/api/render", basis),
+                api<unknown>("/api/editor-map", basis).then(value => decodeEditorMapResponse(value, basis.serial)),
+                doc.queries.discover(basis),
+            ]);
+            if (!sourceConsumersAvailable(doc) || generation !== doc.renderGeneration || sessionId !== doc.session.opened.sessionId)
+                return;
+            if (result.sourceInfo.notes?.sourceHash === editorMap.sourceHash)
+                editorMap.notes = result.sourceInfo.notes;
+            if (doc.session.acceptProjection(result)) {
+                // Map observers consume the accepted projection as well as its source.
+                // Publish it before notifying them so initial notes controls can enable.
+                doc.writing.installMap(editorMap, source, serial);
+                doc.editor.tokens(result.sourceInfo.syntaxTokens, doc.mode === "styled", syntaxBasis);
+                if (doc === current) {
+                    if (doc.layout === "paged" && hadQueries !== doc.queries.hasQueries)
+                        renderContent();
+                    else
+                        renderProjection(doc);
+                    if (result.diagnostics.length)
+                        renderDiagnostics(doc);
+                    else
+                        content.querySelector(".diagnostics")?.remove();
+                    scrollFragment(doc);
+                }
             }
         }
-    }
-    catch (error) {
-        if (sourceConsumersAvailable(doc) && doc.session.serial === serial && generation === doc.renderGeneration && sessionId === doc.session.opened.sessionId) {
-            doc.session.error = displayMessage("shell.previewFailed", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) });
-            if (doc === current)
-                toast(doc.session.error, true);
+        catch (error) {
+            if (sourceConsumersAvailable(doc) && doc.session.serial === serial && generation === doc.renderGeneration && sessionId === doc.session.opened.sessionId) {
+                doc.session.error = displayMessage("shell.previewFailed", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) });
+                if (doc === current)
+                    toast(doc.session.error, true);
+            }
         }
-    }
-    finally {
-        doc.rendering--;
-        if (doc === current)
-            refreshChrome();
-    }
+        finally {
+            doc.rendering--;
+            if (doc === current)
+                refreshChrome();
+        }
+    } finally { finishNativeActivity(); }
 }
 async function flushLiteral(): Promise<void> {
-    if (current)
-        await current.writing.flush();
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (current)
+            await current.writing.flush();
+    } finally { finishNativeActivity(); }
 }
 async function chooseLibrary(): Promise<void> {
-    const path = await pathDialog("openLibrary");
-    if (!path)
-        return;
-    await flushLiteral();
-    inventory = await api<Inventory>("/api/library/open", { path });
-    selectedFolder = null;
-    collapsed.clear();
-    query = "";
-    renderSidebar();
-    renderContent();
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        const path = await pathDialog("openLibrary");
+        if (!path)
+            return;
+        await flushLiteral();
+        const next = await api<Inventory>("/api/library/open", { path });
+        workspaceTools.assertLibraryChange(next);
+        inventory = next;
+        selectedFolder = null;
+        collapsed.clear();
+        query = "";
+        renderSidebar();
+        renderContent();
+    } finally { finishNativeActivity(); }
 }
 async function creation<T extends OriginalFact>(route: string, payload: Record<string, unknown>, deliver: (receipt: T) => Promise<void>): Promise<T> {
-  if (pendingCreation && pendingCreation.route !== route) throw new UiError(uiMessage("shell.previousCreationUnconfirmedRetry"));
-  const retry = pendingCreation !== null;
-  const request = pendingCreation ?? { route, payload: { ...payload, operationId: operationId() }, receipt: undefined as OriginalFact | undefined };
-  pendingCreation = request;
-  try { const result = await submitOriginal<T>(api, request.route, request.payload, "newNode", retry); request.receipt = result; await deliver(result); pendingCreation = null; return result; }
-  catch (error) { if (error instanceof TerminatedAttempt && !request.receipt) pendingCreation = null; else toast(uiMessage("shell.creationUnconfirmedRetrySameOperation"), true); throw error; }
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (pendingCreation && pendingCreation.route !== route) throw new UiError(uiMessage("shell.previousCreationUnconfirmedRetry"));
+        const retry = pendingCreation !== null;
+        const request = pendingCreation ?? { route, payload: { ...payload, operationId: operationId() }, receipt: undefined as OriginalFact | undefined };
+        pendingCreation = request;
+        try { const result = await submitOriginal<T>(api, request.route, request.payload, "newNode", retry); request.receipt = result; await deliver(result); pendingCreation = null; return await (result); }
+        catch (error) { if (error instanceof TerminatedAttempt && !request.receipt) pendingCreation = null; else toast(uiMessage("shell.creationUnconfirmedRetrySameOperation"), true); throw error; }
+    } finally { finishNativeActivity(); }
 }
 async function createLibrary(): Promise<void> {
-  if (pendingCreation) throw new UiError(uiMessage("shell.originalNoteCreationPending"));
-  await openLibraryCreation({ defaults: () => api("/api/library/create-defaults"), create: request => api("/api/library/create", request), delivery: operationId => api("/api/operations/status", { operationId }), deliver: async receipt => {
-    if (!receipt.library || receipt.library.workspaceId !== receipt.workspaceId || normalize(receipt.library.root) !== normalize(receipt.root) || receipt.rootNotePath && !receipt.rootDocument) throw new UiError(uiMessage("shell.libraryExactDeliveryPending"));
-    workspaceTools.invalidateQueryEnvironment(receipt.root);
-    inventory = receipt.library; query = ""; selectedFolder = null; renderSidebar(); renderContent();
-    if (receipt.rootDocument) await acceptCreatedDocument(receipt.rootDocument);
-    else await refreshInventory();
-    toast(uiMessage("shell.libraryCreated"));
-  }, inspect: operationId => api("/api/recovery/inspect", { operationId }), resolve: (operationId, action) => api("/api/recovery/resolve", { operationId, action }), cancel: request => api("/api/library/create-cancel", request) });
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (pendingCreation) throw new UiError(uiMessage("shell.originalNoteCreationPending"));
+        workspaceTools.assertLibraryDeparture();
+        await openLibraryCreation({
+            defaults: () => api("/api/library/create-defaults"), create: request => api("/api/library/create", request), delivery: operationId => api("/api/operations/status", { operationId }), deliver: async receipt => libraryCloseActivity.run(async () => {
+
+                if (!receipt.library || receipt.library.workspaceId !== receipt.workspaceId || normalize(receipt.library.root) !== normalize(receipt.root) || receipt.rootNotePath && !receipt.rootDocument) throw new UiError(uiMessage("shell.libraryExactDeliveryPending"));
+                workspaceTools.assertLibraryChange(receipt.library);
+                workspaceTools.invalidateQueryEnvironment(receipt.root);
+                inventory = receipt.library; query = ""; selectedFolder = null; renderSidebar(); renderContent();
+                if (receipt.rootDocument) await acceptCreatedDocument(receipt.rootDocument);
+                else await refreshInventory();
+                toast(uiMessage("shell.libraryCreated"));
+
+            }), inspect: operationId => api("/api/recovery/inspect", { operationId }), resolve: (operationId, action) => api("/api/recovery/resolve", { operationId, action }), cancel: request => api("/api/library/create-cancel", request)
+        });
+    } finally { finishNativeActivity(); }
 }
 async function openOutsideFile(): Promise<void> {
-    const path = await pathDialog("file");
-    if (path)
-        await openDocument(path);
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        const path = await pathDialog("file");
+        if (path)
+            await openDocument(path);
+    } finally { finishNativeActivity(); }
 }
 async function createNote(): Promise<void> {
-    if (!inventory) {
-        await chooseLibrary();
-        return;
-    }
-    if (!inventory.workspaceId) {
-        toast(uiMessage("shell.ordinaryFolderCannotCreateNote"), true);
-        return;
-    }
-    const name = pendingCreation?.route === "/api/note/create" ? String(pendingCreation.payload.name) : await modal<string>(uiMessage("shell.newNote"), displayMessage("shell.saveToFolder", { p0: uiDisplayParameter(selectedFolder ?? inventory.root) }), (form, close) => {
-        const label = el("label", "field-label", uiMessage("shell.noteName"));
-        const input = el("input", "text-input");
-        setUiAttr(input, "placeholder", uiMessage("shell.untitledNotePlaceholder"));
-        input.required = true;
-        label.append(input);
-        form.append(label);
-        form.append(el("p", "field-help", uiMessage("shell.noteNameDescription")));
-        const actions = el("div", "modal-actions");
-        actions.append(button(uiMessage("common.cancel"), () => close(null), "button-secondary"));
-        const submit = el("button", "button-primary", uiMessage("shell.createAndOpen"));
-        submit.type = "submit";
-        actions.append(submit);
-        form.append(actions);
-        form.onsubmit = event => {
-            event.preventDefault();
-            if (input.value.trim())
-                close(input.value.trim());
-        };
-    });
-    if (!name)
-        return;
-    await prepareSwitch();
-    await creation<OriginalFact & { document?: OpenedDocument; documentError?: ApiErrorBody }>("/api/note/create", { root: inventory.root, parent: selectedFolder ?? inventory.root, name }, async receipt => {
-        if (receipt.status !== "committed" || !receipt.document || receipt.documentError) throw new UiError(joinUiText([uiMessage("shell.noteOriginalDeliveryPending"), receipt.documentError ? apiErrorUiText(receipt.documentError) : uiMessage("shell.checkOriginalOperationSentence")]));
-        await acceptCreatedDocument(receipt.document);
-    });
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (!inventory) {
+            await chooseLibrary();
+            return;
+        }
+        if (!inventory.workspaceId) {
+            toast(uiMessage("shell.ordinaryFolderCannotCreateNote"), true);
+            return;
+        }
+        const name = pendingCreation?.route === "/api/note/create" ? String(pendingCreation.payload.name) : await modal<string>(uiMessage("shell.newNote"), displayMessage("shell.saveToFolder", { p0: uiDisplayParameter(selectedFolder ?? inventory.root) }), (form, close) => {
+            const label = el("label", "field-label", uiMessage("shell.noteName"));
+            const input = el("input", "text-input");
+            setUiAttr(input, "placeholder", uiMessage("shell.untitledNotePlaceholder"));
+            input.required = true;
+            label.append(input);
+            form.append(label);
+            form.append(el("p", "field-help", uiMessage("shell.noteNameDescription")));
+            const actions = el("div", "modal-actions");
+            actions.append(button(uiMessage("common.cancel"), () => close(null), "button-secondary"));
+            const submit = el("button", "button-primary", uiMessage("shell.createAndOpen"));
+            submit.type = "submit";
+            actions.append(submit);
+            form.append(actions);
+            form.onsubmit = event => {
+                event.preventDefault();
+                if (input.value.trim())
+                    close(input.value.trim());
+            };
+        });
+        if (!name)
+            return;
+        await prepareSwitch();
+        await creation<OriginalFact & { document?: OpenedDocument; documentError?: ApiErrorBody }>("/api/note/create", { root: inventory.root, parent: selectedFolder ?? inventory.root, name }, async receipt => libraryCloseActivity.run(async () => {
+
+            if (receipt.status !== "committed" || !receipt.document || receipt.documentError) throw new UiError(joinUiText([uiMessage("shell.noteOriginalDeliveryPending"), receipt.documentError ? apiErrorUiText(receipt.documentError) : uiMessage("shell.checkOriginalOperationSentence")]));
+            await acceptCreatedDocument(receipt.document);
+
+        }));
+    } finally { finishNativeActivity(); }
 }
 async function prepareSwitch(): Promise<void> {
-    if (bodyCloseFrozen)
-        throw new UiError(uiMessage("shell.closeDocumentSwitchFrozen"));
-    captureNavigation();
-    if (current)
-        await current.writing.settleForSessionChange();
-    if (current)
-        await persistDraft(current);
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (bodyCloseFrozen)
+            throw new UiError(uiMessage("shell.closeDocumentSwitchFrozen"));
+        captureNavigation();
+        if (current)
+            await current.writing.settleForSessionChange();
+        if (current)
+            await persistDraft(current);
+    } finally { finishNativeActivity(); }
 }
 async function openDocument(path: string, root?: string): Promise<void> {
-    const existing = documents.find(doc => normalize(doc.session.path) === normalize(path));
-    if (existing && !existing.sourceTrashed) {
-        await activateDocument(existing);
-        return;
-    }
-    const generation = ++navigationGeneration;
-    await prepareSwitch();
-    if (generation !== navigationGeneration)
-        return;
-    const opened = await api<OpenedDocument>("/api/open", { path, root });
-    if (generation !== navigationGeneration) {
-        await releaseOpenedSession(opened.sessionId);
-        return;
-    }
-    if (opened.kind === "managed" && documents.some(doc => doc.sourceTrashed && doc.session.opened.nodeId === opened.nodeId && doc.session.opened.workspaceId === opened.workspaceId))
-        await acceptResolvedDocument(opened);
-    else
-        addDocument(opened);
-    shell.classList.remove("sidebar-open");
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        const existing = documents.find(doc => normalize(doc.session.path) === normalize(path));
+        if (existing && !existing.sourceTrashed) {
+            await activateDocument(existing);
+            return;
+        }
+        const generation = ++navigationGeneration;
+        await prepareSwitch();
+        if (generation !== navigationGeneration)
+            return;
+        const opened = await api<OpenedDocument>("/api/open", { path, root });
+        if (generation !== navigationGeneration) {
+            await releaseOpenedSession(opened.sessionId);
+            return;
+        }
+        if (opened.kind === "managed" && documents.some(doc => doc.sourceTrashed && doc.session.opened.nodeId === opened.nodeId && doc.session.opened.workspaceId === opened.workspaceId))
+            await acceptResolvedDocument(opened);
+        else {
+            try { addDocument(opened); }
+            finally { if (!ownsOpenedSession(opened.sessionId)) await releaseOpenedSession(opened.sessionId); }
+        }
+        shell.classList.remove("sidebar-open");
+    } finally { finishNativeActivity(); }
 }
 function readOnlySource(doc: LiveDocument): boolean { return doc.session.opened.readOnly === true || doc.session.opened.kind === "trash" || doc.session.opened.kind === "managedTrash"; }
 function addDocument(opened: OpenedDocument): void {
     if (bodyCloseFrozen)
         throw new UiError(uiMessage("shell.closeLateOpenFrozen"));
+    workspaceTools.assertLibraryChange(inventory);
     const session = new DocumentSession(opened);
     let doc!: LiveDocument;
     const editor = new SourceEditor(session.source, source => {
@@ -2292,7 +2458,7 @@ function addDocument(opened: OpenedDocument): void {
     const preference = localStorage.getItem("weftext-view");
     const mode = modes.some(m => m.id === preference) ? preference as ViewMode : "styled";
     const writing = new WritingController({
-        actionAvailable: () => current === doc,
+        actionAvailable: () => !bodyCloseFrozen && current === doc,
         refreshMap: basis => api<unknown>("/api/editor-map", basis).then(value => decodeEditorMapResponse(value, basis.serial)),
         editor, basis: () => ({ sessionId: session.opened.sessionId, source: session.source, serial: session.serial }),
         // A temporary consumer pause cannot revoke pending literal settlement.
@@ -2305,30 +2471,36 @@ function addDocument(opened: OpenedDocument): void {
             if (current === doc)
                 refreshChrome();
         }, onError: showError,
-        onPendingSource: source => { clearTimeout(doc.draftTimer); doc.draftTimer = setTimeout(() => { void persistDraft(doc, source).catch(showError); }, 220); },
+        onPendingSource: source => { clearTimeout(doc.draftTimer); doc.draftTimer = setTimeout(() => { doc.draftTimer = undefined; void persistDraft(doc, source).catch(showError); }, 220); },
         onApplied: () => { scheduleDraft(doc); scheduleRender(doc, 100); },
     });
     const queries = new EmbeddedQueryController({
         queryResultScope: "local",
         preferenceIdentity: () => session.opened.nodeId && session.opened.workspaceId ? `weftext-node://${session.opened.workspaceId}/${session.opened.nodeId}` : null,
-        catalog: async () => (await api<{
-            schema: import("./data-panel").DataSchema;
-        }>("/api/data/schema", { root: session.opened.root })).schema,
-        openDefinition: async (owner) => { await acceptResolvedDocument(await api<OpenedDocument>("/api/data/open", { root: session.opened.root, entityKey: owner, lifecycle: "live" })); },
+        catalog: async () => libraryCloseActivity.run(async () => {
+            return await ((await api<{
+                schema: import("./data-panel").DataSchema;
+            }>("/api/data/schema", { root: session.opened.root })).schema);
+        }),
+        openDefinition: async (owner) => libraryCloseActivity.run(async () => {
+            await acceptResolvedDocument(await api<OpenedDocument>("/api/data/open", { root: session.opened.root, entityKey: owner, lifecycle: "live" }));
+        }),
         basis: () => ({ sessionId: session.opened.sessionId, source: session.source, serial: session.serial }), mode: () => doc.mode,
-        editable: () => sourceConsumersAvailable(doc) && current === doc && doc.mode !== "read" && !readOnlySource(doc) && !doc.sourceTrashed && !writing.state.composing,
+        editable: () => !bodyCloseFrozen && sourceConsumersAvailable(doc) && current === doc && doc.mode !== "read" && !readOnlySource(doc) && !doc.sourceTrashed && !writing.state.composing,
         request: (path, basis) => {
             if (!sourceConsumersAvailable(doc))
                 return Promise.reject(new UiError(uiMessage("shell.queryNoteLocationNeedsComparison")));
             return api(path, basis);
         }, prepareEdit: () => writing.flush(), notify: toast, output: query => workspaceTools.openQueryOutput(query),
-        apply: async (patches, basis, event) => {
+        apply: async (patches, basis, event) => libraryCloseActivity.run(async () => {
+
             if (current !== doc || doc.mode === "read" || readOnlySource(doc) || writing.state.composing || session.opened.sessionId !== basis.sessionId || session.serial !== basis.serial || session.source !== basis.source)
                 throw new UiError(uiMessage("shell.queryProposalBasisChanged"));
             editor.applyPatches(basis.source, patches, undefined, event);
             scheduleDraft(doc);
             scheduleRender(doc, 0);
-        },
+
+        }),
         reveal: (occurrence, host) => {
             if (current !== doc || doc.mode !== "focus" || readOnlySource(doc))
                 return false;
@@ -2342,12 +2514,15 @@ function addDocument(opened: OpenedDocument): void {
             return true;
         },
         closeReveal: () => editor.clearReveal(),
-        openOwner: async (origin) => {
+        openOwner: async (origin) => libraryCloseActivity.run(async () => {
+
             if (origin.isMain)
                 return;
             await openDocument(origin.path, session.opened.root);
-        },
-        openRow: async (row, plan) => {
+
+        }),
+        openRow: async (row, plan) => libraryCloseActivity.run(async () => {
+
             const lifecycle = row.lifecycle ?? (plan?.advanced?.call || plan?.advanced?.related || plan?.advanced?.unionAll ? null : plan?.scope.lifecycle);
             if (!lifecycle || !row.path)
                 throw new UiError(uiMessage("shell.queryRowExactNavigationMissing"));
@@ -2357,13 +2532,17 @@ function addDocument(opened: OpenedDocument): void {
                 await openDocument(row.path, session.opened.root);
             else
                 throw new UiError(uiMessage("shell.recycleResultIdentityMissing"));
-        },
+
+        }),
     });
     const authoringAssets = new AuthoringAssetsAdapter({ request: api, prefix: "/api/editor/endnotes-module", context: () => doc && current === doc && sourceConsumersAvailable(doc) && !readOnlySource(doc) && !doc.sourceTrashed && doc.mode !== "read" ? { sessionId: doc.session.opened.sessionId, audience: localPersonalAudience(), root: doc.session.opened.root } : null, committed: context => {
             if (context.root)
                 workspaceTools.invalidateQueryEnvironment(context.root);
-        }, changed: async () => { doc.session.projection = null; doc.renderGeneration++; doc.queries.invalidate(); await compile(doc); } });
+        }, changed: async () => libraryCloseActivity.run(async () => {
+            doc.session.projection = null; doc.renderGeneration++; doc.queries.invalidate(); await compile(doc);
+        }) });
     doc = { navigationKey: opened.sessionId, session, editor, writing, queries, mode, authoringAssets, draftChain: Promise.resolve(), draftFailure: null, rendering: 0, renderGeneration: 0, scroll: {}, layout: "continuous", deferredProjection: new DeferredPaint() };
+    workspaceTools.assertLibraryChange(inventory);
     documents.push(doc);
     current = doc;
     activeSourceOrigin = null;
@@ -2374,555 +2553,602 @@ function addDocument(opened: OpenedDocument): void {
         toast(uiMessage("shell.lastUnsavedDraftRecovered"));
 }
 async function activateDocument(doc: LiveDocument): Promise<void> {
-    const generation = ++navigationGeneration;
-    const activeLibrary = inventory;
-    if (doc.sourceTrashed && activeLibrary && activeLibrary.workspaceId === doc.session.opened.workspaceId && activeLibrary.entries.some(entry => entry.identityStatus === "admitted" && entry.nodeId === doc.session.opened.nodeId)) {
-        await prepareSwitch();
-        await acceptResolvedDocument(await api<OpenedDocument>("/api/data/open", { root: activeLibrary.root, entityKey: `weftext-node://${doc.session.opened.workspaceId}/${doc.session.opened.nodeId}` }));
-        return;
-    }
-    if (current === doc)
-        return;
-    await prepareSwitch();
-    if (generation !== navigationGeneration)
-        return;
-    const prior = doc.session.opened;
+    const finishNativeActivity = libraryCloseActivity.begin();
     let fresh: OpenedDocument | null = null;
     try {
-        fresh = prior.nodeId && prior.workspaceId && !readOnlySource(doc) ? await api<OpenedDocument>("/api/data/open", { root: prior.root, entityKey: `weftext-node://${prior.workspaceId}/${prior.nodeId}` }) : await api<OpenedDocument>("/api/open", { sessionId: prior.sessionId });
-    } catch (error) {
-        doc.session.error = joinUiText([uiMessage("shell.originalFileSessionUnavailable"), error instanceof Error ? errorUiText(error) : String(error)]);
-    }
-    if (generation !== navigationGeneration)
-        return;
-    const saved = navigationContexts.get(doc);
-    if (saved?.inventory) {
-        const before = saved.inventory, latest = await api<Inventory>("/api/library/open", { path: before.root });
+        const initialNavigation = navigationContexts.get(doc);
+        workspaceTools.assertLibraryChange(initialNavigation ? initialNavigation.inventory : inventory);
+        const generation = ++navigationGeneration;
+        const activeLibrary = inventory;
+        if (doc.sourceTrashed && activeLibrary && activeLibrary.workspaceId === doc.session.opened.workspaceId && activeLibrary.entries.some(entry => entry.identityStatus === "admitted" && entry.nodeId === doc.session.opened.nodeId)) {
+            await prepareSwitch();
+            await acceptResolvedDocument(await api<OpenedDocument>("/api/data/open", { root: activeLibrary.root, entityKey: `weftext-node://${doc.session.opened.workspaceId}/${doc.session.opened.nodeId}` }));
+            return;
+        }
+        if (current === doc)
+            return;
+        await prepareSwitch();
         if (generation !== navigationGeneration)
             return;
-        const relocate = (path: string): string | null => {
-            const entry = before.entries.find(item => normalize(item.path) === normalize(path));
-            const primary = entry?.nodeId ? entry : before.entries.find(item => item.kind === "node" && normalize(item.parentPath) === normalize(path));
-            if (!primary?.nodeId)
-                return null;
-            const next = latest.entries.find(item => item.kind === "node" && item.nodeId === primary.nodeId && item.identityStatus === "admitted");
-            return next ? (entry?.kind === "directory" ? next.parentPath : next.path) : null;
-        };
-        saved.selection = saved.selection.flatMap(path => { const next = relocate(path); return next ? [next] : []; });
-        if (saved.folder) {
-            const next = relocate(saved.folder);
-            if (next)
-                saved.folder = next;
-            else if (!latest.entries.some(item => item.kind === "directory" && normalize(item.path) === normalize(saved.folder!))) {
-                saved.folder = null;
-                toast(uiMessage("shell.oldDirectoryScopeUnavailable"));
-            }
+        const prior = doc.session.opened;
+        try {
+            fresh = prior.nodeId && prior.workspaceId && !readOnlySource(doc) ? await api<OpenedDocument>("/api/data/open", { root: prior.root, entityKey: `weftext-node://${prior.workspaceId}/${prior.nodeId}` }) : await api<OpenedDocument>("/api/open", { sessionId: prior.sessionId });
+        } catch (error) {
+            doc.session.error = joinUiText([uiMessage("shell.originalFileSessionUnavailable"), error instanceof Error ? errorUiText(error) : String(error)]);
         }
-        saved.inventory = latest;
-    }
-    if (fresh?.source === doc.session.baseSource) {
-        doc.session.opened = fresh;
-        doc.session.acknowledgeSave(fresh.source, fresh.baseId, fresh.path);
-        doc.sourceTrashed = false;
-        doc.editor.clearTokens();
-        doc.queries.invalidate();
-        doc.session.projection = null;
-        await persistDraft(doc);
-    }
-    else if (fresh) {
-        doc.externalSource = fresh.source;
-        doc.comparisonTarget = fresh;
-        doc.session.error = uiMessage("shell.returnTargetDiskChanged");
-    }
-    if (generation !== navigationGeneration)
-        return;
-    if (flowScroll && flowHasProjection && current)
-        current.scroll[current.mode] = flowScroll.scrollTop;
-    current = doc;
-    restoreNavigation(doc);
-    if (doc.mode === "write")
-        doc.writing.restoreNavigationFocus();
-    activeSourceOrigin = null;
-    renderSidebar();
-    renderContent();
-    if (saved) {
-        const tree = sidebar.querySelector(".file-tree");
-        if (tree)
-            tree.scrollTop = saved.scroll;
-        const contents = sidebar.querySelector(".node-contents");
-        if (contents)
-            contents.scrollTop = saved.contentScroll;
-    }
-    if (["source", "styled"].includes(doc.mode))
-        doc.editor.view.focus();
-    if (!doc.session.projectionCurrent)
-        scheduleRender(doc, 0);
-}
-async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
-    if (bodyCloseFrozen)
-        throw new UiError(uiMessage("shell.closeSaveFrozen"));
-    if (historyPanel.hasPending(historyContext(doc))) { toast(uiMessage("shell.historyRestoreBeforeSave"), true); return; }
-    if (doc.session.savePending)
-        return;
-    if ((doc.sourceTrashed || readOnlySource(doc)) && !path) {
-        toast(uiMessage("shell.noteRecycledRestoreOrSaveAs"), true);
-        return;
-    }
-    if (doc.writing.state.composing) {
-        await doc.writing.deferUntilCompositionEnds(() => saveDocument(doc, path));
-        return;
-    }
-    doc.session.savePending = true;
-    refreshChrome();
-    try {
-        if (!pendingSave(doc)) {
-            await flushLiteral();
+        if (generation !== navigationGeneration)
+            return;
+        const retained = navigationContexts.get(doc);
+        const saved = retained ? { ...retained, selection: [...retained.selection], collapsed: [...retained.collapsed] } : undefined;
+        if (saved?.inventory) {
+            const before = saved.inventory, latest = await api<Inventory>("/api/library/open", { path: before.root });
+            if (generation !== navigationGeneration)
+                return;
+            workspaceTools.assertLibraryChange(latest);
+            const relocate = (path: string): string | null => {
+                const entry = before.entries.find(item => normalize(item.path) === normalize(path));
+                const primary = entry?.nodeId ? entry : before.entries.find(item => item.kind === "node" && normalize(item.parentPath) === normalize(path));
+                if (!primary?.nodeId)
+                    return null;
+                const next = latest.entries.find(item => item.kind === "node" && item.nodeId === primary.nodeId && item.identityStatus === "admitted");
+                return next ? (entry?.kind === "directory" ? next.parentPath : next.path) : null;
+            };
+            saved.selection = saved.selection.flatMap(path => { const next = relocate(path); return next ? [next] : []; });
+            if (saved.folder) {
+                const next = relocate(saved.folder);
+                if (next)
+                    saved.folder = next;
+                else if (!latest.entries.some(item => item.kind === "directory" && normalize(item.path) === normalize(saved.folder!))) {
+                    saved.folder = null;
+                    toast(uiMessage("shell.oldDirectoryScopeUnavailable"));
+                }
+            }
+            saved.inventory = latest;
+        }
+        workspaceTools.assertLibraryChange(saved ? saved.inventory : inventory);
+        if (fresh?.source === doc.session.baseSource) {
+            doc.session.opened = fresh;
+            doc.session.acknowledgeSave(fresh.source, fresh.baseId, fresh.path);
+            doc.sourceTrashed = false;
+            doc.editor.clearTokens();
+            doc.queries.invalidate();
+            doc.session.projection = null;
             await persistDraft(doc);
         }
+        else if (fresh) {
+            doc.externalSource = fresh.source;
+            doc.comparisonTarget = fresh;
+            doc.session.error = uiMessage("shell.returnTargetDiskChanged");
+        }
+        if (generation !== navigationGeneration)
+            return;
+        workspaceTools.assertLibraryChange(saved ? saved.inventory : inventory);
+        if (flowScroll && flowHasProjection && current)
+            current.scroll[current.mode] = flowScroll.scrollTop;
+        if (saved) navigationContexts.set(doc, saved);
+        current = doc;
+        restoreNavigation(doc);
+        if (doc.mode === "write")
+            doc.writing.restoreNavigationFocus();
+        activeSourceOrigin = null;
+        renderSidebar();
+        renderContent();
+        if (saved) {
+            const tree = sidebar.querySelector(".file-tree");
+            if (tree)
+                tree.scrollTop = saved.scroll;
+            const contents = sidebar.querySelector(".node-contents");
+            if (contents)
+                contents.scrollTop = saved.contentScroll;
+        }
+        if (["source", "styled"].includes(doc.mode))
+            doc.editor.view.focus();
+        if (!doc.session.projectionCurrent)
+            scheduleRender(doc, 0);
+    } finally {
+        try { if (fresh && !ownsOpenedSession(fresh.sessionId)) await releaseOpenedSession(fresh.sessionId); }
+        finally { finishNativeActivity(); }
     }
-    catch (error) {
-        doc.session.savePending = false;
+}
+async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (bodyCloseFrozen)
+            throw new UiError(uiMessage("shell.closeSaveFrozen"));
+        if (historyPanel.hasPending(historyContext(doc))) { toast(uiMessage("shell.historyRestoreBeforeSave"), true); return; }
+        if (doc.session.savePending)
+            return;
+        if ((doc.sourceTrashed || readOnlySource(doc)) && !path) {
+            toast(uiMessage("shell.noteRecycledRestoreOrSaveAs"), true);
+            return;
+        }
+        if (doc.writing.state.composing) {
+            await doc.writing.deferUntilCompositionEnds(() => saveDocument(doc, path));
+            return;
+        }
+        doc.session.savePending = true;
         refreshChrome();
-        throw error;
-    }
-    if (doc.session.opened.recoveredDraftConflict && !path) {
-        doc.session.savePending = false;
-        refreshChrome();
-        await showDraftComparison(doc);
-        return;
-    }
-    let reservedOperation: string | null = null;
-    let querySaveNotice = false;
-    if (!pendingSave(doc) && !path && doc.session.opened.nodeId && doc.session.source.includes('"weftext.query"')) {
-        const source = doc.session.source, serial = doc.session.serial;
         try {
-            const pending = await api<{
-                operationId: string | null;
-                queryState?: string;
-            }>("/api/query/definition/pending", { sessionId: doc.session.opened.sessionId, source, serial });
-            reservedOperation = pending.operationId;
-            querySaveNotice = ["unparsed", "unadmitted", "multiplePending"].includes(pending.queryState ?? "");
+            if (!pendingSave(doc)) {
+                await flushLiteral();
+                await persistDraft(doc);
+            }
         }
         catch (error) {
             doc.session.savePending = false;
             refreshChrome();
             throw error;
         }
-        if (doc.session.source !== source || doc.session.serial !== serial) {
+        if (doc.session.opened.recoveredDraftConflict && !path) {
             doc.session.savePending = false;
-            throw new UiError(uiMessage("shell.saveQueryReservationInputChanged"));
+            refreshChrome();
+            await showDraftComparison(doc);
+            return;
         }
-    }
-    const retry = pendingSave(doc) !== undefined;
-    const request: NonNullable<LiveDocument["lastSave"]> = pendingSave(doc) ?? { source: doc.session.source, sourcePath: doc.session.path, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), sessionId: doc.session.opened.sessionId, path };
-    doc.lastSave = request;
-    doc.session.savePending = true;
-    refreshChrome();
-    let receiptReceived = false;
-    try {
-        const payload = request.path
-            ? { sessionId: request.sessionId, path: request.path, source: request.source, operationId: request.operationId }
-            : { sessionId: request.sessionId, baseId: request.baseId, source: request.source, operationId: request.operationId };
-        const receipt = fileSaveReceipt(await submitOriginal(api, request.path ? "/api/save-as" : "/api/save", payload, request.path ? "saveAs" : "save", retry), request);
-        if (!originalCommitted(receipt)) throw new ApiError(receipt.status, uiMessage("shell.saveUnconfirmedDraftRetained"));
-        receiptReceived = true;
-        request.receipt = receipt;
-        if (doc.lastSave !== request || doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) {
-            doc.lastSave = request;
-            throw new ApiError("committedDeliveryPending", uiMessage("shell.commitSessionChangedAwaitOriginalResult"));
-        }
-        if (receipt.recoveryIssue)
-            toast(uiMessage("shell.savedRecoveryUpdateUnavailable"), true);
-        workspaceTools.invalidateQueryEnvironment(doc.session.opened.root);
-        if (request.path) {
-            // The original physical creation must deliver its actual fresh Core Session.
-            const opened = receipt.document;
-            if (!opened || receipt.documentError || receipt.documentSourceMatchesCommit !== true || opened.path !== receipt.path || !canRebindSaveAs(request.source, opened)) {
-                if (opened) { doc.comparisonTarget = opened; doc.externalSource = opened.source; }
-                throw new UiError(uiMessage("shell.saveAsOriginalPhysicalDeliveryPending"));
+        let reservedOperation: string | null = null;
+        let querySaveNotice = false;
+        if (!pendingSave(doc) && !path && doc.session.opened.nodeId && doc.session.source.includes('"weftext.query"')) {
+            const source = doc.session.source, serial = doc.session.serial;
+            try {
+                const pending = await api<{
+                    operationId: string | null;
+                    queryState?: string;
+                }>("/api/query/definition/pending", { sessionId: doc.session.opened.sessionId, source, serial });
+                reservedOperation = pending.operationId;
+                querySaveNotice = ["unparsed", "unadmitted", "multiplePending"].includes(pending.queryState ?? "");
             }
-            await doc.writing.settleForSessionChange();
-            if (doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) throw new UiError(uiMessage("shell.saveAsDeliverySessionChanged"));
-            doc.session.opened = opened;
-            request.deliverySessionId = opened.sessionId;
-            doc.editor.clearTokens();
-            doc.session.acknowledgeSave(request.source, opened.baseId, opened.path);
-            doc.session.projection = null;
-            scheduleRender(doc, 0);
+            catch (error) {
+                doc.session.savePending = false;
+                refreshChrome();
+                throw error;
+            }
+            if (doc.session.source !== source || doc.session.serial !== serial) {
+                doc.session.savePending = false;
+                throw new UiError(uiMessage("shell.saveQueryReservationInputChanged"));
+            }
         }
-        else {
-            if (receipt.document) await doc.writing.settleForSessionChange();
-            if (!receipt.document || receipt.documentError || receipt.documentSourceMatchesCommit !== true || !rebindCommittedSave(doc.session, { ...request, sessionId: request.deliverySessionId ?? request.sessionId }, receipt.document)) {
-                if (receipt.document) {
-                    doc.externalSource = receipt.document.source;
-                    doc.comparisonTarget = receipt.document;
+        const retry = pendingSave(doc) !== undefined;
+        const request: NonNullable<LiveDocument["lastSave"]> = pendingSave(doc) ?? { source: doc.session.source, sourcePath: doc.session.path, baseId: doc.session.baseId, operationId: reservedOperation ?? operationId(), sessionId: doc.session.opened.sessionId, path };
+        doc.lastSave = request;
+        doc.session.savePending = true;
+        refreshChrome();
+        let receiptReceived = false;
+        try {
+            const payload = request.path
+                ? { sessionId: request.sessionId, path: request.path, source: request.source, operationId: request.operationId }
+                : { sessionId: request.sessionId, baseId: request.baseId, source: request.source, operationId: request.operationId };
+            const receipt = fileSaveReceipt(await submitOriginal(api, request.path ? "/api/save-as" : "/api/save", payload, request.path ? "saveAs" : "save", retry), request);
+            if (!originalCommitted(receipt)) throw new ApiError(receipt.status, uiMessage("shell.saveUnconfirmedDraftRetained"));
+            receiptReceived = true;
+            request.receipt = receipt;
+            if (doc.lastSave !== request || doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) {
+                doc.lastSave = request;
+                throw new ApiError("committedDeliveryPending", uiMessage("shell.commitSessionChangedAwaitOriginalResult"));
+            }
+            if (receipt.recoveryIssue)
+                toast(uiMessage("shell.savedRecoveryUpdateUnavailable"), true);
+            workspaceTools.invalidateQueryEnvironment(doc.session.opened.root);
+            if (request.path) {
+                // The original physical creation must deliver its actual fresh Core Session.
+                const opened = receipt.document;
+                if (!opened || receipt.documentError || receipt.documentSourceMatchesCommit !== true || opened.path !== receipt.path || !canRebindSaveAs(request.source, opened)) {
+                    if (opened) { doc.comparisonTarget = opened; doc.externalSource = opened.source; }
+                    throw new UiError(uiMessage("shell.saveAsOriginalPhysicalDeliveryPending"));
                 }
-                throw new ApiError("committedDeliveryPending", uiMessage("shell.savedBasisChangedCheckDisk"));
+                await doc.writing.settleForSessionChange();
+                if (doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) throw new UiError(uiMessage("shell.saveAsDeliverySessionChanged"));
+                doc.session.opened = opened;
+                request.deliverySessionId = opened.sessionId;
+                doc.editor.clearTokens();
+                doc.session.acknowledgeSave(request.source, opened.baseId, opened.path);
+                doc.session.projection = null;
+                scheduleRender(doc, 0);
             }
-            request.deliverySessionId = receipt.document.sessionId;
-            doc.editor.clearTokens();
-            doc.session.projection = null;
-            scheduleRender(doc, 0);
-        }
-        await persistDraft(doc);
-        if (inventory) { inventory = await api<Inventory>("/api/library/open", { path: inventory.root }); renderSidebar(); }
-        if (doc.lastSave !== request || doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) {
-            doc.lastSave = request;
-            throw new UiError(uiMessage("shell.laterDeliverySessionChanged"));
-        }
-        doc.saveAsChangedTarget = undefined;
-        doc.lastSave = undefined;
-        if (doc === current) { renderSidebar(); refreshChrome(); }
-        toast(doc.session.dirty ? uiMessage("shell.savedLaterInputInDraft") : uiMessage("shell.savedSentence"), false);
-        if (querySaveNotice) toast(uiMessage("shell.savedQueriesNotRunnable"), true);
-    }
-    catch (error) {
-        if (!receiptReceived && error instanceof TerminatedAttempt)
+            else {
+                if (receipt.document) await doc.writing.settleForSessionChange();
+                if (!receipt.document || receipt.documentError || receipt.documentSourceMatchesCommit !== true || !rebindCommittedSave(doc.session, { ...request, sessionId: request.deliverySessionId ?? request.sessionId }, receipt.document)) {
+                    if (receipt.document) {
+                        doc.externalSource = receipt.document.source;
+                        doc.comparisonTarget = receipt.document;
+                    }
+                    throw new ApiError("committedDeliveryPending", uiMessage("shell.savedBasisChangedCheckDisk"));
+                }
+                request.deliverySessionId = receipt.document.sessionId;
+                doc.editor.clearTokens();
+                doc.session.projection = null;
+                scheduleRender(doc, 0);
+            }
+            await persistDraft(doc);
+            if (inventory) {
+                const next = await api<Inventory>("/api/library/open", { path: inventory.root });
+                workspaceTools.assertLibraryChange(next);
+                inventory = next;
+                renderSidebar();
+            }
+            if (doc.lastSave !== request || doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) {
+                doc.lastSave = request;
+                throw new UiError(uiMessage("shell.laterDeliverySessionChanged"));
+            }
+            doc.saveAsChangedTarget = undefined;
             doc.lastSave = undefined;
-        doc.session.error = error instanceof Error ? errorUiText(error) : String(error);
-        if (error instanceof ApiError && error.currentSource != null)
-            doc.externalSource = error.currentSource;
-        if (error instanceof ApiError && error.code === "saveAsTargetChanged")
-            doc.session.error = errorUiText(error);
-        else if (receiptReceived)
-            doc.session.error = doc.lastSave ? uiMessage("shell.committedDeliveryIncomplete") : displayMessage("shell.savedRecoveryInformationFailed", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) });
-        else if (!(error instanceof ApiError))
-            doc.session.error = uiMessage("shell.saveUnknownConfirmSameOperation");
-        if (doc === current)
-            renderContent();
-        throw error;
-    }
-    finally {
-        doc.session.savePending = false;
-        if (doc === current) { if (request.path || retry) renderContent(); else refreshChrome(); }
-    }
+            if (doc === current) { renderSidebar(); refreshChrome(); }
+            toast(doc.session.dirty ? uiMessage("shell.savedLaterInputInDraft") : uiMessage("shell.savedSentence"), false);
+            if (querySaveNotice) toast(uiMessage("shell.savedQueriesNotRunnable"), true);
+        }
+        catch (error) {
+            if (!receiptReceived && error instanceof TerminatedAttempt)
+                doc.lastSave = undefined;
+            doc.session.error = error instanceof Error ? errorUiText(error) : String(error);
+            if (error instanceof ApiError && error.currentSource != null)
+                doc.externalSource = error.currentSource;
+            if (error instanceof ApiError && error.code === "saveAsTargetChanged")
+                doc.session.error = errorUiText(error);
+            else if (receiptReceived)
+                doc.session.error = doc.lastSave ? uiMessage("shell.committedDeliveryIncomplete") : displayMessage("shell.savedRecoveryInformationFailed", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) });
+            else if (!(error instanceof ApiError))
+                doc.session.error = uiMessage("shell.saveUnknownConfirmSameOperation");
+            if (doc === current)
+                renderContent();
+            throw error;
+        }
+        finally {
+            doc.session.savePending = false;
+            if (doc === current) { if (request.path || retry) renderContent(); else refreshChrome(); }
+        }
+    } finally { finishNativeActivity(); }
 }
 async function saveAs(): Promise<void> {
-    if (!current)
-        return;
-    const path = await pathDialog("saveAs");
-    if (path)
-        await saveDocument(current, path);
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (!current)
+            return;
+        const path = await pathDialog("saveAs");
+        if (path)
+            await saveDocument(current, path);
+    } finally { finishNativeActivity(); }
 }
 async function inspectSaveAsDelivery(operationId: string): Promise<void> {
-  const fact = await api<Receipt & OriginalFact>("/api/operations/status", { operationId });
-  if (fact.operationId !== operationId || fact.status !== "committed") throw new UiError(uiMessage("shell.originalCommitReadUnavailable"));
-  await modal<void>(uiMessage("shell.originalSaveAsFactTitle"), uiMessage("shell.originalSaveAsFactHelp"), (form, close) => {
-    form.append(el("pre", "", JSON.stringify({ operationId: fact.operationId, status: fact.status, path: fact.path, baseId: fact.baseId, documentError: fact.documentError }, null, 2)), button(uiMessage("common.close"), () => close(), "button-primary"));
-  });
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        const fact = await api<Receipt & OriginalFact>("/api/operations/status", { operationId });
+        if (fact.operationId !== operationId || fact.status !== "committed") throw new UiError(uiMessage("shell.originalCommitReadUnavailable"));
+        await modal<void>(uiMessage("shell.originalSaveAsFactTitle"), uiMessage("shell.originalSaveAsFactHelp"), (form, close) => {
+            form.append(el("pre", "", JSON.stringify({ operationId: fact.operationId, status: fact.status, path: fact.path, baseId: fact.baseId, documentError: fact.documentError }, null, 2)), button(uiMessage("common.close"), () => close(), "button-primary"));
+        });
+    } finally { finishNativeActivity(); }
 }
 async function endSaveAsDelivery(doc: LiveDocument, request: NonNullable<LiveDocument["lastSave"]>): Promise<void> {
-  if (doc.session.savePending || doc.lastSave !== request || !request.path || !request.receipt || !["saved", "committed"].includes(request.receipt.status)) throw new UiError(uiMessage("shell.confirmedSaveAsRequiredToEnd"));
-  await doc.writing.settleForSessionChange(); await persistDraft(doc);
-  if (doc.lastSave !== request || doc.session.savePending) throw new UiError(uiMessage("shell.saveStateChangedOriginalRetained"));
-  request.deliveryEnded = true; doc.session.error = null; doc.comparisonTarget = undefined; doc.externalSource = undefined;
-  if (doc === current) renderContent();
-  toast(uiMessage("shell.saveAsDeliveryEndedNotice"));
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (doc.session.savePending || doc.lastSave !== request || !request.path || !request.receipt || !["saved", "committed"].includes(request.receipt.status)) throw new UiError(uiMessage("shell.confirmedSaveAsRequiredToEnd"));
+        await doc.writing.settleForSessionChange(); await persistDraft(doc);
+        if (doc.lastSave !== request || doc.session.savePending) throw new UiError(uiMessage("shell.saveStateChangedOriginalRetained"));
+        request.deliveryEnded = true; doc.session.error = null; doc.comparisonTarget = undefined; doc.externalSource = undefined;
+        if (doc === current) renderContent();
+        toast(uiMessage("shell.saveAsDeliveryEndedNotice"));
+    } finally { finishNativeActivity(); }
 }
 
 async function showDraftComparison(doc = current): Promise<void> {
-    if (!doc)
-        return;
-    await doc.writing.settleForSessionChange();
-    await persistDraft(doc);
-    scheduleRender(doc, 0);
-    const target = doc.comparisonTarget ?? doc.session.opened;
-    const fresh = target.nodeId && target.workspaceId && target.kind === "managed"
-        ? await api<OpenedDocument>("/api/data/open", { root: target.root, entityKey: `weftext-node://${target.workspaceId}/${target.nodeId}` })
-        : await api<OpenedDocument>("/api/open", { path: target.path, root: target.root });
-    await doc.writing.settleForSessionChange();
-    const initialMergeSource = doc.session.source;
-    const confirmed = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, generation: doc.editor.generation };
-    const result = await modal<{
-        action: "discardRecovered" | "mergeRecovered";
-        source: string;
-    }>(uiMessage("shell.compareDraftAndDisk"), uiMessage("shell.compareDraftAndDiskDescription"), (form, close) => {
-        const columns = el("div", "comparison");
-        for (const [label, source] of [[uiMessage("shell.draftOriginalVersion"), doc.session.opened.recoveredDraftBaseSource ?? doc.session.baseSource], [uiMessage("shell.currentDiskContent"), fresh.source]] as const) {
-            const pane = el("label", "field-label", label);
-            const text = el("textarea", "text-input comparison-source");
-            text.readOnly = true;
-            text.value = source;
-            text.rows = 10;
-            pane.append(text);
-            columns.append(pane);
-        }
-        form.append(columns);
-        const variants = [...(doc.session.opened.recoveredDraftVariants ?? []), ...(fresh.recoveredDraftVariants ?? [])];
-        for (const candidate of [doc.session.opened, fresh]) {
-            if (candidate.recoveredDraft != null && candidate.recoveredDraft !== initialMergeSource)
-                variants.push({ path: candidate.path, baseSource: candidate.recoveredDraftBaseSource ?? candidate.source, source: candidate.recoveredDraft, baseKnown: candidate.recoveredDraftBaseSource != null });
-        }
-        for (const variant of uniqueRetainedDrafts(variants)) {
-            const details = el("details", "recovery-member");
-            details.open = true;
-            details.append(el("summary", "", displayMessage("shell.anotherRetainedDraft", { p0: uiDisplayParameter(variant.path) })));
-            const draft = el("textarea", "text-input comparison-source");
-            draft.readOnly = true;
-            draft.rows = 8;
-            draft.value = variant.source;
-            setUiAttr(draft, "aria-label", displayMessage("shell.retainedDraft", { p0: uiDisplayParameter(variant.path) }));
-            details.append(draft);
-            if (variant.baseKnown) {
-                const base = el("textarea", "text-input comparison-source");
-                base.readOnly = true;
-                base.rows = 5;
-                base.value = variant.baseSource;
-                setUiAttr(base, "aria-label", displayMessage("shell.draftOriginalVersionPath", { p0: uiDisplayParameter(variant.path) }));
-                details.append(el("p", "field-help", uiMessage("shell.thisDraftOriginalVersion")), base);
-            }
-            else
-                details.append(el("p", "field-help", uiMessage("shell.draftOriginalVersionUnconfirmed")));
-            form.append(details);
-        }
-        const mergeLabel = el("label", "field-label", uiMessage("shell.mergedDraftEditable"));
-        const merged = el("textarea", "text-input comparison-source");
-        merged.value = initialMergeSource;
-        merged.rows = 10;
-        mergeLabel.append(merged);
-        form.append(mergeLabel);
-        const actions = el("div", "modal-actions");
-        actions.append(button(uiMessage("shell.closeKeepDraft"), () => close(null), "button-secondary"), button(uiMessage("shell.useDiskVersion"), () => close({ action: "discardRecovered", source: fresh.source }), "button-secondary"), button(uiMessage("shell.applyMergedDraft"), () => close({ action: "mergeRecovered", source: textareaSourceDraft(initialMergeSource, merged.value) }), "button-primary"));
-        form.append(actions);
-    });
-    if (!result) {
-        if (doc === current)
-            renderContent();
-        return;
-    }
-    await api("/api/draft/resolve", { sessionId: fresh.sessionId, action: result.action, source: result.action === "mergeRecovered" ? result.source : undefined });
-    await doc.writing.settleForSessionChange();
-    if (doc.session.opened.sessionId !== confirmed.sessionId || doc.session.source !== confirmed.source || doc.session.serial !== confirmed.serial || doc.editor.generation !== confirmed.generation) {
-        doc.session.opened.recoveredDraftVariants = [...(doc.session.opened.recoveredDraftVariants ?? []), { path: fresh.path, baseSource: fresh.source, source: result.source, baseKnown: true }];
-        doc.comparisonTarget = fresh;
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (!doc)
+            return;
+        await doc.writing.settleForSessionChange();
         await persistDraft(doc);
-        doc.session.error = uiMessage("shell.mergeConfirmationNewInput");
-        if (doc === current)
-            renderContent();
-        return;
-    }
-    fresh.recoveredDraftConflict = false;
-    fresh.recoveredDraft = null;
-    doc.session.opened = fresh;
-    doc.editor.clearTokens();
-    doc.sourceTrashed = fresh.kind === "managedTrash";
-    doc.session.acknowledgeSave(fresh.source, fresh.baseId, fresh.path);
-    doc.session.projection = null;
-    doc.externalSource = undefined;
-    doc.comparisonTarget = undefined;
-    doc.lastSave = undefined;
-    doc.editor.apply(0, doc.editor.source.length, result.source);
-    await persistDraft(doc);
-    workspaceTools.documentChanged();
-    scheduleRender(doc, 0);
-    renderContent();
-    toast(result.action === "discardRecovered" ? uiMessage("shell.diskVersionAppliedRecoveryKept") : uiMessage("shell.explicitMergeApplied"));
-}
-async function showRecovery(): Promise<void> {
-    const result = await api<RecoveryInfo[] | {
-        recoveries: RecoveryInfo[];
-    }>("/api/recovery");
-    recoveries = Array.isArray(result) ? result : result.recoveries;
-    await modal<void>(uiMessage("shell.recoveryRecords"), uiMessage("shell.recoveryRecordsDescription"), (form, close) => {
-        const notes = el("section");
-        noteInputRecovery.render(notes, localPersonalAudience());
-        form.append(notes);
-        if (!recoveries.length)
-            form.append(el("p", "recovery-empty", uiMessage("shell.noPendingFileOperations")));
-        for (const record of recoveries) {
-            const item = el("div", "recovery-item");
-            item.append(el("strong", "", record.path), el("p", "", coreDescriptionUiText(record.description)), el("span", "", displayMessage("shell.operationStatus", { p0: uiDisplayParameter(record.status) })));
-            const inspect = button(uiMessage("shell.compareAndResolve"), async () => { await inspectRecovery(record.operationId); setUiText(inspect, uiMessage("shell.viewAgain")); }, "button-secondary compact");
-            item.append(inspect);
-            form.append(item);
-        }
-        form.append(button(uiMessage("common.close"), () => close(null), "button-primary"));
-    });
-}
-async function inspectRecovery(id: string): Promise<void> {
-    const record = await api<RecoveryInfo>("/api/recovery/inspect", { operationId: id });
-    const decision = await modal<string>(uiMessage("shell.inspectFileRecovery"), uiMessage("shell.inspectFileRecoveryDescription"), (form, close) => {
-        form.append(el("p", "field-help", () => `${record.path}\n${uiTextValue(coreDescriptionUiText(record.description))}`));
-        const states: Record<string, UiText> = { knownBefore: uiMessage("shell.recoveryCompleteBefore"), knownAfter: uiMessage("shell.recoveryCompletePlanned"), knownIntermediate: uiMessage("shell.recoveryConfirmedIntermediate"), mixedKnown: uiMessage("shell.recoveryPartialAllFilesConfirmed"), thirdState: uiMessage("shell.recoveryOtherChanges"), unavailable: uiMessage("shell.recoveryUnreadable") };
-        if (record.coherence)
-            form.append(el("p", "field-help", states[record.coherence] ?? record.coherence));
-        if (record.members?.length) {
-            for (const member of record.members) {
-                const details = el("details", "recovery-member");
-                details.open = true;
-                details.append(el("summary", "", () => `${uiTextValue(member.path)}${uiTextValue(member.targetPath ? ` → ${member.targetPath}` : "")} · ${uiTextValue(states[member.state] ?? member.state)}`));
-                const columns = el("div", "comparison recovery-comparison");
-                for (const [label, image] of [[uiMessage("shell.preOperationContent"), member.before], [uiMessage("shell.plannedContent"), member.after], [uiMessage("shell.currentContent"), member.current]] as const) {
-                    const pane = el("div", "field-label");
-                    pane.append(el("strong", "", label));
-                    if (!image?.present)
-                        pane.append(el("p", "field-help", uiMessage("shell.fileMissingOrUnreadable")));
-                    else if (image.source !== undefined) {
-                        const field = el("textarea", "text-input comparison-source");
-                        field.readOnly = true;
-                        field.rows = 8;
-                        field.value = image.source;
-                        setUiAttr(field, "aria-label", () => `${uiTextValue(label)}：${uiTextValue(member.path)}`);
-                        pane.append(field);
-                    }
-                    else {
-                        pane.append(el("p", "field-help", displayMessage("shell.binaryFileSize", { p0: uiDisplayParameter(image.byteLength.toLocaleString()) })));
-                        if (image.base64)
-                            pane.append(button(uiMessage("shell.downloadVersionToCompare"), () => {
-                                const bytes = Uint8Array.from(atob(image.base64!), value => value.charCodeAt(0));
-                                const url = URL.createObjectURL(new Blob([bytes]));
-                                const link = el("a");
-                                link.href = url;
-                                link.download = `${uiTextValue(label)}-${uiTextValue(basename(member.path))}`;
-                                link.click();
-                                setTimeout(() => URL.revokeObjectURL(url), 1000);
-                            }, "button-secondary compact"));
-                    }
-                    columns.append(pane);
-                }
-                details.append(columns);
-                form.append(details);
-            }
-        }
-        else {
-            const columns = el("div", "comparison recovery-comparison");
-            for (const [label, source] of [[uiMessage("shell.preOperationContent"), record.beforeSource], [uiMessage("shell.proposedContent"), record.afterSource], [uiMessage("shell.currentDiskContent"), record.currentSource]] as const) {
-                const pane = el("label", "field-label", label!);
+        scheduleRender(doc, 0);
+        const target = doc.comparisonTarget ?? doc.session.opened;
+        const fresh = target.nodeId && target.workspaceId && target.kind === "managed"
+            ? await api<OpenedDocument>("/api/data/open", { root: target.root, entityKey: `weftext-node://${target.workspaceId}/${target.nodeId}` })
+            : await api<OpenedDocument>("/api/open", { path: target.path, root: target.root });
+        await doc.writing.settleForSessionChange();
+        const initialMergeSource = doc.session.source;
+        const confirmed = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, generation: doc.editor.generation };
+        const result = await modal<{
+            action: "discardRecovered" | "mergeRecovered";
+            source: string;
+        }>(uiMessage("shell.compareDraftAndDisk"), uiMessage("shell.compareDraftAndDiskDescription"), (form, close) => {
+            const columns = el("div", "comparison");
+            for (const [label, source] of [[uiMessage("shell.draftOriginalVersion"), doc.session.opened.recoveredDraftBaseSource ?? doc.session.baseSource], [uiMessage("shell.currentDiskContent"), fresh.source]] as const) {
+                const pane = el("label", "field-label", label);
                 const text = el("textarea", "text-input comparison-source");
                 text.readOnly = true;
+                text.value = source;
                 text.rows = 10;
-                text.value = source ?? "";
-                if (source === undefined)
-                    setUiAttr(text, "placeholder", uiMessage("shell.noReadableFileContent"));
                 pane.append(text);
                 columns.append(pane);
             }
             form.append(columns);
-        }
-        const actions = el("div", "modal-actions");
-        actions.append(button(uiMessage("common.close"), () => close(null), "button-secondary"));
-        const allowed = record.allowedActions ?? (!record.members?.length && !["resolved", "committed"].includes(record.status) ? ["keepCurrent"] : []);
-        const labels: Record<string, UiText> = { keepCurrent: uiMessage("shell.keepOriginalStateUnblock"), adoptAfterImages: uiMessage("shell.acceptAllPlannedContent"), resumeOriginalPlan: uiMessage("shell.continueRemainingOriginalFiles") };
-        for (const action of allowed)
-            if (labels[action])
-                actions.append(button(labels[action], () => close(action), "button-primary"));
-        form.append(actions);
-    });
-    if (decision) {
-        await api("/api/recovery/resolve", { operationId: id, action: decision });
-        workspaceTools.invalidateQueryEnvironment();
-        toast(uiMessage("shell.recoveryResolutionConfirmed"));
-        await refreshInventory();
-    }
-}
-async function insertLink(): Promise<void> {
-    if (!current || readOnlySource(current) || current.mode === "read")
-        return;
-    const doc = current;
-    const target = await modal<{
-        target: string;
-        label: string;
-    }>(uiMessage("shell.insertLink"), uiMessage("shell.insertLinkDescription"), (form, close) => {
-        const targetLabel = el("label", "field-label", uiMessage("shell.linkTargetAddress"));
-        const input = el("input", "text-input");
-        input.required = true;
-        setUiAttr(input, "placeholder", uiMessage("shell.linkTargetPlaceholder"));
-        targetLabel.append(input);
-        form.append(targetLabel);
-        if (inventory) {
-            const options = el("select", "text-input link-targets");
-            const empty = el("option", "", uiMessage("shell.chooseFromLibrary"));
-            empty.value = "";
-            options.append(empty);
-            for (const entry of inventory.entries.filter(e => e.path.endsWith(".typ"))) {
-                const option = el("option", "", entry.title || entry.relativePath);
-                option.value = entry.path;
-                options.append(option);
+            const variants = [...(doc.session.opened.recoveredDraftVariants ?? []), ...(fresh.recoveredDraftVariants ?? [])];
+            for (const candidate of [doc.session.opened, fresh]) {
+                if (candidate.recoveredDraft != null && candidate.recoveredDraft !== initialMergeSource)
+                    variants.push({ path: candidate.path, baseSource: candidate.recoveredDraftBaseSource ?? candidate.source, source: candidate.recoveredDraft, baseKnown: candidate.recoveredDraftBaseSource != null });
             }
-            options.onchange = () => {
-                if (options.value)
-                    input.value = relativeFileTarget(doc.session.path, options.value);
-            };
-            form.append(options);
-        }
-        const textLabel = el("label", "field-label", uiMessage("shell.linkDisplayText"));
-        const label = el("input", "text-input");
-        setUiAttr(label, "placeholder", uiMessage("shell.linkTextPlaceholder"));
-        const selection = doc.editor.view.state.selection.main;
-        label.value = doc.editor.view.state.sliceDoc(selection.from, selection.to);
-        textLabel.append(label);
-        form.append(textLabel);
-        const actions = el("div", "modal-actions");
-        actions.append(button(uiMessage("common.cancel"), () => close(null), "button-secondary"));
-        const submit = el("button", "button-primary", uiMessage("shell.insert"));
-        submit.type = "submit";
-        actions.append(submit);
-        form.append(actions);
-        form.onsubmit = event => {
-            event.preventDefault();
-            if (input.value.trim())
-                close({ target: absoluteFileTarget(input.value.trim()), label: label.value || input.value.trim() });
-        };
-    });
-    if (!target)
-        return;
-    const quoted = quoteTypstString(target.target);
-    const selection = doc.editor.view.state.selection.main;
-    doc.editor.apply(selection.from, selection.to, `#link(${quoted})[${encodeLiteral(target.label)}]`);
-    doc.editor.view.focus();
-}
-async function navigateLink(target: string): Promise<void> {
-    if (!current)
-        return;
-    if (target.startsWith("#")) {
-        const anchor = renderHost?.querySelector(`#${CSS.escape(`native-${target.slice(1)}`)}`);
-        if (anchor) {
-            anchor.scrollIntoView({ block: "center", behavior: "smooth" });
+            for (const variant of uniqueRetainedDrafts(variants)) {
+                const details = el("details", "recovery-member");
+                details.open = true;
+                details.append(el("summary", "", displayMessage("shell.anotherRetainedDraft", { p0: uiDisplayParameter(variant.path) })));
+                const draft = el("textarea", "text-input comparison-source");
+                draft.readOnly = true;
+                draft.rows = 8;
+                draft.value = variant.source;
+                setUiAttr(draft, "aria-label", displayMessage("shell.retainedDraft", { p0: uiDisplayParameter(variant.path) }));
+                details.append(draft);
+                if (variant.baseKnown) {
+                    const base = el("textarea", "text-input comparison-source");
+                    base.readOnly = true;
+                    base.rows = 5;
+                    base.value = variant.baseSource;
+                    setUiAttr(base, "aria-label", displayMessage("shell.draftOriginalVersionPath", { p0: uiDisplayParameter(variant.path) }));
+                    details.append(el("p", "field-help", uiMessage("shell.thisDraftOriginalVersion")), base);
+                }
+                else
+                    details.append(el("p", "field-help", uiMessage("shell.draftOriginalVersionUnconfirmed")));
+                form.append(details);
+            }
+            const mergeLabel = el("label", "field-label", uiMessage("shell.mergedDraftEditable"));
+            const merged = el("textarea", "text-input comparison-source");
+            merged.value = initialMergeSource;
+            merged.rows = 10;
+            mergeLabel.append(merged);
+            form.append(mergeLabel);
+            const actions = el("div", "modal-actions");
+            actions.append(button(uiMessage("shell.closeKeepDraft"), () => close(null), "button-secondary"), button(uiMessage("shell.useDiskVersion"), () => close({ action: "discardRecovered", source: fresh.source }), "button-secondary"), button(uiMessage("shell.applyMergedDraft"), () => close({ action: "mergeRecovered", source: textareaSourceDraft(initialMergeSource, merged.value) }), "button-primary"));
+            form.append(actions);
+        });
+        if (!result) {
+            if (doc === current)
+                renderContent();
             return;
         }
-        throw new UiError(uiMessage("shell.previewAnchorMissing"));
-    }
-    const result = await api<{
-        path?: string;
-        root?: string;
-        fragment?: string;
-        externalUrl?: string;
-        entityKey?: string;
-        resourceRef?: string;
-        ownerEntityKey?: string;
-        revision?: string;
-        resourceFragment?: {
-            status: string;
-            pageIndex?: number;
-        };
-    }>("/api/link/resolve", { sessionId: current.session.opened.sessionId, target });
-    if (result.externalUrl) {
-        await modal<void>(uiMessage("shell.openExternalLink"), result.externalUrl, (form, close) => { const link = el("a", "button-primary", uiMessage("shell.openInBrowser")); link.href = result.externalUrl!; link.target = "_blank"; link.rel = "noopener noreferrer"; form.append(link, button(uiMessage("common.cancel"), () => close(null), "button-secondary")); });
-    }
-    else if (result.resourceRef) {
-        if (!result.root || !result.ownerEntityKey || !result.revision)
-            throw new UiError(uiMessage("shell.resourceLinkExactIdentityMissing"));
-        const owner = await api<OpenedDocument>("/api/data/open", { root: result.root, entityKey: result.ownerEntityKey });
-        await acceptResolvedDocument(owner);
-        workspaceTools.openResource(owner, { resource: result.resourceRef, revision: result.revision, pageIndex: result.resourceFragment?.status === "found" ? result.resourceFragment.pageIndex : undefined });
-        if (result.fragment && result.resourceFragment?.status !== "found")
-            toast(uiMessage("shell.resourceOpenedPositionUnconfirmed"), true);
-    }
-    else if (result.entityKey) {
-        const opened = await api<OpenedDocument>("/api/data/open", { root: result.root, entityKey: result.entityKey });
-        await acceptResolvedDocument(opened);
-        if (current && result.fragment) {
-            current.pendingFragment = result.fragment;
-            scrollFragment(current);
+        await api("/api/draft/resolve", { sessionId: fresh.sessionId, action: result.action, source: result.action === "mergeRecovered" ? result.source : undefined });
+        await doc.writing.settleForSessionChange();
+        if (doc.session.opened.sessionId !== confirmed.sessionId || doc.session.source !== confirmed.source || doc.session.serial !== confirmed.serial || doc.editor.generation !== confirmed.generation) {
+            doc.session.opened.recoveredDraftVariants = [...(doc.session.opened.recoveredDraftVariants ?? []), { path: fresh.path, baseSource: fresh.source, source: result.source, baseKnown: true }];
+            doc.comparisonTarget = fresh;
+            await persistDraft(doc);
+            doc.session.error = uiMessage("shell.mergeConfirmationNewInput");
+            if (doc === current)
+                renderContent();
+            return;
         }
-    }
-    else if (result.path) {
-        await openDocument(result.path, result.root);
-        if (current && result.fragment) {
-            current.pendingFragment = result.fragment;
-            scrollFragment(current);
+        fresh.recoveredDraftConflict = false;
+        fresh.recoveredDraft = null;
+        doc.session.opened = fresh;
+        doc.editor.clearTokens();
+        doc.sourceTrashed = fresh.kind === "managedTrash";
+        doc.session.acknowledgeSave(fresh.source, fresh.baseId, fresh.path);
+        doc.session.projection = null;
+        doc.externalSource = undefined;
+        doc.comparisonTarget = undefined;
+        doc.lastSave = undefined;
+        doc.editor.apply(0, doc.editor.source.length, result.source);
+        await persistDraft(doc);
+        workspaceTools.documentChanged();
+        scheduleRender(doc, 0);
+        renderContent();
+        toast(result.action === "discardRecovered" ? uiMessage("shell.diskVersionAppliedRecoveryKept") : uiMessage("shell.explicitMergeApplied"));
+    } finally { finishNativeActivity(); }
+}
+async function showRecovery(): Promise<void> {
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        const result = await api<RecoveryInfo[] | {
+            recoveries: RecoveryInfo[];
+        }>("/api/recovery");
+        recoveries = Array.isArray(result) ? result : result.recoveries;
+        await modal<void>(uiMessage("shell.recoveryRecords"), uiMessage("shell.recoveryRecordsDescription"), (form, close) => {
+            const notes = el("section");
+            noteInputRecovery.render(notes, localPersonalAudience());
+            form.append(notes);
+            if (!recoveries.length)
+                form.append(el("p", "recovery-empty", uiMessage("shell.noPendingFileOperations")));
+            for (const record of recoveries) {
+                const item = el("div", "recovery-item");
+                item.append(el("strong", "", record.path), el("p", "", coreDescriptionUiText(record.description)), el("span", "", displayMessage("shell.operationStatus", { p0: uiDisplayParameter(record.status) })));
+                const inspect = button(uiMessage("shell.compareAndResolve"), async () => libraryCloseActivity.run(async () => {
+                    await inspectRecovery(record.operationId); setUiText(inspect, uiMessage("shell.viewAgain"));
+                }), "button-secondary compact");
+                item.append(inspect);
+                form.append(item);
+            }
+            form.append(button(uiMessage("common.close"), () => close(null), "button-primary"));
+        });
+    } finally { finishNativeActivity(); }
+}
+async function inspectRecovery(id: string): Promise<void> {
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        const record = await api<RecoveryInfo>("/api/recovery/inspect", { operationId: id });
+        const decision = await modal<string>(uiMessage("shell.inspectFileRecovery"), uiMessage("shell.inspectFileRecoveryDescription"), (form, close) => {
+            form.append(el("p", "field-help", () => `${record.path}\n${uiTextValue(coreDescriptionUiText(record.description))}`));
+            const states: Record<string, UiText> = { knownBefore: uiMessage("shell.recoveryCompleteBefore"), knownAfter: uiMessage("shell.recoveryCompletePlanned"), knownIntermediate: uiMessage("shell.recoveryConfirmedIntermediate"), mixedKnown: uiMessage("shell.recoveryPartialAllFilesConfirmed"), thirdState: uiMessage("shell.recoveryOtherChanges"), unavailable: uiMessage("shell.recoveryUnreadable") };
+            if (record.coherence)
+                form.append(el("p", "field-help", states[record.coherence] ?? record.coherence));
+            if (record.members?.length) {
+                for (const member of record.members) {
+                    const details = el("details", "recovery-member");
+                    details.open = true;
+                    details.append(el("summary", "", () => `${uiTextValue(member.path)}${uiTextValue(member.targetPath ? ` → ${member.targetPath}` : "")} · ${uiTextValue(states[member.state] ?? member.state)}`));
+                    const columns = el("div", "comparison recovery-comparison");
+                    for (const [label, image] of [[uiMessage("shell.preOperationContent"), member.before], [uiMessage("shell.plannedContent"), member.after], [uiMessage("shell.currentContent"), member.current]] as const) {
+                        const pane = el("div", "field-label");
+                        pane.append(el("strong", "", label));
+                        if (!image?.present)
+                            pane.append(el("p", "field-help", uiMessage("shell.fileMissingOrUnreadable")));
+                        else if (image.source !== undefined) {
+                            const field = el("textarea", "text-input comparison-source");
+                            field.readOnly = true;
+                            field.rows = 8;
+                            field.value = image.source;
+                            setUiAttr(field, "aria-label", () => `${uiTextValue(label)}：${uiTextValue(member.path)}`);
+                            pane.append(field);
+                        }
+                        else {
+                            pane.append(el("p", "field-help", displayMessage("shell.binaryFileSize", { p0: uiDisplayParameter(image.byteLength.toLocaleString()) })));
+                            if (image.base64)
+                                pane.append(button(uiMessage("shell.downloadVersionToCompare"), () => {
+                                    const bytes = Uint8Array.from(atob(image.base64!), value => value.charCodeAt(0));
+                                    const url = URL.createObjectURL(new Blob([bytes]));
+                                    const link = el("a");
+                                    link.href = url;
+                                    link.download = `${uiTextValue(label)}-${uiTextValue(basename(member.path))}`;
+                                    link.click();
+                                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                                }, "button-secondary compact"));
+                        }
+                        columns.append(pane);
+                    }
+                    details.append(columns);
+                    form.append(details);
+                }
+            }
+            else {
+                const columns = el("div", "comparison recovery-comparison");
+                for (const [label, source] of [[uiMessage("shell.preOperationContent"), record.beforeSource], [uiMessage("shell.proposedContent"), record.afterSource], [uiMessage("shell.currentDiskContent"), record.currentSource]] as const) {
+                    const pane = el("label", "field-label", label!);
+                    const text = el("textarea", "text-input comparison-source");
+                    text.readOnly = true;
+                    text.rows = 10;
+                    text.value = source ?? "";
+                    if (source === undefined)
+                        setUiAttr(text, "placeholder", uiMessage("shell.noReadableFileContent"));
+                    pane.append(text);
+                    columns.append(pane);
+                }
+                form.append(columns);
+            }
+            const actions = el("div", "modal-actions");
+            actions.append(button(uiMessage("common.close"), () => close(null), "button-secondary"));
+            const allowed = record.allowedActions ?? (!record.members?.length && !["resolved", "committed"].includes(record.status) ? ["keepCurrent"] : []);
+            const labels: Record<string, UiText> = { keepCurrent: uiMessage("shell.keepOriginalStateUnblock"), adoptAfterImages: uiMessage("shell.acceptAllPlannedContent"), resumeOriginalPlan: uiMessage("shell.continueRemainingOriginalFiles") };
+            for (const action of allowed)
+                if (labels[action])
+                    actions.append(button(labels[action], () => close(action), "button-primary"));
+            form.append(actions);
+        });
+        if (decision) {
+            await api("/api/recovery/resolve", { operationId: id, action: decision });
+            workspaceTools.invalidateQueryEnvironment();
+            toast(uiMessage("shell.recoveryResolutionConfirmed"));
+            await refreshInventory();
         }
-    }
+    } finally { finishNativeActivity(); }
+}
+async function insertLink(): Promise<void> {
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (!current || readOnlySource(current) || current.mode === "read")
+            return;
+        const doc = current;
+        const target = await modal<{
+            target: string;
+            label: string;
+        }>(uiMessage("shell.insertLink"), uiMessage("shell.insertLinkDescription"), (form, close) => {
+            const targetLabel = el("label", "field-label", uiMessage("shell.linkTargetAddress"));
+            const input = el("input", "text-input");
+            input.required = true;
+            setUiAttr(input, "placeholder", uiMessage("shell.linkTargetPlaceholder"));
+            targetLabel.append(input);
+            form.append(targetLabel);
+            if (inventory) {
+                const options = el("select", "text-input link-targets");
+                const empty = el("option", "", uiMessage("shell.chooseFromLibrary"));
+                empty.value = "";
+                options.append(empty);
+                for (const entry of inventory.entries.filter(e => e.path.endsWith(".typ"))) {
+                    const option = el("option", "", entry.title || entry.relativePath);
+                    option.value = entry.path;
+                    options.append(option);
+                }
+                options.onchange = () => {
+                    if (options.value)
+                        input.value = relativeFileTarget(doc.session.path, options.value);
+                };
+                form.append(options);
+            }
+            const textLabel = el("label", "field-label", uiMessage("shell.linkDisplayText"));
+            const label = el("input", "text-input");
+            setUiAttr(label, "placeholder", uiMessage("shell.linkTextPlaceholder"));
+            const selection = doc.editor.view.state.selection.main;
+            label.value = doc.editor.view.state.sliceDoc(selection.from, selection.to);
+            textLabel.append(label);
+            form.append(textLabel);
+            const actions = el("div", "modal-actions");
+            actions.append(button(uiMessage("common.cancel"), () => close(null), "button-secondary"));
+            const submit = el("button", "button-primary", uiMessage("shell.insert"));
+            submit.type = "submit";
+            actions.append(submit);
+            form.append(actions);
+            form.onsubmit = event => {
+                event.preventDefault();
+                if (input.value.trim())
+                    close({ target: absoluteFileTarget(input.value.trim()), label: label.value || input.value.trim() });
+            };
+        });
+        if (!target)
+            return;
+        const quoted = quoteTypstString(target.target);
+        const selection = doc.editor.view.state.selection.main;
+        doc.editor.apply(selection.from, selection.to, `#link(${quoted})[${encodeLiteral(target.label)}]`);
+        doc.editor.view.focus();
+    } finally { finishNativeActivity(); }
+}
+async function navigateLink(target: string): Promise<void> {
+    const finishNativeActivity = libraryCloseActivity.begin();
+    try {
+        if (!current)
+            return;
+        if (target.startsWith("#")) {
+            const anchor = renderHost?.querySelector(`#${CSS.escape(`native-${target.slice(1)}`)}`);
+            if (anchor) {
+                anchor.scrollIntoView({ block: "center", behavior: "smooth" });
+                return;
+            }
+            throw new UiError(uiMessage("shell.previewAnchorMissing"));
+        }
+        const result = await api<{
+            path?: string;
+            root?: string;
+            fragment?: string;
+            externalUrl?: string;
+            entityKey?: string;
+            resourceRef?: string;
+            ownerEntityKey?: string;
+            revision?: string;
+            resourceFragment?: {
+                status: string;
+                pageIndex?: number;
+            };
+        }>("/api/link/resolve", { sessionId: current.session.opened.sessionId, target });
+        if (result.externalUrl) {
+            await modal<void>(uiMessage("shell.openExternalLink"), result.externalUrl, (form, close) => { const link = el("a", "button-primary", uiMessage("shell.openInBrowser")); link.href = result.externalUrl!; link.target = "_blank"; link.rel = "noopener noreferrer"; form.append(link, button(uiMessage("common.cancel"), () => close(null), "button-secondary")); });
+        }
+        else if (result.resourceRef) {
+            if (!result.root || !result.ownerEntityKey || !result.revision)
+                throw new UiError(uiMessage("shell.resourceLinkExactIdentityMissing"));
+            const owner = await api<OpenedDocument>("/api/data/open", { root: result.root, entityKey: result.ownerEntityKey });
+            await acceptResolvedDocument(owner);
+            workspaceTools.openResource(owner, { resource: result.resourceRef, revision: result.revision, pageIndex: result.resourceFragment?.status === "found" ? result.resourceFragment.pageIndex : undefined });
+            if (result.fragment && result.resourceFragment?.status !== "found")
+                toast(uiMessage("shell.resourceOpenedPositionUnconfirmed"), true);
+        }
+        else if (result.entityKey) {
+            const opened = await api<OpenedDocument>("/api/data/open", { root: result.root, entityKey: result.entityKey });
+            await acceptResolvedDocument(opened);
+            if (current && result.fragment) {
+                current.pendingFragment = result.fragment;
+                scrollFragment(current);
+            }
+        }
+        else if (result.path) {
+            await openDocument(result.path, result.root);
+            if (current && result.fragment) {
+                current.pendingFragment = result.fragment;
+                scrollFragment(current);
+            }
+        }
+    } finally { finishNativeActivity(); }
 }
 function scrollFragment(doc: LiveDocument): void {
     if (doc !== current || !doc.pendingFragment || !doc.session.projectionCurrent || !renderHost)
@@ -2940,33 +3166,40 @@ function scrollFragment(doc: LiveDocument): void {
     }
 }
 async function bootstrap(): Promise<void> {
+    const finishNativeActivity = libraryCloseActivity.begin();
     try {
-        const result = await api<{
-            library?: Inventory | null;
-            inventory?: Inventory | null;
-            initialDocument?: OpenedDocument | null;
-            initialDocumentError?: ApiErrorBody | null;
-            recoveries?: RecoveryInfo[];
-            recentLibraries?: string[];
-        }>("/api/bootstrap");
-        inventory = result.inventory ?? result.library ?? inventory;
-        recoveries = result.recoveries ?? [];
-        startupError = result.initialDocumentError ? apiErrorUiText(result.initialDocumentError) : null;
-        if (result.initialDocument && !documents.length) {
-            addDocument(result.initialDocument);
-            try {
-                inventory = await api<Inventory>("/api/library/open", { path: result.initialDocument.root });
+        try {
+            const result = await api<{
+                library?: Inventory | null;
+                inventory?: Inventory | null;
+                initialDocument?: OpenedDocument | null;
+                initialDocumentError?: ApiErrorBody | null;
+                recoveries?: RecoveryInfo[];
+                recentLibraries?: string[];
+            }>("/api/bootstrap");
+            const next = result.inventory ?? result.library ?? inventory;
+            workspaceTools.assertLibraryChange(next);
+            inventory = next;
+            recoveries = result.recoveries ?? [];
+            startupError = result.initialDocumentError ? apiErrorUiText(result.initialDocumentError) : null;
+            if (result.initialDocument && !documents.length) {
+                addDocument(result.initialDocument);
+                try {
+                    const initialInventory = await api<Inventory>("/api/library/open", { path: result.initialDocument.root });
+                    workspaceTools.assertLibraryChange(initialInventory);
+                    inventory = initialInventory;
+                }
+                catch { /* The file session remains usable without an inventory. */ }
             }
-            catch { /* The file session remains usable without an inventory. */ }
         }
-    }
-    catch (error) {
-        startupError = error instanceof Error ? errorUiText(error) : uiMessage("shell.localServiceUnavailable");
-    }
-    renderSidebar();
-    renderContent();
-    if (!startupError)
-        void ensureOfflineFonts().catch(error => toast(displayMessage("shell.offlineFontsIncomplete", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) }), true));
+        catch (error) {
+            startupError = error instanceof Error ? errorUiText(error) : uiMessage("shell.localServiceUnavailable");
+        }
+        renderSidebar();
+        renderContent();
+        if (!startupError)
+            void ensureOfflineFonts().catch(error => toast(displayMessage("shell.offlineFontsIncomplete", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) }), true));
+    } finally { finishNativeActivity(); }
 }
 window.addEventListener("beforeunload", event => {
     if (documents.some(doc => doc.session.dirty || pendingSave(doc) || doc.draftFailure || doc.writing.state.pending)) {
@@ -3011,7 +3244,70 @@ document.addEventListener("keydown", event => {
         void flushLiteral().then(() => redo ? doc.editor.redo() : doc.editor.undo()).catch(showError);
     }
 });
+function assertLibraryProposalsCloseReady(): void {
+    libraryCloseActivity.checkpoint();
+    if (!nativeApiIdle() || pendingCreation || noteInputRecovery.count(localPersonalAudience()))
+        throw new UiError(uiMessage("shell.closeAuthorInputPending"));
+    workspaceTools.assertCloseReady();
+    recognitionPanel.assertCloseReady();
+    historyPanel.assertCloseReady();
+    assertNativeProposalOwnersCloseReady();
+}
+let preparedLibraryClose: { request: string; activity: number } | undefined;
+function thawLibraryClose(): void {
+    preparedLibraryClose = undefined;
+    libraryCloseActivity.thaw();
+    thawNativeApi();
+    bodyCloseParticipant.thaw();
+    workspaceTools.thawAfterClose();
+    recognitionPanel.thawAfterClose();
+    historyPanel.thawAfterClose();
+    thawNativeProposalOwnersAfterClose();
+}
+nativeSurface.register("library-author-owners", {
+    async prepare(request: CloseRequest) {
+        preparedLibraryClose = undefined;
+        assertLibraryProposalsCloseReady();
+        const proofs = await bodyCloseParticipant.prepare(request);
+        assertLibraryProposalsCloseReady();
+        preparedLibraryClose = { request: JSON.stringify(request), activity: libraryCloseActivity.checkpoint() };
+        return proofs;
+    },
+    freeze(request: CloseRequest): boolean {
+        const prepared = preparedLibraryClose;
+        if (!prepared || prepared.request !== JSON.stringify(request)) return false;
+        try {
+            assertLibraryProposalsCloseReady();
+            if (!libraryCloseActivity.freeze(prepared.activity) || !freezeNativeApi() || !workspaceTools.freezeForClose() || !recognitionPanel.freezeForClose() || !historyPanel.freezeForClose() || !freezeNativeProposalOwnersForClose() || !bodyCloseParticipant.freeze(request)) {
+                thawLibraryClose();
+                return false;
+            }
+            return true;
+        } catch { thawLibraryClose(); return false; }
+    },
+    thaw: thawLibraryClose,
+});
+nativeSurface.listen(message => {
+    if (message.type === "open-reminders") {
+        void Promise.resolve().then(() => { libraryCloseActivity.assertAvailable(); return workspaceTools.openReminders(); }).catch(showError);
+        return;
+    }
+    if (message.type !== "open-document") return;
+    const opened = message.document as OpenedDocument | undefined;
+    const deliveryId = typeof message.deliveryId === "string" ? message.deliveryId : undefined;
+    void (async () => {
+        let accepted = false;
+        try {
+            if (!opened || [opened.sessionId, opened.source, opened.baseId, opened.path, opened.root].some(value => typeof value !== "string"))
+                throw new UiError(uiMessage("error.invalidResponse"));
+            await acceptResolvedDocument(opened);
+            accepted = ownsOpenedSession(opened.sessionId);
+            if (!accepted) throw new UiError(uiMessage("shell.closeBasisChanged"));
+        } catch (error) { showError(error); }
+        finally { if (deliveryId) nativeSurface.post({ type: "document-delivered", deliveryId, accepted }); }
+    })().catch(showError);
+});
 renderSidebar();
 renderContent();
-void bootstrap();
+void bootstrap().then(() => { nativeSurface.markReady(); nativeStartupFinished = true; }).catch(error => { showError(error); nativeSurface.reportFailed(); });
 import { coreDescriptionUiText, engineDiagnosticUiText } from "./ui-diagnostics";
