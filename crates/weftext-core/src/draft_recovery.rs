@@ -472,7 +472,7 @@ impl Core {
             .file_scope
             .clone()
     }
-    pub(crate) fn draft_scope_for_session(
+    pub(crate) fn draft_scope_for_session_unread(
         &self,
         session_id: &str,
         retained: Option<&Draft>,
@@ -489,6 +489,15 @@ impl Core {
                 UiMessage::error_core_original_scope_draft_retained_scope_differs(),
             ));
         }
+        Ok(scope)
+    }
+    pub(crate) fn draft_scope_for_session(
+        &self,
+        session_id: &str,
+        retained: Option<&Draft>,
+    ) -> Result<QualifiedInputScope> {
+        let scope = self.draft_scope_for_session_unread(session_id, retained)?;
+        let session = &self.sessions[session_id];
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
         if let Some((original, _)) =
             self.read_draft_record(&path, &scope, &session.stamp.identity)?
