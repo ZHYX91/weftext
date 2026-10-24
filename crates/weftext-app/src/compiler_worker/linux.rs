@@ -85,7 +85,7 @@ impl Status {
     }
     pub(crate) fn completion(&self) -> Completion { self.completion.clone() }
     pub(crate) fn failure_kind(&self) -> Kind {
-        match self.completion {
+        match &self.completion {
             Completion::Timeout => Kind::Deadline,
             Completion::Cancelled => Kind::Cancelled,
             Completion::Disconnected | Completion::SetupFailed => Kind::SupervisionLost,
