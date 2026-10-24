@@ -1303,13 +1303,16 @@ impl Core {
             }
         }
         let later_ack = match input_revision {
-            Some(frozen) if frozen == 0 || frozen > 9_007_199_254_740_991 =>
-                return Err(CoreError::new("draftChanged", UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again())),
-            Some(frozen) => match session.draft_input_revision {
-                Some(current) if current > frozen => true,
-                Some(current) if current == frozen => false,
-                _ => return Err(CoreError::new("draftChanged", UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again())),
-            },
+            Some(frozen) => {
+                if frozen == 0 || frozen > 9_007_199_254_740_991
+                    || !session.draft_cuts.get(&frozen)
+                        .is_some_and(|digest| *digest == hash(request.source.as_bytes()))
+                {
+                    return Err(CoreError::new("draftChanged",
+                        UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again()));
+                }
+                session.draft_input_revision.is_some_and(|current| current > frozen)
+            }
             None => session.draft_input_revision.is_some(),
         };
         if !later_ack {

@@ -85,3 +85,28 @@ fn qualified_protected_draft_read_count_for_one_normal_persist() {
     assert_eq!(reads, 2, "protected Draft reads: {reads}");
     assert_eq!(core.current_session_draft(&doc.session_id).unwrap().unwrap().source, "T");
 }
+
+#[test]
+fn save_as_cannot_relabel_frozen_ack_with_different_source_or_newer_producer() {
+    let temp = tempfile::tempdir().unwrap();
+    let note = temp.path().join("note.typ");
+    fs::write(&note, "B").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let doc = core.open(&note, None).unwrap();
+    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
+    core.persist_draft_ordered(&doc.session_id, "Y", 2).unwrap();
+    let target = temp.path().join("separate.typ");
+    let wrong = core.save_as_ordered(SaveAsRequest {
+        session_id: doc.session_id.clone(), path: display(&target),
+        source: "not S".into(), operation_id: fresh(),
+    }, 1);
+    assert_eq!(wrong.unwrap_err().code, "draftChanged");
+    assert!(!target.exists());
+    let saved = core.save_as_ordered(SaveAsRequest {
+        session_id: doc.session_id.clone(), path: display(&target),
+        source: "S".into(), operation_id: fresh(),
+    }, 1).unwrap();
+    assert_eq!(saved.receipt.status, "saved");
+    assert_eq!(fs::read_to_string(&target).unwrap(), "S");
+    assert_eq!(core.current_session_draft(&doc.session_id).unwrap().unwrap().source, "Y");
+}
