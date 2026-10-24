@@ -51,3 +51,20 @@ fn later_identical_aba_input_does_not_become_a_clean_baseline() {
     assert_eq!(record.role, DraftRole::Proposal);
     assert!(core.persist_draft_ordered(&doc.session_id, "older", 2).is_err());
 }
+
+#[test]
+fn a_frozen_cut_cannot_be_relabelled_with_other_source_bytes() {
+    let temp = tempfile::tempdir().unwrap();
+    let file = temp.path().join("note.typ");
+    fs::write(&file, "B").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let doc = core.open(&file, None).unwrap();
+    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
+    core.persist_draft_ordered(&doc.session_id, "Y", 2).unwrap();
+    assert!(core.save_ordered(SaveRequest {
+        operation_id: fresh(), session_id: doc.session_id.clone(),
+        base_id: doc.base_id, source: "not ACKed S".into(),
+    }, 1).is_err());
+    assert!(core.persist_draft(&doc.session_id, "legacy overwrote Y").is_err());
+    assert_eq!(core.current_session_draft(&doc.session_id).unwrap().unwrap().source, "Y");
+}

@@ -2908,7 +2908,7 @@ async fn save_definition(
             operation_id: req.operation_id,
         };
         let outcome = match revision {
-            Some(revision) => core.save_ordered(intent, revision)?,
+            Some(revision) => core.save_ordered_derived(intent, req.source.clone(), revision)?,
             None => core.save(intent)?,
         };
         let document = core

@@ -589,6 +589,7 @@ impl Core {
                 draft_producer_id: original.draft_producer_id,
                 draft_input: original.draft_input,
                 draft_input_revision: original.draft_input_revision,
+                draft_cuts: original.draft_cuts,
                 draft_witness: original.draft_witness,
                 conflicting_draft: original.conflicting_draft,
                 ..refreshed
