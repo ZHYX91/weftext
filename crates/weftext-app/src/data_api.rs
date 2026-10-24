@@ -2953,7 +2953,7 @@ fn replay_saved_definition(
             base_id: req.base_id.clone(),
             source: original.source.clone(),
             operation_id: req.operation_id.clone(),
-        }, req.input_revision)?
+        }, req.input_revision, Some(&req.source))?
         .ok_or_else(|| {
             CoreError::new(
                 "recoveryPending",

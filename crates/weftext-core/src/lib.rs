@@ -1072,6 +1072,7 @@ impl Core {
                     session.draft_producer_id.clone(),
                 )
             };
+        let author_digest = input_revision.as_ref().map(|(_, author)| hash(author.as_bytes()));
         let fingerprint = original_delivery::save_fingerprint(
             &request,
             &original_path,
@@ -1079,6 +1080,7 @@ impl Core {
             scope.clone(),
             &producer,
             input_revision.as_ref().map_or(0, |(revision, _)| *revision),
+            author_digest.as_deref(),
         )?;
         if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
             return Ok(SaveOutcome::committed(receipt));
@@ -1174,7 +1176,8 @@ impl Core {
             Some(request.base_id.clone()),
             scope,
             producer,
-        ).with_input_revision(input_revision.as_ref().map_or(0, |(revision, _)| *revision)));
+        ).with_input_revision(input_revision.as_ref().map_or(0, |(revision, _)| *revision))
+            .with_author_digest(author_digest));
         plan.receipt = Some(Receipt {
             revision_id: None,
             operation_id: request.operation_id,
@@ -1291,7 +1294,8 @@ impl Core {
                 None,
                 plan.file_save.as_ref().unwrap().scope.clone(),
                 plan.file_save.as_ref().unwrap().draft_producer_id.clone(),
-            ).with_input_revision(input_revision.unwrap_or(0));
+            ).with_input_revision(input_revision.unwrap_or(0))
+                .with_author_digest(input_revision.map(|_| hash(request.source.as_bytes())));
             let fingerprint =
                 file_save_scope::fingerprint("saveAs", &path, &request.source, &data, None)?;
             if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
@@ -1324,7 +1328,8 @@ impl Core {
             None,
             self.capture_file_save_scope(&path)?,
             session.draft_producer_id.clone(),
-        ).with_input_revision(input_revision.unwrap_or(0));
+        ).with_input_revision(input_revision.unwrap_or(0))
+            .with_author_digest(input_revision.map(|_| hash(request.source.as_bytes())));
         let fingerprint =
             file_save_scope::fingerprint("saveAs", &path, &request.source, &data, None)?;
         let mut plan = journal::Plan::file(
