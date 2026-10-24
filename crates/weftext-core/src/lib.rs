@@ -465,7 +465,7 @@ pub struct OpenedDocument {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub recovered_draft_witness: Option<String>,
 }
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SaveRequest {
     pub session_id: String,

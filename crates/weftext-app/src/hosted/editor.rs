@@ -204,13 +204,15 @@ async fn edit(
                 UiMessage::error_api_hosted_editor_preview_busy(),
             )
         })?;
+        // Worker errors may include private typed diagnostics. Qualify at
+        // delivery time before publishing success OR a worker failure.
         let output =
-            super::super::notes_edit_from_worker_with(input, command, &state.workers).await?;
+            super::super::notes_edit_from_worker_with(input, command, &state.workers).await;
         return locked(&state, move |inner| {
             let (actor, session, _) = qualify(inner, &auth, &basis, false, true)?;
             validate_inputs(inner, &actor, &session.resource, &dependencies)?;
             environment.recheck(inner, &actor)?;
-            Ok(Json(output.edit))
+            Ok(Json(output?.edit))
         })
         .await;
     }

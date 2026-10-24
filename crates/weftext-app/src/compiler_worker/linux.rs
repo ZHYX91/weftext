@@ -68,20 +68,29 @@ impl Drop for Admission {
 #[derive(Clone, Copy)]
 pub(crate) struct Status {
     exit: crate::owned_process::Status,
-    completed_normally: bool,
+    completion: Completion,
 }
 impl Status {
     fn from_receipt(receipt: &Receipt) -> io::Result<Self> {
         Ok(Self {
             exit: crate::owned_process::Status::linux(receipt.exit_code, receipt.signal)?,
-            completed_normally: receipt.completion == Completion::Exited,
+            completion: receipt.completion.clone(),
         })
     }
     pub(crate) fn success(&self) -> bool {
-        self.completed_normally && self.exit.success()
+        self.completion == Completion::Exited && self.exit.success()
     }
     pub(crate) fn exit(&self) -> crate::owned_process::ProcessExit {
         self.exit.exit()
+    }
+    pub(crate) fn completion(&self) -> Completion { self.completion.clone() }
+    pub(crate) fn failure_kind(&self) -> Kind {
+        match self.completion {
+            Completion::Timeout => Kind::Deadline,
+            Completion::Cancelled => Kind::Cancelled,
+            Completion::Disconnected | Completion::SetupFailed => Kind::SupervisionLost,
+            Completion::Exited => Kind::NonzeroExit,
+        }
     }
 }
 
