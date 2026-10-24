@@ -13,6 +13,9 @@ pub struct ServeArgs {
     /// Administrator-enrolled authority for the controlled Linux service.
     #[arg(long)]
     pub service_enrollment: Option<PathBuf>,
+    /// Administrator-owned worker policy bound to that same Linux enrollment.
+    #[arg(long)]
+    pub worker_broker_policy: Option<PathBuf>,
     #[arg(long, default_value_t = 0)]
     pub port: u16,
     #[arg(long,conflicts_with_all=["open","root","port"])]
@@ -219,7 +222,7 @@ pub async fn serve(args: ServeArgs) -> Result<(), ServeError> {
         })?;
     #[cfg(windows)]
     {
-        if args.service_enrollment.is_some() {
+        if args.service_enrollment.is_some() || args.worker_broker_policy.is_some() {
             return Err(ServeError {
                 code: "invalidServiceEnrollment",
                 diagnostic: "The Windows service uses its actual Windows authority, not a Linux enrollment",
@@ -262,18 +265,31 @@ async fn controlled_hosted(args: ServeArgs, data: PathBuf) -> Result<(), ServeEr
         code: "serviceAuthorityRequired",
         diagnostic: "Controlled Linux serve requires an administrator enrollment",
     })?;
+    let policy = args.worker_broker_policy.ok_or(ServeError {
+        code: "workerAuthorityRequired",
+        diagnostic: "Controlled Linux serve requires its explicit administrator worker policy",
+    })?;
+    let (backend, workers) = crate::work::spawn_blocking(move || {
+        let backend = weftext_core::BackendContext::controlled_service(&enrollment)
+            .map_err(|_| ServeError { code: "serviceAuthorityRejected",
+                diagnostic: "The actual UID, privileges, enrollment and filesystem roots did not qualify" })?;
+        let workers = crate::compiler_worker::Transport::controlled(&backend, &policy)
+            .map_err(|_| ServeError { code: "workerAuthorityRejected",
+                diagnostic: "The worker policy did not qualify against the original Core enrollment" })?;
+        Ok::<_, ServeError>((backend, workers))
+    }).await.map_err(|_| ServeError { code: "workerAuthorityUnavailable",
+        diagnostic: "The original Core and worker authority could not be inspected" })??;
     let config=args.server_config.ok_or(ServeError{code:"hostedConfigurationRequired",diagnostic:"Controlled Linux serve currently requires the explicit hosted configuration; local owner IPC is unavailable"})?;
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
         .map_err(|_| ServeError {
         code: "shutdownSignalUnavailable",
         diagnostic: "The controlled service termination signal could not be monitored",
     })?;
-    let backend=weftext_core::BackendContext::controlled_service(&enrollment).map_err(|_|ServeError{code:"serviceAuthorityRejected",diagnostic:"The actual UID, privileges, enrollment and filesystem roots did not qualify"})?;
     let core = weftext_core::Core::with_backend(&data, backend).map_err(|_| ServeError {
         code: "coreUnavailable",
         diagnostic: "The exact enrolled persistent Core could not be opened",
     })?;
-    let service=crate::hosted::HostedService::bind(core,config,data.join("legacy-office")).await.map_err(|error|{
+    let service=crate::hosted::HostedService::bind(core,config,data.join("legacy-office"),workers).await.map_err(|error|{
         if error.is::<crate::hosted::PairingMismatch>(){ServeError{code:"syncPairingMismatch",diagnostic:"Persisted sync pairing differs from configuration; existing grants cannot silently move to another family"}}
         else{ServeError{code:"hostedConfiguration",diagnostic:"The controlled hosted configuration could not be bound"}}
     })?;

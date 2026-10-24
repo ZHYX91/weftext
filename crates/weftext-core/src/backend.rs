@@ -139,6 +139,12 @@ pub struct BackendContext {
     root: std::sync::Arc<platform::ControlledRoot>,
 }
 impl BackendContext {
+    /// The original sealed Linux authority retained by this backend. Consumers
+    /// may bind a worker broker to it without independently readmitting a path.
+    #[cfg(target_os = "linux")]
+    pub fn controlled_enrollment(&self) -> &weftext_enrollment::ValidatedEnrollment {
+        self.root.enrollment()
+    }
     pub(crate) fn ancestors<'a>(&self, path: &'a Path) -> Result<Vec<&'a Path>> {
         self.check_path(path)?;
         Ok(path

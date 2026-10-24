@@ -1,4 +1,3 @@
-use crate::owned_process::{Command, Stdio};
 use axum::{
     Json, Router,
     body::Body,
@@ -57,6 +56,7 @@ mod capture_api;
 mod citation_api;
 pub mod cli;
 pub mod client_protocol;
+mod compiler_worker;
 mod data_api;
 mod desktop_api;
 mod embedded_output;
@@ -1050,7 +1050,14 @@ async fn render_frozen_target_worker(
 }
 
 async fn render_worker(input: WorkerRequest) -> Result<Value, ApiError> {
-    bounded_compiler_worker(value(input)?, false).await
+    render_worker_with(input, &compiler_worker::Transport::default()).await
+}
+
+async fn render_worker_with(
+    input: WorkerRequest,
+    transport: &compiler_worker::Transport,
+) -> Result<Value, ApiError> {
+    bounded_compiler_worker(value(input)?, false, transport.clone()).await
 }
 
 #[derive(Deserialize)]
@@ -1096,16 +1103,32 @@ async fn notes_edit_from_worker(
     input: WorkerRequest,
     request: weftext_engine::EditRequest,
 ) -> Result<NotesWorkerOutput, ApiError> {
-    let output =
-        bounded_compiler_worker(value(NotesWorkerRequest { input, request })?, true).await?;
+    notes_edit_from_worker_with(input, request, &compiler_worker::Transport::default()).await
+}
+
+async fn notes_edit_from_worker_with(
+    input: WorkerRequest,
+    request: weftext_engine::EditRequest,
+    transport: &compiler_worker::Transport,
+) -> Result<NotesWorkerOutput, ApiError> {
+    let output = bounded_compiler_worker(
+        value(NotesWorkerRequest { input, request })?,
+        true,
+        transport.clone(),
+    )
+    .await?;
     serde_json::from_value(output)
         .map_err(|_| ApiError::internal(UiMessage::error_notes_dependency_receipt_invalid()))
 }
 
-async fn bounded_compiler_worker(input: Value, notes_edit: bool) -> Result<Value, ApiError> {
+async fn bounded_compiler_worker(
+    input: Value,
+    notes_edit: bool,
+    transport: compiler_worker::Transport,
+) -> Result<Value, ApiError> {
     // Own the whole process future independently of an HTTP caller. Dropping
     // that caller cannot discard a live child or its final kill/wait receipt.
-    crate::work::spawn(owned_compiler_worker(input, notes_edit))
+    crate::work::spawn(owned_compiler_worker(input, notes_edit, transport))
         .await
         .map_err(|_| {
             let mut failure =
@@ -1115,7 +1138,11 @@ async fn bounded_compiler_worker(input: Value, notes_edit: bool) -> Result<Value
         })?
 }
 
-async fn owned_compiler_worker(input: Value, notes_edit: bool) -> Result<Value, ApiError> {
+async fn owned_compiler_worker(
+    input: Value,
+    notes_edit: bool,
+    transport: compiler_worker::Transport,
+) -> Result<Value, ApiError> {
     use worker_failure::{Kind, WorkerFailure};
     let bytes = serde_json::to_vec(&input)
         .map_err(|_| ApiError::worker_failure(WorkerFailure::new(Kind::InputEncoding)))?;
@@ -1125,39 +1152,10 @@ async fn owned_compiler_worker(input: Value, notes_edit: bool) -> Result<Value, 
         )));
     }
     drop(input);
-    let exe = std::env::current_exe().map_err(|error| {
-        let mut failure = WorkerFailure::new(Kind::Setup);
-        failure.io_error = Some(error);
-        ApiError::worker_failure(failure)
-    })?;
-    #[cfg(test)]
-    let exe = std::env::var_os("WEFTEXT_TEST_EXECUTABLE")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            exe.parent()
-                .and_then(std::path::Path::parent)
-                .unwrap_or_else(|| std::path::Path::new("."))
-                .join(if cfg!(windows) {
-                    "weftext.exe"
-                } else {
-                    "weftext"
-                })
-        });
-    let mut command = Command::new(exe);
-    command
-        .arg(if notes_edit {
-            "--notes-edit-worker"
-        } else {
-            "--render-worker"
-        })
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    let mut child = command.spawn().await.map_err(|error| {
-        let mut failure = WorkerFailure::new(Kind::Setup);
-        failure.io_error = Some(error);
-        ApiError::worker_failure(failure)
-    })?;
+    let mut child = transport
+        .spawn(notes_edit)
+        .await
+        .map_err(ApiError::worker_failure)?;
     let mut facts = WorkerFailure::new(Kind::Setup);
     facts.cleanup_confirmed = false;
     // Stream buffers live outside cancellation/try_join futures. A budget,

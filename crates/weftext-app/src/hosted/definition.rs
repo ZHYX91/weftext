@@ -729,6 +729,7 @@ mod integration_tests {
         // A zero native render gate proves the creation path never executes a
         // parameterless preview or compiles native products.
         let state = HostedState {
+            workers: compiler_worker::Transport::default(),
             inner: Arc::new(Mutex::new(inner)),
             origin: Arc::from("http://localhost"),
             host: Arc::from("localhost"),

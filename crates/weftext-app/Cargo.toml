@@ -37,6 +37,9 @@ base64 = "0.22"
 sha2 = "0.10"
 reqwest = { version = "0.12.28", default-features = false, features = ["json", "rustls-tls-native-roots"] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+weftext-worker-broker = { path = "../weftext-worker-broker" }
+
 [dev-dependencies]
 tempfile = "3"
 

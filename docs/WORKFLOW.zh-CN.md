@@ -41,6 +41,8 @@ CLI 合同入口保留业务用例与唯一报告，Win32／ConPTY、受控 rela
 
 宿主启动重构复用同一 `weftext` 程序和原 HTTP 检查；`cargo test --locked -p weftext-app` 同时覆盖库中的既有消费者、持久目录／启动参数／浏览器错误和本机服务关闭回归。库的 `LocalService` 生命周期用真实监听及 Core 租约验证：重复占用拒绝，宿主停止后原端口和私有状态可重新取得；端口冲突不能留下租约。停滞交接测试实际阻塞同一交接 helper 的回调，核对超时返回、宿主运行时销毁，以及浏览器尚未完成时 HTTP 仍可用且停止可完成；它不冒充真实 Shell 扩展或浏览器验收。目录／启动器选择的纯测试只证明选择和错误语义，不作为 macOS／Linux 实机结果。继续按影响矩阵分别验真实桌面、worker 进程、权限、草稿及恢复；本轮不为结构迁移另建验收体系。
 
+受控 Linux 编译传输另须在 Linux 上执行既有 `cargo test --locked -p weftext-worker-broker` 及 `cargo test --locked -p weftext-app compiler_worker`。Windows 执行仅覆盖共用严格帧／回执校验，不覆盖 Linux socket、取消、匿名管道取消或终局状态映射。显式运行的 `scripts/test_linux_worker_broker.py` 要求已独立审查的 root 所有部署，不得替换为无约束进程或省略失败的内核条件。宣称产品集成前，须对 broker 准确批准的产品映像执行托管渲染／编辑／引用授权及原操作回归。
+
 Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 作业使用 Python 3.11 调用同一入口的 `check --group frontend`，按锁文件安装依赖并运行 TypeScript 测试、类型检查和 Vite 构建；Windows 作业使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，执行现有 `python scripts/mvp.py check`。该入口只构建一次，再检查字体、Rust 格式／Clippy／测试和实际程序的本地、托管与同步 HTTP 场景。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不执行发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
 
 Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust 与 40 个 HTTP 脚本。CLI 合同先于较长的 Rust 检查运行；失败时立即输出有界、脱敏的原异常和本用例近期子进程／relay 诊断，并标明本轮新建的结果目录与产物目录，避免把缓存中的旧结果当成当前通过。产品操作和各用例本身的截止时间保持不变。

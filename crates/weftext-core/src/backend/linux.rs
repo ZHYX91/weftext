@@ -234,6 +234,9 @@ fn opaque_identity(file: &File) -> Result<FileIdentity> {
     weftext_enrollment::opaque_identity(file).map_err(enrollment_error)
 }
 impl ControlledRoot {
+    pub(super) fn enrollment(&self) -> &weftext_enrollment::ValidatedEnrollment {
+        &self.authority
+    }
     pub(super) fn admit(enrollment: &Path) -> Result<Arc<Self>> {
         let authority =
             weftext_enrollment::inspect_enrollment(enrollment).map_err(enrollment_error)?;

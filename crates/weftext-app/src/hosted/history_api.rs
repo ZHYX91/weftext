@@ -703,6 +703,7 @@ pub(super) fn test_fixture() -> (tempfile::TempDir, HostedState, Auth, Value, St
     )
     .unwrap();
     let state = HostedState {
+        workers: compiler_worker::Transport::default(),
         inner: Arc::new(Mutex::new(inner)),
         origin: Arc::from("http://localhost"),
         host: Arc::from("localhost"),

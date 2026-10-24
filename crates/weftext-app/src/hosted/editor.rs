@@ -204,7 +204,8 @@ async fn edit(
                 UiMessage::error_api_hosted_editor_preview_busy(),
             )
         })?;
-        let output = super::super::notes_edit_from_worker(input, command).await?;
+        let output =
+            super::super::notes_edit_from_worker_with(input, command, &state.workers).await?;
         return locked(&state, move |inner| {
             let (actor, session, _) = qualify(inner, &auth, &basis, false, true)?;
             validate_inputs(inner, &actor, &session.resource, &dependencies)?;
@@ -422,7 +423,7 @@ pub(super) async fn compile_frozen(
     })?;
     worker_failure::observe_hosted_result(
         worker_failure::HostedContext::Editor,
-        render_worker(input).await,
+        render_worker_with(input, &state.workers).await,
     )
     .map_err(preview_worker_failure)
 }
