@@ -3,6 +3,7 @@
 Uses only owned disposable fixtures. Consumer requests never use local routes.
 The shared harness retains all original files and evidence after failures.
 """
+import uuid
 from _creation_result import created_document
 import json
 import sys
@@ -128,7 +129,7 @@ class HostedLibrary(HostedQuery):
         self.grant_library()
         before = {name: (self.root/name/(name+'.typ')).read_bytes() for name in self.docs}
         doc = self.open()
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': doc['source']+'\nPERSONAL_DRAFT'})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': doc['source']+'\nPERSONAL_DRAFT'})
         source = json.dumps({'version': 1, 'customExtension': {'keep': ['未知', 7]}}, ensure_ascii=False)
         plan, request = self.library_prepare('settings', source)
         self.assertEqual(plan['status'], 'prepared')

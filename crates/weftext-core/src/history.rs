@@ -1290,7 +1290,7 @@ impl Core {
                     .session
                     .draft_cuts
                     .get(&revision)
-                    .is_some_and(|digest| *digest == hash(author.as_bytes()))
+                    .is_some_and(|cut| cut.source_digest == hash(author.as_bytes()))
             {
                 return Err(invalid_cut());
             }
@@ -1344,6 +1344,7 @@ impl Core {
                         identity: context.birth.identity.clone(),
                         alternatives: Vec::new(),
                         producer_id: None,
+                        input_id: None,
                         role: DraftRole::Proposal,
                     });
                 }

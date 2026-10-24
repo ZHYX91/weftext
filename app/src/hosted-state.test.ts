@@ -23,13 +23,13 @@ test("an asynchronous query denial may affect only its original actor, epoch, do
 });
 test("original save freezes reservation IDs while later typing and Undo retain the owner reservations", () => {
   const draft: HostedDraft = { source: "proposal", baseSource: "base", definitionReservations: ["first"] };
-  const request = freezeHostedSave(draft, "session", "base-id", "save-one");
+  const request = freezeHostedSave(draft, "session", "base-id", "save-one", 1);
   draft.pending = { resource: "Shared", operationId: request.operationId, source: request.source, request };
   draft.source = "new typing"; draft.definitionReservations!.push("later");
-  assert.deepEqual(request, { sessionId: "session", baseId: "base-id", operationId: "save-one", source: "proposal", definitionReservations: ["first"] });
+  assert.deepEqual(request, { sessionId: "session", baseId: "base-id", operationId: "save-one", inputRevision: 1, source: "proposal", definitionReservations: ["first"] });
   assert.deepEqual(applySaveResult(draft, "proposal"), { source: "new typing", baseSource: "proposal", definitionReservations: ["first", "later"] });
   const undo: HostedDraft = { ...applySaveResult(draft, "proposal"), source: "base" };
-  assert.deepEqual(freezeHostedSave(undo, "new-session", "new-base", "save-two").definitionReservations, ["first", "later"]);
+  assert.deepEqual(freezeHostedSave(undo, "new-session", "new-base", "save-two", 1).definitionReservations, ["first", "later"]);
 });
 test("a pending-only directory cannot accumulate unbound IDs or prove admission; exact statuses clean the next Save", () => {
   const directory = Array.from({ length: 128 }, (_, index) => ({ operationId: `server-pending-${index}`, status: "reserved" }));
@@ -37,11 +37,11 @@ test("a pending-only directory cannot accumulate unbound IDs or prove admission;
   assert.deepEqual(mergeDefinitionReservations(["applied", "unknown"], []), ["applied", "unknown"]);
   assert.deepEqual(mergeDefinitionReservations(["applied", "unknown"], [{ operationId: "unknown", status: "notRegistered" }]), ["applied", "unknown"]);
   const draft: HostedDraft = { source: "saved carrier", baseSource: "base", definitionReservations: ["applied", "cancelled", "unknown"] };
-  const original = freezeHostedSave(draft, "session", "base", "save-first");
+  const original = freezeHostedSave(draft, "session", "base", "save-first", 1);
   draft.definitionReservations = mergeDefinitionReservations(draft.definitionReservations!, [{ operationId: "applied", status: "admitted" }, { operationId: "cancelled", status: "cancelled" }]);
-  assert.deepEqual(freezeHostedSave(draft, "session", "new-base", "save-next").definitionReservations, ["unknown"]);
+  assert.deepEqual(freezeHostedSave(draft, "session", "new-base", "save-next", 1).definitionReservations, ["unknown"]);
   assert.deepEqual(original.definitionReservations, ["applied", "cancelled", "unknown"]);
-  assert.throws(() => freezeHostedSave({ ...draft, definitionReservations: directory.slice(0, 33).map(item => item.operationId) }, "session", "base", "blocked"), /32/);
+  assert.throws(() => freezeHostedSave({ ...draft, definitionReservations: directory.slice(0, 33).map(item => item.operationId) }, "session", "base", "blocked", 1), /32/);
 });
 test("a new server actor epoch cannot look up old source, preview, input or original-plan cache", () => {
   for (const kind of ["draft", "field", "review", "office", "query", "history", "library"] as const) {

@@ -71,3 +71,5 @@ daemon 持有内核 pidfd 与该任务 cgroup，自己作为 subreaper。自然�
 ## v0.7 worker 终局与授权交付（开发切片）
 
 受控 Linux broker 的 Exited、Cancelled、Timeout、Disconnected、SetupFailed 原回执必须先证明 pidfd/cgroup 全树完成；App 私有 WorkerFailure 在退出码/信号之外保留准确 completion，区分正常非零、取消、超时与监督断链。私有原件不会被 HTTP diagnostics 公开。Hosted Notes 原生 worker 的成功和失败在交付前均复核原 Actor、resource、权限和冻结依赖；撤权后失败消息也不能返回旧私有数据。这里不是实际 Linux 安装或全量验收结论。
+
+可选 `--app-test-binary` 与 `--pump-image` 在既有显式管理员 TEST 部署中调用真实 App pump 与 broker：setup 失败、超时、输出预算、自然非零和 daemon 断开。两个固定产物均须放在该部署的管理员只读 bin 内；测试进程真实降为服务 UID、清空组和所有 capability，并启用 no_new_privs。它们使用新 policy／原 job／真实管道及终局回执，原 policy、image、Core 与 key 不改。用例失败保留原日志，不自动重跑或清理未知终局；未运行这些用例不能把枚举构造测试当成该证据。

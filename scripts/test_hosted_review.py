@@ -1,4 +1,5 @@
 """Actual hosted review transactions, authorization and restart recovery."""
+import uuid
 import json
 import secrets
 import sys
@@ -108,7 +109,7 @@ class HostedReview(HostedFields):
     def test_review_suggestion_atomic_source_and_state_preserves_draft_and_stale_plan(self):
         self.prepare_review()
         annotation, _, _ = self.create_annotation('suggestion', '校对后的正文😀')
-        doc = self.open(); self.call('draft', {'sessionId': doc['sessionId'], 'source': doc['source']+'\nMY_PRIVATE_DRAFT'})
+        doc = self.open(); self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': doc['source']+'\nMY_PRIVATE_DRAFT'})
         source_before = (self.root/'Shared/Shared.typ').read_text('utf-8')
         sidecar_before = (self.root/'Shared/weftext.annotations.json').read_bytes()
         plan, _ = self.prepare_annotation(self.review(), dict(kind='annotationAccept', annotationId=annotation['id']))

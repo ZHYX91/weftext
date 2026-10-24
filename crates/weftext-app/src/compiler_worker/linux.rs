@@ -10,6 +10,8 @@ const CLEANUP_DEADLINE: Duration = Duration::from_secs(5);
 pub(super) struct Authority {
     client: BrokerClient,
     gate: Arc<tokio::sync::Semaphore>,
+    #[cfg(test)]
+    pub(super) test_timeout: Duration,
 }
 impl Authority {
     pub(super) fn connect(
@@ -20,6 +22,8 @@ impl Authority {
             client: BrokerClient::connect(backend.controlled_enrollment(), policy)
                 .map_err(io::Error::other)?,
             gate: Arc::new(tokio::sync::Semaphore::new(1)),
+            #[cfg(test)]
+            test_timeout: Duration::from_secs(20),
         })
     }
 }
@@ -167,6 +171,10 @@ pub(super) async fn spawn(
     })?;
     // Admission moves into the registered launch and then the Child itself.
     // Even a dropped join result retains unknown cleanup via Child::drop.
+    #[cfg(not(test))]
+    let timeout = Duration::from_secs(20);
+    #[cfg(test)]
+    let timeout = authority.test_timeout;
     let launch = crate::work::spawn_blocking(move || {
         admission.begin_launch();
         match authority.client.launch(
@@ -175,7 +183,7 @@ pub(super) async fn spawn(
             } else {
                 WorkerKind::Render
             },
-            Duration::from_secs(20),
+            timeout,
         ) {
             Ok(owned) => Ok(Child {
                 owned,

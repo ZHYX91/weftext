@@ -126,6 +126,7 @@ export class HostedEditor {
         });
     }
     get value(): string { return this.writing?.recoverySource() ?? this.editor?.source ?? ""; }
+    get authorInputId(): string { return this.editor?.authorInputId ?? ""; }
     get serial(): number { return this.editor?.generation ?? 0; }
     get viewMode(): ViewMode { return this.mode; }
     get selection(): {
@@ -253,7 +254,7 @@ export class HostedEditor {
     applyHistorySource(value: string, basis: EmbeddedQueryBasis): void {
         if (!this.editor || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial }, basis))
             throw new UiError(uiMessage("hostedEditor.recoveryNewInputRetained"));
-        this.editor.applyPatches(basis.source, [{ from: 0, to: basis.source.length, expected: basis.source, insert: value }], undefined, "input.history.restore");
+        this.editor.applyPatches(basis.source, [{ from: 0, to: basis.source.length, expected: basis.source, insert: value }], undefined, "input.commit.result");
         this.schedule(0);
     }
     refreshQueries(): void {
@@ -332,7 +333,7 @@ export class HostedEditor {
                     basis: () => ({ sessionId: this.sessionId, source: editor.source, serial: editor.generation }),
                     editable: () => this.editor === editor && !this.blocked && this.mode !== "read",
                     request: request => this.requestEdit(request), onError: this.error,
-                    onPendingSource: () => { this.queries?.invalidate(); this.changed(); }, onApplied: () => this.schedule(50),
+                    onPendingSource: () => { editor.markAuthorInput(); this.queries?.invalidate(); this.changed(); }, onApplied: () => this.schedule(50),
                     onPersonalInput: (id, text, revision) => {
                         const resource = identity.resource, key = JSON.stringify([resource, id]);
                         // A new authorized alias owns new input; earlier records retain their original owner.

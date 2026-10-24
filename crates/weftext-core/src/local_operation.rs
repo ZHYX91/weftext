@@ -77,7 +77,7 @@ impl Core {
             .file_save
             .as_ref()
             .ok_or_else(file_save_scope::unsupported_scope)?;
-        if data.version != 3 {
+        if data.version != 4 {
             return Err(file_save_scope::unsupported_scope());
         }
         let canonical_digest = data.author_input_digest.as_ref().is_some_and(|digest| {
@@ -86,9 +86,15 @@ impl Core {
                     .bytes()
                     .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
         });
-        if (data.input_revision == 0 && data.author_input_digest.is_some())
+        if (data.input_revision == 0
+            && (data.author_input_digest.is_some() || data.author_input_id.is_some()))
             || (data.input_revision > 0
-                && (data.input_revision > 9_007_199_254_740_991 || !canonical_digest))
+                && (data.input_revision > 9_007_199_254_740_991
+                    || !canonical_digest
+                    || !data
+                        .author_input_id
+                        .as_deref()
+                        .is_some_and(|id| valid_operation_id(id).is_ok())))
         {
             return Err(file_save_scope::unsupported_scope());
         }

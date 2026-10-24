@@ -775,6 +775,47 @@ fn existing(
             .is_some_and(|(a, b)| a.from == b.from && a.to == b.to && a.raw == b.raw)
     })
 }
+struct ProofreadDelivery<'a> {
+    inputs: &'a BTreeMap<String, String>,
+    dependencies: &'a [SnapshotFile],
+    environment: &'a library::Environment,
+    processing: Option<&'a library::ProcessingCapture>,
+}
+fn deliver_proofread_result<T>(
+    inner: &mut HostedInner,
+    auth: &Auth,
+    b: &Basis,
+    evidence: ProofreadDelivery<'_>,
+    result: Result<T, ApiError>,
+) -> Result<T, ApiError> {
+    let actor = inner.actor(auth)?;
+    let rights = access(inner, &actor, &b.resource)?;
+    authorize(
+        &rights,
+        &Needs {
+            source_read: true,
+            target: true,
+            proofread: true,
+            ..Needs::default()
+        },
+    )?;
+    if actor != b.actor {
+        return Err(changed());
+    }
+    validate_basis(inner, &b, true)?;
+    editor::validate_inputs(inner, &actor, &b.resource, evidence.inputs)?;
+    evidence.environment.recheck(inner, &actor)?;
+    if let Some(profile) = evidence.processing {
+        profile.validate(inner, &actor)?;
+    }
+    for f in evidence.dependencies {
+        inner
+            .core
+            .validate_snapshot(&inner.config.root, &f.path, &f.base_id)
+            .map_err(|_| changed())?;
+    }
+    result
+}
 async fn proofread(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
@@ -829,55 +870,44 @@ async fn proofread(
         Ok((b, input, inputs, dependencies, environment, processing))
     })
     .await?;
-    let output = editor::compile_frozen(&state, input).await?;
-    if output["ok"] != true {
-        return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            "reviewPreviewUnavailable",
-            UiMessage::error_api_hosted_review_proofread_compile_unavailable(),
-        ));
-    }
-    let tree: weftext_engine::RenderNode =
-        serde_json::from_value(output["tree"].clone()).map_err(|_| {
-            ApiError::bad(UiMessage::error_api_hosted_review_exact_body_tree_required())
-        })?;
-    let source = b.node.as_ref().unwrap().source.clone();
-    let options = req.options.clone();
-    let result =
+    let result: Result<_, ApiError> = async {
+        let output = editor::compile_frozen(&state, input).await?;
+        if output["ok"] != true {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "reviewPreviewUnavailable",
+                UiMessage::error_api_hosted_review_proofread_compile_unavailable(),
+            ));
+        }
+        let tree: weftext_engine::RenderNode = serde_json::from_value(output["tree"].clone())
+            .map_err(|_| {
+                ApiError::bad(UiMessage::error_api_hosted_review_exact_body_tree_required())
+            })?;
+        let source = b.node.as_ref().unwrap().source.clone();
+        let options = req.options.clone();
         crate::work::spawn_blocking(move || knowledge::proofread(&tree, &source, &options))
             .await
             .map_err(|_| {
                 ApiError::internal(UiMessage::error_api_hosted_review_proofread_incomplete())
             })?
-            .map_err(knowledge_error)?;
+            .map_err(knowledge_error)
+    }
+    .await;
     Ok(Json(
         locked(&state, move |inner| {
-            let actor = inner.actor(&auth)?;
-            let rights = access(inner, &actor, &req.resource)?;
-            authorize(
-                &rights,
-                &Needs {
-                    source_read: true,
-                    target: true,
-                    proofread: true,
-                    ..Needs::default()
+            let result = deliver_proofread_result(
+                inner,
+                &auth,
+                &b,
+                ProofreadDelivery {
+                    inputs: &inputs,
+                    dependencies: &dependencies,
+                    environment: &environment,
+                    processing: processing.as_ref(),
                 },
+                result,
             )?;
-            if actor != b.actor {
-                return Err(changed());
-            }
-            validate_basis(inner, &b, true)?;
-            editor::validate_inputs(inner, &actor, &req.resource, &inputs)?;
-            environment.recheck(inner, &actor)?;
-            if let Some(profile) = &processing {
-                profile.validate(inner, &actor)?;
-            }
-            for f in &dependencies {
-                inner
-                    .core
-                    .validate_snapshot(&inner.config.root, &f.path, &f.base_id)
-                    .map_err(|_| changed())?;
-            }
+            let actor = b.actor.clone();
             expire_revoked(inner);
             if inner.review.scans.len() >= 32
                 || inner
@@ -1350,6 +1380,81 @@ async fn settle(
 mod typed_review_tests {
     use super::*;
 
+    #[cfg(windows)]
+    #[test]
+    fn proofreading_success_and_failure_share_actual_policy_and_source_rechecks() {
+        for failure in [false, true] {
+            for mutation in [0, 1, 2] {
+                let (_temp, state, auth, _, _, _) = history_api::test_fixture();
+                let mut inner = state.inner.lock().unwrap();
+                inner
+                    .policy
+                    .users
+                    .get_mut("alice")
+                    .unwrap()
+                    .grants
+                    .get_mut("Shared")
+                    .unwrap()
+                    .annotations = ReviewRights {
+                    read: true,
+                    target: true,
+                    proofread: true,
+                    ..Default::default()
+                };
+                let b = capture(&mut inner, "alice", "Shared", true).unwrap();
+                let (_, inputs, environment) = editor::freeze(
+                    &mut inner,
+                    "alice",
+                    "Shared",
+                    &b.node.as_ref().unwrap().source,
+                )
+                .unwrap();
+                let dependencies = Vec::new();
+                let result = || {
+                    if failure {
+                        Err(crate::worker_failure::diagnostics_tests::original_failure(
+                            crate::worker_failure::Kind::OutputRejected,
+                        ))
+                    } else {
+                        Ok(json!({"value":"protected"}))
+                    }
+                };
+                let evidence = || ProofreadDelivery {
+                    inputs: &inputs,
+                    dependencies: &dependencies,
+                    environment: &environment,
+                    processing: None,
+                };
+                assert_eq!(
+                    deliver_proofread_result(&mut inner, &auth, &b, evidence(), result()).is_err(),
+                    failure
+                );
+                match mutation {
+                    0 => {
+                        inner
+                            .policy
+                            .users
+                            .get_mut("alice")
+                            .unwrap()
+                            .grants
+                            .get_mut("Shared")
+                            .unwrap()
+                            .annotations
+                            .proofread = false
+                    }
+                    1 => std::fs::write(
+                        inner.config.root.join("Shared/Shared.typ"),
+                        "changed saved source",
+                    )
+                    .unwrap(),
+                    _ => inner.policy.users.get_mut("alice").unwrap().epoch += 1,
+                }
+                let error = deliver_proofread_result(&mut inner, &auth, &b, evidence(), result())
+                    .unwrap_err();
+                assert!(error.private_worker_failure.is_none());
+            }
+        }
+    }
     #[test]
     fn proofreading_materialization_requires_independent_explicit_content_language() {
         for intent in [

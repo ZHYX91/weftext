@@ -253,6 +253,7 @@ fn owner_backup_preserves_current_ordinary_family_and_excludes_original_a_after_
                         core.actor_save(
                             "ordinary",
                             HostedSaveRequest {
+                                input_revision: None,
                                 session_id: opened.session_id,
                                 base_id: opened.base_id,
                                 source: "A PRIVATE hosted ordinary".into(),
@@ -499,6 +500,7 @@ impl Fixture {
                 c.actor_save(
                     "note",
                     HostedSaveRequest {
+                        input_revision: None,
                         session_id: doc.session_id.clone(),
                         base_id: doc.base_id,
                         source: format!("{original}\n{marker}"),
@@ -801,6 +803,7 @@ fn owner_backup_pending_actor_source_and_field_freeze_input_owner_before_core_pl
             .with_actor_for_root("nested", &nested, |core| {
                 let doc = core.open(&path, None)?;
                 let request = HostedSaveRequest {
+                    input_revision: None,
                     session_id: doc.session_id,
                     base_id: fresh(),
                     source: "A PRIVATE rejected but retained proposal".into(),
@@ -937,6 +940,7 @@ fn original_qualified_scope_rejects_damaged_stable_locator_before_foreign_routin
                 core.actor_save(
                     "Note",
                     HostedSaveRequest {
+                        input_revision: None,
                         session_id: doc.session_id,
                         base_id: fresh(),
                         source: "retained original author proposal".into(),

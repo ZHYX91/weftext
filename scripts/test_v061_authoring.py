@@ -10,6 +10,7 @@ Run: python scripts/test_v061_authoring.py CANDIDATE.exe --evidence-dir DIRECTOR
      python scripts/test_v061_authoring.py --list
 Optional positional test names select exact cases; unknown selections fail.
 """
+import uuid
 from _creation_result import created_document, library_fact
 import argparse
 from concurrent.futures import ThreadPoolExecutor
@@ -87,7 +88,13 @@ class RetainedHTTP(unittest.TestCase):
 
     def call(self, server, route, data=None, status=200, token=None):
         started = time.monotonic()
+        counters = self.__dict__.setdefault('_draft_counters', {})
+        key = (id(server), data.get('sessionId')) if data else None
+        if route.endswith('/draft') and data and status == 200:
+            data['inputRevision'] = max(data.get('inputRevision', 1), counters.get(key, 0) + 1)
         code, result, headers = server.call(route, data, token=token)
+        if route.endswith('/draft') and code == 200:
+            counters[key] = result['inputRevision']
         with (self.folder / 'http.ndjson').open('a', encoding='utf-8') as log:
             log.write(json.dumps({'program': server.evidence_label, 'route': route,
                                   'request': data, 'status': code, 'response': result,
@@ -186,8 +193,11 @@ class RetainedHTTP(unittest.TestCase):
         return result
 
     def save_exact(self, server, doc, source, token=None):
+        revision = self.__dict__.setdefault('_draft_counters', {}).get((id(server), doc['sessionId']), 0) + 1
+        ack = self.call(server, self.endpoint(server, 'draft'), {'sessionId': doc['sessionId'], 'baseId': doc['baseId'], 'source': source, 'inputId': uid(), 'inputRevision': revision}, token=token)
+        doc['_draftRevision'] = ack['inputRevision']
         request = {'sessionId': doc['sessionId'], 'baseId': doc['baseId'],
-                   'source': source, 'operationId': uid()}
+                   'source': source, 'operationId': uid(), 'inputRevision': ack['inputRevision']}
         receipt = self.call(server, self.endpoint(server, 'save'), request, token=token)
         self.assertEqual(receipt['status'], 'committed' if server.hosted else 'saved')
         self.assertEqual(receipt['operationId'], request['operationId'])
@@ -512,7 +522,7 @@ class RetainedHTTP(unittest.TestCase):
         self.assertFalse(denied['ok'], denied)
         self.assertNotIn('INITIAL_STYLE_PRIVATE_SOURCE_COMMENT', json.dumps(denied))
         personal = saved + '\nAlice retained personal input\n'
-        self.call(server, '/api/hosted/draft', {'sessionId': alice['sessionId'], 'source': personal}, token=tokens['alice'])
+        self.call(server, '/api/hosted/draft', {'inputId': str(uuid.uuid4()), 'baseId': alice['baseId'], 'inputRevision': 1, 'sessionId': alice['sessionId'], 'source': personal}, token=tokens['alice'])
 
         reader = self.view(server, root, token=tokens['reader'])
         reader_basis = {'sessionId': reader['sessionId'], 'source': saved, 'serial': 1}
@@ -636,7 +646,7 @@ class RetainedHTTP(unittest.TestCase):
         old_basis, old_map = self.observe(b, receiver, source, 1)
         old_range = self.table(old_map)['range']
         draft = source + '\nB personal retained input 中文😀\n'
-        self.call(b, '/api/draft', {'inputRevision': 1, 'sessionId': receiver['sessionId'], 'baseId': receiver['baseId'], 'source': draft})
+        self.call(b, '/api/draft', {'inputId': str(uuid.uuid4()), 'inputRevision': 1, 'sessionId': receiver['sessionId'], 'baseId': receiver['baseId'], 'source': draft})
         path = root_b / 'Note/Note.typ'
         file_identity = physical_identity(path)
         directory_identity = physical_identity(path.parent)

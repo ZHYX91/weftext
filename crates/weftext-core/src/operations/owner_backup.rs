@@ -169,37 +169,9 @@ fn selected_plan_scope(
     Ok(original == workspace_id)
 }
 fn qualified_journal_suffix<'a>(id: &str, name: &'a str) -> Result<&'a str> {
-    let suffix = name
-        .strip_prefix(&format!("{id}."))
-        .and_then(|name| name.strip_suffix(".json"))
-        .ok_or_else(private_evidence)?;
-    let fixed = matches!(
-        suffix,
-        "plan"
-            | "install"
-            | "commit"
-            | "resolution"
-            | "birth"
-            | "births"
-            | "observations"
-            | "resource-births"
-            | "definition-reservation"
-            | "definition-reservations"
-            | "revision-reservation"
-            | "tag-reservation"
-            | "directory-reservation"
-    );
-    let object = suffix
-        .strip_prefix("object-")
-        .is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()));
-    let recovery = suffix
-        .strip_prefix("recovery-observations-")
-        .is_some_and(|id| valid_operation_id(id).is_ok());
-    if !fixed && !object && !recovery {
-        return Err(private_evidence());
-    }
-    Ok(suffix)
+    crate::journal::journal_record_suffix(id, name).ok_or_else(private_evidence)
 }
+
 fn route_device_state(
     core: &Core,
     digest: &mut Sha256,

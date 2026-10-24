@@ -2089,108 +2089,142 @@ fn public_query_diagnostics(diagnostics: Vec<ErrorDescription>) -> Vec<ErrorDesc
         .map(|_| UiMessage::error_api_hosted_query_projected_result_unresolved().into())
         .collect()
 }
+fn deliver_query_result<T>(
+    inner: &mut HostedInner,
+    auth: &Auth,
+    captured: &Capture,
+    outcome: Result<T, ApiError>,
+) -> Result<(String, T), ApiError> {
+    let actor = inner.actor(auth)?;
+    if actor != captured.actor || inner.actor_generation(&actor) != captured.epoch {
+        return Err(expired());
+    }
+    authorize_authority(inner, &actor, &captured.authority)?;
+    if office::binding_hash(inner, &all_resources(&captured.authority))? != captured.config_hash {
+        return Err(changed());
+    }
+    for (path, witness) in &captured.witnesses {
+        inner
+            .core
+            .validate_snapshot_witness(&inner.config.root, path, witness)
+            .map_err(|_| changed())?;
+    }
+    captured.scopes.recheck(inner, &actor)?;
+    captured.inputs.validate(inner, &actor)?;
+    if let Some(environment) = &captured.environment {
+        environment.recheck(inner, &actor)?;
+    }
+    if let Some(d) = &captured.draft
+        && let (Some(id), Some(serial)) = (&d.session_id, d.serial)
+    {
+        let (_, session, _) = inner.session(auth, id)?;
+        if session.resource != d.resource {
+            return Err(unavailable());
+        }
+        writing_api::exact_version(&inner.editor_versions, id, &d.source, serial)?;
+    }
+    Ok((actor, outcome?))
+}
 async fn execute_captured(
     state: &HostedState,
     auth: &Auth,
     mut captured: Capture,
 ) -> Result<Value, ApiError> {
-    let mut execution_bytes = frozen_input_bytes(
-        &captured.input,
-        &captured.metadata,
-        &captured.schema,
-        &captured.plan,
-    )?;
-    charge_bytes(&mut execution_bytes, captured.scopes.retained_bytes())?;
-    charge_bytes(&mut execution_bytes, captured.inputs.retained_bytes())?;
-    if let Some(environment) = &captured.environment {
-        charge_bytes(&mut execution_bytes, environment.retained_bytes())?;
-    }
-    for (entity, worker) in std::mem::take(&mut captured.workers) {
-        let output = editor::compile_frozen(state, worker).await?;
-        let products = if output["ok"] == true {
-            serde_json::from_value::<weftext_engine::RenderProducts>(output["products"].clone())
-                .ok()
-                .map(|p| {
-                    data_api::native_query_products(
-                        format!("{}:{entity}", captured.input.cut_id),
-                        p,
-                    )
-                })
-        } else {
-            None
-        };
-        if let Some(note) = captured
-            .input
-            .notes
-            .iter_mut()
-            .find(|n| n.entity_key == entity)
-        {
-            let mut products = products.unwrap_or_else(|| weftext_data::NoteProducts {
-                compile_identity: captured.input.cut_id.clone(),
-                target: "html".into(),
-                title: unavailable_product(
-                    UiMessage::error_api_hosted_query_native_product_unavailable(),
+    let outcome: Result<_, ApiError> = async {
+        let mut execution_bytes = frozen_input_bytes(
+            &captured.input,
+            &captured.metadata,
+            &captured.schema,
+            &captured.plan,
+        )?;
+        charge_bytes(&mut execution_bytes, captured.scopes.retained_bytes())?;
+        charge_bytes(&mut execution_bytes, captured.inputs.retained_bytes())?;
+        if let Some(environment) = &captured.environment {
+            charge_bytes(&mut execution_bytes, environment.retained_bytes())?;
+        }
+        for (entity, worker) in std::mem::take(&mut captured.workers) {
+            let output = editor::compile_frozen(state, worker).await?;
+            let products = if output["ok"] == true {
+                serde_json::from_value::<weftext_engine::RenderProducts>(output["products"].clone())
+                    .ok()
+                    .map(|p| {
+                        data_api::native_query_products(
+                            format!("{}:{entity}", captured.input.cut_id),
+                            p,
+                        )
+                    })
+            } else {
+                None
+            };
+            if let Some(note) = captured
+                .input
+                .notes
+                .iter_mut()
+                .find(|n| n.entity_key == entity)
+            {
+                let mut products = products.unwrap_or_else(|| weftext_data::NoteProducts {
+                    compile_identity: captured.input.cut_id.clone(),
+                    target: "html".into(),
+                    title: unavailable_product(
+                        UiMessage::error_api_hosted_query_native_product_unavailable(),
+                    ),
+                    body: unavailable_product(
+                        UiMessage::error_api_hosted_query_native_product_unavailable(),
+                    ),
+                    headings: unavailable_product(
+                        UiMessage::error_api_hosted_query_native_product_unavailable(),
+                    ),
+                });
+                for (name, cell) in [
+                    ("title", &mut products.title),
+                    ("body", &mut products.body),
+                    ("headings", &mut products.headings),
+                ] {
+                    if !captured.products.contains(name) {
+                        *cell = unavailable_product(
+                            UiMessage::error_api_hosted_query_product_not_selected(),
+                        );
+                    }
+                }
+                charge_serialized(&mut execution_bytes, &products)?;
+                note.products = Some(products);
+            }
+        }
+        let (result, provider_dependencies) =
+            weftext_data::execute_authorized_query_with_provider_dependencies(
+                &captured.input,
+                &captured.plan,
+                &captured.schema,
+                &weftext_data::QueryBudget {
+                    max_rows: 5000,
+                    ..Default::default()
+                },
+                &captured.metadata,
+            )
+            .map_err(|_| invalid())?;
+        if result.rows.len() > 500 {
+            return Err(invalid());
+        }
+        captured.authority.provider_dependencies = provider_dependencies;
+        for consumed in &captured.authority.provider_dependencies.baselines {
+            for (actual, selected) in [
+                (&consumed.providers, &captured.authority.providers.providers),
+                (
+                    &consumed.series_policies,
+                    &captured.authority.providers.series_policies,
                 ),
-                body: unavailable_product(
-                    UiMessage::error_api_hosted_query_native_product_unavailable(),
-                ),
-                headings: unavailable_product(
-                    UiMessage::error_api_hosted_query_native_product_unavailable(),
-                ),
-            });
-            for (name, cell) in [
-                ("title", &mut products.title),
-                ("body", &mut products.body),
-                ("headings", &mut products.headings),
             ] {
-                if !captured.products.contains(name) {
-                    *cell = unavailable_product(
-                        UiMessage::error_api_hosted_query_product_not_selected(),
-                    );
+                if actual.iter().any(|(id, fp)| selected.get(id) != Some(fp)) {
+                    return Err(unavailable());
                 }
             }
-            charge_serialized(&mut execution_bytes, &products)?;
-            note.products = Some(products);
         }
+        Ok(result)
     }
-    let (mut result, provider_dependencies) =
-        weftext_data::execute_authorized_query_with_provider_dependencies(
-            &captured.input,
-            &captured.plan,
-            &captured.schema,
-            &weftext_data::QueryBudget {
-                max_rows: 5000,
-                ..Default::default()
-            },
-            &captured.metadata,
-        )
-        .map_err(|_| invalid())?;
-    if result.rows.len() > 500 {
-        return Err(invalid());
-    }
+    .await;
     let auth = auth.clone();
-    captured.authority.provider_dependencies = provider_dependencies;
-    for consumed in &captured.authority.provider_dependencies.baselines {
-        for (actual, selected) in [
-            (&consumed.providers, &captured.authority.providers.providers),
-            (
-                &consumed.series_policies,
-                &captured.authority.providers.series_policies,
-            ),
-        ] {
-            if actual.iter().any(|(id, fp)| selected.get(id) != Some(fp)) {
-                return Err(unavailable());
-            }
-        }
-    }
     locked(state,move|inner|{
-        let actor=inner.actor(&auth)?;if actor!=captured.actor||inner.actor_generation(&actor)!=captured.epoch{return Err(expired());}authorize_authority(inner,&actor,&captured.authority)?;
-        if office::binding_hash(inner,&all_resources(&captured.authority))?!=captured.config_hash{return Err(changed());}
-        for (path,witness) in &captured.witnesses{inner.core.validate_snapshot_witness(&inner.config.root,path,witness).map_err(|_|changed())?;}
-        captured.scopes.recheck(inner,&actor)?;
-        captured.inputs.validate(inner,&actor)?;
-        if let Some(environment)=&captured.environment {environment.recheck(inner,&actor)?;}
-        if let Some(d)=&captured.draft && let (Some(id),Some(serial))=(&d.session_id,d.serial){let (_,session,_)=inner.session(&auth,id)?;if session.resource!=d.resource{return Err(unavailable());}writing_api::exact_version(&inner.editor_versions,id,&d.source,serial)?;}
+        let (actor, mut result) = deliver_query_result(inner, &auth, &captured, outcome)?;
         for row in &mut result.rows{row.key=digest(format!("{}:{}",result.cut_id,row.key).as_bytes());row.revision=row.revision.as_ref().map(|_|result.cut_id.clone());if let Some(entity)=&row.entity_key{let resource=captured.resource_map.get(entity).ok_or_else(changed)?;row.entity_key=Some(resource.clone());row.path=Some(format!("resource:{resource}"));}}
         result.diagnostics=public_query_diagnostics(result.diagnostics);
         let mut public=serde_json::to_value(&result).map_err(|_|invalid())?;
@@ -2289,6 +2323,73 @@ pub(super) async fn validate_embedded(
 mod tests {
     use super::*;
 
+    #[cfg(windows)]
+    #[test]
+    fn query_success_and_worker_failure_both_recheck_actual_product_grant_and_source() {
+        for failure in [false, true] {
+            for mutation in [0, 1, 2] {
+                let (_temp, state, auth, _, _, _) = history_api::test_fixture();
+                let mut inner = state.inner.lock().unwrap();
+                inner
+                    .policy
+                    .users
+                    .get_mut("alice")
+                    .unwrap()
+                    .grants
+                    .get_mut("Shared")
+                    .unwrap()
+                    .query
+                    .products
+                    .insert("body".into(), true);
+                let req: QueryRequest = serde_json::from_value(
+                    json!({"resources":["Shared"],"products":["body"],"plan":{"select":[]}}),
+                )
+                .unwrap();
+                let captured = capture(&mut inner, &auth, req, None, false).unwrap();
+                let result = || {
+                    if failure {
+                        Err(crate::worker_failure::diagnostics_tests::original_failure(
+                            crate::worker_failure::Kind::OutputRejected,
+                        ))
+                    } else {
+                        Ok(json!({"value":"protected"}))
+                    }
+                };
+                assert_eq!(
+                    deliver_query_result(&mut inner, &auth, &captured, result()).is_err(),
+                    failure
+                );
+                match mutation {
+                    0 => {
+                        inner
+                            .policy
+                            .users
+                            .get_mut("alice")
+                            .unwrap()
+                            .grants
+                            .get_mut("Shared")
+                            .unwrap()
+                            .query
+                            .products
+                            .insert("body".into(), false);
+                    }
+                    1 => {
+                        std::fs::write(
+                            inner.config.root.join("Shared/Shared.typ"),
+                            "changed saved source",
+                        )
+                        .unwrap();
+                    }
+                    _ => {
+                        inner.policy.users.get_mut("alice").unwrap().epoch += 1;
+                    }
+                }
+                let error =
+                    deliver_query_result(&mut inner, &auth, &captured, result()).unwrap_err();
+                assert!(error.private_worker_failure.is_none());
+            }
+        }
+    }
     #[test]
     fn hosted_query_diagnostics_keep_parallel_cardinality_without_private_payloads() {
         let diagnostics = (0..40)

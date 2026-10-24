@@ -25,3 +25,8 @@ path = "src/main.rs"
 name = "weftext-worker-boundary-probe"
 path = "src/bin/boundary_probe.rs"
 required-features = ["boundary-probe"]
+
+[[bin]]
+name = "weftext-worker-pump-probe"
+path = "src/bin/pump_probe.rs"
+required-features = ["boundary-probe"]

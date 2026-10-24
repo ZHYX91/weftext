@@ -575,7 +575,7 @@ Save／另存为首次响应及原号状态共用同一文件保存交付信封�
 
 备份对 Plan、带作用域的 Draft／actor 首部、CaptureDraft 及无 Plan 预约，均先按明确原 workspace 身份路由，再看定位路径。A 的整物理库根保留移走、旧路径独立准入新 B 后，A 的外库记录会被排除，不读其正文，也不阻挡 B 的合法备份。同 workspace 却物理根不同，或同一物理根被矛盾 workspace 声称，仍报 scopeChanged；未知／畸形首部、有界预算和选中记录的严格 reader 继续保守拒绝。
 
-文件保存使用原 Plan 的必需 `fileSave {version:3,sessionId,baseId?,scope}` 参与者；普通 Save 保原 session/base，SaveAs 保原 session 并在 stage 前冻结目标归属。path 与 after 只存于原 Plan，完整参与者和 scope 纳入同一指纹、同一 commit。`QualifiedInputScope` 只有明确 `deviceUnassigned` 或 `library {binding:{root,rootIdentity,workspaceId}}`，库 WorkspaceId 非可选。Open 检查真实祖先的已准入库，即便普通嵌套文件默认 UI root 只是直接父目录，也不能误归为设备输入。缺控制证明、损坏或读取失败不降为设备输入。Save 承原 Session 的 scope，SaveAs 取目标 scope；原号重试／查询不根据当前路径重算归属。
+文件保存使用原 Plan 的必需 `fileSave {version:4,sessionId,baseId?,scope}` 参与者；普通 Save 保原 session/base，SaveAs 保原 session 并在 stage 前冻结目标归属。path 与 after 只存于原 Plan，完整参与者和 scope 纳入同一指纹、同一 commit。`QualifiedInputScope` 只有明确 `deviceUnassigned` 或 `library {binding:{root,rootIdentity,workspaceId}}`，库 WorkspaceId 非可选。Open 检查真实祖先的已准入库，即便普通嵌套文件默认 UI root 只是直接父目录，也不能误归为设备输入。缺控制证明、损坏或读取失败不降为设备输入。Save 承原 Session 的 scope，SaveAs 取目标 scope；原号重试／查询不根据当前路径重算归属。
 
 Session、当前文件 Draft 共用同一 scope，Draft 必需原 FI，唯一主键为 `(FI,scope)`。旧 Session 的后续输入仍归原库，即使旧根路径已属于另一库；不得重新标记为当前库。已提交的同对象移动只在同 scope 下更新主记录 path，先归档准确旧字节；删除旧路径槽／空归属合并和 consumed 迁移协议。旧缺 scope 的 Draft 或缺必需参与者／版本的 file-save 原件保持，报告 unsupported，不自动补证、升级或提供正常写入／备份双轨。原历史 commit 不能因此被解释为无效果。
 
@@ -589,7 +589,7 @@ Draft reader 从当前真实位置逆向遍历同 workspace 的原 committed rel
 
 普通保存、定义保存及原事务内同物理文件的搬移交付，刷新仍活动的原 Session，不另建输入 producer。刷新先核原保存 Session 或原事务捕获的文件 FI，再核当前文件 FI、Node、actor 与完整原 scope；保留原 producer、完整 Draft witness、已确认输入和冲突状态。文件实际基准未变时也保留 BaseId，重复 status 不使同一编辑器的请求失效。若实际基准已变且不匹配原事务捕获基准与原提交 observation，返回独立比较 Session，不更新原 writer 的基准或输入。保存失联后的查询显式携带冻结请求的原 Session；不带 Session 的通用回执查询及 SaveAs 仍返回独立 Session，不能从回执推导延续权。迟到输入继续属于原 writer，多窗口的独立提案不按文本合并；重启后仍走完整记录 CAS 的显式恢复。
 
-Draft 的每条主／备选输入区分普通 `proposal` 与 `committedBaseline { operationId }`。只有真实普通保存提交后，Core 才能签发后者。原 `FileSaveData` v3 在 fingerprint 和原 commit 中绑定准确 `draftProducerId`；Plan 将 `fileSave, identity` 放在作者载荷之前。消费基线前，在同一保护句柄上先核这两项原元数据，再有界读取并重核持久 Plan 与保留事实一致，走现有唯一 commit 校验器，核 scope、FI、producer、已知 Base、准确 afterimage 及已提交搬移路径。证据缺失、损坏或不一致须失败并保留当前完整 Draft，不能把加载时缓存当作原件。
+Draft 的每条主／备选输入区分普通 `proposal` 与 `committedBaseline { operationId }`。只有真实普通保存提交后，Core 才能签发后者。原 `FileSaveData` v4 在 fingerprint 和原 commit 中绑定准确 `draftProducerId`；Plan 将 `fileSave, identity` 放在作者载荷之前。消费基线前，在同一保护句柄上先核这两项原元数据，再有界读取并重核持久 Plan 与保留事实一致，走现有唯一 commit 校验器，核 scope、FI、producer、已知 Base、准确 afterimage 及已提交搬移路径。证据缺失、损坏或不一致须失败并保留当前完整 Draft，不能把加载时缓存当作原件。
 
 关闭回读复用同一受保护 Draft 记录读取入口，先核原 scope 与 FI，再读正文，并以原完整字节计算回执。搬移路径证明同时覆盖原 files 与 Relocate／Compound 的 leaf／members，按准确 FI 和最具体原映射核对；完整新记录通过资格后才归档。历史／比较仅合并来源已知且 producer、完整输入、角色和原号均相同的投影；未知来源及显式保留的当前缓冲区不按同文折叠。
 
@@ -602,7 +602,7 @@ Draft 持久布局必需先 `scope, identity`，再正文；历史枚举仅在�
 
 ### v0.7 作者输入顺序（开发候选）
 
-HTTP 与原生 Draft 写入必须携带同一活动 producer 递增的 `inputRevision`，Core 在完整原稿落盘后才 ACK；旧序号重试还须重新核实当前原记录。保存冻结原已确认序号与原稿摘要，纳入 fileSave v3 参与者、指纹与 commit；Query 定义的生成稿同时绑定生成前的作者 cut。更晚 Y 已 ACK 时，迟到保存可提交 S，保留 Y 为 proposal，并将其已知 Base 接续到真正提交的 S；不得将 Y 改签为已提交 baseline。正常交付继续原 Session，丢回执和重启仍保留 Y。
+HTTP 与原生 Draft 写入必须携带同一活动 producer 递增的 `inputRevision`，Core 在完整原稿落盘后才 ACK；旧序号重试还须重新核实当前原记录。保存冻结原已确认序号与原稿摘要，纳入 fileSave v4 参与者、指纹与 commit；Query 定义的生成稿同时绑定生成前的作者 cut。更晚 Y 已 ACK 时，迟到保存可提交 S，保留 Y 为 proposal，并将其已知 Base 接续到真正提交的 S；不得将 Y 改签为已提交 baseline。正常交付继续原 Session，丢回执和重启仍保留 Y。
 
 未携序号的普通保存只适用于没有有序 Draft 的同步生产者（例如 CLI 的独立 Session），不能借用交互 Session 的 ACK。历史恢复另走显式原请求与完整 Draft 保护，不冒充普通作者输入。原号重试、独立 producer、Undo 与同值 ABA 保持原边界；旧 fileSave 原件保留，缺证明不静默升级。产品与故障注入结果须对应实际候选。
 
@@ -613,3 +613,9 @@ HTTP 与原生 Draft 写入必须携带同一活动 producer 递增的 `inputRev
 分桶容量从原 pending Plan 的固定记录族与文件／目录参与者计算，并在每次私有 journal 写入时保留尚未结算的空间；不另建持久预留账本。迁移先检查所有目标容量与同名冲突，再原对象重命名。Linux 的完整准入只对明确配置的私有 profile 的准确 journal 路径使用分桶／一次迁移扫描预算，作者目录的同名路径没有扩容资格；原所有权、无符号链接与 enrollment 检查不变。
 
 历史恢复也冻结确认稿的 `inputRevision` 与作者正文；生成稿或恢复稿若不是较新 Y 的已知 Base，Y 保持原 Base 并要求比较，不能虚构其见过生成内容。显式恢复／生成替换退休已消费序号；显式 merge/resume 也清除过期 cut 资格，已提交原号仍先对原件重试。Linux exact-path rules 使用实际 POSIX 分隔符，拒绝父目录遍历，不将 `/` 错转成普通反斜杠文件名。
+
+正文的有序 Draft ACK 同时绑定 `inputRevision`（传输序号）、`inputId`（真实编辑代次）和编辑器实际见过的 `baseId`。输入、Undo 和待应用的 literal 都更新代次；已知已提交结果的安装保留代次，不能靠文本相等认定没有新输入。持久 Draft 的主／备选项及 FileSaveData v4 记录此身份，baseline 仅能由同代次及原提交证据延续。
+
+旧 UI Base 的迟到 ACK 只能从同 Session、物理文件和合格 scope 的原已提交 Plan 解释；普通 S 提交可接续为 S，生成／恢复 X 不使 Y 自动变成基于 X。没有已知 Base 的缓存输入显式提交 `retainedBaseSource`，保为未知基础的 proposal 并要求比较。缺少两种基础、同时给出两种或任意未知 baseId 均拒绝。HTTP、WebUI 和原生的活动编辑路径共用此合同。独立同步 CLI 等同步生产者可在从未接受有序 ACK 的独立 Session 上无序保存；已开始有序输入的 Session 不能退回此入口。
+
+worker 的 Started 表示已原子出生的同一受控 job 的身份，在子进程 exec setup 资格确定之前发送。SetupFailed 也必须先完成原 cgroup 空、pidfd 退出及 reap 再交付原 receipt；收不到有效终局时关闭准入。清理后可信 Timeout／Disconnected／SetupFailed 可以修正早到的管道 I/O 分类，保留原 I/O 事实；清理产生的 Cancelled 不能覆盖原预算或 I/O 原因。Query、proofread 和 Office 同族的失败 Result 经过各自既有交付授权与依赖终检后才展开。

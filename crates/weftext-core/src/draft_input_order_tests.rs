@@ -8,8 +8,8 @@ fn late_frozen_save_preserves_newer_acked_draft_after_restart() {
     fs::write(&source, "B").unwrap();
     let mut core = Core::new(&private).unwrap();
     let doc = core.open(&source, None).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "Y", 2).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 1).unwrap();
+    core.persist_test_input(&doc.session_id, "Y", 2).unwrap();
     let operation_id = fresh();
     let intent = SaveRequest {
         operation_id: operation_id.clone(),
@@ -42,8 +42,8 @@ fn late_save_delivery_keeps_the_active_writer_and_newer_proposal() {
     fs::write(&note, "B").unwrap();
     let mut core = Core::new(temp.path().join("private")).unwrap();
     let doc = core.open(&note, None).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "Y", 2).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 1).unwrap();
+    core.persist_test_input(&doc.session_id, "Y", 2).unwrap();
     let operation_id = fresh();
     let saved = core
         .save_ordered(
@@ -89,7 +89,7 @@ fn an_ack_retry_and_frozen_save_requalify_the_actual_durable_draft() {
     fs::write(&note, "B").unwrap();
     let mut core = Core::new(temp.path().join("private")).unwrap();
     let doc = core.open(&note, None).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 1).unwrap();
     let session = &core.sessions[&doc.session_id];
     let draft = core
         .object_draft_path(
@@ -99,7 +99,7 @@ fn an_ack_retry_and_frozen_save_requalify_the_actual_durable_draft() {
         .unwrap();
     let original = fs::read(&draft).unwrap();
     fs::write(&draft, b"{broken").unwrap();
-    assert!(core.persist_draft_ordered(&doc.session_id, "S", 1).is_err());
+    assert!(core.persist_test_input(&doc.session_id, "S", 1).is_err());
     assert!(
         core.save_ordered(
             SaveRequest {
@@ -114,7 +114,7 @@ fn an_ack_retry_and_frozen_save_requalify_the_actual_durable_draft() {
     );
     assert_eq!(fs::read_to_string(note).unwrap(), "B");
     fs::write(&draft, original).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 1).unwrap();
 }
 
 #[test]
@@ -124,9 +124,9 @@ fn later_identical_aba_input_does_not_become_a_clean_baseline() {
     fs::write(&source, "B").unwrap();
     let mut core = Core::new(temp.path().join("private")).unwrap();
     let doc = core.open(&source, None).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "Y", 2).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "S", 3).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 1).unwrap();
+    core.persist_test_input(&doc.session_id, "Y", 2).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 3).unwrap();
     core.save_ordered(
         SaveRequest {
             operation_id: fresh(),
@@ -144,7 +144,7 @@ fn later_identical_aba_input_does_not_become_a_clean_baseline() {
     assert_eq!(record.source, "S");
     assert_eq!(record.role, DraftRole::Proposal);
     assert!(
-        core.persist_draft_ordered(&doc.session_id, "older", 2)
+        core.persist_test_input(&doc.session_id, "older", 2)
             .is_err()
     );
 }
@@ -156,8 +156,8 @@ fn a_frozen_cut_cannot_be_relabelled_with_other_source_bytes() {
     fs::write(&file, "B").unwrap();
     let mut core = Core::new(temp.path().join("private")).unwrap();
     let doc = core.open(&file, None).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "Y", 2).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 1).unwrap();
+    core.persist_test_input(&doc.session_id, "Y", 2).unwrap();
     assert!(
         core.save_ordered(
             SaveRequest {
@@ -213,8 +213,8 @@ fn save_as_cannot_relabel_frozen_ack_with_different_source_or_newer_producer() {
     fs::write(&note, "B").unwrap();
     let mut core = Core::new(temp.path().join("private")).unwrap();
     let doc = core.open(&note, None).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "Y", 2).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 1).unwrap();
+    core.persist_test_input(&doc.session_id, "Y", 2).unwrap();
     let target = temp.path().join("separate.typ");
     let wrong = core.save_as_ordered(
         SaveAsRequest {
@@ -256,9 +256,9 @@ fn out_of_order_ack_and_aba_never_make_the_earlier_cut_clean() {
     fs::write(&note, "B").unwrap();
     let mut core = Core::new(temp.path().join("private")).unwrap();
     let doc = core.open(&note, None).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "Y", 2).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 1).unwrap();
+    core.persist_test_input(&doc.session_id, "Y", 2).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 1).unwrap();
     assert_eq!(
         core.current_session_draft(&doc.session_id)
             .unwrap()
@@ -274,7 +274,7 @@ fn out_of_order_ack_and_aba_never_make_the_earlier_cut_clean() {
     };
     assert_eq!(core.save(request.clone()).unwrap_err().code, "draftChanged");
     assert_eq!(fs::read_to_string(&note).unwrap(), "B");
-    core.persist_draft_ordered(&doc.session_id, "S", 3).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 3).unwrap();
     core.save_ordered(request, 1).unwrap();
     let draft = core
         .current_session_draft(&doc.session_id)
@@ -292,8 +292,8 @@ fn generated_afterimage_cannot_claim_that_newer_input_was_based_on_it() {
     fs::write(&note, "B").unwrap();
     let mut core = Core::new(temp.path().join("private")).unwrap();
     let doc = core.open(&note, None).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "S", 1).unwrap();
-    core.persist_draft_ordered(&doc.session_id, "Y", 2).unwrap();
+    core.persist_test_input(&doc.session_id, "S", 1).unwrap();
+    core.persist_test_input(&doc.session_id, "Y", 2).unwrap();
     let id = fresh();
     let outcome = core
         .save_ordered_derived(
@@ -336,12 +336,12 @@ fn generated_afterimage_cannot_claim_that_newer_input_was_based_on_it() {
     core.resolve_draft(&doc.session_id, "mergeRecovered", Some("reviewed X and Y"))
         .unwrap();
     assert_eq!(
-        core.persist_draft_ordered(&doc.session_id, "Y", 2)
+        core.persist_test_input(&doc.session_id, "Y", 2)
             .unwrap_err()
             .code,
         "draftChanged"
     );
-    core.persist_draft_ordered(&doc.session_id, "reviewed X and Y", 3)
+    core.persist_test_input(&doc.session_id, "reviewed X and Y", 3)
         .unwrap();
     core.save_ordered(
         SaveRequest {
@@ -354,4 +354,214 @@ fn generated_afterimage_cannot_claim_that_newer_input_was_based_on_it() {
     )
     .unwrap();
     assert_eq!(fs::read_to_string(note).unwrap(), "reviewed X and Y");
+}
+
+fn actual_input(
+    doc: &OpenedDocument,
+    source: &str,
+    revision: u64,
+    input_id: &str,
+) -> DraftInputRequest {
+    DraftInputRequest {
+        session_id: doc.session_id.clone(),
+        source: source.into(),
+        input_revision: revision,
+        input_id: input_id.into(),
+        base_id: Some(doc.base_id.clone()),
+        retained_base_source: None,
+    }
+}
+#[test]
+fn debounced_equal_byte_edit_after_committed_s_remains_a_proposal_after_restart() {
+    let temp = tempfile::tempdir().unwrap();
+    let note = temp.path().join("note.typ");
+    fs::write(&note, "B").unwrap();
+    let data = temp.path().join("private");
+    let mut core = Core::new(&data).unwrap();
+    let doc = core.open(&note, None).unwrap();
+    let original = fresh();
+    core.persist_draft_ordered(actual_input(&doc, "S", 1, &original))
+        .unwrap();
+    let outcome = core
+        .save_ordered(
+            SaveRequest {
+                session_id: doc.session_id.clone(),
+                base_id: doc.base_id.clone(),
+                source: "S".into(),
+                operation_id: fresh(),
+            },
+            1,
+        )
+        .unwrap();
+    let mut current = doc.clone();
+    current.base_id = outcome.receipt.base_id;
+    // T and the Undo back to S happened within debounce: only new S is sent.
+    let returned = fresh();
+    core.persist_draft_ordered(actual_input(&current, "S", 2, &returned))
+        .unwrap();
+    let draft = core
+        .current_session_draft(&doc.session_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(draft.role, DraftRole::Proposal);
+    assert_eq!(draft.input_id, Some(returned));
+    drop(core);
+    fs::write(&note, "external X").unwrap();
+    let mut core = Core::new(&data).unwrap();
+    let opened = core.open(&note, None).unwrap();
+    assert_eq!(opened.recovered_draft.as_deref(), Some("S"));
+    assert_eq!(opened.recovered_draft_base_source.as_deref(), Some("S"));
+    assert!(opened.recovered_draft_conflict);
+}
+#[test]
+fn redundant_same_generation_ack_preserves_only_its_qualified_committed_baseline() {
+    let temp = tempfile::tempdir().unwrap();
+    let note = temp.path().join("note.typ");
+    fs::write(&note, "B").unwrap();
+    let data = temp.path().join("private");
+    let mut core = Core::new(&data).unwrap();
+    let doc = core.open(&note, None).unwrap();
+    let input_id = fresh();
+    core.persist_draft_ordered(actual_input(&doc, "S", 1, &input_id))
+        .unwrap();
+    let outcome = core
+        .save_ordered(
+            SaveRequest {
+                session_id: doc.session_id.clone(),
+                base_id: doc.base_id.clone(),
+                source: "S".into(),
+                operation_id: fresh(),
+            },
+            1,
+        )
+        .unwrap();
+    let mut current = doc.clone();
+    current.base_id = outcome.receipt.base_id;
+    core.persist_draft_ordered(actual_input(&current, "S", 2, &input_id))
+        .unwrap();
+    assert!(matches!(
+        core.current_session_draft(&doc.session_id)
+            .unwrap()
+            .unwrap()
+            .role,
+        DraftRole::CommittedBaseline { .. }
+    ));
+    drop(core);
+    fs::write(&note, "external X").unwrap();
+    let mut core = Core::new(&data).unwrap();
+    assert!(core.open(&note, None).unwrap().recovered_draft.is_none());
+}
+#[test]
+fn late_y_ack_uses_the_ui_base_before_generated_x_instead_of_mutable_core_base() {
+    let temp = tempfile::tempdir().unwrap();
+    let note = temp.path().join("note.typ");
+    fs::write(&note, "B").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let doc = core.open(&note, None).unwrap();
+    core.persist_draft_ordered(actual_input(&doc, "S", 1, &fresh()))
+        .unwrap();
+    let outcome = core
+        .save_ordered_derived(
+            SaveRequest {
+                session_id: doc.session_id.clone(),
+                base_id: doc.base_id.clone(),
+                source: "generated X".into(),
+                operation_id: fresh(),
+            },
+            "S".into(),
+            1,
+        )
+        .unwrap();
+    core.persist_draft_ordered(actual_input(&doc, "Y", 2, &fresh()))
+        .unwrap();
+    let draft = core
+        .current_session_draft(&doc.session_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(draft.source, "Y");
+    assert_eq!(draft.base_source, "B");
+    assert_eq!(
+        core.save_ordered(
+            SaveRequest {
+                session_id: doc.session_id.clone(),
+                base_id: outcome.receipt.base_id,
+                source: "Y".into(),
+                operation_id: fresh()
+            },
+            2
+        )
+        .unwrap_err()
+        .code,
+        "draftConflict"
+    );
+    assert_eq!(fs::read_to_string(&note).unwrap(), "generated X");
+}
+#[test]
+fn generated_staged_failure_does_not_replace_the_acknowledged_author_cut() {
+    let temp = tempfile::tempdir().unwrap();
+    let note = temp.path().join("note.typ");
+    fs::write(&note, "B").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let doc = core.open(&note, None).unwrap();
+    let input = actual_input(&doc, "S", 1, &fresh());
+    core.persist_draft_ordered(input.clone()).unwrap();
+    hosted::set_test_failpoint("saveStaged");
+    assert_eq!(
+        core.save_ordered_derived(
+            SaveRequest {
+                session_id: doc.session_id.clone(),
+                base_id: doc.base_id.clone(),
+                source: "generated X".into(),
+                operation_id: fresh()
+            },
+            "S".into(),
+            1
+        )
+        .unwrap_err()
+        .code,
+        "injectedFailure"
+    );
+    let draft = core
+        .current_session_draft(&doc.session_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(draft.source, "S");
+    assert_eq!(draft.base_source, "B");
+    assert_eq!(draft.input_id, Some(input.input_id));
+    assert_eq!(fs::read_to_string(&note).unwrap(), "B");
+}
+#[test]
+fn ordered_ack_cannot_borrow_an_unknown_base_or_retransmit_a_different_generation() {
+    let temp = tempfile::tempdir().unwrap();
+    let note = temp.path().join("note.typ");
+    fs::write(&note, "B").unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let doc = core.open(&note, None).unwrap();
+    let input = actual_input(&doc, "S", 1, &fresh());
+    core.persist_draft_ordered(input.clone()).unwrap();
+    let mut changed = input.clone();
+    changed.input_id = fresh();
+    assert_eq!(
+        core.persist_draft_ordered(changed).unwrap_err().code,
+        "draftChanged"
+    );
+    let mut changed = input.clone();
+    changed.input_revision = 2;
+    changed.base_id = Some(fresh());
+    assert_eq!(
+        core.persist_draft_ordered(changed).unwrap_err().code,
+        "draftChanged"
+    );
+    let mut retained = input;
+    retained.input_revision = 2;
+    retained.base_id = None;
+    retained.retained_base_source = Some("earlier unknown B".into());
+    core.persist_draft_ordered(retained).unwrap();
+    assert!(
+        !core
+            .current_session_draft(&doc.session_id)
+            .unwrap()
+            .unwrap()
+            .base_known
+    );
 }

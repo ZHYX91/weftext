@@ -658,6 +658,7 @@ async fn write(
                             &fingerprint,
                             value(&cell.cell)?,
                             weftext_core::HostedSaveRequest {
+                                input_revision: None,
                                 session_id: doc.session_id.clone(),
                                 base_id: doc.base_id.clone(),
                                 source: patch.source,

@@ -17,7 +17,7 @@ const fresh = (storage: Storage) => new HostedDraftCache(storage, () => prefix);
 
 test("small recovery, frozen original save and reservations roundtrip through one codec", () => {
   const { cache, storage } = create();
-  const draft: HostedDraft = { source: "新😀\ud800", baseSource: "旧\r\n", reference: "weftext-node://test/id", definitionReservations: ["r"], pending: { resource: "Shared", operationId: "op", source: "原请求", request: { sessionId: "session", baseId: "base", operationId: "op", source: "原请求", definitionReservations: ["r"] } } };
+  const draft: HostedDraft = { source: "新😀\ud800", baseSource: "旧\r\n", reference: "weftext-node://test/id", definitionReservations: ["r"], pending: { resource: "Shared", operationId: "op", source: "原请求", request: { inputRevision: 1, sessionId: "session", baseId: "base", operationId: "op", source: "原请求", definitionReservations: ["r"] } } };
   cache.write("note", draft);
   assert.deepEqual(fresh(storage).read("note"), draft);
   assert.deepEqual(JSON.parse(storage.getItem(prefix + "note")!), draft);
@@ -40,7 +40,7 @@ test("large edits synchronously persist compact metadata and survive a fresh rea
 
 test("a large unsaved replacement keeps its small original Base and independent pending request", () => {
   const { cache, storage } = create();
-  const draft: HostedDraft = { source: large, baseSource: "原先小稿", pending: { resource: "Shared", operationId: "op", source: large + "旧提案", request: { sessionId: "s", baseId: "b", operationId: "op", source: large + "旧提案" } } };
+  const draft: HostedDraft = { source: large, baseSource: "原先小稿", pending: { resource: "Shared", operationId: "op", source: large + "旧提案", request: { inputRevision: 1, sessionId: "s", baseId: "b", operationId: "op", source: large + "旧提案" } } };
   cache.write("note", draft);
   draft.source += "后到的新输入"; cache.write("note", draft);
   assert.deepEqual(fresh(storage).read("note"), draft);
@@ -49,7 +49,7 @@ test("a large unsaved replacement keeps its small original Base and independent 
 
 test("failed metadata commit leaves the complete previous recovery and unknown operation untouched", () => {
   const { cache, storage } = create();
-  const previous: HostedDraft = { source: large, baseSource: "旧", pending: { resource: "Shared", operationId: "unknown", source: large, request: { sessionId: "s", baseId: "b", operationId: "unknown", source: large } } };
+  const previous: HostedDraft = { source: large, baseSource: "旧", pending: { resource: "Shared", operationId: "unknown", source: large, request: { inputRevision: 1, sessionId: "s", baseId: "b", operationId: "unknown", source: large } } };
   cache.write("note", previous);
   const original = storage.getItem(prefix + "note"); const keys = [...storage.values.keys()].sort();
   storage.fail = key => key === prefix + "note";

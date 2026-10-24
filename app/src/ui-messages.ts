@@ -2485,6 +2485,7 @@ export const zhCN = {
   "shell.oldDirectoryScopeUnavailable": "原目录范围当前不可用，已返回当前资料库；未按同名目标恢复选择。",
   "shell.returnTargetDiskChanged": "返回目标的磁盘内容已变化。原草稿、选区和撤销记录保留，请比较后继续。",
   "shell.noteRecycledRestoreOrSaveAs": "笔记已移入回收站，请先恢复或将草稿另存为。",
+  "shell.creationTargetChanged": "创建目标已改变，请重新选择目标后再创建；已提交的原操作可返回原库继续交付。",
   "shell.saveQueryReservationInputChanged": "保存前查询预约核对期间出现新输入，请重新保存；输入已保留。",
   "shell.saveUnconfirmedDraftRetained": "保存尚未确认，草稿已保留。",
   "shell.commitSessionChangedAwaitOriginalResult": "原内容已提交；等待期间文件会话已改变，原操作和输入保留，请核对原结果。",
@@ -12670,6 +12671,7 @@ export interface MessageParamsMap {
   "shell.oldDirectoryScopeUnavailable": {  };
   "shell.returnTargetDiskChanged": {  };
   "shell.noteRecycledRestoreOrSaveAs": {  };
+  "shell.creationTargetChanged": {  };
   "shell.saveQueryReservationInputChanged": {  };
   "shell.saveUnconfirmedDraftRetained": {  };
   "shell.commitSessionChangedAwaitOriginalResult": {  };
@@ -23624,6 +23626,7 @@ export const messageParamTypes = {
   "shell.oldDirectoryScopeUnavailable": {},
   "shell.returnTargetDiskChanged": {},
   "shell.noteRecycledRestoreOrSaveAs": {},
+  "shell.creationTargetChanged": {},
   "shell.saveQueryReservationInputChanged": {},
   "shell.saveUnconfirmedDraftRetained": {},
   "shell.commitSessionChangedAwaitOriginalResult": {},
@@ -34873,6 +34876,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "shell.oldDirectoryScopeUnavailable": "The original directory scope is unavailable. Returned to the current library; selection was not restored by a same-named target.",
   "shell.returnTargetDiskChanged": "The return target’s disk content changed. The original draft, selection, and Undo history are retained; compare before continuing.",
   "shell.noteRecycledRestoreOrSaveAs": "The note was moved to the recycle bin. Restore it first or save the draft as a new file.",
+  "shell.creationTargetChanged": "The creation target changed. Select it again before creating; a committed original operation can be delivered after returning to its library.",
   "shell.saveQueryReservationInputChanged": "New input appeared while checking query reservations before saving. Your input is retained; save again.",
   "shell.saveUnconfirmedDraftRetained": "The save is not yet confirmed. The draft is retained.",
   "shell.commitSessionChangedAwaitOriginalResult": "The original content was committed, but the file session changed while waiting. The original operation and input are retained; check the original result.",

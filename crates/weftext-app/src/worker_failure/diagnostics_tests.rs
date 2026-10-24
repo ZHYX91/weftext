@@ -135,6 +135,7 @@ fn summary_is_closed_bounded_and_never_serializes_original_error_or_streams() {
         HostedContext::Preview,
         HostedContext::CitationRead,
         HostedContext::CitationEdit,
+        HostedContext::NativeNotes,
     ];
     for kind in kinds {
         let error = original_failure(kind);

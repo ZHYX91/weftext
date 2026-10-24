@@ -88,6 +88,7 @@ fn definition_enumeration_and_admission_status_skip_other_resources_before_priva
                 "Other",
                 &f.root,
                 HostedSaveRequest {
+                    input_revision: None,
                     session_id: other.session_id.clone(),
                     base_id: other.base_id.clone(),
                     source: source.clone(),
@@ -228,6 +229,7 @@ impl Fixture {
                 "Note",
                 &self.root,
                 HostedSaveRequest {
+                    input_revision: None,
                     session_id: doc.session_id.clone(),
                     base_id: doc.base_id.clone(),
                     source: source.into(),
@@ -742,6 +744,7 @@ fn hosted_definition_guard_holds_schema_and_callee_but_excludes_owner_and_dedupl
                 c.actor_save(
                     "Note",
                     HostedSaveRequest {
+                        input_revision: None,
                         session_id: doc.session_id.clone(),
                         base_id: doc.base_id.clone(),
                         source,
@@ -895,6 +898,7 @@ fn hosted_definition_other_actor_cannot_claim_proposal_but_can_preserve_raw_nati
                 "Note",
                 &f.root,
                 HostedSaveRequest {
+                    input_revision: None,
                     session_id: bob.session_id.clone(),
                     base_id: bob.base_id.clone(),
                     source: source.clone(),
@@ -911,6 +915,7 @@ fn hosted_definition_other_actor_cannot_claim_proposal_but_can_preserve_raw_nati
             c.actor_save(
                 "Note",
                 HostedSaveRequest {
+                    input_revision: None,
                     session_id: bob.session_id,
                     base_id: bob.base_id,
                     source,

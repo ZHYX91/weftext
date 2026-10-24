@@ -2191,6 +2191,17 @@ async fn recover_legacy(
     })
     .await
 }
+async fn deliver_legacy_result<T>(
+    state: &HostedState,
+    auth: &Auth,
+    actor: &str,
+    req: &Prepare,
+    evidence: Arc<LegacyEvidence>,
+    result: Result<T, ApiError>,
+) -> Result<T, ApiError> {
+    recheck_legacy(state, auth, actor, req, evidence).await?;
+    result
+}
 async fn prepare_legacy(
     state: HostedState,
     auth: Auth,
@@ -2298,7 +2309,7 @@ async fn prepare_legacy(
     let key = (actor.clone(), req.request_id.clone());
     let epoch = cut.job.epoch;
     let render = if let Some(worker) = cut.worker.take() {
-        Some(editor::compile_frozen(&state, worker).await?)
+        Some(editor::compile_frozen(&state, worker).await)
     } else {
         None
     };
@@ -2311,10 +2322,14 @@ async fn prepare_legacy(
     let job = cut.job.clone();
     let mut docx_req = req.clone();
     docx_req.format = "docx".into();
-    let docx = crate::work::spawn_blocking(move || convert(docx_req, cut, render))
-        .await
-        .map_err(|_| failed())??;
-    recheck_legacy(&state, &auth, &actor, &req, evidence.clone()).await?;
+    let docx: Result<_, ApiError> = async {
+        let render = render.transpose()?;
+        crate::work::spawn_blocking(move || convert(docx_req, cut, render))
+            .await
+            .map_err(|_| failed())?
+    }
+    .await;
+    let docx = deliver_legacy_result(&state, &auth, &actor, &req, evidence.clone(), docx).await?;
     let stage = LegacyStage {
         schema_version: 1,
         conversion_layout: Some("flatV1".into()),
@@ -2545,6 +2560,45 @@ impl Drop for PendingGuard {
         }
     }
 }
+struct ExportDelivery {
+    witnesses: Vec<(String, weftext_core::SnapshotWitness)>,
+    environment: Option<library::Environment>,
+    citations: Option<citations::Capture>,
+    native_witness: Option<Arc<weftext_core::NativeExportWitness>>,
+}
+fn deliver_export_result<T>(
+    inner: &mut HostedInner,
+    auth: &Auth,
+    actor: &str,
+    key: &(String, String),
+    req: &Prepare,
+    evidence: &ExportDelivery,
+    converted: Result<T, ApiError>,
+) -> Result<(Job, T), ApiError> {
+    if inner.actor(auth)? != actor {
+        return Err(expired());
+    }
+    let job = lookup(inner, &actor, &key.1, false)?
+        .filter(|j| j.status == "pending")
+        .ok_or_else(failed)?;
+    witness_check(inner, &evidence.witnesses)?;
+    if let Some(citations) = &evidence.citations {
+        citations.validate(inner, &actor)?;
+    }
+    if let Some(w) = &evidence.native_witness {
+        inner
+            .core
+            .validate_native_export_witness(&inner.config.root, w)
+            .map_err(|_| failed())?;
+    }
+    if let Some(source) = &req.source {
+        check_draft(inner, &actor, &req, source)?;
+    }
+    if let Some(environment) = &evidence.environment {
+        environment.recheck(inner, &actor)?;
+    }
+    Ok((job, converted?))
+}
 async fn prepare(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
@@ -2628,69 +2682,60 @@ async fn prepare(
         key: key.clone(),
     };
     let mut cut = cut.ok_or_else(failed)?;
-    let render = if let Some(mut worker) = cut.worker.take() {
-        let mut render = editor::compile_frozen(&state, worker.clone()).await?;
-        if req.format == "pdf" {
-            let output: weftext_engine::PagedOutput =
-                serde_json::from_value(render.clone()).map_err(|_| failed())?;
-            if !output.ok {
-                return Err(failed());
-            }
-            let (source, losses) = super::super::embedded_output::paged_source(
-                &worker.source,
-                &cut.embedded,
-                &output.embedded_queries,
-                req.output_locale,
-            )?;
-            cut.additional_losses.extend(losses);
-            if source != worker.source {
-                worker.source = source;
-                worker.frozen_files.insert(
-                    worker.path.to_string_lossy().replace('\\', "/"),
-                    base64::engine::general_purpose::STANDARD.encode(worker.source.as_bytes()),
-                );
-                if let Some(environment) = &cut.environment {
-                    environment.apply(&mut worker)?;
-                }
-                render = editor::compile_frozen(&state, worker).await?;
-            }
-        }
-        Some(render)
-    } else {
-        None
+    let evidence = ExportDelivery {
+        witnesses: std::mem::take(&mut cut.witnesses),
+        environment: cut.environment.clone(),
+        citations: cut.citations.clone(),
+        native_witness: cut.native_witness.clone(),
     };
-    let witnesses = std::mem::take(&mut cut.witnesses);
-    let environment = cut.environment.take();
-    let citations = cut.citations.clone();
-    let native_witness = cut.native_witness.clone();
     let delivery_req = req.clone();
-    let converted = crate::work::spawn_blocking(move || convert(req, cut, render))
-        .await
-        .map_err(|_| failed())?;
+    let converted: Result<_, ApiError> = async {
+        let render = if let Some(mut worker) = cut.worker.take() {
+            let mut render = editor::compile_frozen(&state, worker.clone()).await?;
+            if req.format == "pdf" {
+                let output: weftext_engine::PagedOutput =
+                    serde_json::from_value(render.clone()).map_err(|_| failed())?;
+                if !output.ok {
+                    return Err(failed());
+                }
+                let (source, losses) = super::super::embedded_output::paged_source(
+                    &worker.source,
+                    &cut.embedded,
+                    &output.embedded_queries,
+                    req.output_locale,
+                )?;
+                cut.additional_losses.extend(losses);
+                if source != worker.source {
+                    worker.source = source;
+                    worker.frozen_files.insert(
+                        worker.path.to_string_lossy().replace('\\', "/"),
+                        base64::engine::general_purpose::STANDARD.encode(worker.source.as_bytes()),
+                    );
+                    if let Some(environment) = &cut.environment {
+                        environment.apply(&mut worker)?;
+                    }
+                    render = editor::compile_frozen(&state, worker).await?;
+                }
+            }
+            Some(render)
+        } else {
+            None
+        };
+        crate::work::spawn_blocking(move || convert(req, cut, render))
+            .await
+            .map_err(|_| failed())?
+    }
+    .await;
     locked(&state, move |inner| {
-        if inner.actor(&auth)? != actor {
-            return Err(expired());
-        }
-        let mut job = lookup(inner, &actor, &key.1, false)?
-            .filter(|j| j.status == "pending")
-            .ok_or_else(failed)?;
-        witness_check(inner, &witnesses)?;
-        if let Some(citations) = &citations {
-            citations.validate(inner, &actor)?;
-        }
-        if let Some(w) = &native_witness {
-            inner
-                .core
-                .validate_native_export_witness(&inner.config.root, w)
-                .map_err(|_| failed())?;
-        }
-        if let Some(source) = &delivery_req.source {
-            check_draft(inner, &actor, &delivery_req, source)?;
-        }
-        if let Some(environment) = &environment {
-            environment.recheck(inner, &actor)?;
-        }
-        let artifact = converted?;
+        let (mut job, artifact) = deliver_export_result(
+            inner,
+            &auth,
+            &actor,
+            &key,
+            &delivery_req,
+            &evidence,
+            converted,
+        )?;
         let used = inner
             .office
             .jobs
@@ -2947,6 +2992,145 @@ mod tests {
             .unwrap();
         }
         (req, dir, conversions, stage, generated)
+    }
+    #[test]
+    fn export_success_and_failure_share_actual_grant_source_and_epoch_rechecks() {
+        for failure in [false, true] {
+            for mutation in [0, 1, 2] {
+                let (_temp, state, auth, _, _, _) = history_api::test_fixture();
+                let mut inner = state.inner.lock().unwrap();
+                inner
+                    .policy
+                    .users
+                    .get_mut("alice")
+                    .unwrap()
+                    .grants
+                    .get_mut("Shared")
+                    .unwrap()
+                    .office
+                    .export = true;
+                let mut req = request("docx");
+                req.resource = Some("Shared".into());
+                let mut cut = capture(&mut inner, "alice", &req).unwrap();
+                let key = ("alice".into(), req.request_id.clone());
+                inner.office.jobs.insert(key.clone(), cut.job);
+                let evidence = ExportDelivery {
+                    witnesses: std::mem::take(&mut cut.witnesses),
+                    environment: cut.environment,
+                    citations: cut.citations,
+                    native_witness: cut.native_witness,
+                };
+                let result = || {
+                    if failure {
+                        Err(crate::worker_failure::diagnostics_tests::original_failure(
+                            crate::worker_failure::Kind::OutputRejected,
+                        ))
+                    } else {
+                        Ok(json!({"value":"protected"}))
+                    }
+                };
+                assert_eq!(
+                    deliver_export_result(
+                        &mut inner,
+                        &auth,
+                        "alice",
+                        &key,
+                        &req,
+                        &evidence,
+                        result()
+                    )
+                    .is_err(),
+                    failure
+                );
+                match mutation {
+                    0 => {
+                        inner
+                            .policy
+                            .users
+                            .get_mut("alice")
+                            .unwrap()
+                            .grants
+                            .get_mut("Shared")
+                            .unwrap()
+                            .office
+                            .export = false
+                    }
+                    1 => std::fs::write(
+                        inner.config.root.join("Shared/Shared.typ"),
+                        "changed saved source",
+                    )
+                    .unwrap(),
+                    _ => inner.policy.users.get_mut("alice").unwrap().epoch += 1,
+                }
+                let error = deliver_export_result(
+                    &mut inner,
+                    &auth,
+                    "alice",
+                    &key,
+                    &req,
+                    &evidence,
+                    result(),
+                )
+                .err()
+                .unwrap();
+                assert!(error.private_worker_failure.is_none());
+            }
+        }
+    }
+    #[tokio::test]
+    async fn legacy_worker_success_and_failure_share_the_original_grant_recheck() {
+        for failure in [false, true] {
+            let (_temp, state, auth, _, _, _) = history_api::test_fixture();
+            let (req, _, _, _, _) = seed_legacy(&state, false);
+            let evidence = {
+                let mut inner = state.inner.lock().unwrap();
+                let mut cut = capture(&mut inner, "alice", &req).unwrap();
+                let epoch = cut.job.epoch;
+                inner
+                    .office
+                    .jobs
+                    .insert(("alice".into(), req.request_id.clone()), cut.job);
+                Arc::new(LegacyEvidence {
+                    witnesses: std::mem::take(&mut cut.witnesses),
+                    environment: cut.environment,
+                    citations: cut.citations,
+                    epoch,
+                })
+            };
+            let result = || {
+                if failure {
+                    Err(crate::worker_failure::diagnostics_tests::original_failure(
+                        crate::worker_failure::Kind::OutputRejected,
+                    ))
+                } else {
+                    Ok(json!({"value":"protected"}))
+                }
+            };
+            assert_eq!(
+                deliver_legacy_result(&state, &auth, "alice", &req, evidence.clone(), result())
+                    .await
+                    .is_err(),
+                failure
+            );
+            state
+                .inner
+                .lock()
+                .unwrap()
+                .policy
+                .users
+                .get_mut("alice")
+                .unwrap()
+                .grants
+                .get_mut("Shared")
+                .unwrap()
+                .office
+                .doc
+                .export = false;
+            let error = deliver_legacy_result(&state, &auth, "alice", &req, evidence, result())
+                .await
+                .unwrap_err();
+            assert!(error.private_worker_failure.is_none());
+        }
     }
     #[test]
     fn legacy_formats_require_separate_grants_and_uploaded_docx_inspection_does_not_grant_docx_output()

@@ -3,6 +3,7 @@
 All evidence and original files are retained. Processes stop by an exact typed
 owner shutdown; this test does not certify UI shutdown or power loss.
 """
+import uuid
 import argparse
 import hashlib
 import json
@@ -261,7 +262,7 @@ def run(executable, evidence):
         library_a = call('/api/library/create', {'path': str(reused), 'operationId': test_hosted.uid()})
         a_request = {'root': str(reused), 'parent': str(reused), 'name': 'A', 'operationId': test_hosted.uid()}
         a_receipt = call('/api/note/create', a_request); a_doc = created_document(a_receipt)
-        call('/api/draft', {'inputRevision': 1, 'sessionId': a_doc['sessionId'], 'source': a_doc['source'] + '\nA original private draft'})
+        call('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': a_doc['baseId'], 'inputRevision': 1, 'sessionId': a_doc['sessionId'], 'source': a_doc['source'] + '\nA original private draft'})
         device_input = evidence / 'TEST-device-input.typ'; device_input.write_text('device input', encoding='utf-8')
         device_doc = call('/api/open', {'path': str(device_input)})
         nested = reused / 'nested'; nested.mkdir()
@@ -271,7 +272,7 @@ def run(executable, evidence):
         ordinary = call('/api/open', {'path': str(ordinary_path)})
         ordinary_save = {'sessionId': ordinary['sessionId'], 'baseId': ordinary['baseId'], 'source': 'A PRIVATE ordinary Save S', 'operationId': test_hosted.uid()}
         call('/api/save', ordinary_save)
-        call('/api/draft', {'inputRevision': 1, 'sessionId': ordinary['sessionId'], 'source': 'A PRIVATE later input Y'})
+        call('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': ordinary['baseId'], 'inputRevision': 1, 'sessionId': ordinary['sessionId'], 'source': 'A PRIVATE later input Y'})
         a_ids = set()
         for file in (state / 'journal').rglob('*.plan.json'):
             saved_plan = json.loads(file.read_text('utf-8'))
@@ -287,11 +288,11 @@ def run(executable, evidence):
         retained_a = evidence / 'TEST-preserved-A-root'; reused.rename(retained_a)
         library_b = call('/api/library/create', {'path': str(reused), 'operationId': test_hosted.uid()})
         assert library_b['workspaceId'] != library_a['workspaceId']
-        call('/api/draft', {'inputRevision': 2, 'sessionId': ordinary['sessionId'], 'source': 'A PRIVATE input after path reuse'})
+        call('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': ordinary['baseId'], 'inputRevision': 2, 'sessionId': ordinary['sessionId'], 'source': 'A PRIVATE input after path reuse'})
         stop(); start()  # The original scope must survive a Core restart.
         b_request = {**a_request, 'name': 'B', 'operationId': test_hosted.uid()}
         b_doc = created_document(call('/api/note/create', b_request))
-        call('/api/draft', {'inputRevision': 1, 'sessionId': b_doc['sessionId'], 'source': b_doc['source'] + '\nB selected private draft'})
+        call('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': b_doc['baseId'], 'inputRevision': 1, 'sessionId': b_doc['sessionId'], 'source': b_doc['source'] + '\nB selected private draft'})
         b_backup = evidence / 'TEST-B-only-backup'
         b_plan = call('/api/operations/prepare', {'root': str(reused), 'operationId': test_hosted.uid(), 'intent': {'kind': 'backupLibrary', 'destination': str(b_backup)}})
         assert call('/api/operations/commit', {'operationId': b_plan['operationId'], 'planId': b_plan['planId']})['status'] == 'committed'

@@ -122,6 +122,7 @@ pub(crate) enum HostedContext {
     Preview,
     CitationRead,
     CitationEdit,
+    NativeNotes,
 }
 
 const DIAGNOSTIC_BYTES: usize = 1024;

@@ -3,6 +3,7 @@ import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidi
 // Disconnected drafts carry their actual base. Reopening never silently adopts
 // a new base for an older proposal, including after a lost save response.
 export interface HostedSaveRequest {
+    inputRevision: number;
     sessionId: string;
     baseId: string;
     operationId: string;
@@ -59,10 +60,11 @@ export function applySaveResult(draft: HostedDraft, saved: string): HostedDraft 
 export function hostedOpenedDraft(saved: string, retained: HostedDraft): HostedDraft {
     return !retained.pending && draftDisposition(saved, retained) === "current" ? { ...retained, source: saved, baseSource: saved } : { ...retained };
 }
-export function freezeHostedSave(draft: HostedDraft, sessionId: string, baseId: string, operationId: string): HostedSaveRequest {
+export function freezeHostedSave(draft: HostedDraft, sessionId: string, baseId: string, operationId: string, inputRevision: number): HostedSaveRequest {
+    if (!Number.isSafeInteger(inputRevision) || inputRevision <= 0) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
     if ((draft.definitionReservations?.length ?? 0) > 32)
         throw new UiError(uiMessage("hostedDraftState.definitionReservationLimit"));
-    return { sessionId, baseId, operationId, source: draft.source, ...(draft.definitionReservations?.length ? { definitionReservations: [...draft.definitionReservations] } : {}) };
+    return { sessionId, baseId, operationId, inputRevision, source: draft.source, ...(draft.definitionReservations?.length ? { definitionReservations: [...draft.definitionReservations] } : {}) };
 }
 export function mergeDefinitionReservations(ids: readonly string[], receipts: readonly {
     operationId: string;

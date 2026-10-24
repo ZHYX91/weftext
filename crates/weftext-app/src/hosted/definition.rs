@@ -778,6 +778,7 @@ mod integration_tests {
             &mut inner,
             &auth,
             HostedSaveRequest {
+                input_revision: None,
                 session_id: req.session_id,
                 base_id: req.base_id,
                 source: output["source"].as_str().unwrap().into(),
@@ -894,6 +895,7 @@ mod integration_tests {
             &mut inner,
             &auth,
             HostedSaveRequest {
+                input_revision: None,
                 session_id: req.session_id.clone(),
                 base_id: req.base_id,
                 source: unfinished.clone(),
@@ -928,6 +930,7 @@ mod integration_tests {
             &mut inner,
             &auth,
             HostedSaveRequest {
+                input_revision: None,
                 session_id: req.session_id,
                 base_id: base,
                 source: format!("{unfinished})\n"),

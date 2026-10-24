@@ -4,6 +4,7 @@ Uses owned disposable libraries and real HTTP/Core commits. No desktop input.
 The local process is used only to provision admitted fixtures while the hosted
 process is stopped; consumer requests always use the hosted boundary.
 """
+import uuid
 import copy
 import json
 import sys
@@ -250,7 +251,7 @@ class HostedQuery(HostedFields):
         original = (self.root/'Other/Other.typ').read_bytes()
         if doc.get('recoveredDraftConflict'):
             self.call('draft/resolve', {'sessionId': doc['sessionId'], 'source': draft})
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': draft})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': draft})
         found = self.call('query/embedded/discover', snapshot)
         occurrence = next(item for item in found['occurrences'] if item['key'] == definition['definition']['key'])
         request = {**snapshot, 'occurrenceId': occurrence['id']}

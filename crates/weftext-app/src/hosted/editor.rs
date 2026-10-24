@@ -206,8 +206,10 @@ async fn edit(
         })?;
         // Worker errors may include private typed diagnostics. Qualify at
         // delivery time before publishing success OR a worker failure.
-        let output =
-            super::super::notes_edit_from_worker_with(input, command, &state.workers).await;
+        let output = worker_failure::observe_hosted_result(
+            worker_failure::HostedContext::NativeNotes,
+            super::super::notes_edit_from_worker_with(input, command, &state.workers).await,
+        );
         return locked(&state, move |inner| {
             Ok(Json(
                 deliver_native_notes(inner, &auth, &basis, &dependencies, &environment, output)?

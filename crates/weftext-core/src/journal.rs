@@ -297,6 +297,37 @@ fn decode_journal_plan(path: &Path, bytes: &[u8]) -> Result<Plan> {
 const JOURNAL_BUCKETS: usize = 256;
 const JOURNAL_BUCKET_LIMIT: usize = 5000;
 const JOURNAL_ADMISSION_MARGIN: usize = 32;
+/// Canonical original record grammar, shared with backup routing. Temporary
+/// publications and unknown originals remain physical occupants, never proof
+/// that an operation has already published a required record.
+pub(crate) fn journal_record_suffix<'a>(id: &str, name: &'a str) -> Option<&'a str> {
+    let suffix = name
+        .strip_prefix(&format!("{id}."))?
+        .strip_suffix(".json")?;
+    let fixed = matches!(
+        suffix,
+        "plan"
+            | "install"
+            | "commit"
+            | "resolution"
+            | "birth"
+            | "births"
+            | "observations"
+            | "resource-births"
+            | "definition-reservation"
+            | "definition-reservations"
+            | "revision-reservation"
+            | "tag-reservation"
+            | "directory-reservation"
+    );
+    let object = suffix
+        .strip_prefix("object-")
+        .is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()));
+    let recovery = suffix
+        .strip_prefix("recovery-observations-")
+        .is_some_and(|id| valid_operation_id(id).is_ok());
+    (fixed || object || recovery).then_some(suffix)
+}
 fn journal_record_budget(plan: &Plan) -> usize {
     // Fixed record families plus objects this operation can actually create.
     // Captured existing files/directories do not publish materialization facts.
@@ -572,15 +603,15 @@ impl Core {
             }) {
                 terminal_names.insert(id.to_owned());
             }
-            *counts
-                .entry(
-                    name.to_string_lossy()
-                        .split('.')
-                        .next()
-                        .unwrap_or("")
-                        .into(),
-                )
-                .or_default() += 1;
+            let text = name.to_string_lossy();
+            let operation = text.split('.').next().unwrap_or("");
+            // A new recovery attempt can need another observations record;
+            // earlier attempts do not discharge that future obligation.
+            if journal_record_suffix(operation, &text)
+                .is_some_and(|suffix| !suffix.starts_with("recovery-observations-"))
+            {
+                *counts.entry(operation.to_owned()).or_default() += 1;
+            }
             used += 1;
         }
         // Derive outstanding reservations from the original pending Plans on
@@ -1004,8 +1035,13 @@ impl Core {
                 backend::namespace_path_compare(pending_path, path)? == std::cmp::Ordering::Equal;
             let nested_library = p.kind == "createLibrary"
                 && backend::namespace_relative_path(path, pending_path)?.is_some();
-            let affects =
-                same || nested_library || p.transaction.as_ref().is_some_and(|t| t.affects(path));
+            let affects = same
+                || nested_library
+                || p.transaction
+                    .as_ref()
+                    .map(|t| t.affects(path))
+                    .transpose()?
+                    .unwrap_or(false);
             if !affects {
                 continue;
             }
@@ -1397,8 +1433,17 @@ fn publish_private_record(
     file.write_all(bytes)?;
     file.sync_all()?;
     drop(file);
+    #[cfg(all(test, windows))]
+    hosted::definition_test_failpoint("privateRecordFlushed")?;
     // Public record names appear only after the complete payload is flushed.
     backend::publish_private_create(backend, &temporary, path)?;
+    if path
+        .file_name()
+        .is_some_and(|name| name.to_string_lossy().ends_with(".commit.json"))
+    {
+        #[cfg(all(test, windows))]
+        hosted::definition_test_failpoint("commitPublished")?;
+    }
     Ok(())
 }
 
@@ -1525,6 +1570,135 @@ mod description_tests {
 #[cfg(all(test, windows))]
 mod journal_bucket_tests {
     use super::*;
+
+    #[test]
+    fn flushed_resolution_residue_never_spends_pending_settlement_reservation() {
+        let temp = tempfile::tempdir().unwrap();
+        let note = temp.path().join("note.typ");
+        fs::write(&note, "B").unwrap();
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        let doc = core.open(&note, None).unwrap();
+        let id = fresh();
+        hosted::set_test_failpoint("saveStaged");
+        assert_eq!(
+            core.save(SaveRequest {
+                operation_id: id.clone(),
+                session_id: doc.session_id,
+                base_id: doc.base_id,
+                source: "S".into()
+            })
+            .unwrap_err()
+            .code,
+            "injectedFailure"
+        );
+        for _ in 0..31 {
+            hosted::set_test_failpoint("privateRecordFlushed");
+            assert_eq!(
+                core.resolve_recovery(&id, "keepCurrent").unwrap_err().code,
+                "injectedFailure"
+            );
+        }
+        let bucket = core.journal_path(&id, "plan").parent().unwrap().to_owned();
+        let residues = fs::read_dir(&bucket)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == "pending")
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(residues.len(), 31);
+        // Retained original cancellation facts place this real bucket at its
+        // boundary without replacing the admission logic with a fake count.
+        for _ in 0..4935 {
+            let other = format!("{}{}", &id[..2], &fresh()[2..]);
+            let fence = ResolutionRecord {
+                operation_id: other.clone(),
+                action: "cancelPrepared".into(),
+                historical_message: None,
+                attempt: Some(AttemptFence {
+                    request_kind: "save".into(),
+                    wire_digest: hash(b"retained original intent"),
+                }),
+            };
+            fs::write(
+                core.journal_path(&other, "resolution"),
+                serde_json::to_vec(&fence).unwrap(),
+            )
+            .unwrap();
+        }
+        let other = format!("{}{}", &id[..2], &fresh()[2..]);
+        core.settle_local_attempt(&other, "save", &hash(b"new original intent"))
+            .unwrap();
+        let denied = format!("{}{}", &id[..2], &fresh()[2..]);
+        assert_eq!(
+            core.settle_local_attempt(&denied, "save", &hash(b"denied intent"))
+                .unwrap_err()
+                .code,
+            "budget"
+        );
+        assert!(!core.journal_path(&denied, "resolution").exists());
+        assert_eq!(
+            core.resolve_recovery(&id, "keepCurrent").unwrap().status,
+            "resolved"
+        );
+        assert!(residues.iter().all(|path| path.is_file()));
+        assert_eq!(fs::read_to_string(note).unwrap(), "B");
+    }
+
+    #[test]
+    fn uncertain_success_after_commit_publication_fences_new_effects_until_restart() {
+        let temp = tempfile::tempdir().unwrap();
+        let profile = temp.path().join("private");
+        let note = temp.path().join("note.typ");
+        let other = temp.path().join("other.typ");
+        fs::write(&note, "B").unwrap();
+        fs::write(&other, "other B").unwrap();
+        let mut core = Core::new(&profile).unwrap();
+        let doc = core.open(&note, None).unwrap();
+        let next = core.open(&other, None).unwrap();
+        let id = fresh();
+        hosted::set_test_failpoint("commitPublished");
+        assert!(
+            core.save(SaveRequest {
+                operation_id: id.clone(),
+                session_id: doc.session_id,
+                base_id: doc.base_id,
+                source: "S".into()
+            })
+            .is_err()
+        );
+        assert!(core.journal_path(&id, "commit").is_file());
+        let denied = fresh();
+        assert!(
+            core.save(SaveRequest {
+                operation_id: denied.clone(),
+                session_id: next.session_id,
+                base_id: next.base_id,
+                source: "other S".into()
+            })
+            .is_err()
+        );
+        assert!(!core.journal_path(&denied, "plan").exists());
+        assert_eq!(fs::read_to_string(&other).unwrap(), "other B");
+        drop(core);
+        let mut core = Core::new(&profile).unwrap();
+        let sequence = core.commit_sequence(&id).unwrap();
+        assert_eq!(
+            core.local_operation_status(&id).unwrap()["status"],
+            "committed"
+        );
+        let doc = core.open(&other, None).unwrap();
+        let next_id = fresh();
+        core.save(SaveRequest {
+            operation_id: next_id.clone(),
+            session_id: doc.session_id,
+            base_id: doc.base_id,
+            source: "other S".into(),
+        })
+        .unwrap();
+        assert_eq!(core.commit_sequence(&next_id).unwrap(), sequence + 1);
+    }
 
     #[test]
     fn actual_committed_saves_survive_more_than_five_thousand_retained_members() {

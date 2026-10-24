@@ -280,12 +280,12 @@ export class HostedHistory {
                     if (!protect.checked)
                         return;
                     const current = this.context();
-                    if (!current || current.sessionId !== review.basis.sessionId || current.baseId !== review.basis.baseId || current.source !== review.basis.source || current.serial !== review.basis.serial || current.readOnly || current.savePending || current.unresolvedSave)
+                    if (!current || current.sessionId !== review.basis.sessionId || current.baseId !== review.basis.baseId || current.source !== review.basis.source || current.serial !== review.basis.serial || current.inputRevision !== review.basis.inputRevision || current.readOnly || current.savePending || current.unresolvedSave)
                         throw new UiError(uiMessage("hostedHistory.restoreBasisChanged"));
                     const sourceHash = await hash(review.basis.source);
                     if (epoch !== this.epoch || this.context()?.serial !== review.basis.serial || this.context()?.source !== review.basis.source)
                         return;
-                    const resource = this.note!.resource, operationId = crypto.randomUUID(), record: HostedHistoryRecord = { basis: { ...structuredClone(review.basis), resource }, request: { resource, sessionId: review.basis.sessionId, baseId: review.basis.baseId, versionId: review.basis.selectedVersionId, operationId, draftAction: "retain", source: review.basis.source, serial: review.basis.serial, sourceHash } };
+                    const resource = this.note!.resource, operationId = crypto.randomUUID(), record: HostedHistoryRecord = { basis: { ...structuredClone(review.basis), resource }, request: { resource, sessionId: review.basis.sessionId, baseId: review.basis.baseId, versionId: review.basis.selectedVersionId, operationId, draftAction: "retain", inputRevision: review.basis.inputRevision, source: review.basis.source, serial: review.basis.serial, sourceHash } };
                     const records = [...this.records, record];
                     this.persist(records, true);
                     this.records = records;

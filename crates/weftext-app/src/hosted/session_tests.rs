@@ -34,6 +34,7 @@ async fn original_save_status_authorizes_frozen_resource_before_reading_private_
         State(state.clone()),
         Extension(auth.clone()),
         crate::RequestJson(SourceSaveRequest {
+            input_revision: None,
             session_id: session_id(&doc),
             base_id: doc["baseId"].as_str().unwrap().into(),
             source: source.clone(),

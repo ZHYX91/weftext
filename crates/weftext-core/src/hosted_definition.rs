@@ -799,13 +799,32 @@ impl Core {
             Some(request.base_id.clone()),
             scope.clone(),
             self.operations
-                .get(&request.operation_id)
+                .get(&record.core_operation_id)
                 .and_then(|plan| plan.file_save.as_ref())
                 .map_or_else(
                     || session.draft_producer_id.clone(),
                     |data| data.draft_producer_id.clone(),
                 ),
         );
+        let data = data
+            .with_input_revision(request.input_revision.unwrap_or(0))
+            .with_author_digest(
+                request
+                    .input_revision
+                    .map(|_| hash(request.source.as_bytes())),
+            )
+            .with_author_input_id(request.input_revision.and_then(|revision| {
+                session
+                    .draft_cuts
+                    .get(&revision)
+                    .map(|cut| cut.input_id.clone())
+                    .or_else(|| {
+                        self.operations
+                            .get(&record.core_operation_id)
+                            .and_then(|plan| plan.file_save.as_ref())
+                            .and_then(|data| data.author_input_id.clone())
+                    })
+            }));
         let fingerprint =
             file_save_scope::fingerprint("save", &session.path, &request.source, &data, None)?;
         let admissions = DefinitionSaveRecord {

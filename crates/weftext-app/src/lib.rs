@@ -570,13 +570,7 @@ struct CreateNote {
     name: String,
     operation_id: Option<String>,
 }
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DraftRequest {
-    session_id: String,
-    source: String,
-    input_revision: u64,
-}
+type DraftRequest = weftext_core::DraftInputRequest;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RenderRequest {
@@ -853,10 +847,7 @@ async fn draft(
     RequestJson(req): RequestJson<DraftRequest>,
 ) -> ApiResult {
     let revision = req.input_revision;
-    core_call(&state, move |c| {
-        c.persist_draft_ordered(&req.session_id, &req.source, revision)
-    })
-    .await?;
+    core_call(&state, move |c| c.persist_draft_ordered(req)).await?;
     Ok(Json(json!({"ok":true,"inputRevision":revision})))
 }
 async fn resume_draft(
@@ -1308,6 +1299,22 @@ async fn owned_compiler_worker(
             }
         }
     }
+    #[cfg(target_os = "linux")]
+    if facts.cleanup_confirmed
+        && matches!(
+            facts.kind,
+            Kind::Setup | Kind::InputIo | Kind::StdoutIo | Kind::StderrIo | Kind::Wait
+        )
+    {
+        use weftext_worker_broker::Completion;
+        facts.kind = match facts.completion {
+            Some(Completion::Timeout) => Kind::Deadline,
+            Some(Completion::Disconnected | Completion::SetupFailed) => Kind::SupervisionLost,
+            Some(Completion::Exited) if facts.exit.is_some_and(|exit| matches!(exit, crate::owned_process::ProcessExit::Linux {code,signal} if code != Some(0) || signal.is_some())) => Kind::NonzeroExit,
+            // Cleanup-induced cancellation cannot erase the original pump failure.
+            _ => facts.kind,
+        };
+    }
     let facts = Arc::new(facts);
     let mut error = match protocol_error {
         Some(error) if facts.cleanup_confirmed => error,
@@ -1342,6 +1349,89 @@ mod worker_capture_tests {
     use super::*;
     use worker_failure::{Kind, StreamCapture, WorkerFailure};
 
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    #[ignore = "requires an explicit real controlled-service enrollment, broker policy and fixture image; run serially"]
+    async fn real_broker_pump_retains_terminal_cause_after_pipe_failure_and_cleanup() {
+        use weftext_worker_broker::Completion;
+        let enrollment = std::env::var_os("WEFTEXT_WORKER_PUMP_TEST_ENROLLMENT")
+            .expect("explicit test enrollment");
+        let policy = std::env::var_os("WEFTEXT_WORKER_PUMP_TEST_POLICY")
+            .expect("explicit test broker policy");
+        let case = std::env::var("WEFTEXT_WORKER_PUMP_TEST_CASE").expect("explicit expected case");
+        let (kind, completion, public, notes, timeout) = match case.as_str() {
+            "setupFailed" => (
+                Kind::SupervisionLost,
+                Completion::SetupFailed,
+                "compiler_supervisor_unknown",
+                false,
+                Duration::from_secs(20),
+            ),
+            "timeout" => (
+                Kind::Deadline,
+                Completion::Timeout,
+                "compile_timeout",
+                false,
+                Duration::from_millis(200),
+            ),
+            "disconnected" => (
+                Kind::SupervisionLost,
+                Completion::Disconnected,
+                "compiler_supervisor_unknown",
+                false,
+                Duration::from_secs(20),
+            ),
+            "budget" => (
+                Kind::StdoutBudget,
+                Completion::Cancelled,
+                "compiler_output_budget",
+                true,
+                Duration::from_secs(20),
+            ),
+            "nonzero" => (
+                Kind::NonzeroExit,
+                Completion::Exited,
+                "compiler_failed",
+                false,
+                Duration::from_secs(20),
+            ),
+            _ => panic!("unknown fixture expectation"),
+        };
+        let backend =
+            weftext_core::BackendContext::controlled_service(std::path::Path::new(&enrollment))
+                .unwrap();
+        let transport = compiler_worker::Transport::controlled_test(
+            &backend,
+            std::path::Path::new(&policy),
+            timeout,
+        )
+        .unwrap();
+        let error = bounded_compiler_worker(
+            serde_json::json!({"padding":"x".repeat(32*1024*1024)}),
+            notes,
+            transport,
+        )
+        .await
+        .unwrap_err();
+        let facts = error
+            .private_worker_failure
+            .as_ref()
+            .expect("original private worker facts");
+        assert!(facts.cleanup_confirmed);
+        assert_eq!(facts.kind, kind);
+        assert_eq!(facts.completion, Some(completion));
+        if case != "budget" {
+            assert!(
+                facts.io_error.is_some(),
+                "the real input pump must fail before receipt reconciliation"
+            );
+            assert!(!facts.stdin_complete);
+        } else {
+            assert!(facts.stdout.truncated);
+        }
+        assert_eq!(error.code, public);
+        assert!(facts.exit.is_some());
+    }
     #[tokio::test]
     async fn original_stream_bytes_survive_invalid_utf8_and_real_eof() {
         let raw = vec![0xff, b'a', 0, b'\n'];

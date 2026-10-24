@@ -712,6 +712,7 @@ fn query_scope_definition_reserve_and_explicit_first_admission_share_original_sa
                         "Owner",
                         &root,
                         HostedSaveRequest {
+                            input_revision: None,
                             session_id: doc.session_id.clone(),
                             base_id: doc.base_id.clone(),
                             source,

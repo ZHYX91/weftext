@@ -194,13 +194,7 @@ pub(super) enum DraftRequest {
         body: weftext_core::DocumentDraftFlush,
     },
 }
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(super) struct DraftWrite {
-    pub session_id: String,
-    pub source: String,
-    pub input_revision: u64,
-}
+pub(super) type DraftWrite = weftext_core::DraftInputRequest;
 impl DraftRequest {
     pub fn session_id(&self) -> &str {
         match self {

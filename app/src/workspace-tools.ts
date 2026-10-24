@@ -39,7 +39,7 @@ export interface WorkspaceToolsHost {
     openDocument(path: string, root?: string): Promise<void>;
     openResolved(document: OpenedDocument): Promise<void>;
     releaseOpenedSession(sessionId: string): Promise<void>;
-    created(document: OpenedDocument): Promise<void>;
+    created(document: OpenedDocument, operationId: string | undefined): Promise<void>;
     applyReceipt(receipt: KnowledgeReceipt, context: KnowledgeContext): Promise<void>;
     savedDefinition(result: unknown, basis: DocumentBasis): Promise<void>;
     navigate(target: string | KnowledgeNodeRef): Promise<void>;
@@ -126,11 +126,11 @@ export class WorkspaceTools {
                 await this.show("knowledge");
                 this.knowledgePanel.selectTab("templates");
             },
-            created: async (result) => {
+            created: async (result, operationId) => {
                 const opened = result as OpenedDocument;
                 if (!opened || typeof opened.sessionId !== "string" || typeof opened.source !== "string")
                     throw new UiError(uiMessage("workspaceTools.createdNoteOpenResultMissing"));
-                await host.created(opened);
+                await host.created(opened, operationId);
             },
         };
         this.dataHost = dataHost;

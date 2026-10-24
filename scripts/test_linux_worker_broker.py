@@ -12,6 +12,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import stat
 import select
 import socket
 import subprocess
@@ -406,13 +407,96 @@ def raw_session(config, launch, uid, gid, *, descriptors="pipes", action="exit",
                           expect_root_peer_rejection=expect_root_peer_rejection)
 
 
+def app_pump_cases(args, policy, cases):
+    """Real App pump + real broker/UID/cgroup. No synthetic Status or receipt."""
+    deployment = args.broker.parent.parent
+    for artifact in [args.app_test_binary, args.pump_image]:
+        require(in_directory(artifact, deployment / "bin").parent == deployment / "bin", "unexpected pump artifact role")
+        metadata = artifact.lstat()
+        require(stat.S_ISREG(metadata.st_mode) and metadata.st_uid == 0 and not metadata.st_mode & 0o022,
+                "pump artifact must be an administrator-owned regular file")
+    fake = deployment / "bin" / (args.evidence.name + "-setup-failed.elf")
+    with fake.open("xb") as stream:
+        stream.write(b"\x7fELF" + bytes(60))
+        stream.flush()
+        os.fsync(stream.fileno())
+    fake.chmod(0o755)
+    for case in ["setupFailed", "timeout", "budget", "nonzero", "disconnected"]:
+        image = fake if case == "setupFailed" else Path(policy["image"]) if case == "nonzero" else args.pump_image
+        stamp = os.urandom(4).hex()
+        selected = dict(policy, image=str(image), imageSha256=digest(image),
+                        socket=str(Path(policy["socket"]).with_name(f"{stamp}.sock")))
+        config = Path(policy["socket"]).parent / f"{stamp}.json"
+        with config.open("x", encoding="utf-8") as stream:
+            json.dump(selected, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        config.chmod(0o644)
+        record = {"case": case, "policy": str(config), "policySha256": digest(config),
+                  "image": str(image), "imageSha256": digest(image), "appTestSha256": digest(args.app_test_binary)}
+        record_path = args.evidence / f"pump-{case}.json"
+        with (args.evidence / f"pump-{case}-daemon.log").open("xb") as daemon_log, (args.evidence / f"pump-{case}-app.log").open("xb") as app_log:
+            daemon = subprocess.Popen([str(args.broker), str(config)], env={}, stdin=subprocess.DEVNULL,
+                                      stdout=daemon_log, stderr=subprocess.STDOUT, close_fds=True)
+            app = None
+            try:
+                deadline = time.monotonic() + 5
+                while not Path(selected["socket"]).exists():
+                    require(daemon.poll() is None and time.monotonic() < deadline, "pump broker startup failed")
+                    time.sleep(.01)
+                env = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8",
+                       "WEFTEXT_WORKER_PUMP_TEST_ENROLLMENT": policy["enrollment"],
+                       "WEFTEXT_WORKER_PUMP_TEST_POLICY": str(config), "WEFTEXT_WORKER_PUMP_TEST_CASE": case}
+                command = ["/usr/bin/setpriv", "--reuid=981", "--regid=981", "--clear-groups", "--bounding-set=-all",
+                           "--inh-caps=-all", "--ambient-caps=-all", "--no-new-privs", "--", str(args.app_test_binary),
+                           "--include-ignored", "--test-threads=1", "real_broker_pump_retains_terminal_cause", "--nocapture"]
+                record["command"] = command
+                app = subprocess.Popen(command, env=env, cwd=deployment, stdin=subprocess.DEVNULL,
+                                       stdout=app_log, stderr=subprocess.STDOUT, close_fds=True)
+                record.update(appPid=app.pid, daemonPid=daemon.pid)
+                record_path.write_text(json.dumps(record, indent=2), encoding="utf-8")
+                if case == "disconnected":
+                    # Signal only this Popen-owned daemon, after its actual job is born.
+                    deadline = time.monotonic() + 8
+                    while not any(child.is_dir() for child in Path(policy["cgroupRoot"]).iterdir()):
+                        require(app.poll() is None and daemon.poll() is None and time.monotonic() < deadline,
+                                "no original job reached disconnect barrier")
+                        time.sleep(.01)
+                    time.sleep(.1)
+                    daemon.terminate()
+                code = app.wait(timeout=30)
+                record.update(appExit=code, appReaped=True)
+                require(code == 0, f"actual App pump case failed: {case}")
+            finally:
+                if app is not None and app.poll() is None:
+                    app.kill()
+                    try:
+                        app.wait(timeout=5)
+                    finally:
+                        record.update(appExit=app.returncode, appReaped=app.returncode is not None,
+                                      forcedAppCleanup=True)
+                shutdown = stop_daemon(daemon)
+                record.update(daemonExit=daemon.returncode, daemonExitAccepted=shutdown is None,
+                              shutdownError=repr(shutdown), cleanupUnknown=daemon.returncode is None)
+                record_path.write_text(json.dumps(record, indent=2), encoding="utf-8")
+                require(shutdown is None, f"pump daemon terminal status rejected: {case}")
+        require(not Path(selected["socket"]).exists(), "owned socket remained after daemon exit")
+        require(not any(child.is_dir() for child in Path(policy["cgroupRoot"]).iterdir()), "owned worker cgroup remained")
+        require(not any(Path(policy["stateRoot"]).iterdir()), "owned job scratch remained")
+        cases.append({"case": f"appPump-{case}", "record": str(record_path)})
+        (args.evidence / "cases.json").write_text(json.dumps(cases, indent=2), encoding="utf-8")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-approved", action="store_true")
     parser.add_argument("--policy", type=Path, required=True)
     parser.add_argument("--broker", type=Path, required=True)
     parser.add_argument("--evidence", type=Path, required=True)
+    parser.add_argument("--app-test-binary", type=Path)
+    parser.add_argument("--pump-image", type=Path)
     args = parser.parse_args()
+    require(bool(args.app_test_binary) == bool(args.pump_image), "App pump fixture artifacts must be supplied together")
     if not args.run_approved or sys.platform != "linux" or os.getuid() != 0:
         parser.error("requires explicit --run-approved on the reviewed Linux root deployment")
     config_root = Path("/etc/weftext-test/v07-20261022")
@@ -570,7 +654,12 @@ def main():
                 ("dropDisconnect", {"disconnect": True}),
             ]:
                 result = test(name, good, action="cancel", **kwargs)
-                assert result["receipt"] is None, "disconnect/malformed control cannot become a completion receipt"
+                if name == "dropDisconnect":
+                    assert result["receipt"] is None, "a disconnected client cannot receive a receipt"
+                else:
+                    receipt = result["receipt"]
+                    assert receipt["jobId"] == result["started"]["jobId"] and receipt["completion"] == "setupFailed"
+                    assert receipt["cgroupEmpty"] and receipt["pidfdExited"] and receipt["reaped"] >= 2
                 assert not Path(policy["cgroupRoot"], result["started"]["jobId"]).exists()
                 assert not Path(policy["stateRoot"], result["started"]["jobId"]).exists()
                 assert not Path("/proc", str(result["probe"]["pid"])).exists()
@@ -594,7 +683,9 @@ def main():
                 }, indent=2), encoding="utf-8")
             if shutdown_error is not None:
                 raise RuntimeError("daemon did not exit cleanly; retain identities.json and owned deployment") from shutdown_error
-    print(f"PASS: {len(cases)} actual broker mechanism cases; no whole-version/product claim")
+    if args.app_test_binary:
+        app_pump_cases(args, policy, cases)
+    print(f"PASS: {len(cases)} actual broker mechanism/App pump cases; no whole-version/product claim")
 
 
 if __name__ == "__main__":

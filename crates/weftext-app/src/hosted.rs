@@ -222,6 +222,7 @@ struct SourceRequest {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SourceSaveRequest {
+    input_revision: Option<u64>,
     session_id: String,
     base_id: String,
     source: String,
@@ -825,10 +826,11 @@ async fn keepalive(
 async fn draft(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    RequestJson(req): RequestJson<SourceRequest>,
+    RequestJson(req): RequestJson<weftext_core::DraftInputRequest>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
+            let revision = req.input_revision;
             let (actor, _, rights) = inner.session(&auth, &req.session_id)?;
             if !rights.write {
                 return Err(unavailable());
@@ -836,10 +838,10 @@ async fn draft(
             inner
                 .core
                 .with_actor_for_root(&inner.actor_scope(&actor), &inner.config.root, |c| {
-                    c.persist_draft(&req.session_id, &req.source)
+                    c.persist_draft_ordered(req)
                 })
                 .map_err(HostedInner::core_error)?;
-            Ok(json!({"status":"draftRetained"}))
+            Ok(json!({"status":"draftRetained","inputRevision":revision}))
         })
         .await?,
     ))
@@ -877,6 +879,7 @@ async fn save(
                 inner,
                 &auth,
                 weftext_core::HostedSaveRequest {
+                    input_revision: req.input_revision,
                     session_id: req.session_id,
                     base_id: req.base_id,
                     source: req.source,

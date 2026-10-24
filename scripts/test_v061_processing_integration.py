@@ -5,6 +5,7 @@ and proofreading workers. Owned libraries, state, HTTP records and process logs
 are retained; this suite does not establish browser, Office or IME acceptance.
 Only the tests declared below run, including through unittest discovery.
 """
+import uuid
 from _creation_result import created_document
 import argparse
 import copy
@@ -213,7 +214,7 @@ class SharedProcessingIntegration(HostedLibrary):
         original = self.originals()
         draft_doc = self.open()
         draft = draft_doc['source'] + '\n个人未保存草稿😀'
-        self.call('draft', {'sessionId': draft_doc['sessionId'], 'source': draft})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': draft_doc['baseId'], 'inputRevision': 1, 'sessionId': draft_doc['sessionId'], 'source': draft})
         profile, result = self.scan(options)
         request = self.request(profile, result, options)
         plan = self.call('review/prepare', request)

@@ -7,6 +7,7 @@ export interface DraftInput {
   source: string;
   baseKnown: boolean;
   producerId?: string;
+  inputId?: string;
   role?: { kind: "proposal" } | { kind: "committedBaseline"; operationId: string };
 }
 

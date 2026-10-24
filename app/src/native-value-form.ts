@@ -165,7 +165,7 @@ export interface PanelHost {
     environmentChanged?(root: string): void;
     prepareAction?(): Promise<void>;
     /** A create success must be opened by the host, using its returned Core session. */
-    created?(result: unknown): Promise<void>;
+    created?(result: unknown, operationId: string | undefined): Promise<void>;
     /** Explicitly acknowledges the Core save of a query and its owning note. */
     savedDefinition?(result: unknown, basis: DocumentBasis): Promise<void>;
     /** Reconcile one committed original Core operation without replacing later input. */

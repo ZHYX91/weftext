@@ -4,6 +4,7 @@ Each case owns a disposable library and private state directory. Local APIs are
 used only to provision structural moves while the hosted process is stopped.
 Consumer behavior always goes through the hosted authorization boundary.
 """
+import uuid
 import json
 import sys
 import unittest
@@ -42,10 +43,11 @@ class HostedHistory(Hosted):
     def restore_request(self, doc, version, *, source=None, serial=1,
                         action='none', operation=None, actor='alice'):
         source = doc['source'] if source is None else source
+        ack = self.call('draft', {'sessionId': doc['sessionId'], 'baseId': doc['baseId'], 'source': source, 'inputId': uid(), 'inputRevision': 1}, actor) if doc.get('rights', {}).get('write') else {}
         request = dict(resource=doc['resource'], sessionId=doc['sessionId'],
                        baseId=doc['baseId'], versionId=version, source=source,
                        sourceHash=digest(source), serial=serial,
-                       operationId=operation or uid(), draftAction=action)
+                       operationId=operation or uid(), draftAction=action, inputRevision=ack.get('inputRevision'))
         self.call('editor/map', {key: request[key] for key in
                                 ['sessionId', 'source', 'sourceHash', 'serial']}, actor)
         return request
@@ -76,9 +78,9 @@ class HostedHistory(Hosted):
         doc, versions = self.versions()
         alice = doc['source'] + '\nALICE_PRIVATE_PERSISTED😀'
         bob = doc['source'] + '\nBOB_PRIVATE_PERSISTED🌿'
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': alice})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': alice})
         b = self.open(actor='bob')
-        self.call('draft', {'sessionId': b['sessionId'], 'source': bob}, 'bob')
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': b['baseId'], 'inputRevision': 1, 'sessionId': b['sessionId'], 'source': bob}, 'bob')
         before = self.timeline(doc)
         self.assertEqual(before['path'], 'resource:Shared')
         self.assertEqual(before['currentness'], 'saved')
@@ -114,10 +116,10 @@ class HostedHistory(Hosted):
         doc, versions = self.versions()
         persisted = doc['source'] + '\nALICE_OLD_DRAFT'
         buffer = persisted + '\nALICE_LATEST_BUFFER😀'
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': persisted})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': persisted})
         b = self.open(actor='bob')
         bob = b['source'] + '\nBOB_PRIVATE_RETAINED'
-        self.call('draft', {'sessionId': b['sessionId'], 'source': bob}, 'bob')
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': b['baseId'], 'inputRevision': 1, 'sessionId': b['sessionId'], 'source': bob}, 'bob')
         before = self.timeline(doc)
         request = self.restore_request(doc, versions[0]['id'], source=buffer, action='retain')
         restored = self.call('history/restore', request)
@@ -126,7 +128,7 @@ class HostedHistory(Hosted):
         result = restored['result']
         self.assertEqual(result['receipt']['operationId'], request['operationId'])
         self.assertEqual(result['source'], versions[0]['source'])
-        self.assertEqual({item['source'] for item in result['protectedDrafts']}, {persisted, buffer})
+        self.assertEqual({item['source'] for item in result['protectedDrafts']}, {buffer})
         self.assertTrue(all(item['baseKnown'] for item in result['protectedDrafts']))
         self.assertNotIn('BOB_PRIVATE', json.dumps(restored))
         self.no_physical_paths(restored)
@@ -149,7 +151,7 @@ class HostedHistory(Hosted):
     def test_history_consumer_dirty_none_and_stale_buffer_never_install(self):
         doc, versions = self.versions()
         dirty = doc['source'] + '\nPROTECT_ME'
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': dirty})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': dirty})
         request = self.restore_request(doc, versions[0]['id'], source=dirty)
         denied = self.call('history/restore', request, status=409)
         self.assertEqual(denied['error']['code'], 'draftProtectionRequired')
@@ -182,7 +184,7 @@ class HostedHistory(Hosted):
     def test_history_consumer_external_change_preserves_external_and_personal_draft(self):
         doc, versions = self.versions()
         draft = doc['source'] + '\nALICE_BEFORE_EXTERNAL'
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': draft})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': draft})
         request = self.restore_request(doc, versions[0]['id'], source=draft, action='retain')
         external = doc['source'] + '\nEXTERNAL_CURRENT🌿'
         (self.root / 'Shared/Shared.typ').write_bytes(external.encode())

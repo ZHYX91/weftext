@@ -10,6 +10,8 @@ use weftext_messages::UiMessage;
 #[path = "definition_admission_tests.rs"]
 mod definition_admission_tests;
 mod directory;
+#[cfg(test)]
+mod namespace_tests;
 #[cfg(all(test, windows))]
 mod observation_tests;
 mod owner_backup;
@@ -798,12 +800,10 @@ impl FrozenOperation {
         (self.preview.node_map.len() == 1)
             .then(|| self.preview.node_map.values().next().unwrap().clone())
     }
-    pub(crate) fn affects(&self, path: &Path) -> bool {
-        let target = display(path).to_lowercase();
-        let within = |p: &str| {
-            let p = p.to_lowercase();
-            target == p || target.starts_with(&(p + "\\"))
-        };
+    pub(crate) fn affects(&self, path: &Path) -> Result<bool> {
+        // A locator is interpreted in the actual backend namespace. Textual
+        // lowercasing and separators cannot describe both NTFS and POSIX.
+        let mut affected = Vec::<(PathBuf, bool)>::new();
         match &self.mutation {
             Mutation::Compound {
                 relocations,
@@ -813,21 +813,24 @@ impl FrozenOperation {
                 retired_members,
                 ..
             } => {
-                relocations.iter().any(|step| {
-                    within(&step.source)
-                        || within(&step.target)
-                        || step.parking.as_ref().is_some_and(|path| within(path))
-                }) || updates
-                    .iter()
-                    .chain(created_files)
-                    .any(|change| Path::new(&change.path) == path)
-                    || retired_members.iter().any(|member| {
-                        locator_equal(&member.source, &display(path))
-                            || locator_equal(&member.target, &display(path))
-                    })
-                    || created_directories
+                for step in relocations {
+                    affected.push((PathBuf::from(&step.source), true));
+                    affected.push((PathBuf::from(&step.target), true));
+                    if let Some(parking) = &step.parking {
+                        affected.push((PathBuf::from(parking), true));
+                    }
+                }
+                affected.extend(
+                    updates
                         .iter()
-                        .any(|directory| within(directory))
+                        .chain(created_files)
+                        .map(|c| (PathBuf::from(&c.path), false)),
+                );
+                for member in retired_members {
+                    affected.push((PathBuf::from(&member.source), false));
+                    affected.push((PathBuf::from(&member.target), false));
+                }
+                affected.extend(created_directories.iter().map(|d| (PathBuf::from(d), true)));
             }
             Mutation::Relocate {
                 source,
@@ -835,11 +838,14 @@ impl FrozenOperation {
                 updates,
                 ..
             } => {
-                within(source)
-                    || within(target)
-                    || updates
+                affected.push((PathBuf::from(source), true));
+                affected.push((PathBuf::from(target), true));
+                affected.extend(
+                    updates
                         .iter()
-                        .any(|c| c.before.as_ref() != Some(&c.after) && Path::new(&c.path) == path)
+                        .filter(|c| c.before.as_ref() != Some(&c.after))
+                        .map(|c| (PathBuf::from(&c.path), false)),
+                );
             }
             Mutation::CreateTree {
                 target,
@@ -849,22 +855,37 @@ impl FrozenOperation {
                 updates,
                 ..
             } => {
-                (!existing_target && within(target))
-                    || (*existing_target
-                        && directories
+                if !existing_target {
+                    affected.push((PathBuf::from(target), true));
+                } else {
+                    affected.extend(
+                        directories
                             .iter()
-                            .any(|d| within(&display(&Path::new(target).join(d)))))
-                    || files
+                            .map(|d| (Path::new(target).join(d), true)),
+                    );
+                }
+                affected.extend(
+                    files
                         .iter()
-                        .any(|f| f.path.eq_ignore_ascii_case(&display(path)))
-                    || updates
-                        .iter()
-                        .any(|f| f.path.eq_ignore_ascii_case(&display(path)))
+                        .chain(updates)
+                        .map(|c| (PathBuf::from(&c.path), false)),
+                );
             }
-            Mutation::Update { files } => files
-                .iter()
-                .any(|f| f.path.eq_ignore_ascii_case(&display(path))),
+            Mutation::Update { files } => {
+                affected.extend(files.iter().map(|c| (PathBuf::from(&c.path), false)))
+            }
         }
+        for (locator, subtree) in affected {
+            let matches = if subtree {
+                backend::namespace_relative_path(path, &locator)?.is_some()
+            } else {
+                backend::namespace_path_compare(path, &locator)? == std::cmp::Ordering::Equal
+            };
+            if matches {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
     pub(crate) fn has_identity(&self, identity: &FileIdentity) -> bool {
         self.files.iter().any(|f| &f.stamp.identity == identity)
@@ -5696,12 +5717,10 @@ impl Core {
         }
         if matches!(t.mutation, Mutation::Compound { .. }) {
             self.execute_compound(&plan)?;
-            for session in self
-                .sessions
-                .values_mut()
-                .filter(|session| t.affects(&session.path))
-            {
-                session.base_id = fresh();
+            for session in self.sessions.values_mut() {
+                if t.affects(&session.path)? {
+                    session.base_id = fresh();
+                }
             }
             return Ok(t.receipt.clone());
         }
@@ -6324,8 +6343,10 @@ impl Core {
             }
         }
         // Existing UI sessions retain their drafts but their bases become stale.
-        for session in self.sessions.values_mut().filter(|s| t.affects(&s.path)) {
-            session.base_id = fresh();
+        for session in self.sessions.values_mut() {
+            if t.affects(&session.path)? {
+                session.base_id = fresh();
+            }
         }
         Ok(t.receipt.clone())
     }

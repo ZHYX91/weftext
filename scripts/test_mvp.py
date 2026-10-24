@@ -186,7 +186,7 @@ class LocalApplication(unittest.TestCase):
         path, doc = self.ordinary('B')
         self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': 'S'}, status=422)
         for revision, source in [(1, 'S'), (2, 'Y'), (1, 'S')]:
-            ack = self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': source, 'inputRevision': revision})
+            ack = self.api('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'sessionId': doc['sessionId'], 'source': source, 'inputRevision': revision})
             self.assertEqual(ack, {'ok': True, 'inputRevision': revision})
         request = {'sessionId': doc['sessionId'], 'baseId': doc['baseId'], 'source': 'S', 'operationId': uid(), 'inputRevision': 1}
         saved = self.api('/api/save', request)
@@ -203,7 +203,7 @@ class LocalApplication(unittest.TestCase):
 
     def test_recovered_draft_requires_explicit_merge(self):
         path, doc = self.ordinary('原稿')
-        self.api('/api/draft', {'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': '未保存草稿'})
+        self.api('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': '未保存草稿'})
         path.write_text('外部新稿', encoding='utf-8')
         opened = self.api('/api/open', {'path': str(path)})
         self.assertEqual(opened['recoveredDraftBaseSource'], '原稿')

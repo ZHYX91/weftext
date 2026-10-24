@@ -116,6 +116,8 @@ const modes: {
 ];
 interface LiveDocument {
     navigationKey: string;
+    adoptedCreationId?: string;
+    retiringSessions?: Set<string>;
     session: DocumentSession;
     editor: SourceEditor;
     writing: WritingController;
@@ -593,7 +595,7 @@ const recognitionPanel = new RecognitionPanel({
         if (!node) throw new UiError(uiMessage("shell.importCreatedNoteUnavailable"));
         await prepareSwitch();
         const opened = await api<OpenedDocument>("/api/recognition/open", { operationId: receipt.operationId, target, node });
-        await acceptCreatedDocument(opened);
+        await acceptCreatedDocument(opened, receipt.operationId);
 
     }),
 });
@@ -647,6 +649,7 @@ const workspaceTools = new WorkspaceTools({
                 pagedPreview?.invalidate(uiMessage("shell.syncCheckingDraftRetained"));
                 workspaceTools.documentChanged();
             }
+            let fresh: OpenedDocument | undefined;
             try {
                 // A committed sync can arrive during later preedit. Settle/checkpoint
                 // input before replacing any surface, retaining shared editor/Undo.
@@ -657,7 +660,7 @@ const workspaceTools = new WorkspaceTools({
                     await persistDraft(doc);
                 if (!stillOpen())
                     continue;
-                let fresh: OpenedDocument | undefined, unavailable = false;
+                let unavailable = false;
                 try {
                     if (doc.session.opened.nodeId && doc.session.opened.workspaceId)
                         fresh = await api<OpenedDocument>("/api/data/open", { root, entityKey: `weftext-node://${doc.session.opened.workspaceId}/${doc.session.opened.nodeId}` });
@@ -684,6 +687,7 @@ const workspaceTools = new WorkspaceTools({
                 });
             }
             finally {
+                retireUnownedSessions(fresh?.sessionId);
                 doc.sourceRefreshing = false;
                 if (stillOpen())
                     scheduleRender(doc, 0);
@@ -707,44 +711,31 @@ const workspaceTools = new WorkspaceTools({
     }),
     canEditSource: () => !bodyCloseFrozen && !!current && sourceConsumersAvailable(current) && current.mode !== "read" && !readOnlySource(current) && !current.writing.state.composing,
     savedDefinition: async (result, basis) => libraryCloseActivity.run(async () => {
-
-        const receipt = result as {
-            document?: OpenedDocument;
-            committedSource?: string;
-            documentSourceMatchesCommit?: boolean;
-        };
-        const opened = receipt.document;
-        if (!opened || typeof opened.sessionId !== "string" || typeof opened.source !== "string")
-            throw new UiError(uiMessage("shell.querySaveFileReceiptMissing"));
-        workspaceTools.invalidateQueryEnvironment(basis.root);
-        const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
-        if (!doc)
-            throw new UiError(uiMessage("shell.querySavedReopen"));
-        if (receipt.documentSourceMatchesCommit !== true || receipt.committedSource !== opened.source) {
-            doc.session.error = uiMessage("shell.queryCommittedDiskChanged");
-            if (doc === current)
-                renderContent();
-            return;
-        }
-        await doc.writing.settleForSessionChange();
-        if (doc.session.source !== basis.source || doc.session.serial !== basis.serial || doc.session.baseId !== basis.baseId) {
-            doc.session.error = uiMessage("shell.querySavedNewInputRetained");
-            if (doc === current)
-                renderContent();
-            return;
-        }
-        doc.session.opened = opened;
-        doc.editor.clearTokens();
-        if (doc.editor.source !== opened.source)
-            doc.editor.apply(0, doc.editor.source.length, opened.source);
-        doc.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
-        doc.lastSave = undefined;
-        doc.session.projection = null;
-        await persistDraft(doc);
-        scheduleRender(doc, 0);
-        await refreshInventory();
-        refreshChrome();
-
+        const receipt = result as { document?: OpenedDocument; committedSource?: string; documentSourceMatchesCommit?: boolean };
+        const returned = receipt.document;
+        if (!returned || typeof returned.sessionId !== "string" || typeof returned.source !== "string") throw new UiError(uiMessage("shell.querySaveFileReceiptMissing"));
+        let opened = returned;
+        try {
+            workspaceTools.invalidateQueryEnvironment(basis.root);
+            const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
+            if (!doc) throw new UiError(uiMessage("shell.querySavedReopen"));
+            const comparison = (key: "shell.queryCommittedDiskChanged" | "shell.querySavedNewInputRetained"): never => {
+                setComparisonTarget(doc, returned); doc.externalSource = returned.source;
+                doc.session.error = uiMessage(key);
+                if (doc === current) renderContent();
+                throw new UiError(uiMessage(key));
+            };
+            if (receipt.documentSourceMatchesCommit !== true || receipt.committedSource !== returned.source) comparison("shell.queryCommittedDiskChanged");
+            await doc.writing.settleForSessionChange();
+            if (opened.sessionId !== basis.sessionId) opened = await api<OpenedDocument>("/api/open", { sessionId: basis.sessionId });
+            if (!documents.includes(doc) || doc.session.opened.sessionId !== basis.sessionId || opened.sessionId !== basis.sessionId || opened.source !== receipt.committedSource || opened.recoveredDraftConflict || doc.session.source !== basis.source || doc.session.serial !== basis.serial || doc.session.baseId !== basis.baseId)
+                comparison("shell.querySavedNewInputRetained");
+            doc.session.opened = opened; doc.editor.clearTokens();
+            if (doc.editor.source !== opened.source) doc.editor.applyCommitted(opened.source);
+            doc.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
+            doc.lastSave = undefined; doc.session.projection = null;
+            await persistDraft(doc); scheduleRender(doc, 0); await refreshInventory(); refreshChrome();
+        } finally { retireUnownedSessions(returned.sessionId, opened.sessionId); }
     }),
     selectSource: (from, to) => {
         if (current) {
@@ -783,8 +774,10 @@ const workspaceTools = new WorkspaceTools({
     applyReceipt: async (receipt, context) => libraryCloseActivity.run(async () => {
 
         if (!originalCommitted(receipt)) throw new UiError(uiMessage("shell.originalCommittedReceiptRequired"));
-        workspaceTools.invalidateQueryEnvironment(context.root);
         const opened = receipt.document as OpenedDocument | undefined;
+        const returned = [opened, ...((receipt.affectedDocuments as { document?: OpenedDocument }[] | undefined) ?? []).map(effect => effect.document)];
+        try {
+        workspaceTools.invalidateQueryEnvironment(context.root);
         const doc = documents.find(item => item.session.opened.sessionId === context.sessionId || Boolean(context.nodeId && context.workspaceId && item.session.opened.nodeId === context.nodeId && item.session.opened.workspaceId === context.workspaceId));
         let deliveryPending: UiText | null = receipt.documentError ? apiErrorUiText(receipt.documentError) : receipt.documentSourceMatchesCommit === false ? uiMessage("shell.committedBodyChanged") : null;
         if (doc)
@@ -804,10 +797,10 @@ const workspaceTools = new WorkspaceTools({
         }
         else if (opened && receipt.documentDisposition === "created") {
             const receiving = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
-            if (current === doc || receiving === current) await acceptCreatedDocument(opened);
+            if (current === doc || receiving === current) await acceptCreatedDocument(opened, receipt.operationId);
             else deliveryPending = displayMessage("shell.createdReturnForOriginalDelivery", { name: uiDisplayParameter(basename(opened.path)) });
         }
-        else if (opened && doc && opened.source === doc.session.baseSource) {
+        else if (opened && doc && opened.sessionId === doc.session.opened.sessionId && opened.source === doc.session.baseSource) {
             // Namespace changes keep the same saved bytes. Preserve newer local input,
             // the shared editor and Undo while rebinding the real Core save session.
             doc.session.opened = opened;
@@ -820,11 +813,11 @@ const workspaceTools = new WorkspaceTools({
             if (current === doc)
                 renderContent();
         }
-        else if (opened && doc && doc.session.source === context.source && doc.session.serial === context.serial && !doc.session.dirty) {
+        else if (opened && doc && opened.sessionId === doc.session.opened.sessionId && doc.session.source === context.source && doc.session.serial === context.serial && !doc.session.dirty) {
             doc.session.opened = opened;
             doc.editor.clearTokens();
             if (doc.editor.source !== opened.source)
-                doc.editor.apply(0, doc.editor.source.length, opened.source);
+                doc.editor.applyCommitted(opened.source);
             doc.session.acknowledgeSave(opened.source, opened.baseId, opened.path);
             doc.lastSave = undefined;
             doc.session.projection = null;
@@ -857,7 +850,7 @@ const workspaceTools = new WorkspaceTools({
                 related.session.error = uiMessage("shell.parentFolderRecycled");
                 await persistDraft(related);
             }
-            else if (effect.document && effect.document.source === related.session.baseSource) {
+            else if (effect.document && effect.document.sessionId === related.session.opened.sessionId && effect.document.source === related.session.baseSource) {
                 related.session.opened = effect.document;
                 related.editor.clearTokens();
                 related.session.acknowledgeSave(effect.document.source, effect.document.baseId, effect.document.path);
@@ -868,8 +861,10 @@ const workspaceTools = new WorkspaceTools({
             }
             else {
                 related.session.error = displayMessage("shell.folderOperationCompleted", { p0: uiDisplayParameter(effect.documentError ? apiErrorUiText(effect.documentError) : uiMessage("shell.childNoteChanged")) });
-                if (effect.document)
+                if (effect.document) {
                     related.saveAsChangedTarget = effect.document.path;
+                    setComparisonTarget(related, effect.document);
+                }
                 deliveryPending ||= related.session.error;
             }
             if (related === current)
@@ -877,6 +872,7 @@ const workspaceTools = new WorkspaceTools({
         }
         await refreshInventory();
         if (deliveryPending) throw new UiError(deliveryPending);
+        } finally { retireUnownedSessions(...returned.map(document => document?.sessionId)); }
 
     }),
     stylesChanged: async (root) => libraryCloseActivity.run(async () => {
@@ -917,44 +913,54 @@ const historyPanel = new HistoryPanel({
   getDocument: () => historyContext(current), request: api, prepareRestore: prepareSwitch, notify: toast,
   restorePending: () => { refreshChrome(); },
   restored: async (result, basis) => libraryCloseActivity.run(async () => {
-
         if (result.receipt.status === "saved") workspaceTools.invalidateQueryEnvironment(basis.root);
         const doc = documents.find(item => item.navigationKey === basis.ownerKey && item.session.opened.nodeId === basis.nodeId && item.session.opened.workspaceId === basis.workspaceId);
         if (!doc) throw new UiError(uiMessage("shell.olderVersionSavedReopen"));
         await doc.writing.settleForSessionChange();
         const prior = doc.session.opened;
-        const fact = await api<Receipt & OriginalFact & { committedSource?: string; document?: OpenedDocument; documentSourceMatchesCommit?: boolean }>("/api/operations/status", { operationId: result.receipt.operationId });
-        const opened = fact.document;
-        if (doc.session.opened !== prior || fact.operationId !== result.receipt.operationId || fact.status !== "committed" || fact.baseId !== result.receipt.baseId || fact.path !== result.receipt.path || fact.committedSource !== result.source || !opened || opened.nodeId !== basis.nodeId || opened.workspaceId !== basis.workspaceId || opened.kind !== "managed" || opened.source !== result.source || fact.documentSourceMatchesCommit !== true || fact.documentError) {
-            if (opened && opened.nodeId === basis.nodeId && opened.workspaceId === basis.workspaceId) { setComparisonTarget(doc, opened); doc.externalSource = opened.source; }
-            throw new UiError(uiMessage("shell.restoreCommittedCurrentSessionChanged"));
-        }
-        const variants = [...(doc.session.opened.recoveredDraftVariants ?? []), ...(opened.recoveredDraftVariants ?? []), ...result.protectedDrafts];
-        if (opened.recoveredDraftConflict) await api("/api/draft/resolve", { sessionId: opened.sessionId, action: "mergeRecovered", source: doc.session.source });
-        await doc.writing.settleForSessionChange();
-        if (doc.session.opened !== prior) throw new UiError(uiMessage("shell.deliverySessionChanged"));
-        const disposition = restoreBufferDisposition(basis, historyContext(doc));
-        if (disposition === "unrelated" || result.receipt.status !== "saved") throw new UiError(uiMessage("shell.restoreReceiptNoteMismatch"));
-        opened.recoveredDraftVariants = uniqueRetainedDrafts(variants);
-        // Keep the shared editor and Undo. Only a still-clean, unchanged buffer adopts
-        // the restored text; any original or late input remains a Draft over the new Base.
-        if (disposition === "replaceClean" && doc.editor.source !== result.source) doc.editor.apply(0, doc.editor.source.length, result.source);
-        doc.session.opened = opened; opened.recoveredDraftConflict = false;
-        doc.session.acknowledgeSave(result.source, opened.baseId, opened.path);
-        doc.lastSave = undefined; doc.session.projection = null; doc.editor.clearTokens(); doc.queries.invalidate();
-        await persistDraft(doc); scheduleRender(doc, 0); await refreshInventory(); refreshChrome();
-
+        const received = new Set<string>();
+        try {
+            const fact = await api<Receipt & OriginalFact & { committedSource?: string; document?: OpenedDocument; documentSourceMatchesCommit?: boolean }>("/api/operations/status", { operationId: result.receipt.operationId });
+            const comparison = fact.document;
+            if (comparison) received.add(comparison.sessionId);
+            if (!documents.includes(doc) || doc.session.opened !== prior || fact.operationId !== result.receipt.operationId || fact.status !== "committed" || fact.baseId !== result.receipt.baseId || fact.path !== result.receipt.path || fact.committedSource !== result.source || !comparison || comparison.nodeId !== basis.nodeId || comparison.workspaceId !== basis.workspaceId || comparison.kind !== "managed" || comparison.source !== result.source || fact.documentSourceMatchesCommit !== true || fact.documentError) {
+                if (comparison && documents.includes(doc) && comparison.nodeId === basis.nodeId && comparison.workspaceId === basis.workspaceId) { setComparisonTarget(doc, comparison); doc.externalSource = comparison.source; }
+                throw new UiError(uiMessage("shell.restoreCommittedCurrentSessionChanged"));
+            }
+            comparison.recoveredDraftVariants = uniqueRetainedDrafts([...(prior.recoveredDraftVariants ?? []), ...(comparison.recoveredDraftVariants ?? []), ...result.protectedDrafts]);
+            // A restore receipt proves X committed. It does not prove a later
+            // Y was authored over X, or authorize an automatic reviewed merge.
+            if (restoreBufferDisposition(basis, historyContext(doc)) !== "replaceClean") {
+                setComparisonTarget(doc, comparison); doc.externalSource = comparison.source;
+                throw new UiError(uiMessage("shell.restoreCommittedCurrentSessionChanged"));
+            }
+            const opened = await api<OpenedDocument>("/api/open", { sessionId: prior.sessionId });
+            received.add(opened.sessionId);
+            await doc.writing.settleForSessionChange();
+            if (!documents.includes(doc) || doc.session.opened !== prior || restoreBufferDisposition(basis, historyContext(doc)) !== "replaceClean" || opened.sessionId !== prior.sessionId || opened.nodeId !== basis.nodeId || opened.workspaceId !== basis.workspaceId || opened.source !== result.source || opened.recoveredDraftConflict) {
+                if (documents.includes(doc)) { setComparisonTarget(doc, comparison); doc.externalSource = comparison.source; }
+                throw new UiError(uiMessage("shell.restoreCommittedCurrentSessionChanged"));
+            }
+            opened.recoveredDraftVariants = comparison.recoveredDraftVariants;
+            if (doc.editor.source !== result.source) doc.editor.applyCommitted(result.source);
+            doc.session.opened = opened;
+            doc.session.acknowledgeSave(result.source, opened.baseId, opened.path);
+            doc.lastSave = undefined; doc.session.projection = null; doc.editor.clearTokens(); doc.queries.invalidate();
+            await persistDraft(doc); setComparisonTarget(doc, undefined); scheduleRender(doc, 0); await refreshInventory(); refreshChrome();
+        } finally { retireUnownedSessions(...received); }
     }),
   finishDelivery: async (operationId, basis) => libraryCloseActivity.run(async () => {
 
         const doc = documents.find(item => item.navigationKey === basis.ownerKey && item.session.opened.nodeId === basis.nodeId && item.session.opened.workspaceId === basis.workspaceId);
         if (!doc) throw new UiError(uiMessage("shell.compareOriginalBuffer"));
         const fact = await api<OriginalFact & { document?: OpenedDocument }>("/api/operations/status", { operationId });
+        try {
         if (fact.operationId !== operationId || fact.status !== "committed" || !fact.document || fact.document.nodeId !== basis.nodeId || fact.document.workspaceId !== basis.workspaceId) throw new UiError(uiMessage("shell.originalCurrentObjectUnreadable"));
         setComparisonTarget(doc, fact.document); doc.externalSource = fact.document.source;
         const prior = doc.session.opened;
         await showDraftComparison(doc);
         return await (doc.session.opened !== prior && !doc.comparisonTarget);
+        } finally { retireUnownedSessions(fact.document?.sessionId); }
 
     }),
 });
@@ -972,9 +978,10 @@ async function refreshInventory(): Promise<void> {
         renderSidebar();
     } finally { finishNativeActivity(); }
 }
-async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
+async function acceptCreatedDocument(opened: OpenedDocument, operationId: string | undefined): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
     try {
+        if (!operationId) throw new UiError(uiMessage("shell.originalCommittedReceiptRequired"));
         if (!opened.nodeId || !opened.workspaceId || opened.kind !== "managed") throw new UiError(uiMessage("shell.createdNodeIdentityRequired"));
         workspaceTools.assertLibraryChange(inventory);
         workspaceTools.invalidateQueryEnvironment(opened.root);
@@ -982,13 +989,21 @@ async function acceptCreatedDocument(opened: OpenedDocument): Promise<void> {
         const restored = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
         // A delivered birth is not authority to replace an active writer.
         if (restored) {
+            if (restored.adoptedCreationId === operationId) {
+                await refreshInventory();
+                return;
+            }
             setComparisonTarget(restored, opened);
             restored.externalSource = opened.source;
             throw new UiError(uiMessage("shell.createdNodeAlreadyOpenPending"));
         }
+        if (!inventory || inventory.workspaceId !== opened.workspaceId || normalize(inventory.root) !== normalize(opened.root))
+            throw new UiError(uiMessage("shell.creationTargetChanged"));
         addDocument(opened);
+        const adopted = documents.find(item => item.session.opened.sessionId === opened.sessionId);
+        if (adopted) adopted.adoptedCreationId = operationId;
         await refreshInventory();
-    } finally { finishNativeActivity(); }
+    } finally { retireUnownedSessions(opened.sessionId); finishNativeActivity(); }
 }
 async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
@@ -1046,11 +1061,23 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
         } finally { finishNativeActivity(); }
     }
 }
-function setComparisonTarget(doc: LiveDocument, target: OpenedDocument): void {
+function setComparisonTarget(doc: LiveDocument, target?: OpenedDocument): void {
     const prior = doc.comparisonTarget;
     doc.comparisonTarget = target;
-    if (prior && prior.sessionId !== target.sessionId && !ownsOpenedSession(prior.sessionId))
-        void releaseOpenedSession(prior.sessionId).catch(() => undefined);
+    if (prior?.sessionId !== target?.sessionId) retireUnownedSessions(prior?.sessionId);
+}
+/** Unadopted results may retire immediately. A former writer is eligible only
+ * after its caller has durably handed off the current input. */
+function retireUnownedSessions(...ids: (string | undefined)[]): void {
+    for (const id of new Set(ids)) if (id && !ownsOpenedSession(id))
+        void releaseOpenedSession(id).catch(() => undefined);
+}
+async function retireHandedOffWriters(doc: LiveDocument): Promise<void> {
+    if (doc.writing.retainInput || doc.session.acknowledgedInputRevision === null) return;
+    for (const id of doc.retiringSessions ?? []) if (!ownsOpenedSession(id)) {
+        try { await releaseOpenedSession(id); doc.retiringSessions?.delete(id); }
+        catch { /* the existing release alert is visible; keep the handle for a later ACK */ }
+    }
 }
 function ownsOpenedSession(sessionId: string): boolean {
     return documents.some(document => document.session.opened.sessionId === sessionId || document.comparisonTarget?.sessionId === sessionId);
@@ -2180,6 +2207,7 @@ async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise
         const serial = doc.session.serial;
         const sessionId = doc.session.opened.sessionId;
         const inputRevision = doc.session.issueDraftRevision();
+        const inputId = doc.session.inputId, baseId = doc.session.baseId;
         const request = doc.draftChain.catch(() => undefined).then(async () => libraryCloseActivity.run(async () => {
 
             const recovery = doc.session.recoveryContinuation;
@@ -2190,9 +2218,10 @@ async function persistDraft(doc: LiveDocument, proposedSource?: string): Promise
                 }
                 doc.session.recoveryContinuationSettled = true;
             }
-            const ack = await api<{ ok: boolean; inputRevision: number }>("/api/draft", { sessionId, source, inputRevision });
+            const ack = await api<{ ok: boolean; inputRevision: number }>("/api/draft", { sessionId, source, inputRevision, inputId, baseId });
             if (doc.session.opened.sessionId !== sessionId || !ack || ack.ok !== true || ack.inputRevision !== inputRevision) throw new UiError(uiMessage("shell.querySavedNewInputRetained"));
-            doc.session.acknowledgeDraft(source, serial, inputRevision);
+            doc.session.acknowledgeDraft(source, serial, inputRevision, inputId);
+            await retireHandedOffWriters(doc);
             doc.draftFailure = null;
 
         }));
@@ -2330,7 +2359,7 @@ async function createLibrary(): Promise<void> {
                 workspaceTools.assertLibraryChange(receipt.library);
                 workspaceTools.invalidateQueryEnvironment(receipt.root);
                 inventory = receipt.library; query = ""; selectedFolder = null; renderSidebar(); renderContent();
-                if (receipt.rootDocument) await acceptCreatedDocument(receipt.rootDocument);
+                if (receipt.rootDocument) await acceptCreatedDocument(receipt.rootDocument, receipt.operationId);
                 else await refreshInventory();
                 toast(uiMessage("shell.libraryCreated"));
 
@@ -2357,6 +2386,7 @@ async function createNote(): Promise<void> {
             toast(uiMessage("shell.ordinaryFolderCannotCreateNote"), true);
             return;
         }
+        const owner = inventory, parent = selectedFolder ?? owner.root;
         const name = pendingCreation?.route === "/api/note/create" ? String(pendingCreation.payload.name) : await modal<string>(uiMessage("shell.newNote"), displayMessage("shell.saveToFolder", { p0: uiDisplayParameter(selectedFolder ?? inventory.root) }), (form, close) => {
             const label = el("label", "field-label", uiMessage("shell.noteName"));
             const input = el("input", "text-input");
@@ -2379,11 +2409,15 @@ async function createNote(): Promise<void> {
         });
         if (!name)
             return;
+        if (!pendingCreation && (!inventory || inventory.workspaceId !== owner.workspaceId || inventory.root !== owner.root || (selectedFolder ?? inventory.root) !== parent))
+            throw new UiError(uiMessage("shell.creationTargetChanged"));
         await prepareSwitch();
-        await creation<OriginalFact & { document?: OpenedDocument; documentError?: ApiErrorBody }>("/api/note/create", { root: inventory.root, parent: selectedFolder ?? inventory.root, name }, async receipt => libraryCloseActivity.run(async () => {
+        if (!pendingCreation && (!inventory || inventory.workspaceId !== owner.workspaceId || inventory.root !== owner.root || (selectedFolder ?? inventory.root) !== parent))
+            throw new UiError(uiMessage("shell.creationTargetChanged"));
+        await creation<OriginalFact & { document?: OpenedDocument; documentError?: ApiErrorBody }>("/api/note/create", { root: owner.root, parent, name }, async receipt => libraryCloseActivity.run(async () => {
 
             if (receipt.status !== "committed" || !receipt.document || receipt.documentError) throw new UiError(joinUiText([uiMessage("shell.noteOriginalDeliveryPending"), receipt.documentError ? apiErrorUiText(receipt.documentError) : uiMessage("shell.checkOriginalOperationSentence")]));
-            await acceptCreatedDocument(receipt.document);
+            await acceptCreatedDocument(receipt.document, receipt.operationId);
 
         }));
     } finally { finishNativeActivity(); }
@@ -2433,8 +2467,8 @@ function addDocument(opened: OpenedDocument): void {
     workspaceTools.assertLibraryChange(inventory);
     const session = new DocumentSession(opened);
     let doc!: LiveDocument;
-    const editor = new SourceEditor(session.source, source => {
-        session.edit(source);
+    const editor = new SourceEditor(session.source, (source, inputId) => {
+        session.edit(source, inputId);
         doc.queries.invalidate();
         readingSelection = null;
         workspaceTools.documentChanged();
@@ -2444,7 +2478,7 @@ function addDocument(opened: OpenedDocument): void {
         scheduleRender(doc);
         if (current === doc)
             refreshChrome();
-    }, () => { void saveDocument(doc).catch(showError); });
+    }, () => { void saveDocument(doc).catch(showError); }, undefined, session.inputId);
     editor.observe(event => {
         if (event.kind === "reveal" && !editor.revealed && doc?.mode === "focus") {
             activeSourceOrigin = null;
@@ -2477,7 +2511,7 @@ function addDocument(opened: OpenedDocument): void {
             if (current === doc)
                 refreshChrome();
         }, onError: showError,
-        onPendingSource: source => { clearTimeout(doc.draftTimer); doc.draftTimer = setTimeout(() => { doc.draftTimer = undefined; void persistDraft(doc, source).catch(showError); }, 220); },
+        onPendingSource: source => { session.inputId = editor.markAuthorInput(); clearTimeout(doc.draftTimer); doc.draftTimer = setTimeout(() => { doc.draftTimer = undefined; void persistDraft(doc, source).catch(showError); }, 220); },
         onApplied: () => { scheduleDraft(doc); scheduleRender(doc, 100); },
     });
     const queries = new EmbeddedQueryController({
@@ -2732,6 +2766,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
         doc.session.savePending = true;
         refreshChrome();
         let receiptReceived = false;
+        const unadopted = new Set<string>();
         try {
             const payload = request.path
                 ? { sessionId: request.sessionId, path: request.path, source: request.source, operationId: request.operationId, inputRevision: request.inputRevision }
@@ -2740,6 +2775,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             if (!originalCommitted(receipt)) throw new ApiError(receipt.status, uiMessage("shell.saveUnconfirmedDraftRetained"));
             receiptReceived = true;
             request.receipt = receipt;
+            if (receipt.document) unadopted.add(receipt.document.sessionId);
             if (doc.lastSave !== request || doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) {
                 doc.lastSave = request;
                 throw new ApiError("committedDeliveryPending", uiMessage("shell.commitSessionChangedAwaitOriginalResult"));
@@ -2747,15 +2783,32 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             if (receipt.recoveryIssue)
                 toast(uiMessage("shell.savedRecoveryUpdateUnavailable"), true);
             workspaceTools.invalidateQueryEnvironment(doc.session.opened.root);
+            let delivered = receipt.document;
+            // Status can supply an independent comparison. A known adopted
+            // writer must be freshly qualified under its original Session.
+            if ((!request.path || request.deliverySessionId) && delivered?.sessionId !== doc.session.opened.sessionId) {
+                const prior = doc.session.opened;
+                try {
+                    const original = await api<OpenedDocument>("/api/open", { sessionId: prior.sessionId });
+                    unadopted.add(original.sessionId);
+                    if (doc.session.opened !== prior || !documents.includes(doc) || original.sessionId !== prior.sessionId || original.source !== request.source || original.recoveredDraftConflict)
+                        throw new UiError(uiMessage("shell.savedBasisChangedCheckDisk"));
+                    delivered = original;
+                } catch (error) {
+                    if (delivered) { setComparisonTarget(doc, delivered); doc.externalSource = delivered.source; }
+                    throw error;
+                }
+            }
             if (request.path) {
                 // The original physical creation must deliver its actual fresh Core Session.
-                const opened = receipt.document;
+                const opened = delivered;
                 if (!opened || receipt.documentError || receipt.documentSourceMatchesCommit !== true || opened.path !== receipt.path || !canRebindSaveAs(request.source, opened)) {
                     if (opened) { setComparisonTarget(doc, opened); doc.externalSource = opened.source; }
                     throw new UiError(uiMessage("shell.saveAsOriginalPhysicalDeliveryPending"));
                 }
                 await doc.writing.settleForSessionChange();
                 if (doc.session.opened.sessionId !== (request.deliverySessionId ?? request.sessionId)) throw new UiError(uiMessage("shell.saveAsDeliverySessionChanged"));
+                if (doc.session.opened.sessionId !== opened.sessionId) (doc.retiringSessions ??= new Set()).add(doc.session.opened.sessionId);
                 doc.session.opened = opened;
                 request.deliverySessionId = opened.sessionId;
                 doc.editor.clearTokens();
@@ -2764,20 +2817,21 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
                 scheduleRender(doc, 0);
             }
             else {
-                if (receipt.document) await doc.writing.settleForSessionChange();
-                if (!receipt.document || receipt.documentError || receipt.documentSourceMatchesCommit !== true || !rebindCommittedSave(doc.session, { ...request, sessionId: request.deliverySessionId ?? request.sessionId }, receipt.document)) {
-                    if (receipt.document) {
-                        doc.externalSource = receipt.document.source;
-                        setComparisonTarget(doc, receipt.document);
+                if (delivered) await doc.writing.settleForSessionChange();
+                if (!delivered || receipt.documentError || receipt.documentSourceMatchesCommit !== true || !rebindCommittedSave(doc.session, { ...request, sessionId: request.deliverySessionId ?? request.sessionId }, delivered)) {
+                    if (delivered) {
+                        doc.externalSource = delivered.source;
+                        setComparisonTarget(doc, delivered);
                     }
                     throw new ApiError("committedDeliveryPending", uiMessage("shell.savedBasisChangedCheckDisk"));
                 }
-                request.deliverySessionId = receipt.document.sessionId;
+                request.deliverySessionId = delivered.sessionId;
                 doc.editor.clearTokens();
                 doc.session.projection = null;
                 scheduleRender(doc, 0);
             }
             await persistDraft(doc);
+            await retireHandedOffWriters(doc);
             if (inventory) {
                 const next = await api<Inventory>("/api/library/open", { path: inventory.root });
                 workspaceTools.assertLibraryChange(next);
@@ -2792,8 +2846,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             doc.lastSave = undefined;
             // The new target's input is durable and owns this editor now.
             // Retire the old handle while retaining its original Draft/facts.
-            if (request.path && request.sessionId !== doc.session.opened.sessionId && !ownsOpenedSession(request.sessionId))
-                void releaseOpenedSession(request.sessionId).catch(() => undefined);
+            await retireHandedOffWriters(doc);
             if (doc === current) { renderSidebar(); refreshChrome(); }
             toast(doc.session.dirty ? uiMessage("shell.savedLaterInputInDraft") : uiMessage("shell.savedSentence"), false);
             if (querySaveNotice) toast(uiMessage("shell.savedQueriesNotRunnable"), true);
@@ -2815,6 +2868,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             throw error;
         }
         finally {
+            retireUnownedSessions(...unadopted);
             doc.session.savePending = false;
             if (doc === current) { if (request.path || retry) renderContent(); else refreshChrome(); }
         }
@@ -2853,7 +2907,7 @@ async function endSaveAsDelivery(doc: LiveDocument, request: NonNullable<LiveDoc
         if (doc.session.savePending || doc.lastSave !== request || !request.path || !request.receipt || !["saved", "committed"].includes(request.receipt.status)) throw new UiError(uiMessage("shell.confirmedSaveAsRequiredToEnd"));
         await doc.writing.settleForSessionChange(); await persistDraft(doc);
         if (doc.lastSave !== request || doc.session.savePending) throw new UiError(uiMessage("shell.saveStateChangedOriginalRetained"));
-        request.deliveryEnded = true; doc.session.error = null; doc.comparisonTarget = undefined; doc.externalSource = undefined;
+        request.deliveryEnded = true; doc.session.error = null; setComparisonTarget(doc, undefined); doc.externalSource = undefined;
         if (doc === current) renderContent();
         toast(uiMessage("shell.saveAsDeliveryEndedNotice"));
     } finally { finishNativeActivity(); }
@@ -2861,6 +2915,7 @@ async function endSaveAsDelivery(doc: LiveDocument, request: NonNullable<LiveDoc
 
 async function showDraftComparison(doc = current): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
+    let received: OpenedDocument | undefined;
     try {
         if (!doc)
             return;
@@ -2871,6 +2926,7 @@ async function showDraftComparison(doc = current): Promise<void> {
         const fresh = target.nodeId && target.workspaceId && target.kind === "managed"
             ? await api<OpenedDocument>("/api/data/open", { root: target.root, entityKey: `weftext-node://${target.workspaceId}/${target.nodeId}` })
             : await api<OpenedDocument>("/api/open", { path: target.path, root: target.root });
+        received = fresh;
         await doc.writing.settleForSessionChange();
         const initialMergeSource = doc.session.source;
         const confirmed = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, generation: doc.editor.generation };
@@ -2944,21 +3000,23 @@ async function showDraftComparison(doc = current): Promise<void> {
         }
         fresh.recoveredDraftConflict = false;
         fresh.recoveredDraft = null;
+        if (doc.session.opened.sessionId !== fresh.sessionId) (doc.retiringSessions ??= new Set()).add(doc.session.opened.sessionId);
         doc.session.opened = fresh;
         doc.editor.clearTokens();
         doc.sourceTrashed = fresh.kind === "managedTrash";
         doc.session.acknowledgeSave(fresh.source, fresh.baseId, fresh.path);
         doc.session.projection = null;
         doc.externalSource = undefined;
-        doc.comparisonTarget = undefined;
         doc.lastSave = undefined;
         doc.editor.apply(0, doc.editor.source.length, result.source);
         await persistDraft(doc);
+        await retireHandedOffWriters(doc);
+        setComparisonTarget(doc, undefined);
         workspaceTools.documentChanged();
         scheduleRender(doc, 0);
         renderContent();
         toast(result.action === "discardRecovered" ? uiMessage("shell.diskVersionAppliedRecoveryKept") : uiMessage("shell.explicitMergeApplied"));
-    } finally { finishNativeActivity(); }
+    } finally { retireUnownedSessions(received?.sessionId); finishNativeActivity(); }
 }
 async function showRecovery(): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();

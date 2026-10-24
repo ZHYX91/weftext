@@ -9,6 +9,7 @@ real HTTP request, local identities, resources, drafts and restart consumers.
 Run: python scripts/test_sync_placement.py EXE [exact_test_name ...]
 Set WEFTEXT_SYNC_EVIDENCE_DIR to a fresh owned output directory.
 """
+import uuid
 from _creation_result import created_document
 import hashlib
 import json
@@ -63,7 +64,7 @@ class SyncPlacement(SyncCompound):
         for name in ['Still'] + (['Child'] if self.nested else []):
             doc = self.open(self.b, self.rb, self.original_paths[name])
             self.drafts[name] = doc['source'] + f'\nB PRIVATE PLACEMENT DRAFT {name} 🌿'
-            self.call(self.b, '/api/draft', inputRevision=1, sessionId=doc['sessionId'], baseId=doc['baseId'], source=self.drafts[name])
+            self.call(self.b, '/api/draft', inputId=str(uuid.uuid4()), inputRevision=1, sessionId=doc['sessionId'], baseId=doc['baseId'], source=self.drafts[name])
             history = self.call(self.b, '/api/history/list', sessionId=doc['sessionId'])
             self.history[name] = {item['versionId']: self.call(self.b, '/api/history/read',
                                   sessionId=doc['sessionId'], versionId=item['versionId'])['source']

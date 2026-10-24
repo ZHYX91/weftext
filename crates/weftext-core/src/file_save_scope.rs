@@ -78,6 +78,8 @@ pub(crate) struct FileSaveData {
     /// as another full body or producer history.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub author_input_digest: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author_input_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_id: Option<String>,
     pub scope: QualifiedInputScope,
@@ -90,11 +92,12 @@ impl FileSaveData {
         draft_producer_id: String,
     ) -> Self {
         Self {
-            version: 3,
+            version: 4,
             session_id,
             draft_producer_id,
             input_revision: 0,
             author_input_digest: None,
+            author_input_id: None,
             base_id,
             scope,
         }
@@ -105,6 +108,10 @@ impl FileSaveData {
     }
     pub(crate) fn with_author_digest(mut self, digest: Option<String>) -> Self {
         self.author_input_digest = digest;
+        self
+    }
+    pub(crate) fn with_author_input_id(mut self, id: Option<String>) -> Self {
+        self.author_input_id = id;
         self
     }
 }

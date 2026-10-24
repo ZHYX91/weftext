@@ -435,7 +435,7 @@ export class PeriodNavigator {
                     throw new UiError(displayMessage("periodNavigation.submittedOpenPending", { p0: uiDisplayParameter(deliveryErrors.length ? joinUiText(deliveryErrors.map(apiErrorUiText), "\n") : message("common.confirmOriginalOperation")) }));
                 if (!this.host.created)
                     throw new UiError(message("queryDefinition.periodDocumentDeliveryRequired"));
-                await this.host.created(document);
+                await this.host.created(document, result.operationId);
                 if (this.closeGuard.frozen) return;
                 const unchanged = this.name.value === submitted.name && this.parent.value === submitted.parent && (this.title.value || undefined) === submitted.title && this.body.value === submitted.body && this.series.value === submitted.seriesKey && this.kind.value === submitted.kind && this.key.value === submitted.key;
                 this.pending = null;

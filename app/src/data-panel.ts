@@ -754,7 +754,7 @@ export class QuickCapture {
                         throw new UiError(displayMessage("quickCapture.submittedOpenPending", { p0: uiDisplayParameter(deliveryErrors.length ? joinUiText(deliveryErrors.map(apiErrorUiText), "\n") : uiMessage("common.confirmOriginalOperation")) }));
                     if (!this.host.created)
                         throw new UiError(uiMessage("capture.createdDocumentDeliveryRequired"));
-                    await this.host.created(document);
+                    await this.host.created(document, result.operationId);
                     const unchanged = this.inputRevision === submittedRevision && name.value === submitted.name && parent.value === submitted.parent && (title.value || undefined) === submitted.title && body.value === submitted.body && JSON.stringify(type.value ? [type.value] : []) === JSON.stringify(submitted.types) && JSON.stringify(Object.fromEntries(values)) === JSON.stringify(submitted.fields);
                     this.operationId = null;
                     this.pending = null;

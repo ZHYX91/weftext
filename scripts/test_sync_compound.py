@@ -10,6 +10,7 @@ Run: python scripts/test_sync_compound.py <candidate.exe> [exact_test_name ...]
 Unknown selections fail before either program starts. Every positive prepare
 must return 200; an older candidate's syncStructureRequired is never a pass.
 """
+import uuid
 from _creation_result import created_document
 import base64
 import ctypes
@@ -188,7 +189,7 @@ class SyncCompound(unittest.TestCase):
         for name in ['Left', 'Right']:
             doc = self.open(self.b, self.rb, Path(name) / f'{name}.typ')
             self.drafts[name] = doc['source'] + f'\nB PRIVATE DRAFT {name} 🌿'
-            self.call(self.b, '/api/draft', inputRevision=1, sessionId=doc['sessionId'],
+            self.call(self.b, '/api/draft', inputId=str(uuid.uuid4()), inputRevision=1, sessionId=doc['sessionId'],
                       baseId=doc['baseId'], source=self.drafts[name])
             timeline = self.call(self.b, '/api/history/list', sessionId=doc['sessionId'])
             available = [version for version in timeline['versions'] if version['status'] == 'available']

@@ -108,7 +108,18 @@ class Hosted(unittest.TestCase):
                     self.assertEqual(records(),before)
 
     def call(self, route, data=None, actor='alice', status=200, headers=None):
+        # The test client issues a real durable ACK for each fresh source Save.
+        # Original retries reuse the already frozen request and ordinal.
+        counters = self.__dict__.setdefault('_ordered_drafts', {})
+        if route == 'save' and status == 200 and data is not None and 'inputRevision' not in data:
+            ack = self.call('draft', {'sessionId': data['sessionId'], 'baseId': data['baseId'],
+                                    'source': data['source'], 'inputId': uid(), 'inputRevision': counters.get(data['sessionId'], 0) + 1}, actor)
+            data['inputRevision'] = ack['inputRevision']
+        if route == 'draft' and status == 200 and data is not None:
+            data['inputRevision'] = max(data.get('inputRevision', 1), counters.get(data['sessionId'], 0) + 1)
         code, result, returned = self.server.call('/api/hosted/'+route,data,self.tokens.get(actor,'x'*40),headers)
+        if route == 'draft' and code == 200:
+            counters[data['sessionId']] = result['inputRevision']
         self.assertEqual(code,status,str(result)[:1500])
         if status == 200: self.assertEqual(returned.get('Cache-Control'),'no-store')
         return result
@@ -142,7 +153,7 @@ class Hosted(unittest.TestCase):
     def test_repeated_close_releases_sessions_without_discarding_personal_drafts(self):
         original = self.open()
         retained = original['source'] + '\n个人恢复稿 😀\n'
-        self.call('draft', {'sessionId': original['sessionId'], 'source': retained})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': original['baseId'], 'inputRevision': 1, 'sessionId': original['sessionId'], 'source': retained})
         for _ in range(40):
             opened = self.open()
             self.call('session/keepalive', {'sessionId': opened['sessionId']}, 'bob', 410)
@@ -177,13 +188,13 @@ class Hosted(unittest.TestCase):
         self.save(r,r['source']+'unauthorized','reader',404)
         self.call('history',{'sessionId':r['sessionId']},'reader',404)
         self.call('download/prepare',{'resource':'Shared'},'reader',404)
-        self.call('draft',{'sessionId':a['sessionId'],'source':'stolen'},'bob',410)
+        self.call('draft',{'inputId': str(uuid.uuid4()), 'baseId': a['baseId'], 'inputRevision': 1, 'sessionId':a['sessionId'],'source':'stolen'},'bob',410)
         self.call('preview',{'sessionId':a['sessionId'],'source':'stolen'},'bob',410)
 
     def test_concurrent_writers_keep_both_drafts_and_unrelated_document(self):
         a=self.open();b=self.open(actor='bob');other=self.open('Other','bob')
-        self.call('draft',{'sessionId':a['sessionId'],'source':a['source']+'ALICE_DRAFT'})
-        self.call('draft',{'sessionId':b['sessionId'],'source':b['source']+'BOB_DRAFT'},'bob')
+        self.call('draft',{'inputId': str(uuid.uuid4()), 'baseId': a['baseId'], 'inputRevision': 1, 'sessionId':a['sessionId'],'source':a['source']+'ALICE_DRAFT'})
+        self.call('draft',{'inputId': str(uuid.uuid4()), 'baseId': b['baseId'], 'inputRevision': 1, 'sessionId':b['sessionId'],'source':b['source']+'BOB_DRAFT'},'bob')
         receipt,req=self.save(a,a['source']+'ALICE_SAVED')
         self.assertEqual(receipt,self.call('save',req))
         self.save(b,b['source']+'BOB_CONFLICT','bob',409)
@@ -213,7 +224,7 @@ class Hosted(unittest.TestCase):
 
     def test_history_authorized_without_other_users_drafts(self):
         a=self.open();b=self.open(actor='bob')
-        self.call('draft',{'sessionId':b['sessionId'],'source':b['source']+'BOB_PRIVATE'},'bob')
+        self.call('draft',{'inputId': str(uuid.uuid4()), 'baseId': b['baseId'], 'inputRevision': 1, 'sessionId':b['sessionId'],'source':b['source']+'BOB_PRIVATE'},'bob')
         self.save(a,a['source']+'saved history')
         history=self.call('history',{'sessionId':a['sessionId']})
         self.assertNotIn('BOB_PRIVATE',json.dumps(history));self.assertNotIn(str(self.root),json.dumps(history))

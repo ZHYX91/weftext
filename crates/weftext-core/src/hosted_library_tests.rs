@@ -128,6 +128,7 @@ fn every_actor_reader_qualifies_scope_resource_and_original_tuple_before_private
                 "save" | "field" => {
                     let doc = core.open(&note.path, Some(root.clone()))?;
                     let request = HostedSaveRequest {
+                        input_revision: None,
                         session_id: doc.session_id,
                         base_id: doc.base_id,
                         source: doc.source + "\nActual private author input",
@@ -270,6 +271,7 @@ fn unbound_original_actor_input_is_not_read_in_another_bound_library() {
         core.with_actor(ACTOR, |core| {
             let doc = core.open(&note.path, Some(root.clone()))?;
             let request = HostedSaveRequest {
+                input_revision: None,
                 session_id: doc.session_id,
                 base_id: doc.base_id,
                 source: doc.source + "\nactual unbound private input",
@@ -361,6 +363,7 @@ fn actor_library_scoped_save_fences_output_and_draft_have_first_original_header(
         core.actor_save(
             "Note",
             HostedSaveRequest {
+                input_revision: None,
                 session_id: opened.session_id,
                 base_id: opened.base_id,
                 source: opened.source + "\nSaved.",
@@ -560,6 +563,7 @@ fn actor_library_legacy_backup_validator_requires_original_plan_and_exact_namesp
         core.actor_save(
             "Note",
             HostedSaveRequest {
+                input_revision: None,
                 session_id: doc.session_id,
                 base_id: doc.base_id,
                 source: doc.source + "\nlegacy saved",
@@ -652,6 +656,7 @@ fn no_input_actor_readers_reject_author_payload_and_never_hide_an_existing_commi
         core.actor_save(
             "Note",
             HostedSaveRequest {
+                input_revision: None,
                 session_id: doc.session_id,
                 base_id: doc.base_id,
                 source: doc.source + "\nS",

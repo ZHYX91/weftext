@@ -31,6 +31,7 @@ struct DraftComparison {
 #[derive(Clone, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Restore {
+    input_revision: Option<u64>,
     resource: String,
     session_id: String,
     base_id: String,
@@ -359,7 +360,7 @@ fn restore_fingerprint(req: &Restore) -> Result<String, ApiError> {
         ));
     }
     Ok(digest(&serde_json::to_vec(&json!({"resource":req.resource,"sessionId":req.session_id,"baseId":req.base_id,
-        "versionId":req.version_id,"operationId":req.operation_id,"draftAction":req.draft_action,"source":req.source,"serial":req.serial})).map_err(|_| ApiError::internal(UiMessage::error_api_hosted_history_api_restore_input_freeze_failed()))?))
+        "versionId":req.version_id,"operationId":req.operation_id,"draftAction":req.draft_action,"source":req.source,"serial":req.serial,"inputRevision":req.input_revision})).map_err(|_| ApiError::internal(UiMessage::error_api_hosted_history_api_restore_input_freeze_failed()))?))
 }
 fn core_restore_request(req: &Restore) -> HistoryRestoreRequest {
     HistoryRestoreRequest {
@@ -369,7 +370,7 @@ fn core_restore_request(req: &Restore) -> HistoryRestoreRequest {
         operation_id: req.operation_id.clone(),
         draft_action: req.draft_action.clone(),
         draft_source: Some(req.source.clone()),
-        input_revision: None,
+        input_revision: req.input_revision,
     }
 }
 fn public_status(
@@ -730,6 +731,7 @@ mod tests {
 
     fn request() -> Restore {
         Restore {
+            input_revision: None,
             resource: "Shared".into(),
             session_id: "original-session".into(),
             base_id: "original-base".into(),
@@ -771,6 +773,7 @@ mod tests {
     #[cfg(windows)]
     fn restore_request(doc: &Value, version: &str) -> Restore {
         Restore {
+            input_revision: None,
             resource: "Shared".into(),
             session_id: doc["sessionId"].as_str().unwrap().into(),
             base_id: doc["baseId"].as_str().unwrap().into(),
@@ -911,6 +914,7 @@ mod tests {
                     core.actor_save(
                         "Shared",
                         HostedSaveRequest {
+                            input_revision: None,
                             session_id: opened["sessionId"].as_str().unwrap().into(),
                             base_id: opened["baseId"].as_str().unwrap().into(),
                             source: original.clone() + "\nSaved F\n",
@@ -1225,6 +1229,7 @@ mod tests {
                     core.actor_save(
                         "Shared",
                         HostedSaveRequest {
+                            input_revision: None,
                             session_id: doc["sessionId"].as_str().unwrap().into(),
                             base_id: doc["baseId"].as_str().unwrap().into(),
                             source: original.clone(),

@@ -267,8 +267,10 @@ impl Core {
             self.publish_recovery_facts(plan, &materialized)
                 .map_err(|e| recovery_failure(plan, e))?;
             self.commit(plan).map_err(|e| recovery_failure(plan, e))?;
-            for session in self.sessions.values_mut().filter(|s| t.affects(&s.path)) {
-                session.base_id = fresh();
+            for session in self.sessions.values_mut() {
+                if t.affects(&session.path)? {
+                    session.base_id = fresh();
+                }
             }
         }
         // Release all guards only after the durable decision, then re-inspect.

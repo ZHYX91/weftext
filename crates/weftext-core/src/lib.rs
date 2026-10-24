@@ -473,6 +473,22 @@ pub struct SaveRequest {
     pub source: String,
     pub operation_id: String,
 }
+/// One interactive author cut. Transport ordering and actual edit identity are
+/// separate: repeating a persist does not manufacture another author edit.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct DraftInputRequest {
+    pub session_id: String,
+    pub source: String,
+    pub input_revision: u64,
+    pub input_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_id: Option<String>,
+    /// Explicitly imported input without a current basis witness. This never
+    /// grants a known Base or permission to commit without comparison.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub retained_base_source: Option<String>,
+}
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SaveAsRequest {
@@ -541,7 +557,13 @@ struct Session {
     // Monotonic ACK within one active producer, not a transferable capability.
     draft_input_revision: Option<u64>,
     // Bounded transient admission digests, not another durable author source.
-    draft_cuts: BTreeMap<u64, String>,
+    draft_cuts: BTreeMap<u64, DraftCut>,
+}
+#[derive(Clone)]
+struct DraftCut {
+    source_digest: String,
+    input_id: String,
+    basis_digest: String,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -557,6 +579,8 @@ struct Draft {
     alternatives: Vec<DraftAlternative>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     producer_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    input_id: Option<String>,
     #[serde(default)]
     role: draft_recovery::DraftRole,
 }
@@ -907,46 +931,87 @@ impl Core {
     }
     /// The original author revision is acknowledged only after the exact
     /// proposal has been persisted by Core. A retry cannot make it current.
-    pub fn persist_draft_ordered(
-        &mut self,
-        session_id: &str,
-        source: &str,
-        revision: u64,
-    ) -> Result<()> {
-        self.check_actor_session(session_id)?;
+    pub fn persist_draft_ordered(&mut self, request: DraftInputRequest) -> Result<()> {
+        self.check_actor_session(&request.session_id)?;
         let invalid = || {
-            CoreError::new("draftChanged",
-            UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again())
+            CoreError::new("draftChanged", UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again())
         };
-        if revision == 0 || revision > 9_007_199_254_740_991 {
+        check_size(request.source.as_bytes())?;
+        if request.input_revision == 0
+            || request.input_revision > 9_007_199_254_740_991
+            || valid_operation_id(&request.input_id).is_err()
+        {
             return Err(invalid());
         }
-        let session = self
-            .sessions
-            .get(session_id)
-            .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
-        if let Some(previous) = session.draft_input_revision
-            && revision <= previous
+        let source_digest = hash(request.source.as_bytes());
+        let basis_digest = hash(&serde_json::to_vec(&(
+            &request.base_id,
+            &request.retained_base_source,
+        ))?);
+        let session = self.sessions.get(&request.session_id).ok_or_else(invalid)?;
+        if session
+            .draft_input_revision
+            .is_some_and(|previous| request.input_revision <= previous)
         {
             if !session
                 .draft_cuts
-                .get(&revision)
-                .is_some_and(|digest| *digest == hash(source.as_bytes()))
+                .get(&request.input_revision)
+                .is_some_and(|cut| {
+                    cut.source_digest == source_digest
+                        && cut.input_id == request.input_id
+                        && cut.basis_digest == basis_digest
+                })
             {
                 return Err(invalid());
             }
-            return self.validate_acknowledged_draft(session_id).map(|_| ());
+            return self
+                .validate_acknowledged_draft(&request.session_id)
+                .map(|_| ());
         }
-        self.persist_draft_with_role(session_id, source, draft_recovery::DraftRole::Proposal)?;
-        let session = self.sessions.get_mut(session_id).unwrap();
-        session.draft_input_revision = Some(revision);
-        session.draft_cuts.insert(revision, hash(source.as_bytes()));
-        // Delayed saves older than this bounded window fail closed; they never
-        // gain permission to overwrite current input merely from a stale ID.
+        let basis = self.ordered_draft_basis(&request)?;
+        self.persist_draft_with_identity(
+            &request.session_id,
+            &request.source,
+            draft_recovery::DraftRole::Proposal,
+            Some(request.input_id.clone()),
+            Some(basis),
+        )?;
+        let session = self.sessions.get_mut(&request.session_id).unwrap();
+        session.draft_input_revision = Some(request.input_revision);
+        session.draft_cuts.insert(
+            request.input_revision,
+            DraftCut {
+                source_digest,
+                input_id: request.input_id,
+                basis_digest,
+            },
+        );
         while session.draft_cuts.len() > 8192 {
             session.draft_cuts.pop_first();
         }
         Ok(())
+    }
+    #[cfg(test)]
+    fn persist_test_input(
+        &mut self,
+        session_id: &str,
+        source: &str,
+        input_revision: u64,
+    ) -> Result<()> {
+        let session = &self.sessions[session_id];
+        let input_id = session
+            .draft_cuts
+            .get(&input_revision)
+            .map(|cut| cut.input_id.clone())
+            .unwrap_or_else(fresh);
+        self.persist_draft_ordered(DraftInputRequest {
+            session_id: session_id.into(),
+            source: source.into(),
+            input_revision,
+            input_id,
+            base_id: Some(session.base_id.clone()),
+            retained_base_source: None,
+        })
     }
     fn persist_draft_with_role(
         &mut self,
@@ -954,31 +1019,58 @@ impl Core {
         source: &str,
         role: draft_recovery::DraftRole,
     ) -> Result<()> {
+        let input_id = self
+            .sessions
+            .get(session_id)
+            .and_then(|s| s.draft_input.as_ref())
+            .and_then(|input| input.input_id.clone());
+        self.persist_draft_with_identity(session_id, source, role, input_id, None)
+    }
+    fn persist_draft_with_identity(
+        &mut self,
+        session_id: &str,
+        source: &str,
+        role: draft_recovery::DraftRole,
+        input_id: Option<String>,
+        basis: Option<(String, bool)>,
+    ) -> Result<()> {
         self.check_actor_session(session_id)?;
         check_size(source.as_bytes())?;
         let session = self.sessions.get(session_id).cloned().ok_or_else(|| {
             CoreError::new("sessionMissing", UiMessage::error_reopen_file_session())
         })?;
+        let ordered = basis.is_some();
+        let (base_source, base_known) = match basis {
+            Some(basis) => basis,
+            None => (
+                session
+                    .conflicting_draft
+                    .as_ref()
+                    .map_or_else(|| decode(&session.bytes), |d| Ok(d.base_source.clone()))?,
+                session
+                    .conflicting_draft
+                    .as_ref()
+                    .is_none_or(|d| d.base_known),
+            ),
+        };
         let draft = Draft {
-            // store_session_draft performs the single complete protected read.
             scope: self
                 .draft_scope_for_session_unread(session_id, session.conflicting_draft.as_ref())?,
             path: display(&session.path),
-            base_source: session
-                .conflicting_draft
-                .as_ref()
-                .map_or_else(|| decode(&session.bytes), |d| Ok(d.base_source.clone()))?,
+            base_source,
             source: source.into(),
-            base_known: session
-                .conflicting_draft
-                .as_ref()
-                .is_none_or(|d| d.base_known),
+            base_known,
             identity: session.stamp.identity.clone(),
             alternatives: Vec::new(),
             producer_id: Some(session.draft_producer_id.clone()),
+            input_id,
             role,
         };
-        self.store_session_draft(session_id, draft).map(|_| ())
+        let stored = self.store_session_draft(session_id, draft)?;
+        if ordered && (!stored.base_known || stored.base_source.as_bytes() != session.bytes) {
+            self.sessions.get_mut(session_id).unwrap().conflicting_draft = Some(stored);
+        }
+        Ok(())
     }
     pub fn resolve_draft(
         &mut self,
@@ -1019,7 +1111,8 @@ impl Core {
         };
         check_size(source.as_bytes())?;
         let reviewed = Draft {
-            scope: self.draft_scope_for_session(session_id, session.conflicting_draft.as_ref())?,
+            scope: self
+                .draft_scope_for_session_unread(session_id, session.conflicting_draft.as_ref())?,
             path: display(&session.path),
             base_source: decode(&session.bytes)?,
             source,
@@ -1027,6 +1120,7 @@ impl Core {
             identity: session.stamp.identity.clone(),
             alternatives: Vec::new(),
             producer_id: Some(session.draft_producer_id.clone()),
+            input_id: None,
             role: draft_recovery::DraftRole::Proposal,
         };
         // Validate the complete replacement before changing history or the
@@ -1117,14 +1211,33 @@ impl Core {
         let author_digest = input_revision
             .as_ref()
             .map(|(_, author)| hash(author.as_bytes()));
+        let author_input_id = input_revision.as_ref().and_then(|(revision, _)| {
+            session
+                .draft_cuts
+                .get(revision)
+                .map(|cut| cut.input_id.clone())
+                .or_else(|| {
+                    self.operations
+                        .get(&request.operation_id)
+                        .and_then(|plan| plan.file_save.as_ref())
+                        .filter(|data| data.input_revision == *revision)
+                        .and_then(|data| data.author_input_id.clone())
+                })
+        });
+        let frozen_data = FileSaveData::new(
+            request.session_id.clone(),
+            Some(request.base_id.clone()),
+            scope.clone(),
+            producer.clone(),
+        )
+        .with_input_revision(input_revision.as_ref().map_or(0, |(revision, _)| *revision))
+        .with_author_digest(author_digest.clone())
+        .with_author_input_id(author_input_id.clone());
         let fingerprint = original_delivery::save_fingerprint(
             &request,
             &original_path,
             restore.as_ref(),
-            scope.clone(),
-            &producer,
-            input_revision.as_ref().map_or(0, |(revision, _)| *revision),
-            author_digest.as_deref(),
+            &frozen_data,
         )?;
         if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
             return Ok(SaveOutcome::committed(receipt));
@@ -1136,7 +1249,7 @@ impl Core {
                     && session
                         .draft_cuts
                         .get(frozen)
-                        .is_some_and(|digest| *digest == hash(author_cut.as_bytes()));
+                        .is_some_and(|cut| cut.source_digest == hash(author_cut.as_bytes()));
                 if !valid {
                     return Err(CoreError::new("draftChanged",
                         UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again()));
@@ -1144,6 +1257,9 @@ impl Core {
                 session
                     .draft_input_revision
                     .is_some_and(|current| current > *frozen)
+                    && session.draft_input.as_ref().is_some_and(|input| {
+                        input.input_id != author_input_id || input.source != *author_cut
+                    })
             }
             // Synchronous internal producers have no asynchronous Draft cut.
             // They cannot borrow an interactive producer's ordered Session.
@@ -1183,6 +1299,7 @@ impl Core {
                 source: input.source.clone(),
                 base_known: input.base_known,
                 producer_id: input.producer_id.clone(),
+                input_id: input.input_id.clone(),
                 role: input.role.clone(),
                 alternatives,
             })
@@ -1203,9 +1320,10 @@ impl Core {
                 identity: session.stamp.identity.clone(),
                 alternatives: Vec::new(),
                 producer_id: Some(session.draft_producer_id.clone()),
+                input_id: None,
                 role: draft_recovery::DraftRole::Proposal,
             };
-            if !later_ack {
+            if input_revision.is_none() {
                 let draft = self.store_session_draft(&request.session_id, draft)?;
                 self.sessions
                     .get_mut(&request.session_id)
@@ -1220,7 +1338,9 @@ impl Core {
         if !later_ack {
             self.persist_draft_with_role(
                 &request.session_id,
-                &request.source,
+                input_revision
+                    .as_ref()
+                    .map_or(request.source.as_str(), |(_, source)| source.as_str()),
                 draft_recovery::DraftRole::Proposal,
             )?;
         }
@@ -1269,16 +1389,7 @@ impl Core {
             Some(current_stamp.identity.clone()),
             "save",
         );
-        plan.file_save = Some(
-            FileSaveData::new(
-                request.session_id.clone(),
-                Some(request.base_id.clone()),
-                scope,
-                producer,
-            )
-            .with_input_revision(input_revision.as_ref().map_or(0, |(revision, _)| *revision))
-            .with_author_digest(author_digest),
-        );
+        plan.file_save = Some(frozen_data);
         plan.receipt = Some(Receipt {
             revision_id: None,
             operation_id: request.operation_id,
@@ -1346,44 +1457,31 @@ impl Core {
                 .get_mut(&request.session_id)
                 .unwrap()
                 .draft_cuts
-                .retain(|revision, _| revision > frozen);
+                .retain(|revision, cut| {
+                    revision > frozen && Some(&cut.input_id) != author_input_id.as_ref()
+                });
         }
-        #[cfg(all(test, windows))]
-        let draft_update = if later_ack {
-            hosted::definition_test_failpoint("saveDraftUpdate").and_then(|()| {
+        let draft_update = (|| {
+            #[cfg(all(test, windows))]
+            hosted::definition_test_failpoint("saveDraftUpdate")?;
+            if later_ack {
                 self.persist_draft_with_role(
                     &request.session_id,
                     &session.draft_input.as_ref().unwrap().source,
                     draft_recovery::DraftRole::Proposal,
                 )
-            })
-        } else {
-            hosted::definition_test_failpoint("saveDraftUpdate").and_then(|()| {
-                self.persist_draft_with_role(
+            } else {
+                self.persist_draft_with_identity(
                     &request.session_id,
                     &request.source,
                     draft_recovery::DraftRole::CommittedBaseline {
                         operation_id: receipt.operation_id.clone(),
                     },
+                    author_input_id.clone(),
+                    None,
                 )
-            })
-        };
-        #[cfg(not(all(test, windows)))]
-        let draft_update = if later_ack {
-            self.persist_draft_with_role(
-                &request.session_id,
-                &session.draft_input.as_ref().unwrap().source,
-                draft_recovery::DraftRole::Proposal,
-            )
-        } else {
-            self.persist_draft_with_role(
-                &request.session_id,
-                &request.source,
-                draft_recovery::DraftRole::CommittedBaseline {
-                    operation_id: receipt.operation_id.clone(),
-                },
-            )
-        };
+            }
+        })();
         let recovery_issue = draft_update.err().map(|error| {
             let code = error.code.clone();
             CoreError::new(
@@ -1434,7 +1532,19 @@ impl Core {
                 plan.file_save.as_ref().unwrap().draft_producer_id.clone(),
             )
             .with_input_revision(input_revision.unwrap_or(0))
-            .with_author_digest(input_revision.map(|_| hash(request.source.as_bytes())));
+            .with_author_digest(input_revision.map(|_| hash(request.source.as_bytes())))
+            .with_author_input_id(input_revision.and_then(|revision| {
+                session
+                    .draft_cuts
+                    .get(&revision)
+                    .map(|cut| cut.input_id.clone())
+                    .or_else(|| {
+                        self.operations
+                            .get(&request.operation_id)
+                            .and_then(|plan| plan.file_save.as_ref())
+                            .and_then(|data| data.author_input_id.clone())
+                    })
+            }));
             let fingerprint =
                 file_save_scope::fingerprint("saveAs", &path, &request.source, &data, None)?;
             if let Some(receipt) = self.retry(&request.operation_id, &fingerprint)? {
@@ -1448,7 +1558,7 @@ impl Core {
                     || !session
                         .draft_cuts
                         .get(&frozen)
-                        .is_some_and(|digest| *digest == hash(request.source.as_bytes()))
+                        .is_some_and(|cut| cut.source_digest == hash(request.source.as_bytes()))
                 {
                     return Err(CoreError::new("draftChanged",
                         UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again()));
@@ -1488,7 +1598,19 @@ impl Core {
             session.draft_producer_id.clone(),
         )
         .with_input_revision(input_revision.unwrap_or(0))
-        .with_author_digest(input_revision.map(|_| hash(request.source.as_bytes())));
+        .with_author_digest(input_revision.map(|_| hash(request.source.as_bytes())))
+        .with_author_input_id(input_revision.and_then(|revision| {
+            session
+                .draft_cuts
+                .get(&revision)
+                .map(|cut| cut.input_id.clone())
+                .or_else(|| {
+                    self.operations
+                        .get(&request.operation_id)
+                        .and_then(|plan| plan.file_save.as_ref())
+                        .and_then(|data| data.author_input_id.clone())
+                })
+        }));
         let fingerprint =
             file_save_scope::fingerprint("saveAs", &path, &request.source, &data, None)?;
         let mut plan = journal::Plan::file(

@@ -67,6 +67,8 @@ pub struct DraftAlternative {
     pub base_known: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub producer_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_id: Option<String>,
     #[serde(default)]
     pub role: DraftRole,
 }
@@ -79,6 +81,7 @@ impl Draft {
             source: self.source.clone(),
             base_known: self.base_known,
             producer_id: self.producer_id.clone(),
+            input_id: self.input_id.clone(),
             role: self.role.clone(),
         }
     }
@@ -93,6 +96,9 @@ impl Draft {
 
     pub(super) fn validate_producers(&self) -> Result<()> {
         for input in std::iter::once(self.proposal()).chain(self.alternatives.iter().cloned()) {
+            if let Some(id) = &input.input_id {
+                valid_operation_id(id)?;
+            }
             if let DraftRole::CommittedBaseline { operation_id } = &input.role {
                 valid_operation_id(operation_id)?;
                 if input.producer_id.is_none() {
@@ -146,6 +152,64 @@ pub struct ResumeDraftRequest {
     pub recovered_source: String,
 }
 impl Core {
+    /// Resolve content provenance from this UI's observed Base, never from a
+    /// mutable Session that may already contain a generated afterimage.
+    pub(super) fn ordered_draft_basis(
+        &self,
+        request: &DraftInputRequest,
+    ) -> Result<(String, bool)> {
+        let invalid = || {
+            CoreError::new("draftChanged", UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again())
+        };
+        let session = self.sessions.get(&request.session_id).ok_or_else(invalid)?;
+        match (&request.base_id, &request.retained_base_source) {
+            (None, Some(source)) => {
+                check_size(source.as_bytes())?;
+                return Ok((source.clone(), false));
+            }
+            (Some(base), None) if valid_operation_id(base).is_ok() => {
+                if base == &session.base_id {
+                    return session.conflicting_draft.as_ref().map_or_else(
+                        || Ok((decode(&session.bytes)?, true)),
+                        |draft| Ok((draft.base_source.clone(), draft.base_known)),
+                    );
+                }
+                let scope = session.file_scope.as_ref().map_err(Clone::clone)?;
+                // Classify original metadata before any author-body read. Only
+                // this same Session/physical owner can supply a historic basis.
+                for plan in self.operations.values().filter(|plan| {
+                    plan.kind == "save"
+                        && plan.identity.as_ref() == Some(&session.stamp.identity)
+                        && plan.file_save.as_ref().is_some_and(|data| {
+                            data.session_id == request.session_id
+                                && data.base_id.as_ref() == Some(base)
+                                && &data.scope == scope
+                        })
+                }) {
+                    self.validate_file_save_plan(plan)?;
+                    let original = self.read_original_file_save_plan(plan)?;
+                    if serde_json::to_vec(&original)? != serde_json::to_vec(plan)?
+                        || !self.committed(&plan.operation_id)?
+                    {
+                        return Err(invalid());
+                    }
+                    if let Some(draft) = &session.conflicting_draft {
+                        return Ok((draft.base_source.clone(), draft.base_known));
+                    }
+                    let data = plan.file_save.as_ref().unwrap();
+                    if plan.history_restore.is_none()
+                        && plan.after == session.bytes
+                        && data.author_input_digest.as_deref() == Some(hash(&plan.after).as_str())
+                    {
+                        return Ok((decode(&session.bytes)?, true));
+                    }
+                    return Ok((decode(plan.before.as_deref().ok_or_else(invalid)?)?, true));
+                }
+            }
+            _ => {}
+        }
+        Err(invalid())
+    }
     /// Validate the original durable effect before treating a retained entry as
     /// a committed projection. This never grants its producer to another UI.
     pub(super) fn qualify_committed_baseline(
@@ -169,6 +233,7 @@ impl Core {
             || binding.scope != *scope
             || plan.identity.as_ref() != Some(identity)
             || input.producer_id.as_deref() != Some(binding.draft_producer_id.as_str())
+            || input.input_id != binding.author_input_id
             || !input.base_known
             || input.source.as_bytes() != plan.after
             || input.base_source.as_bytes() != plan.after
@@ -211,6 +276,7 @@ impl Core {
         next.base_source = first.base_source;
         next.base_known = first.base_known;
         next.producer_id = first.producer_id;
+        next.input_id = first.input_id;
         next.role = first.role;
         next.alternatives = entries.collect();
         Ok(Some(next))
@@ -226,8 +292,10 @@ impl Core {
             .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
         // Establish the retained original authority before reading author
         // bytes for the explicit continuation; a current path is not a grant.
-        let scope =
-            self.draft_scope_for_session(&request.session_id, session.conflicting_draft.as_ref())?;
+        let scope = self.draft_scope_for_session_unread(
+            &request.session_id,
+            session.conflicting_draft.as_ref(),
+        )?;
         self.validate_original_input_scope(&scope)?;
         // A path-equivalent replacement, changed disk basis or pending operation
         // cannot transfer an original producer's continuation authority.
@@ -861,6 +929,7 @@ fn same_input(a: &DraftAlternative, b: &DraftAlternative) -> bool {
         .as_ref()
         .is_some_and(|producer| b.producer_id.as_ref() == Some(producer))
         && a.source == b.source
+        && a.input_id == b.input_id
         && a.base_source == b.base_source
         && a.base_known == b.base_known
         && same_draft_path(&a.path, &b.path)

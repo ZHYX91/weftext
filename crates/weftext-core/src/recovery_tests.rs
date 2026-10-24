@@ -969,6 +969,7 @@ fn draft_complete_record_budget_rejection_preserves_readable_primary_and_origina
             source: format!("{index}{}", "x".repeat(MAX_SOURCE_BYTES - 1)),
             base_known: true,
             producer_id: None,
+            input_id: None,
             role: DraftRole::Proposal,
         })
         .collect();

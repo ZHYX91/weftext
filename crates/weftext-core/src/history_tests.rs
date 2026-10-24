@@ -1536,10 +1536,10 @@ fn ordered_restore_retains_later_ack_as_current_proposal_after_restart() {
     let source = format!("{base}\nS");
     let later = format!("{source}\nY");
     f.core
-        .persist_draft_ordered(&f.doc.session_id, &source, 1)
+        .persist_test_input(&f.doc.session_id, &source, 1)
         .unwrap();
     f.core
-        .persist_draft_ordered(&f.doc.session_id, &later, 2)
+        .persist_test_input(&f.doc.session_id, &later, 2)
         .unwrap();
     let mut request = f.restore_request(&selected, "retain", Some(&source));
     request.input_revision = Some(1);
@@ -1577,14 +1577,14 @@ fn no_op_restore_still_retires_the_original_acknowledged_cut() {
     let selected = f.initial_version();
     let source = format!("{}\nunsaved S", f.doc.source);
     f.core
-        .persist_draft_ordered(&f.doc.session_id, &source, 1)
+        .persist_test_input(&f.doc.session_id, &source, 1)
         .unwrap();
     let mut request = f.restore_request(&selected, "retain", Some(&source));
     request.input_revision = Some(1);
     let restored = f.core.restore_history(request).unwrap();
     assert_eq!(
         f.core
-            .persist_draft_ordered(&f.doc.session_id, &source, 1)
+            .persist_test_input(&f.doc.session_id, &source, 1)
             .unwrap_err()
             .code,
         "draftChanged"

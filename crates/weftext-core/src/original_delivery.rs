@@ -6,25 +6,12 @@ pub(crate) fn save_fingerprint(
     request: &SaveRequest,
     path: &Path,
     restore: Option<&history::RestoreBinding>,
-    scope: QualifiedInputScope,
-    producer: &str,
-    input_revision: u64,
-    author_digest: Option<&str>,
+    frozen: &FileSaveData,
 ) -> Result<String> {
-    file_save_scope::fingerprint(
-        "save",
-        path,
-        &request.source,
-        &FileSaveData::new(
-            request.session_id.clone(),
-            Some(request.base_id.clone()),
-            scope,
-            producer.to_owned(),
-        )
-        .with_input_revision(input_revision)
-        .with_author_digest(author_digest.map(str::to_owned)),
-        restore,
-    )
+    let mut data = frozen.clone();
+    data.session_id = request.session_id.clone();
+    data.base_id = Some(request.base_id.clone());
+    file_save_scope::fingerprint("save", path, &request.source, &data, restore)
 }
 
 #[cfg(all(test, windows))]
@@ -746,14 +733,7 @@ impl Core {
                 request,
                 Path::new(&plan.path),
                 None,
-                plan.file_save.as_ref().unwrap().scope.clone(),
-                &plan.file_save.as_ref().unwrap().draft_producer_id,
-                plan.file_save.as_ref().unwrap().input_revision,
-                plan.file_save
-                    .as_ref()
-                    .unwrap()
-                    .author_input_digest
-                    .as_deref(),
+                plan.file_save.as_ref().unwrap(),
             )? != plan.fingerprint
         {
             return Err(CoreError::new(
