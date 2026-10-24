@@ -932,7 +932,8 @@ impl Core {
             CoreError::new("sessionMissing", UiMessage::error_reopen_file_session())
         })?;
         let draft = Draft {
-            scope: self.draft_scope_for_session(session_id, session.conflicting_draft.as_ref())?,
+            // store_session_draft performs the single complete protected read.
+            scope: self.draft_scope_for_session_unread(session_id, session.conflicting_draft.as_ref())?,
             path: display(&session.path),
             base_source: session
                 .conflicting_draft
