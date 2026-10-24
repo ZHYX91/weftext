@@ -959,8 +959,16 @@ fn history_external_rename_replacement_and_current_exclusion_do_not_join_by_name
     let private_snapshot = |directory: &Path| {
         fs::read_dir(directory)
             .unwrap()
-            .map(|entry| {
+            .flat_map(|entry| {
                 let path = entry.unwrap().path();
+                if path.is_dir() {
+                    fs::read_dir(path).unwrap().map(|nested| nested.unwrap().path())
+                        .collect::<Vec<_>>()
+                } else {
+                    vec![path]
+                }
+            })
+            .map(|path| {
                 let bytes = fs::read(&path).unwrap();
                 (path, bytes)
             })

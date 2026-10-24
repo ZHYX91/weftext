@@ -603,3 +603,8 @@ Draft 持久布局必需先 `scope, identity`，再正文；历史枚举仅在�
 ### v0.7 author input ordering (development candidate)
 
 The live Core producer acknowledges strictly increasing input revisions only after the Draft is durable. A frozen file-save intent binds its original acknowledged revision into its fileSave participant/fingerprint; a later acknowledged proposal cannot be overwritten or reclassified by an older save that arrives afterward. Missing revision is not permission to replace a versioned proposal. Original operation retry retains its frozen participants, and distinct producers/Undo remain independent. This changes the developing fileSave profile (version 3); retained original bytes are not deleted or silently upgraded. The stage requires product/browser and failure-injection verification before acceptance.
+
+
+### v0.7 原 journal 目录与可持续原件读取（开发切片）
+
+每项原 Plan、commit、观测、fence 与保留的未知证据按原 operation ID 前两个规范十六进制字符进入 `journal/00..ff/` 的唯一物理位置，文件名与原始字节不改变。Core 独占锁下的一次性原文件重命名可恢复中断，不再保留两套提交读取。每个桶完整枚举最多 5000 项，新增事务先预留结算容量；达到额度须在作者效果前明确拒绝，不能截断当完整或删除旧原件。CommitSequence 仅在进程内从全部原 commit 重新核验重建后递增，不新建持久账本；未知发布阻断后续编号直到重新核原件。历史、同步、owner backup、提醒与恢复消费者使用相同分桶读取。涉及现有原件的一次搬迁与全量读取仍须本机故障注入验证。

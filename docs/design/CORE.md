@@ -604,3 +604,8 @@ The durable Draft layout requires `scope, identity` before the body. History enu
 ### v0.7 作者输入顺序（开发候选）
 
 同一活动 Core producer 的输入序号必须递增，并在 Draft 原字节持久化后才 ACK。文件保存冻结原已确认序号，将其纳入 fileSave 参与者与原指纹；若更晚的输入已经 ACK，迟到旧保存可以提交原 S，但不得覆盖或改签较新的本人提案。缺少序号不是覆盖已编号输入的资格。原号重试保持冻结参与者，独立 producer 与 Undo 保持原边界。这一开发切片采用 fileSave v3，旧原件不删除、缺证明不静默升级；真实产品和故障注入仍需验收。
+
+
+### v0.7 original journal layout and sustainable reads (development slice)
+
+Every original Plan, commit, observation, fence and retained unknown record has one physical location under `journal/00..ff/`, selected by the first two canonical operation-ID hex digits. Filenames and original bytes remain unchanged. An exclusive one-time file-object rename resumes after interruption and never maintains two active commit readers. Each bucket is fully enumerated up to 5000 entries and a new transaction reserves settlement room before its effects; budget exhaustion must reject admission, never silently truncate or delete original evidence. CommitSequence is an in-process high-water mark rebuilt by validating all retained original commits, not another durable ledger. History, sync, owner backup, reminders and recovery share the same routing. Real-profile migration and fault injection remain required before acceptance.

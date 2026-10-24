@@ -1258,3 +1258,71 @@ mod description_tests {
         assert!(wire["explanation"].is_object());
     }
 }
+
+#[cfg(all(test, windows))]
+mod journal_bucket_tests {
+    use super::*;
+
+    #[test]
+    fn actual_committed_saves_survive_more_than_five_thousand_retained_members() {
+        let temp = tempfile::tempdir().unwrap();
+        let profile = temp.path().join("private");
+        let note = temp.path().join("note.typ");
+        fs::write(&note, "B").unwrap();
+        let mut core = Core::new(&profile).unwrap();
+        let doc = core.open(&note, None).unwrap();
+        let op = fresh();
+        core.save(SaveRequest {
+            operation_id: op.clone(), session_id: doc.session_id,
+            base_id: doc.base_id, source: "committed S".into(),
+        }).unwrap();
+        // Synthetic retained plans exercise the namespace budget without
+        // constructing 5200 file mutations. The original S above is real.
+        for index in 0..5200 {
+            let id = fresh();
+            let plan = Plan::file(
+                id.clone(), hash(format!("original-{index}").as_bytes()),
+                &temp.path().join(format!("absent-{index}.typ")),
+                None, Vec::new(), None, "syntheticRetained",
+            );
+            private_create(
+                &core.backend, &core.journal_path(&id, "plan"),
+                &serde_json::to_vec(&plan).unwrap(),
+            ).unwrap();
+        }
+        drop(core);
+        let mut recovered = Core::new(&profile).unwrap();
+        assert_eq!(recovered.local_operation_status(&op).unwrap()["status"], "committed");
+        let opened = recovered.open(&note, None).unwrap();
+        assert_eq!(opened.source, "committed S");
+        assert!(recovered.operations.len() > 5000);
+    }
+
+    #[test]
+    fn legacy_original_objects_move_once_without_copy_or_parallel_facts() {
+        let temp = tempfile::tempdir().unwrap();
+        let profile = temp.path().join("private");
+        let note = temp.path().join("note.typ");
+        fs::write(&note, "B").unwrap();
+        let mut core = Core::new(&profile).unwrap();
+        let doc = core.open(&note, None).unwrap();
+        let op = fresh();
+        core.save(SaveRequest {
+            operation_id: op.clone(), session_id: doc.session_id,
+            base_id: doc.base_id, source: "S".into(),
+        }).unwrap();
+        let plan = core.journal_path(&op, "plan");
+        let commit = core.journal_path(&op, "commit");
+        let before_plan = fs::read(&plan).unwrap();
+        let before_commit = fs::read(&commit).unwrap();
+        drop(core);
+        let legacy_plan = profile.join("journal").join(plan.file_name().unwrap());
+        let legacy_commit = profile.join("journal").join(commit.file_name().unwrap());
+        fs::rename(&plan, &legacy_plan).unwrap();
+        fs::rename(&commit, &legacy_commit).unwrap();
+        Core::new(&profile).unwrap();
+        assert!(!legacy_plan.exists() && !legacy_commit.exists());
+        assert_eq!(fs::read(&plan).unwrap(), before_plan);
+        assert_eq!(fs::read(&commit).unwrap(), before_commit);
+    }
+}
