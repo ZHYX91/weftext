@@ -4,6 +4,7 @@ use super::{
     apartment::Sta,
     close::{CaptureDelivery, CaptureOpen, Gate, Message, Proof, Request, SurfaceKind},
     events::{Event, Queue, Wake},
+    notice::Notice as NativeNotice,
     terminal::{Outcome, Terminal},
     tray::{Action, Tray},
     view::{Pending, View},
@@ -275,7 +276,8 @@ struct PendingPost {
     delivery_id: Option<String>,
 }
 struct Reducer {
-    dispatcher: Window,
+    native_notice: NativeNotice,
+    _dispatcher: Window,
     surfaces: BTreeMap<u64, Surface>,
     environment: Option<ICoreWebView2Environment>,
     queue: Queue,
@@ -424,17 +426,11 @@ impl Reducer {
     fn blocked(&mut self) -> Result<()> {
         self.cancel_all()?;
         self.notice(Notice::CloseBlocked)?;
-        let text = HSTRING::from(UiMessage::desktop_unsaved_close().render(self.locale));
+        let text = UiMessage::desktop_unsaved_close().render(self.locale);
         // This belongs to an explicit own-window close action. No editor input
         // or focus is synthesized and the original surface remains intact.
-        unsafe {
-            MessageBoxW(
-                self.dispatcher.state.live_hwnd(),
-                &text,
-                windows::core::w!("Weftext"),
-                MB_OK | MB_ICONINFORMATION,
-            );
-        }
+        self.native_notice
+            .show(&text, &UiMessage::common_close().render(self.locale))?;
         Ok(())
     }
     fn capture_result(&self, request: &CaptureOpen, accepted: bool) -> Result<()> {
@@ -726,14 +722,10 @@ impl Reducer {
                 if let Some(message) = information {
                     // This is a consequence of the user's explicit tray action;
                     // no startup, background read or settings refresh supplies it.
-                    unsafe {
-                        MessageBoxW(
-                            self.dispatcher.state.live_hwnd(),
-                            &HSTRING::from(message.render(self.locale)),
-                            windows::core::w!("Weftext"),
-                            MB_OK | MB_ICONINFORMATION,
-                        );
-                    }
+                    self.native_notice.show(
+                        &message.render(self.locale),
+                        &UiMessage::common_close().render(self.locale),
+                    )?;
                 }
             }
             Command::Popup => {
@@ -747,14 +739,12 @@ impl Reducer {
                     self.notice(Notice::Action(action))?;
                 }
             }
-            Command::Feedback(message) => unsafe {
-                MessageBoxW(
-                    self.dispatcher.state.live_hwnd(),
-                    &HSTRING::from(message.render(self.locale)),
-                    windows::core::w!("Weftext"),
-                    MB_OK | MB_ICONWARNING,
-                );
-            },
+            Command::Feedback(message) => {
+                self.native_notice.show(
+                    &message.render(self.locale),
+                    &UiMessage::common_close().render(self.locale),
+                )?;
+            }
             Command::VerifyResult {
                 kind,
                 request,
@@ -870,6 +860,10 @@ impl Reducer {
         }
         if self.core_retirement.is_none() {
             self.core_retirement = Some(Instant::now());
+            if self.native_notice.close().is_err() {
+                self.fatal = true;
+                self.wake.fail();
+            }
             // Continue releasing every owned surface after an individual close
             // failure. No ordinary notice delivery is needed after Core exit.
             for key in self.surfaces.keys().copied().collect::<Vec<_>>() {
@@ -1407,7 +1401,8 @@ fn run(
     )
     .map_err(io::Error::other)?;
     let mut reducer = Reducer {
-        dispatcher,
+        native_notice: NativeNotice::new(wake.clone()),
+        _dispatcher: dispatcher,
         surfaces: BTreeMap::new(),
         environment: None,
         queue,
@@ -1493,8 +1488,10 @@ fn run(
                 -1 => reducer.fail(),
                 0 => reducer.fail(),
                 _ => unsafe {
-                    let _ = TranslateMessage(&message);
-                    DispatchMessageW(&message);
+                    if !reducer.native_notice.translate(&message) {
+                        let _ = TranslateMessage(&message);
+                        DispatchMessageW(&message);
+                    }
                 },
             }
             continue;

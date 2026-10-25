@@ -3,6 +3,7 @@
 mod apartment;
 mod close;
 mod events;
+mod notice;
 mod notification;
 mod package;
 #[cfg(test)]
