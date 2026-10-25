@@ -867,18 +867,19 @@ async function readReference(selected: Doc, epoch: number) {
     }
 }
 async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied" | "superseded"> {
-    const selected = doc, epoch = requestEpoch;
+    const selected = doc, epoch = requestEpoch, audience = sessionAudience();
     if (!selected || !draft || selected.resource !== record.request.resource || !record.status?.result)
         throw new UiError(uiMessage("hostedShell.openOriginalForRestoreReceipt"));
     await source.flush();
-    if (epoch !== requestEpoch || doc !== selected || !draft)
+    if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>audience[key] !== sessionAudience()[key]))
         throw new UiError(uiMessage("hostedShell.objectChangedRestoreReceiptRetained"));
-    const audience = sessionAudience();
     const fresh = await request<Doc>("open", { resource: selected.resource, sessionId: selected.sessionId });
     let adopted = false;
     try {
+        if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>audience[key] !== sessionAudience()[key]))
+            throw new UiError(uiMessage("hostedShell.restoreObjectOrUserChanged"));
         const confirmed = await request<HostedHistoryStatus>("history/status", { resource: record.request.resource, operationId: record.request.operationId });
-        if (epoch !== requestEpoch || doc !== selected || !draft)
+        if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>audience[key] !== sessionAudience()[key]))
             throw new UiError(uiMessage("hostedShell.restoreObjectOrUserChanged"));
         const accepted = history.installStatus(record, confirmed);
         if (!accepted.result)
@@ -926,15 +927,15 @@ async function finishUnavailableHistory(record: HostedHistoryRecord): Promise<vo
     if (!selected || !draft || selected.resource !== record.request.resource || !unavailableCommittedHistory(record))
         throw new UiError(uiMessage("hostedShell.openOriginalConfigurationQueryFact"));
     await source.flush();
-    if (epoch !== requestEpoch || doc !== selected || (["authorization","credential","actor","generation","deployment"] as const).some(key=>captured[key] !== sessionAudience()[key]))
-        throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
-    if (epoch !== requestEpoch || doc !== selected || !draft)
+    if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>captured[key] !== sessionAudience()[key]))
         throw new UiError(uiMessage("hostedShell.objectChangedOriginalFactRetained"));
     const fresh = await request<Doc>("open", { resource: selected.resource });
     let adopted = false;
     try {
+        if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>captured[key] !== sessionAudience()[key]))
+            throw new UiError(uiMessage("hostedShell.rereadObjectOrUserChanged"));
         const confirmed = await request<HostedHistoryStatus>("history/status", { resource: record.request.resource, operationId: record.request.operationId });
-        if (epoch !== requestEpoch || doc !== selected || !draft)
+        if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>captured[key] !== sessionAudience()[key]))
             throw new UiError(uiMessage("hostedShell.rereadObjectOrUserChanged"));
         history.installStatus(record, confirmed);
         if (!unavailableCommittedHistory(record))
