@@ -3,7 +3,7 @@
 The product lock is acquired before invoking Cargo (which owns its own lock).
 This is a cache hint, not acceptance evidence or a replacement for Cargo's
 feature/profile/unit fingerprints. Missing, interrupted or changed hints force
-only local/path package entry points; registry dependencies remain Cargo-owned.
+local/path entries and affected registry parents; unrelated registry units stay warm.
 """
 from contextlib import contextmanager
 import json
@@ -294,15 +294,27 @@ class CargoCache:
         # source copy. Touching the new entry then cannot dirty that old unit.
         # Cargo explicitly supports an empty short fingerprint after a failed
         # rebuild: it compares unequal and requires compilation. Invalidate only
-        # generated short hashes for the unqualified local package names, never
+        # generated short hashes for unqualified locals and affected parents, never
         # source copies, dependency outputs or the whole shared target.
-        names = {inputs[key]['name'] for key in forced}
-        if names.intersection(package['name'] for package in metadata['packages']
-                              if package.get('source') is not None):
-            raise ValueError('Cannot invalidate ambiguous local/registry package fingerprints')
+        affected = {inputs[key]['id'] for key in forced}
+        # Cargo computes filesystem freshness before running jobs. Forcing a
+        # local rebuild without changing its structural fingerprint can leave
+        # an already-fresh registry parent referring to replaced Rust metadata.
+        # Rebuild precisely the reverse dependency closure, not all registry
+        # dependencies. Unrelated registry packages keep Cargo's warm outputs.
+        nodes = metadata.get('resolve', {}).get('nodes', [])
+        while True:
+            parents = {node['id'] for node in nodes if affected.intersection(node['dependencies'])}
+            if parents.issubset(affected):
+                break
+            affected.update(parents)
+        names = {package['name'] for package in metadata['packages'] if package['id'] in affected}
+        for name in names:
+            if len({package['id'] for package in metadata['packages'] if package['name'] == name}) != 1:
+                raise ValueError('Cannot invalidate ambiguous local/registry package fingerprints')
         policy = re.compile(r'(?:' + '|'.join(re.escape(name) for name in sorted(names)) + r')-[0-9a-f]{16}')
         if not names:
-            return
+            return affected
         if '..' in self.target.parts or is_reparse(self.target.lstat()):
             raise ValueError('Cargo fingerprint target is not a qualified ordinary directory')
         markers = []
@@ -397,6 +409,7 @@ class CargoCache:
                     if is_reparse(current.lstat()):
                         raise ValueError('Cargo fingerprint changed to a reparse path')
                 stream.truncate(0)
+        return affected
 
     def run(self, command, *, on_message=None, output=None):
         if self.lock is None or len(command) < 2 or command[1] not in ('build', 'test', 'check', 'clippy'):
@@ -438,7 +451,7 @@ class CargoCache:
         # A failed or interrupted command leaves pending, never old A-qualified
         # state after partially compiling B. The next attempt is conservative.
         self._write({'schemaVersion': 1, 'pending': True, 'modes': {}})
-        self._invalidate_local_fingerprints(inputs, forced, metadata, command)
+        affected = self._invalidate_local_fingerprints(inputs, forced, metadata, command) or set()
         for key in forced:
             for entry in inputs[key]['entries']:
                 before = read_checked(entry, self.root)
@@ -475,6 +488,11 @@ class CargoCache:
             if {key: item['sha256'] for key, item in current.items()} != {key: item['sha256'] for key, item in inputs.items()}:
                 raise ValueError('Compiler inputs changed during Cargo; source hint remains pending')
             successful = {}
+            local_ids = {item['id'] for item in inputs.values()}
+            for message in artifacts:
+                if (message['package_id'] in affected - local_ids
+                        and message.get('fresh') is not False):
+                    raise ValueError('Cargo reused an unqualified reverse dependency unit: ' + message['package_id'])
             for key, item in inputs.items():
                 messages = [message for message in artifacts if message['package_id'] == item['id']]
                 if not messages:
@@ -496,7 +514,8 @@ class CargoCache:
             while len(modes) > 16:
                 del modes[next(iter(modes))]
             self._write({'schemaVersion': 1, 'pending': False, 'modes': modes})
-            return {'artifacts': artifacts, 'forced': sorted(forced), 'mode': mode}
+            return {'artifacts': artifacts, 'forced': sorted(forced), 'mode': mode,
+                    'rebuildPackages': sorted(affected)}
         finally:
             if log:
                 log.close()

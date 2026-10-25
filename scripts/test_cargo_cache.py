@@ -1,6 +1,7 @@
-"""Actual dependency-free Cargo regressions; all source/target/logs are owned."""
+"""Actual owned offline Cargo regressions without third-party packages."""
 import argparse
 import ctypes
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -125,6 +126,60 @@ class Fixture:
         return subprocess.run([str(exe)], stdin=subprocess.DEVNULL, capture_output=True, check=True).stdout.decode().strip()
 
 
+class RegistryFixture(Fixture):
+    """Owned offline directory source, retaining actual registry package IDs."""
+    def __init__(self):
+        self.root = BASE / 'reg'
+        self.root.mkdir()
+        self.target = self.root / 'target'
+        self.sources_in_target = True
+        self.records = []
+        self.environment = {**os.environ, 'CARGO_TARGET_DIR': str(self.target),
+                            'CARGO_NET_OFFLINE': 'true', 'CARGO_BUILD_JOBS': '1'}
+        self.environment.pop('CARGO_BUILD_TARGET', None)
+        registry = self.root / 'registry'
+        checksums = {}
+        for name, code, dependencies in (
+                ('owned-parent', 'pub use owned_leaf::Token; pub fn root()->Token {owned_leaf::root()}\n',
+                 '\n[dependencies]\nowned-leaf="0.1.0"\n'),
+                ('owned-other', 'pub fn value()->u32 {7}\n', '')):
+            folder = registry / name
+            files = {'Cargo.toml': f'[package]\nname="{name}"\nversion="0.1.0"\nedition="2024"\n' + dependencies,
+                     'src/lib.rs': code}
+            for relative, content in files.items():
+                path = folder / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content.encode())
+            checksum = hashlib.sha256(json.dumps(files, sort_keys=True).encode()).hexdigest()
+            checksums[name] = checksum
+            (folder / '.cargo-checksum.json').write_text(json.dumps({
+                'package': checksum, 'files': {key: hashlib.sha256(value.encode()).hexdigest()
+                                               for key, value in files.items()}}))
+        lock = '# Owned offline registry fixture\nversion=4\n'
+        for name, dependencies in [('cache-fixture-app', ['owned-parent', 'owned-other']),
+                                   ('owned-leaf', []), ('owned-parent', ['owned-leaf']), ('owned-other', [])]:
+            lock += f'\n[[package]]\nname="{name}"\nversion="0.1.0"\n'
+            if name in checksums:
+                lock += f'source="registry+https://github.com/rust-lang/crates.io-index"\nchecksum="{checksums[name]}"\n'
+            if dependencies:
+                lock += 'dependencies=' + json.dumps(dependencies) + '\n'
+        for variant in ('a', 'b'):
+            files = {
+                'Cargo.toml': '[workspace]\nmembers=["app"]\nexclude=["vendor/leaf"]\nresolver="2"\n[profile.dev]\ndebug=0\n[patch.crates-io]\nowned-leaf={path="vendor/leaf"}\n',
+                'rust-toolchain.toml': (ROOT / 'rust-toolchain.toml').read_text(),
+                'Cargo.lock': lock,
+                '.cargo/config.toml': '[source.crates-io]\nreplace-with="owned"\n[source.owned]\ndirectory=' + json.dumps(str(registry)) + '\n',
+                'app/Cargo.toml': '[package]\nname="cache-fixture-app"\nversion="0.1.0"\nedition="2024"\n[dependencies]\nowned-parent="0.1.0"\nowned-other="0.1.0"\n',
+                'app/src/main.rs': 'fn main(){println!("{}:{}",owned_parent::root().0,owned_other::value());}\n',
+                'vendor/leaf/Cargo.toml': '[package]\nname="owned-leaf"\nversion="0.1.0"\nedition="2024"\n',
+                'vendor/leaf/src/lib.rs': 'pub struct Token(pub &' + "'static str); pub fn root()->Token {Token(env!(\"CARGO_MANIFEST_DIR\"))}\n",
+            }
+            for relative, content in files.items():
+                path = self.source(variant) / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(content.encode())
+
+
 class FingerprintInvalidation(unittest.TestCase):
     def test_validate_all_markers_before_writing_and_reject_hardlinks(self):
         root = BASE / 'marker-safety'
@@ -136,7 +191,8 @@ class FingerprintInvalidation(unittest.TestCase):
             marker.write_bytes(b'0123456789abcdef')
             marker.with_name(marker.name + '.json').write_text('{}')
         cache = CargoCache(root, target, {})
-        inputs, forced, metadata = {'local/Cargo.toml': {'name': 'local'}}, {'local/Cargo.toml'}, {'packages': []}
+        inputs, forced = {'local/Cargo.toml': {'name': 'local', 'id': 'local'}}, {'local/Cargo.toml'}
+        metadata = {'packages': [{'id': 'local', 'name': 'local', 'source': None}]}
         second.with_name(second.name + '.json').write_text('[]')
         with self.assertRaisesRegex(ValueError, 'sidecar'):
             cache._invalidate_local_fingerprints(inputs, forced, metadata, ['cargo', 'build'])
@@ -158,16 +214,17 @@ class FingerprintInvalidation(unittest.TestCase):
         marker.write_bytes(b'')
         marker.with_name(marker.name + '.json').write_text('{}')
         cache = CargoCache(root, target, {})
-        inputs, forced = {'local/Cargo.toml': {'name': 'local'}}, {'local/Cargo.toml'}
+        inputs, forced = {'local/Cargo.toml': {'name': 'local', 'id': 'local'}}, {'local/Cargo.toml'}
+        metadata = {'packages': [{'id': 'local', 'name': 'local', 'source': None}]}
         with self.assertRaisesRegex(ValueError, 'ambiguous'):
             cache._invalidate_local_fingerprints(inputs, forced,
-                                                {'packages': [{'name': 'local', 'source': 'registry+test'}]}, ['cargo', 'build'])
-        cache._invalidate_local_fingerprints(inputs, forced, {'packages': []},
+                                                {'packages': [*metadata['packages'], {'id': 'registry', 'name': 'local', 'source': 'registry+test'}]}, ['cargo', 'build'])
+        cache._invalidate_local_fingerprints(inputs, forced, metadata,
                                                 ['cargo', 'build', '--target', 'host-triple', '--release'])
         self.assertEqual(marker.read_bytes(), b'')
         marker.write_bytes(b'not-a-valid-hash')
         with self.assertRaisesRegex(ValueError, 'short fingerprint'):
-            cache._invalidate_local_fingerprints(inputs, forced, {'packages': []},
+            cache._invalidate_local_fingerprints(inputs, forced, metadata,
                                                 ['cargo', 'build', '--target', 'host-triple', '--release'])
 
 
@@ -350,6 +407,44 @@ with target_lock(root/'target'):
 
 
 class ActualCargo(unittest.TestCase):
+    def test_registry_parent_of_local_patch_rebuilds_but_independent_registry_stays_warm(self):
+        fixture = RegistryFixture()
+        fixture.run('a')
+        original = {path.relative_to(fixture.source('a')).as_posix():
+                    (path.read_bytes(), path.stat().st_mtime_ns, path.stat().st_ino)
+                    for path in fixture.source('a').rglob('*') if path.is_file()}
+        self.assertEqual(fixture.value(), str(fixture.source('a') / 'vendor/leaf') + ':7')
+        invalidate = CargoCache._invalidate_local_fingerprints
+        def local_only(cache, inputs, forced, metadata, command):
+            return invalidate(cache, inputs, forced, {**metadata, 'resolve': {'nodes': []}}, command)
+        with mock.patch.object(CargoCache, '_invalidate_local_fingerprints', local_only):
+            with self.assertRaises(subprocess.CalledProcessError):
+                fixture.run('b')
+        events = []
+        for line in (fixture.root / '01.cargo.log').read_bytes().splitlines():
+            try:
+                events.append(json.loads(line))
+            except ValueError:
+                pass
+        old_artifacts = [event for event in events if event.get('reason') == 'compiler-artifact']
+        self.assertTrue(next(event for event in old_artifacts if '#owned-parent@' in event['package_id'])['fresh'])
+        self.assertFalse(next(event for event in old_artifacts if '/vendor/leaf#' in event['package_id'])['fresh'])
+        self.assertIn(b'error[E0460]:', (fixture.root / '01.cargo.log').read_bytes())
+        self.assertTrue(json.loads((fixture.target / STATE).read_bytes())['pending'])
+        repaired = fixture.run('b')
+        parent = next(event for event in repaired['artifacts'] if '#owned-parent@' in event['package_id'])
+        other = next(event for event in repaired['artifacts'] if '#owned-other@' in event['package_id'])
+        self.assertTrue(parent['package_id'].startswith('registry+'))
+        self.assertFalse(parent['fresh'])
+        self.assertTrue(other['fresh'])
+        self.assertEqual(fixture.value(), str(fixture.source('b') / 'vendor/leaf') + ':7')
+        self.assertEqual(original, {path.relative_to(fixture.source('a')).as_posix():
+                                   (path.read_bytes(), path.stat().st_mtime_ns, path.stat().st_ino)
+                                   for path in fixture.source('a').rglob('*') if path.is_file()})
+        warm = fixture.run('b')
+        self.assertEqual(warm['forced'], [])
+        self.assertTrue(all(event['fresh'] for event in warm['artifacts']))
+
     def test_target_contained_source_switch_rebuilds_vendor_without_touching_original(self):
         fixture = Fixture('in-target', sources_in_target=True)
         for variant in ('a', 'b'):
