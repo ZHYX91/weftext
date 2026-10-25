@@ -351,7 +351,7 @@ with target_lock(root/'target'):
 
 class ActualCargo(unittest.TestCase):
     def test_target_contained_source_switch_rebuilds_vendor_without_touching_original(self):
-        fixture = Fixture('target-contained-source-switch', sources_in_target=True)
+        fixture = Fixture('in-target', sources_in_target=True)
         for variant in ('a', 'b'):
             source = fixture.source(variant)
             vendor = source / 'vendor/stable/src/lib.rs'
