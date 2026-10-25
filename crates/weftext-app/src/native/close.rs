@@ -225,7 +225,7 @@ pub(super) enum Proof {
         session_id: String,
         base_id: String,
         source_digest: String,
-        input_id: Option<String>,
+        input_id: String,
         evidence: weftext_core::DocumentDraftEvidence,
         record_digest: String,
         pending_operation_id: Option<String>,
@@ -259,7 +259,7 @@ impl Proof {
                 session_id,
                 source_digest,
                 input_id,
-                evidence,
+                evidence: _,
                 record_digest,
                 pending_operation_id,
                 base_id,
@@ -267,11 +267,7 @@ impl Proof {
                 kind == SurfaceKind::Library
                     && owner(owner_id, owner_generation)
                     && crate::broker::canonical_uuid(session_id)
-                    && input_id
-                        .as_deref()
-                        .is_none_or(crate::broker::canonical_uuid)
-                    && (*evidence != weftext_core::DocumentDraftEvidence::SavedView
-                        || input_id.is_some())
+                    && crate::broker::canonical_uuid(input_id)
                     && digest(source_digest)
                     && digest(record_digest)
                     && !base_id.is_empty()

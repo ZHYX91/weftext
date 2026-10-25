@@ -139,6 +139,52 @@ fn prepare(core: &mut Core, root: &Path, input: LibraryCreateOptions, op: &str) 
 }
 
 #[test]
+fn pending_library_resume_refuses_unknown_sequence_before_its_first_directory() {
+    let temp = tempfile::tempdir().unwrap();
+    let profile = temp.path().join("private");
+    let root = temp.path().join("pending-library");
+    let mut core = Core::new(&profile).unwrap();
+    let id = fresh();
+    let plan = prepare(&mut core, &root, options(true), &id);
+    let original = fs::read(core.journal_path(&id, "plan")).unwrap();
+    drop(core);
+    let mut core = Core::new(&profile).unwrap();
+    assert!(!root.exists());
+    let unrelated = temp.path().join("unrelated.typ");
+    fs::write(&unrelated, "B").unwrap();
+    let doc = core.open(&unrelated, None).unwrap();
+    let other = fresh();
+    hosted::set_test_failpoint("commitPublished");
+    assert!(
+        core.save(SaveRequest {
+            operation_id: other.clone(),
+            session_id: doc.session_id,
+            base_id: doc.base_id,
+            source: "S".into()
+        })
+        .is_err()
+    );
+    assert!(core.journal_path(&other, "commit").is_file());
+    assert!(core.resolve_recovery(&id, "resumeOriginalPlan").is_err());
+    assert!(!root.exists());
+    assert_eq!(fs::read(core.journal_path(&id, "plan")).unwrap(), original);
+    assert!(!core.journal_path(&id, "commit").exists());
+    drop(core);
+    let mut core = Core::new(&profile).unwrap();
+    assert_eq!(
+        core.resolve_recovery(&id, "resumeOriginalPlan")
+            .unwrap()
+            .status,
+        "committed"
+    );
+    assert_eq!(
+        serde_json::to_vec(&core.operations[&id]).unwrap(),
+        serde_json::to_vec(&plan).unwrap()
+    );
+    assert!(core.read_library_style(&root).unwrap().installed);
+}
+
+#[test]
 fn library_creation_initial_style_has_one_commit_real_admission_history_and_sync() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().join("library");

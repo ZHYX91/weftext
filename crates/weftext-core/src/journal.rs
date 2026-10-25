@@ -647,6 +647,41 @@ impl Core {
                 }
             }
         }
+        // A current observations/bindings publication is already after all
+        // author effects. Reserve its actual remaining settlement path, not
+        // the original installation margin. Older recovery attempts never
+        // discharge future work, and other pending Plans retain their full
+        // independent reservations.
+        let settlement_remaining = if let (Some(plan), Some(suffix)) = (
+            self.operations.get(id),
+            publication.and_then(|name| journal_record_suffix(id, name)),
+        ) {
+            if let Some(transaction) = &plan.transaction
+                && (matches!(suffix, "observations" | "births" | "resource-births")
+                    || suffix.starts_with("recovery-observations-"))
+            {
+                let mut remaining = 1usize; // Original commit, still required.
+                if (suffix == "observations" || suffix.starts_with("recovery-observations-"))
+                    && !transaction.births().is_empty()
+                    && !self.backend.entry_exists(self.journal_path(id, "births"))?
+                {
+                    remaining += 1;
+                }
+                if suffix != "resource-births"
+                    && !transaction.preview.resource_map.is_empty()
+                    && !self
+                        .backend
+                        .entry_exists(self.journal_path(id, "resource-births"))?
+                {
+                    remaining += 1;
+                }
+                Some(remaining)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
         for pending in self.operations.values().filter(|p| {
             candidate.is_none_or(|plan| p.operation_id != plan.operation_id)
                 && journal_bucket(&p.operation_id) == bucket
@@ -656,8 +691,13 @@ impl Core {
             // the actual operation still has to decode its original facts.
             // Do not read unrelated author bodies merely to count free space.
             if !terminal_names.contains(&pending.operation_id) {
-                let remaining = journal_record_budget(pending)
-                    .saturating_sub(*counts.get(&pending.operation_id).unwrap_or(&0));
+                let remaining = (pending.operation_id == id)
+                    .then_some(settlement_remaining)
+                    .flatten()
+                    .unwrap_or_else(|| {
+                        journal_record_budget(pending)
+                            .saturating_sub(*counts.get(&pending.operation_id).unwrap_or(&0))
+                    });
                 used = used.saturating_add(remaining);
             }
         }

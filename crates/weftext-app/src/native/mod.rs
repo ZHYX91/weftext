@@ -5,6 +5,8 @@ mod close;
 mod events;
 mod notification;
 mod package;
+#[cfg(test)]
+mod proof_tests;
 mod runtime;
 mod scheduler;
 mod startup;
@@ -1152,9 +1154,9 @@ async fn verify(state: &crate::AppState, proofs: Vec<Proof>) -> bool {
                     let receipt = core.flush_document_draft(weftext_core::DocumentDraftFlush {
                         session_id,
                         base_id,
-                        source_digest, input_id,
+                        source_digest, input_id: Some(input_id),
                     })?;
-                    if receipt.evidence != evidence || receipt.record_digest != record_digest { return Err(weftext_core::CoreError::new("draftFlushMismatch", weftext_messages::UiMessage::error_core_draft_recovery_the_persisted_draft_does_not_contain_the_prepared_input())); }
+                    if receipt.evidence != evidence || (evidence == weftext_core::DocumentDraftEvidence::SavedView && receipt.record_digest != record_digest) { return Err(weftext_core::CoreError::new("draftFlushMismatch", weftext_messages::UiMessage::error_core_draft_recovery_the_persisted_draft_does_not_contain_the_prepared_input())); }
                 }
                 Proof::Capture {
                     draft_id,
@@ -1226,9 +1228,9 @@ async fn retire(state: &crate::AppState, proofs: Vec<Proof>, sessions: Vec<Strin
                 let receipt = core.flush_document_draft(weftext_core::DocumentDraftFlush {
                     session_id: session_id.clone(),
                     base_id,
-                    source_digest, input_id,
+                    source_digest, input_id: Some(input_id),
                 })?;
-                if receipt.evidence != evidence || receipt.record_digest != record_digest { return Err(weftext_core::CoreError::new("draftFlushMismatch", weftext_messages::UiMessage::error_core_draft_recovery_the_persisted_draft_does_not_contain_the_prepared_input())); }
+                if receipt.evidence != evidence || (evidence == weftext_core::DocumentDraftEvidence::SavedView && receipt.record_digest != record_digest) { return Err(weftext_core::CoreError::new("draftFlushMismatch", weftext_messages::UiMessage::error_core_draft_recovery_the_persisted_draft_does_not_contain_the_prepared_input())); }
             }
         }
         // This set was built only by real successful native producer calls on

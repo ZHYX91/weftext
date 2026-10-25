@@ -15,7 +15,7 @@ import { applySaveResult, hostedOpenedDraft, hostedDocumentDraft, qualifyHostedD
 // Execute the production lifecycle functions and their actual logout/pagehide
 // registrations. DOM/editor panels and HTTP are the only substituted boundaries.
 const sourceFile = ts.createSourceFile("hosted.ts", readFileSync(new URL("./hosted.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = new Set(["sessionAudience", "closeOwnedSession", "releaseViewSessions", "retryHostedRetirements", "capturedDraftAck", "queueHostedWriterRetirement", "retireHostedWriters", "hostedInput", "draftOrder", "persistHostedDraft", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus"]);
+const names = new Set(["sessionAudience", "closeOwnedSession", "confirmHostedRetirementCuts", "confirmDraftBasis", "releaseViewSessions", "retryHostedRetirements", "capturedDraftAck", "queueHostedWriterRetirement", "retireHostedWriters", "hostedInput", "draftOrder", "persistHostedDraft", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus"]);
 const statements = sourceFile.statements.filter(node =>
   ts.isFunctionDeclaration(node) && !!node.name && names.has(node.name.text)
   || ts.isClassDeclaration(node) && node.name?.text === "HostedError"
@@ -210,4 +210,31 @@ test("departure retains both writers across a failed target ACK and retries only
  f.context.releaseViewSessions();await f.context.retryHostedRetirements();assert.equal(calls.some(path=>path.endsWith("/close")),false);assert.equal(f.context.hostedWriterRetirements.size,2);
  f.context.token="bob-credential";f.context.identity={actor:"bob",generation:1,deployment:"space"};accept=true;await f.context.retryHostedRetirements();
  assert.equal(f.context.hostedWriterRetirements.size,0);assert.equal(calls.filter(path=>path.endsWith("/close")).length,2);assert.equal(f.context.token,"bob-credential");
+});
+
+test("ordinary navigation cannot close a target before its dependent writer's cut is confirmed",async()=>{
+ const f=await fixture(),c=f.context,previous={...c.doc},target={...previous,sessionId:"target",baseId:"base",source:"B"};
+ Object.assign(c,{doc:target,draft:{source:"Y",baseSource:"B",basis:{sessionId:"target",baseId:"base"}},source:{value:"Y",serial:1,authorInputId:crypto.randomUUID()}});
+ c.queueHostedWriterRetirement(previous,target);const audience=c.sessionAudience();let accept=false;const effects:string[]=[];
+ c.fetch=async(path:string,options:any)=>{effects.push(path);assert.equal(options.headers.Authorization,"Bearer alice-credential");return {ok:accept,status:accept?200:500,json:async()=>path.endsWith("/draft")?{status:"inputAcknowledged",evidence:"authorDraft",inputRevision:JSON.parse(options.body).inputRevision}:{closed:true},arrayBuffer:async()=>new ArrayBuffer(0)};};
+ c.doc={sessionId:"next-note"};c.token="bob-credential";
+ await assert.rejects(c.closeOwnedSession(target.sessionId,audience));
+ assert.equal(effects.some(path=>path.endsWith("/close")),false);assert.equal(c.hostedWriterRetirements.size,2);
+ accept=true;await c.closeOwnedSession(target.sessionId,audience);await c.retryHostedRetirements();
+ assert.equal(c.hostedWriterRetirements.size,0);assert.equal(effects.filter(path=>path.endsWith("/close")).length,2);
+});
+
+test("explicit comparison installs only its frozen known basis before the next actual ACK",async()=>{
+ for(const aba of [false,true]){
+  const f=await fixture(),c=f.context,selected=c.doc,inputId=crypto.randomUUID();selected.baseId="confirmed-base";selected.source="saved B";
+  c.draft={source:"unknown Y",baseSource:"old B",inputId};c.source.value="unknown Y";c.source.serial=0;c.source.authorInputId=inputId;c.source.flush=async()=>{};
+  c.knowledgeAuthorChanged=()=>{};c.retain=()=>{};c.compareRequired=true;
+  let finish!:()=>void;const sent=new Promise<void>(resolve=>{finish=resolve;});let release!:(value:unknown)=>void;
+  c.request=async(path:string,wire:any)=>{if(path==="draft/resolve"){finish();return new Promise(resolve=>{release=resolve;});}
+   assert.equal(path,"draft");assert.equal(wire.baseId,"confirmed-base");assert.equal("retainedBaseSource"in wire,false);
+   return {status:"inputAcknowledged",evidence:"authorDraft",inputRevision:wire.inputRevision};};
+  const confirmation=c.confirmDraftBasis();await sent;if(aba)c.source.authorInputId=crypto.randomUUID();release({status:"draftRebased"});
+  if(aba){await assert.rejects(confirmation);assert.equal(c.draft.basis,undefined);assert.equal(c.compareRequired,true);}
+  else {await confirmation;assert.equal(c.draft.basis.sessionId,selected.sessionId);assert.equal(c.draft.basis.baseId,selected.baseId);assert.equal(c.compareRequired,false);await c.persistHostedDraft(selected);}
+ }
 });

@@ -845,7 +845,7 @@ async fn read_editor(
 ) -> ApiResult {
     let request = req.clone();
     let check = auth.clone();
-    let (mut profile, frozen) = locked(&state, move |inner| {
+    let (profile, frozen) = locked(&state, move |inner| {
         let (actor, session) = native_basis(inner, &check, &request, true, false)?;
         let profile = native_profile(inner, &actor, &session.resource, &request.source)?;
         let frozen = editor::freeze(inner, &actor, &session.resource, &request.source).ok();
@@ -871,17 +871,83 @@ async fn read_editor(
     } else {
         None
     };
-    locked(&state,move|inner|{
-        let(actor,session)=native_basis(inner,&auth,&req,false,false)?;let fresh=native_profile(inner,&actor,&session.resource,&req.source)?;if fresh["generation"]!=profile["generation"]{return Err(changed());}
-        if let Some((Ok(output),dependencies,environment))=compiled{editor::validate_inputs(inner,&actor,&session.resource,&dependencies)?;environment.recheck(inner,&actor)?;if output["ok"]==true{
-            if let Ok(tree)=serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone()){profile["displayed"]=json!(crate::citation_api::displayed_citations(&tree));profile["unlabelledTargets"]=json!(crate::citation_api::unlabelled_reference_targets(&req.source,&tree));crate::citation_api::classify_reference_controls(&mut profile["editor"],Some(&tree));profile["displayStatus"]=json!("nativeCompileAvailable");}
-            let labels=serde_json::from_value::<Vec<weftext_engine::CompiledLabel>>(output["labels"].clone()).unwrap_or_default();
-            if let Some(targets)=profile["editor"]["targets"].as_array_mut(){targets.retain(|target|matches!(target["kind"].as_str(),Some("heading"|"figure"|"table"|"equation"|"footnote"))&&labels.iter().any(|label|label.label==target["label"].as_str().unwrap_or("") && label.count==1 && label.origins.iter().any(|origin|origin.is_main && origin.from==target["range"]["from"].as_u64().unwrap_or(u64::MAX) as usize)));}
-        }else{profile["editor"]["targets"]=json!([]);}}else{profile["editor"]["targets"]=json!([]);}
-        if profile["displayStatus"]!="nativeCompileAvailable"{profile["coverage"]=json!("partial");}
-        if serde_json::to_vec(&profile).map_err(|_|changed())?.len()>8*1024*1024{return Err(ApiError::bad(UiMessage::error_api_hosted_citations_citation_catalog_budget()));}
-        Ok(Json(json!({"resource":session.resource,"serial":req.serial,"sourceHash":req.source_hash,"profile":profile})))
-    }).await
+    locked(&state, move |inner| {
+        deliver_native_read(inner, &auth, &req, profile, compiled)
+    })
+    .await
+}
+fn deliver_native_read(
+    inner: &mut HostedInner,
+    auth: &Auth,
+    req: &NativeBasis,
+    mut profile: Value,
+    compiled: Option<ReferenceCompile>,
+) -> ApiResult {
+    let (actor, session) = native_basis(inner, auth, req, false, false)?;
+    let fresh = native_profile(inner, &actor, &session.resource, &req.source)?;
+    if fresh["generation"] != profile["generation"] {
+        return Err(changed());
+    }
+    if let Some((_, dependencies, environment)) = &compiled {
+        editor::validate_inputs(inner, &actor, &session.resource, dependencies)?;
+        environment.recheck(inner, &actor)?;
+    }
+    // With no frozen compile, deliver the newly qualified capability
+    // profile itself. A partial generation is not an environment witness.
+    profile = fresh;
+    if let Some((Ok(output), _, _)) = compiled {
+        if output["ok"] == true {
+            if let Ok(tree) =
+                serde_json::from_value::<weftext_engine::RenderNode>(output["tree"].clone())
+            {
+                profile["displayed"] = json!(crate::citation_api::displayed_citations(&tree));
+                profile["unlabelledTargets"] = json!(
+                    crate::citation_api::unlabelled_reference_targets(&req.source, &tree)
+                );
+                crate::citation_api::classify_reference_controls(
+                    &mut profile["editor"],
+                    Some(&tree),
+                );
+                profile["displayStatus"] = json!("nativeCompileAvailable");
+            }
+            let labels = serde_json::from_value::<Vec<weftext_engine::CompiledLabel>>(
+                output["labels"].clone(),
+            )
+            .unwrap_or_default();
+            if let Some(targets) = profile["editor"]["targets"].as_array_mut() {
+                targets.retain(|target| {
+                    matches!(
+                        target["kind"].as_str(),
+                        Some("heading" | "figure" | "table" | "equation" | "footnote")
+                    ) && labels.iter().any(|label| {
+                        label.label == target["label"].as_str().unwrap_or("")
+                            && label.count == 1
+                            && label.origins.iter().any(|origin| {
+                                origin.is_main
+                                    && origin.from
+                                        == target["range"]["from"].as_u64().unwrap_or(u64::MAX)
+                                            as usize
+                            })
+                    })
+                });
+            }
+        } else {
+            profile["editor"]["targets"] = json!([]);
+        }
+    } else {
+        profile["editor"]["targets"] = json!([]);
+    }
+    if profile["displayStatus"] != "nativeCompileAvailable" {
+        profile["coverage"] = json!("partial");
+    }
+    if serde_json::to_vec(&profile).map_err(|_| changed())?.len() > 8 * 1024 * 1024 {
+        return Err(ApiError::bad(
+            UiMessage::error_api_hosted_citations_citation_catalog_budget(),
+        ));
+    }
+    Ok(Json(
+        json!({"resource":session.resource,"serial":req.serial,"sourceHash":req.source_hash,"profile":profile}),
+    ))
 }
 async fn edit_native(
     State(state): State<HostedState>,
@@ -1306,6 +1372,65 @@ async fn propose(
 mod tests {
     use super::*;
     const PRIVATE: &str = "PRIVATE WORK BODY 绝不交付";
+    #[test]
+    fn actual_citation_read_rechecks_frozen_environment_on_success_and_degraded_failure() {
+        for failure in [false, true] {
+            let (_temp, state, auth, doc, _) = fixture();
+            let mut inner = state.inner.lock().unwrap();
+            let source = doc["source"].as_str().unwrap().to_owned();
+            let basis = NativeBasis {
+                session_id: doc["sessionId"].as_str().unwrap().into(),
+                source: source.clone(),
+                serial: 1,
+                source_hash: weftext_engine::source_hash(&source),
+            };
+            let result = || {
+                if failure {
+                    Err(crate::worker_failure::diagnostics_tests::original_failure(
+                        crate::worker_failure::Kind::OutputRejected,
+                    ))
+                } else {
+                    Ok(json!({"ok":true,"tree":null}))
+                }
+            };
+            let profile = native_profile(&mut inner, "alice", "Shared", &source).unwrap();
+            let (_, dependencies, environment) =
+                editor::freeze(&mut inner, "alice", "Shared", &source).unwrap();
+            assert!(
+                deliver_native_read(
+                    &mut inner,
+                    &auth,
+                    &basis,
+                    profile,
+                    Some((result(), dependencies, environment))
+                )
+                .is_ok()
+            );
+            let profile = native_profile(&mut inner, "alice", "Shared", &source).unwrap();
+            let (_, dependencies, environment) =
+                editor::freeze(&mut inner, "alice", "Shared", &source).unwrap();
+            let root = inner.config.root.clone();
+            let settings = inner
+                .core
+                .read_config(&root, weftext_core::ConfigRole::WorkspaceSettings)
+                .unwrap();
+            std::fs::write(
+                settings.path,
+                br#"{"version":1,"defaultStyle":{"enabled":false}}"#,
+            )
+            .unwrap();
+            let error = deliver_native_read(
+                &mut inner,
+                &auth,
+                &basis,
+                profile,
+                Some((result(), dependencies, environment)),
+            )
+            .err()
+            .unwrap();
+            assert!(error.private_worker_failure.is_none());
+        }
+    }
     #[test]
     fn normal_reference_success_and_worker_failure_recheck_changed_actual_environment_before_interpretation()
      {

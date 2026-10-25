@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { NativeSurface, type CloseParticipant, type CloseProof } from "./native-host";
 import { nativeDraftRequest } from "./native-draft";
 
-const proof: CloseProof = { kind: "document", evidence: "authorDraft", ownerId: "actual-owner", ownerGeneration: "owner-generation", sessionId: "opened-session", baseId: "opened-base", sourceDigest: "a".repeat(64), recordDigest: "b".repeat(64) };
+const proof: CloseProof = { kind: "document", evidence: "authorDraft", ownerId: "actual-owner", ownerGeneration: "owner-generation", sessionId: "opened-session", baseId: "opened-base", inputId: "original-input", sourceDigest: "a".repeat(64), recordDigest: "b".repeat(64) };
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(accept => { resolve = accept; }); return { promise, resolve }; }
 async function fixture(run: (f: { surface: NativeSurface; fire: (kind: string) => void; deliver: (value: unknown) => void; messages: Record<string, unknown>[]; root: { inert: boolean }; tick: () => Promise<void> }) => Promise<void>) {
   const originals = [Object.getOwnPropertyDescriptor(globalThis, "document"), Object.getOwnPropertyDescriptor(globalThis, "window")];

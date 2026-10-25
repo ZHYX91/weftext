@@ -593,6 +593,10 @@ Core 在合格打开已保存投影时签发 `viewInputId`。有序 ACK 明确�
 
 正文关闭回读明确返回 `authorDraft` 或 `savedView` 证据。作者证明沿完整合格 Draft 原件核准确输入；视图证明重核 Core 签发身份与原受保护文件观察，不写 Draft 或作者文件。两者均进入现有 prepare／freeze／最终核验门，绑定原 surface 和编辑代次，并只在同 surface 的 Core 调用成功后登记 Session 归属。若另一 writer 已修改当前保存正文，既有 baseline 仍沿其持久原件证明关闭。关闭／ACK 失败未知时，保留原凭据和内存句柄；准确目标输入确认后，还须收到关闭或明确过期回执才能结清，不能改写已知保存事实。
 
+native 正文 proof 必须携带准确 `inputId`。AuthorDraft 每次 verify／retire 都重新沿完整原件证明该输入，不能要求含其他 producer 的整份合并记录摘要不变；SavedView 的 Session／Base／正文／输入身份摘要仍须相同。所有 hosted 关闭入口先确认依赖该 target 的原交接 cut，再释放 target。客户端冻结 basis 保留输入身份，严格 HTTP DTO 只投影其允许字段；显式比较后只有冻结 Session／Base／输入仍适用时才安装确认依据。
+
+pending 恢复的每条实际续跑分支，包括新建库，在首个作者／namespace 效果前重核原 Plan 的 sequence 和容量准入。当前 observations／births 发布按其实际剩余原结算路径预留空间；历史 recovery attempt 和临时残件不抵未来义务，也不消耗其他 pending 的预留。成功或失败的异步结果均先经过原授权、依赖和环境终检，之后才能解释失败、降级能力或发布结果。
+
 Draft 的每条主／备选输入区分普通 `proposal` 与 `committedBaseline { operationId }`。只有真实普通保存提交后，Core 才能签发后者。原 `FileSaveData` v4 在 fingerprint 和原 commit 中绑定准确 `draftProducerId`；Plan 将 `fileSave, identity` 放在作者载荷之前。消费基线前，在同一保护句柄上先核这两项原元数据，再有界读取并重核持久 Plan 与保留事实一致，走现有唯一 commit 校验器，核 scope、FI、producer、已知 Base、准确 afterimage 及已提交搬移路径。证据缺失、损坏或不一致须失败并保留当前完整 Draft，不能把加载时缓存当作原件。
 
 关闭回读复用同一受保护 Draft 记录读取入口，先核原 scope 与 FI，再读正文，并以原完整字节计算回执。搬移路径证明同时覆盖原 files 与 Relocate／Compound 的 leaf／members，按准确 FI 和最具体原映射核对；完整新记录通过资格后才归档。历史／比较仅合并来源已知且 producer、完整输入、角色和原号均相同的投影；未知来源及显式保留的当前缓冲区不按同文折叠。

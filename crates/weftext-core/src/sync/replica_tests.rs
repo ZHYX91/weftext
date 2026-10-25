@@ -143,6 +143,7 @@ fn sync_setup_releases_private_captures_and_retries_owned_original_bytes_after_r
             let enable = fresh();
             let blocked_path = blocker.map(|kind| core.journal_path(&enable, kind));
             if let Some(path) = &blocked_path {
+                fs::create_dir_all(path.parent().unwrap()).unwrap();
                 fs::create_dir(path).unwrap();
             }
             let first = core.enable_sync(&root, &enable);
@@ -660,6 +661,7 @@ fn selected_library_backup_includes_sync_history_and_pending_publication() {
     );
     let outbox = target
         .join("private/journal")
+        .join(&pending[..2])
         .join(format!("{pending}.plan.json"));
     let plan: Plan = serde_json::from_slice(&fs::read(outbox).unwrap()).unwrap();
     assert!(plan.sync_publication.is_some());

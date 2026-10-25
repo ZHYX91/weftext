@@ -537,6 +537,17 @@ test("literal ABA without an ACK or source transaction cannot consume a clean hi
  }
 });
 
+test("a fully qualified Query delivery succeeds and only an input identity ABA blocks its equal-source counterpart",async()=>{
+ for(const aba of [false,true]){
+  const f=deliveryFixture(),basis={...f.basis};
+  const document={...f.prior,source:"X",baseId:"generated-base",recoveredDraftConflict:false};
+  if(aba)f.session.inputId=crypto.randomUUID();
+  const delivery=f.context.queryDelivery({document,committedSource:"X",documentSourceMatchesCommit:true},basis);
+  if(aba){await assert.rejects(delivery);assert.equal(f.session.source,"S");assert.equal(f.session.baseId,"old-base");}
+  else{await delivery;assert.equal(f.session.source,"X");assert.equal(f.session.baseId,"generated-base");}
+ }
+});
+
 test("SaveAs installs the actual new saved-view identity only when the frozen author input has not changed",async()=>{
  for(const aba of [false,true]) {
   const f=fixture(),sent=deferred<void>(),reply=deferred<any>();const prior={sessionId:"original",root:f.original.root,source:"B",baseId:"B-base",path:`${f.original.root}/original.typ`,kind:"ordinary"};

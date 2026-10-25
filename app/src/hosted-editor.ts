@@ -539,11 +539,11 @@ export class HostedEditor {
         const editor = this.editor, writing = this.writing;
         if (!editor || !writing || !this.sessionId)
             return;
-        const basis = { sessionId: this.sessionId, source: editor.source, serial: editor.generation }, generation = this.generation, syntaxBasis = editor.syntaxBasis();
+        const basis = { sessionId: this.sessionId, source: editor.source, serial: editor.generation, inputId: this.authorInputId }, generation = this.generation, syntaxBasis = editor.syntaxBasis();
         setUiText(this.message, uiMessage("hostedEditor.updatingDraftPreview"));
         try {
-            const [map, projection] = await Promise.all([this.request<unknown>("editor/map", basis).then(value => decodeEditorMapResponse(value, basis.serial)), this.request<Projection>("editor/render", basis), this.fonts.ensureDefaults()]);
-            if (this.editor !== editor || this.generation !== generation || this.sessionId !== basis.sessionId || editor.source !== basis.source || editor.generation !== basis.serial)
+            const [map, projection] = await Promise.all([this.request<unknown>("editor/map", queryBasisWire(basis)).then(value => decodeEditorMapResponse(value, basis.serial)), this.request<Projection>("editor/render", queryBasisWire(basis)), this.fonts.ensureDefaults()]);
+            if (this.editor !== editor || this.generation !== generation || this.sessionId !== basis.sessionId || editor.source !== basis.source || editor.generation !== basis.serial || this.authorInputId !== basis.inputId)
                 return;
             const failure = projection.failure === null ? null : decodeErrorDescription(projection.failure);
             if (failure === undefined || (projection.ok ? failure !== null : failure === null))
@@ -559,7 +559,7 @@ export class HostedEditor {
                     if (this.editor === editor && this.generation === generation)
                         this.error(error instanceof Error ? error : new Error(String(error)));
                 }
-                if (this.editor !== editor || this.generation !== generation || this.sessionId !== basis.sessionId || editor.source !== basis.source || editor.generation !== basis.serial)
+                if (this.editor !== editor || this.generation !== generation || this.sessionId !== basis.sessionId || editor.source !== basis.source || editor.generation !== basis.serial || this.authorInputId !== basis.inputId)
                     return;
             }
             if (projection.sourceInfo.notes?.sourceHash === map.sourceHash)

@@ -22,7 +22,7 @@ import { DeferredPaint } from "./deferred-paint";
 import { EverydayNavigation, type EverydayEntry, type EverydayCommand } from "./everyday-navigation";
 import { openEverydayMenu, openEverydayPicker } from "./everyday-ui";
 import { everydayWritingCommands } from "./everyday-writing";
-import { EmbeddedQueryController } from "./embedded-query";
+import { EmbeddedQueryController, queryBasisWire } from "./embedded-query";
 import "./embedded-query.css";
 import { HistoryPanel } from "./history-panel";
 import { restoreBufferDisposition, type HistoryContext } from "./history-state";
@@ -555,7 +555,7 @@ async function insertEverydayQuery(): Promise<void> {
                             text: string;
                             expected: string;
                         }[];
-                    }>("/api/query/definition/draft", { ...basis, operationId: operation, label: `weftext-query-${nativeName}`, plan });
+                    }>("/api/query/definition/draft", { ...queryBasisWire(basis), baseId: basis.baseId, operationId: operation, label: `weftext-query-${nativeName}`, plan });
                     if (!available() || !form.isConnected || label.value !== nameValue || condition.value !== conditionValue || selection() !== selected || !result.draftOnly || result.serial !== basis.serial || result.patchUnit !== "utf16")
                         throw new UiError(uiMessage("shell.queryProposalOrInputChanged"));
                     const patches = result.patches.map(patch => ({ ...patch, insert: patch.text }));
@@ -2272,14 +2272,14 @@ async function compile(doc: LiveDocument): Promise<void> {
         if (doc === current && doc.layout === "paged")
             void pagedPreview?.render({ sessionId: doc.session.opened.sessionId, source, serial });
         try {
-            const basis = { sessionId: doc.session.opened.sessionId, source, serial };
+            const basis = { sessionId: doc.session.opened.sessionId, source, serial, inputId: doc.session.inputId };
             const hadQueries = doc.queries.hasQueries;
             const [result, editorMap] = await Promise.all([
-                api<RenderOutput>("/api/render", basis),
-                api<unknown>("/api/editor-map", basis).then(value => decodeEditorMapResponse(value, basis.serial)),
+                api<RenderOutput>("/api/render", queryBasisWire(basis)),
+                api<unknown>("/api/editor-map", queryBasisWire(basis)).then(value => decodeEditorMapResponse(value, basis.serial)),
                 doc.queries.discover(basis),
             ]);
-            if (!sourceConsumersAvailable(doc) || generation !== doc.renderGeneration || sessionId !== doc.session.opened.sessionId)
+            if (!sourceConsumersAvailable(doc) || generation !== doc.renderGeneration || sessionId !== doc.session.opened.sessionId || doc.session.inputId !== basis.inputId)
                 return;
             if (result.sourceInfo.notes?.sourceHash === editorMap.sourceHash)
                 editorMap.notes = result.sourceInfo.notes;

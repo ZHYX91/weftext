@@ -634,6 +634,7 @@ impl Core {
                 ));
             }
             if action == "resumeOriginalPlan" {
+                self.admit_journal_operation(plan)?;
                 let mut planned_directories = vec![PathBuf::from(target)];
                 planned_directories.extend(
                     directories

@@ -2455,29 +2455,17 @@ async fn prepare_legacy(
     })
     .map_err(|_| failed())?;
     let metadata_dir = dir.clone();
-    crate::work::spawn_blocking(move || {
+    let metadata = crate::work::spawn_blocking(move || {
         ensure_owned(stage_root(&metadata_dir)?, &metadata_dir, false)?;
         durable_write(&metadata_dir.join("ready.json"), &ready_bytes)
     })
     .await
-    .map_err(|_| failed())??;
+    .map_err(|_| failed())
+    .and_then(std::convert::identity);
     // The small publication seal is written only while the original authority
     // and freeze witnesses are still validated under the policy lock.
     locked(&state, move |inner| {
-        if inner.actor(&auth)? != actor || inner.actor_generation(&actor) != epoch {
-            return Err(expired());
-        }
-        access(inner, &actor, &job.needs, false)?;
-        witness_check(inner, &evidence.witnesses)?;
-        if let Some(c) = &evidence.citations {
-            c.validate(inner, &actor)?
-        }
-        if let Some(env) = &evidence.environment {
-            env.recheck(inner, &actor)?
-        }
-        if let Some(source) = &req.source {
-            check_draft(inner, &actor, &req, source)?
-        }
+        validate_legacy_publication(inner, &auth, &actor, &req, &evidence, &job, metadata)?;
         if cancel.load(Ordering::Acquire) {
             return Err(failed());
         }
@@ -2498,6 +2486,31 @@ async fn prepare_legacy(
         Ok(Json(answer))
     })
     .await
+}
+fn validate_legacy_publication(
+    inner: &mut HostedInner,
+    auth: &Auth,
+    actor: &str,
+    req: &Prepare,
+    evidence: &LegacyEvidence,
+    job: &Job,
+    metadata: Result<(), ApiError>,
+) -> Result<(), ApiError> {
+    if inner.actor(auth)? != actor || inner.actor_generation(actor) != evidence.epoch {
+        return Err(expired());
+    }
+    access(inner, actor, &job.needs, false)?;
+    witness_check(inner, &evidence.witnesses)?;
+    if let Some(c) = &evidence.citations {
+        c.validate(inner, actor)?;
+    }
+    if let Some(env) = &evidence.environment {
+        env.recheck(inner, actor)?;
+    }
+    if let Some(source) = &req.source {
+        check_draft(inner, actor, req, source)?;
+    }
+    metadata
 }
 fn lookup(
     inner: &mut HostedInner,
@@ -3181,6 +3194,59 @@ mod tests {
             .unwrap();
         assert_eq!(error.status, StatusCode::NOT_FOUND);
         assert_eq!(std::fs::read(dir.join("frozen.docx")).unwrap(), before);
+    }
+    #[test]
+    fn actual_ready_metadata_success_and_io_failure_share_final_publication_qualification() {
+        for failure in [false, true] {
+            let (_temp, state, auth, _, _, _) = history_api::test_fixture();
+            let (req, dir, _, _, _) = seed_legacy(&state, false);
+            let mut inner = state.inner.lock().unwrap();
+            let mut cut = capture(&mut inner, "alice", &req).unwrap();
+            let evidence = LegacyEvidence {
+                witnesses: std::mem::take(&mut cut.witnesses),
+                environment: cut.environment,
+                citations: cut.citations,
+                epoch: cut.job.epoch,
+            };
+            let path = dir.join("ready.json");
+            if failure {
+                std::fs::write(&path, b"original metadata").unwrap();
+            }
+            let metadata = durable_write(&path, b"fresh metadata");
+            assert_eq!(metadata.is_err(), failure);
+            assert_eq!(
+                validate_legacy_publication(
+                    &mut inner, &auth, "alice", &req, &evidence, &cut.job, metadata
+                )
+                .is_err(),
+                failure
+            );
+            let original = std::fs::read(&path).unwrap();
+            inner
+                .policy
+                .users
+                .get_mut("alice")
+                .unwrap()
+                .grants
+                .get_mut("Shared")
+                .unwrap()
+                .office
+                .doc
+                .export = false;
+            let metadata = if failure {
+                durable_write(&path, b"never replace original")
+            } else {
+                Ok(())
+            };
+            let error = validate_legacy_publication(
+                &mut inner, &auth, "alice", &req, &evidence, &cut.job, metadata,
+            )
+            .err()
+            .unwrap();
+            assert_eq!(error.status, StatusCode::NOT_FOUND);
+            assert_eq!(std::fs::read(path).unwrap(), original);
+            assert!(!dir.join("published.json").exists());
+        }
     }
     #[test]
     fn legacy_formats_require_separate_grants_and_uploaded_docx_inspection_does_not_grant_docx_output()

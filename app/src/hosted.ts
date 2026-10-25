@@ -381,9 +381,11 @@ type HostedSessionAudience = Pick<HostedNodeAudience, "authorization" | "credent
 async function closeOwnedSession(sessionId: string, captured: HostedSessionAudience): Promise<void> {
     const entry = hostedWriterRetirements.get(sessionId) ?? { sessionId, audience: captured };
     hostedWriterRetirements.set(sessionId, entry);
-    if (entry.waitFor) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
     if (entry.closing) return entry.closing;
     const closing = (async () => {
+        if (Array.from(hostedWriterRetirements.values()).some(item => item.waitFor?.target.sessionId === sessionId))
+            await confirmHostedRetirementCuts(sessionId);
+        if (entry.waitFor) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
         if (!entry.audience.credential) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
         const response = await fetch("/api/hosted/close", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${entry.audience.credential}` }, body: JSON.stringify({ sessionId }), cache: "no-store", keepalive: true, signal: AbortSignal.timeout(10000) });
         if (response.status === 410) await response.arrayBuffer();
@@ -407,15 +409,22 @@ function releaseViewSessions() {
     // this single transient ownership set until their actual terminal reply.
     void retryHostedRetirements().catch(() => { /* retain original credentials and handles */ });
 }
+async function confirmHostedRetirementCuts(sessionId: string): Promise<void> {
+    for (const entry of Array.from(hostedWriterRetirements.values())) {
+        const cut = entry.waitFor;
+        if (cut?.target.sessionId !== sessionId) continue;
+        await draftOrder(cut.target).persist(cut.input, wire => capturedDraftAck(wire, cut.audience));
+        if (draftOrder(cut.target).acknowledged(cut.input) === undefined)
+            throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+        if (entry.waitFor === cut) entry.waitFor = undefined;
+    }
+    if (Array.from(hostedWriterRetirements.values()).some(entry => entry.waitFor?.target.sessionId === sessionId))
+        throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+}
 async function retryHostedRetirements(): Promise<void> {
-    const waiting = new Map<string, NonNullable<HostedSessionRetirement["waitFor"]>>();
-    for (const entry of hostedWriterRetirements.values()) if (entry.waitFor) waiting.set(entry.waitFor.target.sessionId, entry.waitFor);
-    for (const cut of waiting.values()) {
-        try {
-            await draftOrder(cut.target).persist(cut.input, wire => capturedDraftAck(wire, cut.audience));
-            if (draftOrder(cut.target).acknowledged(cut.input) === undefined) continue;
-            for (const entry of hostedWriterRetirements.values()) if (entry.waitFor?.target.sessionId === cut.target.sessionId) entry.waitFor = undefined;
-        } catch { /* No former writer can retire ahead of the exact target cut. */ }
+    const waiting = new Set(Array.from(hostedWriterRetirements.values()).flatMap(entry => entry.waitFor ? [entry.waitFor.target.sessionId] : []));
+    for (const id of waiting) {
+        try { await confirmHostedRetirementCuts(id); } catch { /* Keep the exact target cut and both handles. */ }
     }
     for (const entry of Array.from(hostedWriterRetirements.values())) if (!entry.waitFor) {
         try { await closeOwnedSession(entry.sessionId, entry.audience); } catch { /* retain for the next owned cleanup */ }
@@ -767,6 +776,11 @@ async function navigateReference(reference: string) {
             targetDraft = retained === undefined && target.recoveredDraft == null ? hostedDocumentDraft(target) : nodeTargetDraft(target.source, target.recoveredDraft, target.recoveredDraftBaseSource, retained);
         }
         const retainedAlias = !currentTarget && source.pausedSession && draft?.reference === parts.base;
+        if (!currentTarget) {
+            targetDraft = qualifyHostedDraft(target, targetDraft);
+            targetDraft.inputId ??= retainedAlias ? source.authorInputId : crypto.randomUUID();
+        }
+        const inputId = currentTarget ? source.authorInputId : targetDraft.inputId!;
         const basis: HostedNodeBasis = { sessionId: target.sessionId, source: currentTarget ? source.value : targetDraft.source, serial: currentTarget || retainedAlias ? source.serial : source.retainedSourceSerial(target.resource, targetDraft.source), sourceHash: await nodeSourceHash(currentTarget ? source.value : targetDraft.source) };
         if (!sameHostedNodeAudience(captured, nodeAudience()))
             return;
@@ -797,7 +811,7 @@ async function navigateReference(reference: string) {
             scheduleCurrentDraft();
         }
         adoptedAudience = nodeAudience();
-        source.locateNodeFragment(origin, { sessionId: target.sessionId, source: basis.source, serial: basis.serial });
+        source.locateNodeFragment(origin, { sessionId: target.sessionId, source: basis.source, serial: basis.serial, inputId });
         nodeNavigationMessage(reference, displayMessage("hostedShell.fragmentExactlyLocatedInDraft", { p0: uiDisplayParameter(result.fragment.label) }));
         status(uiMessage("hostedShell.fragmentLocatedBodyUnsaved"));
     }
@@ -1305,13 +1319,13 @@ async function restorePersonalInput(record: PersonalInputRecord, audience: strin
         throw new UiError(uiMessage("hostedShell.existingDraftInputNotOverwritten"));
     if (personalInputs.list(audience).some(other => other.pending?.status === "unresolved" && other.owner.kind === "body" && (other.owner.reference && other.owner.reference === owner.reference || other.owner.resource === owner.resource)))
         throw new UiError(uiMessage("hostedShell.originalSaveCheckSameId"));
-    const basis = { sessionId: selected.sessionId, source: source.value, serial: source.serial };
+    const basis = { sessionId: selected.sessionId, source: source.value, serial: source.serial, inputId: source.authorInputId };
     const reference = await request<{
         resource: string;
         reference: string;
     }>("navigation/ref", { sessionId: selected.sessionId });
     const hash = await nodeSourceHash(basis.source);
-    if (authorizationEpoch !== epoch || personalAudience() !== audience || doc !== selected || source.value !== basis.source || source.serial !== basis.serial)
+    if (authorizationEpoch !== epoch || personalAudience() !== audience || doc !== selected || source.value !== basis.source || source.serial !== basis.serial || source.authorInputId !== basis.inputId)
         throw new UiError(uiMessage("hostedShell.recoveryCheckNewInputOrObjectChanged"));
     personalInputs.current(audience, record);
     if (!owner.reference || reference.reference !== owner.reference || reference.resource !== selected.resource || !record.baseHash || hash !== record.baseHash)
@@ -1743,18 +1757,26 @@ el("refresh").onclick = () => void run(async () => {
 el<HTMLFormElement>("search").onsubmit = e => { e.preventDefault(); void run(() => list(el<HTMLInputElement>("term").value.trim())); };
 el("save").onclick = () => void run(save);
 el("reopen").onclick = () => void run(() => open(doc!.resource));
-el("rebase").onclick = () => void run(async () => {
+el("rebase").onclick = () => void run(confirmDraftBasis);
+async function confirmDraftBasis(): Promise<void> {
     if (!doc || !draft)
         return;
+    const selected = doc, retained = draft, epoch = requestEpoch;
     await source.flush();
-    await request("draft/resolve", { sessionId: doc.sessionId, source: source.value });
-    draft.baseSource = doc.source;
+    if (doc !== selected || draft !== retained || requestEpoch !== epoch)
+        throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+    const basis = { sessionId: selected.sessionId, baseId: selected.baseId, source: source.value, inputId: source.authorInputId };
+    const resolved = await request<{ status: string }>("draft/resolve", { sessionId: basis.sessionId, source: basis.source });
+    if (resolved.status !== "draftRebased" || doc !== selected || draft !== retained || requestEpoch !== epoch || selected.baseId !== basis.baseId || source.value !== basis.source || source.authorInputId !== basis.inputId)
+        throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+    retained.baseSource = selected.source;
+    retained.basis = { sessionId: basis.sessionId, baseId: basis.baseId };
     compareRequired = false;
     knowledgeAuthorChanged();
     retain();
     el("comparison").hidden = true;
     status(uiMessage("hostedShell.mergeBasisConfirmedSaveToCommit"));
-});
+}
 el("preview").onclick = () => void run(async () => {
     const epoch = requestEpoch;
     await source.flush();

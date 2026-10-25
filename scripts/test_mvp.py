@@ -188,7 +188,7 @@ class LocalApplication(unittest.TestCase):
         input_ids = {1: uid(), 2: uid()}
         for revision, source in [(1, 'S'), (2, 'Y'), (1, 'S')]:
             ack = self.api('/api/draft', {'inputId': input_ids[revision], 'baseId': doc['baseId'], 'sessionId': doc['sessionId'], 'source': source, 'inputRevision': revision})
-            self.assertEqual(ack, {'ok': True, 'inputRevision': revision})
+            self.assertEqual(ack, {'ok': True, 'inputRevision': revision, 'evidence': 'authorDraft'})
         request = {'sessionId': doc['sessionId'], 'baseId': doc['baseId'], 'source': 'S', 'operationId': uid(), 'inputRevision': 1}
         saved = self.api('/api/save', request)
         self.assertEqual(path.read_text('utf-8'), 'S')
