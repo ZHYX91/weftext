@@ -50,7 +50,7 @@ function testDom(context: { after(callback: () => void): void }) {
     } };
 }
 
-const basis: DocumentBasis = { root: "library", path: "note.typ", source: "text", sessionId: "session", serial: 1, baseId: "base" };
+const basis: DocumentBasis = { inputId: "test-input", root: "library", path: "note.typ", source: "text", sessionId: "session", serial: 1, baseId: "base" };
 const field = () => ({ value: { kind: "text" as const, value: "draft" }, changed: true, revision: 1, rawInputs: {} as Record<string, string> });
 function reminderOwner() {
     const guard = new ProposalCloseGuard(), pending = new Map(), inFlight = new Set();

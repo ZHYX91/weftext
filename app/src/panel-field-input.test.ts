@@ -4,7 +4,7 @@ import { createPanelFieldInputs } from "./panel-field-input";
 import type { AuthorInputOwner } from "./author-input";
 import type { DocumentBasis } from "./data-panel";
 
-const original: DocumentBasis = { sessionId:"session-A", source:"原文", serial:3, baseId:"base", path:"display-path", root:"root" };
+const original: DocumentBasis = { inputId: "test-input", sessionId:"session-A", source:"原文", serial:3, baseId:"base", path:"display-path", root:"root" };
 
 test("the field port binds the actual field identity and composes host and proposal lifetimes", () => {
     const basis = {...original}; let actualSession = original.sessionId, allowed = true, proposal = true;

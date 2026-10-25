@@ -55,7 +55,7 @@ export class LatexInsertionPanel {
         const selection = this.host.selection?.() ?? { from: basis.source.length, to: basis.source.length };
         if (!sourceBoundary(basis.source, selection.from) || !sourceBoundary(basis.source, selection.to) || selection.to < selection.from)
             throw new UiError(uiMessage("latexInsertion.selectionCharacterBoundaryInvalid"));
-        const key = `${basis.sessionId}:${basis.baseId}:${basis.serial}:${selection.from}:${selection.to}`, retained = this.dialogs.get(key);
+        const key = `${basis.sessionId}:${basis.baseId}:${basis.serial}:${basis.inputId}:${selection.from}:${selection.to}`, retained = this.dialogs.get(key);
         if (retained && retained.source === basis.source) {
             if (!retained.dialog.open)
                 retained.dialog.showModal();
@@ -63,7 +63,7 @@ export class LatexInsertionPanel {
         }
         const current = (): boolean => {
             const value = this.host.getDocument();
-            return !!value && value.sessionId === basis.sessionId && value.source === basis.source && value.serial === basis.serial && value.baseId === basis.baseId && this.host.editable?.() !== false;
+            return !!value && value.sessionId === basis.sessionId && value.source === basis.source && value.serial === basis.serial && value.baseId === basis.baseId && value.inputId === basis.inputId && this.host.editable?.() !== false;
         };
         const proposed = (text: string): string => basis.source.slice(0, selection.from) + text + basis.source.slice(selection.to);
         const dialog = document.createElement("dialog");

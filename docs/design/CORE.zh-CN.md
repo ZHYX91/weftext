@@ -595,6 +595,8 @@ Core 在合格打开已保存投影时签发 `viewInputId`。有序 ACK 明确�
 
 native 正文 proof 必须携带准确 `inputId`。AuthorDraft 每次 verify／retire 都重新沿完整原件证明该输入，不能要求含其他 producer 的整份合并记录摘要不变；SavedView 的 Session／Base／正文／输入身份摘要仍须相同。所有 hosted 关闭入口先确认依赖该 target 的原交接 cut，再释放 target。客户端冻结 basis 保留输入身份，严格 HTTP DTO 只投影其允许字段；显式比较后只有冻结 Session／Base／输入仍适用时才安装确认依据。
 
+交接清理重试原 producer 已签发的不可变传输，保留原 `inputRevision`、输入身份、依据与凭据；清理不能把旧快照包装成新序号。真实较新输入在签发时替换依赖该 writer 的待确认 cut，迟到 ACK 不倒退本地确认状态。即使界面已导航离开，准确较新 cut 的 ACK 仍可结清原交接；失败或已消费 cut 的重试不能重新制造作者输入，原句柄继续保留。未采纳的历史查询 Session 同样沿原捕获凭据关闭，失败留在原关闭集合。客户端实际文档依据必须含 `inputId`，LaTeX、图表与共用提案在最后一次 await 后核该身份。
+
 pending 恢复的每条实际续跑分支，包括新建库，在首个作者／namespace 效果前重核原 Plan 的 sequence 和容量准入。当前 observations／births 发布按其实际剩余原结算路径预留空间；历史 recovery attempt 和临时残件不抵未来义务，也不消耗其他 pending 的预留。成功或失败的异步结果均先经过原授权、依赖和环境终检，之后才能解释失败、降级能力或发布结果。
 
 Draft 的每条主／备选输入区分普通 `proposal` 与 `committedBaseline { operationId }`。只有真实普通保存提交后，Core 才能签发后者。原 `FileSaveData` v4 在 fingerprint 和原 commit 中绑定准确 `draftProducerId`；Plan 将 `fileSave, identity` 放在作者载荷之前。消费基线前，在同一保护句柄上先核这两项原元数据，再有界读取并重核持久 Plan 与保留事实一致，走现有唯一 commit 校验器，核 scope、FI、producer、已知 Base、准确 afterimage 及已提交搬移路径。证据缺失、损坏或不一致须失败并保留当前完整 Draft，不能把加载时缓存当作原件。
@@ -611,6 +613,8 @@ Draft 持久布局必需先 `scope, identity`，再正文；历史枚举仅在�
 ### v0.7 作者输入顺序（开发候选）
 
 HTTP 与原生 Draft 写入必须携带同一活动 producer 递增的 `inputRevision`，Core 在完整原稿落盘后才 ACK；旧序号重试还须重新核实当前原记录。保存冻结原已确认序号与原稿摘要，纳入 fileSave v4 参与者、指纹与 commit；Query 定义的生成稿同时绑定生成前的作者 cut。更晚 Y 已 ACK 时，迟到保存可提交 S，保留 Y 为 proposal，并将其已知 Base 接续到真正提交的 S；不得将 Y 改签为已提交 baseline。正常交付继续原 Session，丢回执和重启仍保留 Y。
+
+活动原 Session 收到合格普通保存结果后，客户端将 Draft 的已知依据推进到该结果准确的 `baseId`，保留响应期间的新输入与输入身份，使后续连续保存使用实际见过的基准。跨 Session／别名的原操作恢复不能借返回的新 Base 改签未知依据；仍沿原依据进入明确比较或恢复。
 
 未携序号的普通保存只适用于没有有序 Draft 的同步生产者（例如 CLI 的独立 Session），不能借用交互 Session 的 ACK。历史恢复另走显式原请求与完整 Draft 保护，不冒充普通作者输入。原号重试、独立 producer、Undo 与同值 ABA 保持原边界；旧 fileSave 原件保留，缺证明不静默升级。产品与故障注入结果须对应实际候选。
 

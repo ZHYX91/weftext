@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { hostedLinksPatch, requireHostedLinksBasis, sameHostedLinksContext, sameHostedLinksIdentity, type HostedLinksContext, type HostedLinksProposal } from "./hosted-knowledge-links-state";
 
-const context: HostedLinksContext = { actor: "alice", deployment: "d", generation: 4, credential: "token", epoch: 5, authorization: 6, resource: "Shared", sessionId: "session", source: "😀\r\n#link(\"../目标/目标.typ#%E7%AB%A0\")[*原显示文字*]\r\n后文", serial: 7, writable: true, pending: false, compare: false };
+const context: HostedLinksContext = { inputId: "test-input", actor: "alice", deployment: "d", generation: 4, credential: "token", epoch: 5, authorization: 6, resource: "Shared", sessionId: "session", source: "😀\r\n#link(\"../目标/目标.typ#%E7%AB%A0\")[*原显示文字*]\r\n后文", serial: 7, writable: true, pending: false, compare: false };
 const snapshot = "a".repeat(64), hash = "b".repeat(64);
 function proposal(): HostedLinksProposal {
   const from = context.source.indexOf('"'), to = context.source.indexOf('"', from + 1) + 1, replacement = '"weftext-node://workspace/node#%E7%AB%A0"';

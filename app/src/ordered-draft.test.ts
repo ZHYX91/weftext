@@ -21,3 +21,25 @@ test("a failed ACK never becomes current and the next actual input can still per
  const order=new OrderedDraft(); await assert.rejects(order.persist(input,async()=>({inputRevision:99}))); assert.equal(order.acknowledged(input),undefined);
  assert.equal(await order.persist({...input,retainedBaseSource:"original B",baseId:undefined},async wire=>{assert.equal(wire.retainedBaseSource,"original B");return {inputRevision:wire.inputRevision};}),2);
 });
+
+test("retirement retries the original immutable transmission without lowering a newer ACK",async()=>{
+ const order=new OrderedDraft();let original!:Parameters<OrderedDraft["retry"]>[0];const sent:any[]=[];
+ await assert.rejects(order.persist(input,async wire=>{sent.push(wire);throw new Error("reply lost");},cut=>original=cut));
+ const newer={...input,source:"Y",serial:2,inputId:"real-new-input"};
+ await order.persist(newer,async wire=>{sent.push(wire);return {inputRevision:wire.inputRevision};});
+ await order.retry(original,async wire=>{sent.push(wire);return {inputRevision:wire.inputRevision};});
+ assert.deepEqual(sent.map(wire=>[wire.source,wire.inputRevision]),[["S",1],["Y",2],["S",1]]);
+ assert.equal(order.acknowledged(newer),2);assert.equal(order.acknowledged(input),undefined);
+ assert.equal(order.acknowledged({...newer,baseId:"different-base"}),undefined);
+ await assert.rejects(new OrderedDraft().retry(original,async()=>{throw new Error("foreign cut must not send");}));
+ assert.equal(await order.persist({...newer,source:"Z",inputId:"next-edit"},async wire=>({inputRevision:wire.inputRevision})),3);
+});
+
+test("a consumed original cut stays rejected instead of being issued under a new revision",async()=>{
+ const order=new OrderedDraft();let cut!:Parameters<OrderedDraft["retry"]>[0];
+ await order.persist(input,async wire=>({inputRevision:wire.inputRevision}),value=>cut=value);
+ let failed=0;const reject=async(wire:any)=>{failed++;assert.equal(wire.inputRevision,1);throw new Error("Core cut consumed");};
+ await assert.rejects(order.retry(cut,reject));await assert.rejects(order.retry(cut,reject));assert.equal(failed,2);
+ const rebased={...input,baseId:"actual-committed-base"};
+ assert.equal(await order.persist(rebased,async wire=>({inputRevision:wire.inputRevision})),2);
+});

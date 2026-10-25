@@ -38,7 +38,7 @@ export class DiagramPanel {
             this.host.notify(uiMessage("diagramPanel.openEditableNoteFirst"), true);
             return;
         }
-        const key = `${basis.sessionId}/${basis.serial}/${basis.baseId}`;
+        const key = `${basis.sessionId}/${basis.serial}/${basis.baseId}/${basis.inputId}`;
         const retained = this.dialogs.get(key);
         if (retained) {
             if (!retained.dialog.open)
@@ -150,7 +150,7 @@ export class DiagramPanel {
                 if (checkpoint?.nativePending || checkpoint?.pendingDeliveries)
                     throw new UiError(uiMessage("shell.closeAuthorInputPending"));
                 const current = this.host.getDocument();
-                if (!this.editable() || !current || current.sessionId !== basis.sessionId || current.serial !== basis.serial || current.baseId !== basis.baseId || current.source !== basis.source)
+                if (!this.editable() || !current || current.sessionId !== basis.sessionId || current.serial !== basis.serial || current.baseId !== basis.baseId || current.source !== basis.source || current.inputId !== basis.inputId)
                     throw new UiError(uiMessage("diagramPanel.noteOrPermissionChanged"));
                 const patch = diagramPatch(basis, controller.image, selected);
                 await this.host.applyPatch(patch, basis);

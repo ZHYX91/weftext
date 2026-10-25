@@ -20,7 +20,7 @@ function fixture(authorInputs?: AuthorInputSession) {
     Object.defineProperty(globalThis, "document", { configurable: true, value: doc });
     const preview = deferred<void>(), apply = deferred<void>(), prepare = deferred<void>();
     let previewDelayed = false, applyDelayed = false, prepareDelayed = false, applyFailure = false;
-    let basis: DocumentBasis = { sessionId: "session", baseId: "base", serial: 1, source: "original", path: "note", root: "" };
+    let basis: DocumentBasis = { inputId: "test-input", sessionId: "session", baseId: "base", serial: 1, source: "original", path: "note", root: "" };
     const applied: SourcePatch[] = [];
     const host: PanelHost = {
         authorInputs: () => authorInputs,

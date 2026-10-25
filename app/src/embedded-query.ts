@@ -15,12 +15,12 @@ import { resourceCellReferences } from "./media-selection";
 import { decodeErrorDescription, decodeErrorDescriptions, descriptionUiText, exactKeys, type DataErrorKind, type ErrorDescription } from "./ui-diagnostics";
 import { joinUiText } from "./ui-locale";
 export interface EmbeddedQueryBasis {
-    inputId?: string;
+    inputId: string;
     sessionId: string;
     source: string;
     serial: number;
 }
-export function queryBasisWire(basis: EmbeddedQueryBasis) { return {sessionId:basis.sessionId, source:basis.source, serial:basis.serial}; }
+export function queryBasisWire(basis: Pick<EmbeddedQueryBasis,"sessionId"|"source"|"serial">) { return {sessionId:basis.sessionId, source:basis.source, serial:basis.serial}; }
 export interface EmbeddedQueryOccurrence {
     id: string;
     key: string | null;

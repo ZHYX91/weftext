@@ -7,7 +7,23 @@ test("offline source compares its original base and preserves newer input after 
   assert.equal(draftDisposition("someone else", {source:"offline",baseSource:"base"}), "compare");
   assert.equal(draftDisposition("someone else", {source:"old saved",baseSource:"old saved"}), "compare");
   assert.equal(draftDisposition("sent", {source:"new typing",baseSource:"old",pending:{resource:"Shared",operationId:"one",source:"sent"}}), "unknown");
-  assert.deepEqual(applySaveResult({source:"new typing",baseSource:"old"}, "sent"), {source:"new typing",baseSource:"sent"});
+  assert.deepEqual(applySaveResult({source:"new typing",baseSource:"old"}, "sent", null), {source:"new typing",baseSource:"sent"});
+});
+
+test("only an exact live Save receipt advances the retained author basis", () => {
+  const originalBasis = { sessionId: "original-writer", baseId: "original-base" };
+  const draft: HostedDraft = { source: "late Y", baseSource: "B", inputId: "late-input", basis: originalBasis,
+    pending: { resource: "Shared", operationId: "save-X", source: "submitted X" } };
+  const confirmedBasis = { sessionId: "original-writer", baseId: "committed-X-base" };
+  const saved = applySaveResult(draft, "submitted X", confirmedBasis);
+  assert.deepEqual(saved, { source: "late Y", baseSource: "submitted X", inputId: "late-input", basis: confirmedBasis });
+  assert.notEqual(saved.basis, confirmedBasis, "mutable receipt objects must not become the draft's basis");
+  assert.deepEqual(draft.basis, originalBasis); assert.ok(draft.pending);
+  const recovered = applySaveResult(draft, "submitted X", null);
+  assert.deepEqual(recovered.basis, originalBasis);
+  const alias = qualifyHostedDraft({ sessionId: "alias-writer", baseId: "unrelated-new-base", source: "submitted X" }, recovered);
+  assert.equal(alias.basis, undefined); assert.equal(alias.source, "late Y"); assert.equal(alias.baseSource, "submitted X");
+  assert.equal(applySaveResult({ ...draft, basis: undefined }, "submitted X", null).basis, undefined);
 });
 test("a qualified stable Node binds an unbound personal Draft without changing its original basis or operation, while a different Node never borrows the old Draft", () => {
   const original: HostedDraft = { source: "later actor input", baseSource: "original saved", pending: { resource: "Shared", operationId: "original-save", source: "sent" }, definitionReservations: ["reserved-key"] };
@@ -28,8 +44,8 @@ test("original save freezes reservation IDs while later typing and Undo retain t
   draft.pending = { resource: "Shared", operationId: request.operationId, source: request.source, request };
   draft.source = "new typing"; draft.definitionReservations!.push("later");
   assert.deepEqual(request, { sessionId: "session", baseId: "base-id", operationId: "save-one", inputRevision: 1, source: "proposal", definitionReservations: ["first"] });
-  assert.deepEqual(applySaveResult(draft, "proposal"), { source: "new typing", baseSource: "proposal", definitionReservations: ["first", "later"] });
-  const undo: HostedDraft = { ...applySaveResult(draft, "proposal"), source: "base" };
+  assert.deepEqual(applySaveResult(draft, "proposal", null), { source: "new typing", baseSource: "proposal", definitionReservations: ["first", "later"] });
+  const undo: HostedDraft = { ...applySaveResult(draft, "proposal", null), source: "base" };
   assert.deepEqual(freezeHostedSave(undo, "new-session", "new-base", "save-two", 1).definitionReservations, ["first", "later"]);
 });
 test("a pending-only directory cannot accumulate unbound IDs or prove admission; exact statuses clean the next Save", () => {

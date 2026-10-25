@@ -103,7 +103,7 @@ test("clean restore is one real shared Undo; dirty and late input remain author 
 
 // Execute the real hosted consumer and ACK queue; replace HTTP and UI ports.
 const hostedSource=ts.createSourceFile("hosted.ts",readFileSync(new URL("./hosted.ts",import.meta.url),"utf8"),ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
-const consumerNames=["acknowledgeHistory","queueHostedWriterRetirement","retireHostedWriters","hostedInput","draftOrder","persistHostedDraft"];
+const consumerNames=["acknowledgeHistory","queueHostedWriterRetirement","retireHostedWriters","hostedInput","draftOrder","bindHostedTransmission","issueHostedInput","persistHostedDraft"];
 const hostedFunctions=hostedSource.statements.filter(node=>ts.isFunctionDeclaration(node)&&consumerNames.includes(node.name?.text??""));
 assert.equal(hostedFunctions.length,consumerNames.length);
 const hostedConsumer=ts.transpileModule(hostedFunctions.map(node=>node.getText(hostedSource)).join("\n"),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;

@@ -90,7 +90,7 @@ export interface FormReferences {
 }
 export interface DocumentBasis {
     /** Client-side author identity; not a transport revision. */
-    inputId?: string;
+    inputId: string;
     sessionId: string;
     source: string;
     serial: number;

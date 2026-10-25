@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { citationPatches, type CitationProposal } from "./hosted-citations-state";
 import { sameHostedLinksContext, type HostedLinksContext } from "./hosted-knowledge-links-state";
-const context: HostedLinksContext = { actor: "a", deployment: "d", generation: 2, credential: "token", authorization: 4, epoch: 5, resource: "note", sessionId: "session", source: "中文😀\r\nbody", serial: 7, writable: true, pending: false, compare: false };
+const context: HostedLinksContext = { inputId: "test-input", actor: "a", deployment: "d", generation: 2, credential: "token", authorization: 4, epoch: 5, resource: "note", sessionId: "session", source: "中文😀\r\nbody", serial: 7, writable: true, pending: false, compare: false };
 const hash = "a".repeat(64), text = "\n@paper_1\n";
 const proposal: CitationProposal = { resource: context.resource, serial: context.serial, sourceHash: hash, patchUnit: "utf16", source: context.source + text, patches: [{ from: context.source.length, to: context.source.length, text, expected: "", byteFrom: new TextEncoder().encode(context.source).length, byteTo: new TextEncoder().encode(context.source).length }] };
 test("citation changes enter only proved shared-source patches and preserve complex original bytes", () => {

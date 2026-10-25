@@ -6,13 +6,77 @@ Consumer behavior always goes through the hosted authorization boundary.
 """
 import uuid
 import json
+import os
+from pathlib import Path
+import subprocess
 import sys
 import unittest
 
+from build_receipt import selected_node
 from test_hosted import Hosted, Server, digest, uid
 
 
 class HostedHistory(Hosted):
+    def hosted_consumer(self, scenario, **documents):
+        # Run the actual hosted consumer functions with substituted DOM/editor
+        # boundaries and this fixture's real authorized HTTP transport. Tokens
+        # stay in stdin and are never written to the evidence JSON or stdout.
+        root = Path(__file__).resolve().parent.parent
+        command = [str(selected_node(os.environ)),
+                   str(root / 'app/node_modules/tsx/dist/cli.mjs'),
+                   str(root / 'app/src/hosted-http-regression.ts')]
+        config = dict(scenario=scenario, base=self.server.url,
+                      token=self.tokens['alice'], **documents)
+        result = subprocess.run(command, input=json.dumps(config), text=True,
+                                capture_output=True, cwd=root, timeout=75,
+                                encoding='utf-8')
+        # Even a failing frontend assertion must not print the credential.
+        output = (result.stdout + result.stderr).replace(self.tokens['alice'], '[credential]')
+        self.assertEqual(result.returncode, 0, output[-12000:])
+        record = json.loads(result.stdout)
+        serialized = json.dumps(record, ensure_ascii=False, indent=2)
+        self.assertNotIn(self.tokens['alice'], serialized)
+        (self.folder / 'hosted-consumer.json').write_text(serialized, 'utf-8')
+        return record
+
+    def test_history_consumer_actual_history_navigation_retries_newer_original_cut(self):
+        previous, target = self.open(), self.open()
+        result = self.hosted_consumer('navigationRetry', previous=previous, target=target)
+        self.assertEqual(result['currentResource'], 'Other')
+        self.server.close()
+        self.start()
+        reopened = self.open()
+        self.assertEqual(reopened['source'], target['source'])
+        self.assertEqual(reopened['recoveredDraft'], result['newer'])
+        self.assertNotEqual(reopened['recoveredDraft'], result['stale'])
+        for doc in (previous, target):
+            self.call('session/keepalive', {'sessionId': doc['sessionId']}, status=410)
+
+    def test_history_consumer_actual_repeated_save_advances_basis_and_preserves_late_input(self):
+        target = self.open()
+        result = self.hosted_consumer('repeatedSave', target=target)
+        self.assertEqual(result['sources'][-1], result['savedSource'])
+        self.assertEqual(result['currentSource'], result['late'])
+        self.assertEqual(len(set(result['bases'])), 4)
+        self.server.close()
+        self.start()
+        reopened = self.open()
+        self.assertEqual(reopened['source'], result['savedSource'])
+        self.assertEqual(reopened['recoveredDraft'], result['late'])
+        self.assertFalse(reopened['recoveredDraftConflict'])
+
+    def test_history_consumer_actual_consumed_cut_retry_retains_original_ordinal_and_handles(self):
+        _, versions = self.versions()
+        previous, target = self.open(), self.open()
+        result = self.hosted_consumer('consumedCut', previous=previous, target=target,
+                                     versionId=versions[0]['id'])
+        self.assertEqual(result['retirementCount'], 2)
+        for doc in (previous, target):
+            self.assertTrue(self.call('session/keepalive', {'sessionId': doc['sessionId']})['active'])
+        self.server.close()
+        self.start()
+        self.assertEqual(self.open()['source'], result['restoredSource'])
+
     def timeline(self, doc, actor='alice'):
         return self.call('history/list', {'sessionId': doc['sessionId']}, actor)
 

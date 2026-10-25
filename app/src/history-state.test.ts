@@ -6,7 +6,7 @@ import { DocumentSession } from "./session";
 import { createSourceState } from "./editor";
 import { history, undoDepth } from "@codemirror/commands";
 
-const original: HistoryContext = {
+const original: HistoryContext = { inputId: "test-input",
   sessionId: "session", root: "D:/notes", path: "D:/notes/笔记/笔记.typ", workspaceId: "workspace", nodeId: "node",
   source: "v3\r\n", baseSource: "v3\r\n", baseId: "base3", serial: 0, dirty: false,
 };

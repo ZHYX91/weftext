@@ -54,10 +54,10 @@ export function draftDisposition(saved: string, cached?: HostedDraft): "current"
     if (!cached || (cached.viewInputId !== undefined && cached.inputId === cached.viewInputId)) return "current";
     return cached.basis && cached.baseSource === saved ? "restore" : "compare";
 }
-export function applySaveResult(draft: HostedDraft, saved: string): HostedDraft {
+export function applySaveResult(draft: HostedDraft, saved: string, confirmedBasis: {sessionId: string; baseId: string} | null): HostedDraft {
     // Typing after dispatch must not be replaced by the older committed proposal.
     const { pending: _pending, ...retained } = draft;
-    return { ...retained, baseSource: saved };
+    return { ...retained, baseSource: saved, ...(confirmedBasis ? {basis: {...confirmedBasis}} : {}) };
 }
 export function hostedDocumentDraft(opened: {sessionId:string; baseId:string; source:string; viewInputId?:string; recoveredDraft?:string; recoveredDraftBaseSource?:string}): HostedDraft {
     return opened.recoveredDraft != null ? {source:opened.recoveredDraft,baseSource:opened.recoveredDraftBaseSource??opened.source} : {source:opened.source,baseSource:opened.source,basis:{sessionId:opened.sessionId,baseId:opened.baseId},inputId:opened.viewInputId,viewInputId:opened.viewInputId};

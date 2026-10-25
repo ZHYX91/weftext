@@ -108,10 +108,11 @@ class Hosted(unittest.TestCase):
                     self.assertEqual(records(),before)
 
     def call(self, route, data=None, actor='alice', status=200, headers=None):
-        # The test client issues a real durable ACK for each fresh source Save.
+        # Fresh authorized source Saves need a real durable ACK even when the
+        # Save is expected to conflict; otherwise draftChanged masks the case.
         # Original retries reuse the already frozen request and ordinal.
         counters = self.__dict__.setdefault('_ordered_drafts', {})
-        if route == 'save' and status == 200 and data is not None and 'inputRevision' not in data:
+        if route == 'save' and status in (200, 409) and data is not None and 'inputRevision' not in data:
             ack = self.call('draft', {'sessionId': data['sessionId'], 'baseId': data['baseId'],
                                     'source': data['source'], 'inputId': uid(), 'inputRevision': counters.get(data['sessionId'], 0) + 1}, actor)
             data['inputRevision'] = ack['inputRevision']
@@ -197,12 +198,17 @@ class Hosted(unittest.TestCase):
         self.call('draft',{'inputId': str(uuid.uuid4()), 'baseId': b['baseId'], 'inputRevision': 1, 'sessionId':b['sessionId'],'source':b['source']+'BOB_DRAFT'},'bob')
         receipt,req=self.save(a,a['source']+'ALICE_SAVED')
         self.assertEqual(receipt,self.call('save',req))
-        self.save(b,b['source']+'BOB_CONFLICT','bob',409)
-        self.save(other,other['source']+'UNRELATED_OK','bob')
+        conflict, _ = self.save(b,b['source']+'BOB_CONFLICT','bob',409)
+        self.assertEqual(conflict['error']['code'], 'conflict')
+        unrelated, _ = self.save(other,other['source']+'UNRELATED_OK','bob')
+        self.assertEqual(unrelated['status'], 'committed')
+        self.assertEqual((self.root/'Other/Other.typ').read_text('utf-8'), other['source']+'UNRELATED_OK')
         current=(self.root/'Shared/Shared.typ').read_text('utf-8')
-        self.assertIn('ALICE_SAVED',current);self.assertNotIn('BOB_CONFLICT',current)
+        self.assertEqual(current,a['source']+'ALICE_SAVED')
         recovered=self.open(actor='bob')
-        self.assertIn('BOB_CONFLICT',recovered['recoveredDraft'])
+        self.assertEqual(recovered['source'], current)
+        self.assertEqual(recovered['recoveredDraft'], b['source']+'BOB_CONFLICT')
+        self.assertEqual(recovered['recoveredDraftBaseSource'], b['source'])
         self.assertTrue(recovered['recoveredDraftConflict'])
         self.assertNotIn('ALICE_DRAFT',json.dumps(recovered))
         merged=recovered['source']+'\nBOB_MERGED'
@@ -215,8 +221,10 @@ class Hosted(unittest.TestCase):
         saved,req=self.save(a,a['source']+'saved',op=op)
         other_op=self.call('operation',{'resource':'Shared','operationId':op},'bob')
         self.assertEqual(other_op['status'],'notRegistered')
-        self.save(b,b['source']+'conflict','bob',409,op)
-        self.call('save',{**req,'source':req['source']+'changed'},status=409)
+        conflict, _ = self.save(b,b['source']+'conflict','bob',409,op)
+        self.assertEqual(conflict['error']['code'], 'conflict')
+        changed = self.call('save',{**req,'source':req['source']+'changed'},status=409)
+        self.assertEqual(changed['error']['code'], 'operationConflict')
         self.server.close();self.start()
         self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op}),saved)
         self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op},'bob')['status'],'notCommitted')
@@ -281,7 +289,8 @@ class Hosted(unittest.TestCase):
         a=self.open();op=uid()
         self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op})['status'],'notRegistered')
         self.assertEqual(self.call('operation/settle',{'resource':'Shared','operationId':op})['status'],'cancelled')
-        self.save(a,a['source']+'late original',status=409,op=op)
+        cancelled, _ = self.save(a,a['source']+'late original',status=409,op=op)
+        self.assertEqual(cancelled['error']['code'], 'operationCancelled')
         self.assertNotIn('late original',(self.root/'Shared/Shared.typ').read_text('utf-8'))
         result,req=self.save(a,a['source']+'new explicit proposal')
         self.assertEqual(self.call('operation/settle',{'resource':'Shared','operationId':req['operationId']}),result)

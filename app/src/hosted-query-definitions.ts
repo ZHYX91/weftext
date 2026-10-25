@@ -329,7 +329,7 @@ export class HostedQueryDefinitions {
         }
         const proposal = validatePreparedDefinition(record.request, incoming);
         this.install(record, { operationId: incoming.operationId, resource: incoming.resource, status: incoming.status, key: incoming.key, binding: incoming.binding, saveOperationId: incoming.saveOperationId, proposal });
-        if (allowApply && incoming.canApply === true && incoming.recoveryOnly === false && sameDefinitionBasis(this.author.context(), record.request, record.inputId)) {
+        if (record.inputId !== undefined && allowApply && incoming.canApply === true && incoming.recoveryOnly === false && sameDefinitionBasis(this.author.context(), record.request, record.inputId)) {
             this.author.reservations(record.resource, [record.receipt!], true);
             await this.author.apply(validateDefinitionPatches(record.request.source, proposal), { ...record.request, inputId: record.inputId });
             if (!this.currentOperation(record, epoch, generation))

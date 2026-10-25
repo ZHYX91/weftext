@@ -637,16 +637,59 @@ fn exact_configured_profile_reopens_more_than_5000_journal_records_without_lendi
         .unwrap();
     let original = doc.source.clone();
     let mut ids = Vec::new();
-    for _ in 0..5100 {
+    // This case verifies retained-record admission and reopening. Seed the
+    // bounded middle as real create-only, synced, private cancellation facts;
+    // the first and last requests still use Core's actual producer. Large
+    // author-save publication is covered separately by the real-save case.
+    for index in 0..5100 {
         let id = crate::fresh();
-        core.settle_local_attempt(
-            &id,
-            "save",
-            &crate::hash(b"actual no-input original request"),
-        )
-        .unwrap();
+        if index == 0 || index == 5099 {
+            core.settle_local_attempt(
+                &id,
+                "save",
+                &crate::hash(b"actual no-input original request"),
+            )
+            .unwrap();
+        } else {
+            use std::io::Write;
+            use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+            let original = crate::journal::ResolutionRecord {
+                operation_id: id.clone(),
+                action: "cancelPrepared".into(),
+                historical_message: None,
+                attempt: Some(crate::journal::AttemptFence {
+                    request_kind: "save".into(),
+                    wire_digest: crate::hash(b"actual no-input original request"),
+                }),
+            };
+            let path = core.journal_path(&id, "resolution");
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(path.parent().unwrap())
+                .unwrap();
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&path)
+                .unwrap();
+            file.write_all(&serde_json::to_vec(&original).unwrap())
+                .unwrap();
+            file.sync_all().unwrap();
+        }
         ids.push(id);
     }
+    for entry in std::fs::read_dir(profile.join("journal")).unwrap() {
+        std::fs::File::open(entry.unwrap().path())
+            .unwrap()
+            .sync_all()
+            .unwrap();
+    }
+    std::fs::File::open(profile.join("journal"))
+        .unwrap()
+        .sync_all()
+        .unwrap();
     let count = std::fs::read_dir(profile.join("journal"))
         .unwrap()
         .filter_map(|entry| {

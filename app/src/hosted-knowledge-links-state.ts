@@ -2,7 +2,7 @@ import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { applySourcePatches, sourceBoundary, type SourcePatch } from "./editor";
 export interface HostedLinksContext {
-    inputId?: string;
+    inputId: string;
     actor: string;
     deployment: string;
     generation: number;

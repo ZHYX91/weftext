@@ -171,7 +171,7 @@ test("hosted citation catalog decodes its actual capability branches without inv
 });
 
 test("citation proposals keep exact author bytes and reject undeclared outer and patch fields", () => {
-    const context: HostedLinksContext = { actor: "actor", deployment: "deployment", generation: 1, credential: "credential", authorization: 1, epoch: 1, resource: "note", sessionId: "session", source: "作者😀\r\n", serial: 1, writable: true, pending: false, compare: false }, byte = new TextEncoder().encode(context.source).length;
+    const context: HostedLinksContext = { inputId: "test-input", actor: "actor", deployment: "deployment", generation: 1, credential: "credential", authorization: 1, epoch: 1, resource: "note", sessionId: "session", source: "作者😀\r\n", serial: 1, writable: true, pending: false, compare: false }, byte = new TextEncoder().encode(context.source).length;
     const patch = { from: context.source.length, to: context.source.length, text: "@原始键", expected: "", byteFrom: byte, byteTo: byte }, value = { resource: "note", serial: 1, sourceHash: "hash", patchUnit: "utf16", source: context.source + patch.text, patches: [patch] };
     assert.equal(citationPatches(value, context, "hash")[0].insert, "@原始键"); assert.throws(() => citationPatches({ ...value, message: "old response" }, context, "hash")); assert.throws(() => citationPatches({ ...value, patches: [{ ...patch, reason: "old response" }] }, context, "hash"));
 });
@@ -180,10 +180,10 @@ test("actual hosted citations retain author controls on locale changes and rejec
     const names = ["document", "sessionStorage"] as const, saved = names.map(name => Object.getOwnPropertyDescriptor(globalThis, name)), previousLocale = locale.current, document = new TestDocument(), retained = storage(), host = document.createElement("section"); document.body.append(host);
     Object.defineProperty(globalThis, "document", { configurable: true, value: document }); Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: retained });
     host.querySelectorAll = () => host.all().filter(node => ["input", "textarea", "select"].includes(node.tag));
-    const initial: HostedLinksContext = { actor: "actor", deployment: "deployment", generation: 1, credential: "credential", authorization: 1, epoch: 1, resource: "note-a", sessionId: "session-a", source: "作者😀", serial: 1, writable: true, pending: false, compare: false }; let context = initial, release = (_value: unknown) => {}, arrived = () => {}, mismatch = false, retiredBeforeNotification = false, requestedHash = "";
+    const initial: HostedLinksContext = { inputId: "test-input", actor: "actor", deployment: "deployment", generation: 1, credential: "credential", authorization: 1, epoch: 1, resource: "note-a", sessionId: "session-a", source: "作者😀", serial: 1, writable: true, pending: false, compare: false }; let context = initial, release = (_value: unknown) => {}, arrived = () => {}, mismatch = false, retiredBeforeNotification = false, requestedHash = "";
     const started = new Promise<void>(resolve => { arrived = resolve; }), identity = () => initial;
     let controller: HostedCitations;
-    const owner: HostedCitationHost = { context: () => context, identity, basis: async () => ({ sessionId: context.sessionId, source: context.source, serial: context.serial }), apply: async () => { throw new Error("no proposal may apply"); }, authorizationChanged: () => { retiredBeforeNotification = host.hidden && host.children.length === 0; } };
+    const owner: HostedCitationHost = { context: () => context, identity, basis: async () => ({ sessionId: context.sessionId, source: context.source, serial: context.serial, inputId: context.inputId }), apply: async () => { throw new Error("no proposal may apply"); }, authorizationChanged: () => { retiredBeforeNotification = host.hidden && host.children.length === 0; } };
     const request = async <T,>(path: string, body?: unknown): Promise<T> => {
         if (path === "me") return { actor: "actor", deployment: "deployment", generation: mismatch ? 2 : 1 } as T;
         if (path === "citations") return { works: [{ resource: "work", reference: "entity:work", title: "作者 title 😀", status: "ready", use: true, export: false, download: false }], coverage: "complete" } as T;

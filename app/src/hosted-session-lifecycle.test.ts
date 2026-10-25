@@ -10,17 +10,24 @@ import { HostedDraftCache } from "./hosted-draft-cache";
 import { PersonalInputRecovery } from "./personal-input-recovery";
 import type { PersonalInputBundle } from "./personal-input-storage";
 import { OrderedDraft } from "./ordered-draft";
-import { applySaveResult, hostedOpenedDraft, hostedDocumentDraft, qualifyHostedDraft } from "./hosted-state";
+import { applySaveResult, freezeHostedSave, hostedOpenedDraft, hostedDocumentDraft, qualifyHostedDraft } from "./hosted-state";
+import { freezeOriginalAttempt } from "./original-operation";
+import { unavailableCommittedHistory } from "./hosted-history-state";
 
 // Execute the production lifecycle functions and their actual logout/pagehide
 // registrations. DOM/editor panels and HTTP are the only substituted boundaries.
 const sourceFile = ts.createSourceFile("hosted.ts", readFileSync(new URL("./hosted.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = new Set(["sessionAudience", "closeOwnedSession", "confirmHostedRetirementCuts", "confirmDraftBasis", "releaseViewSessions", "retryHostedRetirements", "capturedDraftAck", "queueHostedWriterRetirement", "retireHostedWriters", "hostedInput", "draftOrder", "persistHostedDraft", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus"]);
+const names = new Set(["sessionAudience", "closeOwnedSession", "confirmHostedRetirementCuts", "confirmDraftBasis", "releaseViewSessions", "retryHostedRetirements", "capturedDraftAck", "queueHostedWriterRetirement", "retireHostedWriters", "hostedInput", "draftOrder", "bindHostedTransmission", "issueHostedInput", "persistHostedDraft", "hostedHistoryBasis", "finishUnavailableHistory", "save", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus"]);
 const statements = sourceFile.statements.filter(node =>
   ts.isFunctionDeclaration(node) && !!node.name && names.has(node.name.text)
   || ts.isClassDeclaration(node) && node.name?.text === "HostedError"
   || ts.isExpressionStatement(node) && (node.getText(sourceFile).startsWith('el("logout").onclick') || node.getText(sourceFile).startsWith('window.addEventListener("pagehide"')));
 const compiled = ts.transpileModule(statements.map(node => node.getText(sourceFile)).join("\n"), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
+function deferred<T>() {
+  let resolve!: (value: T) => void, reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
 
 async function fixture() {
   const testDocument = new TestDocument();
@@ -34,6 +41,7 @@ async function fixture() {
   };
   const context: any = {
     hostedWriterRetirements: new Map(), orderedDrafts:new WeakMap(), OrderedDraft, hostedDocumentDraft, qualifyHostedDraft,
+    applySaveResult, freezeHostedSave, freezeOriginalAttempt, unavailableCommittedHistory, crypto,
     ApiError, UiError, uiMessage, locale, uiTextValue, setUiText, errorUiText, displayMessage, uiDisplayParameter, localeDisposals: 0, interfaceLocale: { dispose() { context.localeDisposals++; } }, mountInterfaceLocale() {},
     el, window: { addEventListener(name: string, listener: (event: any) => void) { const prior = listeners.get(name); listeners.set(name, event => { prior?.(event); listener(event); }); } },
     document: { querySelectorAll() { return []; } },
@@ -163,7 +171,7 @@ test("alias recovery queries only the frozen resource, retains unknown input and
   for (const terminal of [false, true]) {
     const f = await fixture(), c = f.context, originalDoc = c.doc;
     const operation = "original-save", reference = "weftext-node://workspace/node";
-    const retained = { source: "later input Y", baseSource: "base B", reference, pending: { resource: "Shared", operationId: operation, source: "submitted X", request: { sessionId: "alice-original", baseId: "original-base", operationId: operation, source: "submitted X" } } };
+    const retained = { source: "later input Y", baseSource: "base B", basis: { sessionId: crypto.randomUUID(), baseId: crypto.randomUUID() }, reference, pending: { resource: "Shared", operationId: operation, source: "submitted X", request: { sessionId: "alice-original", baseId: "original-base", operationId: operation, source: "submitted X" } } };
     c.draft = retained;
     c.source.value = retained.source; c.source.pausedSession = true;
     c.source.checkNavigationCapacity = () => {}; c.source.flush = async () => {};
@@ -174,12 +182,12 @@ test("alias recovery queries only the frozen resource, retains unknown input and
     c.cached = () => undefined; c.hostedOpenedDraft = hostedOpenedDraft; c.applySaveResult = applySaveResult;
     c.finishPersonalOperation = (id: string, state: string) => { assert.equal(id, operation); assert.equal(state, "committed"); acknowledged++; };
     c.scheduleCurrentDraft = () => {};
-    c.installDocument = (opened: any, draft: any, recovered: boolean) => { assert.equal(recovered, true); assert.equal(draft.source, "later input Y"); assert.equal(draft.baseSource, "submitted X"); assert.equal(draft.pending, undefined); c.doc = opened; c.draft = draft; installed++; };
+    c.installDocument = (opened: any, draft: any, recovered: boolean) => { assert.equal(recovered, true); assert.equal(draft.source, "later input Y"); assert.equal(draft.baseSource, "submitted X"); assert.equal(draft.pending, undefined); assert.equal(draft.basis, undefined, "alias recovery must not borrow the alias open's new Base"); c.doc = opened; c.draft = draft; installed++; };
     const requests: { path: string; data: any }[] = [];
     c.request = async (path: string, data?: any) => {
       requests.push({ path, data });
       if (path === "me") return c.identity;
-      if (path === "open") return { resource: "Alias", sessionId: "new-alias-session", source: terminal ? "submitted X" : "base B", rights: { read: true, write: true } };
+      if (path === "open") return { resource: "Alias", sessionId: "new-alias-session", baseId: "unrelated-alias-base", source: terminal ? "submitted X" : "base B", rights: { read: true, write: true } };
       if (path === "navigation/ref") return { resource: "Alias", reference };
       if (path === "operation") { assert.deepEqual(JSON.parse(JSON.stringify(data)), { resource: "Shared", operationId: operation }); return { resource: "Shared", operationId: operation, status: terminal ? "committed" : "recoveryPending", baseId: "save-base" }; }
       throw new Error("unexpected author request: " + path);
@@ -216,6 +224,8 @@ test("ordinary navigation cannot close a target before its dependent writer's cu
  const f=await fixture(),c=f.context,previous={...c.doc},target={...previous,sessionId:"target",baseId:"base",source:"B"};
  Object.assign(c,{doc:target,draft:{source:"Y",baseSource:"B",basis:{sessionId:"target",baseId:"base"}},source:{value:"Y",serial:1,authorInputId:crypto.randomUUID()}});
  c.queueHostedWriterRetirement(previous,target);const audience=c.sessionAudience();let accept=false;const effects:string[]=[];
+ c.request=async()=>{throw new Error("original Draft reply unavailable");};
+ await assert.rejects(c.persistHostedDraft(target));
  c.fetch=async(path:string,options:any)=>{effects.push(path);assert.equal(options.headers.Authorization,"Bearer alice-credential");return {ok:accept,status:accept?200:500,json:async()=>path.endsWith("/draft")?{status:"inputAcknowledged",evidence:"authorDraft",inputRevision:JSON.parse(options.body).inputRevision}:{closed:true},arrayBuffer:async()=>new ArrayBuffer(0)};};
  c.doc={sessionId:"next-note"};c.token="bob-credential";
  await assert.rejects(c.closeOwnedSession(target.sessionId,audience));
@@ -237,4 +247,117 @@ test("explicit comparison installs only its frozen known basis before the next a
   if(aba){await assert.rejects(confirmation);assert.equal(c.draft.basis,undefined);assert.equal(c.compareRequired,true);}
   else {await confirmation;assert.equal(c.draft.basis.sessionId,selected.sessionId);assert.equal(c.draft.basis.baseId,selected.baseId);assert.equal(c.compareRequired,false);await c.persistHostedDraft(selected);}
  }
+});
+
+test("navigation retirement replays the latest actual Y transmission after two lost replies without issuing S under revision 3", async () => {
+  const f = await fixture(), c = f.context, previous = { ...c.doc }, captured = c.sessionAudience();
+  const target = { ...previous, sessionId: "target-writer", baseId: "base-B", source: "B" };
+  Object.assign(c, { doc: target, draft: { source: "S", baseSource: "B", basis: { sessionId: target.sessionId, baseId: target.baseId } },
+    source: { value: "S", serial: 1, authorInputId: "input-S" } });
+  c.queueHostedWriterRetirement(previous, target);
+  const yStarted = deferred<void>(), yReply = deferred<any>(), retryStarted = deferred<void>(), retryReply = deferred<boolean>();
+  const sent: any[] = [], closed: string[] = [];
+  c.request = async (path: string, wire: any) => {
+    assert.equal(path, "draft"); sent.push(structuredClone(wire));
+    if (wire.inputRevision === 1) throw new Error("S ACK reply lost");
+    yStarted.resolve(); return yReply.promise;
+  };
+  await assert.rejects(c.persistHostedDraft(target), /S ACK reply lost/);
+  Object.assign(c.source, { value: "Y", serial: 2, authorInputId: "input-Y", historyBasis: async () => ({ source: "Y", serial: 2, inputId: "input-Y" }) });
+  c.draft.source = "Y";
+  const history = c.hostedHistoryBasis(true), historyFailure = assert.rejects(history, /Y ACK reply lost/);
+  await yStarted.promise;
+  c.fetch = async (path: string, options: any) => {
+    assert.equal(options.headers.Authorization, "Bearer alice-credential");
+    if (path.endsWith("/close")) { closed.push(JSON.parse(options.body).sessionId); return { ok: true, status: 200, json: async () => ({ closed: true }) }; }
+    const wire = JSON.parse(options.body); sent.push(wire); retryStarted.resolve();
+    const accepted = await retryReply.promise;
+    return { ok: accepted, status: accepted ? 200 : 500, json: async () => ({ status: "inputAcknowledged", evidence: "authorDraft", inputRevision: wire.inputRevision }) };
+  };
+  c.doc = { sessionId: "Other", resource: "Other" }; c.source.value = "Other source"; c.token = "bob-credential"; c.requestEpoch++;
+  const retirement = c.closeOwnedSession(target.sessionId, captured), retirementFailure = assert.rejects(retirement);
+  assert.equal(closed.length, 0);
+  yReply.reject(new Error("Y ACK reply lost")); await historyFailure; await retryStarted.promise;
+  assert.equal(closed.length, 0); retryReply.resolve(false); await retirementFailure;
+  assert.equal(c.hostedWriterRetirements.size, 2);
+  assert.deepEqual(sent.map(wire => [wire.source, wire.inputRevision]), [["S", 1], ["Y", 2], ["Y", 2]]);
+  c.fetch = async (path: string, options: any) => {
+    assert.equal(options.headers.Authorization, "Bearer alice-credential");
+    const wire = JSON.parse(options.body);
+    if (path.endsWith("/close")) { closed.push(wire.sessionId); return { ok: true, status: 200, json: async () => ({ closed: true }) }; }
+    sent.push(wire); return { ok: true, status: 200, json: async () => ({ status: "inputAcknowledged", evidence: "authorDraft", inputRevision: wire.inputRevision }) };
+  };
+  await c.retryHostedRetirements();
+  assert.deepEqual(sent.map(wire => [wire.source, wire.inputRevision]), [["S", 1], ["Y", 2], ["Y", 2], ["Y", 2]]);
+  assert.deepEqual(sent[1], sent[2]); assert.deepEqual(sent[1], sent[3]);
+  assert.deepEqual(closed.sort(), [previous.sessionId, target.sessionId].sort()); assert.equal(c.hostedWriterRetirements.size, 0);
+  assert.equal(c.doc.sessionId, "Other"); assert.equal(c.source.value, "Other source");
+});
+
+test("a Core-consumed cut stays retained after cleanup retry fails instead of manufacturing a new transmission", async () => {
+  const f = await fixture(), c = f.context, previous = { ...c.doc }, captured = c.sessionAudience();
+  const target = { ...previous, sessionId: "consumed-writer", baseId: "consumed-base", source: "B" };
+  Object.assign(c, { doc: target, draft: { source: "S", baseSource: "B", basis: { sessionId: target.sessionId, baseId: target.baseId } },
+    source: { value: "S", serial: 1, authorInputId: "input-S" } });
+  c.request = async (_path: string, wire: any) => ({ status: "inputAcknowledged", evidence: "authorDraft", inputRevision: wire.inputRevision });
+  await c.persistHostedDraft(target); c.queueHostedWriterRetirement(previous, target);
+  c.doc = { sessionId: "Other" }; c.token = "bob-credential";
+  const retries: any[] = [];
+  c.fetch = async (path: string, options: any) => {
+    assert.equal(path, "/api/hosted/draft", "neither writer may close without the exact cut");
+    assert.equal(options.headers.Authorization, "Bearer alice-credential"); retries.push(JSON.parse(options.body));
+    return { ok: false, status: 409 };
+  };
+  await assert.rejects(c.closeOwnedSession(target.sessionId, captured)); await c.retryHostedRetirements();
+  assert.ok(retries.length >= 2); assert.ok(retries.every(wire => wire.inputRevision === 1 && wire.source === "S" && wire.baseId === "consumed-base"));
+  assert.equal(c.hostedWriterRetirements.size, 2); assert.equal(c.hostedWriterRetirements.get(previous.sessionId).waitFor.transmission.inputRevision, 1);
+});
+
+test("unavailable-history cleanup retains Alice's late open handle when Bob connects and close delivery fails", async () => {
+  const f = await fixture(), c = f.context, selected = c.doc;
+  const record = { request: { resource: selected.resource, operationId: "unavailable-restore" }, status: { status: "committed", resultStatus: "unavailable" } };
+  const started = deferred<void>(), opened = deferred<any>();
+  c.source.flush = async () => {}; c.history.installStatus = () => {};
+  c.request = async (path: string) => {
+    if (path === "open") { started.resolve(); return opened.promise; }
+    assert.equal(path, "history/status"); return record.status;
+  };
+  const pending = c.finishUnavailableHistory(record), failed = assert.rejects(pending);
+  await started.promise;
+  c.identity = { actor: "bob", deployment: "space", generation: 1 }; c.token = "bob-credential"; c.authorizationEpoch++; c.requestEpoch++;
+  c.doc = { sessionId: "bob-current", resource: "Other" };
+  let accepts = false; const credentials: string[] = [];
+  c.fetch = async (path: string, options: any) => {
+    assert.equal(path, "/api/hosted/close"); assert.equal(JSON.parse(options.body).sessionId, "alice-late-history");
+    credentials.push(options.headers.Authorization);
+    return { ok: accepts, status: accepts ? 200 : 500, json: async () => ({ closed: true }) };
+  };
+  opened.resolve({ ...selected, sessionId: "alice-late-history" }); await failed;
+  const queued = c.hostedWriterRetirements.get("alice-late-history");
+  assert.ok(queued); assert.equal(queued.audience.actor, "alice"); assert.equal(queued.audience.credential, "alice-credential");
+  accepts = true; await c.retryHostedRetirements();
+  assert.deepEqual(credentials, ["Bearer alice-credential", "Bearer alice-credential"]); assert.equal(c.hostedWriterRetirements.size, 0);
+  assert.equal(c.doc.sessionId, "bob-current"); assert.equal(c.token, "bob-credential");
+});
+
+test("the actual normal Save consumer advances its confirmed Base while late Y remains the next author input", async () => {
+  const f = await fixture(), c = f.context, selected = c.doc;
+  const baseB = crypto.randomUUID(), savedBase = crypto.randomUUID(), inputX = crypto.randomUUID(), inputY = crypto.randomUUID();
+  Object.assign(selected, { sessionId: crypto.randomUUID(), baseId: baseB, source: "B" });
+  c.draft = { source: "X", baseSource: "B", basis: { sessionId: selected.sessionId, baseId: selected.baseId }, inputId: inputX };
+  Object.assign(c.source, { value: "X", serial: 1, authorInputId: inputX, flush: async () => {}, beginPersonalSave: async () => {}, settlePersonalSave() {}, refreshQueries() {} });
+  c.queries = { authorChanged() {}, refreshCatalog: async () => {} }; c.history.hasPending = () => false; c.knowledgeAuthorChanged = () => {}; c.finishPersonalOperation = async () => {};
+  const started = deferred<any>(), committed = deferred<any>(), inputs: any[] = [];
+  c.request = async (path: string, wire: any) => {
+    if (path === "draft") { inputs.push(structuredClone(wire)); return { status: "inputAcknowledged", evidence: "authorDraft", inputRevision: wire.inputRevision }; }
+    assert.equal(path, "save"); started.resolve(wire); return committed.promise;
+  };
+  const saving = c.save(), wire = await started.promise;
+  Object.assign(c.source, { value: "late Y", serial: 2, authorInputId: inputY }); await c.retain();
+  committed.resolve({ status: "committed", operationId: wire.operationId, resource: selected.resource, baseId: savedBase }); await saving;
+  assert.equal(c.source.value, "late Y"); assert.equal(c.draft.source, "late Y"); assert.equal(c.draft.baseSource, "X"); assert.equal(c.draft.pending, undefined);
+  assert.deepEqual(JSON.parse(JSON.stringify(c.draft.basis)), { sessionId: selected.sessionId, baseId: savedBase }); assert.equal(c.draft.inputId, inputY);
+  await c.persistHostedDraft(selected);
+  assert.deepEqual(inputs.map(input => [input.source, input.inputRevision, input.baseId]), [["X", 1, baseB], ["late Y", 2, savedBase]]);
+  assert.ok(inputs.every(input => !("retainedBaseSource" in input))); assert.equal(wire.source, "X"); assert.equal(wire.baseId, baseB);
 });

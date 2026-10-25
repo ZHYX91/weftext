@@ -4,7 +4,7 @@ import { applySourcePatches, sourceBoundary, type SourcePatch } from "./editor";
 import { utf8Offset } from "./writing";
 import type { QueryPlan } from "./query-panel";
 export interface DefinitionAuthorContext {
-    inputId?: string;
+    inputId: string;
     resource: string;
     sessionId: string;
     baseId: string;

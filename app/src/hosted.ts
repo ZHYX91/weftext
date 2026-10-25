@@ -1,4 +1,4 @@
-import { OrderedDraft } from "./ordered-draft";
+import { OrderedDraft, type OrderedDraftTransmission } from "./ordered-draft";
 import { parseUiMessage } from "./ui-locale";
 import { decodeRawDiagnostics, decodeErrorCauses, descriptionUiText } from "./ui-diagnostics";
 import { ApiError, decodeApiError } from "./api-error";
@@ -321,7 +321,7 @@ const source: HostedEditor = new HostedEditor(el("source"), request, sourceChang
 });
 const review: HostedReview = new HostedReview(el("review"), request, () => doc ? {
     resource: doc.resource, sessionId: doc.sessionId, path: doc.resource, root: "", source: source.value,
-    serial: source.serial, baseId: doc.baseId, dirty: source.value !== doc.source || compareRequired,
+    serial: source.serial, inputId: source.authorInputId, baseId: doc.baseId, dirty: source.value !== doc.source || compareRequired,
     pending: !!draft?.pending, selection: source.selection,
 } : null, () => source.flush(), (from, to) => source.select(from, to), (resource, changed) => {
     if (changed && doc?.resource === resource) {
@@ -354,10 +354,10 @@ const authoringHost: PanelHost = {
             return Promise.reject(new UiError(uiMessage("hostedShell.writingControlReadEndpointUnavailable")));
         return request<T>("editor/preview", body);
     },
-    getDocument: () => doc && identity && !source.pausedSession ? { sessionId: doc.sessionId, source: source.value, serial: source.serial, baseId: doc.baseId, path: `resource:${doc.resource}`, root: "", dirty: source.value !== doc.source } : null,
+    getDocument: () => doc && identity && !source.pausedSession ? { sessionId: doc.sessionId, source: source.value, serial: source.serial, inputId: source.authorInputId, baseId: doc.baseId, path: `resource:${doc.resource}`, root: "", dirty: source.value !== doc.source } : null,
     applyPatch: async (patch, basis) => {
         await source.flush();
-        if (!authoringEditable() || doc?.sessionId !== basis.sessionId || doc.baseId !== basis.baseId || source.value !== basis.source || source.serial !== basis.serial)
+        if (!authoringEditable() || doc?.sessionId !== basis.sessionId || doc.baseId !== basis.baseId || source.value !== basis.source || source.serial !== basis.serial || source.authorInputId !== basis.inputId)
             throw new UiError(uiMessage("hostedShell.hostedProposalBasisChanged"));
         retain();
         await source.applyQueryPatches([{ from: patch.from, to: patch.to, insert: patch.text, expected: basis.source.slice(patch.from, patch.to) }], basis, "input.authoring.proposal");
@@ -397,28 +397,39 @@ async function closeOwnedSession(sessionId: string, captured: HostedSessionAudie
 }
 function releaseViewSessions() {
     const captured = sessionAudience(), selected = doc;
+    const waiting = selected && Array.from(hostedWriterRetirements.values()).some(entry => entry.waitFor?.target.sessionId === selected.sessionId);
+    const input = selected && waiting ? hostedInput(selected) : undefined;
+    const transmission = selected && input ? draftOrder(selected).issued(input) : undefined;
     const sessions = new Set(retiredStructureSessions);
     if (selected) sessions.add(selected.sessionId);
     for (const id of sessions) {
-        const waiting = selected && Array.from(hostedWriterRetirements.values()).some(entry => entry.waitFor?.target.sessionId === selected.sessionId);
-        const entry = hostedWriterRetirements.get(id) ?? { sessionId: id, audience: captured };
-        if (selected && waiting) entry.waitFor = { target: selected, input: hostedInput(selected), audience: captured };
-        hostedWriterRetirements.set(id, entry);
+        const entry = hostedWriterRetirements.get(id) ?? {sessionId:id,audience:captured};
+        if (selected && input) entry.waitFor = {target:selected,input,audience:captured,transmission};
+        hostedWriterRetirements.set(id,entry);
     }
-    // All handles, including target-ACK failures and close failures, stay in
-    // this single transient ownership set until their actual terminal reply.
-    void retryHostedRetirements().catch(() => { /* retain original credentials and handles */ });
+    if (selected && input) {
+        if (transmission) bindHostedTransmission(selected,transmission);
+        else if (selected.rights.write) {
+            // Departure is an actual current-input checkpoint. Capture it once;
+            // all subsequent cleanup reuses this original transmission.
+            const issued = issueHostedInput(selected,input,wire=>capturedDraftAck(wire,captured));
+            void issued.result.then(()=>retireHostedWriters(selected,issued.transmission)).catch(()=>{});
+        }
+    }
+    void retryHostedRetirements().catch(()=>{});
 }
 async function confirmHostedRetirementCuts(sessionId: string): Promise<void> {
     for (const entry of Array.from(hostedWriterRetirements.values())) {
-        const cut = entry.waitFor;
-        if (cut?.target.sessionId !== sessionId) continue;
-        await draftOrder(cut.target).persist(cut.input, wire => capturedDraftAck(wire, cut.audience));
-        if (draftOrder(cut.target).acknowledged(cut.input) === undefined)
-            throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
-        if (entry.waitFor === cut) entry.waitFor = undefined;
+        while (entry.waitFor?.target.sessionId === sessionId) {
+            const pending = entry.waitFor, transmission = pending.transmission;
+            if (!transmission) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+            const order = draftOrder(pending.target);
+            await order.retry(transmission,wire=>capturedDraftAck(wire,pending.audience));
+            await order.settled();
+            if (entry.waitFor === pending && pending.transmission === transmission) entry.waitFor = undefined;
+        }
     }
-    if (Array.from(hostedWriterRetirements.values()).some(entry => entry.waitFor?.target.sessionId === sessionId))
+    if (Array.from(hostedWriterRetirements.values()).some(entry=>entry.waitFor?.target.sessionId===sessionId))
         throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
 }
 async function retryHostedRetirements(): Promise<void> {
@@ -911,10 +922,12 @@ async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied
     }
 }
 async function finishUnavailableHistory(record: HostedHistoryRecord): Promise<void> {
-    const selected = doc, epoch = requestEpoch;
+    const selected = doc, epoch = requestEpoch, captured = sessionAudience();
     if (!selected || !draft || selected.resource !== record.request.resource || !unavailableCommittedHistory(record))
         throw new UiError(uiMessage("hostedShell.openOriginalConfigurationQueryFact"));
     await source.flush();
+    if (epoch !== requestEpoch || doc !== selected || (["authorization","credential","actor","generation","deployment"] as const).some(key=>captured[key] !== sessionAudience()[key]))
+        throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
     if (epoch !== requestEpoch || doc !== selected || !draft)
         throw new UiError(uiMessage("hostedShell.objectChangedOriginalFactRetained"));
     const fresh = await request<Doc>("open", { resource: selected.resource });
@@ -947,7 +960,7 @@ async function finishUnavailableHistory(record: HostedHistoryRecord): Promise<vo
     finally {
         if (!adopted) {
             try {
-                await request("close", { sessionId: fresh.sessionId });
+                await closeOwnedSession(fresh.sessionId,captured);
             }
             catch { /* Preserve original evidence when cleanup is unavailable. */ }
         }
@@ -1483,7 +1496,7 @@ async function open(resource: string) {
             checkedSaveStatus(outcome, targetDraft.pending.operationId, originalResource);
             if (outcome.status === "committed") {
                 await finishPersonalOperation(targetDraft.pending.operationId, "committed");
-                targetDraft = applySaveResult(targetDraft, targetDraft.pending.source);
+                targetDraft = applySaveResult(targetDraft, targetDraft.pending.source, null);
                 recoveredSave = true;
             }
             else if (["cancelled", "resolved"].includes(outcome.status)) {
@@ -1576,23 +1589,21 @@ const orderedDrafts = new WeakMap<Doc, OrderedDraft>();
 type HostedSessionRetirement = {
     sessionId: string;
     audience: HostedSessionAudience;
-    waitFor?: { target: Doc; input: ReturnType<typeof hostedInput>; audience: HostedSessionAudience };
+    waitFor?: { target: Doc; input: ReturnType<typeof hostedInput>; audience: HostedSessionAudience; transmission?: OrderedDraftTransmission };
     closing?: Promise<void>;
 };
 const hostedWriterRetirements = new Map<string, HostedSessionRetirement>();
 function queueHostedWriterRetirement(previous: Doc, target: Doc): void {
     if (previous.sessionId === target.sessionId) return;
-    const cut = { target, input: hostedInput(target), audience: sessionAudience() };
+    const input = hostedInput(target);
+    const cut = {target,input,audience:sessionAudience(),transmission:draftOrder(target).issued(input)};
     for (const entry of hostedWriterRetirements.values()) if (entry.waitFor?.target.sessionId === previous.sessionId) entry.waitFor = cut;
-    hostedWriterRetirements.set(previous.sessionId, { sessionId: previous.sessionId, audience: sessionAudience(), waitFor: cut });
+    hostedWriterRetirements.set(previous.sessionId,{sessionId:previous.sessionId,audience:sessionAudience(),waitFor:cut});
 }
-async function retireHostedWriters(selected: Doc): Promise<void> {
-    const input = hostedInput(selected);
-    if (draftOrder(selected).acknowledged(input) === undefined) return;
-    for (const entry of Array.from(hostedWriterRetirements.values())) if (entry.waitFor?.target.sessionId === selected.sessionId) {
-        entry.waitFor = undefined;
-    }
-    for (const entry of Array.from(hostedWriterRetirements.values())) if (!entry.waitFor) await closeOwnedSession(entry.sessionId, entry.audience);
+async function retireHostedWriters(selected: Doc, transmission: OrderedDraftTransmission): Promise<void> {
+    if (draftOrder(selected).acknowledged(transmission) !== transmission.inputRevision) return;
+    for (const entry of hostedWriterRetirements.values()) if (entry.waitFor?.target.sessionId === selected.sessionId && entry.waitFor.transmission === transmission) entry.waitFor = undefined;
+    for (const entry of Array.from(hostedWriterRetirements.values())) if (!entry.waitFor) await closeOwnedSession(entry.sessionId,entry.audience);
 }
 
 function draftOrder(selected: Doc): OrderedDraft { let order = orderedDrafts.get(selected); if (!order) { order = new OrderedDraft(); orderedDrafts.set(selected, order); } return order; }
@@ -1600,8 +1611,25 @@ function hostedInput(selected: Doc, value = source.value) {
     return { sessionId: selected.sessionId, source: value, serial: source.serial, inputId: source.authorInputId,
         ...(doc === selected && draft ? draft.basis?.sessionId === selected.sessionId ? { baseId: draft.basis.baseId } : { retainedBaseSource: draft.baseSource } : { baseId: selected.baseId }) };
 }
+function bindHostedTransmission(selected: Doc, transmission: OrderedDraftTransmission): void {
+    for (const entry of hostedWriterRetirements.values()) if (entry.waitFor?.target.sessionId === selected.sessionId) {
+        entry.waitFor.input = transmission;
+        entry.waitFor.transmission = transmission;
+    }
+}
+function issueHostedInput(selected: Doc, input: ReturnType<typeof hostedInput>, send: Parameters<OrderedDraft["persist"]>[1]) {
+    let transmission!: OrderedDraftTransmission;
+    const result = draftOrder(selected).persist(input,send,cut=>{transmission=cut;bindHostedTransmission(selected,cut);});
+    return {transmission,result};
+}
 async function persistHostedDraft(selected: Doc, value = source.value): Promise<number> {
-    const revision = await draftOrder(selected).persist(hostedInput(selected, value), async wire => { const ack = await request<{ status: string; inputRevision: number; evidence: "authorDraft" | "savedView" }>("draft", wire); if (ack.status !== "inputAcknowledged" || !["authorDraft","savedView"].includes(ack.evidence)) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged")); return ack; });    if (doc === selected && draftOrder(selected).acknowledged(hostedInput(selected)) === revision) await retireHostedWriters(selected);
+    const issued = issueHostedInput(selected,hostedInput(selected,value),async wire=>{
+        const ack = await request<{status:string;inputRevision:number;evidence:"authorDraft"|"savedView"}>("draft",wire);
+        if (ack.status !== "inputAcknowledged" || !["authorDraft","savedView"].includes(ack.evidence)) throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+        return ack;
+    });
+    const revision = await issued.result;
+    await retireHostedWriters(selected,issued.transmission);
     return revision;
 }
 async function hostedHistoryBasis(settle: boolean) {
@@ -1656,7 +1684,7 @@ async function save() {
         await finishPersonalOperation(op, "committed");
         if (epoch !== requestEpoch || doc !== selected || !draft)
             return;
-        draft = applySaveResult(draft, sent);
+        draft = applySaveResult(draft, sent, {sessionId:selected.sessionId,baseId:result.baseId!});
         retain();
         source.refreshQueries();
         queries.authorChanged(true);
