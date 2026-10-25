@@ -139,30 +139,55 @@ class EntrySelection(unittest.TestCase):
 
 
 class FrozenRouting(unittest.TestCase):
+    rust_commands = [
+        ['cargo', 'clippy', '--locked', '--workspace', '--all-targets',
+         '--message-format=json-render-diagnostics', '--', '-D', 'warnings'],
+        ['cargo', 'test', '--locked', '--workspace', '--exclude', 'weftext-app',
+         '--message-format=json-render-diagnostics'],
+        ['cargo', 'test', '--locked', '-p', 'weftext-app',
+         '--message-format=json-render-diagnostics', '--', '--test-threads=1'],
+    ]
+
     def test_full_schedule_preserves_original_order_workers_roles_and_all_40_http(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(directory)
-            calls, cargo_calls, environments = [], [], []
+            calls, cargo_calls, environments, timeline = [], [], [], []
 
             def run(*args, **kwargs):
                 calls.append(tuple(str(arg) for arg in args))
                 environments.append(kwargs['env'])
+                timeline.append(('run', str(args[1]) if len(args) > 1 else ''))
+
+            def cargo(args):
+                cargo_calls.append(args)
+                timeline.append(('cargo', len(cargo_calls)))
 
             @contextmanager
-            def cache(*_):
-                yield SimpleNamespace(run=lambda args: cargo_calls.append(args))
+            def cache(root, target, environment):
+                self.assertEqual(root, fixture.artifacts.source_root)
+                self.assertEqual(target, fixture.artifacts.target_directory)
+                self.assertEqual(environment, environments[-1])
+                yield SimpleNamespace(run=cargo)
 
             with patch.object(mvp.NpmTool, 'discover', return_value=NpmFixture()), \
                     patch.object(mvp, 'run', side_effect=run), patch.object(mvp, 'CargoCache', side_effect=cache), \
-                    patch.object(mvp, 'verify_qualified') as verify, redirect_stdout(io.StringIO()) as output:
+                    patch.object(mvp, 'verify_qualified', side_effect=lambda *_: timeline.append(('verify', 0))) as verify, \
+                    redirect_stdout(io.StringIO()) as output:
                 mvp.check(fixture.artifacts)
             names = [call[1] if len(call) > 1 else '' for call in calls]
             self.assertLess(names.index('scripts/check.py'), names.index('scripts/test_cargo_cache.py'))
             self.assertLess(names.index('scripts/test_cli_contract.py'), names.index('scripts/test_mvp.py'))
             self.assertLess(next(i for i, call in enumerate(calls) if call[:2] == ('cargo', 'fmt')),
                             names.index('scripts/test_cli_contract.py'))
-            self.assertEqual([args[1] for args in cargo_calls], ['clippy', 'test'])
-            self.assertEqual(cargo_calls[0][-3:], ['--', '-D', 'warnings'])
+            self.assertEqual(cargo_calls, self.rust_commands)
+            self.assertLess(timeline.index(('run', 'scripts/test_cli_contract.py')), timeline.index(('cargo', 1)))
+            self.assertLess(timeline.index(('cargo', 3)), timeline.index(('run', 'scripts/test_mvp.py')))
+            cli_index = timeline.index(('run', 'scripts/test_cli_contract.py'))
+            self.assertEqual(timeline[cli_index - 1:cli_index + 9], [
+                ('verify', 0), ('run', 'scripts/test_cli_contract.py'), ('verify', 0),
+                ('verify', 0), ('cargo', 1), ('cargo', 2), ('cargo', 3),
+                ('verify', 0), ('verify', 0), ('run', 'scripts/test_mvp.py'),
+            ])
             http = [call for call in calls if len(call) == 3 and call[2] == str(fixture.artifacts.paths['cli'])]
             self.assertEqual(len(http), 40)
             self.assertEqual([call[1] for call in http], ['scripts/' + name for name in mvp.CHECK_SCRIPTS])
@@ -174,6 +199,41 @@ class FrozenRouting(unittest.TestCase):
                              [('selected-node', 'real-npm-cli.js', '--prefix', 'app', 'test')])
             self.assertEqual(verify.call_count, 15)  # before/after seven original phases, then final
             self.assertIn('Full product checks passed', output.getvalue())
+
+    def test_each_rust_failure_stops_later_tests_and_http_after_cli_and_rechecks_inputs(self):
+        for failed in range(len(self.rust_commands)):
+            with self.subTest(failed=failed), tempfile.TemporaryDirectory() as directory:
+                fixture = Fixture(directory)
+                calls, cargo_calls, timeline = [], [], []
+                primary = RuntimeError('original Rust check failure')
+
+                def run(*args, **_):
+                    calls.append(tuple(str(arg) for arg in args))
+                    timeline.append('run:' + str(args[1]))
+
+                def cargo(args):
+                    cargo_calls.append(args)
+                    timeline.append('cargo')
+                    if len(cargo_calls) == failed + 1:
+                        raise primary
+
+                @contextmanager
+                def cache(*_):
+                    yield SimpleNamespace(run=cargo)
+
+                with patch.object(mvp.NpmTool, 'discover', return_value=NpmFixture()), \
+                        patch.object(mvp, 'run', side_effect=run), \
+                        patch.object(mvp, 'CargoCache', side_effect=cache), \
+                        patch.object(mvp, 'verify_qualified', side_effect=lambda *_: timeline.append('verify')) as verify, \
+                        redirect_stdout(io.StringIO()), \
+                        self.assertRaises(RuntimeError) as caught:
+                    mvp.check(fixture.artifacts, ['cli', 'rust', 'http'])
+                self.assertIs(caught.exception, primary)
+                self.assertEqual(cargo_calls, self.rust_commands[:failed + 1])
+                self.assertEqual([call[1] for call in calls], ['fmt', 'scripts/test_cli_contract.py'])
+                self.assertLess(timeline.index('run:scripts/test_cli_contract.py'), timeline.index('cargo'))
+                self.assertEqual(timeline[-1], 'verify')
+                self.assertEqual(verify.call_count, 6)
 
     def test_same_batch_selected_group_executes_again_without_pass_cache(self):
         with tempfile.TemporaryDirectory() as directory:

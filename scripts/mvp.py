@@ -227,7 +227,13 @@ def check(artifacts=None, groups=None):
         with CargoCache(root, artifacts.target_directory, environment) as cache:
             cache.run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets',
                        '--message-format=json-render-diagnostics', '--', '-D', 'warnings'])
-            cache.run(['cargo', 'test', '--locked', '--workspace', '--message-format=json-render-diagnostics'])
+            cache.run(['cargo', 'test', '--locked', '--workspace', '--exclude', 'weftext-app',
+                       '--message-format=json-render-diagnostics'])
+            # App fixtures have independent Core/HTTP owners but share the
+            # process-wide producer registry drained by LocalService shutdown.
+            # Serialize fixtures, retaining each test's own runtime concurrency.
+            cache.run(['cargo', 'test', '--locked', '-p', 'weftext-app',
+                       '--message-format=json-render-diagnostics', '--', '--test-threads=1'])
 
     def http():
         for script in CHECK_SCRIPTS:
