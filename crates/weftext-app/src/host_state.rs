@@ -4,13 +4,14 @@
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
-    fs::{File, OpenOptions},
+    fs::{File, OpenOptions, TryLockError},
     io::{self, Read, Write},
     os::windows::{
         fs::{MetadataExt, OpenOptionsExt},
         io::AsRawHandle,
     },
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 use windows::{
     Win32::{
@@ -35,6 +36,7 @@ use windows::{
 
 const LIMIT: usize = 16 * 1024 * 1024;
 const LEAF: &str = "host-routing.json";
+const LOCK_WAIT: Duration = Duration::from_secs(5);
 fn invalid() -> io::Error {
     io::Error::new(
         io::ErrorKind::PermissionDenied,
@@ -135,8 +137,19 @@ impl Root {
         if sddl(actual.0)? != sddl(expected.0)? {
             return Err(invalid());
         }
+        let root = Self {
+            profile,
+            _directory: directory,
+        };
+        // A publisher may rename its staged file between read_dir and metadata.
+        // Qualification must inspect members under the same physical lock as
+        // publication, not interpret that live transition as corrupt evidence.
+        drop(root.locked()?);
+        Ok(root)
+    }
+    fn inspect_members(&self) -> io::Result<()> {
         let mut members = 0;
-        for member in std::fs::read_dir(profile.path())? {
+        for member in std::fs::read_dir(self.profile.path())? {
             members += 1;
             if members > 256 {
                 return Err(invalid());
@@ -158,11 +171,14 @@ impl Root {
             {
                 return Err(invalid());
             }
+            if staged {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "An original host routing publication remains unresolved; its bytes were retained",
+                ));
+            }
         }
-        Ok(Self {
-            profile,
-            _directory: directory,
-        })
+        Ok(())
     }
     pub fn separate(&self, profile: &weftext_core::QualifiedProfile) -> io::Result<()> {
         if self
@@ -182,6 +198,9 @@ impl Root {
         }
     }
     fn locked(&self) -> io::Result<Locked<'_>> {
+        self.locked_with_limit(LOCK_WAIT)
+    }
+    fn locked_with_limit(&self, limit: Duration) -> io::Result<Locked<'_>> {
         let path = self.profile.path().join(".host-routing.lock");
         let file = match file_options()
             .read(true)
@@ -199,18 +218,27 @@ impl Root {
         if file.metadata()?.len() != 0 {
             return Err(invalid());
         }
-        file.try_lock().map_err(io::Error::other)?;
-        for member in std::fs::read_dir(self.profile.path())? {
-            let member = member?;
-            if member.file_name().to_str().is_some_and(|name| {
-                name.starts_with(".host-routing.") && name.ends_with(".pending")
-            }) {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "An original host routing publication remains unresolved; its bytes were retained",
-                ));
+        let started = Instant::now();
+        loop {
+            match file.try_lock() {
+                Ok(()) => break,
+                Err(TryLockError::Error(error)) => return Err(error),
+                Err(TryLockError::WouldBlock) => {
+                    let remaining = limit.saturating_sub(started.elapsed());
+                    if remaining.is_zero() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::WouldBlock,
+                            "The private activation routing catalog is busy; no routing or OS effect was attempted",
+                        ));
+                    }
+                    // This waits only for another original catalog operation.
+                    // It never retries publication, an OS request or a failed
+                    // qualification, and does not acquire another Core owner.
+                    std::thread::sleep(remaining.min(Duration::from_millis(10)));
+                }
             }
         }
+        self.inspect_members()?;
         Ok(Locked {
             root: self,
             _lock: file,
@@ -885,6 +913,124 @@ mod tests {
     }
 
     #[test]
+    fn simultaneous_first_origins_are_serialized_and_remain_stable() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("host-state");
+        let root = Root::at(path.clone(), true).unwrap();
+        let other = Root::at(path, false).unwrap();
+        let first = weftext_core::qualify_profile(temp.path().join("first")).unwrap();
+        let second = weftext_core::qualify_profile(temp.path().join("second")).unwrap();
+        let start = std::sync::Barrier::new(2);
+        let (first_listener, second_listener) = std::thread::scope(|scope| {
+            let worker = scope.spawn(|| {
+                start.wait();
+                bind(&other, &second, 0).unwrap()
+            });
+            start.wait();
+            let first_listener = bind(&root, &first, 0).unwrap();
+            (first_listener, worker.join().unwrap())
+        });
+        let first_port = first_listener.local_addr().unwrap().port();
+        let second_port = second_listener.local_addr().unwrap().port();
+        assert_ne!(first_port, second_port);
+        let original = bytes(&root);
+        let catalog: Catalog = serde_json::from_slice(&original).unwrap();
+        assert_eq!(catalog.revision, 2);
+        assert_eq!(catalog.origins.len(), 2);
+        assert!(catalog.profiles.is_empty());
+        assert!(catalog.activations.is_empty());
+        drop((first_listener, second_listener));
+        assert_eq!(
+            bind(&root, &first, 0).unwrap().local_addr().unwrap().port(),
+            first_port
+        );
+        assert_eq!(
+            bind(&other, &second, 0)
+                .unwrap()
+                .local_addr()
+                .unwrap()
+                .port(),
+            second_port
+        );
+        assert_eq!(bytes(&root), original);
+    }
+
+    #[test]
+    fn qualification_waits_for_the_original_publication_before_inspecting_members() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("host-state");
+        let root = Root::at(path.clone(), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
+        drop(bind(&root, &profile, 0).unwrap());
+        let mut locked = root.locked().unwrap();
+        let mut catalog = locked.read().unwrap().unwrap();
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (completed_tx, completed_rx) = std::sync::mpsc::channel();
+        std::thread::scope(|scope| {
+            let worker = scope.spawn(|| {
+                started_tx.send(()).unwrap();
+                let reopened = Root::at(path, false).unwrap();
+                completed_tx.send(bytes(&reopened)).unwrap();
+            });
+            started_rx.recv().unwrap();
+            assert!(matches!(
+                completed_rx.recv_timeout(Duration::from_millis(50)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ));
+            // Use the real publisher while the other qualifier is waiting.
+            // It must observe the completed revision, not the live staged path.
+            catalog.revision += 1;
+            locked.publish(&catalog).unwrap();
+            let original = bytes(&root);
+            drop(locked);
+            assert_eq!(completed_rx.recv_timeout(LOCK_WAIT).unwrap(), original);
+            worker.join().unwrap();
+        });
+    }
+
+    #[test]
+    fn busy_routing_lock_is_bounded_without_changing_original_evidence() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("host-state");
+        let root = Root::at(path.clone(), true).unwrap();
+        let other = Root::at(path, false).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
+        drop(bind(&root, &profile, 0).unwrap());
+        let original = bytes(&root);
+        let locked = root.locked().unwrap();
+        let failure = other
+            .locked_with_limit(Duration::from_millis(20))
+            .err()
+            .expect("the original operation must retain its lock");
+        assert_eq!(failure.kind(), io::ErrorKind::WouldBlock);
+        assert_eq!(bytes(&root), original);
+        drop(locked);
+        assert!(other.locked_with_limit(Duration::ZERO).is_ok());
+        assert_eq!(bytes(&root), original);
+    }
+
+    #[test]
+    fn released_lock_does_not_adopt_an_unresolved_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("host-state");
+        let root = Root::at(path.clone(), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
+        drop(bind(&root, &profile, 0).unwrap());
+        let original = bytes(&root);
+        let locked = root.locked().unwrap();
+        let pending = path.join(format!(".host-routing.{}.pending", uuid::Uuid::new_v4()));
+        let partial = b"original unconfirmed publication";
+        std::fs::write(&pending, partial).unwrap();
+        drop(locked);
+        assert_eq!(
+            Root::at(path, false).err().unwrap().kind(),
+            io::ErrorKind::InvalidData
+        );
+        assert_eq!(bytes(&root), original);
+        assert_eq!(std::fs::read(pending).unwrap(), partial);
+    }
+
+    #[test]
     fn startup_selection_and_os_request_hold_one_physical_lock() {
         let temp = tempfile::tempdir().unwrap();
         let root = Root::at(temp.path().join("host-state"), true).unwrap();
@@ -894,9 +1040,16 @@ mod tests {
         let profile = weftext_core::qualify_existing_profile(temp.path().join("core")).unwrap();
         let value = root
             .change_startup(&profile, &device, true, || {
-                // A concurrent route request fails qualification while the
-                // exact accepted request owns the application-wide OS effect.
-                assert!(other.locked().is_err());
+                // No contender may pass the original application's OS effect.
+                // An immediate probe avoids waiting for this same-thread owner.
+                assert_eq!(
+                    other
+                        .locked_with_limit(Duration::ZERO)
+                        .err()
+                        .unwrap()
+                        .kind(),
+                    io::ErrorKind::WouldBlock
+                );
                 let catalog: Catalog = serde_json::from_slice(&bytes(&root)).unwrap();
                 assert_eq!(
                     catalog.startup.as_ref().unwrap().physical_identity,

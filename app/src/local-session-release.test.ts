@@ -26,6 +26,7 @@ function fixture() {
     toastHost: { append(item: any) { errors.push(item); } },
     api: async (path: string, body: { sessionId: string }) => { calls.push({ path, body }); return { released: true, sessionId: body.sessionId }; },
     navigationGeneration: 0,
+    current: null,
     inventory: null,
     workspaceTools: { assertLibraryChange() {} },
     prepareSwitch: async () => undefined,
@@ -46,7 +47,7 @@ test("native close waits through the actual open-result adoption caller", async 
   const f = fixture();
   let continueSwitch!: () => void;
   f.context.prepareSwitch = () => new Promise<void>(resolve => { continueSwitch = resolve; });
-  f.context.addDocument = (opened: any) => { f.context.documents.push({ session: { opened } }); };
+  f.context.addDocument = (opened: any) => { const document = { session: { opened } }; f.context.documents.push(document); f.context.current = document; };
   const adoption = f.context.acceptResolvedDocument({ sessionId: "newly-delivered", source: "body", baseId: "base", path: "note.typ", root: "library" });
   assert.throws(() => f.context.libraryCloseActivity.checkpoint());
   continueSwitch();
@@ -113,6 +114,34 @@ test("the main owner cannot adopt a late result after the existing writer retire
   assert.deepEqual(f.calls.map(call => call.body.sessionId), ["fresh-result"]);
   assert.equal(existing.session.opened.sessionId, "old-session");
   assert.equal(existing.session.source, "author Y");
+});
+
+test("notification acceptance confirms the original existing writer even when new disk content opens a comparison", async () => {
+  const f = fixture();
+  const existing = {session: {opened: {sessionId:"original",nodeId:"node",workspaceId:"workspace"},source:"unsaved author input",baseSource:"old saved"},writing:{settleForSessionChange:async()=>{}}};
+  f.context.documents=[existing]; f.context.current=existing;
+  f.context.pendingSave=()=>true;
+  f.context.setComparisonTarget=(document:any,result:any)=>{document.comparisonTarget=result;};
+  f.context.renderContent=()=>{}; f.context.renderSidebar=()=>{};
+  let accepted: boolean | undefined;
+  const fresh={sessionId:"new-comparison",nodeId:"node",workspaceId:"workspace",source:"changed disk"};
+  await f.context.acceptResolvedDocument(fresh,(value:boolean)=>{accepted=value;});
+  assert.equal(accepted,true); assert.equal(f.context.current,existing);
+  assert.equal(existing.session.source,"unsaved author input");
+  assert.equal((existing as any).comparisonTarget,fresh); assert.equal(f.calls.length,0);
+});
+
+test("same-node ABA navigation never confirms the retired notification attempt", async () => {
+  const f=fixture(); let resume!:()=>void;
+  const existing={session:{opened:{sessionId:"original",nodeId:"node",workspaceId:"workspace"}}};
+  f.context.documents=[existing]; f.context.current=existing;
+  f.context.prepareSwitch=()=>new Promise<void>(resolve=>{resume=resolve;});
+  let accepted:boolean|undefined;
+  const pending=f.context.acceptResolvedDocument({sessionId:"retired-attempt",nodeId:"node",workspaceId:"workspace",source:"disk"},(value:boolean)=>{accepted=value;});
+  f.context.navigationGeneration+=2;
+  resume(); await pending;
+  assert.equal(accepted,false); assert.equal(f.context.current,existing);
+  assert.deepEqual(f.calls.map(call=>call.body.sessionId),["retired-attempt"]);
 });
 
 const bodyCloseNames = new Set(["bodyCloseFrozen", "bodyOwners", "preparedBody", "frozenBodyRenders", "bodyCloseParticipant"]);

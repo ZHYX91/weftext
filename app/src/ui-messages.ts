@@ -36,6 +36,28 @@ export const zhCN = {
   "capture.persisting": "正在可靠保存恢复稿。",
   "capture.pending": "原操作结果尚未确认；恢复稿和原编号已保留。",
   "reminder.label": "任务提醒",
+  "reminder.activationTitle": "通知中的任务",
+  "reminder.activationEmpty": "此通知已没有可打开的有效任务。",
+  "reminder.activationLimited": "部分任务当前不可访问，请刷新后重试。",
+  "reminder.activationTask": "打开任务 {p0}",
+  "reminder.hostStatus": "本机提醒服务",
+  "reminder.hostStatusLoading": "正在读取本机提醒服务状态。",
+  "reminder.hostStatusUnavailable": "本机提醒服务状态读取失败；通知和调度是否可用尚未确认。",
+  "reminder.desktopInactive": "本次连接没有活动的桌面提醒服务，不会提交系统通知。",
+  "reminder.notificationUnavailable": "当前桌面环境不提供系统通知，提醒记录仍可在应用内查看。",
+  "reminder.notificationUnknown": "系统通知是否可用尚未确认。",
+  "reminder.notificationEnabled": "系统允许此应用提交通知；勿扰、锁屏等系统设置仍决定是否显示。",
+  "reminder.notificationDisabledForApplication": "系统设置已关闭 Weftext 通知；可在 Windows 通知设置中查看。",
+  "reminder.notificationDisabledForUser": "当前 Windows 用户已关闭系统通知。",
+  "reminder.notificationDisabledByPolicy": "系统策略禁止此应用发送通知。",
+  "reminder.notificationDisabledByManifest": "当前安装包没有可用的系统通知配置。",
+  "reminder.schedulingInactive": "提醒调度尚未启动。",
+  "reminder.schedulingRunning": "提醒调度正在运行。",
+  "reminder.schedulingPaused": "提醒调度已暂停，暂不提交新的系统通知。",
+  "reminder.schedulingRestricted": "提醒调度受限；请检查通知权限和下方的库或任务问题。",
+  "reminder.schedulingStopping": "提醒服务正在退出，不再接收新的通知提交。",
+  "reminder.scanIncomplete": "本轮提醒检查尚未完成，不能据此判断没有待办。",
+  "reminder.scopeIssues": "本轮提醒检查发现 {count} 项问题；部分库、任务或原通知结果需要核对。",
   "reminder.absolute": "独立时刻",
   "reminder.beforeDue": "截止前提醒",
   "reminder.dueDay": "截止日指定时间",
@@ -10222,6 +10244,28 @@ export interface MessageParamsMap {
   "capture.persisting": {  };
   "capture.pending": {  };
   "reminder.label": {  };
+  "reminder.activationTitle": {  };
+  "reminder.activationEmpty": {  };
+  "reminder.activationLimited": {  };
+  "reminder.activationTask": { p0: number };
+  "reminder.hostStatus": {  };
+  "reminder.hostStatusLoading": {  };
+  "reminder.hostStatusUnavailable": {  };
+  "reminder.desktopInactive": {  };
+  "reminder.notificationUnavailable": {  };
+  "reminder.notificationUnknown": {  };
+  "reminder.notificationEnabled": {  };
+  "reminder.notificationDisabledForApplication": {  };
+  "reminder.notificationDisabledForUser": {  };
+  "reminder.notificationDisabledByPolicy": {  };
+  "reminder.notificationDisabledByManifest": {  };
+  "reminder.schedulingInactive": {  };
+  "reminder.schedulingRunning": {  };
+  "reminder.schedulingPaused": {  };
+  "reminder.schedulingRestricted": {  };
+  "reminder.schedulingStopping": {  };
+  "reminder.scanIncomplete": {  };
+  "reminder.scopeIssues": { count: number };
   "reminder.absolute": {  };
   "reminder.beforeDue": {  };
   "reminder.dueDay": {  };
@@ -20408,6 +20452,32 @@ export const messageParamTypes = {
   "capture.persisting": {},
   "capture.pending": {},
   "reminder.label": {},
+  "reminder.activationTitle": {},
+  "reminder.activationEmpty": {},
+  "reminder.activationLimited": {},
+  "reminder.activationTask": {
+    "p0": "integer"
+  },
+  "reminder.hostStatus": {},
+  "reminder.hostStatusLoading": {},
+  "reminder.hostStatusUnavailable": {},
+  "reminder.desktopInactive": {},
+  "reminder.notificationUnavailable": {},
+  "reminder.notificationUnknown": {},
+  "reminder.notificationEnabled": {},
+  "reminder.notificationDisabledForApplication": {},
+  "reminder.notificationDisabledForUser": {},
+  "reminder.notificationDisabledByPolicy": {},
+  "reminder.notificationDisabledByManifest": {},
+  "reminder.schedulingInactive": {},
+  "reminder.schedulingRunning": {},
+  "reminder.schedulingPaused": {},
+  "reminder.schedulingRestricted": {},
+  "reminder.schedulingStopping": {},
+  "reminder.scanIncomplete": {},
+  "reminder.scopeIssues": {
+    "count": "integer"
+  },
   "reminder.absolute": {},
   "reminder.beforeDue": {},
   "reminder.dueDay": {},
@@ -32427,6 +32497,28 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "capture.persisting": "Saving the recovery draft durably.",
   "capture.pending": "The original operation is unconfirmed. Its draft and original ID are retained.",
   "reminder.label": "Task reminder",
+  "reminder.activationTitle": "Tasks from this notification",
+  "reminder.activationEmpty": "This notification has no currently available tasks.",
+  "reminder.activationLimited": "Some tasks are currently unavailable. Refresh and try again.",
+  "reminder.activationTask": "Open task {p0}",
+  "reminder.hostStatus": "Reminders on this device",
+  "reminder.hostStatusLoading": "Reading the reminder service status on this device.",
+  "reminder.hostStatusUnavailable": "The reminder service status could not be read. Notification and scheduling availability is unconfirmed.",
+  "reminder.desktopInactive": "This connection has no active desktop reminder service and will not submit system notifications.",
+  "reminder.notificationUnavailable": "System notifications are unavailable in this desktop environment. Reminder records remain available in the app.",
+  "reminder.notificationUnknown": "System notification availability is unconfirmed.",
+  "reminder.notificationEnabled": "The system allows this app to submit notifications. Do Not Disturb, lock-screen and other system settings still control their display.",
+  "reminder.notificationDisabledForApplication": "System settings have disabled Weftext notifications. Check Windows notification settings.",
+  "reminder.notificationDisabledForUser": "System notifications are disabled for the current Windows user.",
+  "reminder.notificationDisabledByPolicy": "System policy prevents this app from sending notifications.",
+  "reminder.notificationDisabledByManifest": "The current package does not have an available system notification configuration.",
+  "reminder.schedulingInactive": "Reminder scheduling has not started.",
+  "reminder.schedulingRunning": "Reminder scheduling is running.",
+  "reminder.schedulingPaused": "Reminder scheduling is paused. No new system notifications are being submitted.",
+  "reminder.schedulingRestricted": "Reminder scheduling is restricted. Check notification permissions and the library or task issues below.",
+  "reminder.schedulingStopping": "The reminder service is stopping and no longer accepts new notification submissions.",
+  "reminder.scanIncomplete": "This reminder scan is incomplete. It does not establish that there are no pending tasks.",
+  "reminder.scopeIssues": "This reminder scan found {count} issues. Some libraries, tasks or original notification results need checking.",
   "reminder.absolute": "Independent instant",
   "reminder.beforeDue": "Before the due time",
   "reminder.dueDay": "Time on the due day",

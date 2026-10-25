@@ -24,12 +24,20 @@ pub(crate) async fn run(data_dir: PathBuf, config: PathBuf) -> Result<(), ServeE
             "This executable is not a complete qualified Weftext build",
         )
     })?;
-    let profile = crate::host_paths::qualify_core(&data_dir).map_err(|_| {
-        failed(
-            "profileQualification",
-            "The exact persistent profile could not be qualified",
-        )
-    })?;
+    let profile = crate::work::spawn_blocking(move || crate::host_paths::qualify_core(&data_dir))
+        .await
+        .map_err(|_| {
+            failed(
+                "profileQualification",
+                "The exact persistent profile could not be qualified",
+            )
+        })?
+        .map_err(|_| {
+            failed(
+                "profileQualification",
+                "The exact persistent profile could not be qualified",
+            )
+        })?;
     let data = profile.path().to_path_buf();
     let owner=OwnerPipe::acquire(profile,OwnerRole::Hosted).map_err(|_|failed("ownerUnavailable","This physical profile already has an owner or owner qualification failed; no second Core was opened"))?;
     let identity = owner.identity();
@@ -39,8 +47,16 @@ pub(crate) async fn run(data_dir: PathBuf, config: PathBuf) -> Result<(), ServeE
             "The original owner name could not be retained through Core release",
         )
     })?;
-    let (core, data) = crate::host_environment::open_core(data)
-        .map_err(|_| failed("coreUnavailable", "The persistent Core could not be opened"))?;
+    // Move the original leases into the actual worker: cancelling this wait
+    // cannot release the elected name while Core is still being opened. The
+    // result drops Core before these leases if no caller receives it.
+    let (core, data, owner, _owner_name) = crate::work::spawn_blocking(move || {
+        crate::host_environment::open_core(data)
+            .map(|(core, data)| (core, data, owner, _owner_name))
+    })
+    .await
+    .map_err(|_| failed("coreUnavailable", "The persistent Core could not be opened"))?
+    .map_err(|_| failed("coreUnavailable", "The persistent Core could not be opened"))?;
     let service=HostedService::bind(core,config,data.join("legacy-office"),crate::compiler_worker::Transport::default()).await.map_err(|error|{
         if error.is::<crate::hosted::PairingMismatch>() {
             failed("syncPairingMismatch","Persisted sync pairing differs from configuration; existing grants cannot silently move to another family")

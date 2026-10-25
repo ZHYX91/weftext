@@ -4,8 +4,9 @@ use super::{
 };
 use std::{cell::Cell, rc::Rc};
 use webview2_com::{
-    Microsoft::Web::WebView2::Win32::*, NavigationStartingEventHandler,
-    NewWindowRequestedEventHandler, ProcessFailedEventHandler, WebMessageReceivedEventHandler,
+    Microsoft::Web::WebView2::Win32::*, NavigationCompletedEventHandler,
+    NavigationStartingEventHandler, NewWindowRequestedEventHandler, ProcessFailedEventHandler,
+    WebMessageReceivedEventHandler,
 };
 use windows::{
     Win32::{
@@ -102,6 +103,38 @@ impl NavigationPolicy {
     }
 }
 
+/// The one admitted document load is distinct from later navigations that the
+/// close barrier deliberately cancels. Their unsuccessful completion must not
+/// retire a healthy author surface or hide an actual initial-load failure.
+struct InitialNavigation {
+    policy: NavigationPolicy,
+    started: Cell<bool>,
+    pending: Cell<Option<u64>>,
+}
+impl InitialNavigation {
+    fn new(policy: NavigationPolicy) -> Self {
+        Self {
+            policy,
+            started: Cell::new(false),
+            pending: Cell::new(None),
+        }
+    }
+    fn start(&self, address: &str, navigation_id: u64) -> bool {
+        if !self.policy.permits(address) || self.started.replace(true) {
+            return false;
+        }
+        self.pending.set(Some(navigation_id));
+        true
+    }
+    fn failed_completion(&self, navigation_id: u64, success: bool) -> bool {
+        if self.pending.get() != Some(navigation_id) {
+            return false;
+        }
+        self.pending.set(None);
+        !success
+    }
+}
+
 pub(super) struct View {
     controller: ICoreWebView2Controller,
     webview: ICoreWebView2,
@@ -165,15 +198,17 @@ impl View {
                 .SetAreBrowserAcceleratorKeysEnabled(false)?;
             view.controller.SetIsVisible(false)?;
         }
-        let initial = Rc::new(Cell::new(true));
+        let initial = Rc::new(InitialNavigation::new(policy));
+        let starting = initial.clone();
         let callback = NavigationStartingEventHandler::create(Box::new(move |_, args| {
             let args = args.ok_or_else(|| Error::from(E_POINTER))?;
             let mut uri = PWSTR::null();
+            let mut navigation_id = 0;
             unsafe {
+                args.NavigationId(&mut navigation_id)?;
                 args.Uri(&mut uri)?;
             }
-            let allowed =
-                text(uri, 32768).is_ok_and(|uri| policy.permits(&uri)) && initial.replace(false);
+            let allowed = text(uri, 32768).is_ok_and(|uri| starting.start(&uri, navigation_id));
             // Reload/back/context actions cannot destroy a live unsaved producer
             // outside the same close barrier. A host-controlled reopen gets a
             // new controller/surface epoch after its prior barrier completes.
@@ -184,6 +219,31 @@ impl View {
             view.webview.add_NavigationStarting(&callback, &mut token)?;
         }
         view.tokens.push((0, token));
+        let weak = Rc::downgrade(state);
+        let events = queue.clone();
+        let callback = NavigationCompletedEventHandler::create(Box::new(move |_, args| {
+            let args = args.ok_or_else(|| Error::from(E_POINTER))?;
+            let mut navigation_id = 0;
+            let mut success = false.into();
+            unsafe {
+                args.NavigationId(&mut navigation_id)?;
+                args.IsSuccess(&mut success)?;
+            }
+            if initial.failed_completion(navigation_id, success.as_bool()) {
+                // Navigation errors (including a failed local response) need
+                // not crash a WebView process. Keep the existing exact-surface
+                // failure/author-retention path instead of waiting forever for
+                // a page that cannot announce surface-ready.
+                events.push(Event::ViewFailed(weak.clone()));
+            }
+            Ok(())
+        }));
+        let mut token = 0;
+        unsafe {
+            view.webview
+                .add_NavigationCompleted(&callback, &mut token)?;
+        }
+        view.tokens.push((4, token));
         let weak = Rc::downgrade(state);
         let events = queue.clone();
         let callback = WebMessageReceivedEventHandler::create(Box::new(move |_, args| {
@@ -299,7 +359,8 @@ impl View {
                     0 => self.webview.remove_NavigationStarting(token),
                     1 => self.webview.remove_WebMessageReceived(token),
                     2 => self.webview.remove_NewWindowRequested(token),
-                    _ => self.webview.remove_ProcessFailed(token),
+                    3 => self.webview.remove_ProcessFailed(token),
+                    _ => self.webview.remove_NavigationCompleted(token),
                 }
             };
             if let Err(error) = result {
@@ -323,6 +384,54 @@ impl Drop for View {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn initial_navigation() -> InitialNavigation {
+        InitialNavigation::new(
+            NavigationPolicy::new("http://127.0.0.1:47821/?native=library").unwrap(),
+        )
+    }
+
+    #[test]
+    fn admitted_initial_navigation_failure_is_reported_once() {
+        let initial = initial_navigation();
+        assert!(initial.start("http://127.0.0.1:47821/?native=library", 41));
+        assert!(initial.failed_completion(41, false));
+        assert!(!initial.failed_completion(41, false));
+    }
+
+    #[test]
+    fn cancelled_other_navigation_cannot_erase_the_initial_failure() {
+        let initial = initial_navigation();
+        assert!(!initial.start("https://example.invalid/", 40));
+        assert!(!initial.failed_completion(40, false));
+        assert!(initial.start("http://127.0.0.1:47821/?native=library", 41));
+        assert!(!initial.start("http://127.0.0.1:47821/?native=library", 42));
+        assert!(!initial.failed_completion(42, false));
+        assert!(initial.failed_completion(41, false));
+    }
+
+    #[test]
+    fn successful_initial_load_is_not_failed_by_cancelled_reload_or_late_completion() {
+        let initial = initial_navigation();
+        assert!(initial.start("http://127.0.0.1:47821/?native=library", 41));
+        assert!(!initial.failed_completion(41, true));
+        assert!(!initial.start("http://127.0.0.1:47821/?native=library", 42));
+        assert!(!initial.failed_completion(42, false));
+        assert!(!initial.failed_completion(41, false));
+    }
+
+    #[test]
+    fn another_surface_completion_does_not_consume_the_original_navigation() {
+        let library = initial_navigation();
+        let capture = InitialNavigation::new(
+            NavigationPolicy::new("http://127.0.0.1:47821/capture?native=capture").unwrap(),
+        );
+        assert!(library.start("http://127.0.0.1:47821/?native=library", 41));
+        assert!(capture.start("http://127.0.0.1:47821/capture?native=capture", 52));
+        assert!(!library.failed_completion(52, false));
+        assert!(capture.failed_completion(52, false));
+        assert!(library.failed_completion(41, false));
+    }
 
     #[test]
     fn complete_large_opened_document_includes_escaped_source_and_recovery() {

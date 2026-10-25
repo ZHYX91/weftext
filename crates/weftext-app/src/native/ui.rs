@@ -50,6 +50,10 @@ pub(super) enum Command {
         message: serde_json::Value,
         activate: bool,
     },
+    ConfirmedPost {
+        message: serde_json::Value,
+        completed: tokio::sync::oneshot::Sender<bool>,
+    },
     Preferences {
         locale: UiLocale,
         preferences: weftext_core::DesktopPreferences,
@@ -227,7 +231,36 @@ struct Surface {
     sessions: std::collections::BTreeSet<String>,
     draft_calls: std::collections::BTreeSet<String>,
     capture_requests: std::collections::BTreeSet<String>,
+    confirmed_posts: BTreeMap<String, ConfirmedAction>,
     exposed: bool,
+}
+struct ConfirmedAction {
+    completed: tokio::sync::oneshot::Sender<bool>,
+    posted: bool,
+}
+impl ConfirmedAction {
+    fn can_post(&self) -> bool {
+        !self.posted && !self.completed.is_closed()
+    }
+}
+fn complete_confirmed_action(
+    gate: &Gate,
+    actions: &mut BTreeMap<String, ConfirmedAction>,
+    surface_id: &str,
+    surface_epoch: &str,
+    action_id: &str,
+    accepted: bool,
+) -> bool {
+    if !gate.owns_surface(SurfaceKind::Library, surface_id, surface_epoch)
+        || !actions.get(action_id).is_some_and(|action| action.posted)
+    {
+        return false;
+    }
+    if let Some(action) = actions.remove(action_id) {
+        let _ = action.completed.send(accepted);
+        return true;
+    }
+    false
 }
 struct PendingPost {
     message: serde_json::Value,
@@ -586,6 +619,7 @@ impl Reducer {
                         sessions: Default::default(),
                         draft_calls: Default::default(),
                         capture_requests: Default::default(),
+                        confirmed_posts: Default::default(),
                         exposed: false,
                     },
                 );
@@ -613,6 +647,55 @@ impl Reducer {
                     });
                 } else {
                     return Err(failed());
+                }
+            }
+            Command::ConfirmedPost {
+                mut message,
+                completed,
+            } => {
+                let Some(surface) = self.surfaces.get_mut(&id(SurfaceKind::Library)) else {
+                    let _ = completed.send(false);
+                    return Ok(());
+                };
+                surface
+                    .confirmed_posts
+                    .retain(|_, action| !action.completed.is_closed());
+                if self.global_exit
+                    || self.fatal
+                    || surface.gate.closing()
+                    || surface.confirmed_posts.len() >= 16
+                    || surface.after_ready.len() >= 64
+                {
+                    let _ = completed.send(false);
+                    return Ok(());
+                }
+                let action_id = uuid::Uuid::new_v4().to_string();
+                message
+                    .as_object_mut()
+                    .ok_or_else(failed)?
+                    .insert("actionId".into(), action_id.clone().into());
+                let message = surface.gate.bind_message(message).ok_or_else(failed)?;
+                surface.confirmed_posts.insert(
+                    action_id.clone(),
+                    ConfirmedAction {
+                        completed,
+                        posted: false,
+                    },
+                );
+                if surface.gate.ready {
+                    surface.view.as_ref().ok_or_else(failed)?.post(&message)?;
+                    surface
+                        .confirmed_posts
+                        .get_mut(&action_id)
+                        .ok_or_else(failed)?
+                        .posted = true;
+                    surface.window.show();
+                } else {
+                    surface.after_ready.push(PendingPost {
+                        message,
+                        activate: true,
+                        delivery_id: None,
+                    });
                 }
             }
             Command::Preferences {
@@ -992,6 +1075,21 @@ impl Reducer {
                         let delivery = self.capture_delivery.take().ok_or_else(failed)?;
                         self.capture_result(&delivery.request, accepted)?;
                     }
+                    Message::ActionDelivered {
+                        surface_id,
+                        surface_epoch,
+                        action_id,
+                        accepted,
+                    } => {
+                        complete_confirmed_action(
+                            &surface.gate,
+                            &mut surface.confirmed_posts,
+                            &surface_id,
+                            &surface_epoch,
+                            &action_id,
+                            accepted,
+                        );
+                    }
                     Message::DraftCall {
                         surface_id,
                         surface_epoch,
@@ -1097,7 +1195,23 @@ impl Reducer {
                                     return Err(failed());
                                 }
                             } else {
-                                view.post(&pending.message)?;
+                                if let Some(action_id) = pending
+                                    .message
+                                    .get("actionId")
+                                    .and_then(serde_json::Value::as_str)
+                                {
+                                    let Some(action) = surface.confirmed_posts.get_mut(action_id)
+                                    else {
+                                        continue;
+                                    };
+                                    if !action.can_post() {
+                                        continue;
+                                    }
+                                    view.post(&pending.message)?;
+                                    action.posted = true;
+                                } else {
+                                    view.post(&pending.message)?;
+                                }
                             }
                             if pending.activate {
                                 surface.window.show();
@@ -1417,6 +1531,95 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notification_reply_requires_a_posted_action_on_the_original_library_incarnation() {
+        let gate = Gate::new(SurfaceKind::Library);
+        let other = Gate::new(SurfaceKind::Library);
+        let id = uuid::Uuid::new_v4().to_string();
+        let (completed, mut result) = tokio::sync::oneshot::channel();
+        let mut actions = BTreeMap::from([(
+            id.clone(),
+            ConfirmedAction {
+                completed,
+                posted: false,
+            },
+        )]);
+        assert!(!complete_confirmed_action(
+            &gate,
+            &mut actions,
+            &gate.id,
+            &gate.epoch,
+            &id,
+            true
+        ));
+        assert!(matches!(
+            result.try_recv(),
+            Err(tokio::sync::oneshot::error::TryRecvError::Empty)
+        ));
+        actions.get_mut(&id).unwrap().posted = true;
+        assert!(!complete_confirmed_action(
+            &gate,
+            &mut actions,
+            &other.id,
+            &other.epoch,
+            &id,
+            true
+        ));
+        assert!(!complete_confirmed_action(
+            &gate,
+            &mut actions,
+            &gate.id,
+            &other.epoch,
+            &id,
+            true
+        ));
+        assert!(!complete_confirmed_action(
+            &gate,
+            &mut actions,
+            &gate.id,
+            &gate.epoch,
+            "another-action",
+            true
+        ));
+        assert!(complete_confirmed_action(
+            &gate,
+            &mut actions,
+            &gate.id,
+            &gate.epoch,
+            &id,
+            false
+        ));
+        assert_eq!(result.try_recv().unwrap(), false);
+        assert!(!complete_confirmed_action(
+            &gate,
+            &mut actions,
+            &gate.id,
+            &gate.epoch,
+            &id,
+            true
+        ));
+    }
+
+    #[test]
+    fn original_navigation_timeout_prevents_a_still_queued_action_from_being_posted() {
+        let (completed, result) = tokio::sync::oneshot::channel();
+        let action = ConfirmedAction {
+            completed,
+            posted: false,
+        };
+        assert!(action.can_post());
+        drop(result);
+        assert!(!action.can_post());
+        let (completed, _result) = tokio::sync::oneshot::channel();
+        assert!(
+            !ConfirmedAction {
+                completed,
+                posted: true
+            }
+            .can_post()
+        );
+    }
 
     #[test]
     fn real_sender_terminal_bypasses_full_normal_queue_and_failed_wake() {

@@ -1,5 +1,6 @@
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { openReminderOverview } from "./reminder-overview";
+import { activateReminderNotification } from "./reminder-activation";
 import { joinUiText } from "./ui-locale";
 import { apiErrorUiText } from "./api-error";
 import { decodeProcessingRead } from "./style-wire";
@@ -38,6 +39,7 @@ export interface WorkspaceToolsHost {
     applyPatch(patch: SourcePatch, basis: DocumentBasis): Promise<void>;
     openDocument(path: string, root?: string): Promise<void>;
     openResolved(document: OpenedDocument): Promise<void>;
+    openResolvedConfirmed(document: OpenedDocument): Promise<boolean>;
     releaseOpenedSession(sessionId: string): Promise<void>;
     created(document: OpenedDocument, operationId: string | undefined): Promise<void>;
     applyReceipt(receipt: KnowledgeReceipt, context: KnowledgeContext): Promise<void>;
@@ -81,6 +83,7 @@ export class WorkspaceTools {
     }
     thawAfterClose(): void { this.closeGuard.thaw(); for (const owner of this.closeOwners()) owner.thawAfterClose(); }
     openReminders(): void { this.closeGuard.assertMutable(); openReminderOverview(this.dataHost); }
+    activateReminder(activationKey: string): Promise<void> { return this.closeGuard.run(() => activateReminderNotification(this.dataHost, activationKey)); }
     readonly bar = document.createElement("nav");
     readonly inspector = document.createElement("aside");
     private readonly propertyPanel: DataPanel;
@@ -117,7 +120,7 @@ export class WorkspaceTools {
         const dataHost: PanelHost = {
             canEdit: host.canEditSource,
             request: api, requestBlob: apiBlob, getDocument: host.getDocument, applyPatch: host.applyPatch,
-            openDocument: host.openDocument, openResolved: host.openResolved, releaseOpenedSession: host.releaseOpenedSession, notify: host.notify,
+            openDocument: host.openDocument, openResolved: host.openResolved, openResolvedConfirmed: host.openResolvedConfirmed, releaseOpenedSession: host.releaseOpenedSession, notify: host.notify,
             environmentChanged: root => this.invalidateQueryEnvironment(root),
             savedDefinition: host.savedDefinition,
             applyOperationReceipt: (receipt, basis) => host.applyReceipt(receipt as KnowledgeReceipt, { ...basis, dirty: basis.dirty ?? false }),

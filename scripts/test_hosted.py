@@ -99,6 +99,7 @@ class Hosted(unittest.TestCase):
             'subscription':{'root':str(self.root),'owner':owner,'reminderId':uid(),'enabled':True,'expectedRevision':0,'mutationId':uid()},
             'status':{'executionKey':'a'*64}, 'records':{'after':None},
             'schedule':{'cursor':None}, 'open':{'executionKey':'a'*64}, 'handle':{'executionKey':'a'*64},
+            'activation':{'activationKey':uid()}, 'activation/open':{'activationKey':uid(),'owner':owner},
         }
         for actor in ['alice','reader']:
             for route, body in routes.items():

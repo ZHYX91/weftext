@@ -2,16 +2,19 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { NativeSurface, type CloseParticipant, type CloseProof } from "./native-host";
 import { nativeDraftRequest } from "./native-draft";
+import { NativeCapture } from "./native-capture";
+import type { MountedLocalCapture } from "./capture-mount";
+import { thawNativeApi } from "./native-api-gate";
 
 const proof: CloseProof = { kind: "document", evidence: "authorDraft", ownerId: "actual-owner", ownerGeneration: "owner-generation", sessionId: "opened-session", baseId: "opened-base", inputId: "original-input", sourceDigest: "a".repeat(64), recordDigest: "b".repeat(64) };
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(accept => { resolve = accept; }); return { promise, resolve }; }
-async function fixture(run: (f: { surface: NativeSurface; fire: (kind: string) => void; deliver: (value: unknown) => void; messages: Record<string, unknown>[]; root: { inert: boolean }; tick: () => Promise<void> }) => Promise<void>) {
+async function fixture(run: (f: { surface: NativeSurface; fire: (kind: string) => void; deliver: (value: unknown) => void; messages: Record<string, unknown>[]; root: { inert: boolean }; tick: () => Promise<void> }) => Promise<void>, kind: "library" | "capture" = "library") {
   const originals = [Object.getOwnPropertyDescriptor(globalThis, "document"), Object.getOwnPropertyDescriptor(globalThis, "window")];
   const events = new Map<string, (() => void)[]>(), messages: Record<string, unknown>[] = [], root = { inert: false };
   const received: ((event: MessageEvent<unknown>) => void)[] = [];
   Object.defineProperty(globalThis, "document", { configurable: true, value: { documentElement: root, addEventListener: (kind: string, listener: () => void) => events.set(kind, [...events.get(kind) ?? [], listener]) } });
   Object.defineProperty(globalThis, "window", { configurable: true, value: { chrome: { webview: { postMessage: (value: Record<string, unknown>) => messages.push(value), addEventListener: (_: string, listener: (event: MessageEvent<unknown>) => void) => { received.push(listener); } } } } });
-  const surface = new NativeSurface("library");
+  const surface = new NativeSurface(kind);
   try { await run({ surface, fire: kind => events.get(kind)?.forEach(listener => listener()), deliver: value => received.forEach(listener => listener({ data: value } as MessageEvent<unknown>)), messages, root, tick: async () => { await new Promise(resolve => setImmediate(resolve)); } }); }
   finally { for (const [index, name] of ["document", "window"].entries()) { const prior = originals[index]; if (prior) Object.defineProperty(globalThis, name, prior); else Reflect.deleteProperty(globalThis, name); } }
 }
@@ -138,4 +141,58 @@ test("duplicate preparation and commit do not restart or thaw the original produ
   f.deliver(close("commit-close", "original")); await f.tick();
   assert.equal(frozen, 1); assert.equal(thawed, 0); assert.equal(f.root.inert, true);
   f.deliver(close("close-cancelled", "original"));
+}));
+
+test("prepare and commit carry one close identity into the actual Capture participant", () => fixture(async f => {
+  thawNativeApi();
+  let frozen = 0;
+  const retained = { draftId: crypto.randomUUID(), ownerGeneration: crypto.randomUUID(), recordRevision: 7, inputRevision: 4, inputCut: "full" as const,
+    lastMutationId: crypto.randomUUID(), recordDigest: "a".repeat(64), editRevision: 3 };
+  const mounted = { assertCloseReady() {}, form: { showError() {} }, guard: {
+    async prepare() { return retained; },
+    freeze(value: unknown) { assert.equal(value, retained); frozen++; return true; },
+    thaw() {},
+  } } as unknown as MountedLocalCapture;
+  const capture = new NativeCapture(f.surface, mounted);
+  f.surface.register("capture", capture.participant); f.surface.markReady(); f.deliver(bound);
+  try {
+    f.deliver(close("prepare-close", "original")); await f.tick();
+    assert.equal(f.messages.at(-1)?.type, "close-prepared");
+    // Host JSON key ordering is not part of the original close identity either.
+    f.deliver({ closeAttemptId: "original", surfaceEpoch: "epoch", type: "commit-close", surfaceId: "surface" }); await f.tick();
+    assert.equal(frozen, 1);
+    assert.equal(f.messages.at(-1)?.type, "close-frozen");
+    assert.equal(f.root.inert, true);
+  } finally {
+    f.deliver(close("close-cancelled", "original")); await f.tick();
+    capture.dispose(); thawNativeApi();
+  }
+}, "capture"));
+
+test("close identity projection cannot admit unknown wire fields or a different attempt", () => fixture(async f => {
+  let prepared = 0, frozen = 0;
+  let original = "";
+  f.surface.register("body", {
+    prepare: async request => { prepared++; original = JSON.stringify(request); return [proof]; },
+    freeze: request => { frozen++; return JSON.stringify(request) === original; },
+    thaw() {},
+  });
+  f.surface.markReady(); f.deliver(bound);
+  f.deliver({ ...close("prepare-close", "original"), unchecked: true }); await f.tick();
+  assert.equal(prepared, 0);
+  f.deliver(close("prepare-close", "original")); await f.tick();
+  assert.equal(prepared, 1);
+  assert.deepEqual(JSON.parse(original), { surfaceId: "surface", surfaceEpoch: "epoch", closeAttemptId: "original" });
+  for (const invalid of [
+    { ...close("commit-close", "original"), unchecked: true },
+    { ...close("commit-close", "original"), surfaceEpoch: "retired" },
+    close("commit-close", "other"),
+  ]) { f.deliver(invalid); await f.tick(); }
+  assert.equal(frozen, 0); assert.equal(f.root.inert, false);
+  f.deliver(close("commit-close", "original")); await f.tick();
+  assert.equal(frozen, 1); assert.equal(f.messages.at(-1)?.type, "close-frozen");
+  f.deliver({ ...close("close-cancelled", "original"), unchecked: true }); await f.tick();
+  assert.equal(f.root.inert, true);
+  f.deliver(close("close-cancelled", "original")); await f.tick();
+  assert.equal(f.root.inert, false);
 }));

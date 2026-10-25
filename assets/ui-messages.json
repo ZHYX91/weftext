@@ -188,6 +188,120 @@
       "en-US": "Task reminder",
       "params": {}
     },
+    "reminder.activationTitle": {
+      "zh-CN": "通知中的任务",
+      "en-US": "Tasks from this notification",
+      "params": {}
+    },
+    "reminder.activationEmpty": {
+      "zh-CN": "此通知已没有可打开的有效任务。",
+      "en-US": "This notification has no currently available tasks.",
+      "params": {}
+    },
+    "reminder.activationLimited": {
+      "zh-CN": "部分任务当前不可访问，请刷新后重试。",
+      "en-US": "Some tasks are currently unavailable. Refresh and try again.",
+      "params": {}
+    },
+    "reminder.activationTask": {
+      "zh-CN": "打开任务 {p0}",
+      "en-US": "Open task {p0}",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "reminder.hostStatus": {
+      "zh-CN": "本机提醒服务",
+      "en-US": "Reminders on this device",
+      "params": {}
+    },
+    "reminder.hostStatusLoading": {
+      "zh-CN": "正在读取本机提醒服务状态。",
+      "en-US": "Reading the reminder service status on this device.",
+      "params": {}
+    },
+    "reminder.hostStatusUnavailable": {
+      "zh-CN": "本机提醒服务状态读取失败；通知和调度是否可用尚未确认。",
+      "en-US": "The reminder service status could not be read. Notification and scheduling availability is unconfirmed.",
+      "params": {}
+    },
+    "reminder.desktopInactive": {
+      "zh-CN": "本次连接没有活动的桌面提醒服务，不会提交系统通知。",
+      "en-US": "This connection has no active desktop reminder service and will not submit system notifications.",
+      "params": {}
+    },
+    "reminder.notificationUnavailable": {
+      "zh-CN": "当前桌面环境不提供系统通知，提醒记录仍可在应用内查看。",
+      "en-US": "System notifications are unavailable in this desktop environment. Reminder records remain available in the app.",
+      "params": {}
+    },
+    "reminder.notificationUnknown": {
+      "zh-CN": "系统通知是否可用尚未确认。",
+      "en-US": "System notification availability is unconfirmed.",
+      "params": {}
+    },
+    "reminder.notificationEnabled": {
+      "zh-CN": "系统允许此应用提交通知；勿扰、锁屏等系统设置仍决定是否显示。",
+      "en-US": "The system allows this app to submit notifications. Do Not Disturb, lock-screen and other system settings still control their display.",
+      "params": {}
+    },
+    "reminder.notificationDisabledForApplication": {
+      "zh-CN": "系统设置已关闭 Weftext 通知；可在 Windows 通知设置中查看。",
+      "en-US": "System settings have disabled Weftext notifications. Check Windows notification settings.",
+      "params": {}
+    },
+    "reminder.notificationDisabledForUser": {
+      "zh-CN": "当前 Windows 用户已关闭系统通知。",
+      "en-US": "System notifications are disabled for the current Windows user.",
+      "params": {}
+    },
+    "reminder.notificationDisabledByPolicy": {
+      "zh-CN": "系统策略禁止此应用发送通知。",
+      "en-US": "System policy prevents this app from sending notifications.",
+      "params": {}
+    },
+    "reminder.notificationDisabledByManifest": {
+      "zh-CN": "当前安装包没有可用的系统通知配置。",
+      "en-US": "The current package does not have an available system notification configuration.",
+      "params": {}
+    },
+    "reminder.schedulingInactive": {
+      "zh-CN": "提醒调度尚未启动。",
+      "en-US": "Reminder scheduling has not started.",
+      "params": {}
+    },
+    "reminder.schedulingRunning": {
+      "zh-CN": "提醒调度正在运行。",
+      "en-US": "Reminder scheduling is running.",
+      "params": {}
+    },
+    "reminder.schedulingPaused": {
+      "zh-CN": "提醒调度已暂停，暂不提交新的系统通知。",
+      "en-US": "Reminder scheduling is paused. No new system notifications are being submitted.",
+      "params": {}
+    },
+    "reminder.schedulingRestricted": {
+      "zh-CN": "提醒调度受限；请检查通知权限和下方的库或任务问题。",
+      "en-US": "Reminder scheduling is restricted. Check notification permissions and the library or task issues below.",
+      "params": {}
+    },
+    "reminder.schedulingStopping": {
+      "zh-CN": "提醒服务正在退出，不再接收新的通知提交。",
+      "en-US": "The reminder service is stopping and no longer accepts new notification submissions.",
+      "params": {}
+    },
+    "reminder.scanIncomplete": {
+      "zh-CN": "本轮提醒检查尚未完成，不能据此判断没有待办。",
+      "en-US": "This reminder scan is incomplete. It does not establish that there are no pending tasks.",
+      "params": {}
+    },
+    "reminder.scopeIssues": {
+      "zh-CN": "本轮提醒检查发现 {count} 项问题；部分库、任务或原通知结果需要核对。",
+      "en-US": "This reminder scan found {count} issues. Some libraries, tasks or original notification results need checking.",
+      "params": {
+        "count": "integer"
+      }
+    },
     "reminder.absolute": {
       "zh-CN": "独立时刻",
       "en-US": "Independent instant",

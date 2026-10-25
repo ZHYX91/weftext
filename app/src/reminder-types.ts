@@ -8,3 +8,11 @@ export interface ReminderRecord {owner:ReminderOwner;reminderId:string;triggerIn
 export interface ReminderRecordsPage {records:ReminderRecord[];next:string|null}
 export interface ReminderScheduleCursor {settingsRevision:number;after:string}
 export interface ReminderSchedulePage {entries:{candidate:ReminderCandidate;eligibility:ReminderEligibility|null;issue:{code:string;message:string}|null}[];issues:{owner:ReminderOwner;reminderId:string;code:string;message:string}[];complete:boolean;next:ReminderScheduleCursor|null}
+/** Current desktop-owner observation, separate from the saved task and delivery records. */
+export interface ReminderHostStatus {
+  desktopActive: boolean;
+  notificationState: "unavailable" | "unknown" | "enabled" | "disabledForApplication" | "disabledForUser" | "disabledByPolicy" | "disabledByManifest";
+  scheduling: "inactive" | "running" | "paused" | "restricted" | "stopping";
+  scanComplete: boolean;
+  scopeIssueCount: number;
+}

@@ -359,29 +359,41 @@ async fn run_owner(
             "This executable is not a complete qualified Weftext build",
         )
     })?;
-    let profile = (|| -> io::Result<weftext_core::QualifiedProfile> {
-        if let Some(original) = &existing {
-            let actual = weftext_core::qualify_existing_profile(&options.data_dir)
-                .map_err(io::Error::other)?;
-            crate::host_state::Root::qualify(false)?.separate(&actual)?;
-            if actual.physical_identity() != original.target.profile.physical_identity() {
-                Err(io::Error::new(
-                    io::ErrorKind::PermissionDenied,
-                    "The original physical profile changed",
-                ))
+    let profile_path = options.data_dir.clone();
+    let expected_profile = existing
+        .as_ref()
+        .map(|original| original.target.profile.physical_identity().to_owned());
+    let profile =
+        crate::work::spawn_blocking(move || -> io::Result<weftext_core::QualifiedProfile> {
+            if let Some(expected) = expected_profile {
+                let actual = weftext_core::qualify_existing_profile(&profile_path)
+                    .map_err(io::Error::other)?;
+                crate::host_state::Root::qualify(false)?.separate(&actual)?;
+                if actual.physical_identity() != expected {
+                    Err(io::Error::new(
+                        io::ErrorKind::PermissionDenied,
+                        "The original physical profile changed",
+                    ))
+                } else {
+                    Ok(actual)
+                }
             } else {
-                Ok(actual)
+                crate::host_paths::qualify_core(&profile_path)
             }
-        } else {
-            crate::host_paths::qualify_core(&options.data_dir)
-        }
-    })()
-    .map_err(|_| {
-        error(
-            "profileQualification",
-            "The exact persistent profile could not be qualified",
-        )
-    })?;
+        })
+        .await
+        .map_err(|_| {
+            error(
+                "profileQualification",
+                "The original profile qualification did not complete",
+            )
+        })?
+        .map_err(|_| {
+            error(
+                "profileQualification",
+                "The exact persistent profile could not be qualified",
+            )
+        })?;
     let data = profile.path().to_path_buf();
     let owner = match OwnerPipe::acquire(
         weftext_core::qualify_existing_profile(&data).map_err(|_| {
@@ -431,8 +443,16 @@ async fn run_owner(
         )
     })?;
     let requested_port = options.port;
-    let listener = crate::work::spawn_blocking(move || {
-        crate::host_state::Root::qualify(false)?.bind_local(&origin_profile, requested_port)
+    let origin_guard = owner.retain_name().map_err(|_| {
+        error(
+            "ownerLease",
+            "The original owner name could not be retained through local origin binding",
+        )
+    })?;
+    let (listener, origin_guard, origin_profile) = crate::work::spawn_blocking(move || {
+        let listener =
+            crate::host_state::Root::qualify(false)?.bind_local(&origin_profile, requested_port)?;
+        Ok::<_, io::Error>((listener, origin_guard, origin_profile))
     })
     .await
     .map_err(|_| {
@@ -457,16 +477,20 @@ async fn run_owner(
         data_dir: data,
         ..options
     };
+    // Cancellation must retain both the owner election and the exact physical
+    // directory through the worker's real Core-open tail.
+    let opening_guard = (origin_guard, origin_profile);
     let service = if let Some(original) = &existing {
         LocalService::bind_existing_with_listener(
             options,
             listener,
             original.target.profile.physical_identity(),
             &original.target.device_id,
+            opening_guard,
         )
         .await
     } else {
-        LocalService::bind_with_listener(options, listener).await
+        LocalService::bind_with_listener(options, listener, opening_guard).await
     }
     .map_err(|_| {
         error(
@@ -557,6 +581,7 @@ async fn run_owner(
         .is_some_and(|original| original.reason == ExistingReason::Toast);
     let toast_deadline = tokio::time::Instant::now() + Duration::from_secs(35);
     let mut proofs = tokio::task::JoinSet::<(ui::Sender, ui::Command)>::new();
+    let mut activations = tokio::task::JoinSet::<()>::new();
     let mut scheduler: Option<scheduler::Scheduler> = None;
     let mut scheduler_faulted = false;
     if (failure.is_none() || desktop.is_some())
@@ -606,6 +631,9 @@ async fn run_owner(
             if automatic_exit(&desktop,&mut exit_requested){break;}}
                                 }
                             }
+                            result=activations.join_next(),if !activations.is_empty()=>{
+                                if !matches!(result,Some(Ok(()))) { failure.get_or_insert(error("toastNavigationUnknown","The original notification navigation did not complete")); }
+                            }
                             request=requested.recv(),if control_open=>{
                                 let Some(request)=request else{
                                     control_open=false;failure=Some(error("ownerControlUnavailable","The protected owner control channel became unavailable"));
@@ -629,7 +657,14 @@ async fn run_owner(
                                     Command::ToastActivation{opaque}=>{
                                         let result=activate_toast(&state,&profile,&url,&mut desktop,opaque,&continuation).await;
                                         let failed=result.is_err();
-                                        let _=reply.send(result.map(|()|br#"{"accepted":true}"#.to_vec()).map_err(io::Error::other));
+                                        match result {
+                                            Ok(completed)=>{activations.spawn(async move {
+                                                let accepted=tokio::time::timeout(Duration::from_secs(40),completed).await;
+                                                let result=if matches!(accepted,Ok(Ok(true))){Ok(br#"{"accepted":true}"#.to_vec())}else{Err(io::Error::other("The original notification navigation was not confirmed"))};
+                                                let _=reply.send(result);
+                                            });}
+                                            Err(error)=>{let _=reply.send(Err(io::Error::other(error)));}
+                                        }
                                         if failed && toast_starting {toast_starting=false;if continuation.end_unclaimed_bootstrap(){failure=Some(error("toastActivationRejected","The original notification is no longer qualified"));break;}}
                                         if !failed {toast_starting=false;}
                                     }
@@ -736,6 +771,14 @@ async fn run_owner(
             failure.get_or_insert(error(
                 "proofUnknown",
                 "An accepted Core close verification did not retire",
+            ));
+        }
+    }
+    while let Some(result) = activations.join_next().await {
+        if result.is_err() {
+            failure.get_or_insert(error(
+                "toastNavigationUnknown",
+                "The original notification navigation tail did not retire",
             ));
         }
     }
@@ -895,7 +938,7 @@ async fn activate_toast(
     desktop: &mut Option<Desktop>,
     opaque: String,
     continuation: &Arc<crate::broker::lifetime::ServiceContinuation>,
-) -> Result<(), ServeError> {
+) -> Result<oneshot::Receiver<bool>, ServeError> {
     let lookup = opaque.clone();
     let route = crate::work::spawn_blocking(move || {
         crate::host_state::Root::qualify(false)?.lookup(&lookup)
@@ -922,7 +965,8 @@ async fn activate_toast(
     let device_id = route.device_id;
     let execution_key = route.execution_key;
     let app_id = route.app_id;
-    let activation = crate::core_call(state, move |core| {
+    let activation_key = opaque.clone();
+    crate::core_call(state, move |core| {
         let device = core.existing_device_identity()?;
         if !device.is_current || device.id != device_id {
             return Err(weftext_core::CoreError::new(
@@ -959,22 +1003,23 @@ async fn activate_toast(
         continuation,
     )
     .await?;
+    let (completed, completion) = oneshot::channel();
     desktop
         .as_ref()
         .unwrap()
         .thread
         .sender
-        .send(ui::Command::Post {
-            kind: SurfaceKind::Library,
-            message: serde_json::json!({"type":"reminder-activation","activation":activation}),
-            activate: true,
+        .send(ui::Command::ConfirmedPost {
+            message: serde_json::json!({"type":"reminder-activation","activationKey":activation_key}),
+            completed,
         })
         .map_err(|_| {
             error(
                 "toastNavigationUnknown",
                 "The qualified reminder navigation was not confirmed",
             )
-        })
+        })?;
+    Ok(completion)
 }
 async fn activate_login(
     state: &crate::AppState,

@@ -627,6 +627,7 @@ const workspaceTools = new WorkspaceTools({
         return range.from === range.to ? undefined : range;
     },
     beforeAction: prepareSwitch, notify: toast, openDocument, openResolved: acceptResolvedDocument, releaseOpenedSession,
+    openResolvedConfirmed: async opened => { let accepted = false; await acceptResolvedDocument(opened, value => { accepted = value; }); return accepted; },
     refreshLibrary: async (root) => libraryCloseActivity.run(async () => {
 
         if (inventory && normalize(inventory.root) === normalize(root))
@@ -1007,12 +1008,13 @@ async function acceptCreatedDocument(opened: OpenedDocument, operationId: string
         await refreshInventory();
     } finally { retireUnownedSessions(opened.sessionId); finishNativeActivity(); }
 }
-async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
+async function acceptResolvedDocument(opened: OpenedDocument, confirmed?: (accepted: boolean) => void): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
     let refreshed: OpenedDocument | null = null;
+    let generation = 0, adopted: LiveDocument | undefined;
     try {
         workspaceTools.assertLibraryChange(inventory);
-        const generation = ++navigationGeneration;
+        generation = ++navigationGeneration;
         await prepareSwitch();
         if (generation !== navigationGeneration) return;
         const existing = opened.nodeId && opened.workspaceId ? documents.find(item =>
@@ -1020,6 +1022,7 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
             && readOnlySource(item) === (opened.readOnly === true || opened.kind === "trash" || opened.kind === "managedTrash")) : undefined;
         if (!existing) {
             addDocument(opened);
+            adopted = current ?? undefined;
         } else {
             await existing.writing.settleForSessionChange();
             if (generation !== navigationGeneration || !documents.includes(existing)) return;
@@ -1043,6 +1046,7 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
                 existing.session.acknowledgeSave(candidate.source, candidate.baseId, candidate.path);
                 existing.session.projection = null;
                 await persistDraft(existing);
+                if (generation !== navigationGeneration || !documents.includes(existing)) return;
                 scheduleRender(existing, 0);
             } else {
                 existing.externalSource = candidate.source;
@@ -1051,6 +1055,7 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
             }
             workspaceTools.assertLibraryChange(inventory);
             current = existing;
+            adopted = existing;
             activeSourceOrigin = null;
             renderContent();
             renderSidebar();
@@ -1060,6 +1065,7 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
         try {
             if (refreshed && !ownsOpenedSession(refreshed.sessionId)) await releaseOpenedSession(refreshed.sessionId);
             if (!ownsOpenedSession(opened.sessionId)) await releaseOpenedSession(opened.sessionId);
+            confirmed?.(adopted !== undefined && current === adopted && documents.includes(adopted) && generation === navigationGeneration);
         } finally { finishNativeActivity(); }
     }
 }
@@ -3383,6 +3389,22 @@ nativeSurface.register("library-author-owners", {
     thaw: thawLibraryClose,
 });
 nativeSurface.listen(message => {
+    if (message.type === "reminder-activation") {
+        const actionId = typeof message.actionId === "string" ? message.actionId : undefined;
+        void libraryCloseActivity.run(async () => {
+            let accepted = false;
+            try {
+                if (typeof message.activationKey !== "string" || !actionId) throw new UiError(uiMessage("error.invalidResponse"));
+                await workspaceTools.activateReminder(message.activationKey);
+                accepted = true;
+            } catch (error) { showError(error); }
+            finally { if (actionId) nativeSurface.post({ type: "action-delivered", actionId, accepted }); }
+        }).catch(error => {
+            showError(error);
+            if (actionId) nativeSurface.post({ type: "action-delivered", actionId, accepted: false });
+        });
+        return;
+    }
     if (message.type === "open-reminders") {
         void Promise.resolve().then(() => { libraryCloseActivity.assertAvailable(); return workspaceTools.openReminders(); }).catch(showError);
         return;
