@@ -92,11 +92,11 @@ impl Notice {
     }
 
     pub fn close(&self) -> Result<()> {
-        if let Some(hwnd) = self.live_hwnd() {
-            if let Err(error) = unsafe { DestroyWindow(hwnd) } {
-                self.state.wake.fail();
-                return Err(error);
-            }
+        if let Some(hwnd) = self.live_hwnd()
+            && let Err(error) = unsafe { DestroyWindow(hwnd) }
+        {
+            self.state.wake.fail();
+            return Err(error);
         }
         Ok(())
     }
@@ -165,7 +165,7 @@ fn template() -> Vec<u32> {
         out.extend(value.encode_utf16().chain(Some(0)));
     }
     fn align(out: &mut Vec<u16>) {
-        if out.len() % 2 != 0 {
+        if !out.len().is_multiple_of(2) {
             out.push(0);
         }
     }
@@ -205,7 +205,9 @@ fn template() -> Vec<u32> {
         "",
     );
     align(&mut out);
-    out.chunks_exact(2)
+    out.as_chunks::<2>()
+        .0
+        .iter()
         .map(|words| u32::from(words[0]) | (u32::from(words[1]) << 16))
         .collect()
 }
