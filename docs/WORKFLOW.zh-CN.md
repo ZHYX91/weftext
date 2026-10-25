@@ -37,7 +37,7 @@ CLI 合同入口保留业务用例与唯一报告，Win32／ConPTY、受控 rela
 
 校对／Office 的并发交付夹具构造 20,000 份原生段落内容，只投影数量及样本，使它们能在原显示树与 worker 输出预算内到达后置授权检查；整批展开超预算是容量拒绝，不能算撤权成功。真实容量／压力测试继续独立运行原规模与拒绝断言，不用这个有界交付夹具授予容量通过。
 
-`scripts/mvp.py` 的共享 Cargo target 使用一份可丢弃的构建输入提示，不能把 Cargo `fresh` 或相对 dep-info 当成当前检出已编译的证明；[Cargo 的文件时间判据](https://doc.rust-lang.org/stable/nightly-rustc/cargo/compiler/fingerprint/index.html)并不替代源码内容身份。提示绑定实际 Rust／Cargo 程序与版本、本地／path／vendor crate 源码、构建脚本及外部嵌入资源，区分具体命令模式与源码根上下文，核原成功产物及本地构建脚本生成目录的内容摘要。未知或变化时只调整相关本地 crate 真实入口的 mtime，字节不改，且必须观察实际 `compiler-artifact` 非 fresh；不 clean target，不让未变的 registry 依赖冷编。本地 vendor 无旧同源资格也需重编当前入口；有有效内容与 unit／产物资格后保持复用，features／profile 仍由 Cargo 管理。
+`scripts/mvp.py` 的共享 Cargo target 使用一份可丢弃的构建输入提示，不能把 Cargo `fresh` 或相对 dep-info 当成当前检出已编译的证明；[Cargo 的文件时间判据](https://doc.rust-lang.org/stable/nightly-rustc/cargo/compiler/fingerprint/index.html)并不替代源码内容身份。提示绑定实际 Rust／Cargo 程序与版本、本地／path／vendor crate 源码、构建脚本及外部嵌入资源，区分具体命令模式与源码根上下文，核原成功产物及本地构建脚本生成目录的内容摘要。未知或变化时，先核包名归属、生成记录、路径与写句柄，再精确失效当前命令所选 host／target、profile 下相关本地包的生成式短 fingerprint，并调整当前入口 mtime；源码字节和旧冻结副本保留。这样覆盖 dep-info 仍指向 target 内旧副本的情形，且必须观察实际 `compiler-artifact` 非 fresh；不 clean target，不让未变的 registry 依赖冷编。本地 vendor 无旧同源资格也需重编当前入口；有有效内容与 unit／产物资格后保持复用，features／profile 仍由 Cargo 管理。
 
 入口先取得同 target 的产品锁，再调用 Cargo 自有锁；固定角色副本完成前不释放产品锁。直接 Cargo 调用不受此产品锁约束，须按同 target 构建协调执行，不能据此外推任意未协作并发安全。Python 在读取输出或等待期间被中断时，仍排空自有子进程的输出，确认该确切进程退出后才释放锁，并重抛最初异常；收尾期间再次中断也不提前释放锁。每条编译命令开始前清除可用成功状态，只有命令成功、输入内容稳定及实际产物核对后才更新提示；失败、被中断或源码变化均不记新源码成功。该提示不是验收记录，不能代替源码／前端／程序冻结。现有检查内的 `scripts/test_cargo_cache.py` 使用无第三方的自有小 Cargo 项目核旧 mtime、两个检出、normal／test／feature、失败和锁顺序；另用自有 Python 子进程核受控的仅父进程 SIGINT、输出／等待及重复中断。这些用例不冒实际产品验收或真实终端键盘行为。
 

@@ -9,6 +9,7 @@ from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -288,6 +289,115 @@ class CargoCache:
         except (OSError, ValueError, TypeError, KeyError):
             return False
 
+    def _invalidate_local_fingerprints(self, inputs, forced, metadata, command):
+        # Cargo can retain target-relative dep-info paths into a previous frozen
+        # source copy. Touching the new entry then cannot dirty that old unit.
+        # Cargo explicitly supports an empty short fingerprint after a failed
+        # rebuild: it compares unequal and requires compilation. Invalidate only
+        # generated short hashes for the unqualified local package names, never
+        # source copies, dependency outputs or the whole shared target.
+        names = {inputs[key]['name'] for key in forced}
+        if names.intersection(package['name'] for package in metadata['packages']
+                              if package.get('source') is not None):
+            raise ValueError('Cannot invalidate ambiguous local/registry package fingerprints')
+        policy = re.compile(r'(?:' + '|'.join(re.escape(name) for name in sorted(names)) + r')-[0-9a-f]{16}')
+        if not names:
+            return
+        if '..' in self.target.parts or is_reparse(self.target.lstat()):
+            raise ValueError('Cargo fingerprint target is not a qualified ordinary directory')
+        markers = []
+        # Do not glob the target: it also owns frozen public source copies.
+        # Only Cargo's selected host/target profile locations are writable.
+        profile = 'debug'
+        targets = []
+        configured = self.environment.get('CARGO_BUILD_TARGET')
+        if configured:
+            targets.append(configured)
+        iterator = iter(command[2:])
+        explicit_target = False
+        for argument in iterator:
+            if argument == '--':
+                break
+            if argument == '--release':
+                profile = 'release'
+            elif argument == '--profile' or argument.startswith('--profile='):
+                profile = next(iterator) if argument == '--profile' else argument.partition('=')[2]
+                profile = {'dev': 'debug', 'test': 'debug', 'bench': 'release'}.get(profile, profile)
+            elif argument == '--target' or argument.startswith('--target='):
+                if not explicit_target:
+                    targets = []
+                    explicit_target = True
+                targets.append(next(iterator) if argument == '--target' else argument.partition('=')[2])
+        folders = [Path(profile)]
+        for target in targets:
+            if target.endswith('.json'):
+                target = Path(target).stem
+            folders.append(Path(target) / profile)
+        if any(not re.fullmatch(r'[A-Za-z0-9_-]+', part) for folder in folders for part in folder.parts):
+            raise ValueError('Unsupported Cargo fingerprint target/profile layout')
+        roots = sorted({self.target / folder / '.fingerprint' for folder in folders})
+        for root in roots:
+            if not root.exists():
+                continue
+            current = self.target
+            for part in root.relative_to(self.target).parts:
+                current /= part
+                if is_reparse(current.lstat()):
+                    raise ValueError('Cargo fingerprint path is a reparse point')
+            for directory in root.iterdir():
+                if not policy.fullmatch(directory.name):
+                    continue
+                if is_reparse(directory.lstat()) or not directory.is_dir():
+                    raise ValueError('Cargo local fingerprint directory is not an ordinary directory')
+                for marker in directory.iterdir():
+                    if marker.suffix or not marker.with_name(marker.name + '.json').is_file():
+                        continue
+                    data = read_checked(marker, self.target, max_bytes=16)
+                    if data and not re.fullmatch(b'[0-9a-f]{16}', data):
+                        raise ValueError('Unsupported Cargo local short fingerprint')
+                    sidecar = parse_json(read_checked(marker.with_name(marker.name + '.json'), self.target,
+                                                      max_bytes=1024**2))
+                    if not isinstance(sidecar, dict):
+                        raise ValueError('Unsupported Cargo local fingerprint sidecar')
+                    info = marker.stat()
+                    if info.st_nlink != 1:
+                        raise ValueError('Cargo local fingerprint has multiple hard links')
+                    markers.append((marker, info.st_dev, info.st_ino, data))
+        # Validate every selected marker before writing any of them. Recheck the
+        # exact opened file so a substituted hard link cannot truncate source.
+        for marker, device, inode, data in markers:
+            if read_checked(marker, self.target, max_bytes=16) != data:
+                raise ValueError('Cargo local fingerprint changed before invalidation')
+            with marker.open('r+b') as stream:
+                opened = os.fstat(stream.fileno())
+                if (opened.st_dev, opened.st_ino, opened.st_nlink) != (device, inode, 1):
+                    raise ValueError('Cargo local fingerprint identity changed before invalidation')
+                if os.name == 'nt':
+                    import ctypes
+                    import msvcrt
+                    from ctypes import wintypes
+                    function = ctypes.WinDLL('kernel32', use_last_error=True).GetFinalPathNameByHandleW
+                    function.argtypes = [wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD]
+                    function.restype = wintypes.DWORD
+                    buffer = ctypes.create_unicode_buffer(32768)
+                    length = function(msvcrt.get_osfhandle(stream.fileno()), buffer, len(buffer), 0)
+                    if not length or length >= len(buffer):
+                        raise OSError(ctypes.get_last_error(), 'Cannot qualify Cargo fingerprint write handle')
+                    actual = buffer.value
+                    if actual.startswith('\\\\?\\UNC\\'):
+                        actual = '\\\\' + actual[8:]
+                    elif actual.startswith('\\\\?\\'):
+                        actual = actual[4:]
+                    if Path(actual) != marker:
+                        raise ValueError('Cargo fingerprint write handle escaped its qualified path')
+                current = self.target
+                for part in (None, *marker.relative_to(self.target).parts):
+                    if part is not None:
+                        current /= part
+                    if is_reparse(current.lstat()):
+                        raise ValueError('Cargo fingerprint changed to a reparse path')
+                stream.truncate(0)
+
     def run(self, command, *, on_message=None, output=None):
         if self.lock is None or len(command) < 2 or command[1] not in ('build', 'test', 'check', 'clippy'):
             raise ValueError('A supported compile command requires the held product target lock')
@@ -328,6 +438,7 @@ class CargoCache:
         # A failed or interrupted command leaves pending, never old A-qualified
         # state after partially compiling B. The next attempt is conservative.
         self._write({'schemaVersion': 1, 'pending': True, 'modes': {}})
+        self._invalidate_local_fingerprints(inputs, forced, metadata, command)
         for key in forced:
             for entry in inputs[key]['entries']:
                 before = read_checked(entry, self.root)

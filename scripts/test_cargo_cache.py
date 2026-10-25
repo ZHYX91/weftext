@@ -11,6 +11,7 @@ import sys
 import time
 import tomllib
 import unittest
+from unittest import mock
 import uuid
 
 from cargo_cache import CargoCache, EXTRA_INPUTS, STATE
@@ -42,10 +43,11 @@ def memory_gate():
 
 
 class Fixture:
-    def __init__(self, name):
+    def __init__(self, name, *, sources_in_target=False):
         self.root = BASE / name
         self.root.mkdir()
         self.target = self.root / 'target'
+        self.sources_in_target = sources_in_target
         self.environment = {**os.environ, 'CARGO_TARGET_DIR': str(self.target), 'CARGO_NET_OFFLINE': 'true', 'CARGO_BUILD_JOBS': '1'}
         self.environment.pop('CARGO_BUILD_TARGET', None)  # This fixture executes its own host binary.
         self.records = []
@@ -72,7 +74,7 @@ class Fixture:
                 os.utime(path, (OLD, OLD))
 
     def source(self, variant):
-        return self.root / ('checkout-' + variant)
+        return (self.target / 'frozen-sources' if self.sources_in_target else self.root) / ('checkout-' + variant)
 
     def data(self, variant, value=22):
         return ('pub fn old_symbol()->u32 {11+cache_fixture_stable::value()}\n'
@@ -121,6 +123,52 @@ class Fixture:
     def value(self):
         exe = self.target / 'debug' / ('cache-fixture-app.exe' if os.name == 'nt' else 'cache-fixture-app')
         return subprocess.run([str(exe)], stdin=subprocess.DEVNULL, capture_output=True, check=True).stdout.decode().strip()
+
+
+class FingerprintInvalidation(unittest.TestCase):
+    def test_validate_all_markers_before_writing_and_reject_hardlinks(self):
+        root = BASE / 'marker-safety'
+        target = root / 'target'
+        folder = target / 'debug/.fingerprint/local-0123456789abcdef'
+        folder.mkdir(parents=True)
+        first, second = folder / 'lib-local', folder / 'test-lib-local'
+        for marker in (first, second):
+            marker.write_bytes(b'0123456789abcdef')
+            marker.with_name(marker.name + '.json').write_text('{}')
+        cache = CargoCache(root, target, {})
+        inputs, forced, metadata = {'local/Cargo.toml': {'name': 'local'}}, {'local/Cargo.toml'}, {'packages': []}
+        second.with_name(second.name + '.json').write_text('[]')
+        with self.assertRaisesRegex(ValueError, 'sidecar'):
+            cache._invalidate_local_fingerprints(inputs, forced, metadata, ['cargo', 'build'])
+        self.assertEqual(first.read_bytes(), b'0123456789abcdef')
+        second.with_name(second.name + '.json').write_text('{}')
+        linked = root / 'owned-source-original'
+        os.link(second, linked)
+        with self.assertRaisesRegex(ValueError, 'hard links'):
+            cache._invalidate_local_fingerprints(inputs, forced, metadata, ['cargo', 'build'])
+        self.assertEqual(first.read_bytes(), b'0123456789abcdef')
+        self.assertEqual(linked.read_bytes(), b'0123456789abcdef')
+
+    def test_empty_marker_is_dirty_and_registry_ambiguity_is_rejected(self):
+        root = BASE / 'marker-empty'
+        target = root / 'target'
+        folder = target / 'host-triple/release/.fingerprint/local-0123456789abcdef'
+        folder.mkdir(parents=True)
+        marker = folder / 'lib-local'
+        marker.write_bytes(b'')
+        marker.with_name(marker.name + '.json').write_text('{}')
+        cache = CargoCache(root, target, {})
+        inputs, forced = {'local/Cargo.toml': {'name': 'local'}}, {'local/Cargo.toml'}
+        with self.assertRaisesRegex(ValueError, 'ambiguous'):
+            cache._invalidate_local_fingerprints(inputs, forced,
+                                                {'packages': [{'name': 'local', 'source': 'registry+test'}]}, ['cargo', 'build'])
+        cache._invalidate_local_fingerprints(inputs, forced, {'packages': []},
+                                                ['cargo', 'build', '--target', 'host-triple', '--release'])
+        self.assertEqual(marker.read_bytes(), b'')
+        marker.write_bytes(b'not-a-valid-hash')
+        with self.assertRaisesRegex(ValueError, 'short fingerprint'):
+            cache._invalidate_local_fingerprints(inputs, forced, {'packages': []},
+                                                ['cargo', 'build', '--target', 'host-triple', '--release'])
 
 
 class InputInventory(unittest.TestCase):
@@ -302,6 +350,44 @@ with target_lock(root/'target'):
 
 
 class ActualCargo(unittest.TestCase):
+    def test_target_contained_source_switch_rebuilds_vendor_without_touching_original(self):
+        fixture = Fixture('target-contained-source-switch', sources_in_target=True)
+        for variant in ('a', 'b'):
+            source = fixture.source(variant)
+            vendor = source / 'vendor/stable/src/lib.rs'
+            vendor.write_text('pub fn value()->u32 {1}\npub fn root()-> &' + "'static str {env!(\"CARGO_MANIFEST_DIR\")}\n", encoding='utf-8')
+            data = source / 'data/src/lib.rs'
+            data.write_text(data.read_text() + 'pub fn vendor_root()-> &' + "'static str {cache_fixture_stable::root()}\n", encoding='utf-8')
+            app = source / 'app/src/main.rs'
+            app.write_text(app.read_text().replace('fn main(){', 'fn main(){println!("{}",cache_fixture_data::vendor_root());'), encoding='utf-8')
+        fixture.run('a')
+        # A public source may itself contain a fingerprint-shaped fixture.
+        # It is not a Cargo output location, even though A is inside target.
+        source_marker = fixture.source('a') / '.fingerprint/cache-fixture-stable-0123456789abcdef/lib-stable'
+        source_marker.parent.mkdir(parents=True)
+        source_marker.write_bytes(b'0123456789abcdef')
+        source_marker.with_name(source_marker.name + '.json').write_text('{}')
+        original = {path.relative_to(fixture.source('a')).as_posix():
+                    (path.read_bytes(), path.stat().st_mtime_ns, path.stat().st_ino)
+                    for path in fixture.source('a').rglob('*') if path.is_file()}
+        self.assertEqual(fixture.value().splitlines()[0], str(fixture.source('a') / 'vendor/stable'))
+        # Reproduce the old entry-touch policy on the actual shared fixture
+        # target. The strict gate must reject Cargo's retained vendor unit.
+        with mock.patch.object(CargoCache, '_invalidate_local_fingerprints', return_value=None):
+            with self.assertRaisesRegex(ValueError, 'Cargo reused an unqualified local unit'):
+                fixture.run('b')
+        self.assertTrue(json.loads((fixture.target / STATE).read_bytes())['pending'])
+        repaired = fixture.run('b')
+        self.assertTrue(all(message['fresh'] is False for message in repaired['artifacts']))
+        self.assertEqual(fixture.value().splitlines(),
+                         [str(fixture.source('b') / 'vendor/stable'), '23:owned-build-asset-b'])
+        self.assertEqual(original, {path.relative_to(fixture.source('a')).as_posix():
+                                   (path.read_bytes(), path.stat().st_mtime_ns, path.stat().st_ino)
+                                   for path in fixture.source('a').rglob('*') if path.is_file()})
+        warm = fixture.run('b')
+        self.assertEqual(warm['forced'], [])
+        self.assertTrue(all(message['fresh'] for message in warm['artifacts']))
+
     def test_same_target_product_lock_precedes_cargo_and_success_hint(self):
         fixture = Fixture('concurrent-product-lock')
         script = '''import json,sys
