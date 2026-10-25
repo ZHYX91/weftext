@@ -239,6 +239,13 @@ struct ConfirmedAction {
     posted: bool,
 }
 impl ConfirmedAction {
+    fn admit(completed: tokio::sync::oneshot::Sender<bool>) -> Option<Self> {
+        let action = Self {
+            completed,
+            posted: false,
+        };
+        action.can_post().then_some(action)
+    }
     fn can_post(&self) -> bool {
         !self.posted && !self.completed.is_closed()
     }
@@ -653,8 +660,13 @@ impl Reducer {
                 mut message,
                 completed,
             } => {
+                // This command may have waited in the main native queue past
+                // its original caller's deadline, before any surface was bound.
+                let Some(action) = ConfirmedAction::admit(completed) else {
+                    return Ok(());
+                };
                 let Some(surface) = self.surfaces.get_mut(&id(SurfaceKind::Library)) else {
-                    let _ = completed.send(false);
+                    let _ = action.completed.send(false);
                     return Ok(());
                 };
                 surface
@@ -666,7 +678,7 @@ impl Reducer {
                     || surface.confirmed_posts.len() >= 16
                     || surface.after_ready.len() >= 64
                 {
-                    let _ = completed.send(false);
+                    let _ = action.completed.send(false);
                     return Ok(());
                 }
                 let action_id = uuid::Uuid::new_v4().to_string();
@@ -675,13 +687,7 @@ impl Reducer {
                     .ok_or_else(failed)?
                     .insert("actionId".into(), action_id.clone().into());
                 let message = surface.gate.bind_message(message).ok_or_else(failed)?;
-                surface.confirmed_posts.insert(
-                    action_id.clone(),
-                    ConfirmedAction {
-                        completed,
-                        posted: false,
-                    },
-                );
+                surface.confirmed_posts.insert(action_id.clone(), action);
                 if surface.gate.ready {
                     surface.view.as_ref().ok_or_else(failed)?.post(&message)?;
                     surface
@@ -1590,7 +1596,7 @@ mod tests {
             &id,
             false
         ));
-        assert_eq!(result.try_recv().unwrap(), false);
+        assert!(!result.try_recv().unwrap());
         assert!(!complete_confirmed_action(
             &gate,
             &mut actions,
@@ -1619,6 +1625,44 @@ mod tests {
             }
             .can_post()
         );
+    }
+
+    #[test]
+    fn original_navigation_timeout_in_the_main_command_queue_rejects_admission() {
+        let (wake, _fault) = Wake::new().unwrap();
+        let (send, queued) = std::sync::mpsc::sync_channel(2);
+        let sender = Sender {
+            send,
+            wake,
+            terminal: Arc::new(Terminal::default()),
+        };
+        let (completed, expired) = tokio::sync::oneshot::channel();
+        sender
+            .send(Command::ConfirmedPost {
+                message: serde_json::json!({"type":"reminder-activation"}),
+                completed,
+            })
+            .unwrap();
+        drop(expired);
+        let Command::ConfirmedPost { completed, .. } = queued.recv().unwrap() else {
+            panic!("expected original confirmed command");
+        };
+        assert!(ConfirmedAction::admit(completed).is_none());
+
+        let (completed, mut live) = tokio::sync::oneshot::channel();
+        sender
+            .send(Command::ConfirmedPost {
+                message: serde_json::json!({"type":"reminder-activation"}),
+                completed,
+            })
+            .unwrap();
+        let Command::ConfirmedPost { completed, .. } = queued.recv().unwrap() else {
+            panic!("expected live confirmed command");
+        };
+        let action = ConfirmedAction::admit(completed).unwrap();
+        assert!(action.can_post());
+        action.completed.send(false).unwrap();
+        assert!(!live.try_recv().unwrap());
     }
 
     #[test]
