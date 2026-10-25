@@ -103,7 +103,7 @@ class LocalProcessing(local_harness.LocalFeatures):
         resource = manifest['resources'][0]
         self.assertEqual(settings['defaultStyle']['resource'],
                          f"weftext-resource://{receipt['workspaceId']}/{resource['resourceId']}")
-        plan_path = self.data_dir / 'journal' / (request['operationId'] + '.plan.json')
+        plan_path = self.data_dir / 'journal' / request['operationId'][:2] / (request['operationId'] + '.plan.json')
         frozen = json.loads(plan_path.read_text('utf-8'))
         self.assertEqual(frozen['kind'], 'createLibrary')
         self.assertEqual(frozen['transaction']['request']['intent']['options'], request['options'])
@@ -147,7 +147,7 @@ class LocalProcessing(local_harness.LocalFeatures):
                 ended = self.api('/api/library/create-cancel', request)
                 self.assertEqual(ended['operationId'], request['operationId'])
                 self.assertEqual(ended['status'], 'resolved')
-                journal = self.data_dir / 'journal'
+                journal = self.data_dir / 'journal' / request['operationId'][:2]
                 terminal_path = journal / (request['operationId'] + '.resolution.json')
                 terminal_bytes = terminal_path.read_bytes()
                 terminal = json.loads(terminal_bytes)

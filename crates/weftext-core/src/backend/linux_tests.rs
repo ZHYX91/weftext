@@ -726,7 +726,7 @@ fn exact_configured_profile_reopens_more_than_5000_journal_records_without_lendi
     for id in [&ids[0], ids.last().unwrap()] {
         assert_eq!(
             core.local_operation_status(id).unwrap()["status"],
-            "cancelled"
+            "resolved"
         );
     }
     drop(core);

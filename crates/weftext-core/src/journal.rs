@@ -386,54 +386,83 @@ pub(crate) struct JournalEntries<'a> {
     root: backend::ScopedDirectoryEntries,
     current: Option<backend::ScopedDirectoryEntries>,
 }
+fn validate_journal_entry(entry: &backend::ScopedDirectoryEntry) -> Result<()> {
+    // A file in the wrong bucket is not a valid original record, even when
+    // its filename parses as a Plan ID. Both enumeration paths use this gate.
+    let file = entry.file_name();
+    let name = file.to_string_lossy();
+    let id = name.split('.').next().unwrap_or("");
+    if valid_operation_id(id).is_err()
+        || entry
+            .path()
+            .parent()
+            .and_then(Path::file_name)
+            .and_then(|p| p.to_str())
+            != Some(journal_bucket(id).as_str())
+    {
+        return Err(CoreError::new(
+            "privateEvidence",
+            UiMessage::error_core_journal_journal_filename_invalid(),
+        ));
+    }
+    Ok(())
+}
+impl JournalEntries<'_> {
+    fn advance_bucket(&mut self) -> Result<bool> {
+        self.current = None;
+        let Some(bucket) = self.root.next() else {
+            return Ok(false);
+        };
+        let bucket = bucket?;
+        if !bucket
+            .file_name()
+            .to_str()
+            .is_some_and(valid_journal_bucket)
+        {
+            return Err(CoreError::new(
+                "privateEvidence",
+                UiMessage::error_core_journal_journal_filename_invalid(),
+            ));
+        }
+        self.current = Some(self.backend.read_dir(bucket.path())?);
+        Ok(true)
+    }
+    /// Startup's bucket-at-a-time path; do not intermix with leaf iteration.
+    /// The consumed current iterator retains its physical bucket guard until
+    /// the caller finishes validating this complete slice and advances again.
+    fn next_bucket_entries(&mut self) -> Result<Option<Vec<backend::ScopedDirectoryEntry>>> {
+        if !self.advance_bucket()? {
+            return Ok(None);
+        }
+        let entries = self
+            .current
+            .as_mut()
+            .unwrap()
+            .by_ref()
+            .map(|entry| {
+                let entry = entry?;
+                validate_journal_entry(&entry)?;
+                Ok(entry)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(Some(entries))
+    }
+}
 impl Iterator for JournalEntries<'_> {
     type Item = Result<backend::ScopedDirectoryEntry>;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some(current) = self.current.as_mut() {
-                if let Some(entry) = current.next() {
-                    // A file in the wrong bucket is not a valid original
-                    // record, even when its filename parses as a Plan ID.
-                    let entry = match entry {
-                        Ok(entry) => entry,
-                        Err(error) => return Some(Err(error)),
-                    };
-                    let file = entry.file_name();
-                    let name = file.to_string_lossy();
-                    let id = name.split('.').next().unwrap_or("");
-                    if valid_operation_id(id).is_err()
-                        || entry
-                            .path()
-                            .parent()
-                            .and_then(Path::file_name)
-                            .and_then(|p| p.to_str())
-                            != Some(journal_bucket(id).as_str())
-                    {
-                        return Some(Err(CoreError::new(
-                            "privateEvidence",
-                            UiMessage::error_core_journal_journal_filename_invalid(),
-                        )));
-                    }
-                    return Some(Ok(entry));
-                }
-                self.current = None;
-            }
-            let bucket = match self.root.next()? {
-                Ok(bucket) => bucket,
-                Err(error) => return Some(Err(error)),
-            };
-            if !bucket
-                .file_name()
-                .to_str()
-                .is_some_and(valid_journal_bucket)
+            if let Some(current) = self.current.as_mut()
+                && let Some(entry) = current.next()
             {
-                return Some(Err(CoreError::new(
-                    "privateEvidence",
-                    UiMessage::error_core_journal_journal_filename_invalid(),
-                )));
+                return Some(entry.and_then(|entry| {
+                    validate_journal_entry(&entry)?;
+                    Ok(entry)
+                }));
             }
-            match self.backend.read_dir(bucket.path()) {
-                Ok(entries) => self.current = Some(entries),
+            match self.advance_bucket() {
+                Ok(true) => {}
+                Ok(false) => return None,
                 Err(error) => return Some(Err(error)),
             }
         }
@@ -907,6 +936,13 @@ impl Core {
         Ok(plans)
     }
     pub(crate) fn resolution_record(&self, id: &str) -> Result<Option<ResolutionRecord>> {
+        self.resolution_record_with_namespace(id, || self.validate_unregistered_fence_namespace(id))
+    }
+    fn resolution_record_with_namespace(
+        &self,
+        id: &str,
+        validate_namespace: impl FnOnce() -> Result<()>,
+    ) -> Result<Option<ResolutionRecord>> {
         valid_operation_id(id)?;
         let mut file = match self.backend.open_read(self.journal_path(id, "resolution")) {
             Ok(file) => file,
@@ -925,7 +961,7 @@ impl Core {
                     UiMessage::error_core_journal_unregistered_attempt_cannot_carry_author_recovery_decision(),
                 ));
             }
-            self.validate_unregistered_fence_namespace(id)?;
+            validate_namespace()?;
         } else if record.attempt.is_some() {
             return Err(CoreError::new(
                 "resolutionUnavailable",
@@ -947,8 +983,18 @@ impl Core {
         protected: &[operations::CapturedFile],
     ) -> Result<Option<hosted::ActorLibraryBinding>> {
         valid_operation_id(id)?;
+        self.unregistered_attempt_library_entries(id, full, protected, self.journal_entries()?)
+    }
+    fn unregistered_attempt_library_entries(
+        &self,
+        id: &str,
+        full: bool,
+        protected: &[operations::CapturedFile],
+        entries: impl IntoIterator<Item = Result<backend::ScopedDirectoryEntry>>,
+    ) -> Result<Option<hosted::ActorLibraryBinding>> {
+        valid_operation_id(id)?;
         let mut scope = None;
-        for entry in self.journal_entries()? {
+        for entry in entries {
             let entry = entry?;
             let name = entry.file_name();
             let name = name.to_str().ok_or_else(|| {
@@ -1046,17 +1092,44 @@ impl Core {
         Ok(scope)
     }
     fn validate_resolution_namespace(&self) -> Result<()> {
-        for entry in self.journal_entries()? {
-            let entry = entry?;
-            let name = entry.file_name();
-            let name = name.to_str().ok_or_else(|| {
-                CoreError::new(
-                    "resolutionUnavailable",
-                    UiMessage::error_core_journal_journal_filename_invalid(),
-                )
-            })?;
-            if let Some(id) = name.strip_suffix(".resolution.json") {
-                self.resolution_record(id)?;
+        let mut entries = self.journal_entries()?;
+        while let Some(bucket) = entries.next_bucket_entries()? {
+            // Same-call grouping is bounded by the existing bucket limit.
+            // Retain every sibling, including unknown/alias names, and keep
+            // the current physical bucket guard alive through actual reads.
+            let mut groups =
+                std::collections::BTreeMap::<String, Vec<backend::ScopedDirectoryEntry>>::new();
+            let mut resolutions = Vec::new();
+            for entry in bucket {
+                let name = entry.file_name();
+                let name = name.to_str().ok_or_else(|| {
+                    CoreError::new(
+                        "resolutionUnavailable",
+                        UiMessage::error_core_journal_journal_filename_invalid(),
+                    )
+                })?;
+                if let Some(id) = name.strip_suffix(".resolution.json") {
+                    resolutions.push(id.to_owned());
+                }
+                let operation = name.split('.').next().unwrap_or("").to_ascii_lowercase();
+                groups.entry(operation).or_default().push(entry);
+            }
+            for id in resolutions {
+                let siblings = groups.remove(&id.to_ascii_lowercase()).ok_or_else(|| {
+                    CoreError::new(
+                        "privateEvidence",
+                        UiMessage::error_core_journal_journal_filename_invalid(),
+                    )
+                })?;
+                self.resolution_record_with_namespace(&id, || {
+                    self.unregistered_attempt_library_entries(
+                        &id,
+                        true,
+                        &[],
+                        siblings.into_iter().map(Ok),
+                    )
+                    .map(|_| ())
+                })?;
             }
         }
         Ok(())
