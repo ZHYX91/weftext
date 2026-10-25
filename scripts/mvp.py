@@ -64,7 +64,10 @@ def build(release, *, package_input=False, linker=None, windows_sdk=None):
     if package_input:
         # A before/after comparison of an edited checkout alone is not an atomic
         # source snapshot. Package builds use an owned, fixed public-source copy.
-        source_root = target / 'weftext-package-inputs' / str(uuid.uuid4()) / 'source'
+        # npm config get treats values containing a hyphenated UUID as secrets;
+        # --prefix makes its default globalconfig inherit this owned path. Keep
+        # UUID uniqueness without triggering redaction of nonsecret path values.
+        source_root = target / 'weftext-package-inputs' / uuid.uuid4().hex / 'source'
         source_root.mkdir(parents=True, exist_ok=False)
         for name, data in frozen.items():
             path = source_root / name

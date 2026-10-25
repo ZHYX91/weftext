@@ -5,6 +5,7 @@ from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
+import uuid
 from unittest.mock import Mock, patch
 
 import mvp
@@ -23,6 +24,44 @@ class NpmFixture:
 
 
 class EntrySelection(unittest.TestCase):
+    def test_package_copy_uses_unique_nonredacted_token_and_never_overwrites(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root, target = Path(directory) / 'checkout', Path(directory) / 'target'
+            root.mkdir()
+            target.mkdir()
+            frozen = {'packaging/windows/host-contract.json': b'contract',
+                      'app/package.json': b'{"name":"owned-source"}',
+                      'original.txt': b'original source bytes'}
+            tokens = [uuid.uuid4(), uuid.uuid4()]
+            observed = []
+            stopped = RuntimeError('stop before npm install or build')
+
+            def before_install(*args, **kwargs):
+                source = kwargs['cwd']
+                observed.append(source)
+                self.assertEqual(args, tuple(NpmFixture().command('--prefix', 'app', 'ci', '--ignore-scripts')))
+                self.assertEqual({name: (source / name).read_bytes() for name in frozen}, frozen)
+                raise stopped
+
+            with patch.object(mvp, 'ROOT', root), \
+                    patch.object(mvp.NpmTool, 'discover', return_value=NpmFixture()), \
+                    patch.object(mvp, 'metadata', return_value={'target_directory': str(target)}), \
+                    patch.object(mvp, 'snapshot', return_value=frozen), \
+                    patch.object(mvp, 'load_contract', return_value={}), \
+                    patch.object(mvp, 'qualify', return_value={}), \
+                    patch.object(mvp, 'run', side_effect=before_install), \
+                    patch.object(mvp.uuid, 'uuid4', side_effect=[*tokens, tokens[0]]):
+                for _ in tokens:
+                    with self.assertRaises(RuntimeError) as caught:
+                        mvp.build(True, package_input=True)
+                    self.assertIs(caught.exception, stopped)
+                with self.assertRaises(FileExistsError):
+                    mvp.build(True, package_input=True)
+            self.assertEqual(observed, [target / 'weftext-package-inputs' / token.hex / 'source'
+                                        for token in tokens])
+            self.assertNotEqual(observed[0], observed[1])
+            self.assertEqual((observed[0] / 'original.txt').read_bytes(), frozen['original.txt'])
+
     def test_source_only_needs_no_node_cargo_git_or_product(self):
         calls = []
         with patch.object(mvp, 'metadata', side_effect=AssertionError('Cargo forbidden')), \
