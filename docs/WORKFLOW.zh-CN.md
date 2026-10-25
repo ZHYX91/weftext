@@ -25,9 +25,17 @@ translation_status: source
 
 纯文档改动运行 `python scripts/check.py`。涉及 schema、类型/时间算法或模型时运行 `python scripts/check.py --models`。实现切片增加自己的格式、静态分析和必要测试；跨平台、文件故障、权限、编辑和 Office 输出按真实影响选场景。失败记录实际原因；不通过删断言或改期望掩盖问题。
 
-`python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 40 个 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由默认 Rust discovery 完整执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。
+`python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 40 个 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由完整 Rust 组逐项执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。
 
-Rust 组保留原 workspace／all-targets Clippy；测试依次运行 `cargo test --locked --workspace --exclude weftext-app` 和 `cargo test --locked -p weftext-app -- --test-threads=1`。两条命令合计覆盖同一 workspace 的全部默认测试目标，并保持当前清单的默认 feature 选择，其他 crate 保持原并行度。App 的独立 Core／HTTP fixture 共享进程级后台 producer registry，而服务退出必须排空该 registry，因此 App 用例之间串行调度；每个用例内部的 Tokio 多线程运行时、并发 HTTP、真实容量、退出排空及原截止时间保持不变。直接运行 App 测试或带名称筛选时也使用 `-- --test-threads=1`，不依赖私有环境变量。
+Rust 组保留原 workspace／all-targets Clippy，随后依次运行：
+
+```text
+cargo test --locked --workspace --exclude weftext-app --message-format=json-render-diagnostics -- --exact --skip reminder_device_state::integration_tests::capacity::reminder_64_member_permit_checks_within_its_real_monotonic_lifetime
+cargo test --locked -p weftext-core --lib --message-format=json-render-diagnostics -- reminder_device_state::integration_tests::capacity::reminder_64_member_permit_checks_within_its_real_monotonic_lifetime --exact --test-threads=1
+cargo test --locked -p weftext-app --message-format=json-render-diagnostics -- --test-threads=1
+```
+
+首条测试命令保留其他 Core／workspace 用例的默认并行度与全部默认目标，只把完整名称匹配的真实 64 成员许可用例交给第二条独立运行；[固定 Rust 1.99.1 的 libtest 实现](https://github.com/rust-lang/rust/blob/1.99.1/library/test/src/lib.rs#L498-L537)对 `--exact --skip` 采用完整名称相等，不排除名称带此前缀的新增用例。第二条仍使用真实单调时钟、原 5 秒硬期限和全部容量／授权断言，作为隔离时间基准；不缩减 setup、放宽期限或省略用例。第三条运行完整 App 默认目标。三条合计覆盖原 workspace 的全部默认 lib／bin／doctests，并保留当前 manifest 的默认 feature 选择；Core 当前没有可选 feature。独立 App Core／HTTP fixture 共享进程级后台 producer registry，服务退出必须排空该 registry，因此 App 用例之间串行调度。每个用例内部的 Tokio 多线程运行时、并发 HTTP、真实容量、退出排空及原截止时间保持不变。直接运行 App 测试或带名称筛选时也使用 `-- --test-threads=1`，不依赖私有环境变量。隔离时间基准通过不代表并行 I/O 压力下仍满足期限；此前并行压力失败保留为该次实际结果，不能用隔离通过改写。
 
 Windows `build`／完整 `check` 在固定双角色批次旁生成 `build-input-receipt.json`。`check --artifacts ABSOLUTE_RECEIPT` 只复用这批产物字节，所选检查每次重新执行，不读取旧 PASS。回执严格绑定同一检出／target／profile、完整公开源码与前端、双角色和原 catalog、实际顶层 Rust／Cargo／Node／npm 与所列明确构建配置；源码中的脚本、文档或 fixture 变化也要求新批次。每组边界及最终重新核输入；源根改变、缺失或未完成回执、非法路径、角色／字节／配置不一致均拒绝。资格观察要求外部 Cargo home、明确工具／SDK 路径及工具搜索目录为绝对路径；Cargo 配置中的自定义工具须以直接环境覆盖明确选择，未解析的 include、条件 linker 与 `[env]` 工具选择均拒绝，不猜测实际工具。它不证明所有隐式 SDK、系统库及传递依赖相同，也不证明可重现构建或整版验收。`package` 拒绝分组和外部回执，继续在固定源码副本执行原完整检查与打包。
 

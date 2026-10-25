@@ -16,6 +16,8 @@ from windows_package import artifact_catalog, load_contract, msix_version, packa
 from windows_materials import freeze_materials
 
 ROOT = Path(__file__).resolve().parents[1]
+MONOTONIC_PERMIT_TEST = ('reminder_device_state::integration_tests::capacity::'
+                         'reminder_64_member_permit_checks_within_its_real_monotonic_lifetime')
 CHECK_SCRIPTS = [
     'test_mvp.py', 'test_commit_delivery.py', 'test_local_features.py', 'test_outputs.py',
     'test_v05_completion.py', 'test_review_interchange.py', 'test_hosted.py',
@@ -228,7 +230,13 @@ def check(artifacts=None, groups=None):
             cache.run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets',
                        '--message-format=json-render-diagnostics', '--', '-D', 'warnings'])
             cache.run(['cargo', 'test', '--locked', '--workspace', '--exclude', 'weftext-app',
-                       '--message-format=json-render-diagnostics'])
+                       '--message-format=json-render-diagnostics', '--', '--exact',
+                       '--skip', MONOTONIC_PERMIT_TEST])
+            # This real five-second permit is an isolated timing baseline;
+            # retain all assertions and run it before App's complete tests.
+            cache.run(['cargo', 'test', '--locked', '-p', 'weftext-core', '--lib',
+                       '--message-format=json-render-diagnostics', '--', MONOTONIC_PERMIT_TEST,
+                       '--exact', '--test-threads=1'])
             # App fixtures have independent Core/HTTP owners but share the
             # process-wide producer registry drained by LocalService shutdown.
             # Serialize fixtures, retaining each test's own runtime concurrency.

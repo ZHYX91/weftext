@@ -139,11 +139,15 @@ class EntrySelection(unittest.TestCase):
 
 
 class FrozenRouting(unittest.TestCase):
+    permit_test = ('reminder_device_state::integration_tests::capacity::'
+                   'reminder_64_member_permit_checks_within_its_real_monotonic_lifetime')
     rust_commands = [
         ['cargo', 'clippy', '--locked', '--workspace', '--all-targets',
          '--message-format=json-render-diagnostics', '--', '-D', 'warnings'],
         ['cargo', 'test', '--locked', '--workspace', '--exclude', 'weftext-app',
-         '--message-format=json-render-diagnostics'],
+         '--message-format=json-render-diagnostics', '--', '--exact', '--skip', permit_test],
+        ['cargo', 'test', '--locked', '-p', 'weftext-core', '--lib',
+         '--message-format=json-render-diagnostics', '--', permit_test, '--exact', '--test-threads=1'],
         ['cargo', 'test', '--locked', '-p', 'weftext-app',
          '--message-format=json-render-diagnostics', '--', '--test-threads=1'],
     ]
@@ -181,11 +185,11 @@ class FrozenRouting(unittest.TestCase):
                             names.index('scripts/test_cli_contract.py'))
             self.assertEqual(cargo_calls, self.rust_commands)
             self.assertLess(timeline.index(('run', 'scripts/test_cli_contract.py')), timeline.index(('cargo', 1)))
-            self.assertLess(timeline.index(('cargo', 3)), timeline.index(('run', 'scripts/test_mvp.py')))
+            self.assertLess(timeline.index(('cargo', 4)), timeline.index(('run', 'scripts/test_mvp.py')))
             cli_index = timeline.index(('run', 'scripts/test_cli_contract.py'))
-            self.assertEqual(timeline[cli_index - 1:cli_index + 9], [
+            self.assertEqual(timeline[cli_index - 1:cli_index + 10], [
                 ('verify', 0), ('run', 'scripts/test_cli_contract.py'), ('verify', 0),
-                ('verify', 0), ('cargo', 1), ('cargo', 2), ('cargo', 3),
+                ('verify', 0), ('cargo', 1), ('cargo', 2), ('cargo', 3), ('cargo', 4),
                 ('verify', 0), ('verify', 0), ('run', 'scripts/test_mvp.py'),
             ])
             http = [call for call in calls if len(call) == 3 and call[2] == str(fixture.artifacts.paths['cli'])]
