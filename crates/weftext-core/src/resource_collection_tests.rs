@@ -367,6 +367,60 @@ fn resource_collection_genuine_empty_then_original_import_and_restart() {
 }
 
 #[test]
+fn resource_collection_empty_owner_checks_other_owner_and_late_original_recovery_facts() {
+    let mut f = Fixture::new();
+    let other = f
+        .core
+        .create_note_fixture(&f.root, &f.root, "Other")
+        .unwrap();
+    let operation_id = fresh();
+    let plan = f
+        .core
+        .prepare_import_resource(
+            &f.root,
+            &other.path,
+            "other.bin",
+            b"other owner's original bytes".to_vec(),
+            &operation_id,
+        )
+        .unwrap();
+    f.core
+        .execute_operation(&plan.operation_id, &plan.plan_id)
+        .unwrap();
+    // A genuine initialization belonging to another physical owner does not
+    // initialize this owner's collection merely by sharing the same library.
+    assert!(!f.collection().unwrap().initialized);
+    assert!(!f.manifest().exists());
+
+    let mut original = f
+        .core
+        .read_observation_facts(&plan.operation_id)
+        .unwrap()
+        .into_iter()
+        .find(|fact| {
+            Path::new(&fact.path).file_name()
+                == Some(std::ffi::OsStr::new("weftext.resources.json"))
+        })
+        .unwrap();
+    // All original recovery records participate, including a new relevant
+    // record from a Plan whose declared mutation targets another owner.
+    // Adversarial retained evidence cannot be skipped by intent/path indexes.
+    original.path = display(&f.manifest());
+    let recovery = f.core.journal_path(
+        &plan.operation_id,
+        &format!("recovery-observations-{}", fresh()),
+    );
+    let retained = serde_json::to_vec(&vec![original]).unwrap();
+    fs::write(&recovery, &retained).unwrap();
+    assert_eq!(
+        f.collection().err().unwrap().code,
+        "resourceManifestUnavailable"
+    );
+    assert_eq!(fs::read(&recovery).unwrap(), retained);
+    assert!(!f.manifest().exists());
+}
+
+#[test]
 fn resource_collection_lost_committed_manifest_and_empty_manifest_cannot_reset() {
     for populated in [false, true] {
         let mut f = Fixture::new();

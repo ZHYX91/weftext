@@ -24,7 +24,7 @@ const MAX_OPERATION_BYTES: usize = 64 * 1024 * 1024;
 const MAX_OPERATION_FILES: usize = 5000;
 // A single observation-name cut retains the original enumeration's directory
 // guard. It carries no accepted revision or source qualification authority.
-struct ObservationRecordPaths<'a> {
+pub(crate) struct ObservationRecordPaths<'a> {
     _directory: journal::JournalEntries<'a>,
     paths: Vec<PathBuf>,
 }
@@ -1110,7 +1110,7 @@ impl Core {
         let records = self.observation_record_paths()?;
         self.read_observation_facts_from_paths(operation_id, &records)
     }
-    fn observation_record_paths(&self) -> Result<ObservationRecordPaths<'_>> {
+    pub(crate) fn observation_record_paths(&self) -> Result<ObservationRecordPaths<'_>> {
         let mut directory = self.journal_entries()?;
         let paths = directory
             .by_ref()
@@ -1121,7 +1121,7 @@ impl Core {
             paths,
         })
     }
-    fn check_observation_record_paths(
+    pub(crate) fn check_observation_record_paths(
         &self,
         records: &ObservationRecordPaths<'_>,
         plans: &[&journal::Plan],
@@ -1134,7 +1134,7 @@ impl Core {
         }
         Ok(())
     }
-    fn read_observation_facts_from_paths(
+    pub(crate) fn read_observation_facts_from_paths(
         &self,
         operation_id: &str,
         records: &ObservationRecordPaths<'_>,

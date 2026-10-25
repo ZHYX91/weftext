@@ -31,6 +31,8 @@ Weftext 原生 Rust Core 供 Desktop、CLI、Server、WebUI 和未来 Mobile 使
 
 一次已接纳修订查询只枚举一次观察记录名称，并始终持有原 journal 目录 guard；每个已提交 Plan 仍通过同一受保护 reader 按观察顺序读取原记录。必需记录缺失或损坏仍拒绝，准确 stamp 与字节 hash、每 Plan 首个匹配事实、耐久提交序号及最大序号歧义规则不变。在确认修订号或确认没有修订号之前，再完整枚举一次并核对相关记录名称集合；名称变化直接拒绝，不接纳新记录替换原结论。名称与修订结果均不跨查询缓存。
 
+证明某个物理 owner 的资源集合从未初始化时，同一次调用共享一份完整观察记录名称枚举，逐个读取同 Workspace 已提交 Plan 的全部原观察／恢复记录；不能只按 Plan 声明的目标过滤原事实。原提交序号、owner 位置重放和声明写入的兜底证据仍分别核实，其他 owner 的初始化不转移资格。成功返回前再次完整枚举并核对相关名称集合，变化以资源清单不可用拒绝；原名称与结论不跨调用保留。这只消除重复目录枚举，不省略正文、位置证明或最终 collection witness 重验。
+
 节点结构动作仍拒绝显式 ignored/unmanaged 边界内的目标，或已知子树含这类排除边界的动作；普通非节点文件动作经同一安全后端独立预览确切范围，不借普通改名/移动绕过受管节点的两侧配对、已登记资源及历史责任。已接纳节点突然缺主文件或改配对是诊断/恢复事件，不能静默降为普通文件、退休身份或猜新 ID。开放树未观察新增的严格排除仍需强范围能力；§5 的迟到边界 pending 规则针对这些显式排除边界，不把普通容器缺主文件误当同一阻断条件。
 
 受管目录提供稳定快捷目标：Node目录直接用NodeRef；非Node容器由Core `admitDirectory` 创建 `weftext.directory.json`，只记DirectoryId，不复制parent/name/path。出生/复制fresh ID/移动/duplicate/gap按同一Plan与manifest处理。快捷创建只接纳选定容器，不整改全库。unmanaged 边界不自动加 ID。用户可明确只登记目录导航身份，保留其非 Node 状态和原发现边界；这不创建主文件、Node 或 typed 业务对象。拒绝登记或后端无法证明稳定目录身份时，仅提供明确较弱的 locator 书签，不能称改名稳定快捷。根 `.weftext-tags.json` 集中登记immutable TagId与可改displayName；TagRef用于稳定快捷/导航/Query。同名不自动合并，literal标签字符串不自发登记对象。Core `createTag`可与笔记typed TagRef赋值同Plan，SOURCE负责该原生typed槽。

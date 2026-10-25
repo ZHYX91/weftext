@@ -463,27 +463,18 @@ impl Core {
     /// This projects original observation facts at their original identity-
     /// proved placement; it does not create another membership ledger.
     pub(crate) fn require_resource_collection_uninitialized(&self, owner: &Birth) -> Result<()> {
-        for plan in self
-            .operations
-            .values()
-            .map(|plan| -> Result<_> {
-                Ok(
-                    if {
-                        self.committed(&plan.operation_id)?
-                            && plan.workspace_id.as_deref() == Some(&owner.workspace_id)
-                    } {
-                        Some(plan)
-                    } else {
-                        None
-                    },
-                )
-            })
-            .collect::<Result<Vec<_>>>()?
+        let plans = self
+            .committed_plans()?
             .into_iter()
-            .flatten()
-        {
+            .filter(|plan| plan.workspace_id.as_deref() == Some(&owner.workspace_id))
+            .collect::<Vec<_>>();
+        // Retain one original protected enumeration throughout this proof.
+        // Every Plan still uses the actual record reader/decoder below; only
+        // repeated full-directory enumeration is shared within this call.
+        let records = self.observation_record_paths()?;
+        for plan in &plans {
             let facts = self
-                .read_observation_facts(&plan.operation_id)
+                .read_observation_facts_from_paths(&plan.operation_id, &records)
                 .map_err(|mut error| {
                     if error.code == "identityPending" {
                         error.code = "resourceManifestUnavailable".into();
@@ -566,6 +557,15 @@ impl Core {
                 ));
             }
         }
+        // A late recovery record cannot silently replace the original cut or
+        // turn a previously initialized collection into an empty one.
+        self.check_observation_record_paths(&records, &plans)
+            .map_err(|mut error| {
+                if error.code == "identityPending" {
+                    error.code = "resourceManifestUnavailable".into();
+                }
+                error
+            })?;
         Ok(())
     }
 
