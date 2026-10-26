@@ -40897,9 +40897,14 @@
       "en-US": "Ambiguous union tag",
       "params": {}
     },
+    "error.data.schema.unionNativeDomainNoMatch": {
+      "zh-CN": "该值的类型不符合联合类型的任何分支。",
+      "en-US": "The value's type does not match any union branch.",
+      "params": {}
+    },
     "error.data.schema.unionNativeDomainAmbiguous": {
-      "zh-CN": "联合类型的原生值域不唯一。",
-      "en-US": "Ambiguous union native domain",
+      "zh-CN": "该值的类型同时匹配多个联合类型分支。",
+      "en-US": "The value's type matches multiple union branches.",
       "params": {}
     },
     "error.data.schema.invalidUnionDiscriminator": {

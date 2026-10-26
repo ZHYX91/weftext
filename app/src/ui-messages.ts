@@ -7886,7 +7886,8 @@ export const zhCN = {
   "error.data.schema.unionRequiresExactlyOneBranchMember": "联合类型要求恰好一个分支成员。",
   "error.data.schema.unionTagMissing": "联合类型标签缺失。",
   "error.data.schema.unionTagAmbiguous": "联合类型标签不唯一。",
-  "error.data.schema.unionNativeDomainAmbiguous": "联合类型的原生值域不唯一。",
+  "error.data.schema.unionNativeDomainNoMatch": "该值的类型不符合联合类型的任何分支。",
+  "error.data.schema.unionNativeDomainAmbiguous": "该值的类型同时匹配多个联合类型分支。",
   "error.data.schema.invalidUnionDiscriminator": "联合类型判别器无效。",
   "error.data.schema.unsupportedSchemaVersion": "不支持此 Schema 版本。",
   "error.data.schema.typeAliasUnresolved": "类型别名尚未解析。",
@@ -18094,6 +18095,7 @@ export interface MessageParamsMap {
   "error.data.schema.unionRequiresExactlyOneBranchMember": {  };
   "error.data.schema.unionTagMissing": {  };
   "error.data.schema.unionTagAmbiguous": {  };
+  "error.data.schema.unionNativeDomainNoMatch": {  };
   "error.data.schema.unionNativeDomainAmbiguous": {  };
   "error.data.schema.invalidUnionDiscriminator": {  };
   "error.data.schema.unsupportedSchemaVersion": {  };
@@ -29761,6 +29763,7 @@ export const messageParamTypes = {
   "error.data.schema.unionRequiresExactlyOneBranchMember": {},
   "error.data.schema.unionTagMissing": {},
   "error.data.schema.unionTagAmbiguous": {},
+  "error.data.schema.unionNativeDomainNoMatch": {},
   "error.data.schema.unionNativeDomainAmbiguous": {},
   "error.data.schema.invalidUnionDiscriminator": {},
   "error.data.schema.unsupportedSchemaVersion": {},
@@ -40347,7 +40350,8 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.data.schema.unionRequiresExactlyOneBranchMember": "Union requires exactly one branch member",
   "error.data.schema.unionTagMissing": "Missing union tag",
   "error.data.schema.unionTagAmbiguous": "Ambiguous union tag",
-  "error.data.schema.unionNativeDomainAmbiguous": "Ambiguous union native domain",
+  "error.data.schema.unionNativeDomainNoMatch": "The value's type does not match any union branch.",
+  "error.data.schema.unionNativeDomainAmbiguous": "The value's type matches multiple union branches.",
   "error.data.schema.invalidUnionDiscriminator": "Invalid union discriminator",
   "error.data.schema.unsupportedSchemaVersion": "Unsupported schema version",
   "error.data.schema.typeAliasUnresolved": "Unresolved type alias",

@@ -557,12 +557,19 @@ impl Schema {
                     .filter(|(_, s)| self.native_domain(s) == value_domain(v))
                     .map(|(i, _)| i)
                     .collect();
-                if found.len() != 1 {
-                    return Err(DataError::new(
-                        weftext_messages::UiMessage::error_data_schema_union_native_domain_ambiguous(),
-                    ));
+                match found.as_slice() {
+                    [] => {
+                        return Err(DataError::new(
+                            UiMessage::error_data_schema_union_native_domain_no_match(),
+                        ));
+                    }
+                    [index] => *index,
+                    _ => {
+                        return Err(DataError::new(
+                            UiMessage::error_data_schema_union_native_domain_ambiguous(),
+                        ));
+                    }
                 }
-                found[0]
             }
         };
         variants.get(index).ok_or_else(|| {
