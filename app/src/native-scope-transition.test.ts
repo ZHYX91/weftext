@@ -10,7 +10,7 @@ import { message, UiError, errorUiText, uiTextValue, displayMessage, uiDisplayPa
 import { ApiError } from "./api-error";
 import { DocumentSession, rebindCommittedSave, canRebindSaveAs, uniqueRetainedDrafts } from "./session";
 import { restoreBufferDisposition } from "./history-state";
-import { fileSaveReceipt, type FileSaveReceipt } from "./file-save-result";
+import { fileSaveReceipt, fileSaveFailure, type FileSaveReceipt } from "./file-save-result";
 import { originalCommitted, submitOriginal, TerminatedAttempt } from "./original-operation";
 
 // Exercise the actual main consumers and WorkspaceTools methods. Substitute
@@ -67,7 +67,7 @@ function fixture() {
     pathDialog: async () => next.root, flushLiteral: async () => {}, prepareSwitch: async () => {},
     api: async () => next,
     normalize: (path: string) => path.replaceAll("\\", "/").toLowerCase(),
-    readOnlySource: () => false, flowScroll: null, flowHasProjection: false,
+    readOnlySource: () => false, fileSaveFailure, flowScroll: null, flowHasProjection: false,
     persistDraft: async () => { effects.push("persist-draft"); },
     releaseOpenedSession: async (id: string) => { released.push(id); },
     renderContent: () => { effects.push("content"); }, scheduleRender: () => { effects.push("schedule"); },
@@ -302,6 +302,35 @@ test("saveDocument retains its exact committed receipt and adopted Session when 
   assert.equal(doc.session.savePending, false); assert.deepEqual(f.released, []);
   assert.deepEqual(routes, ["/api/save", "/api/library/open"]);
   assert.equal(f.effects.includes("sidebar"), false);
+});
+
+test("saveDocument clears a resolved original attempt while retaining its typed rejection and exact author input", async () => {
+  const f = fixture();
+  const prior = { sessionId: "save-writer", root: f.original.root, workspaceId: f.original.workspaceId, nodeId: "node", source: "before", baseId: "old-base", path: `${f.original.root}/note.typ`, kind: "managed" };
+  const session = new DocumentSession(prior); session.edit("retained author input\r\n😀");
+  const source = session.source, inputId = session.inputId;
+  const doc: any = { session, writing: { state: { composing: false } }, sourceTrashed: false };
+  const rejection = new ApiError("invalidAuthorSource", message("error.invalidResponse"));
+  const routes: string[] = [];
+  f.context.current = doc; f.context.documents = [doc];
+  Object.assign(f.context, {
+    historyPanel: { hasPending: () => false }, historyContext: () => ({}), refreshChrome() {},
+    operationId: () => "resolved-save", originalCommitted, submitOriginal, TerminatedAttempt, ApiError, errorUiText, fileSaveReceipt,
+    persistDraft: async () => { const revision = session.issueDraftRevision(); session.acknowledgeDraft(session.source, session.serial, revision); },
+    api: async (route: string, payload: any) => {
+      routes.push(route); assert.equal(payload.operationId, "resolved-save");
+      if (route === "/api/save") { assert.equal(payload.source, source); throw rejection; }
+      if (route === "/api/operations/status") return { operationId: "resolved-save", status: "unknown" };
+      assert.equal(route, "/api/operations/settle"); return { operationId: "resolved-save", status: "resolved" };
+    },
+  });
+  await assert.rejects(f.context.saveDocument(doc), error => error instanceof TerminatedAttempt);
+  assert.deepEqual(routes, ["/api/save", "/api/operations/status", "/api/operations/settle"]);
+  assert.equal(doc.lastSave, undefined); assert.equal(session.savePending, false);
+  assert.equal(uiTextValue(session.error!), uiTextValue(errorUiText(rejection)));
+  assert.notEqual(uiTextValue(session.error!), uiTextValue(message("shell.saveUnknownConfirmSameOperation")));
+  assert.equal(session.source, source); assert.equal(session.inputId, inputId); assert.equal(session.baseId, prior.baseId);
+  assert.equal(session.opened, prior); assert.deepEqual(f.released, []);
 });
 
 test("activateDocument publishes an admitted context without inventing another writer producer", async () => {

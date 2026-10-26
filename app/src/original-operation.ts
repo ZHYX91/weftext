@@ -59,11 +59,11 @@ async function reconcileOriginal<T extends OriginalFact>(request: OriginalReques
   if (fact.status === "unknown") fact = exact(await request<T>("/api/operations/settle", await originalFence(attempt)), operationId, true);
   if (originalCommitted(fact)) return fact;
   if (fact.status === "resolved") throw new TerminatedAttempt(error);
-  throw error;
+  throw error ?? new UiError(uiMessage("originalOperation.awaitingConfirmation"));
 }
 export async function submitOriginal<T extends OriginalFact>(request: OriginalRequest, route: string, payload: Record<string, unknown>, kind: string, recoverFirst = false): Promise<T> {
   const attempt = freezeOriginalAttempt(payload, kind);
-  if (recoverFirst) return reconcileOriginal(request, attempt, new UiError(uiMessage("originalOperation.awaitingConfirmation")));
+  if (recoverFirst) return reconcileOriginal(request, attempt, undefined);
   try {
     const fact = exact(await request<T>(route, JSON.parse(attempt.wire)), attempt.operationId);
     if (!originalCommitted(fact) || fact.status === "saved" && !["save", "saveAs"].includes(kind)) throw new UiError(uiMessage("originalOperation.applicableCommittedReceiptRequired"));

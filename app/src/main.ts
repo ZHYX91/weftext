@@ -12,7 +12,7 @@ import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import "./style.css";
 import { originalCommitted, submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
-import { fileSaveReceipt } from "./file-save-result";
+import { fileSaveReceipt, fileSaveFailure } from "./file-save-result";
 import { RecognitionPanel } from "./recognition-panel";
 import { api, apiBlob, ApiError, operationId } from "./api";
 import { mountNodeContents } from "./node-contents";
@@ -2863,17 +2863,12 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             if (querySaveNotice) toast(uiMessage("shell.savedQueriesNotRunnable"), true);
         }
         catch (error) {
-            if (!receiptReceived && error instanceof TerminatedAttempt)
+            const failure = fileSaveFailure(error, receiptReceived, !!doc.lastSave);
+            if (failure.clearAttempt)
                 doc.lastSave = undefined;
-            doc.session.error = error instanceof Error ? errorUiText(error) : String(error);
+            doc.session.error = failure.error;
             if (error instanceof ApiError && error.currentSource != null)
                 doc.externalSource = error.currentSource;
-            if (error instanceof ApiError && error.code === "saveAsTargetChanged")
-                doc.session.error = errorUiText(error);
-            else if (receiptReceived)
-                doc.session.error = doc.lastSave ? uiMessage("shell.committedDeliveryIncomplete") : displayMessage("shell.savedRecoveryInformationFailed", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) });
-            else if (!(error instanceof ApiError))
-                doc.session.error = uiMessage("shell.saveUnknownConfirmSameOperation");
             if (doc === current)
                 renderContent();
             throw error;

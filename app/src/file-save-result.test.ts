@@ -1,15 +1,83 @@
-import { message, uiTextValue, locale } from "./ui-locale";
-import { apiErrorUiText } from "./api-error";
+import { message, uiTextValue, errorUiText, locale } from "./ui-locale";
+import { ApiError, apiErrorUiText } from "./api-error";
 import { coreDescriptionUiText } from "./ui-diagnostics";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { fileSaveReceipt } from "./file-save-result";
-import { submitOriginal, deliverCommitted, committedDeliveryComplete, originalDeliveryErrors, type OriginalRequest } from "./original-operation";
+import { fileSaveReceipt, fileSaveFailure } from "./file-save-result";
+import { submitOriginal, TerminatedAttempt, deliverCommitted, committedDeliveryComplete, originalDeliveryErrors, type OriginalRequest } from "./original-operation";
 import { DocumentSession, rebindCommittedSave } from "./session";
 
 const frozen = { operationId: "original", sessionId: "writer", source: "submitted S", sourcePath: "C:/TEST/a.typ", baseId: "before" };
 const document = { sessionId: frozen.sessionId, baseId: "actual", path: frozen.sourcePath, root: "C:/TEST", source: frozen.source, kind: "ordinary" };
 const receipt = { operationId: frozen.operationId, status: "committed", baseId: "original-base", path: frozen.sourcePath, committedSource: frozen.source, document, documentSourceMatchesCommit: true };
+
+test("resolved original save preserves its typed rejection instead of asking to confirm a cleared attempt", async () => {
+  const rejection = new ApiError("invalidAuthorSource", message("error.invalidResponse"));
+  const session = new DocumentSession({ ...document, source: "before B", baseId: "before" });
+  session.edit("retained author input\r\n😀");
+  const inputId = session.inputId, calls: string[] = [];
+  let lastSave: typeof frozen | undefined = { ...frozen };
+  const request: OriginalRequest = async <T>(route: string, body: unknown) => {
+    calls.push(route);
+    if (route === "/api/save") throw rejection;
+    if (route === "/api/operations/status") return { operationId: frozen.operationId, status: "unknown" } as T;
+    assert.equal(route, "/api/operations/settle");
+    assert.equal((body as { operationId: string }).operationId, frozen.operationId);
+    return { operationId: frozen.operationId, status: "resolved" } as T;
+  };
+  await assert.rejects(submitOriginal(request, "/api/save", { ...frozen }, "save"), error => {
+    const failure = fileSaveFailure(error, false, !!lastSave);
+    if (failure.clearAttempt) lastSave = undefined;
+    assert.equal(lastSave, undefined);
+    assert.equal(uiTextValue(failure.error), uiTextValue(errorUiText(rejection)));
+    assert.notEqual(uiTextValue(failure.error), uiTextValue(message("shell.saveUnknownConfirmSameOperation")));
+    return true;
+  });
+  assert.deepEqual(calls, ["/api/save", "/api/operations/status", "/api/operations/settle"]);
+  assert.equal(session.source, "retained author input\r\n😀"); assert.equal(session.inputId, inputId); assert.equal(session.baseId, "before");
+});
+
+test("unconfirmed save retains the original attempt and input and retry only reads its original result", async () => {
+  const unknown = new Error("connection ended"), calls: string[] = [];
+  const lastSave = { ...frozen }, before = JSON.stringify(lastSave);
+  const request: OriginalRequest = async <T>(route: string, body: unknown) => {
+    calls.push(route); assert.equal((body as { operationId: string }).operationId, frozen.operationId);
+    if (route === "/api/save") throw unknown;
+    return { operationId: frozen.operationId, status: "unknown" } as T;
+  };
+  for (const retry of [false, true]) await assert.rejects(submitOriginal(request, "/api/save", lastSave, "save", retry), error => {
+    const failure = fileSaveFailure(error, false, true);
+    assert.equal(failure.clearAttempt, false);
+    assert.equal(uiTextValue(failure.error), uiTextValue(message("shell.saveUnknownConfirmSameOperation")));
+    return true;
+  });
+  assert.equal(calls.filter(route => route === "/api/save").length, 1);
+  assert.equal(JSON.stringify(lastSave), before);
+});
+
+test("unresolved typed rejection and committed delivery failure preserve their separate presentation", async () => {
+  const rejection = new ApiError("invalidAuthorSource", message("error.invalidResponse"));
+  const request: OriginalRequest = async <T>(route: string) => {
+    if (route === "/api/save") throw rejection;
+    return { operationId: frozen.operationId, status: "prepared" } as T;
+  };
+  await assert.rejects(submitOriginal(request, "/api/save", { ...frozen }, "save"), error => {
+    assert.equal(error, rejection);
+    const failure = fileSaveFailure(error, false, true);
+    assert.equal(failure.clearAttempt, false);
+    assert.equal(uiTextValue(failure.error), uiTextValue(errorUiText(rejection)));
+    return true;
+  });
+  const committed = await submitOriginal((async () => receipt) as OriginalRequest, "/api/save", { ...frozen }, "save");
+  assert.equal(committed.status, "committed");
+  const failure = fileSaveFailure(new Error("delivery failed"), true, true);
+  assert.equal(failure.clearAttempt, false);
+  assert.equal(uiTextValue(failure.error), uiTextValue(message("shell.committedDeliveryIncomplete")));
+  assert.equal(committed.operationId, frozen.operationId); assert.equal(frozen.source, "submitted S");
+  const contradictory = fileSaveFailure(new TerminatedAttempt(rejection), true, true);
+  assert.equal(contradictory.clearAttempt, false);
+  assert.equal(uiTextValue(contradictory.error), uiTextValue(message("shell.committedDeliveryIncomplete")));
+});
 const malformed = [
   { baseId: undefined }, { baseId: "" }, { baseId: 12 }, { path: undefined }, { path: 12 }, { path: "C:/TEST/other.typ" },
   { operationId: "other" }, { status: "complete" }, { status: ["saved"] }, { message: "old message protocol" },

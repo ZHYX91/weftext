@@ -166,6 +166,8 @@ Windows Core private state defaults to `%LOCALAPPDATA%\Weftext-MVP\core`, includ
 
 Saving checks actual file objects and original bytes, rejecting old drafts that would overwrite external changes. Save As creates only absent targets and verifies the reopened result, preserving input typed meanwhile in the same draft and Undo. Sessions/drafts follow proved objects across rename/move/Trash. Competing retained drafts require comparison instead of silent selection.
 
+When the original save is confirmed safely ended without a commit, the UI shows its known rejection or ended state and retains input, without asking to keep confirming a cleared attempt. An outcome still awaiting confirmation retains the original attempt and queries its original result. A committed save with incomplete delivery is described separately, rather than as an unsaved operation.
+
 Recovery records show every participant's before, planned and current content; binary versions can be downloaded for comparison. A coherent before-state can cancel the original plan, and a proved complete after-state can adopt it. Proven partial content updates can continue the original operation's remaining files. Third-state bytes or mismatched identities are not overwritten. Intermediate directory-rename placement remains available for inspection without automatic replay. Prior drafts and confirmed merge proposals remain in private recovery history.
 
 A complete single-library backup includes ordinary files, ignored bytes, related control evidence and consistently captured related journal/drafts. It excludes private material from other libraries or outside files. Retained recovery evidence does not grant a new device the original local NTFS identity and does not establish synchronization.
