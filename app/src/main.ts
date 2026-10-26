@@ -893,7 +893,7 @@ const workspaceTools = new WorkspaceTools({
     }),
 });
 workspace.insertBefore(workspaceTools.bar, workspaceBody);
-const interfaceLocale = new InterfaceLocaleControl(localLocalePreferences(api));
+const interfaceLocale = new InterfaceLocaleControl(localLocalePreferences(api), () => nativeSurface.confirmLocale());
 workspaceTools.bar.append(interfaceLocale.element);
 document.documentElement.lang = locale.current;
 locale.subscribe(value => { document.documentElement.lang = value; });

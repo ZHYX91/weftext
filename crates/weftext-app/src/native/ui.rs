@@ -426,11 +426,10 @@ impl Reducer {
     fn blocked(&mut self) -> Result<()> {
         self.cancel_all()?;
         self.notice(Notice::CloseBlocked)?;
-        let text = UiMessage::desktop_unsaved_close().render(self.locale);
         // This belongs to an explicit own-window close action. No editor input
         // or focus is synthesized and the original surface remains intact.
         self.native_notice
-            .show(&text, &UiMessage::common_close().render(self.locale))?;
+            .show(&UiMessage::desktop_unsaved_close(), self.locale)?;
         Ok(())
     }
     fn capture_result(&self, request: &CaptureOpen, accepted: bool) -> Result<()> {
@@ -708,6 +707,7 @@ impl Reducer {
                 information,
             } => {
                 self.locale = locale;
+                self.native_notice.refresh_locale(locale)?;
                 self.preferences = preferences;
                 self.startup = startup;
                 self.cli_service = cli_service;
@@ -722,10 +722,7 @@ impl Reducer {
                 if let Some(message) = information {
                     // This is a consequence of the user's explicit tray action;
                     // no startup, background read or settings refresh supplies it.
-                    self.native_notice.show(
-                        &message.render(self.locale),
-                        &UiMessage::common_close().render(self.locale),
-                    )?;
+                    self.native_notice.show(&message, self.locale)?;
                 }
             }
             Command::Popup => {
@@ -740,10 +737,7 @@ impl Reducer {
                 }
             }
             Command::Feedback(message) => {
-                self.native_notice.show(
-                    &message.render(self.locale),
-                    &UiMessage::common_close().render(self.locale),
-                )?;
+                self.native_notice.show(&message, self.locale)?;
             }
             Command::VerifyResult {
                 kind,

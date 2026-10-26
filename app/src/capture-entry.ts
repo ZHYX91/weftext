@@ -10,7 +10,7 @@ import { NativeCapture } from "./native-capture";
 const nativeSurface=window.chrome?.webview?new NativeSurface("capture"):undefined;
 const host=document.getElementById("capture");
 if(!host)throw new Error("Capture root is unavailable");
-const language=new InterfaceLocaleControl(localLocalePreferences(api));host.before(language.element);
+const language=new InterfaceLocaleControl(localLocalePreferences(api), () => nativeSurface?.confirmLocale());host.before(language.element);
 const title=document.querySelector("title");if(title)setUiText(title, message("capture.title"));
 const updateLanguage=()=>document.documentElement.lang=locale.current;updateLanguage();const releaseLanguage=locale.subscribe(updateLanguage);
 window.addEventListener("pagehide",event=>{if(event.persisted)return;language.dispose();releaseLanguage();});

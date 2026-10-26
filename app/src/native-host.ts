@@ -50,6 +50,8 @@ export class NativeSurface {
   private frozen = false;
   private readonly participants = new Map<string, CloseParticipant>();
   private ready = false;
+  private retired = false;
+  private localeConfirmed = false;
   private readonly listeners = new Set<(message: Record<string, unknown>) => void>();
 
   constructor(readonly kind: SurfaceKind) {
@@ -64,6 +66,15 @@ export class NativeSurface {
     document.addEventListener("compositionstart", () => { this.composing = true; changed(); }, true);
     document.addEventListener("compositionend", () => { this.composing = false; changed(); }, true);
     bridge()?.addEventListener("message", event => { void this.receive(event.data); });
+    window.addEventListener?.("pagehide", event => { if (!event.persisted) { this.retired = true; this.localeConfirmed = false; } });
+  }
+
+  /** Only a confirmed personal preference cut may notify the original owner.
+   * Before binding retain the signal on this surface instance, never globally. */
+  confirmLocale(): void {
+    if (this.retired || !bridge()) return;
+    this.localeConfirmed = true;
+    if (this.binding) { this.send({ type: "locale-changed" }); this.localeConfirmed = false; }
   }
 
   get isNative(): boolean { return bridge() !== undefined; }
@@ -107,6 +118,7 @@ export class NativeSurface {
   }
 
   private async receive(value: unknown): Promise<void> {
+    if (this.retired) return;
     if (!value || typeof value !== "object") return;
     const message = value as Record<string, unknown>;
     if (message.type === "surface-bound") {
@@ -119,6 +131,7 @@ export class NativeSurface {
       try { bindNativeDraftSurface(binding); }
       catch { this.reportFailed(); return; }
       this.binding = binding;
+      if (this.localeConfirmed) this.confirmLocale();
       this.send({ type: "surface-edited", surfaceEditRevision: this.editRevision });
       return;
     }

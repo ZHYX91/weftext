@@ -8,14 +8,15 @@ import { thawNativeApi } from "./native-api-gate";
 
 const proof: CloseProof = { kind: "document", evidence: "authorDraft", ownerId: "actual-owner", ownerGeneration: "owner-generation", sessionId: "opened-session", baseId: "opened-base", inputId: "original-input", sourceDigest: "a".repeat(64), recordDigest: "b".repeat(64) };
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(accept => { resolve = accept; }); return { promise, resolve }; }
-async function fixture(run: (f: { surface: NativeSurface; fire: (kind: string) => void; deliver: (value: unknown) => void; messages: Record<string, unknown>[]; root: { inert: boolean }; tick: () => Promise<void> }) => Promise<void>, kind: "library" | "capture" = "library") {
+async function fixture(run: (f: { surface: NativeSurface; fire: (kind: string) => void; hide: () => void; deliver: (value: unknown) => void; messages: Record<string, unknown>[]; root: { inert: boolean }; tick: () => Promise<void> }) => Promise<void>, kind: "library" | "capture" = "library") {
   const originals = [Object.getOwnPropertyDescriptor(globalThis, "document"), Object.getOwnPropertyDescriptor(globalThis, "window")];
   const events = new Map<string, (() => void)[]>(), messages: Record<string, unknown>[] = [], root = { inert: false };
+  const hidden: (() => void)[] = [];
   const received: ((event: MessageEvent<unknown>) => void)[] = [];
   Object.defineProperty(globalThis, "document", { configurable: true, value: { documentElement: root, addEventListener: (kind: string, listener: () => void) => events.set(kind, [...events.get(kind) ?? [], listener]) } });
-  Object.defineProperty(globalThis, "window", { configurable: true, value: { chrome: { webview: { postMessage: (value: Record<string, unknown>) => messages.push(value), addEventListener: (_: string, listener: (event: MessageEvent<unknown>) => void) => { received.push(listener); } } } } });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { addEventListener: (kind: string, callback: (event: { persisted: boolean }) => void) => { if (kind === "pagehide") hidden.push(() => callback({ persisted: false })); }, chrome: { webview: { postMessage: (value: Record<string, unknown>) => messages.push(value), addEventListener: (_: string, listener: (event: MessageEvent<unknown>) => void) => { received.push(listener); } } } } });
   const surface = new NativeSurface(kind);
-  try { await run({ surface, fire: kind => events.get(kind)?.forEach(listener => listener()), deliver: value => received.forEach(listener => listener({ data: value } as MessageEvent<unknown>)), messages, root, tick: async () => { await new Promise(resolve => setImmediate(resolve)); } }); }
+  try { await run({ surface, hide: () => hidden.forEach(callback => callback()), fire: kind => events.get(kind)?.forEach(listener => listener()), deliver: value => received.forEach(listener => listener({ data: value } as MessageEvent<unknown>)), messages, root, tick: async () => { await new Promise(resolve => setImmediate(resolve)); } }); }
   finally { for (const [index, name] of ["document", "window"].entries()) { const prior = originals[index]; if (prior) Object.defineProperty(globalThis, name, prior); else Reflect.deleteProperty(globalThis, name); } }
 }
 const bound = { type: "surface-bound", surfaceId: "surface", surfaceEpoch: "epoch" };
@@ -196,3 +197,18 @@ test("close identity projection cannot admit unknown wire fields or a different 
   f.deliver(close("close-cancelled", "original")); await f.tick();
   assert.equal(f.root.inert, false);
 }));
+
+for (const kind of ["library", "capture"] as const) {
+  test(`${kind} confirmed locale waits for its original binding and never replays into a new epoch`, () => fixture(async f => {
+    f.surface.confirmLocale(); assert.equal(f.messages.length, 0);
+    f.deliver(bound); await f.tick();
+    assert.deepEqual(f.messages.filter(message => message.type === "locale-changed"), [{ type: "locale-changed", surfaceId: "surface", surfaceEpoch: "epoch" }]);
+    f.surface.confirmLocale(); assert.equal(f.messages.filter(message => message.type === "locale-changed").length, 2);
+    f.deliver({ ...bound, surfaceEpoch: "other" }); await f.tick();
+    assert.equal(f.messages.some(message => message.type === "locale-changed" && message.surfaceEpoch === "other"), false);
+  }, kind));
+  test(`${kind} retirement discards a pre-binding confirmed locale and late callbacks`, () => fixture(async f => {
+    f.surface.confirmLocale(); f.hide(); f.deliver(bound); f.surface.confirmLocale(); await f.tick();
+    assert.equal(f.messages.some(message => message.type === "locale-changed"), false);
+  }, kind));
+}

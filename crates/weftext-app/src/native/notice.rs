@@ -2,6 +2,7 @@
 //! author reducer: the ordinary outer pump remains the sole event consumer.
 use super::events::Wake;
 use std::{cell::Cell, rc::Rc};
+use weftext_messages::{UiLocale, UiMessage};
 use windows::{
     Win32::{
         Foundation::{HWND, LPARAM, WPARAM},
@@ -20,11 +21,13 @@ struct State {
 
 pub(super) struct Notice {
     state: Rc<State>,
+    message: Option<UiMessage>,
 }
 
 impl Notice {
     pub fn new(wake: Wake) -> Self {
         Self {
+            message: None,
             state: Rc::new(State {
                 hwnd: Cell::new(None),
                 initialized: Cell::new(false),
@@ -77,8 +80,27 @@ impl Notice {
         Ok(hwnd)
     }
 
-    pub fn show(&mut self, text: &str, dismiss: &str) -> Result<()> {
-        let hwnd = self.update(text, dismiss)?;
+    fn update_message(&mut self, message: &UiMessage, locale: UiLocale) -> Result<HWND> {
+        let hwnd = self.update(
+            &message.render(locale),
+            &UiMessage::common_close().render(locale),
+        )?;
+        self.message = Some(message.clone());
+        Ok(hwnd)
+    }
+
+    /// Re-render only the original live notice. Never create, show or activate.
+    pub fn refresh_locale(&mut self, locale: UiLocale) -> Result<()> {
+        if self.live_hwnd().is_some()
+            && let Some(message) = self.message.clone()
+        {
+            self.update_message(&message, locale)?;
+        }
+        Ok(())
+    }
+
+    pub fn show(&mut self, message: &UiMessage, locale: UiLocale) -> Result<()> {
+        let hwnd = self.update_message(message, locale)?;
         unsafe {
             let _ = ShowWindow(hwnd, SW_SHOWNORMAL);
             let _ = SetForegroundWindow(hwnd);
@@ -219,7 +241,7 @@ mod tests {
         events::{Event, Queue, Wake},
         window::Window,
     };
-    use windows::Win32::UI::Input::KeyboardAndMouse::IsWindowEnabled;
+    use windows::Win32::UI::Input::KeyboardAndMouse::{GetFocus, IsWindowEnabled};
 
     #[test]
     fn notice_keeps_author_messages_live_and_has_bounded_identity_and_teardown() {
@@ -237,6 +259,27 @@ mod tests {
             let mut text = [0; 64];
             unsafe { GetDlgItemTextW(original, TEXT, &mut text) };
             assert_eq!(String::from_utf16_lossy(&text[..7]), "updated");
+            let focus = unsafe { GetFocus() };
+            let foreground = unsafe { GetForegroundWindow() };
+            notice
+                .update_message(&UiMessage::desktop_unsaved_close(), UiLocale::ZhCn)
+                .unwrap();
+            notice.refresh_locale(UiLocale::EnUs).unwrap();
+            assert_eq!(notice.live_hwnd(), Some(original));
+            let mut translated = [0; 512];
+            let length = unsafe { GetDlgItemTextW(original, TEXT, &mut translated) } as usize;
+            assert_eq!(
+                String::from_utf16_lossy(&translated[..length]),
+                UiMessage::desktop_unsaved_close().render(UiLocale::EnUs)
+            );
+            let length = unsafe { GetDlgItemTextW(original, 1, &mut translated) } as usize;
+            assert_eq!(
+                String::from_utf16_lossy(&translated[..length]),
+                UiMessage::common_close().render(UiLocale::EnUs)
+            );
+            assert!(!unsafe { IsWindowVisible(original).as_bool() });
+            assert_eq!(unsafe { GetFocus() }, focus);
+            assert_eq!(unsafe { GetForegroundWindow() }, foreground);
             while queue.pop().is_some() {}
             unsafe {
                 PostMessageW(Some(author_hwnd), WM_SIZE, WPARAM(0), LPARAM(0)).unwrap();
@@ -276,9 +319,12 @@ mod tests {
             };
             assert!(notice.translate(&escape));
             assert!(notice.live_hwnd().is_none());
+            notice.refresh_locale(UiLocale::ZhCn).unwrap();
+            assert!(notice.live_hwnd().is_none());
             assert!(author.state.live_hwnd().is_some());
             let stale = Notice {
                 state: notice.state.clone(),
+                message: notice.message.clone(),
             };
             notice.update("reopened", "Close").unwrap();
             stale.close().unwrap();
