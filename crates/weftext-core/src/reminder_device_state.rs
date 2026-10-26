@@ -694,6 +694,50 @@ pub struct ReminderEligibility {
     pub execution_key: String,
     pub timing: ReminderTiming,
     pub retained: Option<ReminderDeliveryStatus>,
+    // Same-process wake guidance only. It is neither an HTTP field nor a permit.
+    #[serde(skip)]
+    next_recheck_at: Option<std::time::Instant>,
+}
+impl ReminderEligibility {
+    pub fn next_recheck_at(&self) -> Option<std::time::Instant> {
+        self.next_recheck_at
+    }
+}
+
+/// Reuse the parsed exact instants/decimal arithmetic; never parse RFC3339 in
+/// the Native adapter or round a positive subnanosecond delay down to zero.
+fn reminder_recheck_delay(
+    at: &ExactInstant,
+    trigger: &ExactInstant,
+) -> Result<std::time::Duration> {
+    if !at.compare(trigger).is_lt() {
+        return Ok(std::time::Duration::ZERO);
+    }
+    let whole = trigger
+        .utc_seconds
+        .checked_sub(at.utc_seconds)
+        .ok_or_else(|| err(UiMessage::error_reminder_clock_overflow()))?;
+    let delta = ExactDecimal::parse(&whole.to_string())
+        .map_err(temporal_error)?
+        .add(&trigger.fraction)
+        .add(&ExactDecimal {
+            coefficient: -at.fraction.coefficient.clone(),
+            scale: at.fraction.scale,
+        });
+    let divisor = ExactDecimal::parse("10")
+        .map_err(temporal_error)?
+        .coefficient
+        .pow(delta.scale);
+    let nanos = (delta.coefficient * 1_000_000_000u32 + &divisor - 1u32) / divisor;
+    let seconds = (&nanos / 1_000_000_000u32)
+        .to_string()
+        .parse::<u64>()
+        .map_err(|_| err(UiMessage::error_reminder_clock_overflow()))?;
+    let subsecond = (&nanos % 1_000_000_000u32)
+        .to_string()
+        .parse::<u32>()
+        .map_err(|_| err(UiMessage::error_reminder_clock_overflow()))?;
+    Ok(std::time::Duration::new(seconds, subsecond))
 }
 
 impl Core {
@@ -842,6 +886,18 @@ impl Core {
         &mut self,
         expected: &TaskReminderCandidate,
     ) -> Result<ReminderEligibility> {
+        self.reminder_eligibility_with_clock(expected, || {
+            // Anchor immediately before this exact wall-clock observation.
+            // Subsequent Core/adapter work consumes the same absolute deadline.
+            let observed = std::time::Instant::now();
+            Ok((now()?, observed))
+        })
+    }
+    fn reminder_eligibility_with_clock(
+        &mut self,
+        expected: &TaskReminderCandidate,
+        mut clock: impl FnMut() -> Result<(ExactInstant, std::time::Instant)>,
+    ) -> Result<ReminderEligibility> {
         let (state, _) = self.read_reminders()?;
         let current = self.task_reminder_candidate(Path::new(&expected.root), &expected.owner)?;
         same_candidate(expected, &current)?;
@@ -849,7 +905,7 @@ impl Core {
         let (id, definition, trigger) = ready(&current)?;
         let key = execution_key(&state.device_id, &current.owner, id, definition, trigger)?;
         let trigger = ExactInstant::parse(trigger).map_err(temporal_error)?;
-        let at = now()?;
+        let (at, observed) = clock()?;
         let timing = if at.compare(&trigger).is_lt() {
             ReminderTiming::Upcoming
         } else if missed(&current, &at)? {
@@ -862,10 +918,16 @@ impl Core {
         } else {
             None
         };
+        let next_recheck_at = if matches!(&timing, ReminderTiming::Upcoming) {
+            observed.checked_add(reminder_recheck_delay(&at, &trigger)?)
+        } else {
+            None
+        };
         Ok(ReminderEligibility {
             execution_key: key,
             timing,
             retained,
+            next_recheck_at,
         })
     }
     /// Bounded traversal of consent records, not a second task store. Each task

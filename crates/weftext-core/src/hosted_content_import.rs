@@ -183,25 +183,13 @@ impl Core {
         let mut members = Vec::new();
         let mut producers = 0usize;
         let mut metadata = 0usize;
-        for plan in self
-            .operations
-            .values()
-            .map(|p| -> Result<_> {
-                Ok(
-                    if {
-                        self.committed(&p.operation_id)?
-                            && p.workspace_id.as_ref() == Some(&workspace.workspace_id)
-                    } {
-                        Some(p)
-                    } else {
-                        None
-                    },
-                )
-            })
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-        {
+        for plan in self.operations.values() {
+            // The retained Plan selects possible producers; it does not prove
+            // their commit. Unrelated operations cannot confer slot authority
+            // and need no private commit read for this symbolic projection.
+            if plan.workspace_id.as_ref() != Some(&workspace.workspace_id) {
+                continue;
+            }
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
@@ -211,6 +199,9 @@ impl Core {
                 .is_some_and(|d| d.is_fixed_slot(slot))
                 || !content_import(&transaction.request.intent)
             {
+                continue;
+            }
+            if !self.committed(&plan.operation_id)? {
                 continue;
             }
             let Mutation::CreateTree {
@@ -284,25 +275,10 @@ impl Core {
         let placement_file = placement_guard.open_placement_file()?;
         let identity = stamp(&placement_file)?.identity;
         let mut owner = None;
-        for plan in self
-            .operations
-            .values()
-            .map(|p| -> Result<_> {
-                Ok(
-                    if {
-                        self.committed(&p.operation_id)?
-                            && p.workspace_id.as_ref() == Some(&workspace.workspace_id)
-                    } {
-                        Some(p)
-                    } else {
-                        None
-                    },
-                )
-            })
-            .collect::<Result<Vec<_>>>()?
-            .into_iter()
-            .flatten()
-        {
+        for plan in self.operations.values() {
+            if plan.workspace_id.as_ref() != Some(&workspace.workspace_id) {
+                continue;
+            }
             let Some(transaction) = &plan.transaction else {
                 continue;
             };
@@ -312,6 +288,11 @@ impl Core {
                 .is_some_and(|d| d.is_fixed_slot(slot))
                 || !content_import(&transaction.request.intent)
             {
+                continue;
+            }
+            // Still validate every candidate's original commit before its
+            // mutation/birth evidence. A malformed producer is not absence.
+            if !self.committed(&plan.operation_id)? {
                 continue;
             }
             let Mutation::CreateTree {

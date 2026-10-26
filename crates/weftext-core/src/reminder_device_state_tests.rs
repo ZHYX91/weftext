@@ -36,6 +36,9 @@ struct Fixture {
 }
 impl Fixture {
     fn new(kind: &str) -> Self {
+        Self::with_source(task_source(kind))
+    }
+    fn with_source(source: String) -> Self {
         let temp = tempfile::tempdir().unwrap();
         let data = temp.path().join("state");
         let root = temp.path().join("library");
@@ -49,7 +52,7 @@ impl Fixture {
                 intent: OperationIntent::NewNode {
                     parent: display(&root),
                     name: "Task".into(),
-                    source: Some(task_source(kind)),
+                    source: Some(source),
                 },
             })
             .unwrap();
@@ -1715,3 +1718,139 @@ fn reminder_summary_reports_a_sample_explicitly_without_consuming_unknown_scopes
 
 #[path = "reminder_device_state_capacity_tests.rs"]
 mod capacity;
+
+#[test]
+fn reminder_wake_hint_uses_actual_qualified_seconds_without_changing_http_or_record() {
+    for (trigger, before) in [
+        ("2026-10-23T09:00:59Z", "2026-10-23T09:00:58.25Z"),
+        ("2026-10-23T09:01:00Z", "2026-10-23T09:00:59.25Z"),
+        ("2026-10-23T09:00:37Z", "2026-10-23T09:00:36.25Z"),
+    ] {
+        let mut fixture = Fixture::with_source(task_source("absolute").replace(TRIGGER, trigger));
+        let candidate = fixture.candidate();
+        assert_eq!(
+            candidate.resolution.trigger_instant.as_deref(),
+            Some(trigger)
+        );
+        let record = fixture
+            .core()
+            .device_record_path(DeviceRecordKind::Reminders);
+        let original = fs::read(&record).unwrap();
+        let observed = std::time::Instant::now();
+        let mut reads = 0;
+        let upcoming = fixture
+            .core()
+            .reminder_eligibility_with_clock(&candidate, || {
+                reads += 1;
+                Ok((instant(before), observed))
+            })
+            .unwrap();
+        assert_eq!(reads, 1);
+        assert!(matches!(&upcoming.timing, ReminderTiming::Upcoming));
+        assert_eq!(
+            upcoming.next_recheck_at(),
+            Some(observed + std::time::Duration::from_millis(750))
+        );
+        let wire = serde_json::to_value(&upcoming).unwrap();
+        assert_eq!(
+            wire.as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect::<std::collections::BTreeSet<_>>(),
+            ["executionKey", "timing", "retained"].into_iter().collect()
+        );
+        let due = fixture
+            .core()
+            .reminder_eligibility_with_clock(&candidate, || Ok((instant(trigger), observed)))
+            .unwrap();
+        assert!(matches!(&due.timing, ReminderTiming::Due));
+        assert!(due.next_recheck_at().is_none());
+        let end = candidate
+            .resolution
+            .normal_delivery_until
+            .as_deref()
+            .unwrap();
+        let missed = fixture
+            .core()
+            .reminder_eligibility_with_clock(&candidate, || Ok((instant(end), observed)))
+            .unwrap();
+        assert!(matches!(&missed.timing, ReminderTiming::Missed));
+        assert!(missed.next_recheck_at().is_none());
+        assert_eq!(fs::read(&record).unwrap(), original);
+    }
+}
+
+#[test]
+fn reminder_wake_hint_does_not_make_a_late_seconds_59_check_due() {
+    let trigger = "2026-10-23T09:00:59Z";
+    let mut fixture = Fixture::with_source(task_source("absolute").replace(TRIGGER, trigger));
+    let candidate = fixture.candidate();
+    let observed = std::time::Instant::now();
+    let eligibility = fixture
+        .core()
+        .reminder_eligibility_with_clock(&candidate, || {
+            Ok((instant("2026-10-23T09:01:03Z"), observed))
+        })
+        .unwrap();
+    assert!(matches!(&eligibility.timing, ReminderTiming::Missed));
+    assert!(eligibility.next_recheck_at().is_none());
+    assert_eq!(
+        fixture
+            .core()
+            .begin_reminder_delivery_at(&candidate, options(), instant("2026-10-23T09:01:03Z"))
+            .unwrap_err()
+            .code,
+        "reminderMissed"
+    );
+}
+
+#[test]
+fn reminder_recheck_uses_exact_decimal_difference_and_ceil_nanoseconds() {
+    for (at, trigger, delay) in [
+        (
+            "2026-10-23T09:00:58.25Z",
+            "2026-10-23T09:00:59Z",
+            std::time::Duration::from_millis(750),
+        ),
+        (
+            "2026-10-23T09:00:58.999999999999Z",
+            "2026-10-23T09:00:59Z",
+            std::time::Duration::from_nanos(1),
+        ),
+        (
+            "2026-10-23T09:00:58.0000000001Z",
+            "2026-10-23T09:00:58.9999999999Z",
+            std::time::Duration::from_secs(1),
+        ),
+        (
+            "2026-10-23T09:00:59Z",
+            "2026-10-23T09:00:59Z",
+            std::time::Duration::ZERO,
+        ),
+        (
+            "2026-10-23T09:01:03Z",
+            "2026-10-23T09:00:59Z",
+            std::time::Duration::ZERO,
+        ),
+    ] {
+        assert_eq!(
+            reminder_recheck_delay(&instant(at), &instant(trigger)).unwrap(),
+            delay
+        );
+    }
+    let tiny = ExactInstant {
+        utc_seconds: instant(TRIGGER).utc_seconds,
+        fraction: ExactDecimal::parse(&format!("0.{}1", "0".repeat(4093))).unwrap(),
+    };
+    assert_eq!(
+        reminder_recheck_delay(&instant(TRIGGER), &tiny).unwrap(),
+        std::time::Duration::from_nanos(1)
+    );
+    let future = instant("9999-12-31T23:59:59Z");
+    let start = instant(TRIGGER);
+    assert_eq!(
+        reminder_recheck_delay(&start, &future).unwrap(),
+        std::time::Duration::from_secs((future.utc_seconds - start.utc_seconds) as u64)
+    );
+}

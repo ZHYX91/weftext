@@ -235,6 +235,8 @@ For hosted copy/template, Server separately authorizes whole-subtree read and ex
 
 The original FeatureOperation and FrozenOperation share one closed HostedDestination binding. Fixed binds a slot ID. UniqueChild also fixes the actual parent FileIdentity/WorkspaceId, prefix, maxMembers and original external operationId. Fixed slots retain original create/copy/template Birth or rename/move/restore Relocate qualification at the exact reserved placement. UniqueChild accepts only NewNode/TemplateNode, names output prefix plus original ID without replacement, and never extends receive to other structure actions. Members derive from the same original Plan/Birth. Preparation and commit both count retained members, including unavailable members and earlier prefixes; reads independently qualify the original Birth FileIdentity. Corrupt, unreadable or over-budget selected commit/Birth evidence is unavailable, never an empty collection or zero members. There is no member ledger or directory-name adoption. Local producers have no hosted destination and gain no preauthorization. Every result still requires independent current Server read authority.
 
+Hosted import-slot candidate enumeration first checks the original in-memory Plan's Workspace, import intent and fixed slot, then reads those candidates' original commit/Birth evidence. It does not reread every unrelated operation's commit for each slot. A selected committed malformed mutation still fails; relevant evidence is reread on every call, without persistent or cross-request caching. This enumeration is not a whole-journal health check. Final entity, placement and Query qualification still use their original independent paths and cannot bypass corrupt facts.
+
 Installation:
 
 1. After the journal and exact blobs are durable, acquire §5.1 target ancestors/parents and Core scope reader barriers. Reserve simultaneous handle capacity for all planned files before installation. Insufficient capacity fails or produces an explicit revised batch plan before writing anything.
@@ -454,6 +456,10 @@ All newly missed items must fit the same 1,024-input/64 MiB scan guards and 16 M
 Only an original Individual with definite `failedBeforeCall` may first enter this missed stage, retaining its prior Attempt. Existing SummaryMember/Overflow items and any possible OS effects cannot enter a new batch. A summary with a definite pre-call failure can retry only its original key, request and members; cutoff, overflow and cooldown stay fixed, without regrouping into another summary.
 
 Positive input read guards retain original parents/bytes/identity/Pending checks across the durable decision. Original absent configuration slots are rechecked before and after it, using the sole bundled schema without an installation prerequisite. Absence is an observation, not a lock against future creation. A failed postcheck returns no permit and retains durable submitting/unknown. Last checks and OS effects are not globally atomic with all later author edits. Invalid existing configuration never falls back. Data/ledger tests alone do not establish integrated Desktop DSK03–08 acceptance.
+
+
+
+Native scheduling may consume a process-local monotonic recheck deadline produced by the same eligibility qualification. It is absent from HTTP DTOs and device records and is not external-call permission. Core reuses the exact trigger and current clock observation, rounding their exact decimal difference up to nanoseconds for this hint. Waking still requires fresh eligibility, begin and final one-use permit checks; the target minute and original five-second permit remain unchanged.
 
 ## 10. Minimal consumer interface
 

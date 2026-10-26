@@ -170,7 +170,8 @@ class OwnedServe:
         self._status_attempted, self._status_identity = False, None
         self._threads, self._ready_bytes, self._logs_written = [], 0, False
         self._first_stdout, self._extra_stdout = True, False
-        self.record = {'command': self.command, 'hosted': hosted, 'ready': False, 'shutdownAttempted': False}
+        self.record = {'command': self.command, 'hosted': hosted, 'ready': False,
+                       'shutdownAttempted': False, 'shutdownVerified': False}
         if expected_default_data_dir is not None:
             self.record['expectedDefaultDataDir'] = str(self.data_dir)
         self._save()
@@ -328,13 +329,43 @@ class OwnedServe:
                 output.write(text)
         self._logs_written = True
 
+    def _observe_failed_shutdown(self, timeout, *, drain=True):
+        # This observes only the original held Popen. A natural exit cannot
+        # repair an absent/invalid typed acknowledgement or authorize a retry.
+        observation = {'source': 'original Popen', 'timeoutSeconds': timeout}
+        self.record['exitObservation'] = observation
+        try:
+            code = self.process.wait(timeout=timeout) if timeout else self.process.poll()
+            observation['outcome'] = 'exited' if code is not None else 'running'
+        except subprocess.TimeoutExpired:
+            observation['outcome'] = 'timeout'
+        except BaseException as error:
+            observation.update({'outcome': 'error', 'error': repr(error)})
+        try:
+            code = self.process.poll()
+            # `stopped` describes the process terminal state, not verified
+            # shutdown. shutdownVerified remains false on every failure path.
+            self.record.update({'observedExitCode': code, 'stopped': code is not None})
+            if code is not None and drain:
+                self._join()
+        except BaseException as error:
+            observation['captureError'] = repr(error)
+        if self._stream_errors:
+            observation['streamErrors'] = list(self._stream_errors)
+
     def stop(self, control_timeout=45, exit_timeout=15):
+        """Send one typed stop; exit_timeout also bounds observation after failure.
+
+        Post-failure observation never changes the unknown shutdown outcome or
+        the CLI control deadline. Repeated calls rethrow the cached failure.
+        """
         if self._stop_attempted:
             if self._stop_error is not None:
                 raise self._stop_error
             return self.output()
         self._stop_attempted = True
         self.record['shutdownAttempted'] = True
+        exit_wait_attempted, streams_join_attempted = False, False
         try:
             if self._owner_identity is None:
                 raise RuntimeError('No verified Ready identity; do not guess an owner to stop')
@@ -351,23 +382,39 @@ class OwnedServe:
             if code != 0:
                 raise RuntimeError(f'owner-stop exit {code}; no retry or owner kill, outcome may be unknown')
             self.record['shutdownReceipt'] = parse_shutdown(data, self._owner_identity)
+            exit_wait_attempted = True
             if self.process.wait(timeout=exit_timeout) != 0:
                 raise RuntimeError('Owned serve child did not exit successfully')
+            streams_join_attempted = True
             self._join()
             if self._stream_errors:
                 raise RuntimeError('; '.join(self._stream_errors))
             if self._extra_stdout:
                 raise RuntimeError('Serve emitted additional stdout after its single Ready')
-            self.record.update({'stopped': True, 'exitCode': self.process.returncode})
+            self.record.update({'stopped': True, 'exitCode': self.process.returncode,
+                                'shutdownVerified': True, 'shutdownOutcome': 'verified'})
             return self.output()
         except BaseException as error:
-            self.record.update({'shutdownError': repr(error), 'observedExitCode': self.process.poll(),
-                                'stopped': self.process.poll() is not None})
+            self.record.update({'shutdownError': repr(error), 'shutdownVerified': False,
+                                'shutdownOutcome': 'unknown'})
             self._stop_error = RuntimeError(f'Typed shutdown failed; no retry/kill; owned PID {self.process.pid}, originals: {self.directory}')
+            # The CLI's control deadline is unchanged. A failed issued control
+            # gets the existing, separately recorded exit-observation budget;
+            # a wait already attempted never receives a second budget.
+            issued = 'pid' in self.record.get('controls', {}).get('owner-stop', {})
+            self._observe_failed_shutdown(exit_timeout if issued and not exit_wait_attempted else 0,
+                                          drain=not streams_join_attempted)
             raise self._stop_error from error
         finally:
-            self._save()
-            self._write_logs()
+            for label, capture in (('logs', self._write_logs), ('lifecycle', self._save)):
+                try:
+                    capture()
+                except BaseException as error:
+                    if self._stop_error is None:
+                        raise
+                    detail = f'{label}: {error!r}'
+                    self.record.setdefault('evidenceErrors', []).append(detail)
+                    self._stop_error.add_note(f'Shutdown evidence capture failed: {detail}')
 
 
 def launch_serve(executable, arguments, *, hosted=False, log_prefix=None, ready_timeout=45,

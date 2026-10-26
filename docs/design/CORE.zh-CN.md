@@ -234,6 +234,8 @@ Compound root 已到达原计划最终位置，且将作为另一参与者的目
 
 托管目的能力由原 FeatureOperation 和 FrozenOperation 的同一个闭合 `HostedDestination` 绑定：Fixed 固定槽 ID；UniqueChild 另固定真实父目录 FileIdentity／WorkspaceId、prefix、maxMembers 和原外部 operationId。固定槽的新建／复制／模板 Birth 或改名／移动／恢复 Relocate 身份继续确认准确预留位置。UniqueChild 只接 NewNode／TemplateNode，以 prefix＋原号 no-replace 命名，不把 receive 扩给其他结构动作。其成员从同一原 Plan/Birth 派生；准备和提交都核包含 unavailable 及旧 prefix 的保留成员额度，读取另核原 Birth 的 FileIdentity。所选原 commit／Birth 证据损坏、读失败或超预算须 unavailable，不能当空集合或零成员；不建立额外成员账本、不按目录同名收养。本地 producer 没有 hosted destination，不能取得预授权；读取所有结果仍须 Server 当前独立读取授权。
 
+托管导入槽的候选枚举先按内存中的原 Plan 核 Workspace、导入意图及固定槽，再读取这些候选的原 commit／Birth；不为每个槽反复读取所有无关操作的 commit。命中槽的已提交异常 mutation 仍拒绝，相关证据每次重新读取，不建立持久或跨请求缓存。该枚举不是全日志健康检查；最终实体、位置和 Query 资格仍沿原独立路径核验，不能据此绕过损坏事实。
+
 安装算法：
 
 1. 在操作日志及exact blobs已durable后取得§5.1目标祖先/父闭包和Core范围reader barrier。预算预留计划文件数对应的同时handle容量；不足在安装前失败/显式改批，不先半写。
@@ -453,6 +455,10 @@ submittedToSystem、可证明未调用的 failedBeforeCall 和 unknown 分开；
 仅原 Individual 的确定 `failedBeforeCall` 可以首次进入该错过阶段，并保留 prior Attempt。既有 SummaryMember／Overflow 或任何可能已有 OS 效果者不得进入新批。原汇总的确定调用前失败仅能按原 key、原 request 和原成员显式重试，cutoff、overflow 和 cooldown 均不变；不重组为另一个汇总。
 
 最终决定前后保持正向输入共享只读 guard、核对原 parent／准确字节／身份／Pending；缺失配置保原见证并前后复验，使用唯一 bundled schema，无用户安装前置。缺失槽是观察而非未来创建锁；后验变化不给 permit，已持久 submitting／unknown 不抹去。最后检查与 OS 效果不声称对之后任意作者编辑全局原子。已有无效配置不回退。单独数据／账本测试不等于真实桌面 DSK03–08 验收。
+
+
+
+原生调度可消费同次 eligibility 资格读取产生的进程内单调重查期限；它不进入 HTTP DTO 或设备记录，也不是外部调用许可。Core 复用精确 trigger 与本次时钟观察，按精确十进制差向上取整至纳秒生成 hint；到点仍重新进行 eligibility、begin 和最终一次性许可检查，目标分钟和原五秒 permit 不变。
 
 ## 10. 最小消费接口
 

@@ -9,7 +9,7 @@ use std::{
         Arc,
         atomic::{AtomicBool, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tokio::sync::watch;
 use weftext_core::reminder_device_state::{
@@ -19,7 +19,7 @@ use weftext_core::reminder_device_state::{
 };
 use weftext_messages::UiMessage;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Mode {
     Running,
     Paused,
@@ -75,6 +75,26 @@ impl Scheduler {
         self.task.await.map_err(io::Error::other)?
     }
 }
+const FALLBACK_RECHECK: Duration = Duration::from_secs(5);
+
+fn retain_earliest_recheck(earliest: &mut Option<Instant>, hint: Option<Instant>) {
+    if let Some(hint) = hint {
+        *earliest = Some(earliest.map_or(hint, |previous| previous.min(hint)));
+    }
+}
+fn recheck_deadline(earliest: Option<Instant>, after_sweep: Instant) -> Instant {
+    // Preserve the original no-near-deadline pause after a completed sweep.
+    // Core's absolute hint alone consumes elapsed traversal/submission time.
+    let fallback = after_sweep + FALLBACK_RECHECK;
+    earliest.map_or(fallback, |hint| hint.min(fallback))
+}
+async fn wait_for_recheck(mode: &mut watch::Receiver<Mode>, deadline: Instant) -> bool {
+    tokio::select! {
+        _ = tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)) => true,
+        changed = mode.changed() => changed.is_ok(),
+    }
+}
+
 async fn run(
     state: crate::AppState,
     profile: notification::Profile,
@@ -100,6 +120,9 @@ async fn run(
             }
             Mode::Running => {}
         }
+        // Rebuilt every running sweep; pause/resume or OS clock refresh never
+        // restores an old wake hint as saved task state or delivery permission.
+        let mut next_recheck = None;
         let capability = notification::capability().await;
         status.notification_state = capability.state;
         status.scan_complete = false;
@@ -114,6 +137,7 @@ async fn run(
                     io::Error::other("The qualified notification identity is absent")
                 })?,
                 &mut status,
+                &mut next_recheck,
             )
             .await;
             if result.is_err() {
@@ -127,9 +151,8 @@ async fn run(
             status.scheduling = Scheduling::Restricted;
         }
         crate::desktop_api::set_status(&state, status.clone())?;
-        tokio::select! {
-            _ = tokio::time::sleep(Duration::from_secs(5)) => {},
-            changed = mode.changed() => { if changed.is_err() {break;} },
+        if !wait_for_recheck(&mut mode, recheck_deadline(next_recheck, Instant::now())).await {
+            break;
         }
     }
     status.scheduling = Scheduling::Stopping;
@@ -143,6 +166,7 @@ async fn sweep(
     originals_after: &mut Option<String>,
     app_id: &str,
     status: &mut HostStatus,
+    next_recheck: &mut Option<Instant>,
 ) -> io::Result<()> {
     status.scheduling = Scheduling::Running;
     // A bounded original page advances independently of current schedule
@@ -201,6 +225,7 @@ async fn sweep(
                 status.scope_issue_count = status.scope_issue_count.saturating_add(1);
                 continue;
             };
+            retain_earliest_recheck(next_recheck, eligibility.next_recheck_at());
             match eligibility.timing {
                 ReminderTiming::Upcoming => {}
                 ReminderTiming::Missed => {
@@ -313,4 +338,96 @@ async fn reconcile_original(
         .map_err(|_| io::Error::other("The exact OS history observation could not be stored"))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn poll_recheck_once(
+        mode: &mut watch::Receiver<Mode>,
+        deadline: Instant,
+    ) -> std::task::Poll<bool> {
+        let mut waiting = std::pin::pin!(wait_for_recheck(mode, deadline));
+        let mut context = std::task::Context::from_waker(std::task::Waker::noop());
+        std::future::Future::poll(waiting.as_mut(), &mut context)
+    }
+
+    #[test]
+    fn recheck_deadline_consumes_scan_time_but_preserves_the_fallback_pause() {
+        let observed = Instant::now();
+        let hint = observed + Duration::from_millis(750);
+        let mut earliest = None;
+        retain_earliest_recheck(&mut earliest, Some(observed + Duration::from_secs(30)));
+        retain_earliest_recheck(&mut earliest, None);
+        retain_earliest_recheck(&mut earliest, Some(hint));
+        retain_earliest_recheck(&mut earliest, Some(observed + Duration::from_secs(2)));
+        assert_eq!(
+            recheck_deadline(earliest, observed + Duration::from_millis(500)),
+            hint
+        );
+        let finished = observed + Duration::from_secs(1);
+        assert!(recheck_deadline(earliest, finished) < finished);
+        // A long scan without an imminent hint still receives its old pause.
+        let finished = observed + Duration::from_secs(20);
+        assert_eq!(
+            recheck_deadline(None, finished),
+            finished + FALLBACK_RECHECK
+        );
+        assert_eq!(
+            recheck_deadline(Some(observed + Duration::from_secs(120)), finished),
+            finished + FALLBACK_RECHECK
+        );
+    }
+
+    #[tokio::test]
+    async fn elapsed_hint_and_refresh_pause_stop_wake_the_real_wait_helper() {
+        let (mode, mut observed) = watch::channel(Mode::Running);
+        assert!(wait_for_recheck(&mut observed, Instant::now() - Duration::from_secs(1)).await);
+        for next in [Mode::Running, Mode::Paused, Mode::Running, Mode::Stopped] {
+            mode.send_replace(next);
+            assert!(matches!(
+                poll_recheck_once(&mut observed, Instant::now() + Duration::from_secs(60)),
+                std::task::Poll::Ready(true)
+            ));
+            assert_eq!(*observed.borrow_and_update(), next);
+        }
+        drop(mode);
+        assert!(matches!(
+            poll_recheck_once(&mut observed, Instant::now() + Duration::from_secs(60)),
+            std::task::Poll::Ready(false)
+        ));
+    }
+
+    #[tokio::test]
+    async fn stop_keeps_waiting_for_its_already_accepted_task_tail() {
+        let (mode, changes) = watch::channel(Mode::Running);
+        let admitting = Arc::new(AtomicBool::new(true));
+        let accepted = admitting.clone();
+        let (finished, fault) = watch::channel(false);
+        let (release, held) = tokio::sync::oneshot::channel::<()>();
+        let task = tokio::spawn(async move {
+            let _completion = Completion(finished);
+            held.await.map_err(io::Error::other)
+        });
+        let scheduler = Scheduler {
+            mode,
+            admitting,
+            task,
+            fault: fault.clone(),
+        };
+        let mut stopped = Box::pin(scheduler.stop());
+        let initial = std::future::poll_fn(|context| {
+            std::task::Poll::Ready(std::future::Future::poll(stopped.as_mut(), context))
+        })
+        .await;
+        assert!(initial.is_pending());
+        assert!(!accepted.load(Ordering::Acquire));
+        assert_eq!(*changes.borrow(), Mode::Stopped);
+        assert!(!*fault.borrow());
+        release.send(()).unwrap();
+        stopped.await.unwrap();
+        assert!(*fault.borrow());
+        // This is the production stop/join contract, not simulated OS delivery.
+    }
 }
