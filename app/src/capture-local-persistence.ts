@@ -21,6 +21,7 @@ export class LocalCapturePersistence implements CapturePersistencePort<CaptureDr
     return this.input.write(payload as CaptureMutationPayload["input"], producerRevision);
   }
   flush: CapturePersistencePort<CaptureDraftRecord>["flush"] = (...args) => this.core.flush(...args);
+  settleStaging() { return this.input.settleStaging(); }
   recover(draftId: string) { return this.input.recover(draftId); }
   queryOriginal(proposal: CaptureTransportRecord) { return this.input.queryOriginal(proposal); }
   read(draftId: string) { return this.core.read(draftId); }

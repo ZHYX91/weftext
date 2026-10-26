@@ -7,7 +7,7 @@ import { PersonalControlInput } from "./personal-control-input";
 import { PersonalInputRecovery } from "./personal-input-recovery";
 import type { AuthorInputFactory } from "./author-input";
 import { action, ui, type DataSchema } from "./native-value-form";
-import { disposeUiTree, errorUiText, message, replaceUiChildren, setUiText, UiError } from "./ui-locale";
+import { disposeUiTree, errorUiText, message, replaceUiChildren, setUiAttr, setUiText, UiError } from "./ui-locale";
 
 export interface CaptureMountPorts {
   request:CaptureTransport;
@@ -35,14 +35,20 @@ export async function mountLocalCapture(host:HTMLElement,ports:CaptureMountPorts
   };
   const assertCloseReady=()=>{if(!live||pendingActions||form?.pendingAction)throw new UiError(message("desktop.unsavedClose"));};
   const recovery=ports.options?.recovery??new PersonalInputRecovery();
-  const session=await LocalCaptureSession.open(ports.request,{...ports.options,recovery,changed:state=>{form?.update(state);ports.options?.changed?.(state);}});
+  const session=await LocalCaptureSession.open(ports.request,{...ports.options,recovery,changed:state=>{if(live){form?.update(state);ports.options?.changed?.(state);}}});
   const draftId=session.controller.state.draft.draftId;
-  const inputs=new PersonalControlInput(host.ownerDocument,()=>live,()=>{throw new UiError(message("capture.rawRetained"));});
+  const inputListeners=new AbortController();
+  const producerDocument={addEventListener(type:string,listener:EventListenerOrEventListenerObject,options?:boolean|AddEventListenerOptions){
+    host.ownerDocument.addEventListener(type,listener,{...(typeof options==="object"?options:{capture:options}),signal:inputListeners.signal});
+  }} as unknown as Document;
+  const inputs=new PersonalControlInput(producerDocument,()=>live,()=>{throw new UiError(message("capture.rawRetained"));});
+  try {
   const audience=JSON.stringify(["capture-surface",draftId]);
   const authorInputs:AuthorInputFactory=(owner,current,sink,revision)=>inputs.session(audience,1,owner,()=>live&&current(),sink,revision);
   const target=ui("section","capture-target"),targetStatus=ui("p","data-help"),root=ui("input","data-input"),parent=ui("input","data-input");
   const state=session.controller.state;
   root.value=captureString(state.input.rootInput);parent.value=captureString(state.input.parentInput);
+  setUiAttr(root,"aria-label",message("capture.target"));setUiAttr(parent,"aria-label",message("capture.parent"));
   root.dataset.controlKey=JSON.stringify([draftId,"rootInput"]);parent.dataset.controlKey=JSON.stringify([draftId,"parentInput"]);
   root.placeholder=state.draft.target?.rootHint??"";
   const targetSession=authorInputs({kind:"capture",draftId},()=>live,snapshot=>{session.controller.observeAuthorCut(snapshot);const next=session.controller.state.input;observeCaptureText(next,snapshot.context.slot as "rootInput"|"parentInput",snapshot);session.controller.edit(next);},()=>session.controller.editRevision);
@@ -91,5 +97,9 @@ export async function mountLocalCapture(host:HTMLElement,ports:CaptureMountPorts
   renderOwnRecovery();form.element.append(retained);
   const unloading=(event:BeforeUnloadEvent)=>{const current=session.controller.state;if(current.persisting||current.blocked||inputs.inspect().producers.some(producer=>producer.nativePending||producer.pendingDeliveries||producer.unapplied))event.preventDefault();};
   host.ownerDocument.defaultView?.addEventListener("beforeunload",unloading);
-  return {session,form,guard,assertCloseReady,dispose(){live=false;schemaVersion++;form?.dispose();targetSession.retire();fields?.dispose();host.ownerDocument.defaultView?.removeEventListener("beforeunload",unloading);disposeUiTree(host);}};
+  return {session,form,guard,assertCloseReady,dispose(){if(!live)return;live=false;schemaVersion++;session.controller.retire();inputListeners.abort();form?.dispose();inputs.clear();fields?.dispose();host.ownerDocument.defaultView?.removeEventListener("beforeunload",unloading);disposeUiTree(host);}};
+  } catch(error) {
+    live=false;session.controller.retire();inputListeners.abort();form?.dispose();inputs.clear();fields?.dispose();disposeUiTree(host);
+    throw error;
+  }
 }

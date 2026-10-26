@@ -1,5 +1,9 @@
 body:has(> #capture) { margin: 0; min-width: 320px; background: #f5f4ef; color: #24241f; }
 #capture { max-width: 880px; margin: 0 auto; padding: 24px; }
+.capture-drafts { box-sizing: border-box; max-width: 928px; margin: 0 auto; padding: 24px 24px 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.capture-drafts > p { flex-basis: 100%; margin: 0; }
+.capture-drafts select { min-width: 0; max-width: 100%; }
+.capture-drafts :focus-visible { outline: 2px solid #395f85; outline-offset: 2px; }
 .capture-surface { display: grid; gap: 16px; }
 .capture-surface h1 { margin: 0; font-size: 1.5rem; }
 .capture-surface label { display: grid; gap: 6px; }
