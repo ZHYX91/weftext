@@ -8,7 +8,7 @@ translation_status: source
 
 # Apple 原生宿主
 
-`platforms/apple` 是面向 macOS 13／iOS 16 及以后系统的 Swift 宿主库，当前不是可安装的 Weftext 产品。首轮已在实际 macOS 15.7.9 arm64／Xcode 16.4／Swift 6.1.2 上通过编译与五项纯策略 XCTest，并完成 iOS Simulator SDK 的 arm64／x86_64 编译；见[首轮 CI](https://github.com/ZHYX91/weftext/actions/runs/39703298589)。这不包含 WebKit 执行、Simulator 运行或产品验收，不能关闭 LC10、IM10、输入法或辅助技术要求。
+`platforms/apple` 是面向 macOS 13／iOS 16 及以后系统的 Swift 宿主库，当前不是可安装的 Weftext 产品。[首轮 CI](https://github.com/ZHYX91/weftext/actions/runs/39703298589) 已在实际 macOS 15.7.9 arm64／Xcode 16.4／Swift 6.1.2 上通过编译与五项纯策略 XCTest，并完成 iOS Simulator SDK 的 arm64／x86_64 编译。[后续 CI](https://github.com/ZHYX91/weftext/actions/runs/39727579932) 又通过包含真实 WKWebView 的全部十二项宿主测试及 generic iOS Simulator SDK 构建；对应宿主源码未变。这些结果只覆盖宿主 fixture，没有运行 iOS Simulator 或完整 Rust Core 产品，不能关闭 LC10、IM10、输入法或辅助技术要求。
 
 `NativeWebSurface` 必须由实际 composition root 注入 `AppleHostPort` 和同次产品构建的完整 `app/dist` 字节，且显式选择准确的 WebKit data store。库没有默认业务执行器、HTTP 代理、占位 Core 或替代编辑器。Swift 不解码或重新编码业务 JSON，不维护第二份 CallKind 路由表；正式适配器仍须进入同一个 Rust Host、固定业务注册表和严格原请求解码，获权在正文解析前。响应同样保留原 typed bytes。
 
@@ -16,7 +16,7 @@ translation_status: source
 
 包内 scheme 只读取构造时给定的不可变 allowlist，无文件路径、查询参数、百分号路径、外网或作者目录访问。每个明确创建的 document 只消费一次准确入口导航资格；reload、后退前进、JS 导航和任意 query／fragment 不能越过实际关闭流程重建页面。CSP 拒绝网络及 frame；实际 WebKit 上的导航、module／字体／worker 行为仍须测试，不以政策源码代替运行结果。
 
-新增的 WebKit XCTest 直接创建真实 WKWebView，经实际脚本消息验证准确原始字节往返、坏 envelope／旧代次拒绝、导航拒绝后原页面保留，以及已接受 Host 工作在页面退役后继续完成。晚回包先在旧 DOM 仍可观察时必须实际收到 `retiredSurface`；另验新文档不接旧结果，不能用销毁旧 Promise 的上下文代替交付拒绝。子 frame 负例必须实际收到 `invalidOrigin`，CSP 负例必须观察 `connect-src` 违规事件，不能用网络失败或 iframe 没创建来冒充对应分支通过。fixture Host 仅记录字节，不执行或证明 Core 业务。每个 WebKit 回调与等待均有期限；这些新增用例仍待当前候选实际执行。
+WebKit XCTest 直接创建真实 WKWebView，经实际脚本消息验证准确原始字节往返、坏 envelope／旧代次拒绝、导航拒绝后原页面保留，以及已接受 Host 工作在页面退役后继续完成。晚回包先在旧 DOM 仍可观察时必须实际收到 `retiredSurface`；另验新文档不接旧结果，不能用销毁旧 Promise 的上下文代替交付拒绝。子 frame 负例必须实际收到 `invalidOrigin`，CSP 负例必须观察 `connect-src` 违规事件，不能用网络失败或 iframe 没创建来冒充对应分支通过。fixture Host 仅记录字节，不执行或证明 Core 业务。每个 WebKit 回调与等待均有期限；上述后续 CI 已执行这些有界用例，完整应用与 Simulator 运行仍待接通和验收。
 
 ## 验证入口
 
