@@ -43,7 +43,9 @@ Windows CI 通过同一产品入口构建一次，再以独立进程和该次回
 
 CLI 合同入口保留业务用例与唯一报告，Win32／ConPTY、受控 relay、安全失败摘要及纯传输夹具分别放在支持模块。2048 个确定性 token 的 DOCX 夹具仍经过真实转换、多块下载和完整摘要／内容断言，不以模拟产物代替。并发输入测试在真实冻结捕获后确认原宿主的新 worker，再执行原修改并核特定后置拒绝和严格事件先后；不能用初始捕获失败、任意 409 或 worker 失败冒充撤权／依赖重验通过。
 
-校对／Office 的并发交付夹具构造 20,000 份原生段落内容，只投影数量及样本，使它们能在原显示树与 worker 输出预算内到达后置授权检查；整批展开超预算是容量拒绝，不能算撤权成功。真实容量／压力测试继续独立运行原规模与拒绝断言，不用这个有界交付夹具授予容量通过。
+并发修改用例只测量实际变更 POST：策略读取、导入准备和保存所需的 Draft ACK 均在原总预算内先完成。确认 worker 仍运行后记录 POST 开始，要求它早于原请求交付；随后核准确回执与实际回读。客户端收到 ACK 的时点不是服务端发布时点，拒绝回包可先到达。策略核同一 generation 及完整目标值；输入序号、保存和集合成员变更各核其原身份与实际效果，保留原错误码和无泄漏断言。
+
+校对／Office／集合成员变更的并发交付夹具构造 20,000 份原生段落内容，只投影数量及固定代表文字，使它们能在原显示树与 worker 输出预算内到达后置授权检查；整批展开超预算是容量拒绝，不能算撤权成功。真实容量／压力测试继续独立运行原规模与拒绝断言，不用这个有界交付夹具授予容量通过。
 
 `scripts/mvp.py` 的共享 Cargo target 使用一份可丢弃的构建输入提示，不能把 Cargo `fresh` 或相对 dep-info 当成当前检出已编译的证明；[Cargo 的文件时间判据](https://doc.rust-lang.org/stable/nightly-rustc/cargo/compiler/fingerprint/index.html)并不替代源码内容身份。提示绑定实际 Rust／Cargo 程序与版本、本地／path／vendor crate 源码、构建脚本及外部嵌入资源，区分具体命令模式与源码根上下文，核原成功产物及本地构建脚本生成目录的内容摘要。未知或变化时，先核包名归属、生成记录、路径与写句柄，再精确失效当前命令所选 host／target、profile 下相关本地包及其实际依赖图反向闭包的生成式短 fingerprint，并调整当前本地入口 mtime；源码字节和旧冻结副本保留。这样覆盖 dep-info 仍指向 target 内旧副本的情形，且必须观察本地包及受影响反向依赖的实际 `compiler-artifact` 非 fresh。被本地 patch 影响的 registry 父包随之重编，避免旧 Rust 元数据引用已替换的依赖；不 clean target，无关 registry 依赖继续复用。本地 vendor 无旧同源资格也需重编当前入口；有有效内容与 unit／产物资格后保持复用，features／profile 仍由 Cargo 管理。
 
@@ -99,6 +101,8 @@ Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust �
 同一输入脚本可用 `EXE NEW_OUTPUT --hosted --smoke --fixture=100k-lines --recovery-check` 检查大稿恢复：实际阻断服务端草稿交付，刷新后核完整未保存正文，关闭自有后端释放文件租约后核磁盘原件未变。该模式的少量输入只作校准，不替代完整时延矩阵；失败现场与普通退出回执分别保留。
 
 `node scripts/test_hosted_personal_input_browser.mjs EXE NEW_OUTPUT` 在自有 TEST 库和独立无头浏览器验证未上传本人输入：仅注入后台草稿网络失败，实际撤权／401 后重新认证，核纯输入、账号分隔、准确基线恢复、共享 Undo、迟到原生回应、存储失败及原保存编号。程序赋值／IME 负向用例不授予保护文字来源。设置 `WEFTEXT_PLAYWRIGHT_MODULE` 可指定已安装的通用 Playwright 模块；不操作用户浏览器。该定向检查不代替完整候选验收或真实系统 IME。
+
+`node scripts/test_capture_workspace_browser.mjs` 通过明确的 `WEFTEXT_TEST_EXECUTABLE` 消费构建批次的 CLI 及相邻目录中的 catalog／receipt，使用新的绝对 `WEFTEXT_BROWSER_REPORT` 目录、已安装的 Chrome 和 `WEFTEXT_PLAYWRIGHT_MODULE`。它验证真实 Core、Capture 界面和 IndexedDB 之间的独立草稿切换、一次创建回包丢失与重开恢复；可选 `WEFTEXT_TEST_EXECUTABLE_SHA256` 限定程序摘要，`WEFTEXT_BROWSER_FIXTURE_PARENT` 指定独立短夹具父目录，默认使用系统临时目录。实际挂载组件的退役／迟到 schema 用例另由 `scripts/test_capture_mount_browser.mjs` 以受控传输验证。两者均保留自有资料及清理记录；真实 Core 检查另留原 owner 停机回执，不授予真实原生窗口、系统 IME、辅助技术或整包通过。
 
 ## 发布
 

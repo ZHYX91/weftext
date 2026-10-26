@@ -467,6 +467,57 @@ class PolicyRevocationTests(unittest.TestCase):
                 self.assertEqual(post.call_count, int(len(times) == 2))
 
 
+class MutationBoundaryTests(unittest.TestCase):
+    def test_structured_and_multiple_policy_targets_keep_exact_original_cuts(self):
+        policy = {'generation': 7, 'users': {'alice': {'queryProviders': {'providers':['original'], 'seriesPolicies':[]},
+                  'queryScopes': {'directories':['owned'], 'trash':True}, 'grants':{'Shared':{'read':True,'write':True}}}}}
+        changes = [(('alice','queryProviders'), {'providers':[], 'seriesPolicies':[]}),
+                   (('alice','queryScopes'), {'directories':[], 'trash':False}),
+                   (('alice','grants','Shared','read'),False), (('alice','grants','Shared','write'),False)]
+        request = observer.freeze_policy_changes(policy,changes)
+        trace={'submittedMonotonicNs':10,'worker':{'observedMonotonicNs':20},
+               'changeStartedMonotonicNs':30,'changeAcknowledgedMonotonicNs':50,
+               'requestCompletedMonotonicNs':40,'policyGeneration':8}
+        readback={'generation':8,'users':copy.deepcopy(request['users'])}
+        observer.verify_policy_changes(request,[path for path,_ in changes],readback,trace)
+        self.assertEqual(policy['users']['alice']['queryProviders']['providers'],['original'])
+        self.assertTrue(policy['users']['alice']['grants']['Shared']['read'])
+        changes[0][1]['providers'].append('later')
+        self.assertEqual(request['users']['alice']['queryProviders']['providers'],[])
+        readback['users']['alice']['queryScopes']['trash']=0
+        with self.assertRaisesRegex(AssertionError,'readback'):
+            observer.verify_policy_changes(request,[path for path,_ in changes],readback,trace)
+
+    def test_noop_missing_and_duplicate_policy_targets_are_not_mutation_witnesses(self):
+        policy={'generation':0,'users':{'alice':{'enabled':True}}}
+        for changes in [[],[(('alice','enabled'),True)],[(('alice','missing'),False)],
+                        [(('alice','enabled'),False),(('alice','enabled'),True)]]:
+            with self.subTest(changes=changes), self.assertRaises(AssertionError):
+                observer.freeze_policy_changes(policy,changes)
+
+    def test_mutating_post_only_runs_after_the_actual_inflight_check(self):
+        for kind in ('map','save','importCommit'):
+            events=[]
+            observation=SimpleNamespace(assert_inflight=lambda pending:events.append('inflight'))
+            acknowledgment={'kind':kind,'operationId':'original'}
+            def post():
+                self.assertEqual(events,['inflight']);events.append('post');return acknowledgment
+            with patch.object(observer.time,'monotonic',side_effect=[1,2]), \
+                 patch.object(observer,'event_time_ns',side_effect=[30,50]):
+                actual,interval=observer.apply_inflight_mutation(observation,Pending(),post,40)
+            self.assertIs(actual,acknowledgment)
+            trace={**interval,'submittedMonotonicNs':10,'worker':{'observedMonotonicNs':20},'requestCompletedMonotonicNs':40}
+            observer.verify_inflight_change(trace)
+            for completed in (29,30):
+                with self.assertRaises(AssertionError):
+                    observer.verify_inflight_change({**trace,'requestCompletedMonotonicNs':completed})
+        rejected=SimpleNamespace(assert_inflight=Mock(side_effect=AssertionError('worker ended')))
+        post=Mock()
+        with patch.object(observer.time,'monotonic',return_value=1), self.assertRaisesRegex(AssertionError,'worker ended'):
+            observer.apply_inflight_mutation(rejected,Pending(),post,40)
+        post.assert_not_called()
+
+
 class EventClockTests(unittest.TestCase):
     def test_adjacent_events_remain_ordered_when_the_ordinary_tick_is_equal(self):
         with patch.object(observer.time, 'monotonic_ns', return_value=0), \

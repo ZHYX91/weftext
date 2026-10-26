@@ -5,7 +5,7 @@ import sys
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
+from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call, freeze_policy_changes, apply_inflight_revocation, verify_policy_changes
 from urllib.parse import quote
 
 from test_hosted import digest, uid
@@ -129,6 +129,8 @@ class HostedNavigationFragments(HostedHistory):
         source = doc['source'] + '\n#for i in range(20000) [delayed paragraph #parbreak()]'
         request = self.fragment_request(doc, reference + '#target', source, serial=21)
         deadline = time.monotonic() + 40
+        changes = [(('alice', 'grants', 'Shared', key), False) for key in ('read', 'write', 'history', 'download')]
+        policy_request = freeze_policy_changes(self.call('admin/policy', actor='admin'), changes)
         with ThreadPoolExecutor(max_workers=1) as pool:
             with OwnedWorkerObservation(self.server.owner) as observation:
                 self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted')
@@ -137,18 +139,20 @@ class HostedNavigationFragments(HostedHistory):
                 worker = observation.wait(pending, deadline=deadline)
                 observation.assert_inflight(pending)
                 self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
-                self.policy(lambda users: users['alice']['grants']['Shared'].update(read=False, write=False, history=False, download=False))
-                changed = event_time_ns()
+                mutation = apply_inflight_revocation(observation, pending, policy_request,
+                    lambda update: self.call('admin/policy', update, 'admin'), deadline)
                 (status, response, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        self.assertLess(time.monotonic(), deadline, 'Original budget exhausted before policy readback')
+        readback = self.call('admin/policy', actor='admin')
+        self.assertLess(time.monotonic(), deadline, 'Original budget exhausted during policy readback')
         trace = {'submittedMonotonicNs': submitted, 'worker': worker,
-                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 **mutation, 'requestCompletedMonotonicNs': completed,
+                 'policyReadbackGeneration': readback['generation'],
                  'status': status, 'errorCode': response.get('error', {}).get('code'),
                  'explanationKey': response.get('error', {}).get('explanation', {}).get('key')}
         with (self.folder/'fragment-revocation-inflight.json').open('x', encoding='utf-8') as evidence:
             evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
-        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
-        self.assertLess(worker['observedMonotonicNs'], changed)
-        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
+        verify_policy_changes(policy_request, [path for path, _ in changes], readback, trace)
         self.assertEqual(status, 401, response)
         self.assertEqual(response['error']['code'], 'authentication')
         self.assertEqual(response['error']['explanation']['key'],

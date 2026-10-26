@@ -11,7 +11,9 @@ import sys
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
+from owned_worker_observer import (OwnedWorkerObservation, event_time_ns, timed_call,
+    apply_inflight_mutation, verify_inflight_change, freeze_policy_changes,
+    apply_inflight_revocation, verify_policy_changes)
 from test_hosted import Server, digest, uid
 from test_hosted_fields import HostedFields
 from test_hosted_office import HostedOffice
@@ -315,24 +317,32 @@ class HostedQuery(HostedFields):
                 worker = observation.wait(pending, deadline=deadline)
                 observation.assert_inflight(pending)
                 self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
-                self.call('editor/map', {**basis, 'source': slow+'\nNEWER_DRAFT', 'serial': 2})
-                changed = event_time_ns()
+                newer = {**basis, 'source': slow+'\nNEWER_DRAFT', 'serial': 2}
+                mapped, mutation = apply_inflight_mutation(observation, pending,
+                    lambda: self.call('editor/map', newer), deadline)
+                self.assertEqual(mapped['serial'],2); self.assertEqual(mapped['sourceHash'],digest(newer['source']))
                 (code, result, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
         trace = {'submittedMonotonicNs': submitted, 'worker': worker,
-                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 **mutation, 'requestCompletedMonotonicNs': completed,
                  'status': code, 'errorCode': result.get('error', {}).get('code'),
                  'explanationKey': result.get('error', {}).get('explanation', {}).get('key')}
         with (self.folder/'query-serial-inflight.json').open('x', encoding='utf-8') as evidence:
             evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
         self.assertLessEqual(submitted, worker['observedMonotonicNs'])
-        self.assertLess(worker['observedMonotonicNs'], changed)
-        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
+        verify_inflight_change(trace)
+        self.assertLess(time.monotonic(), deadline, 'Original budget exhausted before serial readback')
+        self.call('editor/map',basis,status=409)
+        actual=self.call('editor/map',newer)
+        self.assertEqual(actual['serial'],2); self.assertEqual(actual['sourceHash'],digest(newer['source']))
+        self.assertLess(time.monotonic(), deadline, 'Original budget exhausted during serial readback')
         self.assertEqual(code, 409, result)
         self.assertEqual(result['error']['code'], 'stale_draft')
         self.assertEqual(result['error']['explanation']['key'],
                          'error.api.writing.editorBasisExpired')
         self.assertNotIn('queryId', result)
         deadline = time.monotonic() + 40
+        target = ('alice','grants','Other','query','products','body')
+        policy_request = freeze_policy_changes(self.call('admin/policy',actor='admin'),[(target,False)])
         with ThreadPoolExecutor(max_workers=1) as pool:
             with OwnedWorkerObservation(self.server.owner) as observation:
                 self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted')
@@ -343,18 +353,20 @@ class HostedQuery(HostedFields):
                 worker = observation.wait(pending, deadline=deadline)
                 observation.assert_inflight(pending)
                 self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
-                self.policy(lambda users: users['alice']['grants']['Other']['query']['products'].update(body=False))
-                changed = event_time_ns()
+                mutation = apply_inflight_revocation(observation, pending, policy_request,
+                    lambda update: self.call('admin/policy', update, 'admin'), deadline)
                 (code, result, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
         trace = {'submittedMonotonicNs': submitted, 'worker': worker,
-                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 **mutation, 'requestCompletedMonotonicNs': completed,
                  'status': code, 'errorCode': result.get('error', {}).get('code'),
                  'explanationKey': result.get('error', {}).get('explanation', {}).get('key')}
         with (self.folder/'query-authority-inflight.json').open('x', encoding='utf-8') as evidence:
             evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
         self.assertLessEqual(submitted, worker['observedMonotonicNs'])
-        self.assertLess(worker['observedMonotonicNs'], changed)
-        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
+        self.assertLess(time.monotonic(), deadline, 'Original budget exhausted before policy readback')
+        readback = self.call('admin/policy',actor='admin')
+        verify_policy_changes(policy_request,[target],readback,trace)
+        self.assertLess(time.monotonic(), deadline, 'Original budget exhausted during policy readback')
         self.assertEqual(code, 401, result)
         self.assertEqual(result['error']['code'], 'authentication')
         self.assertEqual(result['error']['explanation']['key'],
