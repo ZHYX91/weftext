@@ -24,6 +24,53 @@ class NpmFixture:
 
 
 class EntrySelection(unittest.TestCase):
+    def test_tag_fixture_default_is_independent_of_deep_frozen_source(self):
+        self._tag_fixture_parent(False)
+
+    def test_tag_fixture_explicit_owned_parent_remains_selected(self):
+        self._tag_fixture_parent(True)
+
+    def _tag_fixture_parent(self, explicit):
+        import test_hierarchical_tags as tags
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            executable = root / 'fake-cli.exe'
+            executable.write_bytes(b'entry-selection-only; never executed')
+            deep_source = root / ('frozen-' * 45) / 'source/scripts/test_hierarchical_tags.py'
+            selected = unittest.defaultTestLoader.getTestCaseNames(tags.HierarchicalTags)[0]
+            arguments = [str(executable), selected]
+            parent = root / 'evidence'
+            if explicit:
+                arguments.extend(['--artifacts-dir', str(parent)])
+            result = SimpleNamespace(wasSuccessful=lambda: True)
+            runner = SimpleNamespace(run=Mock(return_value=result))
+            with patch.object(tags, '__file__', str(deep_source)), \
+                    patch.object(tags, 'ARTIFACTS', None), \
+                    patch.object(tags.test_hosted, 'EXE', None), \
+                    patch.object(tags.unittest, 'TextTestRunner', return_value=runner), \
+                    redirect_stdout(io.StringIO()):
+                self.assertEqual(tags.main(arguments), 0)
+                self.assertEqual(tags.ARTIFACTS, parent.resolve() if explicit else None)
+                self.assertEqual([test._testMethodName for test in runner.run.call_args.args[0]], [selected])
+                case = tags.HierarchicalTags(selected)
+                server = SimpleNamespace(close=Mock())
+                with patch.object(tags, 'Server', return_value=server), \
+                        patch.object(case, 'call', return_value={}), \
+                        patch.object(case, 'note', return_value={}):
+                    case.setUp()
+                self.assertEqual(case.folder.parent, parent.resolve() if explicit else Path(tempfile.gettempdir()).resolve())
+                self.assertFalse(case.folder.is_relative_to(deep_source.parent))
+                # Exercise the exact longest control-output name that failed
+                # under frozen-source/target, without starting any process.
+                control = case.folder / ('server-control-' + str(uuid.uuid4()))
+                control.mkdir()
+                output = control / 'owner-stop.stdout.bin'
+                with output.open('xb') as stream:
+                    stream.write(b'owned fixture, no process')
+                self.assertEqual(output.read_bytes(), b'owned fixture, no process')
+                case.tearDown()
+                server.close.assert_called_once_with()
+
     def test_package_copy_uses_unique_nonredacted_token_and_never_overwrites(self):
         with tempfile.TemporaryDirectory() as directory:
             root, target = Path(directory) / 'checkout', Path(directory) / 'target'
