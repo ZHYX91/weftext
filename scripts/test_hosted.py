@@ -14,7 +14,9 @@ import uuid
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
+from owned_worker_observer import (OwnedWorkerObservation, event_time_ns, timed_call,
+                                   freeze_policy_revocation, apply_inflight_revocation,
+                                   verify_revocation_delivery)
 
 EXE = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else None
 def uid(): return str(uuid.uuid4())
@@ -298,6 +300,8 @@ class Hosted(unittest.TestCase):
 
     def test_inflight_preview_rechecks_revocation_before_delivery(self):
         a=self.open()
+        target = ('alice', 'enabled')
+        policy_request = freeze_policy_revocation(self.call('admin/policy', actor='admin'), target)
         deadline = time.monotonic() + 30
         with ThreadPoolExecutor(max_workers=1) as pool:
             with OwnedWorkerObservation(self.server.owner) as observation:
@@ -307,24 +311,22 @@ class Hosted(unittest.TestCase):
                 worker = observation.wait(pending, deadline=deadline)
                 observation.assert_inflight(pending)
                 self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
-                self.policy(lambda u:u['alice'].update(enabled=False))
-                changed = event_time_ns()
+                mutation = apply_inflight_revocation(observation, pending, policy_request,
+                    lambda update: self.call('admin/policy', update, 'admin'), deadline)
                 (code, body, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before readback')
+        readback = self.call('admin/policy', actor='admin')
+        self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted during readback')
         trace = {'submittedMonotonicNs': submitted, 'worker': worker,
-                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 **mutation, 'requestCompletedMonotonicNs': completed,
+                 'policyReadbackGeneration': readback.get('generation'),
+                 'targetAuthorizationAfter': readback['users']['alice']['enabled'],
                  'status': code, 'errorCode': body.get('error', {}).get('code'),
                  'explanationKey': body.get('error', {}).get('explanation', {}).get('key')}
         with (self.folder/'preview-revocation-inflight.json').open('x', encoding='utf-8') as evidence:
             evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
-        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
-        self.assertLess(worker['observedMonotonicNs'], changed)
-        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
-        self.assertIn(code,[401,410],str(body)[:500])
-        self.assertEqual(code, 401, body)
-        self.assertEqual(body['error']['code'], 'authentication')
-        self.assertEqual(body['error']['explanation']['key'],
-                         'error.api.hosted.authenticationExpired')
-        self.assertNotIn('html',body)
+        verify_revocation_delivery(policy_request, target, readback, trace, body,
+                                   (401, 'authentication', 'error.api.hosted.authenticationExpired', 'html'))
 
 if __name__ == '__main__':
     unittest.main(argv=[sys.argv[0]],verbosity=2)
