@@ -12,13 +12,13 @@ import { UiError, message as uiMessage, locale, uiTextValue, setUiText, errorUiT
 import { HostedDraftCache } from "./hosted-draft-cache";
 import { PersonalInputRecovery } from "./personal-input-recovery";
 import { OrderedDraft } from "./ordered-draft";
-import { applySaveResult, freezeHostedSave, hostedOpenedDraft, hostedDocumentDraft, qualifyHostedDraft } from "./hosted-state";
+import { applySaveResult, bindHostedDraftReference, draftDisposition, freezeHostedSave, hostedOpenedDraft, hostedDocumentDraft, qualifyHostedDraft } from "./hosted-state";
 import { freezeOriginalAttempt } from "./original-operation";
 import { unavailableCommittedHistory } from "./hosted-history-state";
 
 const config = JSON.parse(readFileSync(0, "utf8"));
 const sourceFile = ts.createSourceFile("hosted.ts", readFileSync(new URL("./hosted.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = new Set(["sessionAudience", "closeOwnedSession", "confirmHostedRetirementCuts", "releaseViewSessions", "retryHostedRetirements", "capturedDraftAck", "queueHostedWriterRetirement", "retireHostedWriters", "hostedInput", "draftOrder", "bindHostedTransmission", "issueHostedInput", "persistHostedDraft", "hostedHistoryBasis", "save", "retain", "personalAudience", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus"]);
+const names = new Set(["sessionAudience", "closeOwnedSession", "confirmHostedRetirementCuts", "releaseViewSessions", "retryHostedRetirements", "capturedDraftAck", "queueHostedWriterRetirement", "retireHostedWriters", "hostedInput", "draftOrder", "bindHostedTransmission", "issueHostedInput", "persistHostedDraft", "hostedHistoryBasis", "save", "retain", "personalAudience", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus", "unresolvedPersonalSave", "readDocumentReference", "publishDocumentReference", "installDocument", "qualifyPersonalOriginalRoute", "finishPersonalOperation"]);
 const statements = sourceFile.statements.filter(node => ts.isFunctionDeclaration(node) && !!node.name && names.has(node.name.text) || ts.isClassDeclaration(node) && node.name?.text === "HostedError");
 assert.equal(statements.length, names.size + 1, "all selected production functions must exist");
 const compiled = ts.transpileModule(statements.map(node => node.getText(sourceFile)).join("\n"), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
@@ -27,7 +27,7 @@ async function fixture() {
   const fixtureFile = ts.createSourceFile("hosted-session-lifecycle.test.ts", readFileSync(new URL("./hosted-session-lifecycle.test.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const declaration = fixtureFile.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === "fixture");
   assert.ok(declaration, "reuse the lifecycle DOM fixture without executing its tests");
-  const scope = vm.createContext({ compiled, TestDocument, ApiError, UiError, uiMessage, locale, uiTextValue, setUiText, errorUiText, displayMessage, uiDisplayParameter, HostedDraftCache, PersonalInputRecovery, OrderedDraft, hostedOpenedDraft, hostedDocumentDraft, qualifyHostedDraft, applySaveResult, freezeHostedSave, freezeOriginalAttempt, unavailableCommittedHistory, vm, crypto, AbortSignal, clearTimeout, structuredClone, assert });
+  const scope = vm.createContext({ compiled, TestDocument, ApiError, UiError, uiMessage, locale, uiTextValue, setUiText, errorUiText, displayMessage, uiDisplayParameter, HostedDraftCache, PersonalInputRecovery, OrderedDraft, hostedOpenedDraft, hostedDocumentDraft, qualifyHostedDraft, applySaveResult, bindHostedDraftReference, draftDisposition, freezeHostedSave, freezeOriginalAttempt, unavailableCommittedHistory, vm, crypto, AbortSignal, clearTimeout, structuredClone, assert });
   vm.runInContext(ts.transpileModule(declaration.getText(fixtureFile), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText, scope);
   const f = await vm.runInContext("fixture()", scope), c = f.context;
   Object.assign(c, { crypto, freezeHostedSave, freezeOriginalAttempt, applySaveResult, hostedOpenedDraft });
@@ -35,11 +35,15 @@ async function fixture() {
   Object.assign(c, { token: config.token, identity, verifiedPersonalAudience: JSON.stringify([identity.deployment, identity.actor]) });
   await c.personalInputs.open(c.verifiedPersonalAudience);
   const target = config.target;
-  Object.assign(c, { doc: target, draft: hostedDocumentDraft(target), source: {
-    value: target.source, serial: 0, authorInputId: crypto.randomUUID(), viewMode: "source", pausedSession: false,
+  Object.assign(c, { doc: target, draft: hostedDocumentDraft(target), recoveryContinuations: new WeakMap(), installingDocument: false });
+  // Keep the existing DOM/editor fixture, including its stable-reference port.
+  // Production installDocument and personal-operation settlement run unchanged.
+  Object.assign(c.source, {
+    value: target.source, serial: 0, authorInputId: String(crypto.randomUUID()), viewMode: "source", pausedSession: false,
     flush: async () => {}, checkNavigationCapacity() {}, personalInputRecords: () => [],
+    open(_sessionId: string, _resource: string, value: string, inputId?: string) { this.value = value; this.serial = 0; this.authorInputId = inputId ?? crypto.randomUUID(); },
     beginPersonalSave: async () => {}, settlePersonalSave() {}, refreshQueries() {},
-  } });
+  });
   c.nodeAudience = () => ({ ...c.sessionAudience(), epoch: c.requestEpoch, sessionId: c.doc.sessionId, source: c.source.value, serial: c.source.serial });
   c.sameHostedNodeAudience = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
   c.cached = () => undefined;
@@ -47,7 +51,14 @@ async function fixture() {
   c.knowledgeAuthorChanged = () => {};
   c.queries.authorChanged = () => {};
   c.queries.refreshCatalog = async () => {};
-  c.finishPersonalOperation = async (operationId: string, state: string) => { assert.equal(state, "committed"); c.source.settlePersonalSave(operationId, true); };
+  c.history.documentChanged = () => {};
+  // Establish the initial editor identity through the same real qualified read.
+  // No fixture-created stable reference can stand in for this HTTP receipt.
+  c.request = (path: string, body?: unknown) => api(path, body);
+  const reference = await c.readDocumentReference(target);
+  c.source.personalInputReference(target.resource, reference);
+  c.draft = bindHostedDraftReference(c.draft, reference);
+  c.publishDocumentReference(target, reference);
   return c;
 }
 
@@ -93,7 +104,8 @@ async function navigationRetry() {
     }
     return result;
   };
-  c.installDocument = (opened: any, retained: any) => { c.doc = opened; c.draft = retained; c.source.value = retained.source; c.source.serial = 0; c.source.authorInputId = opened.viewInputId; installed.resolve(); };
+  const mountSource = c.source.open;
+  c.source.open = (...args: any[]) => { mountSource.apply(c.source, args); installed.resolve(); };
   c.source.historyBasis = async () => ({ sessionId: target.sessionId, source: c.source.value, serial: c.source.serial, inputId: c.source.authorInputId });
   c.queueHostedWriterRetirement(previous, target);
   await assert.rejects(c.persistHostedDraft(target), /discarded durable S ACK/);
@@ -170,7 +182,6 @@ async function consumedCut() {
     effects.push({ path, body: JSON.parse(options.body as string), status: response.status });
     return response;
   };
-  c.installDocument = (opened: any, retained: any) => { c.doc = opened; c.draft = retained; c.source.value = retained.source; };
   c.queueHostedWriterRetirement(previous, target);
   await assert.rejects(c.persistHostedDraft(target), /discarded consumed cut ACK/);
   assert.equal(original.inputRevision, 1);

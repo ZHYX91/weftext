@@ -53130,6 +53130,46 @@
       "zh-CN": "预览",
       "en-US": "Preview",
       "params": {}
+    },
+    "personalInput.editCopy": {
+      "zh-CN": "编辑独立本人输入副本",
+      "en-US": "Edit a separate personal input copy",
+      "params": {}
+    },
+    "personalInput.copyEditorTitle": {
+      "zh-CN": "本人输入副本",
+      "en-US": "Personal input copy",
+      "params": {}
+    },
+    "personalInput.copyEditorLabel": {
+      "zh-CN": "可编辑的独立本人输入副本",
+      "en-US": "Editable separate personal input copy",
+      "params": {}
+    },
+    "personalInput.finishCopy": {
+      "zh-CN": "完成副本编辑",
+      "en-US": "Finish editing this copy",
+      "params": {}
+    },
+    "personalInput.copyActiveFinishFirst": {
+      "zh-CN": "请先完成当前本人副本的编辑。",
+      "en-US": "Finish editing the current personal copy first.",
+      "params": {}
+    },
+    "personalInput.copyChanged": {
+      "zh-CN": "本人副本或其输入已变化；当前输入仍保留，请检查后重试。",
+      "en-US": "The personal copy or its input changed. Current input is retained; check it before retrying.",
+      "params": {}
+    },
+    "personalInput.copyOnlyCannotRestore": {
+      "zh-CN": "独立本人副本只能继续编辑或复制，不能作为正文恢复或取得资料写入权限。",
+      "en-US": "A separate personal copy can be edited or copied; it cannot restore an author draft or grant document write access.",
+      "params": {}
+    },
+    "personalInput.copyFinished": {
+      "zh-CN": "本人副本已可靠保留；原输入、原操作和资料正文未改变。",
+      "en-US": "The personal copy is durably retained. The original input, operation and document source are unchanged.",
+      "params": {}
     }
   }
 }

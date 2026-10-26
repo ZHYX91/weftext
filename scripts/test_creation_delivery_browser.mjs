@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 // Actual original-operation delivery consumers in owned headless Chrome.
 // node scripts/test_creation_delivery_browser.mjs EXE NEW_OUTPUT [all|CASE]
 // Optional WEFTEXT_BROWSER_FRONTEND_URL uses an already running local Vite UI;
@@ -144,7 +145,7 @@ async function browse(f) {
   page.on("response", response => { const route = new URL(response.url()).pathname; if (!route.startsWith("/api/")) return;
     const capturedCase = caseName; observed.push((async () => { const body = await response.json().catch(() => null);
       result.http.push({ case: capturedCase, browser: true, route, request: response.request().postDataJSON(), status: response.status(), response: body }); })()); });
-  await page.goto((frontendUrl || base) + "/#token=" + token); await click("源码"); await expectSource(f.sourceS);
+  await page.goto((frontendUrl || base) + "/#token=" + token); await workspaceMode(page, "源码"); await expectSource(f.sourceS);
 }
 async function closeBrowser() { if (context) await context.close(); context = undefined; page = undefined;
   await Promise.allSettled(observed); observed = []; }
@@ -161,7 +162,7 @@ async function navigation(f) {
   await click("返回", page.getByRole("navigation", { name: "日常导航与命令", exact: true })); await expectSource(f.sourceS);
   assert.ok(result.uiRequests.slice(before).some(item => item.route === "/api/data/open" && String(item.body.entityKey).endsWith("/" + f.a.nodeId)));
 }
-async function openTimeline() { await click("时间线", page.locator(".top-actions")); await timeline().waitFor(); }
+async function openTimeline() { await workspaceCommand(page, "file", "时间线"); await timeline().waitFor(); }
 async function closeTimeline() { await click("关闭时间线", timeline()); await timeline().waitFor({ state: "hidden" }); }
 async function prepareHistory(f) {
   await openTimeline(); await timeline().locator('[data-history-version="' + f.versionS + '"]').click();
@@ -204,7 +205,7 @@ async function libraryCase() {
   await failRefreshOnce(arm);
   await intercept("**/api/library/create", async route => { requests.push(route.request().postDataJSON());
     const response = await route.fetch(); assert.equal(response.status(), 200); arm.active = true; await route.fulfill({ response }); });
-  const open = async () => { await page.getByRole("button", { name: "创建资料库", exact: true }).first().click();
+  const open = async () => { await workspaceCommand(page, "file", "创建资料库");
     const panel = page.getByRole("dialog", { name: "创建资料库与文档排版语言", exact: true }); await panel.waitFor(); return panel; };
   let panel = await open();
   await panel.getByRole("textbox", { name: "新资料库完整路径", exact: true }).fill(path.join(out, "UI-Created-Library"));
@@ -239,7 +240,7 @@ async function saveAsCase(f, mode) {
       await new Promise(resolve => { release = resolve; held = true; }); await route.fulfill({ response });
     }
   });
-  await click("另存为", page.locator(".top-actions"));
+  await workspaceCommand(page, "file", "另存为");
   const dialog = page.getByRole("dialog", { name: "另存为", exact: true });
   await dialog.getByLabel("文件路径", { exact: true }).fill(target); await click("另存为", dialog);
   await until(() => !!original, "Original SaveAs request observed");
@@ -292,7 +293,7 @@ async function tabIdentityCase(f) {
     original = route.request().postDataJSON(); const response = await route.fetch(); assert.equal(response.status(), 200);
     receipt = await response.json(); await route.fulfill({ response });
   });
-  await click("另存为", page.locator(".top-actions"));
+  await workspaceCommand(page, "file", "另存为");
   const dialog = page.getByRole("dialog", { name: "另存为", exact: true });
   await dialog.getByLabel("文件路径", { exact: true }).fill(target); await click("另存为", dialog);
   await until(async () => (await page.locator(".document-tab.selected .tab-name").innerText()) === path.basename(target), "Exact original SaveAs target delivery");

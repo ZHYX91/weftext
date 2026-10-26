@@ -1,8 +1,28 @@
 import { RecoveryTextCache, type StoragePort } from "./recovery-text-cache";
-import { hasPersonalInput, inputTexts, type InputOrigin, type InputPiece, type PendingInputCheckpoint, type PersonalText } from "./source-input-origin";
+import { hasPersonalInput, inputTexts, personalInputId, type InputOrigin, type InputPiece, type PendingInputCheckpoint, type PersonalText } from "./source-input-origin";
 import type { AuthorInputOwner, AuthorProducerCheckpoint, ValuePath } from "./author-input";
 import { IndexedDBPersonalInputBackend, PersonalInputStoreConflict, type PersonalInputBackend, type PersonalInputBundle } from "./personal-input-storage";
 import type { CaptureRawProvenance, CaptureTextSlot } from "./capture-draft-state";
+
+export const PERSONAL_COPY_ONLY_SLOT = "personal-copy-only";
+declare const PERSONAL_COPY_SEED: unique symbol;
+export interface PersonalCopySeed { readonly [PERSONAL_COPY_SEED]: true }
+interface PersonalCopySeedProof {
+  audience: string; owner: PersonalInputRecord["owner"]; id: string;
+  sequence: number; revision: number; text: string; current(): boolean;
+}
+const personalCopySeeds = new WeakMap<object, PersonalCopySeedProof>();
+export function isPersonalCopy(record: Pick<PersonalInputRecord, "slot">): boolean { return record.slot === PERSONAL_COPY_ONLY_SLOT; }
+/** Verification only: a raw string or lookalike object cannot mint a seed. */
+export function readPersonalCopySeed(seed: PersonalCopySeed, basis: {
+  audience: string; owner: AuthorInputOwner; slot: string; path: readonly ValuePath[]; value: string;
+}): Readonly<{ id: string; revision: number; text: string }> {
+  const proof = seed && typeof seed === "object" ? personalCopySeeds.get(seed) : undefined;
+  if (!proof || proof.audience !== basis.audience || !equal(proof.owner, basis.owner)
+    || basis.slot !== PERSONAL_COPY_ONLY_SLOT || basis.path.length !== 0
+    || basis.value !== proof.text || !proof.current()) throw invalid();
+  return Object.freeze({ id: proof.id, revision: proof.revision, text: proof.text });
+}
 
 export type PersonalOperationRoute = { route: "known"; resource: string } | { route: "unknownOriginalRoute" };
 export type PersonalPendingOperation = { operationId: string; status: "unresolved" | "committed" | "cancelled" | "resolved" } & PersonalOperationRoute;
@@ -154,7 +174,13 @@ function mapTexts(value: unknown, convert: (value: unknown, key: string) => unkn
     }
     const candidate = record.candidate;
     if (candidate && (owner.kind !== "body" || candidate.operationId !== pending?.operationId || candidate.baseHash !== undefined && !/^[a-f0-9]{64}$/.test(candidate.baseHash))) throw invalid();
-    return { kind: "text", id: record.id, owner, ...(record.slot !== undefined ? { slot: record.slot } : {}), ...(path ? { path } : {}), ...(record.baseHash ? { baseHash: record.baseHash } : {}), ...(producer ? { producer: { ...producer } } : {}), sequence: record.sequence, origin: readOrigin(record.origin, "confirmed"), ...(candidate ? { candidate: { operationId: candidate.operationId, baseHash: candidate.baseHash, origin: readOrigin(candidate.origin, "candidate") } } : {}), ...(pending ? { pending: pending.route === "known" ? { operationId: pending.operationId, route: "known", resource: pending.resource, status: pending.status } : { operationId: pending.operationId, route: "unknownOriginalRoute", status: pending.status } } : {}) };
+    const origin = readOrigin(record.origin, "confirmed");
+    if (record.slot === PERSONAL_COPY_ONLY_SLOT && (record.baseHash !== undefined
+      || candidate !== undefined || pending !== undefined || record.path?.length
+      || origin.baseLength !== 0 || origin.pieces.length !== 0 || origin.detached.length !== 0
+      || origin.copyOnly?.length !== 1 || origin.copyOnly[0].id !== record.id
+      || origin.copyOnly[0].revision !== origin.revision)) throw invalid();
+    return { kind: "text", id: record.id, owner, ...(record.slot !== undefined ? { slot: record.slot } : {}), ...(path ? { path } : {}), ...(record.baseHash ? { baseHash: record.baseHash } : {}), ...(producer ? { producer: { ...producer } } : {}), sequence: record.sequence, origin, ...(candidate ? { candidate: { operationId: candidate.operationId, baseHash: candidate.baseHash, origin: readOrigin(candidate.origin, "candidate") } } : {}), ...(pending ? { pending: pending.route === "known" ? { operationId: pending.operationId, route: "known", resource: pending.resource, status: pending.status } : { operationId: pending.operationId, route: "unknownOriginalRoute", status: pending.status } } : {}) };
   }) };
 }
 
@@ -317,6 +343,8 @@ export class PersonalInputRecovery {
     const state = this.state(audience);
     for (const update of updates) {
       const index = state.records.records.findIndex(record => record.id === update.id), old = state.records.records[index];
+      if (update.slot === PERSONAL_COPY_ONLY_SLOT && !old) throw invalid();
+      if (old?.kind === "text" && isPersonalCopy(old) !== (update.slot === PERSONAL_COPY_ONLY_SLOT)) throw invalid();
       if (old && (old.kind !== "text" || !equal(old.owner, update.owner))) throw invalid();
       let next: PersonalInputRecord = { ...structuredClone(update), kind: "text", ...(!update.pending && old?.kind === "text" && old.pending ? { pending: old.pending } : {}), sequence: (old?.sequence ?? 0) + 1 };
       if (old?.kind === "text" && old.pending?.route === "unknownOriginalRoute" && old.pending.status === "unresolved" && next.pending?.operationId !== old.pending.operationId) throw invalid();
@@ -343,6 +371,38 @@ export class PersonalInputRecovery {
     if (current?.kind !== "captureTransport" || current.pending && !equal(current.pending, pending)) throw new Error("另一原 input mutation 尚未核定，未覆盖其冻结 cut。");
     const next = captureTransport({ ...structuredClone(current), pending: structuredClone(pending), sequence: current.sequence + 1 }, value => { if (typeof value !== "string") throw invalid(); return value; });
     state.records.records[index] = next; state.dirty.add(id); state.version++; return this.flush(audience);
+  }
+  /** Fork only proved personal text; the original and its operation do not change. */
+  async createPersonalCopy(audience: string, original: PersonalInputRecord): Promise<PersonalInputRecord> {
+    const selected = this.current(audience, original), state = this.state(audience);
+    const id = personalInputId(), text = personalInputText(selected);
+    if (state.records.records.some(record => record.id === id)) throw invalid();
+    const copy: PersonalInputRecord = {
+      kind: "text", id, owner: structuredClone(selected.owner), slot: PERSONAL_COPY_ONLY_SLOT,
+      origin: { baseLength: 0, pieces: [], detached: [], copyOnly: [{ id, revision: 0, text }], revision: 0 }, sequence: 1,
+    };
+    const checked = mapTexts({ version: 4, records: [copy] }, value => { if (typeof value !== "string") throw invalid(); return value; }).records[0] as PersonalInputRecord;
+    state.records.records.push(checked); state.dirty.add(id); state.version++;
+    await this.flush(audience);
+    return this.current(audience, checked);
+  }
+  /** A seed requires this exact pure-copy sequence to be Browser-ACKed already. */
+  personalCopySeed(audience: string, record: PersonalInputRecord): PersonalCopySeed {
+    const selected = this.current(audience, record), state = this.state(audience);
+    if (!isPersonalCopy(selected) || !equal(state.base.records.find(record => record.id === selected.id), selected)) throw invalid();
+    const token = Object.freeze({}) as PersonalCopySeed;
+    personalCopySeeds.set(token, {
+      audience, owner: structuredClone(selected.owner), id: selected.id,
+      sequence: selected.sequence, revision: selected.origin.revision, text: personalInputText(selected),
+      current: () => {
+        try {
+          const now = this.current(audience, selected);
+          return isPersonalCopy(now) && equal(now, selected)
+            && equal(this.state(audience).base.records.find(record => record.id === selected.id), selected);
+        } catch { return false; }
+      },
+    });
+    return token;
   }
   current(audience: string, record: PersonalInputRecord): PersonalInputRecord {
     const current = this.state(audience).records.records.find(entry => entry.id === record.id);

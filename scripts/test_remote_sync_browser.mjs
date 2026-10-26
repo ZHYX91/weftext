@@ -1,3 +1,4 @@
+import { workspaceCommand } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Three actual programs and headless browser controls. No desktop interaction.
@@ -29,7 +30,7 @@ async function api(server, route, data, token) {
   const response = await fetch(server.base + route, { method: data === undefined ? 'GET' : 'POST', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: 'Bearer ' + token } : { 'X-Weftext-Token': server.token }) }, body: data === undefined ? undefined : JSON.stringify(data) });
   const body = await response.json(); assert.ok(response.ok, JSON.stringify(body)); return body;
 }
-async function sync(page) { await page.getByRole('button', { name: '同步', exact: true }).click(); const panel = page.getByRole('dialog', { name: '资料库同步' }); await panel.waitFor(); return panel; }
+async function sync(page) { await workspaceCommand(page, 'knowledge', '同步'); const panel = page.getByRole('dialog', { name: '资料库同步' }); await panel.waitFor(); return panel; }
 async function click(panel, name) { await panel.getByRole('button', { name, exact: true }).click(); await panel.getByRole('status').filter({ hasText: '操作已完成' }).waitFor(); }
 async function transfer(panel, name) { await panel.getByRole('button', { name, exact: true }).click(); await panel.getByRole('status', { name: '远程传输进度' }).filter({ hasText: '传输完成' }).waitFor({ timeout: 60000 }); }
 try {

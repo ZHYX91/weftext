@@ -1,3 +1,4 @@
+import { workspaceTab, workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 import { personalInputSnapshot, abortPersonalInputWrites } from './_personal_input_browser.mjs';
@@ -12,7 +13,7 @@ const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwright');
 const exe = path.resolve(process.argv[2]), out = path.resolve(process.argv[3]); await mkdir(out, { recursive: false });
 const sha = value => createHash('sha256').update(value).digest('hex'), pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-const result = { exe, exeSha256: sha(await readFile(exe)), harnessSha256: sha(await readFile(new URL(import.meta.url))), personalInputHelperSha256: sha(await readFile(new URL('./_personal_input_browser.mjs', import.meta.url))), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), completed: false, cases: [], pageErrors: [], processes: [] };
+const result = { exe, exeSha256: sha(await readFile(exe)), harnessSha256: sha(await readFile(new URL(import.meta.url))), personalInputHelperSha256: sha(await readFile(new URL('./_personal_input_browser.mjs', import.meta.url))), workspaceBrowserHelperSha256: sha(await readFile(new URL('./_workspace_browser.mjs', import.meta.url))), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), completed: false, cases: [], pageErrors: [], processes: [] };
 const tokens = Object.fromEntries(['alice', 'bob', 'admin'].map(actor => [actor, randomBytes(32).toString('hex')]));
 let base, localToken, local, server, browser;
 const pendingReleases = [];
@@ -35,9 +36,9 @@ async function api(route, data, actor = 'alice') {
 }
 async function policy(edit) { const current = await api('/api/hosted/admin/policy', undefined, 'admin'); edit(current.users); return api('/api/hosted/admin/policy', { expectedGeneration: current.generation, users: current.users }, 'admin'); }
 async function login(page, actor, navigate = true) {
-  if (navigate) await page.goto(base); if (await page.locator('#logout').isVisible()) await page.locator('#logout').click();
+  if (navigate) await page.goto(base); if (await page.locator('#workspace').isVisible()) await workspaceTab(page, 'file'); if (await page.locator('#logout').isVisible()) await page.locator('#logout').click();
   await page.getByLabel('访问凭据', { exact: true }).fill(tokens[actor]); await page.getByRole('button', { name: '连接', exact: true }).click();
-  await page.getByRole('button', { name: 'TEST共同文档', exact: true }).click(); await page.getByRole('button', { name: 'V01 源码', exact: true }).click(); await page.locator('#source .cm-content').waitFor(); await page.locator('#stable-link:not([hidden])').waitFor();
+  await page.getByRole('button', { name: 'TEST共同文档', exact: true }).click(); await workspaceMode(page, 'V01 源码'); await page.locator('#source .cm-content').waitFor(); await workspaceCommand(page, 'knowledge', '知识链接'); await page.locator('#stable-link:not([hidden])').waitFor();
 }
 async function freshPage() {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } }), page = await context.newPage();
@@ -55,7 +56,7 @@ async function revoke(page, disabled = false) {
 }
 async function reauthorize(page) { await policy(users => { users.alice.enabled = true; users.alice.grants = { shared: { read: true, write: true, history: true, download: true } }; }); await login(page, 'alice', false); }
 async function recoveryRow(page, marker) {
-  await page.getByRole('button', { name: '取回本人未上传输入', exact: true }).click();
+  await workspaceCommand(page, 'home', '取回本人未上传输入');
   const rows = page.locator('#personal-inputs > section');
   for (let i = 0; i < await rows.count(); i++) if ((await rows.nth(i).locator('textarea').inputValue()).includes(marker)) return rows.nth(i);
   throw new Error('Expected pure personal input record was not shown');
@@ -83,12 +84,12 @@ try {
   }
   {
     const { page, context } = await freshPage(), marker = 'OWN_401_AND_ACTOR'; await append(page, marker); await revoke(page, true); await page.locator('#login:not([hidden])').waitFor();
-    await login(page, 'bob'); assert.equal(await page.getByRole('button', { name: '取回本人未上传输入', exact: true }).isVisible(), false); assert.equal(await page.locator('#personal-inputs textarea').count(), 0);
+    await login(page, 'bob'); await workspaceTab(page, 'home'); assert.equal(await page.getByRole('button', { name: '取回本人未上传输入', exact: true }).isVisible(), false); assert.equal(await page.locator('#personal-inputs textarea').count(), 0);
     await reauthorize(page); await recoveryRow(page, marker); await assertOnlyOwn(page, marker, secret); result.cases.push('real credential 401 locks personal input until fresh original actor authentication; another actor does not see it'); await context.close();
   }
   {
     const { page, context } = await freshPage(), marker = 'OWN_RICH_WAITING_😀';
-    await page.locator('#source [role=status]').filter({ hasText: '预览对应当前草稿' }).waitFor({ timeout: 30000 }); await page.getByRole('button', { name: 'V04 可视写作', exact: true }).click();
+    await page.locator('#source [role=status]').filter({ hasText: '预览对应当前草稿' }).waitFor({ timeout: 30000 }); await workspaceMode(page, 'V04 可视写作');
     let observed; const pending = new Promise(resolve => observed = resolve); let release; const held = new Promise(resolve => release = resolve); pendingReleases.push(release);
     await page.route('**/api/hosted/editor/edit', async route => { try { const response = await route.fetch(); observed({ status: response.status() }); await held; await route.fulfill({ response }).catch(() => {}); } catch (error) { observed({ error: String(error) }); await route.abort('failed').catch(() => {}); } });
     const literal = page.getByRole('textbox', { name: '编辑段落文字', exact: true }).last(); await literal.click(); await literal.press('End'); await page.keyboard.insertText(marker); assert.deepEqual(await bounded(pending, 'held native edit'), { status: 200 }); await assertOnlyOwn(page, marker, secret);
@@ -98,8 +99,8 @@ try {
   }
   {
     const { page, context } = await freshPage(), marker = 'OWN_APPLIED_TITLE_中文';
-    await page.locator('#source [role=status]').filter({ hasText: '预览对应当前草稿' }).waitFor({ timeout: 30000 }); await page.getByRole('button', { name: 'V04 可视写作', exact: true }).click();
-    await page.getByRole('button', { name: '标题', exact: true }).click(); const dialog = page.getByRole('dialog', { name: '文档标题', exact: true });
+    await page.locator('#source [role=status]').filter({ hasText: '预览对应当前草稿' }).waitFor({ timeout: 30000 }); await workspaceMode(page, 'V04 可视写作');
+    await workspaceCommand(page, 'insert', '标题'); const dialog = page.getByRole('dialog', { name: '文档标题', exact: true });
     const titleInput = dialog.getByRole('textbox'); await titleInput.fill('A');
     await titleInput.evaluate(input => { input.value = 'A' + 'PROGRAMMATIC_SECRET'; }); await titleInput.press('End'); await page.keyboard.insertText('X');
     assert.ok(!Object.values(await ownStorage(page)).join().includes('PROGRAMMATIC_SECRET'));
@@ -124,7 +125,7 @@ try {
     const { page, context } = await freshPage(), marker = 'OWN_PENDING_ORIGINAL'; await append(page, marker);
     let originalOperation, writes = 0; await page.route('**/api/hosted/save', async route => { writes++; originalOperation = route.request().postDataJSON().operationId; const response = await route.fetch(); assert.equal(response.status(), 200); await route.abort('failed'); });
     await page.locator('#save').click(); await page.locator('#save').waitFor({ state: 'visible' }); await page.waitForFunction(() => document.querySelector('#status').textContent.length > 0); await pause(200);
-    await revoke(page); await reauthorize(page); await page.getByRole('button', { name: '取回本人未上传输入', exact: true }).click();
+    await revoke(page); await reauthorize(page); await workspaceCommand(page, 'home', '取回本人未上传输入');
     const row = page.locator('#personal-inputs > section').filter({ hasText: originalOperation }); await row.getByRole('button', { name: '查询并核定原保存操作', exact: true }).click();
     await page.locator('#personal-inputs > section').filter({ hasText: originalOperation }).filter({ hasText: 'committed' }).waitFor(); assert.equal(writes, 1); assert.ok((await source(page)).includes(marker));
     result.originalOperation = originalOperation; result.cases.push('lost committed save response retains and queries the same operation ID after revocation; no replacement save request is sent'); await context.close();

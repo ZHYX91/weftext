@@ -1,3 +1,4 @@
+import { workspaceTab, workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Optional real-browser acceptance. Supply a qualified Playwright installation
@@ -26,7 +27,7 @@ async function api(route,data,actor){
  const r=await fetch(base+route,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(actor?{Authorization:'Bearer '+token[actor]}:{'X-Weftext-Token':localToken})},body:data===undefined?undefined:JSON.stringify(data)});const body=await r.json();assert.ok(r.ok,JSON.stringify(body));return body;
 }
 async function login(p,actor){await p.goto(base);await p.getByLabel('访问凭据',{exact:true}).fill(token[actor]);await p.getByRole('button',{name:'连接',exact:true}).click();await p.getByRole('button',{name:'共同文档',exact:true}).waitFor();}
-async function open(p){await p.getByRole('button',{name:'共同文档',exact:true}).click();await p.locator('#source .cm-content[contenteditable=true]').waitFor();await p.getByRole('button',{name:'预览',exact:true}).waitFor();}
+async function open(p){await p.getByRole('button',{name:'共同文档',exact:true}).click();await workspaceTab(p, 'view');await p.locator('#source .cm-content[contenteditable=true]').waitFor();await p.getByRole('button',{name:'预览',exact:true}).waitFor();}
 async function fillSource(p, text){const e=p.locator('#source .cm-content');await e.click();await e.press('ControlOrMeta+a');await p.keyboard.insertText(text);}
 async function sourceValue(p){return (await p.locator('#source .cm-line').allTextContents()).join('\n');}
 async function save(p){const response=p.waitForResponse(r=>r.url().endsWith('/api/hosted/save'));await p.getByRole('button',{name:'保存',exact:true}).click();return (await response).status();}
@@ -49,49 +50,49 @@ try{
  for(const p of [page,bob]){p.on('pageerror',e=>result.pageErrors.push(String(e)));p.on('dialog',d=>d.accept());p.on('console',m=>{if(m.type()==='error')result.consoleErrors.push(m.text());});}
  await login(page,'alice');await login(bob,'bob');await open(page);await open(bob);
  await page.locator('#source [role=status]').filter({hasText:'预览对应当前草稿'}).waitFor({timeout:30000});
- await page.getByRole('button',{name:'V03 按需语法',exact:true}).click();
+ await workspaceMode(page, 'V03 按需语法');
  await page.getByRole('button',{name:/展开源码：中文远端/}).first().click();
  await page.getByLabel('当前构造的 Typst 源码',{exact:true}).waitFor();
- await page.getByRole('button',{name:'收起语法',exact:true}).click();
- await page.getByRole('button',{name:'V04 可视写作',exact:true}).click();
+ await workspaceCommand(page, 'view', '收起语法');
+ await workspaceMode(page, 'V04 可视写作');
  await page.screenshot({path:path.join(out,'visual-writing.png'),fullPage:true});
  await page.getByRole('textbox',{name:'编辑段落文字',exact:true}).last().fill('中文远端测试😀富编辑');
- await page.getByRole('button',{name:'V05 阅读',exact:true}).click();
+ await workspaceMode(page, 'V05 阅读');
  await page.locator('.hosted-flow').filter({hasText:'富编辑'}).waitFor();
  assert.equal(await page.locator('.literal-input').count(),0);
- await page.getByRole('button',{name:'V01 源码',exact:true}).click();
+ await workspaceMode(page, 'V01 源码');
  assert.match(await sourceValue(page),/富编辑/);
- await page.getByRole('button',{name:'撤销',exact:true}).click();assert.equal(await sourceValue(page),initial);
- await page.getByRole('button',{name:'重做',exact:true}).click();assert.match(await sourceValue(page),/富编辑/);
- await page.getByRole('button',{name:'撤销',exact:true}).click();assert.equal(await sourceValue(page),initial);
- await page.getByRole('button',{name:'更新写作预览',exact:true}).click();
+ await workspaceCommand(page, 'home', '撤销');assert.equal(await sourceValue(page),initial);
+ await workspaceCommand(page, 'home', '重做');assert.match(await sourceValue(page),/富编辑/);
+ await workspaceCommand(page, 'home', '撤销');assert.equal(await sourceValue(page),initial);
+ await workspaceCommand(page, 'view', '更新写作预览');
  await page.locator('#source [role=status]').filter({hasText:'预览对应当前草稿'}).waitFor({timeout:30000});
- await page.getByRole('button',{name:'V04 可视写作',exact:true}).click();
- await page.getByRole('button',{name:'链接',exact:true}).click();
+ await workspaceMode(page, 'V04 可视写作');
+ await workspaceCommand(page, 'insert', '链接');
  const linkDialog=page.getByRole('dialog',{name:'添加链接',exact:true});
  await linkDialog.getByLabel('目标地址',{exact:true}).fill('https://example.test/notes');
  await linkDialog.getByLabel('显示文字',{exact:true}).fill('测试链接');await linkDialog.getByRole('button',{name:'添加',exact:true}).click();await linkDialog.waitFor({state:'hidden'});
- await page.getByRole('button',{name:'V05 阅读',exact:true}).click();
+ await workspaceMode(page, 'V05 阅读');
  await page.getByRole('link',{name:'测试链接',exact:true}).waitFor();assert.equal(await page.getByRole('link',{name:'测试链接',exact:true}).getAttribute('href'),'https://example.test/notes');
- await page.getByRole('button',{name:'V01 源码',exact:true}).click();
- await page.getByRole('button',{name:'撤销',exact:true}).click();assert.equal(await sourceValue(page),initial);
+ await workspaceMode(page, 'V01 源码');
+ await workspaceCommand(page, 'home', '撤销');assert.equal(await sourceValue(page),initial);
  assert.equal((await readFile(path.join(root,'Shared','Shared.typ'))).toString(),initial);
  await page.screenshot({path:path.join(out,'five-view-undo.png'),fullPage:true});
  result.cases.push('five hosted views share native Chinese/non-BMP rich edits and source Undo/Redo; view changes do not save');
 
  await fillSource(page,initial+'甲保存。');assert.equal(await save(page),200);
  await fillSource(bob,initial+'乙冲突草稿。');assert.equal(await save(bob),409);
- await bob.getByRole('button',{name:'重新读取与核对',exact:true}).click();await bob.locator('#comparison:not([hidden])').waitFor();
+ await workspaceCommand(bob, 'file', '重新读取与核对');await bob.locator('#comparison:not([hidden])').waitFor();
  assert.match(await bob.locator('#current').innerText(),/甲保存/);assert.match(await sourceValue(bob),/乙冲突/);
  await bob.screenshot({path:path.join(out,'conflict.png'),fullPage:true});
  await fillSource(bob,initial+'甲保存。乙合并。');await bob.getByRole('button',{name:'已核对，以当前稿作为保存依据',exact:true}).click();
  await bob.getByRole('button',{name:'保存',exact:true}).waitFor({state:'visible'});assert.equal(await save(bob),200);
  result.cases.push('two browser users preserve both drafts and explicitly merge');
 
- await page.getByRole('button',{name:'重新读取与核对',exact:true}).click();await page.locator('#status').filter({hasText:'已读取当前稿'}).waitFor();
+ await workspaceCommand(page, 'file', '重新读取与核对');await page.locator('#status').filter({hasText:'已读取当前稿'}).waitFor();
  await contextA.setOffline(true);await fillSource(page,initial+'甲离线输入。');
  assert.match(await sourceValue(page),/离线输入/);
- await contextA.setOffline(false);await page.getByRole('button',{name:'重新读取与核对',exact:true}).click();
+ await contextA.setOffline(false);await workspaceCommand(page, 'file', '重新读取与核对');
  await page.locator('#status').filter({hasText:'已恢复个人草稿'}).waitFor();assert.match(await sourceValue(page),/离线输入/);
  assert.equal(await save(page),200);result.cases.push('disconnected typing retained and revalidated after reconnect');
 
@@ -104,16 +105,16 @@ try{
  await page.locator('#status').filter({hasText:'已读取当前稿'}).waitFor();assert.match(await sourceValue(page),/丢响应已提交/);
  assert.equal(await page.locator('#save').isEnabled(),true);result.cases.push('lost save response reconciled by original operation after page reload');
 
- const preview=page.waitForResponse(r=>r.url().endsWith('/api/hosted/preview') && r.status()!==429);await page.getByRole('button',{name:'预览',exact:true}).click();const previewResponse=await preview;assert.equal(previewResponse.status(),200);await writeFile(path.join(out,'preview.json'),await previewResponse.text());await page.locator('#render:not([hidden])').waitFor();
+ const preview=page.waitForResponse(r=>r.url().endsWith('/api/hosted/preview') && r.status()!==429);await workspaceCommand(page, 'view', '预览');const previewResponse=await preview;assert.equal(previewResponse.status(),200);await writeFile(path.join(out,'preview.json'),await previewResponse.text());await page.locator('#render:not([hidden])').waitFor();
  await page.locator('#render').scrollIntoViewIfNeeded();
  await page.frameLocator('#render').locator('body').filter({hasText:'丢响应已提交'}).waitFor({timeout:5000});
  await writeFile(path.join(out,'preview-dom.json'),JSON.stringify(await page.frameLocator('#render').locator('body').evaluate(body=>({display:getComputedStyle(body).display,visibility:getComputedStyle(body).visibility,rect:body.getBoundingClientRect().toJSON()})),null,2));
- await fillSource(page,initial+'未保存预览。');assert.equal(await page.locator('#render').isHidden(),true);
- await page.getByRole('button',{name:'预览',exact:true}).click();
+ await fillSource(page,initial+'未保存预览。');assert.equal(await page.locator('#render').isHidden(),true); assert.equal(await page.locator('#render').evaluate(element => element.hidden), true);
+ await workspaceCommand(page, 'view', '预览');
  await page.frameLocator('#render').locator('body').filter({hasText:'未保存预览'}).waitFor({timeout:5000});
- await page.getByRole('button',{name:'保存历史',exact:true}).click();await page.locator('#history-list [data-version-id]').first().waitFor();assert.ok(await page.locator('#history-list [data-version-id]').count()>1);
+ await workspaceCommand(page, 'review', '保存历史');await page.locator('#history-list [data-version-id]').first().waitFor();assert.ok(await page.locator('#history-list [data-version-id]').count()>1);
  await page.locator('#history-list [data-version-id]').first().click();await page.getByLabel('所选准确旧版 · 只读源码',{exact:true}).filter({hasText:'#metadata'}).waitFor();
- const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'下载已保存源码',exact:true}).click();const download=await downloading;await download.saveAs(path.join(out,'download.typ'));
+ const downloading=page.waitForEvent('download');await workspaceCommand(page, 'file', '下载已保存源码');const download=await downloading;await download.saveAs(path.join(out,'download.typ'));
  assert.equal((await readFile(path.join(out,'download.typ'))).toString(),initial+'丢响应已提交。');
  await page.locator('#render').scrollIntoViewIfNeeded();
  await page.locator('#render').screenshot({path:path.join(out,'visible-preview.png')});
@@ -133,7 +134,7 @@ try{
  });
  const beforeReopen=await sourceValue(bob);
  await bob.locator('#source .cm-content').evaluate(node=>{window.__reopenSourceNode=node;});
- await bob.getByRole('button',{name:'重新读取与核对',exact:true}).click();await openHeld;
+ await workspaceCommand(bob, 'file', '重新读取与核对');await openHeld;
  assert.equal(await bob.locator('#source .cm-content').getAttribute('contenteditable'),'true');
  await bob.locator('#source .cm-content').press('ControlOrMeta+End');await bob.keyboard.insertText('\n等待核验期间的新输入😀');
  const duringReopen=beforeReopen+'\n等待核验期间的新输入😀';assert.equal(await sourceValue(bob),duringReopen);
@@ -144,9 +145,9 @@ try{
  await bob.locator('#source .cm-content').press('ControlOrMeta+Shift+KeyZ');assert.equal(await sourceValue(bob),duringReopen);
  await fillSource(bob,initial+'乙未提交草稿仍保留');
  result.cases.push('held reopen retains the editable owner and Undo/Redo; new typing rejects and closes the late target session');
- await page.getByRole('button',{name:'更新写作预览',exact:true}).click();
+ await workspaceCommand(page, 'view', '更新写作预览');
  await page.locator('#source [role=status]').filter({hasText:'预览对应当前草稿'}).waitFor({timeout:30000});
- await page.getByRole('button',{name:'V04 可视写作',exact:true}).click();
+ await workspaceMode(page, 'V04 可视写作');
  let releaseEdit, observedEdit;
  const editHeld=new Promise(resolve=>observedEdit=resolve), resumeEdit=new Promise(resolve=>releaseEdit=resolve);
  await page.route('**/api/hosted/editor/edit',async route=>{const response=await route.fetch();assert.equal(response.status(),200);observedEdit();await resumeEdit;await route.fulfill({response});});
@@ -154,7 +155,7 @@ try{
  const policy=await api('/api/hosted/admin/policy',undefined,'admin');policy.users.alice.grants={};
  await api('/api/hosted/admin/policy',{expectedGeneration:policy.generation,users:policy.users},'admin');
  await page.locator('#status').filter({hasText:'缓存已清除'}).waitFor({timeout:12000});assert.equal(await sourceValue(page),'');releaseEdit();await pause(500);assert.equal(await sourceValue(page),'');await page.unroute('**/api/hosted/editor/edit');
- assert.equal(await page.locator('#render').isHidden(),true);assert.equal(await page.locator('#history-list').isHidden(),true);assert.equal(await page.locator('#stable-link').isHidden(),true);assert.match(await sourceValue(bob),/仍保留/);
+ assert.equal(await page.locator('#render').isHidden(),true); assert.equal(await page.locator('#render').evaluate(element => element.hidden), true);assert.equal(await page.locator('#history-list').isHidden(),true); assert.equal(await page.locator('#history-list').evaluate(element => element.hidden), true);assert.equal(await page.locator('#stable-link').isHidden(),true); assert.equal(await page.locator('#stable-link').evaluate(element => element.hidden), true);assert.match(await sourceValue(bob),/仍保留/);
  const cached=await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('weftext-hosted-draft:')));assert.deepEqual(cached,[]);
  result.cases.push('revoked actor display/preview/cache cleared, late rich edit cannot restore the old draft, and other actor draft survives');
  assert.deepEqual(result.pageErrors,[]);result.completed=true;

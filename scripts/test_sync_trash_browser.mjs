@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Real public producers and the local Trash UI, with owned replicas and Chrome.
@@ -48,7 +49,7 @@ async function operation(server, root, intent, operationId = randomUUID()) {
 const normalize = value => path.resolve(value).replaceAll('\\', '/');
 async function exists(location) { try { await stat(location); return true; } catch (error) { if (error.code === 'ENOENT') return false; throw error; } }
 const sourceText = async editor => (await editor.locator('.cm-line').allTextContents()).join('\n');
-async function sourceEditor() { await page.getByRole('button', { name: '源码', exact: true }).click(); const editor = page.locator('.cm-content[contenteditable=true]'); await editor.waitFor(); return editor; }
+async function sourceEditor() { await workspaceMode(page, '源码'); const editor = page.locator('.cm-content[contenteditable=true]'); await editor.waitFor(); return editor; }
 async function enterDraft(editor, source) {
   const persisted = page.waitForResponse(response => response.url().endsWith('/api/draft') && response.request().postDataJSON()?.source === source && response.ok());
   await editor.press('ControlOrMeta+a'); await page.keyboard.insertText(source); await persisted;
@@ -56,7 +57,7 @@ async function enterDraft(editor, source) {
 }
 async function trashPanel() {
   const loaded = page.waitForResponse(response => response.url().endsWith('/api/knowledge/trash') && response.ok());
-  await page.getByRole('button', { name: '回收站', exact: true }).click();
+  await workspaceCommand(page, 'knowledge', '回收站');
   const panel = page.getByRole('dialog', { name: '资料库回收站' }); await panel.waitFor();
   const response = await loaded; await panel.locator('article.knowledge-card').first().waitFor();
   return { panel, entries: (await response.json()).trash };

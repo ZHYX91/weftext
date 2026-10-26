@@ -1,3 +1,4 @@
+import { workspaceMode, workspaceCommand } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Actual local stage-three UI, in owned headless Chrome. Synthetic events are not OS IME acceptance.
@@ -36,7 +37,7 @@ try{
  let url=base;
  if(process.env.WEFTEXT_DEV_FRONTEND){const repo=path.resolve(import.meta.dirname,'..'),{createServer}=await import(pathToFileURL(path.join(repo,'app/node_modules/vite/dist/node/index.js')).href);const proxy={target:base,changeOrigin:true,configure(instance){instance.on('proxyReq',(req,incoming)=>{if(incoming.headers.origin)req.setHeader('Origin',base);});}};vite=await createServer({root:path.join(repo,'app'),configFile:false,server:{host:'127.0.0.1',port:0,hmr:false,proxy:{'/api':proxy,'/fonts':proxy}}});await vite.listen();url='http://127.0.0.1:'+vite.httpServer.address().port;}
  browser=await chromium.launch({headless:true,...(process.env.WEFTEXT_BROWSER_EXECUTABLE?{executablePath:process.env.WEFTEXT_BROWSER_EXECUTABLE}:{channel:'chrome'})});result.browser=browser.version();page=await browser.newPage({viewport:{width:1500,height:1000}});page.setDefaultTimeout(30000);page.on('pageerror',e=>result.pageErrors.push(String(e)));
- await page.goto(url+'/#token='+token);await click('源码');await expectSource(original);await click('链接与批注');await relations().waitFor();const profile=await refresh();assert.equal(profile.diagnostics.issues.length,3);
+ await page.goto(url+'/#token='+token);await workspaceMode(page,'源码');await expectSource(original);await workspaceCommand(page,'knowledge','链接与批注');await relations().waitFor();const profile=await refresh();assert.equal(profile.diagnostics.issues.length,3);
  await relations().getByLabel('问题分组',{exact:true}).selectOption('occurrence');assert.equal(await relations().getByRole('button',{name:'定位来源',exact:true}).count(),3);
  await relations().getByRole('button',{name:'定位来源',exact:true}).first().click();assert.match(await cm().evaluate(e=>{const v=e.cmTile.root.view;return v.state.sliceDoc(v.state.selection.main.from,v.state.selection.main.to);}),/^link\(/);assert.equal(await source(),original);pass('Every problem occurrence is locatable and does not edit source; invalid fragment keeps its node connection');
  const group=relations().locator('article').filter({hasText:'缺失'}).first();await group.getByRole('button',{name:'忽略此问题…',exact:true}).click();const rule=page.getByRole('dialog',{name:'个人关系规则预览',exact:true});assert.match(await rule.textContent(),/匹配 2 项/);await rule.press('Escape');assert.equal(await relations().getByRole('button',{name:'定位来源',exact:true}).count(),3);

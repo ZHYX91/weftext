@@ -13,7 +13,7 @@ import { UiError, message as uiMessage, locale, uiTextValue, setUiText, displayM
 
 const sourcePath = new URL("./hosted.ts", import.meta.url);
 const sourceFile = ts.createSourceFile("hosted.ts", readFileSync(sourcePath, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = new Set(["acknowledgeHistory", "finishUnavailableHistory", "readDocumentReference", "request", "clearDisplay", "sessionAudience", "closeOwnedSession", "releaseViewSessions", "confirmHostedRetirementCuts", "retryHostedRetirements", "capturedDraftAck", "hostedInput", "draftOrder", "bindHostedTransmission", "issueHostedInput", "retireHostedWriters"]);
+const names = new Set(["acknowledgeHistory", "finishUnavailableHistory", "readDocumentReference", "request", "clearDisplay", "retirePersonalCopy", "sessionAudience", "closeOwnedSession", "releaseViewSessions", "confirmHostedRetirementCuts", "retryHostedRetirements", "capturedDraftAck", "hostedInput", "draftOrder", "bindHostedTransmission", "issueHostedInput", "retireHostedWriters"]);
 const functions = sourceFile.statements.filter(node => ts.isFunctionDeclaration(node) && !!node.name && names.has(node.name.text) || ts.isClassDeclaration(node) && node.name?.text === "HostedError");
 assert.equal(functions.length, names.size + 1, "exercise every production request/error/cleanup consumer");
 const compiled = ts.transpileModule(functions.map(node => node.getText(sourceFile)).join("\n"), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
@@ -40,6 +40,7 @@ function fixture() {
     document: { querySelectorAll() { return []; } }, el, AbortSignal, clearTimeout,
     hostedCapture: undefined, captureVersion: 0, capturePanel: document.createElement("section"), interfaceLocale: { dispose() {} }, mountInterfaceLocale() {},
     verifiedPersonalAudience: "alice-personal", personalControls: { clear() {} }, persistPersonalInputs: async () => undefined,
+    personalCopyVersion: 0, personalCopyEditor: undefined, personalCopyMount: document.createElement("section"), personalInputList: document.createElement("div"),
     everydayNavigation: { clear() {} }, everydayBar: document.createElement("div"), actionVersion: 0, busy: false, draftTimer: undefined, expiredSessionId: undefined,
     openDocumentTitles: new Map(), openDocumentButtons: new Map(), documentTabs: document.createElement("nav"), closeHostedInspector() {},
     retiredStructureSessions: new Set(), retiredStructureSources: new Set(), structureDocuments: [], clearNodeNavigation() {}, compareRequired: false,

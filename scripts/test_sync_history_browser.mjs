@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Two owned programs and headless Chrome. No desktop input or borrowed state.
@@ -30,7 +31,7 @@ async function api(server, route, data) {
   const body = await response.json(); assert.ok(response.ok, `${route}: ${JSON.stringify(body)}`); return body;
 }
 async function sync(page) {
-  await page.getByRole('button', { name: '同步', exact: true }).click();
+  await workspaceCommand(page, 'knowledge', '同步');
   const panel = page.getByRole('dialog', { name: '资料库同步' }); await panel.waitFor();
   await panel.getByRole('status').filter({ hasText: '操作已完成' }).waitFor(); return panel;
 }
@@ -40,7 +41,7 @@ async function click(panel, name) {
 }
 async function close(panel) { await panel.getByRole('button', { name: '关闭同步', exact: true }).click(); }
 async function sourceEditor(page) {
-  await page.getByRole('button', { name: '源码', exact: true }).click();
+  await workspaceMode(page, '源码');
   const editor = page.locator('.cm-content[contenteditable=true]'); await editor.waitFor(); return editor;
 }
 const text = async editor => (await editor.locator('.cm-line').allTextContents()).join('\n');

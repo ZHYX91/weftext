@@ -191,7 +191,7 @@ test("the unknown-route recovery row preserves copy access and gives no query, s
   const backend = new Backend(); legacy(backend); const recovery = await open(backend), document = new TestDocument(), host = document.createElement("section");
   const descriptor = Object.getOwnPropertyDescriptor(globalThis, "document"); Object.defineProperty(globalThis, "document", { configurable: true, value: document });
   try {
-    renderPersonalInputs(host as unknown as HTMLElement, recovery, audience, { restore: async () => { throw new Error("unexpected restore"); }, operation: async () => { throw new Error("unexpected operation"); }, producers: () => [], discardProducer: async () => {}, changed() {} });
+    renderPersonalInputs(host as unknown as HTMLElement, recovery, audience, { restore: async () => { throw new Error("unexpected restore"); }, operation: async () => { throw new Error("unexpected operation"); }, editCopy: async () => { throw new Error("unexpected copy editing"); }, editingCopy: () => false, producers: () => [], discardProducer: async () => {}, changed() {} });
     assert.equal(host.find("textarea").value, "original input"); assert.equal(host.find("button", uiTextValue(message("personalInput.copyText"))).disabled, false);
     assert.equal(host.find("button", uiTextValue(message("personalInput.resolveOriginalSave"))).disabled, true); assert.equal(host.find("button", uiTextValue(message("personalInput.restoreDraft"))).disabled, true);
     assert.ok(host.textContent.includes(uiTextValue(message("personalInput.unknownOriginalRoute"))));

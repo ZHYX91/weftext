@@ -1,3 +1,4 @@
+import { workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Narrow real local-client counterpart of the hosted table-copy regression.
@@ -23,8 +24,8 @@ async function stop() { await stopServe(child); }
 async function api(route, body) { const reply = await fetch(base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': token }, body: JSON.stringify(body) }), value = await reply.json(); assert.equal(reply.status, 200, route + ': ' + JSON.stringify(value)); return value; }
 const click = label => page.getByRole('button', { name: label, exact: true }).click(), surface = () => page.locator('.writing-table-surface').first();
 async function source() { return page.locator('.source-host .cm-content').evaluate(element => { const view = element.cmTile?.root?.view; if (view?.contentDOM !== element) throw new Error('Actual source editor unavailable'); return view.state.doc.toString(); }); }
-async function original(file, expected) { await click('源码'); await until(async () => (await source()) === expected, 'unchanged real local Draft'); assert.equal(await readFile(file, 'utf8'), expected); }
-async function selectRow() { await click('可视编辑'); await surface().getByRole('grid').waitFor(); await surface().locator('.writing-table-tools[aria-busy="false"]').waitFor(); await surface().getByRole('button', { name: '选择第 2 行', exact: true }).click(); }
+async function original(file, expected) { await workspaceMode(page, '源码'); await until(async () => (await source()) === expected, 'unchanged real local Draft'); assert.equal(await readFile(file, 'utf8'), expected); }
+async function selectRow() { await workspaceMode(page, '可视编辑'); await surface().getByRole('grid').waitFor(); await surface().locator('.writing-table-tools[aria-busy="false"]').waitFor(); await surface().getByRole('button', { name: '选择第 2 行', exact: true }).click(); }
 async function clipboard() { return page.evaluate(async () => { if (!navigator.clipboard?.read) throw new Error('Real Clipboard API read is required'); return Promise.all((await navigator.clipboard.read()).map(async item => ({ types: [...item.types].sort(), payloads: Object.fromEntries(await Promise.all(item.types.map(async type => [type, await (await item.getType(type)).text()]))) }))); }); }
 try {
   await start(); await api('/api/library/create', { path: root, operationId: randomUUID() });

@@ -17,7 +17,7 @@ import { unavailableCommittedHistory } from "./hosted-history-state";
 // Execute the production lifecycle functions and their actual logout/pagehide
 // registrations. DOM/editor panels and HTTP are the only substituted boundaries.
 const sourceFile = ts.createSourceFile("hosted.ts", readFileSync(new URL("./hosted.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = new Set(["sessionAudience", "closeOwnedSession", "confirmHostedRetirementCuts", "confirmDraftBasis", "releaseViewSessions", "retryHostedRetirements", "capturedDraftAck", "queueHostedWriterRetirement", "retireHostedWriters", "hostedInput", "draftOrder", "bindHostedTransmission", "issueHostedInput", "persistHostedDraft", "hostedHistoryBasis", "finishUnavailableHistory", "save", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "unresolvedPersonalSave", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus", "readDocumentReference", "publishDocumentReference", "installDocument", "verifyPersonalIdentity", "recoverPersonalOperation", "qualifyPersonalOriginalRoute", "finishPersonalOperation"]);
+const names = new Set(["sessionAudience", "closeOwnedSession", "confirmHostedRetirementCuts", "confirmDraftBasis", "releaseViewSessions", "retryHostedRetirements", "capturedDraftAck", "queueHostedWriterRetirement", "retireHostedWriters", "hostedInput", "draftOrder", "bindHostedTransmission", "issueHostedInput", "persistHostedDraft", "hostedHistoryBasis", "finishUnavailableHistory", "save", "refreshOpenSession", "clearDisplay", "retirePersonalCopy", "controls", "retain", "personalAudience", "unresolvedPersonalSave", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus", "readDocumentReference", "publishDocumentReference", "installDocument", "verifyPersonalIdentity", "recoverPersonalOperation", "qualifyPersonalOriginalRoute", "finishPersonalOperation"]);
 const statements = sourceFile.statements.filter(node =>
   ts.isFunctionDeclaration(node) && !!node.name && names.has(node.name.text)
   || ts.isClassDeclaration(node) && node.name?.text === "HostedError"
@@ -47,6 +47,7 @@ async function fixture() {
     document: { querySelectorAll() { return []; } },
     everydayNavigation: { clear() {} }, everydayBar: { replaceChildren() {} },
     personalControls: { clear() {} },
+    personalCopyVersion: 0, personalCopyEditor: undefined, personalCopyMount: testDocument.createElement("section"), personalInputList: testDocument.createElement("div"),
     // Chrome remains a presentation port in this lifecycle harness. Its title
     // stores and tab DOM are real so actual logout must clear them as well.
     openDocumentTitles: new Map(), openDocumentButtons: new Map(), documentTabs: testDocument.createElement("nav"), closeHostedInspector() {},

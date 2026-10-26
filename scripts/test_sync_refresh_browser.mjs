@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Two owned replicas; real sidecar synchronization and delayed UI delivery.
@@ -51,14 +52,14 @@ try {
   page.on('pageerror', error => result.pageErrors.push(String(error)));
   const calls = []; page.on('request', request => { const url = new URL(request.url()); if (url.pathname.startsWith('/api/')) calls.push(url.pathname); });
   await page.goto(`${a.base}/#token=${a.token}`);
-  await page.getByRole('button', { name: '源码', exact: true }).click();
+  await workspaceMode(page, '源码');
   const editor = page.locator('.cm-content[contenteditable=true]');
   const initialEditorSource = (await editor.locator('.cm-line').allTextContents()).join('\n');
   assert.equal(initialEditorSource, savedSource);
   await editor.press('ControlOrMeta+End'); await page.keyboard.insertText('保留个人草稿');
   const draft = (await editor.locator('.cm-line').allTextContents()).join('\n');
   assert.equal(draft, savedSource + '保留个人草稿');
-  await page.getByRole('button', { name: '链接与批注', exact: true }).click();
+  await workspaceCommand(page, 'knowledge', '链接与批注');
   await page.getByRole('tab', { name: '批注', exact: true }).click();
   await page.locator('.knowledge-current').waitFor();
   const remote = await api(b, '/api/open', { root: rb, path: path.join(rb, 'Note', 'Note.typ') });
@@ -67,7 +68,7 @@ try {
   const annotation = await api(b, '/api/knowledge/prepare', { operationId: randomUUID(), context, intent: { kind: 'annotationCreate', body: marker, target: { kind: 'whole_document' } } });
   await api(b, '/api/operations/commit', { operationId: annotation.operationId, planId: annotation.planId, context });
   await api(b, '/api/sync/export', { root: rb, directory: exchange, objects: [object] });
-  await page.getByRole('button', { name: '同步', exact: true }).click();
+  await workspaceCommand(page, 'knowledge', '同步');
   const panel = page.getByRole('dialog', { name: '资料库同步' });
   await panel.getByLabel('交换目录路径（新目录或已配对目录）', { exact: true }).fill(exchange);
   await click(panel, '接收交换目录'); await click(panel, '预览应用所选对象');

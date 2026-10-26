@@ -102,6 +102,8 @@ Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust �
 
 `node scripts/test_hosted_personal_input_browser.mjs EXE NEW_OUTPUT` 在自有 TEST 库和独立无头浏览器验证未上传本人输入：仅注入后台草稿网络失败，实际撤权／401 后重新认证，核纯输入、账号分隔、准确基线恢复、共享 Undo、迟到原生回应、存储失败及原保存编号。程序赋值／IME 负向用例不授予保护文字来源。设置 `WEFTEXT_PLAYWRIGHT_MODULE` 可指定已安装的通用 Playwright 模块；不操作用户浏览器。该定向检查不代替完整候选验收或真实系统 IME。
 
+现有工作区浏览器消费者先通过 `scripts/_workspace_browser.mjs` 选择实际任务选项卡，再进入对应命令；对话框动作仍限定于自身范围。权限负例先确认仍可读的 inspector 已实际呈现，或检查原控制器自己的 hidden 状态。注释编号任务另核独立本人副本的续编、完成与重开，始终比较原恢复记录及原操作全对象，再核另一账号无副本 DOM 或值泄漏。结构任务注入稳定引用缓存写失败时，要求零新 writer 接纳且原稿／缓存不变；解除故障后仍由同一侧栏入口重试。
+
 `node scripts/test_capture_workspace_browser.mjs` 通过明确的 `WEFTEXT_TEST_EXECUTABLE` 消费构建批次的 CLI 及相邻目录中的 catalog／receipt，使用新的绝对 `WEFTEXT_BROWSER_REPORT` 目录、已安装的 Chrome 和 `WEFTEXT_PLAYWRIGHT_MODULE`。它验证真实 Core、Capture 界面和 IndexedDB 之间的独立草稿切换、一次创建回包丢失与重开恢复；可选 `WEFTEXT_TEST_EXECUTABLE_SHA256` 限定程序摘要，`WEFTEXT_BROWSER_FIXTURE_PARENT` 指定独立短夹具父目录，默认使用系统临时目录。实际挂载组件的退役／迟到 schema 用例另由 `scripts/test_capture_mount_browser.mjs` 以受控传输验证。两者均保留自有资料及清理记录；真实 Core 检查另留原 owner 停机回执，不授予真实原生窗口、系统 IME、辅助技术或整包通过。
 
 `node scripts/test_workspace_layout_browser.mjs ABSOLUTE_CLI ABSOLUTE_NEW_OUTPUT [--dev]` 在自有库和独立无头 Chrome 验证单一树展开、折叠保留父节点、功能区与文档标签、实际编辑器／选区／Undo、格式操作及响应式布局。默认消费程序内嵌前端；`--dev` 仅为当前开发前端诊断。CSS 等效缩放、合成组合键和浏览器结果不替代真实缩放、系统 IME 或读屏验收。功能入口按任务选项卡到达，不通过强制点击隐藏控件维持旧测试。

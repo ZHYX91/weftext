@@ -1,4 +1,5 @@
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Actual final-candidate daily task chain. Every product view comes from the
 // supplied executable's embedded frontend and actual HTTP/Core fixture data.
@@ -131,7 +132,7 @@ async function command(label) { await page.keyboard.press('Control+Shift+p'); co
 async function knowledgeCommand(label, tab) { await command(label); await until(async () => { const control = knowledge().getByRole('tab', { name: tab, exact: true }); return await control.isVisible() && await control.getAttribute('aria-selected') === 'true'; }, 'explicit knowledge command visibly selects ' + tab); }
 async function quick(name) { await page.keyboard.press('Control+p'); const dialog = page.getByRole('dialog', { name: '快捷打开', exact: true }); await dialog.getByRole('searchbox').fill(name.endsWith('.typ') ? name : name + '.typ'); await dialog.getByRole('searchbox').press('Enter'); }
 async function panelDetails(label, host = queryPanel()) { const summary = host.getByText(label, { exact: true }); const details = summary.locator('..'); if (!await details.evaluate(element => element.open)) await summary.click(); return details; }
-async function showQuery() { if (!await queryPanel().isVisible()) await click('查询与视图'); }
+async function showQuery() { if (!await queryPanel().isVisible()) await workspaceCommand(page, 'knowledge', '查询与视图'); }
 async function pass(message) { const now = performance.now(); result.cases.push({ phase, message, elapsedMs: Math.round((now - caseStartedAt) * 100) / 100, input: 'Actual DOM mouse and keyboard; automation and observable waits included' }); caseStartedAt = now; await writeFile(path.join(out, 'progress.json'), stringifyServeJson(result, 2)); console.log('PASS', message); }
 async function createTag(name, parentRef = '', assign = false) {
   const navigation = await panelDetails('登记标签与目录入口');
@@ -229,7 +230,7 @@ try {
   await stop(); await start(['--open', image.path, '--root', root]);
   browser = await chromium.launch({ headless: true, ...(process.env.WEFTEXT_BROWSER_EXECUTABLE ? { executablePath: process.env.WEFTEXT_BROWSER_EXECUTABLE } : { channel: 'chrome' }) });
   result.browser = browser.version(); context = await browser.newContext({ viewport: { width: 1480, height: 1080 }, reducedMotion: 'reduce' }); page = await context.newPage(); page.setDefaultTimeout(30000); observe(page);
-  await page.goto(base + '/#token=' + token); await click('源码'); await expectSource(image.source);
+  await page.goto(base + '/#token=' + token); await workspaceMode(page, '源码'); await expectSource(image.source);
 
   result.fixturePreparationMs = Math.round(performance.now() - caseStartedAt); caseStartedAt = performance.now();
   phase = 'hierarchical-tags'; await showQuery();
@@ -255,7 +256,7 @@ try {
   await page.close(); page = originalPage; await expectSource(dirtyImage); await cm().click(); await page.keyboard.press('Control+z'); await expectSource(savedImage); await page.keyboard.press('Control+y'); await expectSource(dirtyImage);
   await pass('A separately reopened embedded client restores exact/subtree shortcut meaning without implicit mode memory; the original retained document keeps its own Draft/Undo.');
 
-  phase = 'cancel-rejected-first-assignment'; await quick('B-Plain'); await click('源码'); await expectSource(plain.source); await showQuery();
+  phase = 'cancel-rejected-first-assignment'; await quick('B-Plain'); await workspaceMode(page, '源码'); await expectSource(plain.source); await showQuery();
   const rejectedName = 'TEST Rejected Untyped Assignment', navigation = await panelDetails('登记标签与目录入口');
   await click('读取登记标签', navigation); await navigation.getByLabel('新标签父级', { exact: true }).waitFor();
   await navigation.getByLabel('新标签显示名称', { exact: true }).fill(rejectedName);
@@ -309,7 +310,7 @@ try {
   result.queryRefreshCoalescing = { sameEpochHeld, sameEpochVisibleCut: sameEpochReceipt.result.cutId, changedEpochHeld, changedEpochVisibleCut: changedEpochReceipt.result.cutId, installedCuts, hook: 'Only the first original server response is held and then forwarded without changing its body; no synthetic Query result is supplied. A read-only MutationObserver records actual visible result bases.' };
   await pass('A held actual Core response survives presentation changes and same-epoch repeated refresh as one query. A real tag-tree commit requires a second identical-plan request and a new visible cut; the old result cannot replace it. Hooks, tags and display preferences are restored.');
 
-  phase = 'authored-order'; await quick('TEST-Parent'); await click('源码'); await expectSource(savedParent);
+  phase = 'authored-order'; await quick('TEST-Parent'); await workspaceMode(page, '源码'); await expectSource(savedParent);
   await cm().click(); await page.keyboard.press('Control+End'); await page.keyboard.insertText(' UNSAVED PARENT DRAFT😀'); dirtyParent = savedParent + ' UNSAVED PARENT DRAFT😀'; await expectSource(dirtyParent);
   await page.getByRole('button', { name: '仅浏览 TEST-Parent 文件夹', exact: true }).click(); await contents().waitFor();
   const captured = await api('/api/navigation/capture', { root, path: parentFolder }), before = await api('/api/navigation/order/read', { root, parentRef: captured.targetRef }); assert.equal(before.complete, true);
@@ -347,7 +348,7 @@ try {
   const graph = () => knowledge().locator('.knowledge-graph-view'); await graph().locator('g[data-graph-key]').first().waitFor();
   await graph().getByLabel('在当前图范围搜索定位', { exact: true }).fill('A-Image'); await click('定位 A-Image', graph()); await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent);
   await graph().getByLabel('方向', { exact: true }).selectOption('out'); await graph().getByLabel('范围', { exact: true }).selectOption('global'); await click('放大', graph()); await click('向右平移', graph()); await click('适应视口', graph());
-  const graphNode = graph().locator(`g[data-graph-key=${JSON.stringify(imageKey)}]`); await graphNode.focus(); await page.keyboard.press('Enter'); await click('源码'); await expectSource(dirtyImage);
+  const graphNode = graph().locator(`g[data-graph-key=${JSON.stringify(imageKey)}]`); await graphNode.focus(); await page.keyboard.press('Enter'); await workspaceMode(page, '源码'); await expectSource(dirtyImage);
   await page.keyboard.press('Alt+ArrowLeft'); await expectSource(dirtyParent); await knowledgeCommand('打开二维关系图谱', '二维图谱'); await refreshKnowledge(dirtyParent);
   const edge = duplicateEdges[1]; await graph().locator(`path[data-graph-key=${JSON.stringify(edge.key)}]`).focus(); await page.keyboard.press('Space'); await click('打开准确作者来源', graph());
   await until(async () => { const actual = await cm().evaluate(element => { const range = element.cmTile.root.view.state.selection.main; return { from: range.from, to: range.to }; }); return actual.from === edge.range.utf16From && actual.to === edge.range.utf16To; }, 'accurate original graph occurrence source range'); await expectSource(dirtyParent);
@@ -470,8 +471,8 @@ try {
   await pass('The same native endpoint drives actual heading counts, keyboard folding and full/subtree controls; search reveals collapsed ancestors without changing their real counts, clears back to the saved fold and traverses duplicate matches in both directions with wraparound, without author writes.');
 
   phase = 'explicit-inspector-commands'; await knowledgeCommand('导入或浏览图片与资源', '文件'); await knowledgeCommand('导入或浏览图片与资源', '文件');
-  await expectSource(dirtyParent); await click('链接与批注'); await until(async () => !await knowledge().isVisible(), 'toolbar still closes its own active inspector');
-  await click('链接与批注'); await knowledge().waitFor({ state: 'visible' }); await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent); assert.equal(await disk(image.path), savedImage);
+  await expectSource(dirtyParent); await workspaceCommand(page, 'knowledge', '链接与批注'); await until(async () => !await knowledge().isVisible(), 'toolbar still closes its own active inspector');
+  await workspaceCommand(page, 'knowledge', '链接与批注'); await knowledge().waitFor({ state: 'visible' }); await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent); assert.equal(await disk(image.path), savedImage);
   await pass('Repeated explicit graph, heading and resource commands keep the requested inspector visible; the original toolbar keeps its close/reopen behavior and neither path saves or changes the retained author Draft.');
   result.expectedHttpStates = []; result.unexpectedHttpErrors = [];
   for (const event of result.httpErrors) { let code; try { code = JSON.parse(event.body).error?.code; } catch { /* An unclassified response stays unexpected. */ }

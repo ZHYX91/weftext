@@ -1,9 +1,11 @@
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
-import { PersonalInputRecovery, personalInputText, type PersonalInputRecord } from "./personal-input-recovery";
+import { PersonalInputRecovery, isPersonalCopy, personalInputText, type PersonalInputRecord } from "./personal-input-recovery";
 import type { AuthorProducerState } from "./author-input";
 export function renderPersonalInputs(host: HTMLElement, recovery: PersonalInputRecovery, audience: string, actions: {
     restore(record: PersonalInputRecord): Promise<void>;
+    editCopy(record: PersonalInputRecord): Promise<void>;
+    editingCopy(record: PersonalInputRecord): boolean;
     operation(record: PersonalInputRecord): Promise<void>;
     producers(): AuthorProducerState[];
     discardProducer(producer: AuthorProducerState): Promise<void>;
@@ -46,6 +48,7 @@ export function renderPersonalInputs(host: HTMLElement, recovery: PersonalInputR
                 await navigator.clipboard.writeText(input.value);
             setUiText(status, uiMessage("personalInput.textRetrieved"));
         }));
+        row.append(action(uiMessage("personalInput.editCopy"), () => actions.editCopy(record)));
         if (record.pending) {
             const operation = document.createElement("p");
             setUiText(operation, displayMessage("personalInput.originalSaveSummary", { p0: uiDisplayParameter(record.pending.operationId), p1: uiDisplayParameter(record.pending.status) }));
@@ -61,13 +64,13 @@ export function renderPersonalInputs(host: HTMLElement, recovery: PersonalInputR
             resolve.disabled = unknownOriginalRoute;
             row.append(resolve);
         }
-        if (record.owner.kind === "body") {
+        if (record.owner.kind === "body" && !isPersonalCopy(record)) {
             const restore = action(uiMessage("personalInput.restoreDraft"), () => actions.restore(record));
             restore.disabled = unresolvedOriginalRoute;
             row.append(restore);
         }
         const remove = action(uiMessage("personalInput.removeRetrieved"), async () => { await recovery.remove(audience, record); row.remove(); });
-        remove.disabled = record.pending?.status === "unresolved";
+        remove.disabled = record.pending?.status === "unresolved" || actions.editingCopy(record);
         row.append(remove, status);
         host.append(row);
     }
@@ -76,7 +79,7 @@ export function renderPersonalInputs(host: HTMLElement, recovery: PersonalInputR
         description.textContent = `已退休表单 ${producer.owner.kind} · ${producer.producerId}：其输入尚未应用，仍会阻止关闭。移除单条恢复副本不会放弃整个表单。`;
         discard.type = "button";
         discard.textContent = "明确放弃此退休表单的全部未应用输入";
-        discard.disabled = recovery.list(audience).some(record => record.producer?.producerId === producer.producerId && record.pending?.status === "unresolved");
+        discard.disabled = recovery.list(audience).some(record => record.producer?.producerId === producer.producerId && (record.pending?.status === "unresolved" || actions.editingCopy(record)));
         discard.onclick = () => { discard.disabled = true; void actions.discardProducer(producer).then(actions.changed).catch(error => { status.textContent = error instanceof Error ? error.message : String(error); discard.disabled = false; }); };
         status.setAttribute("role", "status");
         row.append(description, discard, status);

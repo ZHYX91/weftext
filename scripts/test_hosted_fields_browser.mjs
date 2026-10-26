@@ -1,3 +1,4 @@
+import { workspaceCommand } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Optional real-browser acceptance. Supply a qualified Playwright installation
@@ -28,14 +29,16 @@ async function api(route,data,actor){
  const r=await fetch(base+route,{method:data===undefined?'GET':'POST',headers:{'Content-Type':'application/json',...(actor?{Authorization:'Bearer '+token[actor]}:{'X-Weftext-Token':localToken})},body:data===undefined?undefined:JSON.stringify(data)});const body=await r.json();assert.ok(r.ok,JSON.stringify(body));return body;
 }
 async function click(name){await page.getByRole('button',{name,exact:true}).click();}
-async function readField(){const response=page.waitForResponse(r=>r.url().endsWith('/api/hosted/fields/read'));await click('读取字段');assert.equal((await response).status(),200);await page.locator('#fields fieldset').first().waitFor();}
+async function showFields(){await workspaceCommand(page,'home','属性');}
+async function fieldsAfterQuery(){await page.locator('#office').waitFor({state:'visible'});await showFields();}
+async function readField(){await showFields();const response=page.waitForResponse(r=>r.url().endsWith('/api/hosted/fields/read'));await click('读取字段');assert.equal((await response).status(),200);await page.locator('#fields fieldset').first().waitFor();}
 async function changePolicy(edit){const p=await api('/api/hosted/admin/policy',undefined,'admin');edit(p.users);return api('/api/hosted/admin/policy',{expectedGeneration:p.generation,users:p.users},'admin');}
 async function passed(message){result.cases.push(message);await writeFile(path.join(out,'progress.json'),stringifyServeJson(result, 2));console.log(message);}
 const tagRefs=value=>(value?.kind==='array'?value.value:[]).flatMap(item=>item.kind==='record'?item.value.filter(member=>member.key==='ref'&&member.value.kind==='text').map(member=>member.value.value):[]);
 async function tagProfile(){return api('/api/hosted/fields/read',{resource:'shared',fieldId:'core/tags'},'tagger');}
 async function registry(){return api('/api/hosted/navigation/registry',undefined,'tagger');}
 function observePage(target){target.on('pageerror',error=>result.pageErrors.push(String(error)));target.on('dialog',dialog=>dialog.accept());target.on('console',message=>{if(message.type()==='error')result.consoleErrors.push(message.text());});}
-async function tagReady(){await page.getByLabel('选择获权字段').selectOption({label:'shared · core/tags'});await readField();await page.getByLabel('新建并赋值标签名称',{exact:true}).waitFor();await page.waitForFunction(()=>!document.querySelector('#fields fieldset')?.disabled);const rebase=page.getByRole('button',{name:'已核对，采用当前字段依据',exact:true});if(await rebase.isEnabled())await rebase.click();}
+async function tagReady(){await showFields();await page.getByLabel('选择获权字段').selectOption({label:'shared · core/tags'});await readField();await page.getByLabel('新建并赋值标签名称',{exact:true}).waitFor();await page.waitForFunction(()=>!document.querySelector('#fields fieldset')?.disabled);const rebase=page.getByRole('button',{name:'已核对，采用当前字段依据',exact:true});if(await rebase.isEnabled())await rebase.click();}
 async function saveTagField(){const response=page.waitForResponse(r=>r.url().endsWith('/api/hosted/fields/write'));await click('保存字段');const received=await response;assert.equal(received.status(),200,await received.text());await page.locator('#fields').getByText('原字段操作已保存。继续编辑前，请重新读取并核对当前字段。',{exact:true}).waitFor();return received.request().postDataJSON();}
 async function waitTagAction(name){await page.waitForFunction(name=>Array.from(document.querySelectorAll('#fields button')).some(button=>button.textContent===name&&!button.disabled),name);}
 async function cachedTagJob(){return page.evaluate(()=>Object.keys(sessionStorage).filter(key=>key.startsWith('weftext-hosted-field:')).map(key=>JSON.parse(sessionStorage[key])).find(draft=>draft.tagCreation)?.tagCreation);}
@@ -66,12 +69,12 @@ try{
  const ctx=await browser.newContext({viewport:{width:1440,height:1100}});page=await ctx.newPage();
  observePage(page);
  await page.goto(base);await page.getByLabel('访问凭据',{exact:true}).fill(token.alice);await click('连接');
- await page.getByLabel('选择获权字段').waitFor();assert.equal(await page.locator('#documents button').count(),0);
+ await showFields();await page.getByLabel('选择获权字段').waitFor();assert.equal(await page.locator('#documents button').count(),0);
  await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/status'});await readField();
  assert.equal(await page.getByLabel('字段输入',{exact:true}).inputValue(),'open');
  assert.ok(!(await page.locator('body').innerText()).includes('HIDDEN_BODY_987'));
  await page.getByLabel('查询字段').selectOption('tasks/status');await page.getByLabel('CEL 筛选条件').fill('status == "open"');
- await click('运行查询');await page.getByRole('table',{name:'获权字段查询结果'}).waitFor();assert.match(await page.getByRole('table').innerText(),/open/);
+ await click('运行查询');await fieldsAfterQuery();await page.getByRole('table',{name:'获权字段查询结果'}).waitFor();assert.match(await page.getByRole('table').innerText(),/open/);
  await page.screenshot({path:path.join(out,'field-query.png'),fullPage:true});
  result.cases.push('field-only form and typed CEL Query; no source document or hidden body delivered');
  const doc=await api('/api/hosted/open',{resource:'shared'},'writer');
@@ -85,13 +88,13 @@ try{
  let invalidWrites=0;const countInvalidWrites=request=>{if(request.url().endsWith('/api/hosted/fields/write'))invalidWrites++;};page.on('request',countInvalidWrites);
  await page.getByLabel('字段输入',{exact:true}).fill('-');await click('保存字段');
  assert.equal(invalidWrites,0);assert.equal(await page.getByLabel('字段输入',{exact:true}).inputValue(),'-');
- const invalidQuery=page.waitForResponse(r=>r.url().endsWith('/api/hosted/query'));await click('运行查询');assert.equal((await invalidQuery).status(),200);
+ const invalidQuery=page.waitForResponse(r=>r.url().endsWith('/api/hosted/query'));await click('运行查询');await fieldsAfterQuery();assert.equal((await invalidQuery).status(),200);
  await page.waitForFunction(()=>!document.querySelector('#fields fieldset').disabled);
  assert.equal(await page.getByLabel('字段输入',{exact:true}).inputValue(),'-');
  await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/status'});await readField();
  await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/priority'});await readField();
  assert.equal(await page.getByLabel('字段输入',{exact:true}).inputValue(),'-');
- await page.reload();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/priority'});await readField();
+ await page.reload();await showFields();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/priority'});await readField();
  assert.equal(await page.getByLabel('字段输入',{exact:true}).inputValue(),'-');await click('已核对，采用当前字段依据');await click('保存字段');
  assert.equal(invalidWrites,0);assert.equal((await api('/api/hosted/fields/read',{resource:'shared',fieldId:'tasks/priority'},'bob')).field.cell.value.value,'7');
  await page.getByLabel('字段输入',{exact:true}).fill('9');await click('保存字段');await page.locator('#fields').getByText('原字段操作已保存。继续编辑前，请重新读取并核对当前字段。',{exact:true}).waitFor();
@@ -105,7 +108,7 @@ try{
  await page.route('**/api/hosted/fields/write',async route=>{try{pending=route.request().postDataJSON();const response=await route.fetch();assert.equal(response.status(),200,await response.text());await route.abort('failed');}catch(error){routeErrors.push(String(error));await route.abort('failed').catch(()=>{});}finally{firstWriteDroppedResolve();}});
  await click('保存字段');await page.waitForFunction(()=>Object.keys(sessionStorage).some(k=>k.startsWith('weftext-hosted-field:') && JSON.parse(sessionStorage[k]).pending));
  await bounded(firstWriteDropped,'first committed field reply loss');assert.deepEqual(routeErrors,[]);await page.unroute('**/api/hosted/fields/write');await page.reload();
- await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/status'});await readField();
+ await showFields();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/status'});await readField();
  await click('核对原字段操作');await page.locator('#fields').getByText('原字段操作已保存。继续编辑前，请重新读取并核对当前字段。',{exact:true}).waitFor();
  const receipt=await api('/api/hosted/fields/operation',{resource:'shared',fieldId:'tasks/status',operationId:pending.operationId},'alice');assert.equal(receipt.status,'committed');
  assert.ok(await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('weftext-hosted-field:')).every(k=>!JSON.parse(sessionStorage[k]).pending)));
@@ -115,7 +118,7 @@ try{
  await page.route('**/api/hosted/fields/write',async route=>{try{pending=route.request().postDataJSON();const response=await route.fetch();assert.equal(response.status(),200,await response.text());await route.abort('failed');}catch(error){routeErrors.push(String(error));await route.abort('failed').catch(()=>{});}finally{committed();}});
  await click('保存字段');await bounded(committedWrite,'second committed field reply loss');assert.deepEqual(routeErrors,[]);await page.waitForFunction(()=>!Array.from(document.querySelectorAll('#fields button')).find(b=>b.textContent==='核对原字段操作').disabled);await page.unroute('**/api/hosted/fields/write');
  const notePath=path.join(root,'Shared/Shared.typ'), accepted=await readFile(notePath,'utf8');await writeFile(notePath,accepted+'\nEXTERNAL_UNADMITTED_CHANGE\n');
- await page.reload();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/status'});
+ await page.reload();await showFields();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · tasks/status'});
  const unavailableRead=page.waitForResponse(r=>r.url().endsWith('/api/hosted/fields/read'));await click('读取字段');assert.equal((await unavailableRead).status(),409);
  await click('核对原字段操作');await page.locator('#fields').getByText('原字段操作已保存。继续编辑前，请重新读取并核对当前字段。',{exact:true}).waitFor();
  assert.equal((await api('/api/hosted/fields/operation',{resource:'shared',fieldId:'tasks/status',operationId:pending.operationId},'alice')).status,'committed');
@@ -135,14 +138,14 @@ try{
  await page.getByLabel('选择获权字段').selectOption({label:'shared · core/aliases'});await readField();
  const alias=page.getByLabel('字段输入 第 1 项',{exact:true});await ctx.setOffline(true);await alias.fill('离线中文😀输入');
  assert.ok((await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('weftext-hosted-field:')).map(k=>sessionStorage[k]).join(''))).includes('离线中文😀输入'));
- await ctx.setOffline(false);await page.reload();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · core/aliases'});await readField();
+ await ctx.setOffline(false);await page.reload();await showFields();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · core/aliases'});await readField();
  assert.equal(await alias.inputValue(),'离线中文😀输入');await click('已核对，采用当前字段依据');await click('保存字段');
  await page.locator('#fields').getByText('原字段操作已保存。继续编辑前，请重新读取并核对当前字段。',{exact:true}).waitFor();
  assert.ok((await readFile(path.join(root,'Shared/Shared.typ'),'utf8')).includes('离线中文😀输入'));
  result.cases.push('native array form preserves offline Chinese/non-BMP draft, reload and explicit rebase');
  // The following UI chain has only a narrow field grant plus independently
  // declared tag read/create rights. The writer token remains fixture-only.
- const alicePage=page,tagContext=await browser.newContext({viewport:{width:1440,height:1100}});page=await tagContext.newPage();observePage(page);await page.goto(base);await page.getByLabel('访问凭据',{exact:true}).fill(token.tagger);await click('连接');await page.getByLabel('选择获权字段').waitFor();
+ const alicePage=page,tagContext=await browser.newContext({viewport:{width:1440,height:1100}});page=await tagContext.newPage();observePage(page);await page.goto(base);await page.getByLabel('访问凭据',{exact:true}).fill(token.tagger);await click('连接');await showFields();await page.getByLabel('选择获权字段').waitFor();
  const actualPolicy=await api('/api/hosted/admin/policy',undefined,'admin'),narrow=actualPolicy.users.tagger.grants.shared;
  assert.deepEqual(Object.keys(narrow.fields),['core/tags']);assert.equal(narrow.read??false,false);assert.equal(narrow.write??false,false);assert.equal(narrow.history??false,false);assert.equal(actualPolicy.users.tagger.navigation.tags.read,true);assert.equal(actualPolicy.users.tagger.navigation.tags.create,true);assert.equal(actualPolicy.users.tagger.navigation.tags.rename,false);assert.equal(actualPolicy.users.tagger.navigation.tags.move,false);
  const sourceDenied=await fetch(base+'/api/hosted/open',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token.tagger},body:JSON.stringify({resource:'shared'})});assert.equal(sourceDenied.status,404);assert.ok(!(await sourceDenied.text()).includes('HIDDEN_BODY_987'));
@@ -161,11 +164,11 @@ try{
  const beforeAssignedSource=await readFile(notePath,'utf8');await page.getByLabel('新建并赋值标签名称',{exact:true}).fill('UI_CHILD / 叶😀');let assignedRequest,assignedPrepared,assignedCommit,prepareLostResolve;const prepareWasLost=new Promise(resolve=>prepareLostResolve=resolve);
  await page.route('**/api/hosted/navigation/registry/prepare',async route=>{try{assignedRequest=route.request().postDataJSON();const reply=await route.fetch();assignedPrepared=await reply.json();assert.equal(reply.status(),200,JSON.stringify(assignedPrepared));await route.abort('failed');prepareLostResolve();}catch(error){routeErrors.push(String(error));prepareLostResolve();await route.abort('failed').catch(()=>{});}});
  await click('预览新建并赋值');await bounded(prepareWasLost,'actual tag preparation');assert.deepEqual(routeErrors,[]);await waitTagAction('核对原标签新建与赋值操作');await page.unroute('**/api/hosted/navigation/registry/prepare');const afterOriginalPrepare=tagPrepares;assert.equal((await cachedTagJob()).request.operationId,assignedRequest.operationId);assert.ok(!JSON.stringify(assignedPrepared).includes('HIDDEN_BODY_987'));assert.ok(!(await registry()).tags.items.some(tag=>tag.reference===assignedPrepared.navigationRef));
- await page.reload();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · core/tags'});await readField();await waitTagAction('核对原标签新建与赋值操作');
+ await page.reload();await showFields();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · core/tags'});await readField();await waitTagAction('核对原标签新建与赋值操作');
  const recoveredPrepare=page.waitForResponse(r=>r.url().endsWith('/api/hosted/navigation/registry/operation'));await click('核对原标签新建与赋值操作');const knownPrepare=await (await recoveredPrepare).json();assert.equal(knownPrepare.operationId,assignedRequest.operationId);assert.equal(knownPrepare.status,'prepared');assert.equal(knownPrepare.planId,assignedPrepared.planId);assert.equal(tagPrepares,afterOriginalPrepare);await waitTagAction('明确提交原新建与赋值计划');
  let commitLostResolve;const commitWasLost=new Promise(resolve=>commitLostResolve=resolve);await page.route('**/api/hosted/navigation/registry/commit',async route=>{try{const submitted=route.request().postDataJSON();assert.equal(submitted.operationId,assignedRequest.operationId);assert.equal(submitted.planId,assignedPrepared.planId);const reply=await route.fetch();assignedCommit=await reply.json();assert.equal(reply.status(),200,JSON.stringify(assignedCommit));assert.equal(assignedCommit.status,'committed');await route.abort('failed');commitLostResolve();}catch(error){routeErrors.push(String(error));commitLostResolve();await route.abort('failed').catch(()=>{});}});
  await click('明确提交原新建与赋值计划');await bounded(commitWasLost,'actual tag commit');assert.deepEqual(routeErrors,[]);await waitTagAction('核对原标签新建与赋值操作');await page.unroute('**/api/hosted/navigation/registry/commit');assert.equal(assignedCommit.operationId,assignedRequest.operationId);assert.equal(assignedCommit.navigationRef,assignedPrepared.navigationRef);assert.ok(!JSON.stringify(assignedCommit).includes('HIDDEN_BODY_987'));
- const committedCount=tagCommits;config.bind=new URL(base).host;await writeFile(configPath,JSON.stringify(config,null,2));await stop(server);server=await start(['--data-dir',data,'--server-config',configPath],true);await page.reload();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · core/tags'});await readField();await waitTagAction('核对原标签新建与赋值操作');
+ const committedCount=tagCommits;config.bind=new URL(base).host;await writeFile(configPath,JSON.stringify(config,null,2));await stop(server);server=await start(['--data-dir',data,'--server-config',configPath],true);await page.reload();await showFields();await page.getByLabel('选择获权字段').waitFor();await page.getByLabel('选择获权字段').selectOption({label:'shared · core/tags'});await readField();await waitTagAction('核对原标签新建与赋值操作');
  const recoveredCommit=page.waitForResponse(r=>r.url().endsWith('/api/hosted/navigation/registry/operation'));await click('核对原标签新建与赋值操作');const knownCommit=await (await recoveredCommit).json();assert.equal(knownCommit.operationId,assignedRequest.operationId);assert.equal(knownCommit.status,'committed');assert.equal(knownCommit.planId,assignedPrepared.planId);assert.equal(knownCommit.navigationRef,assignedPrepared.navigationRef);await waitTagAction('结束已核对记录，继续字段编辑');assert.equal(tagCommits,committedCount);assert.equal(tagPrepares,afterOriginalPrepare);
  const actualTags=(await tagProfile()).field.cell.value;assert.deepEqual(tagRefs(actualTags),[otherRef,knownCommit.navigationRef]);assert.ok(JSON.stringify(actualTags).includes('literal / 保留'));assert.ok(!tagRefs(actualTags).includes(parentRef));const newTag=(await registry()).tags.items.find(tag=>tag.reference===knownCommit.navigationRef);assert.equal(newTag.parentTagId,parentRef.split('/').at(-1));const assignedSource=await readFile(notePath,'utf8');assert.equal(maskFixtureTags(assignedSource),maskFixtureTags(beforeAssignedSource));assert.ok(!(await page.locator('body').innerText()).includes('HIDDEN_BODY_987'));assert.equal(await page.locator('#source .cm-content').count(),0);
  await page.screenshot({path:path.join(out,'tag-first-assignment-recovered.png'),fullPage:true});await click('结束已核对记录，继续字段编辑');assert.equal(await page.getByRole('button',{name:'保存字段',exact:true}).isDisabled(),true);await click('已核对，采用当前字段依据');
@@ -177,7 +180,7 @@ try{
  await page.route('**/api/hosted/fields/read',async route=>{const response=await route.fetch();assert.equal(response.status(),200);observed();await resume;await route.fulfill({response});});
  await click('重新读取字段');await held;await changePolicy(users=>users.alice.grants={});
  await page.locator('#status').filter({hasText:'缓存已清除'}).waitFor({timeout:12000});release();await pause(400);
- assert.equal(await page.locator('#fields').isHidden(),true);assert.equal(await page.getByLabel('字段输入 第 1 项',{exact:true}).count(),0);
+ assert.equal(await page.locator('#fields').isHidden(),true); assert.equal(await page.locator('#fields').evaluate(element => element.hidden), true);assert.equal(await page.getByLabel('字段输入 第 1 项',{exact:true}).count(),0);
  assert.deepEqual(await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('weftext-hosted-field:'))),[]);
  assert.equal((await api('/api/hosted/fields/read',{resource:'shared',fieldId:'tasks/status'},'bob')).field.cell.value.value,'cancelled');
  result.cases.push('revocation clears field drafts/results and held late delivery; unrelated actor remains authorized');

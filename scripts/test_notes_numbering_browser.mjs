@@ -1,3 +1,5 @@
+import { workspaceTab, workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
+import { personalInputSnapshot } from './_personal_input_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 // Real local/hosted authoring UI over owned fixtures. No desktop input or Save.
 import assert from 'node:assert/strict';
@@ -84,23 +86,57 @@ async function frontendFor(backend, isHosted) {
   return `http://127.0.0.1:${server.httpServer.address().port}${isHosted ? '/hosted.html' : ''}`;
 }
 const click = (page, name) => page.getByRole('button', { name, exact: true }).click();
+async function personalNoteInput(page, expected) {
+  await workspaceCommand(page, 'home', '取回本人未上传输入');
+  const panel = page.locator('#personal-inputs'); await panel.waitFor({ state: 'visible' });
+  const inputs = panel.getByRole('textbox', { name: '本人新增输入', exact: true });
+  for (let index = 0; index < await inputs.count(); index++) {
+    const input = inputs.nth(index);
+    if (await input.inputValue() === expected) return input;
+  }
+  throw new Error("The original actor's exact separated note input was not recovered");
+}
+async function personalNoteRecords(page) {
+  const identity = await page.evaluate(() => JSON.parse(sessionStorage.getItem('weftext-hosted-identity')));
+  const audience = JSON.stringify([identity.deployment, identity.actor]);
+  const snapshot = await personalInputSnapshot(page), retained = snapshot.audiences.find(row => row.audience === audience);
+  assert.ok(retained, 'the exact current actor must have a committed personal-input audience');
+  const metadata = JSON.parse(retained.metadata); assert.equal(metadata.version, 4);
+  return metadata.records.filter(record => record.kind === 'text');
+}
+function personalRecordText(record) {
+  const texts = [...record.origin.pieces.flatMap(piece => 'text' in piece ? [piece.text] : []), ...record.origin.detached.map(entry => entry.text), ...(record.origin.copyOnly ?? []).map(entry => entry.text)];
+  for (const text of texts) assert.equal(typeof text, 'string', 'this short owned note input must remain exact inline text');
+  return texts.join('\n');
+}
+function originalNoteRecord(records, expected) {
+  const matches = records.filter(record => record.slot?.startsWith('notes:') && personalRecordText(record) === expected);
+  assert.equal(matches.length, 1, 'the exact separated note input must identify one original record');
+  return matches[0];
+}
+async function noPersonalCopyDOM(page, expected, edited) {
+  assert.equal(await page.locator('textarea[aria-label="可编辑的独立本人输入副本"]').count(), 0);
+  assert.equal(await page.locator('.personal-copy-editor textarea').count(), 0);
+  const values = await page.locator('textarea').evaluateAll(inputs => inputs.map(input => input.value)), markers = [...expected.split('\n'), ...edited.split('\n')].filter(Boolean);
+  assert.equal(values.some(value => markers.some(marker => value.includes(marker))), false, 'another actor must not receive any original or continued working-copy marker in textarea values, including hidden controls');
+}
 async function connectActor(page, actor) {
   await page.getByLabel('访问凭据', { exact: true }).fill(fixture.tokens[actor]); await click(page, '连接');
   await page.waitForFunction(() => !!document.querySelector('#documents button:not(:disabled)') && !document.querySelector('#workspace')?.hidden);
 }
 async function logoutDuringConnect(page) {
-  await click(page, '退出并清除本页缓存');
+  await workspaceCommand(page, 'file', '退出并清除本页缓存');
   let release, arrived; const held = new Promise(resolve => { release = resolve; }), pending = new Promise(resolve => { arrived = resolve; }); let once = true;
   const pattern = '**/api/hosted/documents';
   const handler = async route => { if (once && route.request().headers().authorization === 'Bearer ' + fixture.tokens.bob) { once = false; arrived(); await held; } await route.continue(); };
   await page.route(pattern, handler);
   try {
     await page.getByLabel('访问凭据', { exact: true }).fill(fixture.tokens.bob); await click(page, '连接'); await pending;
-    await click(page, '退出并清除本页缓存'); await connectActor(page, 'alice');
+    await workspaceCommand(page, 'file', '退出并清除本页缓存'); await connectActor(page, 'alice');
     const late = page.waitForResponse(response => response.url().endsWith('/api/hosted/documents') && response.request().headers().authorization === 'Bearer ' + fixture.tokens.bob); release(); await (await late).finished();
     assert.equal(await page.evaluate(() => JSON.parse(sessionStorage.getItem('weftext-hosted-identity')).actor), 'alice');
     assert.equal(await page.locator('#login').isVisible(), false); assert.equal(await page.locator('#status').innerText().then(value => value.includes('Cannot read')), false);
-    await click(page, '取回未应用的注释输入'); assert.equal(await page.getByLabel('保留的本次新输入', { exact: true }).inputValue(), '用户新输入甲\n用户新输入乙');
+    const retained = await personalNoteInput(page, '用户新输入甲\n用户新输入乙'); assert.equal(await retained.inputValue(), '用户新输入甲\n用户新输入乙');
   } finally { release(); await page.unroute(pattern, handler); }
 }
 async function waitNoteApplied(page) {
@@ -108,7 +144,7 @@ async function waitNoteApplied(page) {
   const error = page.locator('dialog.document-notes-dialog [role="alert"]:not([hidden])'); if (await error.count()) throw new Error(`Native note proposal rejected: ${await error.innerText()}`);
 }
 const rawSource = async (page, hosted = false) => (await page.locator(hosted ? '#source .cm-content .cm-line' : '.source-host .cm-content .cm-line').allTextContents()).join('\n');
-async function waitNotes(page) { await page.getByRole('button', { name: '脚注', exact: true }).waitFor(); await page.waitForFunction(() => Array.from(document.querySelectorAll('button')).some(button => button.textContent === '脚注' && !button.disabled)); }
+async function waitNotes(page) { await workspaceTab(page, 'insert'); await page.getByRole('button', { name: '脚注', exact: true }).waitFor(); await page.waitForFunction(() => Array.from(document.querySelectorAll('button')).some(button => button.textContent === '脚注' && !button.disabled)); }
 async function notes(page, type = '脚注') { await waitNotes(page); await click(page, type); await page.getByRole('dialog', { name: '脚注、尾注与题注' }).waitFor(); }
 async function firstNote(page) { await page.getByRole('button', { name: /中文脚注.*2 处标记/ }).click(); }
 async function sourceChanged(page, match, hosted) {
@@ -127,7 +163,7 @@ async function applyNoteAndUndo(page, original, isHosted) {
   return changed;
 }
 async function numbering(page, isHosted) {
-  await click(page, '编号控制'); await page.getByLabel('文档编号方案', { exact: true }).selectOption('chinese');
+  await workspaceCommand(page, 'insert', '编号控制'); await page.getByLabel('文档编号方案', { exact: true }).selectOption('chinese');
   const endpoint = isHosted ? '/api/hosted/editor/preview' : '/api/editor/preview', response = page.waitForResponse(reply => reply.url().endsWith(endpoint) && reply.status() === 200);
   await click(page, '预览文档编号'); const preview = await (await response).json(); assert.ok(preview.ok && preview.tree); assert.equal(await page.getByRole('dialog').getByText(/一、重复标题：无编号 →/).count(), 2);
   await click(page, '应用到文档（一次草稿修改）'); await sourceChanged(page, { includes: ['weftext:heading-numbering'] }, isHosted);
@@ -142,9 +178,9 @@ async function captionsAndReading(page, isHosted) {
   await notes(page, '题注与编号'); await page.getByRole('button', { name: /^公式本体编号 ·/ }).click(); await page.getByLabel('题注编号方式', { exact: true }).selectOption('pattern'); await page.getByLabel('原生编号方案', { exact: true }).fill('(1)'); await click(page, '应用公式本体编号'); await waitNoteApplied(page); await sourceChanged(page, { includes: ['#math.equation'] }, isHosted); const numbered = await rawSource(page, isHosted);
   await notes(page, '题注与编号'); await page.getByRole('button', { name: /^公式本体编号 ·/ }).click(); await page.getByLabel('题注编号方式', { exact: true }).selectOption('none'); await click(page, '应用公式本体编号'); await waitNoteApplied(page); await sourceChanged(page, { notEquals: numbered }, isHosted);
   await content.click(); await content.press('ControlOrMeta+z'); await sourceChanged(page, { equals: numbered }, isHosted); await content.press('ControlOrMeta+z'); await sourceChanged(page, { equals: original }, isHosted);
-  await click(page, isHosted ? 'V05 阅读' : '阅读'); const markers = page.getByRole('button', { name: '查看脚注正文与全部标记', exact: true }); await markers.first().waitFor(); const second = await markers.nth(1).getAttribute('data-document-node-key'); await markers.first().click();
+  await workspaceMode(page, isHosted ? 'V05 阅读' : '阅读'); const markers = page.getByRole('button', { name: '查看脚注正文与全部标记', exact: true }); await markers.first().waitFor(); const second = await markers.nth(1).getAttribute('data-document-node-key'); await markers.first().click();
   const dialog = page.getByRole('dialog', { name: '脚注、尾注与题注' }); assert.equal(await dialog.locator('textarea,input,select').count(), 0, 'read view must not expose author controls or native source'); assert.equal((await dialog.locator('.document-notes-reading').innerText()).includes('*'), false); await click(page, '跳到正文第 2 处标记'); await dialog.waitFor({ state: 'detached' }); assert.equal(await page.evaluate(() => document.activeElement.getAttribute('data-document-node-key')), second);
-  assert.equal(await page.locator('.personal-heading-number').count(), 2); await click(page, isHosted ? 'V01 源码' : '源码'); await sourceChanged(page, { equals: original }, isHosted); assert.equal(await rawSource(page, isHosted), original);
+  assert.equal(await page.locator('.personal-heading-number').count(), 2); await workspaceMode(page, isHosted ? 'V01 源码' : '源码'); await sourceChanged(page, { equals: original }, isHosted); assert.equal(await rawSource(page, isHosted), original);
 }
 async function installAndInsertEndnote(page, isHosted) {
   await page.evaluate(() => {
@@ -170,7 +206,7 @@ async function numberingWithEndnote(page, isHosted) {
   assert.ok(before.includes('#import "weftext-endnotes.typ": endnote, endnote-ref, endnotes') && before.includes('#endnotes()'));
   const canonical = '// weftext:heading-numbering\n#set heading(numbering: (..n) => if n.pos().len() <= 6 { numbering("1.1", ..n) })\n#counter(heading).update(0)\n// weftext:end-heading-numbering\n';
   const expected = canonical + before.slice(at + end.length);
-  await click(page, '编号控制'); await page.getByLabel('文档编号方案', { exact: true }).selectOption('decimal'); await page.getByLabel('文档编号起始值', { exact: true }).fill('1'); await page.getByLabel('文档编号最大层级', { exact: true }).fill('6'); await page.getByLabel('文档编号排除标题标记', { exact: true }).fill('');
+  await workspaceCommand(page, 'insert', '编号控制'); await page.getByLabel('文档编号方案', { exact: true }).selectOption('decimal'); await page.getByLabel('文档编号起始值', { exact: true }).fill('1'); await page.getByLabel('文档编号最大层级', { exact: true }).fill('6'); await page.getByLabel('文档编号排除标题标记', { exact: true }).fill('');
   const endpoint = isHosted ? '/api/hosted/editor/preview' : '/api/editor/preview', response = page.waitForResponse(reply => reply.url().endsWith(endpoint));
   await click(page, '预览文档编号'); const reply = await response, preview = await reply.json(); assert.equal(reply.status(), 200, JSON.stringify(preview)); assert.ok(preview.ok && preview.tree); assert.equal(preview.source, expected, 'the frozen preview must change only the canonical heading header'); assert.equal(await rawSource(page, isHosted), before, 'a preview must not apply or save the unsaved endnote draft');
   const all = item => [item, ...(item.children ?? []).flatMap(all)], nodes = all(preview.tree);
@@ -202,9 +238,25 @@ try {
   await notes(hp); await hp.getByRole('button', { name: /修改的脚注.*2 处标记/ }).click(); const pendingInput = hp.getByLabel('注释或题注内容', { exact: true }); await pendingInput.press('ControlOrMeta+Home'); await hp.keyboard.type('用户新输入甲'); await pendingInput.press('ControlOrMeta+End'); await hp.keyboard.type('用户新输入乙');
   const policy = await hostedAPI('admin/policy', undefined, 'admin'); policy.users.alice.grants.Shared = {}; await hostedAPI('admin/policy', { expectedGeneration: policy.generation, users: policy.users }, 'admin');
   await click(hp, '应用此注释内容'); await hp.waitForFunction(() => !document.querySelector('.document-notes-dialog') && !document.querySelector('#source .cm-content'));
-  await click(hp, '取回未应用的注释输入'); assert.equal(await hp.getByLabel('保留的本次新输入', { exact: true }).inputValue(), '用户新输入甲\n用户新输入乙'); await click(hp, '恢复这份输入继续编辑'); assert.equal(await hp.getByLabel('保留的本次新输入', { exact: true }).isEditable(), true);
-  await click(hp, '退出并清除本页缓存'); await connectActor(hp, 'bob'); assert.equal(await hp.locator('#note-input-recovery').isVisible(), false); assert.equal(await hp.locator('#note-inputs').textContent(), '');
-  await click(hp, '退出并清除本页缓存'); await connectActor(hp, 'alice'); await click(hp, '取回未应用的注释输入'); assert.equal(await hp.getByLabel('保留的本次新输入', { exact: true }).inputValue(), '用户新输入甲\n用户新输入乙'); result.cases.push('revoked proposal recovery preserves only separated new author input, remains independently editable/copyable, and stays bound to its original actor across logout');
+  const retainedNoteInput = await personalNoteInput(hp, '用户新输入甲\n用户新输入乙'); assert.equal(await retainedNoteInput.inputValue(), '用户新输入甲\n用户新输入乙');
+  assert.equal(await retainedNoteInput.isEditable(), false, 'the original recovery record remains read-only after source authorization is revoked');
+  const originalRecord = originalNoteRecord(await personalNoteRecords(hp), '用户新输入甲\n用户新输入乙');
+  await retainedNoteInput.locator('..').getByRole('button', { name: '编辑独立本人输入副本', exact: true }).click();
+  const editableCopy = hp.getByRole('textbox', { name: '可编辑的独立本人输入副本', exact: true }); await editableCopy.waitFor({ state: 'visible' }); assert.equal(await editableCopy.inputValue(), '用户新输入甲\n用户新输入乙'); assert.equal(await editableCopy.isEditable(), true);
+  assert.equal(await retainedNoteInput.isEditable(), false); assert.deepEqual((await personalNoteRecords(hp)).find(record => record.id === originalRecord.id), originalRecord, 'creating the copy must not replace the original id, owner, pending operation or input');
+  await editableCopy.press('ControlOrMeta+End'); await hp.keyboard.type('\n独立副本续编');
+  const editedCopyText = '用户新输入甲\n用户新输入乙\n独立副本续编'; assert.equal(await editableCopy.inputValue(), editedCopyText);
+  assert.equal(await retainedNoteInput.inputValue(), '用户新输入甲\n用户新输入乙'); assert.equal(await hp.locator('#source .cm-content').count(), 0, 'personal-copy editing must not restore the revoked author document');
+  await hp.locator('.personal-copy-editor').getByRole('button', { name: '完成副本编辑', exact: true }).click(); await editableCopy.waitFor({ state: 'detached' });
+  const afterCopy = await personalNoteRecords(hp), copies = afterCopy.filter(record => record.slot === 'personal-copy-only' && personalRecordText(record) === editedCopyText);
+  assert.equal(copies.length, 1, 'explicit Finish must retain the complete continued personal copy');
+  const copyRecord = copies[0]; assert.notEqual(copyRecord.id, originalRecord.id); assert.deepEqual(copyRecord.owner, originalRecord.owner); assert.equal(copyRecord.pending, undefined); assert.equal(copyRecord.candidate, undefined); assert.equal(copyRecord.baseHash, undefined);
+  assert.deepEqual(afterCopy.find(record => record.id === originalRecord.id), originalRecord, 'editing and finishing the copy must leave the complete original record and operation unchanged');
+  // Reopen the acknowledged copy before logout so actor isolation retires a real active working editor.
+  const retainedCopyInput = await personalNoteInput(hp, editedCopyText); assert.equal(await retainedCopyInput.isEditable(), false); await retainedCopyInput.locator('..').getByRole('button', { name: '编辑独立本人输入副本', exact: true }).click(); await editableCopy.waitFor({ state: 'visible' }); assert.equal(await editableCopy.inputValue(), editedCopyText);
+  await workspaceCommand(hp, 'file', '退出并清除本页缓存'); await connectActor(hp, 'bob'); await workspaceTab(hp, 'home'); assert.equal(await hp.locator('#personal-input-recovery').isVisible(), false); assert.equal(await hp.locator('#personal-inputs').textContent(), ''); await noPersonalCopyDOM(hp, '用户新输入甲\n用户新输入乙', editedCopyText);
+  await workspaceCommand(hp, 'file', '退出并清除本页缓存'); await connectActor(hp, 'alice'); const reauthenticatedNoteInput = await personalNoteInput(hp, '用户新输入甲\n用户新输入乙'); assert.equal(await reauthenticatedNoteInput.inputValue(), '用户新输入甲\n用户新输入乙');
+  const reauthenticatedRecords = await personalNoteRecords(hp); assert.deepEqual(reauthenticatedRecords.find(record => record.id === originalRecord.id), originalRecord); assert.deepEqual(reauthenticatedRecords.find(record => record.id === copyRecord.id), copyRecord); result.cases.push('revoked proposal recovery preserves only separated new author input, remains independently editable/copyable, and stays bound to its original actor across logout');
   await logoutDuringConnect(hp); result.cases.push('logout during a deliberately delayed account connection permits a new login and rejects the former account response without restoring its view or changing recovery ownership');
   assert.equal(await savedSource(path.join(fixture.root, 'Shared', 'Shared.typ')), fixture.source); result.cases.push('actual hosted read revocation rejects old note proposal, clears private dialog/source and never writes the saved original');
   assert.deepEqual(result.pageErrors, []); result.completed = true;

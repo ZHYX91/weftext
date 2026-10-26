@@ -10254,7 +10254,15 @@ export const zhCN = {
   "hostedChrome.note": "当前笔记",
   "hostedChrome.knowledge": "知识与资料",
   "hostedChrome.review": "审阅",
-  "hostedChrome.preview": "预览"
+  "hostedChrome.preview": "预览",
+  "personalInput.editCopy": "编辑独立本人输入副本",
+  "personalInput.copyEditorTitle": "本人输入副本",
+  "personalInput.copyEditorLabel": "可编辑的独立本人输入副本",
+  "personalInput.finishCopy": "完成副本编辑",
+  "personalInput.copyActiveFinishFirst": "请先完成当前本人副本的编辑。",
+  "personalInput.copyChanged": "本人副本或其输入已变化；当前输入仍保留，请检查后重试。",
+  "personalInput.copyOnlyCannotRestore": "独立本人副本只能继续编辑或复制，不能作为正文恢复或取得资料写入权限。",
+  "personalInput.copyFinished": "本人副本已可靠保留；原输入、原操作和资料正文未改变。"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -20514,6 +20522,14 @@ export interface MessageParamsMap {
   "hostedChrome.knowledge": {  };
   "hostedChrome.review": {  };
   "hostedChrome.preview": {  };
+  "personalInput.editCopy": {  };
+  "personalInput.copyEditorTitle": {  };
+  "personalInput.copyEditorLabel": {  };
+  "personalInput.finishCopy": {  };
+  "personalInput.copyActiveFinishFirst": {  };
+  "personalInput.copyChanged": {  };
+  "personalInput.copyOnlyCannotRestore": {  };
+  "personalInput.copyFinished": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -32620,7 +32636,15 @@ export const messageParamTypes = {
   "hostedChrome.note": {},
   "hostedChrome.knowledge": {},
   "hostedChrome.review": {},
-  "hostedChrome.preview": {}
+  "hostedChrome.preview": {},
+  "personalInput.editCopy": {},
+  "personalInput.copyEditorTitle": {},
+  "personalInput.copyEditorLabel": {},
+  "personalInput.finishCopy": {},
+  "personalInput.copyActiveFinishFirst": {},
+  "personalInput.copyChanged": {},
+  "personalInput.copyOnlyCannotRestore": {},
+  "personalInput.copyFinished": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -42878,5 +42902,13 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "hostedChrome.note": "Current note",
   "hostedChrome.knowledge": "Knowledge and resources",
   "hostedChrome.review": "Review",
-  "hostedChrome.preview": "Preview"
+  "hostedChrome.preview": "Preview",
+  "personalInput.editCopy": "Edit a separate personal input copy",
+  "personalInput.copyEditorTitle": "Personal input copy",
+  "personalInput.copyEditorLabel": "Editable separate personal input copy",
+  "personalInput.finishCopy": "Finish editing this copy",
+  "personalInput.copyActiveFinishFirst": "Finish editing the current personal copy first.",
+  "personalInput.copyChanged": "The personal copy or its input changed. Current input is retained; check it before retrying.",
+  "personalInput.copyOnlyCannotRestore": "A separate personal copy can be edited or copied; it cannot restore an author draft or grant document write access.",
+  "personalInput.copyFinished": "The personal copy is durably retained. The original input, operation and document source are unchanged."
 };

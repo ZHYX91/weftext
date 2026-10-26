@@ -1,3 +1,4 @@
+import { workspaceTab, workspaceCommand } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 // Real local initialization UI over owned fixtures. Never uses desktop input.
 // The supplied binary and frontend mode are recorded; working builds are not
@@ -68,10 +69,7 @@ const click = (root, name) => root.getByRole('button', { name, exact: true }).cl
 const dialog = () => page.getByRole('dialog', { name: '创建资料库与文档排版语言', exact: true });
 const retained = () => page.evaluate(key => JSON.parse(localStorage.getItem(key)), storageKey);
 async function open() {
-  if (page.viewportSize().width < 780 && !await page.locator('.shell').evaluate(element => element.classList.contains('sidebar-open'))) {
-    await page.getByRole('button', { name: '显示资料库导航', exact: true }).click();
-  }
-  await page.getByRole('button', { name: '创建资料库', exact: true }).first().click();
+  await workspaceCommand(page, 'file', '创建资料库');
   await dialog().waitFor(); return dialog();
 }
 async function preview(root, language, region) {
@@ -139,7 +137,7 @@ try {
     else await route.continue();
   });
   const base = await frontend(); await page.goto(`${base}/#token=${server.token}`);
-  await page.getByRole('button', { name: '创建资料库', exact: true }).first().waitFor();
+  await (await workspaceTab(page, 'file')).getByRole('button', { name: '创建资料库', exact: true }).waitFor();
 
   let panel = await open();
   const language = panel.getByRole('combobox', { name: '初始文档排版语言', exact: true });

@@ -23,11 +23,11 @@ import { HostedOffice } from "./hosted-office";
 import { HostedEditor } from "./hosted-editor";
 import { HostedQuery } from "./hosted-query";
 import { HostedHistory } from "./hosted-history";
-import { PersonalInputRecovery, type BrowserProposalAck, type PersonalInputRecord, type PersonalOriginalRouteProof } from "./personal-input-recovery";
+import { PersonalInputRecovery, PERSONAL_COPY_ONLY_SLOT, isPersonalCopy, personalInputText, type BrowserProposalAck, type PersonalInputRecord, type PersonalOriginalRouteProof } from "./personal-input-recovery";
 import { renderPersonalInputs } from "./personal-input-panel";
 import { replayPersonalInput } from "./source-input-origin";
 import { PersonalControlInput } from "./personal-control-input";
-import type { AuthorInputFactory, AuthorProducerState } from "./author-input";
+import type { AuthorInputFactory, AuthorInputSession, AuthorProducerState } from "./author-input";
 import { freezeOriginalAttempt } from "./original-operation";
 import { HostedLibrary } from "./hosted-library";
 import { HostedMedia } from "./hosted-media";
@@ -167,7 +167,7 @@ setUiText(inspectorClose, uiMessage("common.close"));
 inspectorClose.onclick = () => closeHostedInspector();
 inspectorHeader.append(inspectorTitle, inspectorClose);
 inspector.append(inspectorHeader, inspectorBody);
-type HostedPanel = { host: HTMLElement; slot: HTMLElement; button: HTMLButtonElement; trigger: HTMLButtonElement; tab: RibbonTab; title: UiText; wide: boolean };
+type HostedPanel = { host: HTMLElement; slot: HTMLElement; button: HTMLButtonElement; trigger: HTMLButtonElement; triggerTab: RibbonTab; tab: RibbonTab; title: UiText; wide: boolean };
 const hostedPanels = new Map<string, HostedPanel>();
 let selectedHostedPanel: string | null = null;
 const panelObservers: MutationObserver[] = [];
@@ -180,15 +180,16 @@ function closeHostedInspector(): void {
     }
     inspector.hidden = true;
     if (previous) {
-        ribbon.select(previous.tab, true);
+        ribbon.select(previous.triggerTab, true);
         ribbon.setCollapsed(false);
         if (previous.trigger.isConnected && !previous.trigger.disabled && !previous.trigger.hidden) previous.trigger.focus();
     }
 }
-function selectHostedPanel(id: string): boolean {
+function selectHostedPanel(id: string, origin?: { button: HTMLButtonElement; tab: RibbonTab }): boolean {
     const selected = hostedPanels.get(id);
     // The original controller, not layout selection, owns authorization/availability.
     if (!selected || selected.host.hidden) return false;
+    if (origin) { selected.trigger = origin.button; selected.triggerTab = origin.tab; }
     selectedHostedPanel = id;
     for (const [key, panel] of hostedPanels) {
         panel.slot.hidden = key !== id;
@@ -323,6 +324,24 @@ const personalControls = new PersonalControlInput(document, context => context.a
     }
 });
 const authorInputs: AuthorInputFactory = (owner, current, sink, leaseRevision) => { const audience = personalAudience(); return audience ? personalControls.session(audience, authorizationEpoch, owner, current, sink, leaseRevision) : undefined; };
+const personalInputList = document.createElement("div"), personalCopyMount = document.createElement("section");
+personalCopyMount.className = "personal-copy-editor";
+interface HostedPersonalCopy {
+    audience: string;
+    epoch: number;
+    credential: string;
+    version: number;
+    originalId: string;
+    record: PersonalInputRecord;
+    session: AuthorInputSession;
+    textarea: HTMLTextAreaElement;
+    status: HTMLElement;
+    finish: HTMLButtonElement;
+    finishing: boolean;
+    retentionFailure?: boolean;
+    lastWrite?: Promise<BrowserProposalAck>;
+}
+let personalCopyVersion = 0, personalCopyEditor: HostedPersonalCopy | undefined;
 let hostedCapture: MountedHostedCapture | undefined;
 let captureVersion = 0;
 const capturePanel = document.createElement("section");
@@ -1135,6 +1154,8 @@ function clearDisplay(message: UiText, clearToken = false) {
         personalFailure = true;
     }
     verifiedPersonalAudience = "";
+    retirePersonalCopy();
+    personalInputList.replaceChildren();
     el("personal-inputs").replaceChildren();
     el("personal-inputs").hidden = true;
     personalControls.clear();
@@ -1433,8 +1454,12 @@ function showPersonalInputs(): void {
         throw new UiError(uiMessage("hostedShell.reauthenticateOriginalAccount"));
     const panel = el("personal-inputs");
     panel.hidden = false;
-    renderPersonalInputs(panel, personalInputs, audience, {
+    if (personalInputList.parentElement !== panel)
+        panel.replaceChildren(personalInputList, personalCopyMount);
+    renderPersonalInputs(personalInputList, personalInputs, audience, {
         restore: record => restorePersonalInput(record, audience), operation: record => recoverPersonalOperation(record, audience),
+        editCopy: record => editPersonalCopy(record, audience),
+        editingCopy: record => personalCopyEditor?.audience === audience && personalCopyEditor.record.id === record.id,
         producers: () => personalControls.inspect().producers.filter(producer => producer.audience === audience),
         discardProducer: producer => discardRetiredPersonalProducer(producer, audience),
         changed: () => {
@@ -1445,6 +1470,119 @@ function showPersonalInputs(): void {
         },
     });
 }
+function personalCopyCurrent(editor: HostedPersonalCopy | undefined): editor is HostedPersonalCopy {
+    return !!editor && personalCopyEditor === editor && editor.version === personalCopyVersion
+        && editor.audience === personalAudience() && editor.epoch === authorizationEpoch && editor.credential === token;
+}
+function retirePersonalCopy(): void {
+    personalCopyVersion++;
+    const editor = personalCopyEditor;
+    personalCopyEditor = undefined;
+    editor?.session.retire();
+    personalCopyMount.replaceChildren();
+}
+async function editPersonalCopy(record: PersonalInputRecord, audience: string): Promise<void> {
+    if (personalCopyEditor) {
+        if (personalCopyCurrent(personalCopyEditor) && (personalCopyEditor.record.id === record.id || personalCopyEditor.originalId === record.id)) {
+            personalCopyEditor.textarea.focus();
+            return;
+        }
+        throw new UiError(uiMessage("personalInput.copyActiveFinishFirst"));
+    }
+    record = personalInputs.current(audience, record);
+    const epoch = authorizationEpoch, credential = token, version = ++personalCopyVersion, originalId = record.id;
+    const current = () => version === personalCopyVersion && epoch === authorizationEpoch && credential === token && personalAudience() === audience && !personalCopyEditor;
+    await verifyPersonalIdentity(audience, epoch);
+    if (!current())
+        throw new UiError(uiMessage("hostedShell.recoveryAccountOrAuthorizationChanged"));
+    record = personalInputs.current(audience, record);
+    let copy: PersonalInputRecord;
+    if (isPersonalCopy(record)) {
+        // Reopening this personal target is also an explicit retry of its own
+        // RAM cut after a refused browser write; seeding still requires ACK.
+        await observePersonalWrite(personalInputs.retry(audience), audience);
+        copy = personalInputs.current(audience, record);
+    }
+    else
+        copy = await personalInputs.createPersonalCopy(audience, record);
+    if (!current())
+        throw new UiError(uiMessage("hostedShell.recoveryAccountOrAuthorizationChanged"));
+    const seed = personalInputs.personalCopySeed(audience, copy);
+    const title = document.createElement("h3"), textarea = document.createElement("textarea"), diagnostic = document.createElement("p"), finish = document.createElement("button");
+    setUiText(title, uiMessage("personalInput.copyEditorTitle"));
+    textarea.value = personalInputText(copy);
+    textarea.rows = 5;
+    setUiAttr(textarea, "aria-label", uiMessage("personalInput.copyEditorLabel"));
+    diagnostic.setAttribute("role", "status");
+    finish.type = "button";
+    setUiText(finish, uiMessage("personalInput.finishCopy"));
+    let editor: HostedPersonalCopy;
+    const session = personalControls.session(audience, epoch, copy.owner, () => personalCopyCurrent(editor), input => {
+        if (!personalCopyCurrent(editor))
+            return;
+        if (input.kind !== "text" || input.id !== editor.record.id || input.context.slot !== PERSONAL_COPY_ONLY_SLOT || input.context.path.length !== 0 || JSON.stringify(input.context.owner) !== JSON.stringify(editor.record.owner))
+            throw new UiError(uiMessage("personalInput.copyChanged"));
+        try {
+            const previous = personalInputs.current(audience, editor.record);
+            const write = personalInputs.update(audience, [{ id: previous.id, owner: previous.owner, slot: PERSONAL_COPY_ONLY_SLOT,
+                producer: { producerId: input.producerId, revision: input.producerRevision },
+                origin: { baseLength: 0, pieces: [], detached: [], copyOnly: [{ id: input.id, revision: input.revision, text: input.text }], revision: input.revision } }]);
+            editor.record = personalInputs.current(audience, { ...previous, sequence: previous.sequence + 1 });
+            editor.retentionFailure = false;
+            editor.lastWrite = observePersonalWrite(write, audience);
+            void write.catch(error => { if (personalCopyCurrent(editor)) setUiText(editor.status, errorUiText(error)); });
+            controls();
+        }
+        catch (error) {
+            editor.retentionFailure = true;
+            setUiText(editor.status, errorUiText(error));
+        }
+    }, () => editor.record.sequence);
+    editor = { audience, epoch, credential, version, originalId, record: copy, session, textarea, status: diagnostic, finish, finishing: false };
+    personalCopyEditor = editor;
+    personalCopyMount.replaceChildren(title, textarea, finish, diagnostic);
+    try {
+        session.bind(textarea, PERSONAL_COPY_ONLY_SLOT, [], { personalCopy: seed });
+    }
+    catch (error) {
+        retirePersonalCopy();
+        throw error;
+    }
+    finish.onclick = () => { void finishPersonalCopy(editor).catch(error => { if (personalCopyCurrent(editor)) setUiText(editor.status, errorUiText(error)); }); };
+    textarea.focus();
+}
+async function finishPersonalCopy(editor: HostedPersonalCopy): Promise<void> {
+    if (!personalCopyCurrent(editor) || editor.finishing)
+        throw new UiError(uiMessage("personalInput.copyChanged"));
+    await verifyPersonalIdentity(editor.audience, editor.epoch);
+    if (!personalCopyCurrent(editor))
+        throw new UiError(uiMessage("hostedShell.recoveryAccountOrAuthorizationChanged"));
+    const record = personalInputs.current(editor.audience, editor.record), checkpoint = editor.session.inspect();
+    if (!isPersonalCopy(record) || editor.retentionFailure || !editor.session.freeze(checkpoint))
+        throw new UiError(uiMessage("personalInput.copyChanged"));
+    editor.finishing = true;
+    editor.finish.disabled = true;
+    try {
+        // Finish explicitly accepts this whole personal-copy cut. A transport
+        // ACK on ordinary input never acknowledges this or the original owner.
+        await observePersonalWrite(personalInputs.retry(editor.audience), editor.audience);
+        if (!personalCopyCurrent(editor) || editor.session.inspect().revision !== checkpoint.revision || JSON.stringify(personalInputs.current(editor.audience, record)) !== JSON.stringify(record))
+            throw new UiError(uiMessage("personalInput.copyChanged"));
+        if (!editor.session.acknowledge(checkpoint, "applied"))
+            throw new UiError(uiMessage("personalInput.copyChanged"));
+        retirePersonalCopy();
+        showPersonalInputs();
+        status(uiMessage("personalInput.copyFinished"));
+    }
+    catch (error) {
+        if (personalCopyCurrent(editor)) {
+            editor.session.thaw();
+            editor.finishing = false;
+            editor.finish.disabled = false;
+        }
+        throw error;
+    }
+}
 async function discardRetiredPersonalProducer(producer: AuthorProducerState, audience: string): Promise<void> {
     const epoch = authorizationEpoch;
     await verifyPersonalIdentity(audience, epoch);
@@ -1454,6 +1592,8 @@ async function discardRetiredPersonalProducer(producer: AuthorProducerState, aud
     const records = personalInputs.list(audience).filter(record => record.producer?.producerId === producer.producerId);
     if (records.some(record => record.pending?.status === "unresolved"))
         throw new Error("原保存结果尚未核定，先查询同一编号；未放弃其输入。");
+    if (personalCopyEditor?.audience === audience && records.some(record => record.id === personalCopyEditor!.record.id))
+        throw new UiError(uiMessage("personalInput.copyActiveFinishFirst"));
     await Promise.all(records.map(record => observePersonalWrite(personalInputs.remove(audience, record), audience)));
     if (authorizationEpoch !== epoch || personalAudience() !== audience || JSON.stringify(current()) !== JSON.stringify(producer))
         throw new Error("处置期间作者身份已变化，未放弃新的输入。");
@@ -1493,15 +1633,20 @@ async function recoverPersonalOperation(record: PersonalInputRecord, audience: s
     await finishPersonalOperation(record.pending.operationId, outcome.status as "committed" | "cancelled" | "resolved", outcome);
 }
 async function restorePersonalInput(record: PersonalInputRecord, audience: string): Promise<void> {
-    if (record.owner.kind !== "body")
-        throw new UiError(uiMessage("hostedShell.formCopyOnly"));
-    const owner = record.owner;
+    record = personalInputs.current(audience, record);
+    if (isPersonalCopy(record))
+        throw new UiError(uiMessage("personalInput.copyOnlyCannotRestore"));
     const selected = doc, epoch = authorizationEpoch;
     if (!selected || !draft || !selected.rights.write || compareRequired || draft.pending)
         throw new UiError(uiMessage("hostedShell.openOriginalCheckDraftAndOperation"));
     await source.flush();
     await verifyPersonalIdentity(audience, epoch);
     record = personalInputs.current(audience, record);
+    if (isPersonalCopy(record))
+        throw new UiError(uiMessage("personalInput.copyOnlyCannotRestore"));
+    if (record.owner.kind !== "body")
+        throw new UiError(uiMessage("hostedShell.formCopyOnly"));
+    const owner = record.owner;
     if (doc !== selected || !draft || source.value !== selected.source || draft.source !== selected.source)
         throw new UiError(uiMessage("hostedShell.existingDraftInputNotOverwritten"));
     if (personalInputs.list(audience).some(other => other.pending?.status === "unresolved" && other.owner.kind === "body" && (other.owner.reference && other.owner.reference === owner.reference || other.owner.resource === owner.resource)))
@@ -2060,7 +2205,7 @@ el("download").onclick = () => void run(async () => {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     status(uiMessage("hostedShell.savedSourceDownloaded"));
 });
-el("history").onclick = () => { void history.open().then(() => selectHostedPanel("history-list")).catch(error => status(errorUiText(error))); };
+el("history").onclick = () => { void history.open().then(() => selectHostedPanel("history-list", { button: el<HTMLButtonElement>("history"), tab: "review" })).catch(error => status(errorUiText(error))); };
 el("personal-input-recovery").onclick = () => {
     try {
         showPersonalInputs();
@@ -2170,8 +2315,8 @@ function installHostedLayout(): void {
         setUiText(button, title);
         button.setAttribute("aria-pressed", "false");
         button.setAttribute("aria-controls", id);
-        button.onclick = () => selectHostedPanel(id);
-        hostedPanels.set(id, { host, slot, button, trigger: button, tab, title, wide });
+        button.onclick = () => selectHostedPanel(id, { button, tab });
+        hostedPanels.set(id, { host, slot, button, trigger: button, triggerTab: tab, tab, title, wide });
         inspectorBody.append(slot);
         const observer = new MutationObserver(syncHostedPanels);
         observer.observe(host, { attributes: true, attributeFilter: ["hidden"] });
@@ -2193,14 +2338,14 @@ function installHostedLayout(): void {
         backup: addPanel("owner-backup", uiMessage("hostedShell.panelRecoveryMaterials"), false, "file"),
         capture: addPanel("capture-panel", uiMessage("capture.title"), false, "file"),
     };
-    addPanel("history-list", uiMessage("shell.timeline"), true, "review");
-    hostedPanels.get("history-list")!.trigger = el<HTMLButtonElement>("history");
+    const historyRecovery = addPanel("history-list", uiMessage("shell.timeline"), true, "file");
     hostedPanels.get("capture-panel")!.trigger = captureButton;
     hostedPanels.get("knowledge-links")!.slot.prepend(el("stable-link"));
     renderEverydayBar();
     ribbon.setGroup("file", "hosted-file", uiMessage("hostedChrome.files"), [el("download"), el("reopen"), everydayControls.get("recent")!]);
     ribbon.setGroup("file", "hosted-delivery", uiMessage("hostedShell.panelOfficeImportOutput"), [panelButtons.office, panelButtons.contentImport, recognitionButton]);
-    ribbon.setGroup("file", "hosted-library", uiMessage("hostedChrome.library"), [captureButton, panelButtons.library, panelButtons.structure, panelButtons.backup]);
+    ribbon.setGroup("file", "hosted-library", uiMessage("hostedChrome.library"), [captureButton, panelButtons.library, panelButtons.structure]);
+    ribbon.setGroup("file", "hosted-recovery", uiMessage("hostedShell.panelRecoveryMaterials"), [historyRecovery, panelButtons.backup]);
     ribbon.setGroup("file", "hosted-settings", uiMessage("hostedChrome.settings"), [interfaceLocaleHost, el("logout")]);
     ribbon.setGroup("home", "hosted-note", uiMessage("hostedChrome.note"), [panelButtons.fields, el("personal-input-recovery")]);
     ribbon.setGroup("insert", "hosted-insert", uiMessage("hostedChrome.content"), [everydayControls.get("insert")!, el("latex"), el("diagram")]);
