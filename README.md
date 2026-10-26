@@ -23,8 +23,8 @@ Weftext is a knowledge and writing tool built around **native Typst (`.typ`) aut
 | --- | --- |
 | **0.6.0 Windows/NTFS** | The established v0.6 scope passed HTTP, affected browser and real NAS HTTPS acceptance on the same optimized executable, **but was not formally published**. That result does not qualify other platforms. |
 | **0.6.2 local delivery candidate** | Initial Windows local/self-hosted recognition covers PDF text layers, PNG/JPEG OCR and selected official-document and ordinary digital-invoice schemes; the independent runtime, partial results and complex-layout limits still apply. |
-| **0.6.3-rc.4 candidate** | Navigation, properties/Query, tags, relationship graph and read-only heading structure were integrated; **whole-version acceptance remains incomplete**. |
-| **v0.7 development branch** | Integrates GUI/CLI, Capture, reminders, language/host foundations, save recovery and the native author-close lifecycle, with controlled Linux Render/Notes service paths connected. Checks and actual-run evidence remain candidate-specific; full desktop, installation and cross-platform acceptance is incomplete. These are development slices, **not an accepted v0.7 product or installer**. |
+| **Previous 0.6.3-rc.4 candidate** | Navigation, properties/Query, tags, relationship graph and read-only heading structure were integrated; **whole-version acceptance remains incomplete**. |
+| **0.7.0-rc.1 development candidate** | Integrates GUI/CLI, Capture, reminders, language/host foundations, save recovery and the native author-close lifecycle, with controlled Linux Render/Notes service paths connected. Checks and actual-run evidence remain candidate-specific; full desktop, installation and cross-platform acceptance is incomplete. These are development slices, **not an accepted v0.7 product or installer**. |
 
 See the [local-candidate scope](docs/MVP.md), [roadmap](docs/ROADMAP.md) and [acceptance workflow](docs/WORKFLOW.md) for actual evidence, supported environments and open gates. Passing checks on an earlier candidate does not qualify the current commit.
 
