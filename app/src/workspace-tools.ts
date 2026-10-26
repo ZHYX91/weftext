@@ -1,3 +1,4 @@
+import { type WorkspaceRibbon, type RibbonTab } from "./workspace-chrome";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { openReminderOverview } from "./reminder-overview";
 import { activateReminderNotification } from "./reminder-activation";
@@ -84,7 +85,7 @@ export class WorkspaceTools {
     thawAfterClose(): void { this.closeGuard.thaw(); for (const owner of this.closeOwners()) owner.thawAfterClose(); }
     openReminders(): void { this.closeGuard.assertMutable(); openReminderOverview(this.dataHost); }
     activateReminder(activationKey: string): Promise<void> { return this.closeGuard.run(() => activateReminderNotification(this.dataHost, activationKey)); }
-    readonly bar = document.createElement("nav");
+    private readonly commandGroups: { tab: RibbonTab; id: string; label: UiText; nodes: HTMLElement[] }[] = [];
     readonly inspector = document.createElement("aside");
     private readonly propertyPanel: DataPanel;
     private readonly queryPanel: QueryPanel;
@@ -107,11 +108,8 @@ export class WorkspaceTools {
         receipt?: KnowledgeReceipt;
     } | null = null;
     constructor(private readonly host: WorkspaceToolsHost) {
-        this.closeGuard.bind(this.bar);
         this.closeGuard.bind(this.inspector);
         this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify, environmentChanged: root => this.invalidateQueryEnvironment(root) });
-        this.bar.className = "workspace-tools";
-        setUiAttr(this.bar, "aria-label", uiMessage("workspaceTools.toolbar"));
         this.inspector.className = "workspace-inspector";
         this.inspector.hidden = true;
         this.header.className = "inspector-header";
@@ -185,15 +183,38 @@ export class WorkspaceTools {
                 importResource: (file, sessionId) => this.importResource(file, sessionId), notify: host.notify,
             }, selected, initial),
         });
-        this.bar.append(this.button(uiMessage("dataPanel.title"), () => this.toggle("data")), this.button(uiMessage("workspaceTools.linksAnnotations"), () => this.toggle("knowledge")), this.button(uiMessage("workspaceTools.queriesViews"), () => this.toggle("query")), this.button(uiMessage("export.title"), () => this.outputPanel.open()), this.button(uiMessage("error.api.hostedLibrary.styleRoleTitle"), () => this.showStyles()), this.button(uiMessage("knowledge.recycleBin"), async () => {
-            if (!this.library?.workspaceId)
-                throw new UiError(uiMessage("workspaceTools.openLibraryFirst"));
-            await this.host.beforeAction();
-            await this.libraryTrash.open(this.library.root);
-        }));
-        this.bar.append(this.button(uiMessage("workspaceTools.sync"), async () => { await this.host.beforeAction(); await openSyncPanel(this.library?.root ?? "", { beforeAction: this.host.beforeAction, applied: this.host.syncApplied }); }));
-        this.bar.append(this.button(uiMessage("hostedShell.latexEquation"), () => latex.open()), this.button(uiMessage("hostedShell.mermaidDiagram"), () => diagrams.open()), this.button(uiMessage("workspaceTools.processingDefaultsVocabulary"), () => this.showProcessingSettings()));
+        const add = (tab: RibbonTab, id: string, label: UiText, nodes: HTMLElement[]) => this.commandGroups.push({ tab, id, label, nodes });
+        add("knowledge", "note", uiMessage("localChrome.note"), [
+            this.button(uiMessage("dataPanel.title"), () => this.toggle("data")),
+            this.button(uiMessage("workspaceTools.linksAnnotations"), () => this.toggle("knowledge")),
+            this.button(uiMessage("workspaceTools.queriesViews"), () => this.toggle("query")),
+        ]);
+        add("file", "exchange", uiMessage("localChrome.exchange"), [this.button(uiMessage("export.title"), () => this.outputPanel.open())]);
+        add("knowledge", "library", uiMessage("localChrome.library"), [
+            this.button(uiMessage("error.api.hostedLibrary.styleRoleTitle"), () => this.showStyles()),
+            this.button(uiMessage("knowledge.recycleBin"), async () => {
+                if (!this.library?.workspaceId) throw new UiError(uiMessage("workspaceTools.openLibraryFirst"));
+                await this.host.beforeAction();
+                await this.libraryTrash.open(this.library.root);
+            }),
+            this.button(uiMessage("workspaceTools.sync"), async () => { await this.host.beforeAction(); await openSyncPanel(this.library?.root ?? "", { beforeAction: this.host.beforeAction, applied: this.host.syncApplied }); }),
+            this.button(uiMessage("workspaceTools.processingDefaultsVocabulary"), () => this.showProcessingSettings()),
+        ]);
+        add("insert", "objects", uiMessage("localChrome.objects"), [
+            this.button(uiMessage("hostedShell.latexEquation"), () => latex.open()),
+            this.button(uiMessage("hostedShell.mermaidDiagram"), () => diagrams.open()),
+        ]);
+        add("review", "review", uiMessage("localChrome.review"), [
+            this.button(uiMessage("localChrome.annotations"), async () => { await this.show("knowledge"); this.selectKnowledgeTab("annotations"); }),
+            this.button(uiMessage("knowledge.proofreading"), async () => { await this.show("knowledge"); this.selectKnowledgeTab("proofreading"); }),
+        ]);
     }
+    /** Ribbon switches retain these same command nodes and every proposal owner. */
+    mountRibbon(ribbon: WorkspaceRibbon): void {
+        this.closeGuard.bind(ribbon.element);
+        for (const group of this.commandGroups) ribbon.setGroup(group.tab, group.id, group.label, group.nodes);
+    }
+
     private async showProcessingSettings(): Promise<void> {
         return this.closeGuard.run(async () => {
             await this.host.beforeAction();

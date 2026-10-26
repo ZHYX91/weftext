@@ -13,7 +13,7 @@ import { UiError, message as uiMessage, locale, uiTextValue, setUiText, displayM
 
 const sourcePath = new URL("./hosted.ts", import.meta.url);
 const sourceFile = ts.createSourceFile("hosted.ts", readFileSync(sourcePath, "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = new Set(["acknowledgeHistory", "finishUnavailableHistory", "request", "clearDisplay", "sessionAudience", "closeOwnedSession", "releaseViewSessions", "confirmHostedRetirementCuts", "retryHostedRetirements", "capturedDraftAck", "hostedInput", "draftOrder", "bindHostedTransmission", "issueHostedInput", "retireHostedWriters"]);
+const names = new Set(["acknowledgeHistory", "finishUnavailableHistory", "readDocumentReference", "request", "clearDisplay", "sessionAudience", "closeOwnedSession", "releaseViewSessions", "confirmHostedRetirementCuts", "retryHostedRetirements", "capturedDraftAck", "hostedInput", "draftOrder", "bindHostedTransmission", "issueHostedInput", "retireHostedWriters"]);
 const functions = sourceFile.statements.filter(node => ts.isFunctionDeclaration(node) && !!node.name && names.has(node.name.text) || ts.isClassDeclaration(node) && node.name?.text === "HostedError");
 assert.equal(functions.length, names.size + 1, "exercise every production request/error/cleanup consumer");
 const compiled = ts.transpileModule(functions.map(node => node.getText(sourceFile)).join("\n"), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
@@ -41,6 +41,7 @@ function fixture() {
     hostedCapture: undefined, captureVersion: 0, capturePanel: document.createElement("section"), interfaceLocale: { dispose() {} }, mountInterfaceLocale() {},
     verifiedPersonalAudience: "alice-personal", personalControls: { clear() {} }, persistPersonalInputs: async () => undefined,
     everydayNavigation: { clear() {} }, everydayBar: document.createElement("div"), actionVersion: 0, busy: false, draftTimer: undefined, expiredSessionId: undefined,
+    openDocumentTitles: new Map(), openDocumentButtons: new Map(), documentTabs: document.createElement("nav"), closeHostedInspector() {},
     retiredStructureSessions: new Set(), retiredStructureSources: new Set(), structureDocuments: [], clearNodeNavigation() {}, compareRequired: false,
     cachePrefix: "alice-cache", stableReference: undefined, draftCache: { clearMemory() {} }, sessionStorage: { removeItem() {} }, controls() {},
     status(message: unknown) { context.lastStatus = uiTextValue(message as any); },
@@ -53,6 +54,11 @@ function fixture() {
       }
       if (call.path === "history/status") {
         assert.equal(call.body.resource, initial.resource); return unavailable();
+      }
+      if (call.path === "navigation/ref") {
+        assert.equal(call.credential, "Bearer alice-credential");
+        assert.ok([initial.sessionId, fresh.sessionId].includes(call.body.sessionId));
+        return json({ resource: initial.resource, reference: "weftext-node://workspace/alice-node" });
       }
       if (call.path === "close") {
         if (call.body.sessionId === fresh.sessionId && !acceptLateClose) return json({ closed: false }, 500);

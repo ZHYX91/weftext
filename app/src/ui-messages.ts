@@ -63,6 +63,13 @@ export const zhCN = {
   "reminder.dueDay": "截止日指定时间",
   "reminder.enabledDevice": "在本设备启用此提醒",
   "reminder.submitted": "系统已接受提醒；不代表用户已读。",
+  "reminder.submissionStartedAt": "系统通知调用开始（UTC）：{at}",
+  "reminder.submissionReturnedAt": "系统通知调用返回（UTC）：{at}",
+  "reminder.submissionElapsed": "调用单调耗时：{nanoseconds} ns",
+  "reminder.submissionReturnedSuccess": "系统通知调用返回成功；不代表用户已看到。",
+  "reminder.submissionReturnedFailure": "系统通知调用返回失败（HRESULT {hresult}）；此返回本身不能确定系统送达结果。",
+  "reminder.submissionObservationMissing": "没有实际系统通知调用的时间记录；账本确认时间不能替代调用时间。",
+  "reminder.ledgerConfirmedAt": "账本确认时间（UTC；可能来自后续系统历史核查）：{at}",
   "reminder.unknown": "系统提交结果未知，未盲目重发。",
   "reminder.unavailable": "当前条件不允许提交系统通知。",
   "reminder.missed": "有 {count} 项有效的错过提醒。",
@@ -1181,6 +1188,7 @@ export const zhCN = {
   "definitionProposal.originalRequestMissing": "没有原请求，只能查询原编号，不能制造新的重试输入。",
   "definitionProposal.insertedUnsaved": "新定义提案已插入当前正文草稿，共用 Undo；尚未保存，原 key 只分配一次。",
   "definitionProposal.originalCheckedNotApplied": "原定义提案已核对。当前依据或会话不同，请明确比较后恢复；未自动贴回正文。",
+  "personalInput.unknownOriginalRoute": "原保存的目标路由尚无可靠证明；原编号与本人文字保留。核对原请求前，不能查询、核定或再次保存到可能相同的笔记。",
   "personalInput.title": "本人未上传输入与原操作",
   "personalInput.help": "这里只保存本人新增文字、原基线位置与原操作编号，不含旧正文、预览或凭据。先打开获权的原笔记；仅在原身份与准确基线一致时可恢复为草稿。表单等无法映射的文字只供单独取回，可能已经应用或撤销，不代表当前正文。",
   "personalInput.textLabel": "本人新增输入",
@@ -10210,7 +10218,43 @@ export const zhCN = {
   "capture.startOtherDraft": "保留此稿，开始或恢复空白新稿",
   "capture.newDraftHelp": "新稿不携带当前内容，打开后请另选资料库。失败后再次操作会恢复同一新稿，不另建替代稿。可从列表回到原稿。",
   "capture.retainedDraft": "草稿",
-  "capture.unselectedTarget": "未选择目标"
+  "capture.unselectedTarget": "未选择目标",
+  "workspaceRibbon.label": "文档功能区",
+  "workspaceRibbon.file": "文件",
+  "workspaceRibbon.home": "开始",
+  "workspaceRibbon.insert": "插入",
+  "workspaceRibbon.knowledge": "资料",
+  "workspaceRibbon.review": "审阅",
+  "workspaceRibbon.view": "视图",
+  "workspaceRibbon.collapse": "收起功能区",
+  "workspaceRibbon.expand": "展开功能区",
+  "localChrome.files": "打开与创建",
+  "localChrome.document": "当前文档",
+  "localChrome.preferences": "设置",
+  "localChrome.panes": "面板",
+  "localChrome.blocks": "内容块",
+  "localChrome.note": "笔记与查询",
+  "localChrome.exchange": "导入与输出",
+  "localChrome.library": "资料库",
+  "localChrome.objects": "公式与图表",
+  "localChrome.review": "批注与校对",
+  "localChrome.navigation": "导航",
+  "localChrome.history": "撤销与重做",
+  "localChrome.text": "文字格式",
+  "localChrome.content": "插入内容",
+  "localChrome.annotations": "批注",
+  "hostedChrome.editing": "编辑",
+  "hostedChrome.format": "文字",
+  "hostedChrome.content": "内容",
+  "hostedChrome.inspector": "笔记检查器",
+  "hostedChrome.navigation": "资料库导航",
+  "hostedChrome.files": "文件",
+  "hostedChrome.library": "资料库",
+  "hostedChrome.settings": "设置",
+  "hostedChrome.note": "当前笔记",
+  "hostedChrome.knowledge": "知识与资料",
+  "hostedChrome.review": "审阅",
+  "hostedChrome.preview": "预览"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -10278,6 +10322,13 @@ export interface MessageParamsMap {
   "reminder.dueDay": {  };
   "reminder.enabledDevice": {  };
   "reminder.submitted": {  };
+  "reminder.submissionStartedAt": { at: string };
+  "reminder.submissionReturnedAt": { at: string };
+  "reminder.submissionElapsed": { nanoseconds: string };
+  "reminder.submissionReturnedSuccess": {  };
+  "reminder.submissionReturnedFailure": { hresult: number };
+  "reminder.submissionObservationMissing": {  };
+  "reminder.ledgerConfirmedAt": { at: string };
   "reminder.unknown": {  };
   "reminder.unavailable": {  };
   "reminder.missed": { count: number };
@@ -11396,6 +11447,7 @@ export interface MessageParamsMap {
   "definitionProposal.originalRequestMissing": {  };
   "definitionProposal.insertedUnsaved": {  };
   "definitionProposal.originalCheckedNotApplied": {  };
+  "personalInput.unknownOriginalRoute": {  };
   "personalInput.title": {  };
   "personalInput.help": {  };
   "personalInput.textLabel": {  };
@@ -20426,6 +20478,42 @@ export interface MessageParamsMap {
   "capture.newDraftHelp": {  };
   "capture.retainedDraft": {  };
   "capture.unselectedTarget": {  };
+  "workspaceRibbon.label": {  };
+  "workspaceRibbon.file": {  };
+  "workspaceRibbon.home": {  };
+  "workspaceRibbon.insert": {  };
+  "workspaceRibbon.knowledge": {  };
+  "workspaceRibbon.review": {  };
+  "workspaceRibbon.view": {  };
+  "workspaceRibbon.collapse": {  };
+  "workspaceRibbon.expand": {  };
+  "localChrome.files": {  };
+  "localChrome.document": {  };
+  "localChrome.preferences": {  };
+  "localChrome.panes": {  };
+  "localChrome.blocks": {  };
+  "localChrome.note": {  };
+  "localChrome.exchange": {  };
+  "localChrome.library": {  };
+  "localChrome.objects": {  };
+  "localChrome.review": {  };
+  "localChrome.navigation": {  };
+  "localChrome.history": {  };
+  "localChrome.text": {  };
+  "localChrome.content": {  };
+  "localChrome.annotations": {  };
+  "hostedChrome.editing": {  };
+  "hostedChrome.format": {  };
+  "hostedChrome.content": {  };
+  "hostedChrome.inspector": {  };
+  "hostedChrome.navigation": {  };
+  "hostedChrome.files": {  };
+  "hostedChrome.library": {  };
+  "hostedChrome.settings": {  };
+  "hostedChrome.note": {  };
+  "hostedChrome.knowledge": {  };
+  "hostedChrome.review": {  };
+  "hostedChrome.preview": {  };
 }
 export const messageParamTypes = {
   "app.title": {},
@@ -20497,6 +20585,23 @@ export const messageParamTypes = {
   "reminder.dueDay": {},
   "reminder.enabledDevice": {},
   "reminder.submitted": {},
+  "reminder.submissionStartedAt": {
+    "at": "text"
+  },
+  "reminder.submissionReturnedAt": {
+    "at": "text"
+  },
+  "reminder.submissionElapsed": {
+    "nanoseconds": "text"
+  },
+  "reminder.submissionReturnedSuccess": {},
+  "reminder.submissionReturnedFailure": {
+    "hresult": "integer"
+  },
+  "reminder.submissionObservationMissing": {},
+  "reminder.ledgerConfirmedAt": {
+    "at": "text"
+  },
   "reminder.unknown": {},
   "reminder.unavailable": {},
   "reminder.missed": {
@@ -21969,6 +22074,7 @@ export const messageParamTypes = {
   "definitionProposal.originalRequestMissing": {},
   "definitionProposal.insertedUnsaved": {},
   "definitionProposal.originalCheckedNotApplied": {},
+  "personalInput.unknownOriginalRoute": {},
   "personalInput.title": {},
   "personalInput.help": {},
   "personalInput.textLabel": {},
@@ -32478,7 +32584,43 @@ export const messageParamTypes = {
   "capture.startOtherDraft": {},
   "capture.newDraftHelp": {},
   "capture.retainedDraft": {},
-  "capture.unselectedTarget": {}
+  "capture.unselectedTarget": {},
+  "workspaceRibbon.label": {},
+  "workspaceRibbon.file": {},
+  "workspaceRibbon.home": {},
+  "workspaceRibbon.insert": {},
+  "workspaceRibbon.knowledge": {},
+  "workspaceRibbon.review": {},
+  "workspaceRibbon.view": {},
+  "workspaceRibbon.collapse": {},
+  "workspaceRibbon.expand": {},
+  "localChrome.files": {},
+  "localChrome.document": {},
+  "localChrome.preferences": {},
+  "localChrome.panes": {},
+  "localChrome.blocks": {},
+  "localChrome.note": {},
+  "localChrome.exchange": {},
+  "localChrome.library": {},
+  "localChrome.objects": {},
+  "localChrome.review": {},
+  "localChrome.navigation": {},
+  "localChrome.history": {},
+  "localChrome.text": {},
+  "localChrome.content": {},
+  "localChrome.annotations": {},
+  "hostedChrome.editing": {},
+  "hostedChrome.format": {},
+  "hostedChrome.content": {},
+  "hostedChrome.inspector": {},
+  "hostedChrome.navigation": {},
+  "hostedChrome.files": {},
+  "hostedChrome.library": {},
+  "hostedChrome.settings": {},
+  "hostedChrome.note": {},
+  "hostedChrome.knowledge": {},
+  "hostedChrome.review": {},
+  "hostedChrome.preview": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -32545,6 +32687,13 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "reminder.dueDay": "Time on the due day",
   "reminder.enabledDevice": "Enable this reminder on this device",
   "reminder.submitted": "The system accepted the reminder. This does not mean it was read.",
+  "reminder.submissionStartedAt": "Notification call started (UTC): {at}",
+  "reminder.submissionReturnedAt": "Notification call returned (UTC): {at}",
+  "reminder.submissionElapsed": "Monotonic call duration: {nanoseconds} ns",
+  "reminder.submissionReturnedSuccess": "The notification call returned success. This does not mean the user saw it.",
+  "reminder.submissionReturnedFailure": "The notification call returned failure (HRESULT {hresult}). This return alone does not establish the delivery outcome.",
+  "reminder.submissionObservationMissing": "No actual notification-call timing was recorded. Ledger confirmation time cannot substitute for call time.",
+  "reminder.ledgerConfirmedAt": "Ledger confirmation time (UTC; may come from a later system-history check): {at}",
   "reminder.unknown": "The system submission result is unknown. It was not blindly resubmitted.",
   "reminder.unavailable": "System notifications cannot be submitted under the current conditions.",
   "reminder.missed": "Valid missed reminders: {count}.",
@@ -33663,6 +33812,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "definitionProposal.originalRequestMissing": "Without the original request, only the original ID can be queried; new retry input cannot be manufactured.",
   "definitionProposal.insertedUnsaved": "The new definition proposal was inserted into the current body draft with shared Undo. It has not been saved; the original key is allocated only once.",
   "definitionProposal.originalCheckedNotApplied": "The original definition proposal was checked. The current basis or session differs; compare explicitly before recovery. It was not automatically pasted into the body.",
+  "personalInput.unknownOriginalRoute": "Proof of the original save route is missing. Its operation ID and personal text are retained; query, settle, and saving to a possibly identical note remain unavailable until the original request is verified.",
   "personalInput.title": "My unuploaded input and original operations",
   "personalInput.help": "Only my added text, original baseline positions and original operation IDs are stored here, without old body content, previews or credentials. Open the authorized original note first. Restoration as a draft requires the original identity and exact baseline to match. Text that cannot be mapped, such as form input, is available only for separate retrieval; it may already have been applied or undone and does not represent the current body.",
   "personalInput.textLabel": "My added input",
@@ -42692,5 +42842,41 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "capture.startOtherDraft": "Keep this draft; start or resume a blank draft",
   "capture.newDraftHelp": "A new draft does not carry the current content. Choose its library after opening. After a failure, repeat this action to recover the same new draft without creating a replacement. Use the list to return to an original draft.",
   "capture.retainedDraft": "Draft",
-  "capture.unselectedTarget": "No target selected"
+  "capture.unselectedTarget": "No target selected",
+  "workspaceRibbon.label": "Document ribbon",
+  "workspaceRibbon.file": "File",
+  "workspaceRibbon.home": "Home",
+  "workspaceRibbon.insert": "Insert",
+  "workspaceRibbon.knowledge": "Knowledge",
+  "workspaceRibbon.review": "Review",
+  "workspaceRibbon.view": "View",
+  "workspaceRibbon.collapse": "Collapse ribbon",
+  "workspaceRibbon.expand": "Expand ribbon",
+  "localChrome.files": "Open and create",
+  "localChrome.document": "Current document",
+  "localChrome.preferences": "Settings",
+  "localChrome.panes": "Panes",
+  "localChrome.blocks": "Content blocks",
+  "localChrome.note": "Notes and queries",
+  "localChrome.exchange": "Import and output",
+  "localChrome.library": "Library",
+  "localChrome.objects": "Equations and diagrams",
+  "localChrome.review": "Annotations and proofreading",
+  "localChrome.navigation": "Navigation",
+  "localChrome.history": "Undo and redo",
+  "localChrome.text": "Text formatting",
+  "localChrome.content": "Insert content",
+  "localChrome.annotations": "Annotations",
+  "hostedChrome.editing": "Editing",
+  "hostedChrome.format": "Text",
+  "hostedChrome.content": "Content",
+  "hostedChrome.inspector": "Note inspector",
+  "hostedChrome.navigation": "Library navigation",
+  "hostedChrome.files": "Files",
+  "hostedChrome.library": "Library",
+  "hostedChrome.settings": "Settings",
+  "hostedChrome.note": "Current note",
+  "hostedChrome.knowledge": "Knowledge and resources",
+  "hostedChrome.review": "Review",
+  "hostedChrome.preview": "Preview"
 };

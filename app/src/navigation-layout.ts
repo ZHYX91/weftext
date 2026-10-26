@@ -130,6 +130,8 @@ export interface NavigationLayoutOptions {
     workspaceBody: HTMLElement;
     inspector: HTMLElement;
     toolbar?: HTMLElement;
+    /** A persistent header control remains reachable while the ribbon is hidden. */
+    sidebarToggle?: HTMLButtonElement;
     storage?: NavigationStorage | null;
     notify?: (message: UiText) => void;
 }
@@ -180,6 +182,9 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
     const lifetime = new AbortController();
     const priorSidebarId = sidebar.id, priorInspectorId = inspector.id;
     const priorInert = sidebar.hasAttribute("inert");
+    const priorSidebarAriaHidden = sidebar.getAttribute("aria-hidden");
+    const externalToggle = options.sidebarToggle;
+    const priorExternalAttributes = externalToggle ? new Map(["aria-label", "title", "aria-controls", "aria-expanded"].map(name => [name, externalToggle.getAttribute(name)] as const)) : null;
     const priorSidebarWidth = shell.style.getPropertyValue("--navigation-sidebar-width");
     const priorInspectorWidth = shell.style.getPropertyValue("--navigation-inspector-width");
     if (!sidebar.id)
@@ -194,6 +199,7 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
     toggle.type = "button";
     toggle.className = "text-button navigation-layout-toggle";
     toggle.setAttribute("aria-controls", sidebar.id);
+    externalToggle?.setAttribute("aria-controls", sidebar.id);
     const resetButton = doc.createElement("button");
     resetButton.type = "button";
     resetButton.className = "text-button";
@@ -250,7 +256,19 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
         const collapsed = wide && preference.sidebarCollapsed;
         if (shell.classList.contains("navigation-sidebar-collapsed") !== collapsed)
             shell.classList.toggle("navigation-sidebar-collapsed", collapsed);
-        sidebar.toggleAttribute("inert", priorInert || collapsed);
+        const opened = wide ? !collapsed : shell.classList.contains("sidebar-open");
+        const hidden = !opened;
+        // Move focus before making the old owner unavailable to keyboard and AT.
+        // A translated off-screen sidebar must not remain a second tab sequence.
+        if (hidden && (sidebar.contains(doc.activeElement) || doc.activeElement === sidebarHandle))
+            (externalToggle ?? toggle).focus({ preventScroll: true });
+        sidebar.toggleAttribute("inert", priorInert || hidden);
+        if (hidden || priorSidebarAriaHidden === "true")
+            sidebar.setAttribute("aria-hidden", "true");
+        else if (priorSidebarAriaHidden === null)
+            sidebar.removeAttribute("aria-hidden");
+        else
+            sidebar.setAttribute("aria-hidden", priorSidebarAriaHidden);
         const sidebarWidth = clampPaneWidth(preference.sidebarWidth, sidebarBounds());
         shell.style.setProperty("--navigation-sidebar-width", `${sidebarWidth}px`);
         const inspectorWidth = clampPaneWidth(inspectorPreferredWidth(), inspectorBounds());
@@ -259,9 +277,14 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
         inspectorHandle.hidden = !dockedInspector();
         setAccessibleRange(sidebarHandle, sidebarWidth, sidebarBounds());
         setAccessibleRange(inspectorHandle, inspectorWidth, inspectorBounds());
-        const opened = wide ? !collapsed : shell.classList.contains("sidebar-open");
-        setUiText(toggle, opened ? uiMessage("navigationLayout.collapseNavigation") : uiMessage("navigationLayout.showNavigation"));
+        const label = opened ? uiMessage("navigationLayout.collapseNavigation") : uiMessage("navigationLayout.showNavigation");
+        setUiText(toggle, label);
         toggle.setAttribute("aria-expanded", String(opened));
+        if (externalToggle) {
+            setUiAttr(externalToggle, "aria-label", label);
+            setUiAttr(externalToggle, "title", label);
+            externalToggle.setAttribute("aria-expanded", String(opened));
+        }
     }
     function captureSidebarState(): void {
         const tree = sidebar.querySelector<HTMLElement>(".file-tree");
@@ -277,7 +300,7 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
             tree.scrollTop = preference.sidebarScroll;
         // Only an explicit, surviving DOM ID can restore focus. A remembered title,
         // path, or list index never selects another object with the same name.
-        if (previousFocus?.owned && previousFocus.id && (!doc.activeElement || doc.activeElement === doc.body)) {
+        if (!sidebar.hasAttribute("inert") && previousFocus?.owned && previousFocus.id && (!doc.activeElement || doc.activeElement === doc.body)) {
             const target = doc.getElementById(previousFocus.id);
             if (target && sidebar.contains(target))
                 target.focus({ preventScroll: true });
@@ -302,7 +325,7 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
             shell.classList.toggle("sidebar-open");
         refresh();
         if (ownedFocus && (preference.sidebarCollapsed || !shell.classList.contains("sidebar-open")))
-            toggle.focus({ preventScroll: true });
+            (externalToggle ?? toggle).focus({ preventScroll: true });
     }
     function reset(): void { cancelDrag(); store.reset(context); preference = defaultNavigationPreference(); refresh(); restoreSidebarState(); }
     function keyboardResize(pane: "sidebar" | "inspector", event: KeyboardEvent): void {
@@ -370,6 +393,7 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
     view.addEventListener("blur", cancelDrag, { signal: lifetime.signal });
     view.addEventListener("resize", refresh, { signal: lifetime.signal });
     toggle.addEventListener("click", toggleSidebar, { signal: lifetime.signal });
+    externalToggle?.addEventListener("click", toggleSidebar, { signal: lifetime.signal });
     resetButton.addEventListener("click", reset, { signal: lifetime.signal });
     const observer = new MutationObserver(refresh);
     observer.observe(inspector, { attributes: true, attributeFilter: ["hidden", "class"] });
@@ -403,6 +427,17 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
             shell.classList.remove("navigation-layout", "navigation-sidebar-collapsed");
             workspaceBody.classList.remove("navigation-workspace-body");
             sidebar.toggleAttribute("inert", priorInert);
+            if (priorSidebarAriaHidden === null) sidebar.removeAttribute("aria-hidden");
+            else sidebar.setAttribute("aria-hidden", priorSidebarAriaHidden);
+            if (externalToggle && priorExternalAttributes)
+                for (const [name, value] of priorExternalAttributes) {
+                    // Retire this controller's translated bindings before restoring
+                    // the caller's original attribute bytes.
+                    if (name === "aria-label" || name === "title")
+                        setUiAttr(externalToggle, name, value ?? "");
+                    if (value === null) externalToggle.removeAttribute(name);
+                    else externalToggle.setAttribute(name, value);
+                }
             if (!priorSidebarId)
                 sidebar.removeAttribute("id");
             if (!priorInspectorId)

@@ -18,6 +18,8 @@ translation_status: synced
 
 按需启动的无界面所有者保持运行，让独立的读取、外部编辑、保存命令保留同一真实会话；它不显示托盘或运行桌面提醒调度。`capabilities --output owner.json` 的结果包含经 OS 核对的 `ownerIdentity`。需要结束此所有者时，使用同一 `--data-dir PATH owner-stop --owner-identity owner.json`；它只连接已存在的准确进程，排空已接受任务并等待原进程退出，不启动新所有者或按名称结束进程。所有者重启后旧 basis 会话失效，CLI 明确拒绝，不自动重开替代。
 
+桌面提醒状态沿同一 Core 的原投递记录读取；`submittedToSystem.at` 表示账本确认时间，不是准确 OS 调用时刻。可用的 `submissionObservation` 另保实际调用开始／返回 UTC、十进制字符串纳秒耗时及调用返回结果；缺失明确为 null，系统历史确认不补造调用观察。这不增加 CLI 提醒发送命令或允许无界面所有者调度通知。
+
 `--data-dir PATH owner-status` 只查询现存所有者身份，不启动 Core 或调用作者 API；它可辨本地／托管角色。其 JSON 同样可作为 owner-stop 的准确身份输入。
 
 身份查询输出 `{"schemaVersion":1,"call":"ownerStatus","ownerIdentity":{...}}`。严格身份字段为 `pid`、`created`（Windows 原始 FILETIME，不是 Unix 时间）、`incarnation`、`profileIdentity` 和 `role`（`local` 或 `hosted`）。停止命令接受此信封、capabilities 信封或原始身份对象，输入须为不超过 16 KiB 的 UTF-8 JSON 文件。成功停止输出 `{"schemaVersion":1,"call":"ownerStop","result":{"owner":{...},"exitCode":0}}`，仅在准确的原进程句柄确认退出后返回 0；closing 回执本身不算完成。所有者非零退出返回 3；停止请求已可能接受但结果不确定返回 6，不自动重试。

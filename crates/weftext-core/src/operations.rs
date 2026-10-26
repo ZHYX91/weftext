@@ -22,6 +22,56 @@ mod trash;
 
 const MAX_OPERATION_BYTES: usize = 64 * 1024 * 1024;
 const MAX_OPERATION_FILES: usize = 5000;
+
+// A single synchronous node qualification reads every original committed Plan
+// and Birth in their original order. It is not retained by a returned witness,
+// an App capture or a worker, and it never substitutes for current file guards.
+pub(crate) struct QualifiedReadObservation<'a> {
+    core: &'a Core,
+    plans: Vec<&'a journal::Plan>,
+    births: BTreeMap<String, Vec<Birth>>,
+}
+impl<'a> QualifiedReadObservation<'a> {
+    pub(crate) fn read(core: &'a Core) -> Result<Self> {
+        let plans = core.committed_plans()?;
+        let mut births = BTreeMap::new();
+        for plan in &plans {
+            // Read the complete original evidence before selecting a binding:
+            // an earlier match must not hide a corrupt later Birth record.
+            births.insert(
+                plan.operation_id.clone(),
+                core.read_births(&plan.operation_id)?,
+            );
+        }
+        Ok(Self {
+            core,
+            plans,
+            births,
+        })
+    }
+    pub(crate) fn binding(&self, identity: &FileIdentity) -> Option<&Birth> {
+        self.plans
+            .iter()
+            .flat_map(|plan| &self.births[&plan.operation_id])
+            .find(|birth| &birth.identity == identity)
+    }
+    pub(crate) fn placements(&self, birth: &Birth) -> Result<BTreeSet<String>> {
+        Ok(self
+            .core
+            .node_placement_paths_in_cut(
+                &self.plans,
+                std::slice::from_ref(birth),
+                None,
+                Some(&self.births),
+            )?
+            .pop()
+            .unwrap())
+    }
+    pub(crate) fn revision(&self, captured: &CapturedFile) -> Result<Option<String>> {
+        self.core
+            .accepted_revision_with_plans(captured, &self.plans)
+    }
+}
 // A single observation-name cut retains the original enumeration's directory
 // guard. It carries no accepted revision or source qualification authority.
 pub(crate) struct ObservationRecordPaths<'a> {
@@ -902,6 +952,14 @@ impl FrozenOperation {
 impl Core {
     /// Qualify only an operator-selected source; never discover ambient nodes.
     pub fn qualified_node_at(&self, root: &Path, path: &Path) -> Result<QualifiedNode> {
+        self.qualified_node_with_session(root, path, None)
+    }
+    fn qualified_node_with_session(
+        &self,
+        root: &Path,
+        path: &Path,
+        session: Option<&Session>,
+    ) -> Result<QualifiedNode> {
         let root = absolute_path(root)?;
         let path = absolute_path(path)?;
         let workspace = self.require_workspace(&root)?;
@@ -925,7 +983,8 @@ impl Core {
         let actual = stamp(&file)?;
         self.check_pending_identity(&actual.identity)?;
         let bytes = read_source(&mut file)?;
-        let birth = self.admitted_binding(&actual.identity)?.ok_or_else(|| {
+        let facts = QualifiedReadObservation::read(self)?;
+        let birth = facts.binding(&actual.identity).cloned().ok_or_else(|| {
             CoreError::new(
                 "identityPending",
                 UiMessage::error_core_operations_selected_object_has_no_committed_node_admission(),
@@ -942,18 +1001,19 @@ impl Core {
                 UiMessage::error_core_operations_current_declaration_workspace_and_object_admission_differ(),
             ));
         }
-        self.check_history_placement(&birth, &path)?;
+        let places = facts.placements(&birth)?;
+        self.check_history_placement_paths(&path, &places)?;
         let captured = CapturedFile {
             path: display(&path),
             bytes,
             stamp: actual,
         };
-        Ok(QualifiedNode {
+        let current = QualifiedNode {
             owner: weftext_knowledge::NodeRef {
                 workspace_id: birth.workspace_id,
                 node_id: birth.node_id,
             },
-            revision: self.accepted_revision(&captured)?,
+            revision: facts.revision(&captured)?,
             source_hash: hash(&captured.bytes),
             identity: captured.stamp.identity.clone(),
             witness: SnapshotWitness {
@@ -963,7 +1023,25 @@ impl Core {
                     parent: guard.directory_identity()?,
                 },
             },
-        })
+        };
+        if let Some(session) = session {
+            let original = facts.binding(&session.stamp.identity).ok_or_else(|| {
+                CoreError::new(
+                    "identityPending",
+                    UiMessage::error_core_operations_original_opened_node_admission_unavailable(),
+                )
+            })?;
+            if session.node_id.as_ref() != Some(&current.owner.node_id)
+                || session.stamp.identity != current.identity
+                || original.workspace_id != current.owner.workspace_id
+            {
+                return Err(CoreError::new(
+                    "identityPending",
+                    UiMessage::error_core_operations_current_object_differs_from_original_opened_owner(),
+                ));
+            }
+        }
+        Ok(current)
     }
     pub fn qualified_node_for_session_at(
         &self,
@@ -980,26 +1058,7 @@ impl Core {
                 UiMessage::error_core_operations_opened_and_configured_owner_paths_differ(),
             ));
         }
-        let current = self.qualified_node_at(root, path)?;
-        let original = self
-            .admitted_binding(&session.stamp.identity)?
-            .ok_or_else(|| {
-                CoreError::new(
-                    "identityPending",
-                    UiMessage::error_core_operations_original_opened_node_admission_unavailable(),
-                )
-            })?;
-        if session.node_id.as_ref() != Some(&current.owner.node_id)
-            || session.stamp.identity != current.identity
-            || original.workspace_id != current.owner.workspace_id
-        {
-            return Err(CoreError::new(
-                "identityPending",
-                UiMessage::error_core_operations_current_object_differs_from_original_opened_owner(
-                ),
-            ));
-        }
-        Ok(current)
+        self.qualified_node_with_session(root, path, Some(session))
     }
     pub(crate) fn validate_source_reservation(
         &self,
@@ -2993,11 +3052,18 @@ impl Core {
 
     pub(crate) fn accepted_revision(&self, captured: &CapturedFile) -> Result<Option<String>> {
         let plans = self.committed_plans()?;
+        self.accepted_revision_with_plans(captured, &plans)
+    }
+    fn accepted_revision_with_plans(
+        &self,
+        captured: &CapturedFile,
+        plans: &[&journal::Plan],
+    ) -> Result<Option<String>> {
         let records = self.observation_record_paths()?;
-        let mut revisions = self.accepted_revisions_with_facts(&plans, &[captured], |id| {
+        let mut revisions = self.accepted_revisions_with_facts(plans, &[captured], |id| {
             self.read_observation_facts_from_paths(id, &records)
         })?;
-        self.check_observation_record_paths(&records, &plans)?;
+        self.check_observation_record_paths(&records, plans)?;
         Ok(revisions.pop().unwrap())
     }
     pub(crate) fn accepted_revisions_with_facts(

@@ -68,6 +68,65 @@ pub enum ReminderDeliveryState {
     FailedBeforeCall { description: CoreDescription },
     Unknown { description: CoreDescription },
 }
+/// A trusted adapter's observation of its one actual OS call. These times do
+/// not authorize a delivery or prove that the user saw the notification.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ReminderSubmissionObservation {
+    pub started_at: String,
+    pub returned_at: String,
+    /// Exact decimal nanoseconds; JSON consumers must not round this to f64.
+    pub elapsed_nanoseconds: String,
+    pub result: ReminderOsCallResult,
+}
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub enum ReminderOsCallResult {
+    ReturnedSuccess,
+    ReturnedFailure { hresult: i32 },
+}
+impl ReminderSubmissionObservation {
+    pub fn from_system_times(
+        started: SystemTime,
+        returned: SystemTime,
+        elapsed: std::time::Duration,
+        result: ReminderOsCallResult,
+    ) -> Result<Self> {
+        let observation = Self {
+            started_at: system_instant(started)?
+                .canonical()
+                .map_err(temporal_error)?,
+            returned_at: system_instant(returned)?
+                .canonical()
+                .map_err(temporal_error)?,
+            elapsed_nanoseconds: elapsed.as_nanos().to_string(),
+            result,
+        };
+        observation.validate()?;
+        Ok(observation)
+    }
+    fn validate(&self) -> Result<()> {
+        ExactInstant::parse(&self.started_at).map_err(temporal_error)?;
+        ExactInstant::parse(&self.returned_at).map_err(temporal_error)?;
+        // Wall time can change during Show. Only the independently measured
+        // monotonic duration represents elapsed time, including a clock rollback.
+        if self
+            .elapsed_nanoseconds
+            .parse::<u128>()
+            .ok()
+            .is_none_or(|value| {
+                value.to_string() != self.elapsed_nanoseconds
+                    || value > std::time::Duration::MAX.as_nanos()
+            })
+            || matches!(self.result, ReminderOsCallResult::ReturnedFailure { hresult } if hresult >= 0)
+        {
+            return Err(err(
+                UiMessage::error_reminder_original_notification_invalid(),
+            ));
+        }
+        Ok(())
+    }
+}
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Attempt {
@@ -77,6 +136,10 @@ struct Attempt {
     attempt_count: u32,
     request: ReminderNotificationRequest,
     delivery: ReminderDeliveryState,
+    /// Absent in original records and when an actual call observation was not
+    /// retained. Reading or confirming OS history never manufactures one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    submission_observation: Option<ReminderSubmissionObservation>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(
@@ -209,12 +272,13 @@ fn execution_key(
     ))?))
 }
 fn now() -> Result<ExactInstant> {
-    let elapsed = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|error| {
-            err(UiMessage::error_reminder_clock_before_epoch())
-                .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
-        })?;
+    system_instant(SystemTime::now())
+}
+fn system_instant(time: SystemTime) -> Result<ExactInstant> {
+    let elapsed = time.duration_since(UNIX_EPOCH).map_err(|error| {
+        err(UiMessage::error_reminder_clock_before_epoch())
+            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+    })?;
     let utc_seconds = i64::try_from(elapsed.as_secs()).map_err(|error| {
         err(UiMessage::error_reminder_clock_overflow())
             .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
@@ -226,6 +290,17 @@ fn now() -> Result<ExactInstant> {
     })
 }
 fn validate_attempt(attempt: &Attempt, key: &str) -> Result<()> {
+    if let Some(observation) = &attempt.submission_observation {
+        observation.validate()?;
+        if matches!(
+            attempt.delivery,
+            ReminderDeliveryState::Submitting | ReminderDeliveryState::FailedBeforeCall { .. }
+        ) {
+            return Err(err(
+                UiMessage::error_reminder_original_notification_invalid(),
+            ));
+        }
+    }
     if !uuid(&attempt.permit_id)
         || !uuid(&attempt.request.activation_key)
         || attempt.attempt_count == 0
@@ -557,6 +632,7 @@ pub struct ReminderDeliveryStatus {
     pub delivery: ReminderRecordedDelivery,
     pub handled: bool,
     pub invalidated: Option<ReminderCancellation>,
+    pub submission_observation: Option<ReminderSubmissionObservation>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -2070,6 +2146,7 @@ impl Core {
         &mut self,
         permit: &ReminderDeliveryPermit,
         outcome: ReminderSubmissionOutcome,
+        observation: Option<ReminderSubmissionObservation>,
     ) -> Result<ReminderDeliveryStatus> {
         let (mut state, digest) = self.read_reminders()?;
         let attempt = lookup_attempt_mut(&mut state, &permit.key)?;
@@ -2084,6 +2161,33 @@ impl Core {
             ReminderDeliveryState::SubmittedToSystem { .. }
         ) {
             return status(&state, &permit.key);
+        }
+        if let Some(observation) = &observation {
+            observation.validate()?;
+            if attempt
+                .submission_observation
+                .as_ref()
+                .is_some_and(|original| original != observation)
+            {
+                return Err(CoreError::new(
+                    "operationConflict",
+                    UiMessage::error_reminder_delivery_result_mismatch(),
+                ));
+            }
+            if !matches!(
+                (&outcome, &observation.result),
+                (
+                    ReminderSubmissionOutcome::SubmittedToSystem,
+                    ReminderOsCallResult::ReturnedSuccess
+                ) | (
+                    ReminderSubmissionOutcome::Unknown(_),
+                    ReminderOsCallResult::ReturnedFailure { .. }
+                )
+            ) {
+                return Err(err(
+                    UiMessage::error_reminder_original_notification_invalid(),
+                ));
+            }
         }
         attempt.delivery = match outcome {
             ReminderSubmissionOutcome::SubmittedToSystem => {
@@ -2107,6 +2211,9 @@ impl Core {
                 ReminderDeliveryState::Unknown { description }
             }
         };
+        if observation.is_some() {
+            attempt.submission_observation = observation;
+        }
         let state = self.write_reminders(state, digest.as_deref())?;
         status(&state, &permit.key)
     }
@@ -2550,6 +2657,7 @@ fn make_attempt(
             body: options.body,
         },
         delivery: ReminderDeliveryState::Submitting,
+        submission_observation: None,
     };
     validate_attempt(&attempt, key)?;
     Ok(attempt)
@@ -2705,6 +2813,10 @@ fn status(state: &State, key: &str) -> Result<ReminderDeliveryStatus> {
         delivery,
         handled: record_handled,
         invalidated,
+        submission_observation: match state.records.get(key).map(|record| &record.delivery) {
+            Some(Delivery::SummaryOverflow { .. }) => None,
+            _ => lookup_attempt(state, key)?.submission_observation.clone(),
+        },
     })
 }
 

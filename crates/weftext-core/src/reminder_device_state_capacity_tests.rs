@@ -81,7 +81,7 @@ fn reminder_complete_65_set_is_atomic_overflow_and_restart_never_drains_another_
     );
     assert!(
         f.core()
-            .finish_reminder_delivery(&forged, ReminderSubmissionOutcome::SubmittedToSystem)
+            .finish_reminder_delivery(&forged, ReminderSubmissionOutcome::SubmittedToSystem, None)
             .is_err()
     );
     assert!(f.core().resolve_reminder_activation(overflow_key).is_err());

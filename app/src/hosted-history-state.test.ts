@@ -103,29 +103,33 @@ test("clean restore is one real shared Undo; dirty and late input remain author 
 
 // Execute the real hosted consumer and ACK queue; replace HTTP and UI ports.
 const hostedSource=ts.createSourceFile("hosted.ts",readFileSync(new URL("./hosted.ts",import.meta.url),"utf8"),ts.ScriptTarget.Latest,true,ts.ScriptKind.TS);
-const consumerNames=["acknowledgeHistory","queueHostedWriterRetirement","retireHostedWriters","hostedInput","draftOrder","bindHostedTransmission","issueHostedInput","persistHostedDraft"];
+const consumerNames=["acknowledgeHistory","readDocumentReference","publishDocumentReference","queueHostedWriterRetirement","retireHostedWriters","hostedInput","draftOrder","bindHostedTransmission","issueHostedInput","persistHostedDraft"];
 const hostedFunctions=hostedSource.statements.filter(node=>ts.isFunctionDeclaration(node)&&consumerNames.includes(node.name?.text??""));
 assert.equal(hostedFunctions.length,consumerNames.length);
 const hostedConsumer=ts.transpileModule(hostedFunctions.map(node=>node.getText(hostedSource)).join("\n"),{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.None}}).outputText;
 function historyConsumerFixture(later=false) {
  const original={resource:"owner",sessionId:"session",baseId:"baseC",viewInputId:"00000000-0000-4000-8000-000000000001",source:"C😀\r\n",rights:{write:true}};
  const fresh={...original,sessionId:original.sessionId,baseId:"baseA",source:"A\r\n"};
- const calls:any[]=[],closed:string[]=[], elements=new Map<string,any>();
+ const calls:any[]=[],closed:string[]=[],closeAudiences:any[]=[], elements=new Map<string,any>(),references=new Map<string,string>(),producers:any[]=[],historyApplications:string[]=[];
+ let referenceReply:Promise<any>|undefined,referenceStarted!:()=>void;
+ const started=new Promise<void>(resolve=>{referenceStarted=resolve;});
  let rejectAck=false;
  const source={value:later?"new Y":"C😀\r\n",serial:later?4:3,authorInputId:later?crypto.randomUUID():"00000000-0000-4000-8000-000000000001",disabled:false,
-  flush:async()=>{},open(_session:string,_resource:string,value:string){this.value=value;},refreshQueries(){},
-  applyHistorySource(value:string){this.value=value;this.serial++;}};
- const context:any={doc:original,draft:{source:source.value,baseSource:original.source,basis:{sessionId:original.sessionId,baseId:original.baseId}},source,requestEpoch:1,compareRequired:false,
+  flush:async()=>{},open(session:string,resource:string,value:string){assert.ok(references.has(resource),"history must bind the producer before opening it");producers.push({session,resource,value,reference:references.get(resource)});this.value=value;},refreshQueries(){},
+  personalInputReference(resource:string,reference:string){references.set(resource,reference);},
+  applyHistorySource(value:string){historyApplications.push(value);this.value=value;this.serial++;}};
+ const context:any={doc:original,draft:{source:source.value,baseSource:original.source,basis:{sessionId:original.sessionId,baseId:original.baseId}},source,requestEpoch:1,authorizationEpoch:0,compareRequired:false,
+  token:"original",identity:{actor:"alice",deployment:"space",generation:0},AbortSignal,
   OrderedDraft,orderedDrafts:new WeakMap(),hostedWriterRetirements:new Map(),currentHostedHistoryResult,restoreBufferDisposition,
-  uiMessage:message,UiError,HostedError:class extends Error{},sessionAudience:()=>({credential:"original",epoch:1}),
-  closeOwnedSession:async(id:string)=>{closed.push(id);},
+  uiMessage:message,UiError,HostedError:class extends Error{},sessionAudience:()=>({credential:context.token,authorization:context.authorizationEpoch,actor:context.identity.actor,deployment:context.identity.deployment,generation:context.identity.generation}),
+  closeOwnedSession:async(id:string,audience:any)=>{closed.push(id);closeAudiences.push(audience);},
   el:(id:string)=>{if(!elements.has(id))elements.set(id,{});return elements.get(id);},setUiText(){},retain(){},controls(){},
   history:{installStatus:(original:HostedHistoryRecord,incoming:HostedHistoryStatus)=>hostedHistoryStatus(original,incoming),documentChanged(){ }},
-  queries:{authorChanged(){},refreshCatalog:async()=>{}},knowledgeAuthorChanged(){},readReference:async()=>{},
-  request:async(path:string,body:any)=>{calls.push([path,body]);if(path==="open")return fresh;if(path==="history/status")return committed;if(path==="draft"){if(rejectAck)throw new Error("ACK delivery failed");return {status:"inputAcknowledged",evidence:"authorDraft",inputRevision:body.inputRevision};}throw new Error(`unexpected ${path}`);},
+  queries:{authorChanged(){},refreshCatalog:async()=>{}},knowledgeAuthorChanged(){},
+  request:async(path:string,body:any,bytes?:boolean,attempt?:number,signal?:AbortSignal,scope?:string)=>{calls.push([path,body]);if(path==="open")return fresh;if(path==="navigation/ref"){assert.equal(body.sessionId,original.sessionId);assert.equal(bytes,false);assert.equal(attempt,0);assert.equal(scope,"stagedTarget");assert.ok(signal instanceof AbortSignal);referenceStarted();return referenceReply??{resource:original.resource,reference:"weftext-node://workspace/original"};}if(path==="history/status")return committed;if(path==="draft"){if(rejectAck)throw new Error("ACK delivery failed");return {status:"inputAcknowledged",evidence:"authorDraft",inputRevision:body.inputRevision};}throw new Error(`unexpected ${path}`);},
  };
  vm.createContext(context);vm.runInContext(hostedConsumer,context);
- return {context,original,fresh,calls,closed,elements,reject:(value:boolean)=>{rejectAck=value;}};
+ return {context,original,fresh,calls,closed,closeAudiences,elements,references,producers,historyApplications,started,delayReference:(reply:Promise<any>)=>{referenceReply=reply;},reject:(value:boolean)=>{rejectAck=value;}};
 }
 test("real hosted restore consumer preserves Y on its original Base and persists that basis before retiring the old writer",async()=>{
  const f=historyConsumerFixture(true), original=structuredClone(record);original.status=structuredClone(committed);
@@ -136,6 +140,44 @@ test("real hosted clean restore installs the committed output and acknowledges t
  const f=historyConsumerFixture(),original=structuredClone(record);original.status=structuredClone(committed);
  assert.equal(await f.context.acknowledgeHistory(original),"applied");assert.equal(f.context.source.value,"A\r\n");assert.equal(f.context.draft.baseSource,"A\r\n");assert.equal(f.context.compareRequired,false);
  const input=f.calls.find(([path])=>path==="draft")[1];assert.equal(input.baseId,"baseA");assert.equal(input.retainedBaseSource,undefined);assert.deepEqual(f.closed,[]);
+});
+test("a late history identity leaves the original source and producer installed until its exact target reference is ready",async()=>{
+ const f=historyConsumerFixture(),original=structuredClone(record);original.status=structuredClone(committed);
+ let release!:(value:any)=>void;f.delayReference(new Promise(resolve=>{release=resolve;}));
+ const pending=f.context.acknowledgeHistory(original);await f.started;
+ assert.equal(f.context.doc,f.original);assert.equal(f.context.source.value,"C😀\r\n");assert.deepEqual(f.producers,[]);assert.deepEqual(f.historyApplications,[]);assert.equal(f.references.size,0);
+ release({resource:"owner",reference:"weftext-node://workspace/original"});assert.equal(await pending,"applied");
+ assert.deepEqual(f.historyApplications,["A\r\n"]);assert.deepEqual(f.producers,[{session:"session",resource:"owner",value:"A\r\n",reference:"weftext-node://workspace/original"}]);
+ assert.equal(f.context.stableReference.reference,"weftext-node://workspace/original");
+});
+test("typing while a history reference is delayed retains the new author input on its original Base",async()=>{
+ const f=historyConsumerFixture(),original=structuredClone(record);original.status=structuredClone(committed);
+ let release!:(value:any)=>void;f.delayReference(new Promise(resolve=>{release=resolve;}));
+ const pending=f.context.acknowledgeHistory(original);await f.started;
+ Object.assign(f.context.source,{value:"new Y while reference waits 😀",serial:4,authorInputId:crypto.randomUUID()});
+ release({resource:"owner",reference:"weftext-node://workspace/original"});assert.equal(await pending,"superseded");
+ assert.equal(f.context.source.value,"new Y while reference waits 😀");assert.deepEqual(f.historyApplications,[]);assert.equal(f.context.draft.baseSource,"C😀\r\n");assert.equal(f.context.compareRequired,true);
+ const input=f.calls.find(([path])=>path==="draft")[1];assert.equal(input.source,"new Y while reference waits 😀");assert.equal(input.baseId,"baseC");assert.equal(input.retainedBaseSource,undefined);
+});
+test("a late history reference cannot lend Alice's producer to Bob and staged cleanup retains Alice's audience",async()=>{
+ const f=historyConsumerFixture(),original=structuredClone(record);original.status=structuredClone(committed);f.fresh.sessionId="alice-staged-history";
+ let release!:(value:any)=>void;f.delayReference(new Promise(resolve=>{release=resolve;}));
+ const pending=f.context.acknowledgeHistory(original),rejected=assert.rejects(pending);await f.started;
+ const bob={resource:"Other",sessionId:"bob-current"};f.context.doc=bob;f.context.token="bob-credential";f.context.identity={actor:"bob",deployment:"space",generation:1};f.context.authorizationEpoch++;f.context.requestEpoch++;
+ release({resource:"owner",reference:"weftext-node://workspace/original"});await rejected;
+ assert.equal(f.context.doc,bob);assert.equal(f.context.source.value,"C😀\r\n");assert.deepEqual(f.producers,[]);assert.deepEqual(f.historyApplications,[]);assert.equal(f.references.size,0);
+ assert.deepEqual(f.closed,["alice-staged-history"]);assert.equal(f.closeAudiences[0].actor,"alice");assert.equal(f.closeAudiences[0].credential,"original");assert.equal(f.context.token,"bob-credential");
+});
+test("history reference rejection or final retention failure keeps the original source and producer",async()=>{
+ for(const failure of ["network","identity","retention"] as const){
+  const f=historyConsumerFixture(),original=structuredClone(record);original.status=structuredClone(committed);
+  let release!:(value:any)=>void,reject!:(reason:unknown)=>void;f.delayReference(new Promise((resolve,fail)=>{release=resolve;reject=fail;}));
+  if(failure==="retention")f.context.retain=()=>{throw new Error("history final retention failed");};
+  const pending=f.context.acknowledgeHistory(original),rejected=assert.rejects(pending);await f.started;
+  if(failure==="network")reject(new Error("history reference unavailable"));
+  else release({resource:failure==="identity"?"unrelated":"owner",reference:"weftext-node://workspace/original"});
+  await rejected;assert.equal(f.context.doc,f.original);assert.equal(f.context.source.value,"C😀\r\n");assert.deepEqual(f.producers,[]);assert.deepEqual(f.historyApplications,[]);assert.equal(f.references.size,0);assert.deepEqual(f.closed,[]);
+ }
 });
 test("failed target ACK keeps the old hosted writer handle until the same target's actual ACK succeeds",async()=>{
  const f=historyConsumerFixture(true),original=structuredClone(record);original.status=structuredClone(committed);f.reject(true);

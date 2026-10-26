@@ -11,7 +11,9 @@ import type { QueryPlan, QueryResult, QueryRow } from "./query-panel";
 import type { FrozenQuery } from "./export-state";
 import type { AuthorInputFactory } from "./author-input";
 import { decodeEditorMapResponse, WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, type WritingMap, type WritingRange } from "./writing";
-import { createWritingToolbar, createStructureControls, insertWritingLink } from "./writing-controls";
+import { createWritingCommandGroups, createStructureControls, insertWritingLink, type WritingControlOptions } from "./writing-controls";
+import { WorkspaceRibbon } from "./workspace-chrome";
+import "./workspace-chrome.css";
 import { createMathSelectionControls } from "./math-selection";
 import { mountDocumentNotes, openDocumentNotes, retireDocumentNotes, type DocumentNotesMount } from "./document-notes";
 import { AuthoringAssetsAdapter } from "./authoring-assets-adapter";
@@ -72,9 +74,20 @@ export class HostedEditor {
     private deferredPaint = new DeferredPaint();
     private generation = 0;
     private timer?: ReturnType<typeof setTimeout>;
-    private toolbar = node("div");
+    private ribbon = new WorkspaceRibbon();
+    private externalRibbon = false;
+    private commandOwner?: SourceEditor;
+    private viewControls = node("div", "", "hosted-modes");
+    private editControls = node("div", "", "hosted-edit-controls");
+    private notesControls = node("div", "", "hosted-notes-controls");
+    private formatControls = node("div", "", "hosted-format-controls");
+    private insertControls = node("div", "", "hosted-insert-controls");
+    private modeControls = new Map<ViewMode, HTMLButtonElement>();
+    private queryPreviewControl?: HTMLButtonElement;
+    private collapseSyntaxControl?: HTMLButtonElement;
     private sourceHost = node("div", "", "hosted-source");
     private flow = node("div", "", "hosted-flow");
+    private scrollHost: HTMLElement;
     private message = node("p", "", "hint");
     private fonts: OfflineFontLoader;
     private renderedMode?: ViewMode;
@@ -92,16 +105,20 @@ export class HostedEditor {
         mode: ViewMode;
         scroll: number;
         sourceScroll: number;
-        windowScroll: number;
+        surfaceScrollTop: number;
     }>();
     private restoredView?: {
         resource: string;
         scroll: number;
         sourceScroll: number;
-        windowScroll: number;
+        surfaceScrollTop: number;
     };
     private personalReferences = new Map<string, string>();
-    private editorIdentities = new WeakMap<SourceEditor, { resource: string }>();
+    private editorIdentities = new WeakMap<SourceEditor, {
+        resource: string;
+        personalOwner: { kind: "body"; resource: string; reference: string };
+        saveRoute?: { operationId: string; resource: string };
+    }>();
     private literalPersonal = new Map<string, {
         recordId: string;
         inputId: string;
@@ -110,6 +127,7 @@ export class HostedEditor {
         revision: number;
     }>();
     constructor(private container: HTMLElement, private request: Request, private changed: () => void, private save: () => void, private error: (e: Error) => void, private queryHost?: HostedEditorQueryHost) {
+        this.scrollHost = container;
         this.fonts = new OfflineFontLoader({ fonts: document.fonts, readManifest: () => request("fonts") });
         this.authoringAssets = new AuthoringAssetsAdapter({ request, prefix: "editor/endnotes-module", context: () => this.sessionId && !this.paused && !this.blocked && this.mode !== "read" && this.personalAudience ? { sessionId: this.sessionId, audience: this.personalAudience } : null, changed: async () => { this.projection = undefined; this.queries?.invalidate(); this.generation++; await this.compile(); } });
         container.classList.add("hosted-editor");
@@ -125,10 +143,30 @@ export class HostedEditor {
             void (redo ? writing.redo() : writing.undo()).catch(this.error);
         });
     }
+    /** Presentation owns no author/session state. Switching ribbon tabs never calls paint. */
+    attachRibbon(ribbon: WorkspaceRibbon): void {
+        if (this.ribbon === ribbon) return;
+        this.clearRibbonGroups();
+        if (!this.externalRibbon) this.ribbon.dispose();
+        this.ribbon = ribbon;
+        this.externalRibbon = true;
+        if (this.editor && this.writing) this.syncCommandControls(this.editor, this.writing);
+    }
+    /** The containing workspace supplies its actual scroll surface before open. */
+    attachScrollHost(host: HTMLElement): void {
+        if (this.editor && host !== this.scrollHost) throw new Error("An active editor retains its scroll host");
+        this.scrollHost = host;
+    }
+    private clearRibbonGroups(): void {
+        for (const [tab, id] of [["home", "hosted-editor-history"], ["home", "hosted-editor-format"], ["insert", "hosted-editor-content"], ["insert", "hosted-editor-notes"], ["view", "hosted-editor-view"]] as const)
+            this.ribbon.clearGroup(tab, id);
+    }
     get value(): string { return this.writing?.recoverySource() ?? this.editor?.source ?? ""; }
     get authorInputId(): string { return this.editor?.authorInputId ?? ""; }
     get serial(): number { return this.editor?.generation ?? 0; }
     get viewMode(): ViewMode { return this.mode; }
+    /** Only physically retained editor owners are open document tabs. */
+    get openResources(): readonly string[] { return [...(this.resource && this.editor ? [this.resource] : []), ...this.retained.keys()]; }
     get selection(): {
         from: number;
         to: number;
@@ -140,25 +178,61 @@ export class HostedEditor {
         if (this.editor)
             editors.push({ resource: this.resource, editor: this.editor });
         return [
-            ...editors.map(({ resource, editor }) => { const input = editor.personalInput(); return { ...input, owner: { kind: "body" as const, resource, reference: this.personalReferences.get(resource) }, ...(input.candidate ? { pending: { operationId: input.candidate.operationId, status: "unresolved" as const } } : {}) }; }),
+            ...editors.map(({ editor }) => {
+                const input = editor.personalInput(), identity = this.editorIdentities.get(editor);
+                if (!identity)
+                    throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+                const saveResource = input.candidate?.operationId === identity.saveRoute?.operationId ? identity.saveRoute?.resource : undefined;
+                if (input.candidate && !saveResource)
+                    throw new UiError(uiMessage("hostedEditor.draftOrSessionChanged"));
+                return { ...input, owner: identity.personalOwner, ...(input.candidate ? { pending: { operationId: input.candidate.operationId, route: "known" as const, resource: saveResource!, status: "unresolved" as const } } : {}) };
+            }),
             ...[...this.literalPersonal.values()].map(value => ({ id: value.recordId, owner: { kind: "body" as const, resource: value.resource, reference: this.personalReferences.get(value.resource) }, slot: "literal-pending", origin: { baseLength: 0, pieces: [], detached: value.text ? [{ id: value.inputId, revision: value.revision, text: value.text }] : [], revision: value.revision } })),
         ];
     }
-    personalInputReference(resource: string, reference: string): void { this.personalReferences.set(resource, reference); this.queryHost?.personalInputChanged?.(); }
+    /** Bind a staged session's verified identity before its first author input.
+     * A retained producer never changes the owner of already collected text. */
+    personalInputReference(resource: string, reference: string): void {
+        const prior = this.personalReferences.get(resource);
+        if (!/^weftext-node:\/\//.test(reference) || prior && prior !== reference)
+            throw new UiError(uiMessage("hostedDraftState.authorizedIdentityMismatch"));
+        this.personalReferences.set(resource, reference);
+    }
     async beginPersonalSave(operationId: string, submitted: string): Promise<void> {
         const editor = this.editor, resource = this.resource, sessionId = this.sessionId;
         if (!editor || this.paused || this.composing)
             throw new UiError(uiMessage("hostedEditor.saveInputUnsettled"));
-        await editor.beginPersonalSave(operationId, submitted);
+        const identity = this.editorIdentities.get(editor), previous = identity?.saveRoute;
+        if (!identity || previous && (previous.operationId !== operationId || previous.resource !== resource))
+            throw new UiError(uiMessage("hostedEditor.saveEditorChanged"));
+        // The operation route is captured independently of the input's immutable
+        // original owner. A later alias can route a new save, never an old one.
+        identity.saveRoute = { operationId, resource };
+        try {
+            await editor.beginPersonalSave(operationId, submitted);
+        }
+        catch (error) {
+            if (editor.personalInput().candidate?.operationId !== operationId && identity.saveRoute?.operationId === operationId)
+                identity.saveRoute = undefined;
+            throw error;
+        }
         if (this.editor !== editor || this.resource !== resource || this.sessionId !== sessionId || this.paused) {
             editor.settlePersonalSave(operationId, false);
+            if (identity.saveRoute?.operationId === operationId) identity.saveRoute = undefined;
             throw new UiError(uiMessage("hostedEditor.saveEditorChanged"));
         }
     }
     settlePersonalSave(operationId: string, committed: boolean): void {
         this.editor?.settlePersonalSave(operationId, committed);
-        for (const saved of this.retained.values())
+        if (this.editor) {
+            const identity = this.editorIdentities.get(this.editor);
+            if (identity?.saveRoute?.operationId === operationId) identity.saveRoute = undefined;
+        }
+        for (const saved of this.retained.values()) {
             saved.editor.settlePersonalSave(operationId, committed);
+            const identity = this.editorIdentities.get(saved.editor);
+            if (identity?.saveRoute?.operationId === operationId) identity.saveRoute = undefined;
+        }
     }
     restorePersonalInput(value: string, origin: InputOrigin, baseHash: string, basis: EmbeddedQueryBasis): void {
         if (!this.editor || this.blocked || this.paused || this.composing || !sameQueryBasis({ sessionId: this.sessionId, source: this.value, serial: this.serial, inputId: this.authorInputId }, basis))
@@ -204,9 +278,11 @@ export class HostedEditor {
     rebindResourceAlias(resource: string): void {
         if (!this.editor || !this.paused)
             throw new UiError(uiMessage("hostedEditor.aliasRebindRequiresPausedEditor"));
-        this.resource = resource;
         const identity = this.editorIdentities.get(this.editor);
-        if (identity) identity.resource = resource;
+        if (!identity || this.personalReferences.get(resource) !== identity.personalOwner.reference)
+            throw new UiError(uiMessage("hostedDraftState.authorizedIdentityMismatch"));
+        this.resource = resource;
+        identity.resource = resource;
     }
     select(from: number, to: number): void { this.editor?.select(from, to); }
     selectSourceRange(from: number, to: number): void {
@@ -290,6 +366,8 @@ export class HostedEditor {
     }
     open(sessionId: string, resource: string, source: string, inputId?: string): void {
         this.checkNavigationCapacity(resource);
+        if (!this.personalReferences.has(resource))
+            throw new UiError(uiMessage("hostedShell.noteAuthorizedStableIdentityMissing"));
         this.paused = false;
         // Reopening the same retained draft changes its Base/session, not Undo.
         if (this.resource !== resource || !this.editor) {
@@ -297,7 +375,7 @@ export class HostedEditor {
                 this.queries?.invalidate();
                 this.queries?.detach();
                 retireDocumentNotes(this.writing);
-                this.retained.set(this.resource, { editor: this.editor, writing: this.writing, queries: this.queries, mode: this.mode, scroll: this.flow.scrollTop, sourceScroll: this.editor.view.scrollDOM.scrollTop, windowScroll: window.scrollY });
+                this.retained.set(this.resource, { editor: this.editor, writing: this.writing, queries: this.queries, mode: this.mode, scroll: this.flow.scrollTop, sourceScroll: this.editor.view.scrollDOM.scrollTop, surfaceScrollTop: this.scrollHost.scrollTop });
                 this.editor = undefined;
                 this.writing = undefined;
                 this.queries = undefined;
@@ -311,7 +389,7 @@ export class HostedEditor {
                 this.writing = saved.writing;
                 this.queries = saved.queries;
                 this.mode = saved.mode;
-                this.restoredView = { resource, scroll: saved.scroll, sourceScroll: saved.sourceScroll, windowScroll: saved.windowScroll };
+                this.restoredView = { resource, scroll: saved.scroll, sourceScroll: saved.sourceScroll, surfaceScrollTop: saved.surfaceScrollTop };
                 if (this.mode === "write")
                     saved.writing.restoreNavigationFocus();
             }
@@ -322,7 +400,10 @@ export class HostedEditor {
                     saved.editor.destroy();
                 }
                 this.editor = new SourceEditor(source, () => { this.queries?.invalidate(); this.changed(); this.schedule(); }, this.save, () => this.queryHost?.personalInputChanged?.(), inputId);
-                const editor = this.editor, identity = {resource};
+                const editor = this.editor, identity = {
+                    resource,
+                    personalOwner: Object.freeze({ kind: "body" as const, resource, reference: this.personalReferences.get(resource)! }),
+                };
                 this.editorIdentities.set(editor, identity);
                 this.writing = new WritingController({ editor,
                     authorInputs: () => {
@@ -446,7 +527,17 @@ export class HostedEditor {
         this.paused = false;
         this.sourceHost.replaceChildren();
         this.flow.replaceChildren();
-        this.toolbar.replaceChildren();
+        this.clearRibbonGroups();
+        this.commandOwner = undefined;
+        for (const controls of [this.viewControls, this.editControls, this.notesControls, this.formatControls, this.insertControls]) disposeUiTree(controls);
+        this.modeControls.clear();
+        this.viewControls.replaceChildren();
+        this.editControls.replaceChildren();
+        this.notesControls.replaceChildren();
+        this.formatControls.replaceChildren();
+        this.insertControls.replaceChildren();
+        this.queryPreviewControl = undefined;
+        this.collapseSyntaxControl = undefined;
         setUiText(this.message, "");
         // Shared structure dialogs may contain the just-revoked source. Dispose
         // both their visible data and their pending controller capability.
@@ -572,14 +663,15 @@ export class HostedEditor {
             const restored = this.restoredView;
             if (restored?.resource === this.resource) {
                 this.restoredView = undefined;
+                const scrollHost = this.scrollHost;
                 requestAnimationFrame(() => {
-                    if (this.editor !== editor || this.resource !== restored.resource)
+                    if (this.editor !== editor || this.resource !== restored.resource || this.sessionId !== basis.sessionId || this.generation !== generation || this.scrollHost !== scrollHost)
                         return;
                     this.flow.scrollTop = restored.scroll;
                     editor.view.scrollDOM.scrollTop = restored.sourceScroll;
                     if (["source", "styled"].includes(this.mode))
                         editor.view.focus();
-                    window.scrollTo({ top: restored.windowScroll, behavior: "instant" });
+                    scrollHost.scrollTop = restored.surfaceScrollTop;
                 });
             }
         }
@@ -596,6 +688,8 @@ export class HostedEditor {
     private button(label: UiText, action: () => void | Promise<void>): HTMLButtonElement {
         const button = node("button", label);
         button.type = "button";
+        // A command preserves the source/native selection through its click.
+        button.addEventListener("mousedown", event => event.preventDefault());
         button.onclick = () => { Promise.resolve().then(action).catch(this.error); };
         return button;
     }
@@ -639,48 +733,61 @@ export class HostedEditor {
     }
     private current(): boolean { return !!this.editor && this.projection?.source === this.editor.source && this.projection?.serial === this.editor.generation; }
     private paintBasis(): readonly unknown[] { return [this.editor, this.sessionId, this.resource, this.editor?.source, this.editor?.generation, this.projection, this.writing?.map, this.mode, this.blocked, this.paused, this.queryPreview, this.flow]; }
+    private syncCommandControls(editor: SourceEditor, writing: WritingController): void {
+        if (this.commandOwner !== editor) {
+            this.commandOwner = editor;
+            this.viewControls.setAttribute("role", "group");
+            setUiAttr(this.viewControls, "aria-label", uiMessage("shell.documentView"));
+            for (const [mode, label] of modes) {
+                const button = this.button(label, () => this.changeMode(mode));
+                this.modeControls.set(mode, button);
+                this.viewControls.append(button);
+            }
+            this.queryPreviewControl = this.button(uiMessage("hostedEditor.showBodyQueryPreview"), () => { this.queryPreview = !this.queryPreview; this.paint(true); });
+            this.collapseSyntaxControl = this.button(uiMessage("shell.collapseSyntax"), () => { editor.clearReveal(); this.paint(true); });
+            this.viewControls.append(this.queryPreviewControl, this.collapseSyntaxControl, this.button(uiMessage("hostedEditor.updateWritingPreview"), () => this.compile()));
+            const groups = createWritingCommandGroups(writing, this.writingControlOptions(writing));
+            this.formatControls.append(groups.format);
+            this.insertControls.append(groups.insert);
+            this.editControls.append(groups.history);
+            const notes = node("div", "", "document-notes-summary");
+            this.notesControls.append(this.button(uiMessage("shell.numberingControls"), () => this.openNumbering()), notes);
+            this.viewControls.append(this.button(uiMessage("shell.outlineHeadingStructure"), () => this.queryHost?.showHeadingStructure?.()));
+            this.notesMount = mountDocumentNotes(notes, documentNotesHost(this.authoringEnvironment()));
+        }
+        for (const [mode, button] of this.modeControls) button.setAttribute("aria-pressed", String(this.mode === mode));
+        this.queryPreviewControl!.hidden = this.mode !== "source" || !this.queries?.hasQueries;
+        setUiText(this.queryPreviewControl!, this.queryPreview ? uiMessage("hostedEditor.collapseBodyQueryPreview") : uiMessage("hostedEditor.showBodyQueryPreview"));
+        this.collapseSyntaxControl!.hidden = this.mode !== "focus" || !editor.revealed;
+        const editable = !this.blocked && this.mode !== "read" && (!this.paused || this.mode === "source");
+        this.ribbon.setGroup("home", "hosted-editor-history", uiMessage("hostedChrome.editing"), editable ? [this.editControls] : []);
+        this.ribbon.setGroup("home", "hosted-editor-format", uiMessage("hostedChrome.format"), editable && this.mode === "write" ? [this.formatControls] : []);
+        this.ribbon.setGroup("insert", "hosted-editor-content", uiMessage("hostedChrome.content"), editable && this.mode === "write" ? [this.insertControls] : []);
+        this.ribbon.setGroup("insert", "hosted-editor-notes", uiMessage("documentNotes.title"), [this.notesControls]);
+        this.ribbon.setGroup("view", "hosted-editor-view", uiMessage("shell.documentView"), [this.viewControls]);
+    }
+    private writingControlOptions(writing: WritingController): WritingControlOptions {
+        return { onError: this.error, revealSource: range => this.reveal(range), insertLink: () => insertWritingLink(writing) };
+    }
     private paint(force = false): void {
         const editor = this.editor, writing = this.writing;
         if (!editor || !writing)
             return;
+        const options = this.writingControlOptions(writing);
         if (!force && (writing.retainInput || editor.composing)) {
             this.deferredPaint.defer(this.paintBasis());
             return;
         }
         this.deferredPaint.clear();
-        const nav = node("div", "", "hosted-modes");
-        nav.setAttribute("role", "group");
-        setUiAttr(nav, "aria-label", uiMessage("shell.documentView"));
-        for (const [mode, label] of modes) {
-            const b = this.button(label, () => this.changeMode(mode));
-            b.setAttribute("aria-pressed", String(this.mode === mode));
-            nav.append(b);
-        }
-        if (this.mode === "source" && this.queries?.hasQueries)
-            nav.append(this.button(this.queryPreview ? uiMessage("hostedEditor.collapseBodyQueryPreview") : uiMessage("hostedEditor.showBodyQueryPreview"), () => { this.queryPreview = !this.queryPreview; this.paint(true); }));
-        nav.append(this.button(uiMessage("hostedEditor.updateWritingPreview"), () => this.compile()));
+        this.syncCommandControls(editor, writing);
         this.sourceHost.hidden = !["source", "styled"].includes(this.mode) && !(this.mode === "focus" && editor.revealed);
         this.flow.hidden = this.mode === "source" && !this.queryPreview;
         if (!this.sourceHost.hidden && editor.view.dom.parentElement !== this.sourceHost)
             editor.mount(this.sourceHost);
-        const options = { onError: this.error, revealSource: (range: WritingRange) => this.reveal(range), insertLink: () => insertWritingLink(writing) };
-        this.toolbar.replaceChildren();
-        this.notesMount?.dispose();
-        const notes = node("div", "", "document-notes-summary");
-        this.toolbar.append(this.button(uiMessage("shell.numberingControls"), () => this.openNumbering()), this.button(uiMessage("shell.outlineHeadingStructure"), () => this.queryHost?.showHeadingStructure?.()), notes);
-        this.notesMount = mountDocumentNotes(notes, documentNotesHost(this.authoringEnvironment()));
-        if (!this.blocked && this.mode !== "read" && (!this.paused || this.mode === "source")) {
-            if (this.mode === "write")
-                this.toolbar.append(createWritingToolbar(writing, options));
-            else
-                this.toolbar.append(this.button(uiMessage("hostedEditor.undo"), () => writing.undo()), this.button(uiMessage("hostedEditor.redo"), () => writing.redo()));
-        }
-        if (this.mode === "focus" && editor.revealed)
-            this.toolbar.append(this.button(uiMessage("shell.collapseSyntax"), () => { editor.clearReveal(); this.paint(true); }));
         if (force || !this.container.contains(this.flow) || this.renderedMode !== this.mode || this.renderedBlocked !== this.blocked) {
             const layout = node("div", "", `hosted-editor-body mode-${this.mode}`);
             layout.append(this.sourceHost, this.flow);
-            this.container.replaceChildren(nav, this.toolbar, this.message, layout);
+            this.container.replaceChildren(...(this.externalRibbon ? [] : [this.ribbon.element]), this.message, layout);
             this.renderedMode = this.mode;
             this.renderedBlocked = this.blocked;
         }

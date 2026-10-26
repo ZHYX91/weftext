@@ -104,6 +104,10 @@ Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust �
 
 `node scripts/test_capture_workspace_browser.mjs` 通过明确的 `WEFTEXT_TEST_EXECUTABLE` 消费构建批次的 CLI 及相邻目录中的 catalog／receipt，使用新的绝对 `WEFTEXT_BROWSER_REPORT` 目录、已安装的 Chrome 和 `WEFTEXT_PLAYWRIGHT_MODULE`。它验证真实 Core、Capture 界面和 IndexedDB 之间的独立草稿切换、一次创建回包丢失与重开恢复；可选 `WEFTEXT_TEST_EXECUTABLE_SHA256` 限定程序摘要，`WEFTEXT_BROWSER_FIXTURE_PARENT` 指定独立短夹具父目录，默认使用系统临时目录。实际挂载组件的退役／迟到 schema 用例另由 `scripts/test_capture_mount_browser.mjs` 以受控传输验证。两者均保留自有资料及清理记录；真实 Core 检查另留原 owner 停机回执，不授予真实原生窗口、系统 IME、辅助技术或整包通过。
 
+`node scripts/test_workspace_layout_browser.mjs ABSOLUTE_CLI ABSOLUTE_NEW_OUTPUT [--dev]` 在自有库和独立无头 Chrome 验证单一树展开、折叠保留父节点、功能区与文档标签、实际编辑器／选区／Undo、格式操作及响应式布局。默认消费程序内嵌前端；`--dev` 仅为当前开发前端诊断。CSS 等效缩放、合成组合键和浏览器结果不替代真实缩放、系统 IME 或读屏验收。功能入口按任务选项卡到达，不通过强制点击隐藏控件维持旧测试。
+
+`scripts/test_everyday_browser.mjs` 的本地及托管日常任务通过实际功能区进入相应命令；托管文档返回检查使用中央画布和源码编辑器各自的非零滚动位置，不以页面的 `window.scrollY` 代替画布位置。
+
 ## 发布
 
 当前 `python scripts/mvp.py check` 检查本地实现，`package` 生成带源码和声明的本地候选，不上传发布。正式发布复用已验收的同一产物，不在发布步骤重新构建另一份。发布前明确目标版本、平台、未通过项和用户授权；发布后核对下载内容及最小运行场景。

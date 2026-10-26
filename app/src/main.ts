@@ -1,4 +1,8 @@
+import { WorkspaceRibbon } from "./workspace-chrome";
+import "./workspace-chrome.css";
+import { disposeUiTree } from "./ui-locale";
 import { LibraryCloseActivity } from "./library-native-close";
+import { fileTreeEntries } from "./file-tree";
 import { originalSaveAsSelection } from "./save-as-origin";
 import { NativeSurface, type CloseRequest } from "./native-host";
 import { nativeApiIdle, freezeNativeApi, thawNativeApi } from "./api";
@@ -34,7 +38,7 @@ import { ensureOfflineFonts } from "./font-readiness";
 import "./navigation-layout.css";
 import "./writing.css";
 import "./paged-preview.css";
-import { createWritingToolbar, createStructureControls } from "./writing-controls";
+import { createWritingCommandGroups, createStructureControls } from "./writing-controls";
 import { createMathSelectionControls } from "./math-selection";
 import { mountDocumentNotes, openDocumentNotes, type DocumentNotesMount } from "./document-notes";
 import { AuthoringAssetsAdapter } from "./authoring-assets-adapter";
@@ -162,6 +166,30 @@ const sidebar = el("aside", "sidebar");
 setUiAttr(sidebar, "aria-label", uiMessage("shell.libraryNavigation"));
 const workspace = el("main", "workspace");
 const topbar = el("header", "topbar");
+const ribbon = new WorkspaceRibbon();
+const headerSidebarToggle = el("button", "icon-button header-sidebar-toggle");
+headerSidebarToggle.type = "button";
+headerSidebarToggle.append(icon("menu"));
+const everydayBar = el("nav", "everyday-bar header-navigation");
+setUiAttr(everydayBar, "aria-label", uiMessage("shell.everydayNavigation"));
+const headerHome = el("span", "home-label", "Weftext");
+const headerActions = el("div", "top-actions");
+const headerSaveState = el("span", "save-state");
+const headerSave = button(uiMessage("common.save"), () => current ? saveDocument(current) : undefined, "button-primary compact", "save");
+headerSave.dataset.command = "save";
+headerActions.append(headerSaveState, headerSave);
+let documentFileControls: { recognition: HTMLButtonElement; saveAs: HTMLButtonElement; timeline: HTMLButtonElement } | undefined;
+const documentRibbonGroups: { tab: "home" | "insert" | "view"; id: string; nodes: HTMLElement[] }[] = [];
+function setDocumentGroup(tab: "home" | "insert" | "view", id: string, label: UiText, nodes: HTMLElement[]): void {
+    documentRibbonGroups.push({ tab, id, nodes });
+    ribbon.setGroup(tab, id, label, nodes);
+}
+function clearDocumentGroups(): void {
+    for (const group of documentRibbonGroups.splice(0)) {
+        for (const node of group.nodes) disposeUiTree(node);
+        ribbon.clearGroup(group.tab, group.id);
+    }
+}
 const tabs = el("nav", "tabs");
 setUiAttr(tabs, "aria-label", uiMessage("shell.openDocuments"));
 const content = el("div", "content");
@@ -170,7 +198,8 @@ const statusbar = el("footer", "statusbar");
 const toastHost = el("div", "toast-host");
 toastHost.setAttribute("aria-live", "polite");
 shell.append(sidebar, workspace);
-workspace.append(topbar, tabs, workspaceBody, statusbar);
+topbar.append(headerSidebarToggle, everydayBar, headerHome, tabs, headerActions);
+workspace.append(topbar, ribbon.element, workspaceBody, statusbar);
 workspaceBody.append(content);
 app.append(shell, toastHost);
 let inventory: Inventory | null = null;
@@ -294,9 +323,6 @@ const navigationContexts = new Map<LiveDocument, {
     contentScroll: number;
     selection: string[];
 }>();
-const everydayBar = el("nav", "everyday-bar");
-setUiAttr(everydayBar, "aria-label", uiMessage("shell.everydayNavigation"));
-workspace.insertBefore(everydayBar, tabs);
 let query = "";
 let selectedFolder: string | null = null;
 let sidebarComposing = false;
@@ -416,15 +442,20 @@ async function stepNavigation(direction: -1 | 1): Promise<void> {
     } finally { finishNativeActivity(); }
 }
 function renderEverydayBar(): void {
-    if (current && !navigatingHistory)
-        everydayNavigation.visit(current.navigationKey);
+    if (current && !navigatingHistory) everydayNavigation.visit(current.navigationKey);
     everydayBar.replaceChildren();
     for (const [direction, label] of [[-1, uiMessage("shell.back")], [1, uiMessage("shell.forward")]] as const) {
-        const control = button(label, () => stepNavigation(direction));
+        const control = button("", () => stepNavigation(direction), `icon-button navigation-direction ${direction < 0 ? "back" : "forward"}`, "arrow");
+        setUiAttr(control, "aria-label", label);
+        setUiAttr(control, "title", label);
         control.disabled = !everydayNavigation.target(direction);
         everydayBar.append(control);
     }
-    everydayBar.append(button(uiMessage("shell.quickOpen"), () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), toast)), button(uiMessage("shell.recentVisits"), showRecent), button(uiMessage("cli.commandsHeading"), () => openEverydayMenu(uiMessage("cli.commandsHeading"), everydayCommands(), toast)), button(uiMessage("shell.insertBlockActions"), () => openEverydayMenu(uiMessage("shell.insertBlockActions"), everydayCommands().filter(item => /^(insert-|convert-|move-|undo|redo|resources)/.test(item.id)), toast)));
+    const quick = button("", () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), toast), "icon-button", "search");
+    setUiAttr(quick, "aria-label", uiMessage("shell.quickOpen"));
+    setUiAttr(quick, "title", uiMessage("shell.quickOpenShortcut"));
+    const commands = button(uiMessage("cli.commandsHeading"), () => openEverydayMenu(uiMessage("cli.commandsHeading"), everydayCommands(), toast), "text-button command-search");
+    everydayBar.append(quick, commands);
 }
 async function insertEverydayQuery(): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
@@ -892,15 +923,13 @@ const workspaceTools = new WorkspaceTools({
 
     }),
 });
-workspace.insertBefore(workspaceTools.bar, workspaceBody);
 const interfaceLocale = new InterfaceLocaleControl(localLocalePreferences(api), () => nativeSurface.confirmLocale());
-workspaceTools.bar.append(interfaceLocale.element);
 document.documentElement.lang = locale.current;
 locale.subscribe(value => { document.documentElement.lang = value; });
 window.addEventListener("pagehide", event => { if (!event.persisted)
     interfaceLocale.dispose(); });
 workspaceBody.append(workspaceTools.inspector);
-const navigationLayout = installNavigationLayout({ shell, sidebar, workspaceBody, inspector: workspaceTools.inspector, toolbar: workspaceTools.bar, notify: toast });
+const navigationLayout = installNavigationLayout({ shell, sidebar, workspaceBody, inspector: workspaceTools.inspector, toolbar: ribbon.element, sidebarToggle: headerSidebarToggle, notify: toast });
 function historyContext(doc: LiveDocument | null): HistoryContext | null {
   if (!doc) return null;
   const { session } = doc;
@@ -1251,36 +1280,17 @@ function renderSidebar(): void {
         if (!inventory.complete)
             heading.append(el("span", "partial-label", uiMessage("shell.scanIncomplete")));
         list.append(heading);
-        const paired = new Map(inventory.entries.filter(entry => entry.kind === "node").map(entry => [normalize(entry.parentPath), entry]));
-        const navigation = inventory.entries.filter(entry => entry.kind !== "node" || !inventory!.entries.some(dir => dir.kind === "directory" && normalize(dir.path) === normalize(entry.parentPath))).map(entry => {
-            const primary = entry.kind === "directory" ? paired.get(normalize(entry.path)) : null;
-            return primary ? { ...primary, relativePath: entry.relativePath, name: entry.name, folderPath: entry.path } : { ...entry, folderPath: entry.kind === "directory" ? entry.path : null };
-        });
-        const matching = navigation.filter(entry => {
-            if (selectedFolder && normalize(entry.path) !== normalize(selectedFolder) && !normalize(entry.path).startsWith(normalize(selectedFolder) + "/"))
-                return false;
-            if (!query.trim())
-                return true;
-            const needle = query.toLocaleLowerCase();
-            return `${entry.name} ${entry.relativePath} ${entry.title ?? ""}`.toLocaleLowerCase().includes(needle);
-        });
-        const visible = matching.filter(entry => query || ![...collapsed].some(path => normalize(entry.path).startsWith(normalize(path) + "/")));
+        const visible = fileTreeEntries(inventory.entries, selectedFolder, query, collapsed);
         for (const entry of visible) {
             const directory = entry.kind === "directory";
             const row = button("", () => directory ? browseFolder(entry.folderPath!) : openInventoryEntry(entry, inventory!.root, inventory!.workspaceId), `tree-row ${current && normalize(current.session.path) === normalize(entry.path) ? "active" : ""}`, entry.folderPath ? "folder" : "file");
             const depth = Math.max(0, entry.relativePath.replaceAll("\\", "/").split("/").length - 1);
-            row.style.paddingLeft = `${12 + (query ? 0 : Math.min(depth, 5) * 14)}px`;
+            row.style.paddingLeft = "0";
             const names = el("span", "tree-names");
             names.append(el("span", "tree-name", entry.title || entry.name));
             if (query)
                 names.append(el("span", "tree-path", entry.relativePath));
             row.append(names);
-            if (entry.folderPath) {
-                const expand = el("span", "tree-chevron", collapsed.has(entry.folderPath) ? "›" : "⌄");
-                setUiAttr(expand, "title", uiMessage("shell.toggleChildFiles"));
-                expand.onclick = event => { event.stopPropagation(); toggleFolder(entry.folderPath!); };
-                row.append(expand);
-            }
             if (!["ordinary", "admitted"].includes(entry.identityStatus))
                 row.append(el("span", "identity-badge", labelStatus[entry.identityStatus] ?? entry.identityStatus));
             setUiAttr(row, "title", () => `${uiTextValue(entry.path)}\n${uiTextValue(labelStatus[entry.identityStatus] ?? entry.identityStatus)}`);
@@ -1294,30 +1304,33 @@ function renderSidebar(): void {
                     menu();
                 }
             };
+            const wrapper = el("div", "tree-row-with-scope");
+            wrapper.style.paddingInlineStart = `${12 + (query ? 0 : Math.min(depth, 5) * 14)}px`;
+            if (entry.folderPath && entry.hasChildren) {
+                const expand = button(entry.collapsed ? "›" : "⌄", () => toggleFolder(entry.folderPath!), "tree-scope-button tree-expand-button");
+                expand.id = `tree-expand-${encodeURIComponent(normalize(entry.folderPath))}`;
+                setUiAttr(expand, "aria-label", displayMessage("shell.toggleFolder", { p0: uiDisplayParameter(entry.name) }));
+                expand.setAttribute("aria-expanded", String(!entry.collapsed));
+                wrapper.append(expand);
+            }
+            else {
+                const spacer = el("span", "tree-expand-placeholder");
+                spacer.setAttribute("aria-hidden", "true");
+                wrapper.append(spacer);
+            }
+            wrapper.append(row);
             if (entry.folderPath) {
-                const wrapper = el("div", "tree-row-with-scope");
                 const scopeButton = button("", () => browseFolder(entry.folderPath), "tree-scope-button", "search");
                 setUiAttr(scopeButton, "aria-label", displayMessage("shell.browseFolderOnly", { p0: uiDisplayParameter(entry.name) }));
                 setUiAttr(scopeButton, "title", displayMessage("shell.setFolderBrowseScope", { p0: uiDisplayParameter(entry.name) }));
-                const expandButton = button(collapsed.has(entry.folderPath) ? "›" : "⌄", () => toggleFolder(entry.folderPath!), "tree-scope-button");
-                setUiAttr(expandButton, "aria-label", displayMessage("shell.toggleFolder", { p0: uiDisplayParameter(entry.name) }));
-                expandButton.setAttribute("aria-expanded", String(!collapsed.has(entry.folderPath)));
-                const more = button("⋯", menu, "tree-scope-button");
-                more.onkeydown = row.onkeydown;
-                more.oncontextmenu = row.oncontextmenu;
-                setUiAttr(more, "aria-label", displayMessage("shell.moreActionsForEntry", { p0: uiDisplayParameter(entry.name) }));
-                wrapper.append(row, expandButton, scopeButton, more);
-                list.append(wrapper);
+                wrapper.append(scopeButton);
             }
-            else {
-                const wrapper = el("div", "tree-row-with-scope");
-                const more = button("⋯", menu, "tree-scope-button");
-                more.onkeydown = row.onkeydown;
-                more.oncontextmenu = row.oncontextmenu;
-                setUiAttr(more, "aria-label", displayMessage("shell.moreActionsForEntry", { p0: uiDisplayParameter(entry.name) }));
-                wrapper.append(row, more);
-                list.append(wrapper);
-            }
+            const more = button("⋯", menu, "tree-scope-button");
+            more.onkeydown = row.onkeydown;
+            more.oncontextmenu = row.oncontextmenu;
+            setUiAttr(more, "aria-label", displayMessage("shell.moreActionsForEntry", { p0: uiDisplayParameter(entry.name) }));
+            wrapper.append(more);
+            list.append(wrapper);
         }
         if (!visible.length)
             list.append(el("div", "search-empty", query ? displayMessage("shell.searchNoMatch", { p0: uiDisplayParameter(query) }) : uiMessage("shell.folderHasNoNotes")));
@@ -1341,7 +1354,7 @@ function renderSidebar(): void {
     }
     navigationLayout.restoreSidebarState();
 }
-function toggleFolder(path: string): void { collapsed.has(path) ? collapsed.delete(path) : collapsed.add(path); renderSidebar(); }
+function toggleFolder(path: string): void { const key = normalize(path); collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key); renderSidebar(); }
 function browseFolder(path: string | null): void {
     workspaceTools.assertLibraryChange(inventory);
     const old = selectedFolder ?? inventory?.root;
@@ -1408,57 +1421,22 @@ function renderNodeContents(host: HTMLElement, folder: string): void {
     });
 }
 function renderTopbar(): void {
-    // Writing blur can report state between pointerdown and click. Preserve the
-    // actual action nodes while updating labels, so the pending click survives.
-    const sessionId = current?.session.opened.sessionId ?? "";
-    if (topbar.dataset.session === sessionId) {
-        if (current) {
-            const title = topbar.querySelector<HTMLElement>(".document-title")!;
-            setUiText(title, basename(current.session.path));
-            const path = topbar.querySelector<HTMLElement>(".document-path")!;
-            setUiText(path, current.session.path);
-            setUiAttr(path, "title", current.session.path);
-            const state = topbar.querySelector<HTMLElement>(".save-state")!;
-            state.className = `save-state ${current.session.dirty ? "dirty" : ""}`;
-            setUiText(state, saveState(current));
-            const save = topbar.querySelector<HTMLButtonElement>('[data-command="save"]')!;
-            save.disabled = saveBusy(current);
-            setUiText(save.lastChild!, saveBusy(current) ? uiMessage("shell.saveAwaitingConfirmationEllipsis") : uiMessage("common.save"));
-        }
-        return;
-    }
-    topbar.dataset.session = sessionId;
-    topbar.replaceChildren();
-    const menu = button("", () => { shell.classList.toggle("sidebar-open"); }, "icon-button mobile-menu", "menu");
-    setUiAttr(menu, "aria-label", uiMessage("shell.showLibraryNavigation"));
-    topbar.append(menu);
-    const location = el("div", "document-location");
+    // These action nodes survive author blur/state acknowledgements. File paths
+    // are tab tooltips, rather than a second permanent document identity row.
+    headerHome.hidden = documents.length > 0;
+    headerSaveState.hidden = !current;
+    headerSave.disabled = !current || saveBusy(current);
     if (current) {
-        const name = el("div", "document-title", basename(current.session.path));
-        const subtitle = el("span", "document-path", current.session.path);
-        setUiAttr(subtitle, "title", current.session.path);
-        location.append(name, subtitle);
+        headerSaveState.className = `save-state ${current.session.dirty ? "dirty" : ""}`;
+        setUiText(headerSaveState, saveState(current));
+        setUiAttr(headerSaveState, "title", saveState(current));
+        setUiText(headerSave.lastChild!, saveBusy(current) ? uiMessage("shell.saveAwaitingConfirmationEllipsis") : uiMessage("common.save"));
     }
-    else
-        location.append(el("span", "home-label", uiMessage("shell.writingAndKnowledge")));
-    topbar.append(location);
-    const actions = el("div", "top-actions");
-    if (current) {
-        const state = el("span", `save-state ${current.session.dirty ? "dirty" : ""}`, saveState(current));
-        actions.append(state);
-        actions.append(button(uiMessage("shell.importRecognition"), () => recognitionPanel.open(), "button-secondary compact"));
-        actions.append(button(uiMessage("shell.saveAs"), saveAs, "button-secondary compact"));
-        const timeline = button(uiMessage("shell.timeline"), () => historyPanel.open(), "button-secondary compact");
-        timeline.disabled = !current.session.opened.nodeId || !current.session.opened.workspaceId;
-        actions.append(timeline);
-        const saveButton = button(saveBusy(current) ? uiMessage("shell.saveAwaitingConfirmationEllipsis") : uiMessage("common.save"), () => saveDocument(current!), "button-primary compact", "save");
-        saveButton.dataset.command = "save";
-        saveButton.disabled = saveBusy(current);
-        actions.append(saveButton);
+    if (documentFileControls) {
+        documentFileControls.recognition.disabled = !current;
+        documentFileControls.saveAs.disabled = !current;
+        documentFileControls.timeline.disabled = !current?.session.opened.nodeId || !current?.session.opened.workspaceId;
     }
-    else
-        actions.append(el("span", "top-note", uiMessage("shell.localNativeTypst")));
-    topbar.append(actions);
 }
 function saveState(doc: LiveDocument): UiText { return doc.writing.state.pending ? uiMessage("shell.textAwaitingConfirmation") : doc.session.opened.recoveredDraftConflict ? uiMessage("shell.recoveredDraftDiskConflict") : historyPanel.hasPending(historyContext(doc)) ? uiMessage("shell.originalHistoryRestorePending") : doc.session.savePending ? uiMessage("shell.saving") : pendingSave(doc) ? uiMessage("shell.saveResultAwaitingConfirmation") : doc.draftFailure ? uiMessage("shell.draftRecoveryWriteFailed") : doc.session.recovered ? uiMessage("shell.draftRecovered") : doc.session.dirty ? uiMessage("shell.unsaved") : uiMessage("shell.saved"); }
 function renderTabs(): void {
@@ -1469,6 +1447,7 @@ function renderTabs(): void {
             tab.className = `document-tab ${doc === current ? "selected" : ""}`;
             tab.setAttribute("aria-current", doc === current ? "page" : "false");
             setUiText(tab.querySelector<HTMLElement>(".tab-name")!, basename(doc.session.path));
+            setUiAttr(tab, "title", doc.session.path);
             const dirty = tab.querySelector(".tab-dirty");
             if (doc.session.dirty && !dirty)
                 tab.append(el("span", "tab-dirty", "•"));
@@ -1483,6 +1462,7 @@ function renderTabs(): void {
     for (const doc of documents) {
         const tab = button("", () => activateDocument(doc), `document-tab ${doc === current ? "selected" : ""}`, "file");
         tab.setAttribute("aria-current", doc === current ? "page" : "false");
+        setUiAttr(tab, "title", doc.session.path);
         tab.append(el("span", "tab-name", basename(doc.session.path)));
         if (doc.session.dirty)
             tab.append(el("span", "tab-dirty", "•"));
@@ -1494,18 +1474,29 @@ function renderTabs(): void {
         tabs.append(add);
     }
 }
+const statusLeft = el("div", "status-left");
+const statusRight = el("div", "status-right");
+const statusMode = button("", () => { ribbon.select("view", true); ribbon.setCollapsed(false); }, "status-mode");
+setUiAttr(statusMode, "aria-label", uiMessage("shell.documentView"));
+statusbar.append(statusLeft, statusMode, statusRight);
 function renderStatus(): void {
-    statusbar.replaceChildren();
+    statusLeft.replaceChildren();
+    statusRight.replaceChildren();
+    statusMode.hidden = !current;
     if (!current) {
-        statusbar.append(el("span", "", uiMessage("shell.filesOnYourDevice")), el("span", "", uiMessage("shell.localPreviewEdition")));
+        statusLeft.append(el("span", "", uiMessage("shell.filesOnYourDevice")));
+        statusRight.append(el("span", "", uiMessage("shell.localPreviewEdition")));
         return;
     }
     const doc = current;
     const session = doc.session;
-    const left = el("div", "status-left");
+    const left = statusLeft;
+    const activeMode = modes.find(mode => mode.id === doc.mode)!;
+    setUiText(statusMode, activeMode.title);
+    setUiAttr(statusMode, "title", activeMode.hint);
     const chars = doc.editor.source === session.source ? doc.editor.characterCount : countSourceCodePoints(session.source);
     left.append(el("span", "", displayMessage("shell.characterCount", { p0: uiDisplayParameter(chars.toLocaleString()) })), el("span", "status-kind", session.opened.nodeId ? uiMessage("shell.libraryNote") : uiMessage("shell.ordinaryTypstFile")));
-    const right = el("div", "status-right");
+    const right = statusRight;
     if (doc.writing.state.pending || doc.writing.state.busy)
         right.append(el("span", "pending-label", doc.writing.state.busy ? uiMessage("shell.textUpdating") : uiMessage("shell.textSyncingToDraft")));
     else if (!sourceConsumersAvailable(doc))
@@ -1524,7 +1515,6 @@ function renderStatus(): void {
         right.append(el("span", "error-label", displayMessage("shell.recoveryDraftNotWritten", { p0: uiDisplayParameter(doc.draftFailure) })));
     else if (session.dirty && session.lastDraftSource === session.source)
         right.append(el("span", "", uiMessage("shell.recoveryDraftRetained")));
-    statusbar.append(left, right);
 }
 function renderWelcome(): void {
     const welcome = el("section", "welcome");
@@ -1661,22 +1651,32 @@ function renderDocument(): void {
         const preview = button(previewVisible ? uiMessage("shell.collapsePreview") : uiMessage("shell.showPreview"), () => { previewVisible = !previewVisible; localStorage.setItem("weftext-preview", String(previewVisible)); renderContent(); }, "text-button preview-toggle", "eye");
         controls.append(preview);
     }
-    content.append(controls);
+    setDocumentGroup("view", "document-mode", uiMessage("shell.documentView"), [controls]);
     const caption = el("div", "view-caption");
-    caption.append(el("span", "", modes.find(m => m.id === doc.mode)!.hint));
     if (doc.mode === "read" || readOnlySource(doc))
         caption.append(el("span", "readonly-label", readOnlySource(doc) ? uiMessage("shell.recycledReadOnly") : uiMessage("shell.readOnlyCurrentDraft")));
     if (doc.session.recovered)
         caption.append(button(uiMessage("shell.recoveredPreviousDraftView"), showDraftComparison, "recovery-caption"));
     if (noteInputRecovery.count(localPersonalAudience()))
         caption.append(button(uiMessage("shell.retrieveUnappliedNoteInput"), showRecovery, "recovery-caption"));
-    content.append(caption);
+    if (caption.childElementCount) content.append(caption);
     doc.notesMount?.dispose();
     const authoring = el("section", "document-authoring-controls"), notes = el("div", "document-notes-summary");
-    authoring.append(button(uiMessage("shell.numberingControls"), () => openLocalNumbering(doc), "text-button"), button(uiMessage("shell.outlineHeadingStructure"), async () => libraryCloseActivity.run(async () => {
+    authoring.append(button(uiMessage("shell.numberingControls"), () => openLocalNumbering(doc), "text-button"), notes);
+    setDocumentGroup("insert", "document-notes", uiMessage("documentNotes.title"), [authoring]);
+    const outline = button(uiMessage("shell.outlineHeadingStructure"), async () => libraryCloseActivity.run(async () => {
         await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings");
-    }), "text-button"), notes);
-    content.append(authoring);
+    }), "text-button");
+    setDocumentGroup("view", "document-outline", uiMessage("localChrome.navigation"), [outline]);
+    if (doc.mode !== "read" && !readOnlySource(doc)) {
+        const history = el("div", "source-history-controls");
+        for (const [redo, label] of [[false, uiMessage("hostedEditor.undo")], [true, uiMessage("hostedEditor.redo")]] as const) {
+            const control = button(label, () => doc.writing.deferUntilCompositionEnds(() => redo ? doc.writing.redo() : doc.writing.undo()), "format-button", redo ? "redo" : "undo");
+            control.addEventListener("mousedown", event => event.preventDefault());
+            history.append(control);
+        }
+        setDocumentGroup("home", "document-history", uiMessage("localChrome.history"), [history]);
+    }
     doc.notesMount = mountDocumentNotes(notes, documentNotesHost(localAuthoringEnvironment(doc)));
     if (doc.session.opened.recoveredDraftConflict) {
         const conflict = el("div", "document-error document-conflict");
@@ -1700,7 +1700,7 @@ function renderDocument(): void {
     if (doc.layout === "paged") {
         if (["source", "styled"].includes(doc.mode)) {
             const sourcePane = el("section", "source-pane");
-            sourcePane.append(sourceToolbar(doc));
+            setDocumentGroup("home", "document-format", uiMessage("localChrome.text"), [sourceToolbar(doc)]);
             const host = el("div", "source-host");
             sourcePane.append(host);
             doc.editor.mount(host);
@@ -1724,7 +1724,7 @@ function renderDocument(): void {
     else if (["source", "styled"].includes(doc.mode)) {
         const sourcePane = el("section", "source-pane");
         setUiAttr(sourcePane, "aria-label", uiMessage("shell.sourceEditingArea"));
-        sourcePane.append(sourceToolbar(doc));
+        setDocumentGroup("home", "document-format", uiMessage("localChrome.text"), [sourceToolbar(doc)]);
         const host = el("div", "source-host");
         sourcePane.append(host);
         doc.editor.mount(host);
@@ -1751,13 +1751,20 @@ function renderDocument(): void {
         flowScroll = flow;
         renderProjection(doc);
         if (doc.mode === "write" && !readOnlySource(doc)) {
-            body.before(createWritingToolbar(doc.writing, { onError: showError, insertLink, revealSource: range => revealWritingSource(doc, range) }));
+            const commands = createWritingCommandGroups(doc.writing, { onError: showError, insertLink, revealSource: range => revealWritingSource(doc, range) });
+            setDocumentGroup("home", "document-format", uiMessage("localChrome.text"), [commands.format]);
+            setDocumentGroup("insert", "document-writing", uiMessage("localChrome.content"), [commands.insert]);
+            // Use the same history owner and handlers supplied by the writing adapter.
+            const priorHistory = documentRibbonGroups.find(group => group.tab === "home" && group.id === "document-history");
+            if (priorHistory) { for (const node of priorHistory.nodes) disposeUiTree(node); priorHistory.nodes = [commands.history]; }
+            ribbon.setGroup("home", "document-history", uiMessage("localChrome.history"), [commands.history]);
         }
         if (doc.mode === "focus" && activeSourceOrigin) {
             const source = el("section", "focus-source");
             const heading = el("div", "pane-heading");
             heading.append(el("span", "", uiMessage("shell.currentConstructSyntax")), button(uiMessage("shell.collapseSyntax"), () => { doc.editor.clearReveal(); activeSourceOrigin = null; renderContent(); }, "text-button", "close"));
-            source.append(heading, sourceToolbar(doc));
+            source.append(heading);
+            setDocumentGroup("home", "document-format", uiMessage("localChrome.text"), [sourceToolbar(doc)]);
             const host = el("div", "source-host");
             source.append(host);
             body.append(source);
@@ -1799,13 +1806,13 @@ function sourceToolbar(doc: LiveDocument): HTMLElement {
                 doc.editor.insert(before, after, placeholder);
         }, `format-button format-${role}`);
         control.disabled = readOnlySource(doc);
+        control.addEventListener("mousedown", event => event.preventDefault());
         toolbar.append(control);
     }
     const link = button(uiMessage("shell.formatLink"), insertLink, "format-button", "link");
     link.disabled = readOnlySource(doc);
+    link.addEventListener("mousedown", event => event.preventDefault());
     toolbar.append(link);
-    const spacer = el("span", "toolbar-spacer");
-    toolbar.append(spacer, el("span", "keyboard-hint", uiMessage("shell.sourceKeyboardHint")));
     return toolbar;
 }
 function renderContent(): void {
@@ -1831,6 +1838,8 @@ function renderContent(): void {
     }
     renderHost = null;
     flowScroll = null;
+    for (const document of documents) { document.notesMount?.dispose(); document.notesMount = undefined; }
+    clearDocumentGroups();
     content.replaceChildren();
     current ? renderDocument() : renderWelcome();
     renderTopbar();
@@ -3419,6 +3428,28 @@ nativeSurface.listen(message => {
         finally { if (deliveryId) nativeSurface.post({ type: "document-delivered", deliveryId, accepted }); }
     })().catch(showError);
 });
+function mountWorkspaceRibbon(): void {
+    workspaceTools.mountRibbon(ribbon);
+    ribbon.setGroup("file", "open", uiMessage("localChrome.files"), [
+        button(uiMessage("shell.openLibrary"), chooseLibrary, "text-button", "book"),
+        button(uiMessage("shell.createLibrary"), createLibrary, "text-button", "plus"),
+        button(uiMessage("shell.openOutsideTypst"), openOutsideFile, "text-button", "file"),
+        button(uiMessage("shell.recentVisits"), showRecent, "text-button"),
+    ]);
+    documentFileControls = {
+        recognition: button(uiMessage("shell.importRecognition"), () => recognitionPanel.open(), "text-button"),
+        saveAs: button(uiMessage("shell.saveAs"), saveAs, "text-button"),
+        timeline: button(uiMessage("shell.timeline"), () => historyPanel.open(), "text-button"),
+    };
+    ribbon.setGroup("file", "document", uiMessage("localChrome.document"), [documentFileControls.saveAs, documentFileControls.recognition, documentFileControls.timeline, button(uiMessage("shell.recoveryRecords"), showRecovery, "text-button", "undo")]);
+    ribbon.setGroup("file", "preferences", uiMessage("localChrome.preferences"), [interfaceLocale.element]);
+    ribbon.setGroup("view", "panes", uiMessage("localChrome.panes"), [navigationLayout.controls]);
+    ribbon.setGroup("insert", "blocks", uiMessage("localChrome.blocks"), [
+        button(uiMessage("shell.insertBlockActions"), () => openEverydayMenu(uiMessage("shell.insertBlockActions"), everydayCommands().filter(item => /^(insert-|convert-|move-|resources)/.test(item.id)), toast), "text-button"),
+        button(uiMessage("shell.insertEmbeddedQuery"), insertEverydayQuery, "text-button"),
+    ]);
+}
+mountWorkspaceRibbon();
 renderSidebar();
 renderContent();
 void bootstrap().then(() => { nativeSurface.markReady(); nativeStartupFinished = true; }).catch(error => { showError(error); nativeSurface.reportFailed(); });

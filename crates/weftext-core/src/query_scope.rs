@@ -1,7 +1,7 @@
 //! Explicit, admitted query objects. The public coordinates come from guarded
 //! OS handles; neither paths nor copied portable markers establish identity.
 use super::*;
-use operations::{CapturedFile, Mutation, SnapshotBinding};
+use operations::{CapturedFile, Mutation, QualifiedReadObservation, SnapshotBinding};
 use std::collections::BTreeSet;
 use weftext_messages::UiMessage;
 
@@ -217,7 +217,8 @@ impl Core {
         let coordinate = backend::file_coordinates(&handle)?;
         self.query_lifecycle_boundary(&root, coordinate.parent().unwrap(), lifecycle)?;
         let bytes = read_source(&mut handle)?;
-        let birth = self.admitted_binding(&actual.identity)?.ok_or_else(|| {
+        let facts = QualifiedReadObservation::read(self)?;
+        let birth = facts.binding(&actual.identity).cloned().ok_or_else(|| {
             CoreError::new(
                 "identityPending",
                 UiMessage::error_core_query_scope_selected_source_has_no_original_physical_admission(),
@@ -235,7 +236,7 @@ impl Core {
                 UiMessage::error_core_query_scope_current_owner_declaration_and_original_admission_differ(),
             ));
         }
-        let places = self.node_placement_paths(&birth)?;
+        let places = facts.placements(&birth)?;
         self.check_query_node_placement_paths(&root, &coordinate, &places)?;
         let captured = CapturedFile {
             path: display(&path),
@@ -243,7 +244,7 @@ impl Core {
             stamp: actual,
         };
         let identity = captured.stamp.identity.clone();
-        let revision = self.accepted_revision(&captured)?;
+        let revision = facts.revision(&captured)?;
         let source_hash = hash(&captured.bytes);
         let main = SnapshotWitness {
             binding: SnapshotBinding {

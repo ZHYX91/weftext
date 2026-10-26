@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
-import type { PanelHost } from "./data-panel";
+import type { DocumentBasis, PanelHost } from "./data-panel";
 import { TestDocument, TestElement } from "./dom.test-support";
 import { ReminderOverview } from "./reminder-overview";
-import type { ReminderHostStatus } from "./reminder-types";
+import { ReminderDeviceControl } from "./reminder-device-control";
+import type { ReminderDelivery, ReminderHostStatus, ReminderRecordsPage } from "./reminder-types";
 import { locale, message, uiTextValue, type MessageKey, type MessageParams } from "./ui-locale";
 
 class Element extends TestElement {
@@ -16,7 +17,7 @@ type ReminderKey = Extract<MessageKey, `reminder.${string}`>;
 type LabelKey = { [K in ReminderKey]: keyof MessageParams<K> extends never ? K : never }[ReminderKey];
 const text = (key: LabelKey): string => uiTextValue(message(key));
 
-function fixture(t: TestContext, status: () => Promise<unknown>, settingsFailure = false) {
+function fixture(t: TestContext, status: () => Promise<unknown>, settingsFailure = false, records: () => ReminderRecordsPage = () => ({ records: [], next: null })) {
   const previous = Object.getOwnPropertyDescriptor(globalThis, "document"), document = new Document(), oldLocale = locale.current;
   Object.defineProperty(globalThis, "document", { configurable: true, writable: true, value: document });
   locale.set("zh-CN");
@@ -29,7 +30,7 @@ function fixture(t: TestContext, status: () => Promise<unknown>, settingsFailure
       return { deviceId: "device", settingsRevision: 1, libraries: [], subscriptions: [] };
     }
     if (route === "/api/reminders/schedule") return { entries: [], issues: [], complete: true, next: null };
-    if (route === "/api/reminders/records") return { records: [], next: null };
+    if (route === "/api/reminders/records") return records();
     throw new Error(`Unexpected route ${route}`);
   } } as unknown as PanelHost;
   const overview = new ReminderOverview(host), element = overview.element as unknown as Element;
@@ -122,4 +123,90 @@ test("Retired overview ignores late desktop status without allocating a new loca
   settle(running); await refresh;
   assert.equal(f.displayed(), previous);
   assert.equal(f.calls.filter(call => call.route === "/api/desktop/status").length, 1);
+});
+
+function record(status: ReminderDelivery): ReminderRecordsPage {
+  return { records: [{ owner: { workspaceId: "workspace", nodeId: "task" }, reminderId: "reminder", triggerInstant: "2026-10-26T09:00:59Z", status }], next: null };
+}
+const submitted: ReminderDelivery = {
+  executionKey: "execution", delivery: { state: "submittedToSystem", at: "2026-10-26T09:01:10Z" },
+  submissionObservation: {
+    startedAt: "2026-10-26T09:00:59.125Z", returnedAt: "2026-10-26T09:00:59.130Z", elapsedNanoseconds: "5000000",
+    result: { kind: "returnedSuccess" },
+  }, handled: false, invalidated: null,
+};
+
+test("Delivery rows keep exact OS-call observations separate from ledger confirmation and switch their labels with the locale", async t => {
+  const f = fixture(t, async () => running, false, () => record(structuredClone(submitted)));
+  await f.overview.refresh();
+  for (const language of ["zh-CN", "en-US"] as const) {
+    locale.set(language);
+    const displayed = f.element.textContent;
+    const observation = submitted.submissionObservation!;
+    assert.ok(displayed.includes(uiTextValue(message("reminder.submissionStartedAt", { at: observation.startedAt }))));
+    assert.ok(displayed.includes(uiTextValue(message("reminder.submissionReturnedAt", { at: observation.returnedAt }))));
+    assert.ok(displayed.includes(uiTextValue(message("reminder.submissionElapsed", { nanoseconds: "5000000" }))));
+    assert.ok(displayed.includes(text("reminder.submissionReturnedSuccess")));
+    assert.ok(displayed.includes(uiTextValue(message("reminder.ledgerConfirmedAt", { at: submitted.delivery.at! }))));
+    assert.equal(displayed.includes(uiTextValue(message("reminder.submissionStartedAt", { at: submitted.delivery.at! }))), false);
+    assert.equal(displayed.includes(text("reminder.submissionObservationMissing")), false);
+  }
+});
+
+test("An OS-call failure retains its original HRESULT and exact duration without claiming known rejection or successful delivery", async t => {
+  const unknown: ReminderDelivery = {
+    ...submitted, delivery: { state: "unknown" },
+    submissionObservation: { ...submitted.submissionObservation!, elapsedNanoseconds: "9007199254740993", result: { kind: "returnedFailure", hresult: -2147467259 } },
+  };
+  const f = fixture(t, async () => running, false, () => record(unknown));
+  await f.overview.refresh();
+  assert.ok(f.element.textContent.includes(text("reminder.unknown")));
+  assert.ok(f.element.textContent.includes(uiTextValue(message("reminder.submissionReturnedFailure", { hresult: -2147467259 }))));
+  assert.ok(f.element.textContent.includes(uiTextValue(message("reminder.submissionElapsed", { nanoseconds: "9007199254740993" }))));
+  assert.equal(f.element.textContent.includes(text("reminder.submitted")), false);
+  assert.equal(f.element.textContent.includes(text("reminder.failedBeforeCall")), false);
+  assert.equal(f.element.textContent.includes(text("reminder.submissionReturnedSuccess")), false);
+});
+
+test("Historical ledger confirmation with a null or absent observation never invents the time of the actual OS call", async t => {
+  let status: ReminderDelivery = { ...submitted, submissionObservation: null };
+  const f = fixture(t, async () => running, false, () => record(status));
+  for (const absent of [false, true]) {
+    status = { ...submitted, submissionObservation: null };
+    if (absent) Reflect.deleteProperty(status, "submissionObservation");
+    await f.overview.refresh();
+    assert.ok(f.element.textContent.includes(text("reminder.submissionObservationMissing")));
+    assert.ok(f.element.textContent.includes(uiTextValue(message("reminder.ledgerConfirmedAt", { at: submitted.delivery.at! }))));
+    assert.equal(f.element.textContent.includes(text("reminder.submissionReturnedSuccess")), false);
+    assert.equal(f.element.textContent.includes(uiTextValue(message("reminder.submissionStartedAt", { at: submitted.delivery.at! }))), false);
+    assert.equal(f.element.textContent.includes(uiTextValue(message("reminder.submissionReturnedAt", { at: submitted.delivery.at! }))), false);
+  }
+});
+
+test("Summary overflow is explicitly in-app-only and cannot appear as a failed OS call", async t => {
+  const f = fixture(t, async () => running, false, () => record({ ...submitted, delivery: { state: "inAppOnly", summaryKey: "summary" }, submissionObservation: null }));
+  await f.overview.refresh();
+  assert.ok(f.element.textContent.includes(text("reminder.inAppOnly")));
+  assert.equal(f.element.textContent.includes(text("reminder.failedBeforeCall")), false);
+  assert.equal(f.element.textContent.includes(text("reminder.submissionReturnedSuccess")), false);
+  assert.equal(f.element.textContent.includes(text("reminder.submissionObservationMissing")), false, "In-app-only records explicitly establish no OS submission, rather than missing timing for a possible call");
+});
+
+test("The task's device control also labels summary overflow as in-app-only", async t => {
+  const f = fixture(t, async () => running);
+  const basis: DocumentBasis = { inputId: "input", root: "library", path: "task.typ", source: "task", sessionId: "session", serial: 1, baseId: "base" };
+  const host = { getDocument: () => basis, async request(route: string) {
+    assert.equal(route, "/api/reminders/inspect");
+    return {
+      candidate: { root: "library", owner: { workspaceId: "workspace", nodeId: "task" }, taskOpen: true, resolution: { state: "ready", reminderId: "reminder", triggerInstant: "2026-10-26T09:00:59Z", diagnostics: [] } },
+      settings: { deviceId: "device", settingsRevision: 1, libraries: [], subscriptions: [] },
+      eligibility: null, issue: null, delivery: { ...submitted, delivery: { state: "inAppOnly", summaryKey: "summary" }, submissionObservation: null },
+    };
+  } } as unknown as PanelHost;
+  const control = new ReminderDeviceControl(host);
+  f.element.append(control.element as unknown as Element);
+  t.after(() => control.retire());
+  await control.refresh(basis);
+  assert.ok(control.element.textContent!.includes(text("reminder.inAppOnly")));
+  assert.equal(control.element.textContent!.includes(text("reminder.failedBeforeCall")), false);
 });

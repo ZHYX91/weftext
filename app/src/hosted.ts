@@ -1,5 +1,7 @@
 import { OrderedDraft, type OrderedDraftTransmission } from "./ordered-draft";
-import { parseUiMessage } from "./ui-locale";
+import { WorkspaceRibbon, type RibbonTab } from "./workspace-chrome";
+import "./workspace-chrome.css";
+import { parseUiMessage, disposeUiTree } from "./ui-locale";
 import { decodeRawDiagnostics, decodeErrorCauses, descriptionUiText } from "./ui-diagnostics";
 import { ApiError, decodeApiError } from "./api-error";
 import { joinUiText } from "./ui-locale";
@@ -21,7 +23,7 @@ import { HostedOffice } from "./hosted-office";
 import { HostedEditor } from "./hosted-editor";
 import { HostedQuery } from "./hosted-query";
 import { HostedHistory } from "./hosted-history";
-import { PersonalInputRecovery, type BrowserProposalAck, type PersonalInputRecord } from "./personal-input-recovery";
+import { PersonalInputRecovery, type BrowserProposalAck, type PersonalInputRecord, type PersonalOriginalRouteProof } from "./personal-input-recovery";
 import { renderPersonalInputs } from "./personal-input-panel";
 import { replayPersonalInput } from "./source-input-origin";
 import { PersonalControlInput } from "./personal-control-input";
@@ -89,6 +91,7 @@ function checkedSaveStatus(result: SaveStatus, operationId: string, resource: st
     return result;
 }
 const root = document.querySelector<HTMLElement>("#hosted")!;
+root.classList.add("hosted-shell");
 root.innerHTML = `<header><span class="brand">Weftext</span><span><span data-ui-message="hostedShell.remotePreviewEdition"></span></span><button id="logout" hidden><span data-ui-message="hostedShell.logoutClearCache"></span></button></header>
 <form id="login"><h1><span data-ui-message="hostedShell.connectSpace"></span></h1><p><span data-ui-message="hostedShell.credentialsDescription"></span></p><label><span data-ui-message="hostedShell.accessCredentials"></span><input id="token" type="password" autocomplete="off" required minlength="32"></label><button><span data-ui-message="hostedShell.connect"></span></button></form>
 <p id="status" role="status" aria-live="polite"><span data-ui-message="hostedShell.notConnected"></span></p>
@@ -142,16 +145,109 @@ let navigatingHistory = false;
 const everydayBar = document.createElement("nav");
 everydayBar.className = "everyday-bar";
 setUiAttr(everydayBar, "aria-label", uiMessage("shell.everydayNavigation"));
-el("source").before(everydayBar);
+const ribbon = new WorkspaceRibbon();
+const documentTabs = document.createElement("nav");
+documentTabs.className = "hosted-document-tabs";
+documentTabs.setAttribute("role", "tablist");
+setUiAttr(documentTabs, "aria-label", uiMessage("shell.openDocuments"));
+const openDocumentTitles = new Map<string, string>();
+const openDocumentButtons = new Map<string, HTMLButtonElement>();
+const inspector = document.createElement("aside");
+inspector.className = "hosted-inspector";
+inspector.hidden = true;
+setUiAttr(inspector, "aria-label", uiMessage("hostedChrome.inspector"));
+const inspectorHeader = document.createElement("header");
+inspectorHeader.className = "hosted-inspector-header";
+const inspectorTitle = document.createElement("strong");
+const inspectorBody = document.createElement("div");
+inspectorBody.className = "hosted-inspector-body";
+const inspectorClose = document.createElement("button");
+inspectorClose.type = "button";
+setUiText(inspectorClose, uiMessage("common.close"));
+inspectorClose.onclick = () => closeHostedInspector();
+inspectorHeader.append(inspectorTitle, inspectorClose);
+inspector.append(inspectorHeader, inspectorBody);
+type HostedPanel = { host: HTMLElement; slot: HTMLElement; button: HTMLButtonElement; trigger: HTMLButtonElement; tab: RibbonTab; title: UiText; wide: boolean };
+const hostedPanels = new Map<string, HostedPanel>();
+let selectedHostedPanel: string | null = null;
+const panelObservers: MutationObserver[] = [];
+function closeHostedInspector(): void {
+    const previous = selectedHostedPanel ? hostedPanels.get(selectedHostedPanel) : undefined;
+    selectedHostedPanel = null;
+    for (const panel of hostedPanels.values()) {
+        panel.slot.hidden = true;
+        panel.button.setAttribute("aria-pressed", "false");
+    }
+    inspector.hidden = true;
+    if (previous) {
+        ribbon.select(previous.tab, true);
+        ribbon.setCollapsed(false);
+        if (previous.trigger.isConnected && !previous.trigger.disabled && !previous.trigger.hidden) previous.trigger.focus();
+    }
+}
+function selectHostedPanel(id: string): boolean {
+    const selected = hostedPanels.get(id);
+    // The original controller, not layout selection, owns authorization/availability.
+    if (!selected || selected.host.hidden) return false;
+    selectedHostedPanel = id;
+    for (const [key, panel] of hostedPanels) {
+        panel.slot.hidden = key !== id;
+        panel.button.setAttribute("aria-pressed", String(key === id));
+    }
+    setUiText(inspectorTitle, selected.title);
+    inspector.classList.toggle("wide", selected.wide);
+    inspector.hidden = false;
+    return true;
+}
+function syncHostedPanels(): void {
+    for (const panel of hostedPanels.values()) panel.button.disabled = busy || panel.host.hidden;
+    if (selectedHostedPanel && hostedPanels.get(selectedHostedPanel)?.host.hidden) closeHostedInspector();
+}
+function renderHostedDocumentTabs(): void {
+    const retained = new Set(source.openResources);
+    for (const resource of openDocumentTitles.keys()) {
+        if (retained.has(resource)) continue;
+        openDocumentTitles.delete(resource);
+        const button = openDocumentButtons.get(resource);
+        if (button) { disposeUiTree(button); button.remove(); }
+        openDocumentButtons.delete(resource);
+    }
+    if (doc && retained.has(doc.resource)) openDocumentTitles.set(doc.resource, doc.title);
+    for (const [resource, title] of openDocumentTitles) {
+        let button = openDocumentButtons.get(resource);
+        if (!button) {
+            button = document.createElement("button");
+            button.type = "button";
+            button.setAttribute("role", "tab");
+            button.setAttribute("aria-controls", "source");
+            button.onclick = () => { void run(() => open(resource)); };
+            openDocumentButtons.set(resource, button);
+            documentTabs.append(button);
+        }
+        if (button.textContent !== title) setUiText(button, title);
+        button.disabled = busy;
+        button.tabIndex = doc?.resource === resource ? 0 : -1;
+        button.setAttribute("aria-selected", String(doc?.resource === resource));
+    }
+}
+documentTabs.addEventListener("keydown", event => {
+    if (event.isComposing || event.keyCode === 229 || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    const buttons = [...openDocumentButtons.values()].filter(button => !button.disabled);
+    const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    if (index < 0 || !buttons.length) return;
+    event.preventDefault();
+    const next = event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : (index + (event.key === "ArrowRight" ? 1 : -1) + buttons.length) % buttons.length;
+    buttons[next].focus();
+});
 function everydayEntries() { return structureDocuments.map(item => ({ key: item.resource, title: item.title, detail: item.resource, open: () => run(() => open(item.resource)) })); }
 function everydayCommands(): EverydayCommand[] {
     return [
         { id: "quick-open", label: uiMessage("shell.quickOpen"), run: () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), status) },
-        { id: "relationship-graph", label: uiMessage("shell.openRelationshipGraph"), run: () => knowledgeLinks.showStructure("graph") },
-        { id: "heading-structure", label: uiMessage("shell.openHeadingStructure"), run: () => knowledgeLinks.showStructure("headings") },
+        { id: "relationship-graph", label: uiMessage("shell.openRelationshipGraph"), run: async () => { await knowledgeLinks.showStructure("graph"); selectHostedPanel("knowledge-links"); } },
+        { id: "heading-structure", label: uiMessage("shell.openHeadingStructure"), run: async () => { await knowledgeLinks.showStructure("headings"); selectHostedPanel("knowledge-links"); } },
         { id: "recent", label: uiMessage("shell.recentVisits"), run: showRecent },
         { id: "save", label: uiMessage("shell.saveCurrentNote"), unavailable: !authoringEditable() ? uiMessage("hostedShell.bodyCannotSave") : undefined, run: () => run(save) },
-        ...source.commands(async () => { el("query").hidden = false; el("query").scrollIntoView(); el("query").querySelector<HTMLInputElement>('input[data-control-role="definition-label"]')?.focus(); status(uiMessage("hostedShell.queryPromotePlanHint")); }),
+        ...source.commands(async () => { el("query").hidden = false; selectHostedPanel("query"); el("query").scrollIntoView(); el("query").querySelector<HTMLInputElement>('input[data-control-role="definition-label"]')?.focus(); status(uiMessage("hostedShell.queryPromotePlanHint")); }),
     ];
 }
 function showRecent() { const entries = everydayEntries(); openEverydayPicker(uiMessage("shell.recentVisits"), everydayNavigation.recent.flatMap(key => entries.filter(item => item.key === key)), status); }
@@ -170,17 +266,49 @@ async function stepNavigation(direction: -1 | 1) {
         renderEverydayBar();
     }
 }
+function hostedChromeIcon(name: string): SVGSVGElement {
+    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    icon.setAttribute("viewBox", "0 0 24 24");
+    icon.setAttribute("fill", "none");
+    icon.setAttribute("stroke", "currentColor");
+    icon.setAttribute("stroke-width", "1.6");
+    icon.setAttribute("stroke-linecap", "round");
+    icon.setAttribute("stroke-linejoin", "round");
+    icon.setAttribute("aria-hidden", "true");
+    icon.setAttribute("focusable", "false");
+    const shapes: Record<string, string> = { back: "M14 5l-7 7 7 7", forward: "M10 5l7 7-7 7", "quick-open": "M21 21l-5-5M18 10a8 8 0 1 1-16 0 8 8 0 0 1 16 0", commands: "M4 6h16M4 12h16M4 18h16", recent: "M3 11a9 9 0 1 1 3 8M3 4v7h7", insert: "M12 4v16M4 12h16", navigation: "M3 4h18v16H3zM9 4v16" };
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", shapes[name] ?? shapes.commands);
+    icon.append(path);
+    return icon;
+}
+const everydayControls = new Map<string, HTMLButtonElement>();
 function renderEverydayBar() {
-    if (doc && !navigatingHistory)
-        everydayNavigation.visit(doc.resource);
-    everydayBar.replaceChildren();
-    const add = (label: UiText, action: () => void | Promise<void>, disabled = false) => { const button = document.createElement("button"); button.type = "button"; setUiText(button, label); button.disabled = disabled; button.onclick = () => { void Promise.resolve().then(action).catch(error => status(errorUiText(error))); }; everydayBar.append(button); };
-    add(uiMessage("shell.back"), () => run(() => stepNavigation(-1)), !everydayNavigation.target(-1) || busy);
-    add(uiMessage("shell.forward"), () => run(() => stepNavigation(1)), !everydayNavigation.target(1) || busy);
-    add(uiMessage("shell.quickOpen"), () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), status), busy);
-    add(uiMessage("shell.recentVisits"), showRecent, busy);
-    add(uiMessage("cli.commandsHeading"), () => openEverydayMenu(uiMessage("cli.commandsHeading"), everydayCommands(), status), busy);
-    add(uiMessage("shell.insertBlockActions"), () => openEverydayMenu(uiMessage("shell.insertBlockActions"), source.commands(), status), busy);
+    if (doc && !navigatingHistory) everydayNavigation.visit(doc.resource);
+    const add = (id: string, label: UiText, action: () => void | Promise<void>, disabled = false) => {
+        let button = everydayControls.get(id);
+        if (!button) {
+            button = document.createElement("button");
+            button.type = "button";
+            button.dataset.command = id;
+            setUiAttr(button, "aria-label", label);
+            setUiAttr(button, "title", label);
+            const caption = document.createElement("span");
+            caption.className = "hosted-command-label";
+            setUiText(caption, label);
+            button.append(hostedChromeIcon(id), caption);
+            button.onclick = () => { void Promise.resolve().then(action).catch(error => status(errorUiText(error))); };
+            everydayControls.set(id, button);
+        }
+        button.disabled = disabled;
+        if (["back", "forward", "quick-open", "commands"].includes(id) && button.parentElement !== everydayBar) everydayBar.append(button);
+    };
+    add("back", uiMessage("shell.back"), () => run(() => stepNavigation(-1)), !everydayNavigation.target(-1) || busy);
+    add("forward", uiMessage("shell.forward"), () => run(() => stepNavigation(1)), !everydayNavigation.target(1) || busy);
+    add("quick-open", uiMessage("shell.quickOpen"), () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), status), busy);
+    add("recent", uiMessage("shell.recentVisits"), showRecent, busy);
+    add("commands", uiMessage("cli.commandsHeading"), () => openEverydayMenu(uiMessage("cli.commandsHeading"), everydayCommands(), status), busy);
+    add("insert", uiMessage("shell.insertBlockActions"), () => openEverydayMenu(uiMessage("shell.insertBlockActions"), source.commands(), status), busy || !doc);
 }
 const personalInputs = new PersonalInputRecovery();
 const personalControls = new PersonalControlInput(document, context => context.audience === personalAudience() && context.epoch === authorizationEpoch, ({ context, id, revision, text, producerId, producerRevision }) => {
@@ -217,6 +345,7 @@ async function showCapturePicker(): Promise<void> {
     if (!identity || !personalAudience())
         throw new UiError(uiMessage("hostedShell.reauthenticateOriginalAccount"));
     capturePanel.hidden = false;
+    selectHostedPanel("capture-panel");
     if (hostedCapture) {
         capturePanel.scrollIntoView();
         return;
@@ -292,7 +421,7 @@ async function showCapturePicker(): Promise<void> {
     create.disabled = slots.options.length === 0;
     capturePanel.replaceChildren(captureUi("h2", "", uiMessage("capture.title")), captureUi("p", "", uiMessage("capture.restoreDraft")), existing, restore, captureUi("p", "", uiMessage("capture.target")), slots, create, diagnostic);
 }
-const fields = new HostedFields(el("fields"), request, (id, metadata) => office.setQuery(id, metadata), () => queries.environmentChanged(uiMessage("hostedShell.fieldsChangedQueryMustRerun")), authorInputs);
+const fields = new HostedFields(el("fields"), request, (id, metadata) => showOfficeQuery(id, metadata), () => queries.environmentChanged(uiMessage("hostedShell.fieldsChangedQueryMustRerun")), authorInputs);
 const source: HostedEditor = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(errorUiText(error)), {
     canOpenRow: row => (row as HostedQueryRow).canOpen === true && !!(row as HostedQueryRow).resource,
     openRow: row => {
@@ -302,9 +431,9 @@ const source: HostedEditor = new HostedEditor(el("source"), request, sourceChang
         return openQueryResource(target.resource);
     },
     openOwner: async () => { throw new UiError(uiMessage("hostedShell.querySourceNoAuthorizedNavigation")); },
-    output: (query, result) => office.setQuery(query.queryId, { columns: result.columns ?? [], rowCount: result.rows.length, coverage: result.coverage }),
+    output: (query, result) => showOfficeQuery(query.queryId, { columns: result.columns ?? [], rowCount: result.rows.length, coverage: result.coverage }),
     modeChanged: () => { queries.authorChanged(); knowledgeAuthorChanged(); },
-    showHeadingStructure: () => knowledgeLinks.showStructure("headings"),
+    showHeadingStructure: async () => { await knowledgeLinks.showStructure("headings"); selectHostedPanel("knowledge-links"); },
     navigateReference,
     navigateResource,
     dependencies: () => queries.dependencies(),
@@ -480,7 +609,7 @@ const office: HostedOffice = new HostedOffice(el("office"), request, () => doc ?
 } : null, () => source.flush(), () => { void list().catch(e => status(e instanceof Error ? errorUiText(e) : uiMessage("hostedShell.refreshDocumentListFailed"))); }, {
     identity: hostedIdentity, basis: () => source.historyBasis(true), embeddedQueries: () => source.outputSelections(), authorizationChanged: authorizationsChanged,
 });
-const queries = new HostedQuery(el("query"), request, openQueryResource, (id, metadata) => office.setQuery(id, metadata), {
+const queries = new HostedQuery(el("query"), request, openQueryResource, (id, metadata) => showOfficeQuery(id, metadata), {
     context: () => doc ? { resource: doc.resource, sessionId: doc.sessionId, baseId: doc.baseId, source: source.value, serial: source.serial, inputId: source.authorInputId, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending, compare: compareRequired, definitionReservations: draft?.definitionReservations } : null,
     prepareBasis: () => source.prepareQueryBasis(),
     apply: (patches, basis) => source.applyQueryPatches(patches, basis, "input.query.definition.proposal"),
@@ -491,7 +620,7 @@ const queries = new HostedQuery(el("query"), request, openQueryResource, (id, me
         draft.definitionReservations = mergeDefinitionReservations(draft.definitionReservations ?? [], receipts, includeReserved);
         retain();
     },
-}, () => source.queryInputsChanged(), navigateResource, { canEdit: (resource, fieldId) => fields.canEdit(resource, fieldId), open: (resource, fieldId) => fields.openGranted(resource, fieldId) });
+}, () => source.queryInputsChanged(), navigateResource, { canEdit: (resource, fieldId) => fields.canEdit(resource, fieldId), open: async (resource, fieldId) => { await fields.openGranted(resource, fieldId); selectHostedPanel("fields"); } });
 const knowledgeLinks = new HostedKnowledgeLinks(el("knowledge-links"), (path, body, signal) => request(path, body, false, 0, signal), {
     identity: hostedIdentity,
     context: () => doc && identity && !source.pausedSession ? { actor: identity.actor, deployment: identity.deployment, generation: identity.generation, credential: token, epoch: requestEpoch, authorization: authorizationEpoch, resource: doc.resource, sessionId: doc.sessionId, source: source.value, serial: source.serial, inputId: source.authorInputId, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending || history.hasPending(doc.resource), compare: compareRequired } : null,
@@ -662,18 +791,15 @@ async function openStructureResult(result: NonNullable<StructureReceipt["result"
     try {
         if (epoch !== requestEpoch || doc !== selected)
             return;
-        const ref = await request<{
-            resource: string;
-            reference: string;
-        }>("navigation/ref", { sessionId: fresh.sessionId });
-        if (epoch !== requestEpoch || doc !== selected || ref.reference !== expected || ref.resource !== fresh.resource)
+        const reference = await readDocumentReference(fresh);
+        if (epoch !== requestEpoch || doc !== selected || reference !== expected)
             throw new UiError(uiMessage("hostedShell.structureNewLocationEligibilityChanged"));
+        await retain();
+        if (epoch !== requestEpoch || doc !== selected)
+            return;
         if (original?.reference === expected) {
             const retained = selected?.resource === intent.source && draft ? { ...draft, source: source.value } : original;
-            if (selected?.resource === intent.source && source.pausedSession)
-                source.rebindResourceAlias(fresh.resource);
-            requestEpoch++;
-            installDocument(fresh, retained);
+            installDocument(fresh, retained, reference, false, false, selected?.resource === intent.source && source.pausedSession);
             adopted = true;
             if (fresh.rights.write && retained.source !== fresh.source) {
                 await persistHostedDraft(fresh, retained.source);
@@ -682,8 +808,7 @@ async function openStructureResult(result: NonNullable<StructureReceipt["result"
             }
         }
         else {
-            requestEpoch++;
-            installDocument(fresh, cached(fresh.resource) ?? { ...hostedDocumentDraft(fresh), reference: ref.reference });
+            installDocument(fresh, cached(fresh.resource) ?? hostedDocumentDraft(fresh), reference);
             adopted = true;
         }
         if (selected)
@@ -764,7 +889,7 @@ async function navigateReference(reference: string) {
         if (currentTarget && draft?.pending)
             throw new UiError(uiMessage("hostedShell.targetSaveUnverified"));
         const prior = doc;
-        let target: Doc, targetDraft: HostedDraft;
+        let target: Doc, targetDraft: HostedDraft, targetReference: string | undefined;
         if (currentTarget) {
             target = doc!;
             targetDraft = draft!;
@@ -775,6 +900,11 @@ async function navigateReference(reference: string) {
             if (!sameHostedNodeAudience(captured, nodeAudience()))
                 return;
             if (target.resource !== resolved.resource)
+                throw new UiError(uiMessage("hostedShell.stagedTargetAuthorizedMismatch"));
+            targetReference = await readDocumentReference(target);
+            if (!sameHostedNodeAudience(captured, nodeAudience()))
+                return;
+            if (targetReference !== parts.base)
                 throw new UiError(uiMessage("hostedShell.stagedTargetAuthorizedMismatch"));
             let local: HostedDraft | undefined;
             try {
@@ -788,7 +918,7 @@ async function navigateReference(reference: string) {
         }
         const retainedAlias = !currentTarget && source.pausedSession && draft?.reference === parts.base;
         if (!currentTarget) {
-            targetDraft = qualifyHostedDraft(target, targetDraft);
+            targetDraft = bindHostedDraftReference(qualifyHostedDraft(target, targetDraft), targetReference!);
             targetDraft.inputId ??= retainedAlias ? source.authorInputId : crypto.randomUUID();
         }
         const inputId = currentTarget ? source.authorInputId : targetDraft.inputId!;
@@ -812,10 +942,10 @@ async function navigateReference(reference: string) {
             return;
         }
         if (!currentTarget) {
-            if (retainedAlias)
-                source.rebindResourceAlias(target.resource);
-            requestEpoch++;
-            installDocument(target, targetDraft);
+            await retain();
+            if (!sameHostedNodeAudience(captured, nodeAudience()))
+                return;
+            installDocument(target, targetDraft, targetReference!, false, false, retainedAlias);
             adopted = true;
             if (prior)
                 void closeOwnedSession(prior.sessionId, captured).catch(() => {});
@@ -839,32 +969,18 @@ async function navigateReference(reference: string) {
             await closeOwnedSession(staged.sessionId, captured);
     }
 }
-async function readReference(selected: Doc, epoch: number) {
-    stableReference = undefined;
-    el("stable-link").hidden = true;
-    el<HTMLInputElement>("node-reference").value = "";
-    try {
-        const result = await request<{
-            resource: string;
-            reference: string;
-        }>("navigation/ref", { sessionId: selected.sessionId });
-        if (epoch !== requestEpoch || doc !== selected || !draft)
-            return;
-        if (result.resource !== selected.resource || !/^weftext-node:\/\//.test(result.reference))
-            throw new UiError(uiMessage("hostedShell.noteAuthorizedStableIdentityMissing"));
-        const qualified = bindHostedDraftReference({ ...draft, source: source.value }, result.reference);
-        draftCache.write(selected.resource, qualified);
-        draft = qualified;
-        source.personalInputReference(selected.resource, result.reference);
-        stableReference = { resource: selected.resource, sessionId: selected.sessionId, reference: result.reference };
-        el<HTMLInputElement>("node-reference").value = result.reference;
-        el("stable-link").hidden = false;
-        controls();
-    }
-    catch (error) {
-        if (epoch === requestEpoch && doc === selected)
-            status(error instanceof Error ? errorUiText(error) : uiMessage("hostedShell.stableIdentityUnavailable"));
-    }
+/** Read only the staged session. No producer, draft or visible owner is changed. */
+async function readDocumentReference(selected: Doc): Promise<string> {
+    const result = await request<{ resource: string; reference: string }>("navigation/ref", { sessionId: selected.sessionId }, false, 0, AbortSignal.timeout(10000), "stagedTarget");
+    if (result.resource !== selected.resource || typeof result.reference !== "string" || !/^weftext-node:\/\//.test(result.reference))
+        throw new UiError(uiMessage("hostedShell.noteAuthorizedStableIdentityMissing"));
+    return result.reference;
+}
+function publishDocumentReference(selected: Doc, reference: string): void {
+    stableReference = { resource: selected.resource, sessionId: selected.sessionId, reference };
+    el<HTMLInputElement>("node-reference").value = reference;
+    el("stable-link").hidden = false;
+    controls();
 }
 async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied" | "superseded"> {
     const selected = doc, epoch = requestEpoch, audience = sessionAudience();
@@ -878,12 +994,20 @@ async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied
     try {
         if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>audience[key] !== sessionAudience()[key]))
             throw new UiError(uiMessage("hostedShell.restoreObjectOrUserChanged"));
+        const target = fresh.sessionId === selected.sessionId ? fresh : selected;
+        const reference = await readDocumentReference(target);
+        if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>audience[key] !== sessionAudience()[key]))
+            throw new UiError(uiMessage("hostedShell.restoreObjectOrUserChanged"));
         const confirmed = await request<HostedHistoryStatus>("history/status", { resource: record.request.resource, operationId: record.request.operationId });
         if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>audience[key] !== sessionAudience()[key]))
             throw new UiError(uiMessage("hostedShell.restoreObjectOrUserChanged"));
         const accepted = history.installStatus(record, confirmed);
         if (!accepted.result)
             throw new UiError(uiMessage("hostedShell.restoreResultNoCurrentDeliveryRight"));
+        await retain();
+        if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>audience[key] !== sessionAudience()[key]))
+            throw new UiError(uiMessage("hostedShell.restoreObjectOrUserChanged"));
+        source.personalInputReference(target.resource, reference);
         const installed = currentHostedHistoryResult(record, fresh.source, accepted), buffer = { sessionId: selected.sessionId, source: source.value, serial: source.serial, inputId: source.authorInputId };
         const current: HistoryContext = { ...buffer, path: `resource:${selected.resource}`, root: "", baseId: selected.baseId, baseSource: selected.source, dirty: buffer.source !== selected.source, nodeId: record.basis.nodeId, workspaceId: record.basis.workspaceId };
         const replaceClean = installed && fresh.sessionId === selected.sessionId && !fresh.recoveredDraftConflict && restoreBufferDisposition(record.basis, current) === "replaceClean";
@@ -891,7 +1015,6 @@ async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied
         const retainedSource = source.value, originalDraftBase = draft.baseSource;
         // Keep the initiating producer. A returned comparison never grants
         // a different writer permission to adopt this editor's later input.
-        const target = fresh.sessionId === selected.sessionId ? fresh : selected;
         if (target !== selected) orderedDrafts.set(target, draftOrder(selected));
         doc = target;
         source.open(target.sessionId, target.resource, retainedSource);
@@ -909,7 +1032,7 @@ async function acknowledgeHistory(record: HostedHistoryRecord): Promise<"applied
         queries.authorChanged(true);
         knowledgeAuthorChanged();
         void queries.refreshCatalog();
-        void readReference(fresh, epoch);
+        publishDocumentReference(target, reference);
         if (target.rights.write) await persistHostedDraft(target,retainedSource);
         return replaceClean ? "applied" : "superseded";
     }
@@ -934,12 +1057,19 @@ async function finishUnavailableHistory(record: HostedHistoryRecord): Promise<vo
     try {
         if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>captured[key] !== sessionAudience()[key]))
             throw new UiError(uiMessage("hostedShell.rereadObjectOrUserChanged"));
+        const reference = await readDocumentReference(fresh);
+        if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>captured[key] !== sessionAudience()[key]))
+            throw new UiError(uiMessage("hostedShell.rereadObjectOrUserChanged"));
         const confirmed = await request<HostedHistoryStatus>("history/status", { resource: record.request.resource, operationId: record.request.operationId });
         if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>captured[key] !== sessionAudience()[key]))
             throw new UiError(uiMessage("hostedShell.rereadObjectOrUserChanged"));
         history.installStatus(record, confirmed);
         if (!unavailableCommittedHistory(record))
             throw new UiError(uiMessage("hostedShell.originalDeliveryStatusChanged"));
+        await retain();
+        if (epoch !== requestEpoch || doc !== selected || !draft || (["authorization","credential","actor","generation","deployment"] as const).some(key=>captured[key] !== sessionAudience()[key]))
+            throw new UiError(uiMessage("hostedShell.rereadObjectOrUserChanged"));
+        source.personalInputReference(fresh.resource, reference);
         const retainedSource = source.value;
         doc = fresh;
         draft = { ...draft, source: retainedSource };
@@ -954,7 +1084,7 @@ async function finishUnavailableHistory(record: HostedHistoryRecord): Promise<vo
         history.documentChanged();
         knowledgeAuthorChanged();
         controls();
-        void readReference(fresh, epoch);
+        publishDocumentReference(fresh, reference);
         queueHostedWriterRetirement(selected,fresh);
         if (fresh.rights.write) await persistHostedDraft(fresh,retainedSource);
     }
@@ -1013,6 +1143,10 @@ function clearDisplay(message: UiText, clearToken = false) {
     expiredSessionId = undefined;
     everydayNavigation.clear();
     everydayBar.replaceChildren();
+    openDocumentTitles.clear();
+    openDocumentButtons.clear();
+    documentTabs.replaceChildren();
+    closeHostedInspector();
     document.querySelectorAll<HTMLDialogElement>(".everyday-dialog").forEach(dialog => { dialog.close(); dialog.remove(); });
     // Logout retires its pending action. A new login may start immediately;
     // the former action's catch/finally cannot change the new account's UI.
@@ -1186,6 +1320,8 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
 }
 function controls() {
     renderEverydayBar();
+    renderHostedDocumentTabs();
+    syncHostedPanels();
     for (const button of el("documents").querySelectorAll<HTMLButtonElement>("button"))
         button.disabled = busy;
     try {
@@ -1197,7 +1333,7 @@ function controls() {
     }
     for (const id of ["latex", "diagram"])
         el<HTMLButtonElement>(id).disabled = !authoringEditable();
-    el<HTMLButtonElement>("save").disabled = busy || !doc?.rights.write || source.pausedSession || compareRequired || !!draft?.pending || !!doc && history.hasPending(doc.resource);
+    el<HTMLButtonElement>("save").disabled = busy || !doc?.rights.write || source.pausedSession || compareRequired || !!draft?.pending || !!doc && (history.hasPending(doc.resource) || unresolvedPersonalSave(doc));
     for (const id of ["preview", "reopen"])
         el<HTMLButtonElement>(id).disabled = busy || !doc || source.pausedSession && id === "preview";
     el<HTMLButtonElement>("download").disabled = busy || !doc?.rights.download || source.pausedSession;
@@ -1234,6 +1370,24 @@ async function confirmIdentity(next: Me): Promise<void> {
     controls();
 }
 function personalAudience(): string | null { const current = identity ? JSON.stringify([identity.deployment, identity.actor]) : ""; return current && current === verifiedPersonalAudience ? current : null; }
+/** A known route is not a terminal operation result. A fresh session identity
+ * can exclude a separately proved node, never guess an alias. */
+function unresolvedPersonalSave(selected: Doc, preparedOperationId?: string): boolean {
+    const audience = personalAudience();
+    if (!audience)
+        return false;
+    const reference = stableReference?.resource === selected.resource && stableReference.sessionId === selected.sessionId ? stableReference.reference : undefined;
+    return personalInputs.list(audience).some(record => {
+        const pending = record.pending;
+        if (!pending || pending.status !== "unresolved")
+            return false;
+        // This exact newly prepared request has not been sent yet. Every older
+        // operation remains a barrier, including one recovered after logout.
+        if (pending.operationId === preparedOperationId && pending.route === "known" && pending.resource === selected.resource)
+            return false;
+        return record.owner.kind !== "body" || !record.owner.reference || !reference || record.owner.resource === selected.resource || record.owner.reference === reference || pending.route === "known" && pending.resource === selected.resource;
+    });
+}
 function observePersonalWrite(write: Promise<BrowserProposalAck>, audience: string): Promise<BrowserProposalAck> {
     void write.catch(error => {
         if (personalAudience() === audience) {
@@ -1250,11 +1404,27 @@ function persistPersonalInputs(): Promise<BrowserProposalAck | undefined> {
     const updates = source.personalInputRecords();
     return observePersonalWrite(personalInputs.update(audience, updates), audience);
 }
-async function finishPersonalOperation(operationId: string, terminal: "committed" | "cancelled" | "resolved"): Promise<void> {
-    source.settlePersonalSave(operationId, terminal === "committed");
-    const audience = personalAudience();
-    if (!audience)
+async function qualifyPersonalOriginalRoute(proof: PersonalOriginalRouteProof): Promise<void> {
+    const audience = personalAudience(), epoch = authorizationEpoch, credential = token;
+    if (!audience || proof.audience !== audience)
+        throw new UiError(uiMessage("hostedShell.reauthenticateOriginalAccount"));
+    const operationId = proof.kind === "hostedDraft" ? proof.pending.operationId : proof.receipt.operationId;
+    const original = personalInputs.list(audience).find(record => record.pending?.operationId === operationId && record.pending.route === "unknownOriginalRoute");
+    if (!original)
         return;
+    await observePersonalWrite(personalInputs.proveOriginalRoute(audience, original, proof), audience);
+    if (personalAudience() !== audience || epoch !== authorizationEpoch || credential !== token)
+        throw new UiError(uiMessage("hostedShell.recoveryAccountOrAuthorizationChanged"));
+}
+async function finishPersonalOperation(operationId: string, terminal: "committed" | "cancelled" | "resolved", receipt: SaveStatus): Promise<void> {
+    const audience = personalAudience(), epoch = authorizationEpoch, credential = token;
+    if (!audience || typeof receipt.resource !== "string" || receipt.status !== terminal)
+        throw new UiError(uiMessage("hostedShell.saveReceiptBasisMismatch"));
+    checkedSaveStatus(receipt, operationId, receipt.resource);
+    await qualifyPersonalOriginalRoute({ kind: "coreReceipt", audience, receipt: { operationId, resource: receipt.resource, status: terminal } });
+    if (personalAudience() !== audience || epoch !== authorizationEpoch || credential !== token)
+        throw new UiError(uiMessage("hostedShell.recoveryAccountOrAuthorizationChanged"));
+    source.settlePersonalSave(operationId, terminal === "committed");
     await Promise.all(personalInputs.list(audience).filter(record => record.pending?.operationId === operationId).map(record => observePersonalWrite(personalInputs.settle(audience, record, terminal), audience)));
 }
 function showPersonalInputs(): void {
@@ -1305,19 +1475,22 @@ async function recoverPersonalOperation(record: PersonalInputRecord, audience: s
     record = personalInputs.current(audience, record);
     if (!record.pending || record.owner.kind !== "body")
         throw new UiError(uiMessage("hostedShell.bodySaveOperationMissing"));
-    let outcome = await request<SaveStatus>("operation", { resource: record.owner.resource, operationId: record.pending.operationId });
+    if (record.pending.route !== "known")
+        throw new UiError(uiMessage("personalInput.unknownOriginalRoute"));
+    const resource = record.pending.resource;
+    let outcome = await request<SaveStatus>("operation", { resource, operationId: record.pending.operationId });
     if (authorizationEpoch !== epoch || personalAudience() !== audience)
         return;
-    checkedSaveStatus(outcome, record.pending.operationId, record.owner.resource);
+    checkedSaveStatus(outcome, record.pending.operationId, resource);
     if (["notRegistered", "notCommitted"].includes(outcome.status))
-        outcome = await request<SaveStatus>("operation/settle", { resource: record.owner.resource, operationId: record.pending.operationId });
+        outcome = await request<SaveStatus>("operation/settle", { resource, operationId: record.pending.operationId });
     if (authorizationEpoch !== epoch || personalAudience() !== audience)
         return;
     personalInputs.current(audience, record);
-    checkedSaveStatus(outcome, record.pending.operationId, record.owner.resource);
+    checkedSaveStatus(outcome, record.pending.operationId, resource);
     if (!["committed", "cancelled", "resolved"].includes(outcome.status))
         throw new UiError(uiMessage("hostedShell.originalSaveUnknownIdRetained"));
-    await finishPersonalOperation(record.pending.operationId, outcome.status as "committed" | "cancelled" | "resolved");
+    await finishPersonalOperation(record.pending.operationId, outcome.status as "committed" | "cancelled" | "resolved", outcome);
 }
 async function restorePersonalInput(record: PersonalInputRecord, audience: string): Promise<void> {
     if (record.owner.kind !== "body")
@@ -1470,22 +1643,25 @@ async function open(resource: string) {
             return;
         if (opened.resource !== resource)
             throw new UiError(uiMessage("hostedShell.openReceiptTargetMismatch"));
+        const reference = await readDocumentReference(opened);
+        if (!await authority() || !current())
+            return;
         let targetDraft = cached(resource) ?? hostedDocumentDraft(opened);
         let alias = false, recoveredSave = false;
         if (prior && draft?.reference && source.pausedSession && prior.resource !== resource) {
-            const ref = await request<{
-                resource: string;
-                reference: string;
-            }>("navigation/ref", { sessionId: opened.sessionId });
-            if (!current())
-                return;
-            if (ref.resource === opened.resource && ref.reference === draft.reference) {
+            if (reference === draft.reference) {
                 targetDraft = { ...draft, source: source.value };
                 alias = true;
             }
         }
         if (targetDraft.pending) {
             const originalResource = targetDraft.pending.resource;
+            const audience = personalAudience();
+            if (targetDraft.pending.request && audience) {
+                await qualifyPersonalOriginalRoute({ kind: "hostedDraft", audience, pending: { operationId: targetDraft.pending.operationId, resource: originalResource, request: targetDraft.pending.request } });
+                if (!current())
+                    return;
+            }
             let outcome = await request<SaveStatus>("operation", { resource: originalResource, operationId: targetDraft.pending.operationId }, false, 0, undefined, "stagedTarget");
             if (!current())
                 return;
@@ -1496,12 +1672,12 @@ async function open(resource: string) {
                 return;
             checkedSaveStatus(outcome, targetDraft.pending.operationId, originalResource);
             if (outcome.status === "committed") {
-                await finishPersonalOperation(targetDraft.pending.operationId, "committed");
+                await finishPersonalOperation(targetDraft.pending.operationId, "committed", outcome);
                 targetDraft = applySaveResult(targetDraft, targetDraft.pending.source, null);
                 recoveredSave = true;
             }
             else if (["cancelled", "resolved"].includes(outcome.status)) {
-                await finishPersonalOperation(targetDraft.pending.operationId, outcome.status as "cancelled" | "resolved");
+                await finishPersonalOperation(targetDraft.pending.operationId, outcome.status as "cancelled" | "resolved", outcome);
                 delete targetDraft.pending;
             }
         }
@@ -1512,7 +1688,7 @@ async function open(resource: string) {
         await retain();
         if (!current())
             return;
-        targetDraft = hostedOpenedDraft(opened.source, qualifyHostedDraft(opened, targetDraft));
+        targetDraft = bindHostedDraftReference(hostedOpenedDraft(opened.source, qualifyHostedDraft(opened, targetDraft)), reference);
         // A quota failure must happen while the original editor and session still
         // exist. This exact prepared cache is not written again during install.
         try {
@@ -1523,10 +1699,7 @@ async function open(resource: string) {
         }
         // Install only after every target qualification/recovery succeeds. Closing
         // the former session uses its captured actor and cannot clear the new view.
-        requestEpoch++;
-        if (alias)
-            source.rebindResourceAlias(resource);
-        installDocument(opened, targetDraft, recoveredSave, true);
+        installDocument(opened, targetDraft, reference, recoveredSave, true, alias);
         adopted = true;
         if (alias)
             scheduleCurrentDraft();
@@ -1538,12 +1711,17 @@ async function open(resource: string) {
             await closeOwnedSession(opened.sessionId, captured);
     }
 }
-function installDocument(opened: Doc, retainedDraft: HostedDraft, recoveredSave = false, stagedCache = false) {
+function installDocument(opened: Doc, retainedDraft: HostedDraft, reference: string, recoveredSave = false, stagedCache = false, rebindAlias = false) {
+    if (!rebindAlias)
+        source.checkNavigationCapacity(opened.resource);
+    const qualified = bindHostedDraftReference(qualifyHostedDraft(opened, retainedDraft), reference);
+    source.personalInputReference(opened.resource, reference);
+    if (rebindAlias)
+        source.rebindResourceAlias(opened.resource);
     clearNodeNavigation();
+    requestEpoch++;
     doc = opened;
-    const qualified = qualifyHostedDraft(opened, retainedDraft);
     draft = stagedCache ? qualified : hostedOpenedDraft(opened.source, qualified);
-    const epoch = requestEpoch;
     installingDocument = true;
     if (opened.recoveredDraft != null && opened.recoveredDraftWitness && draft.source === opened.recoveredDraft)
         recoveryContinuations.set(opened, null);
@@ -1566,7 +1744,7 @@ function installDocument(opened: Doc, retainedDraft: HostedDraft, recoveredSave 
     controls();
     queries.authorChanged(true);
     knowledgeAuthorChanged();
-    void readReference(opened, epoch);
+    publishDocumentReference(opened, reference);
     if (recoveredSave)
         void queries.refreshCatalog();
     status(draft.pending ? uiMessage("hostedShell.originalSaveUnknownCannotSaveAgain") : compareRequired ? uiMessage("hostedShell.bothDraftsRetainedCompareMerge") : draft.source !== opened.source ? uiMessage("hostedShell.personalDraftRecoveredBodyUnsaved") : uiMessage("hostedShell.currentDraftRead"));
@@ -1644,9 +1822,17 @@ async function hostedHistoryBasis(settle: boolean) {
 async function save() {
     if (!doc || !draft || draft.pending || compareRequired || history.hasPending(doc.resource))
         return;
+    if (unresolvedPersonalSave(doc)) {
+        status(uiMessage("hostedShell.originalSaveUnknownCannotSaveAgain"));
+        return;
+    }
     await source.flush();
     if (!doc || !draft || draft.pending || compareRequired || history.hasPending(doc.resource))
         return;
+    if (unresolvedPersonalSave(doc)) {
+        status(uiMessage("hostedShell.originalSaveUnknownCannotSaveAgain"));
+        return;
+    }
     draft.source = source.value;
     const epoch = requestEpoch;
     const selected = doc;
@@ -1668,6 +1854,11 @@ async function save() {
     await retain();
     if (epoch !== requestEpoch || doc !== selected || !draft)
         return;
+    if (unresolvedPersonalSave(selected, op)) {
+        controls();
+        status(uiMessage("hostedShell.originalSaveUnknownCannotSaveAgain"));
+        return;
+    }
     controls();
     queries.authorChanged();
     knowledgeAuthorChanged();
@@ -1682,7 +1873,7 @@ async function save() {
         }
         doc.baseId = result.baseId!;
         doc.source = sent;
-        await finishPersonalOperation(op, "committed");
+        await finishPersonalOperation(op, "committed", result);
         if (epoch !== requestEpoch || doc !== selected || !draft)
             return;
         draft = applySaveResult(draft, sent, {sessionId:selected.sessionId,baseId:result.baseId!});
@@ -1709,7 +1900,7 @@ async function save() {
                 throw error;
             checkedSaveStatus(result, op, selected.resource);
             if (result.status === "cancelled") {
-                await finishPersonalOperation(op, "cancelled");
+                await finishPersonalOperation(op, "cancelled", result);
                 if (epoch !== requestEpoch || doc !== selected || !draft)
                     return;
                 delete draft.pending;
@@ -1869,7 +2060,7 @@ el("download").onclick = () => void run(async () => {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     status(uiMessage("hostedShell.savedSourceDownloaded"));
 });
-el("history").onclick = () => void history.open();
+el("history").onclick = () => { void history.open().then(() => selectHostedPanel("history-list")).catch(error => status(errorUiText(error))); };
 el("personal-input-recovery").onclick = () => {
     try {
         showPersonalInputs();
@@ -1922,6 +2113,110 @@ setInterval(() => {
             void refreshOpenSession();
     }).catch(() => { });
 }, 5000);
+
+function showOfficeQuery(id: Parameters<HostedOffice["setQuery"]>[0], metadata: Parameters<HostedOffice["setQuery"]>[1]): void {
+    office.setQuery(id, metadata);
+    selectHostedPanel("office");
+}
+/** Reparent known presentation surfaces once; original controllers keep every
+ * authorization flag, pending proposal and original-operation owner. */
+function installHostedLayout(): void {
+    const workspace = el("workspace"), article = workspace.querySelector("article")!, navigation = workspace.querySelector("aside")!;
+    workspace.classList.add("hosted-workspace");
+    article.classList.add("hosted-document");
+    navigation.classList.add("hosted-navigation");
+    const documentBar = document.createElement("div");
+    documentBar.className = "hosted-document-bar";
+    const toggleNavigation = document.createElement("button");
+    toggleNavigation.type = "button";
+    toggleNavigation.className = "hosted-navigation-toggle";
+    toggleNavigation.append(hostedChromeIcon("navigation"));
+    setUiAttr(toggleNavigation, "aria-label", uiMessage("hostedChrome.navigation"));
+    setUiAttr(toggleNavigation, "title", uiMessage("hostedChrome.navigation"));
+    toggleNavigation.setAttribute("aria-controls", "hosted-navigation");
+    navigation.id = "hosted-navigation";
+    const narrowNavigation = matchMedia("(max-width: 760px)");
+    const syncNavigation = () => {
+        const expanded = narrowNavigation.matches ? workspace.classList.contains("is-navigation-open") : !workspace.classList.contains("is-navigation-collapsed");
+        if (!expanded && navigation.contains(document.activeElement)) toggleNavigation.focus({ preventScroll: true });
+        toggleNavigation.setAttribute("aria-expanded", String(expanded));
+        navigation.setAttribute("aria-hidden", String(!expanded));
+        navigation.inert = !expanded;
+    };
+    toggleNavigation.onclick = () => {
+        workspace.classList.toggle(narrowNavigation.matches ? "is-navigation-open" : "is-navigation-collapsed");
+        syncNavigation();
+    };
+    narrowNavigation.addEventListener("change", syncNavigation);
+    syncNavigation();
+    el("title").classList.add("hosted-title-label");
+    documentBar.append(toggleNavigation, everydayBar, documentTabs, el("title"), el("save"));
+    const ribbonHost = document.createElement("div");
+    ribbonHost.className = "hosted-ribbon-host";
+    ribbonHost.append(ribbon.element);
+    const body = document.createElement("div");
+    body.className = "hosted-workspace-body";
+    const canvas = document.createElement("div");
+    canvas.className = "hosted-canvas";
+    el("source").setAttribute("role", "tabpanel");
+    for (const id of ["node-navigation", "source", "comparison", "personal-inputs", "render"]) canvas.append(el(id));
+    body.append(canvas, inspector);
+    const addPanel = (id: string, title: UiText, wide = false, tab: RibbonTab = "knowledge"): HTMLButtonElement => {
+        const host = el(id), slot = document.createElement("div"), button = document.createElement("button");
+        slot.className = "hosted-panel-slot";
+        slot.hidden = true;
+        slot.append(host);
+        button.type = "button";
+        setUiText(button, title);
+        button.setAttribute("aria-pressed", "false");
+        button.setAttribute("aria-controls", id);
+        button.onclick = () => selectHostedPanel(id);
+        hostedPanels.set(id, { host, slot, button, trigger: button, tab, title, wide });
+        inspectorBody.append(slot);
+        const observer = new MutationObserver(syncHostedPanels);
+        observer.observe(host, { attributes: true, attributeFilter: ["hidden"] });
+        panelObservers.push(observer);
+        return button;
+    };
+    const panelButtons = {
+        fields: addPanel("fields", uiMessage("hostedShell.panelProperties"), false, "home"),
+        query: addPanel("query", uiMessage("hostedShell.panelQueries"), true),
+        links: addPanel("knowledge-links", uiMessage("hostedShell.panelKnowledgeLinks"), true),
+        citations: addPanel("citations", uiMessage("hostedShell.panelCitations")),
+        tags: addPanel("navigation-registry", uiMessage("hostedShell.panelTags")),
+        review: addPanel("review", uiMessage("hostedShell.panelAnnotations"), true, "review"),
+        media: addPanel("media", uiMessage("hostedShell.panelMedia"), true),
+        office: addPanel("office", uiMessage("hostedShell.panelOfficeImportOutput"), true, "file"),
+        contentImport: addPanel("content-import", uiMessage("shell.contentImport"), true, "file"),
+        library: addPanel("library", uiMessage("hostedShell.panelLibraryConfiguration"), false, "file"),
+        structure: addPanel("structure", uiMessage("hostedShell.panelStructure"), false, "file"),
+        backup: addPanel("owner-backup", uiMessage("hostedShell.panelRecoveryMaterials"), false, "file"),
+        capture: addPanel("capture-panel", uiMessage("capture.title"), false, "file"),
+    };
+    addPanel("history-list", uiMessage("shell.timeline"), true, "review");
+    hostedPanels.get("history-list")!.trigger = el<HTMLButtonElement>("history");
+    hostedPanels.get("capture-panel")!.trigger = captureButton;
+    hostedPanels.get("knowledge-links")!.slot.prepend(el("stable-link"));
+    renderEverydayBar();
+    ribbon.setGroup("file", "hosted-file", uiMessage("hostedChrome.files"), [el("download"), el("reopen"), everydayControls.get("recent")!]);
+    ribbon.setGroup("file", "hosted-delivery", uiMessage("hostedShell.panelOfficeImportOutput"), [panelButtons.office, panelButtons.contentImport, recognitionButton]);
+    ribbon.setGroup("file", "hosted-library", uiMessage("hostedChrome.library"), [captureButton, panelButtons.library, panelButtons.structure, panelButtons.backup]);
+    ribbon.setGroup("file", "hosted-settings", uiMessage("hostedChrome.settings"), [interfaceLocaleHost, el("logout")]);
+    ribbon.setGroup("home", "hosted-note", uiMessage("hostedChrome.note"), [panelButtons.fields, el("personal-input-recovery")]);
+    ribbon.setGroup("insert", "hosted-insert", uiMessage("hostedChrome.content"), [everydayControls.get("insert")!, el("latex"), el("diagram")]);
+    ribbon.setGroup("knowledge", "hosted-knowledge", uiMessage("hostedChrome.knowledge"), [panelButtons.query, panelButtons.links, panelButtons.citations, panelButtons.tags, panelButtons.media]);
+    ribbon.setGroup("review", "hosted-review", uiMessage("hostedChrome.review"), [panelButtons.review, el("history")]);
+    ribbon.setGroup("view", "hosted-preview", uiMessage("hostedChrome.preview"), [el("preview")]);
+    source.attachRibbon(ribbon);
+    source.attachScrollHost(canvas);
+    for (const stale of article.children) disposeUiTree(stale);
+    article.replaceChildren(documentBar, ribbonHost, body);
+    root.append(el("status"));
+    syncHostedPanels();
+    window.addEventListener("pagehide", event => { if (!event.persisted) panelObservers.forEach(observer => observer.disconnect()); });
+}
+installHostedLayout();
+
 if (token)
     void run(connect);
 import { readStrictJsonResponse } from "./strict-json";

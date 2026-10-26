@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from _cli_serve import OwnedServe, _creation_time, parse_ready, parse_shutdown, serve_command
+from _cli_serve import OwnedServe, _creation_time, _io_path, parse_ready, parse_shutdown, serve_command
 
 CREATED = 134055000000000001  # Deliberately larger than JavaScript Number precision.
 IDENTITY = {'pid': 41, 'created': CREATED, 'incarnation': 'opaque-incarnation',
@@ -102,17 +102,32 @@ class Fixture:
             return ControlFixture(result)
         raise AssertionError('No other process command is allowed')
 
-    def launch(self, root, *, expected_default_data_dir=None):
+    def launch(self, root, *, expected_default_data_dir=None, log_prefix=None):
         with patch('_cli_serve.subprocess.Popen', side_effect=self.popen), patch('_cli_serve._creation_time', return_value=CREATED):
             arguments = [] if expected_default_data_dir is not None else ['--data-dir', str(root / 'state')]
             self.owner = OwnedServe(root / 'weftext-cli.exe', arguments, expected_default_data_dir=expected_default_data_dir,
-                                    evidence_parent=root if expected_default_data_dir is not None else None)
+                                    evidence_parent=root if expected_default_data_dir is not None else None, log_prefix=log_prefix)
         return self.owner
 
     def close_fixture(self):
         self.service.finish(3)
         if self.owner:
             self.owner._join()
+
+
+def long_evidence_root(directory):
+    # TemporaryDirectory retains the extended cleanup root. The controller gets
+    # its ordinary spelling, matching real --artifacts-dir callers/protocols.
+    ordinary = str(directory)
+    if ordinary.startswith('\\\\?\\UNC\\'):
+        ordinary = '\\\\' + ordinary[8:]
+    else:
+        ordinary = ordinary.removeprefix('\\\\?\\')
+    root = Path(ordinary)
+    for index in range(4):
+        root /= f'TEST-long-evidence-{index}-' + 'x' * 60
+    _io_path(root).mkdir(parents=True)
+    return root
 
 
 class ReadyAndReceipt(unittest.TestCase):
@@ -168,7 +183,96 @@ class ReadyAndReceipt(unittest.TestCase):
         self.assertGreater(_creation_time(process), 2 ** 53)
 
 
+class IOPaths(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'nt', 'Windows namespace spelling')
+    def test_windows_io_encoding_handles_drive_unc_relative_and_explicit_namespaces(self):
+        self.assertEqual(str(_io_path(Path('C:/TEST/evidence'))), '\\\\?\\C:\\TEST\\evidence')
+        self.assertEqual(str(_io_path(Path('\\\\server\\share\\TEST\\evidence'))), '\\\\?\\UNC\\server\\share\\TEST\\evidence')
+        for spelling in ('\\\\?\\C:\\TEST\\evidence', '\\\\?\\UNC\\server\\share\\TEST\\evidence', '\\\\.\\C:\\TEST\\evidence'):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(str(_io_path(Path(spelling))), spelling)
+        relative = Path('TEST-relative') / '..' / 'TEST-evidence'
+        self.assertEqual(str(_io_path(relative)), '\\\\?\\' + os.path.abspath(relative))
+
+    @unittest.skipIf(os.name == 'nt', 'Non-Windows path spelling')
+    def test_non_windows_io_keeps_relative_spelling(self):
+        original = Path('TEST-relative') / 'evidence'
+        self.assertEqual(_io_path(original), original)
+        self.assertFalse(_io_path(original).is_absolute())
+
+
 class Controller(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'nt', 'Real Windows long evidence paths')
+    def test_long_evidence_paths_keep_all_originals_and_exact_control_arguments(self):
+        fixture = Fixture()
+        stderr = ('TEST stderr ' + TOKEN).encode()
+        fixture.service.stderr.chunks.put(stderr)
+        # The context's original extended root also keeps its own normal
+        # TemporaryDirectory cleanup working on systems with MAX_PATH limits.
+        with tempfile.TemporaryDirectory(dir=_io_path(tempfile.gettempdir())) as directory:
+            try:
+                root = long_evidence_root(directory)
+                self.assertGreater(len(str(root)), 300)
+                data = root / 'Weftext-MVP/core'
+                log_prefix = root / 'TEST-existing-log'
+                _io_path(Path(str(log_prefix) + '.stdout.log')).write_text('original log\n', encoding='utf-8')
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen):
+                    owner = fixture.launch(root, expected_default_data_dir=data, log_prefix=log_prefix).wait_ready(.5)
+                    self.assertEqual(owner.stop(), ('', stderr.decode()))
+                    self.assertEqual(owner.stop(), ('', stderr.decode()))
+                self.assertEqual([call[1] for call in fixture.calls], ['serve', 'owner-status', 'owner-stop'])
+                self.assertEqual(owner.data_dir, data)
+                self.assertEqual(owner.directory.parent, root)
+                self.assertEqual(owner.log_prefix, log_prefix)
+                self.assertFalse(str(owner.directory).startswith('\\\\?\\'))
+                self.assertFalse(_io_path(data.parent).exists(), 'Evidence I/O must not create product state')
+                status, stop = fixture.calls[1:]
+                self.assertEqual(status[status.index('--data-dir') + 1], str(data))
+                self.assertEqual(stop[stop.index('--data-dir') + 1], str(data))
+                identity_file = owner.directory / 'owner-identity.json'
+                self.assertEqual(stop[stop.index('--owner-identity') + 1], str(identity_file))
+                self.assertEqual(json.loads(_io_path(identity_file).read_bytes()), IDENTITY)
+                self.assertEqual(_io_path(owner.directory / 'serve.stdout.bin').read_bytes(), ready())
+                self.assertEqual(_io_path(owner.directory / 'serve.stderr.bin').read_bytes(), stderr)
+                for name in ('owner-status', 'owner-stop'):
+                    for stream in ('stdout', 'stderr'):
+                        self.assertTrue(_io_path(owner.directory / f'{name}.{stream}.bin').is_file())
+                record = json.loads(_io_path(owner.directory / 'lifecycle.json').read_bytes())
+                self.assertTrue(record['shutdownVerified'])
+                self.assertEqual(record['command'], fixture.calls[0])
+                self.assertEqual(record['shutdownReceipt']['owner'], IDENTITY)
+                self.assertEqual(set(record['controls']), {'owner-status', 'owner-stop'})
+                stdout_log = _io_path(Path(str(log_prefix) + '.stdout.log')).read_text(encoding='utf-8')
+                stderr_log = _io_path(Path(str(log_prefix) + '.stderr.log')).read_text(encoding='utf-8')
+                self.assertTrue(stdout_log.startswith('original log\n'))
+                self.assertIn('<redacted>', stdout_log)
+                self.assertNotIn(TOKEN, stdout_log + stderr_log)
+            finally:
+                fixture.close_fixture()
+
+    @unittest.skipUnless(os.name == 'nt', 'Real Windows long evidence paths')
+    def test_long_evidence_path_unknown_stop_remains_one_attempt_without_kill(self):
+        fixture = Fixture(stop_code=3)
+        with tempfile.TemporaryDirectory(dir=_io_path(tempfile.gettempdir())) as directory:
+            try:
+                root = long_evidence_root(directory)
+                owner = fixture.launch(root).wait_ready(.5)
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen):
+                    with self.assertRaisesRegex(RuntimeError, 'no retry/kill') as first:
+                        owner.stop(exit_timeout=0)
+                    with self.assertRaises(RuntimeError) as second:
+                        owner.stop(exit_timeout=0)
+                self.assertIs(first.exception, second.exception)
+                self.assertEqual([call[1] for call in fixture.calls], ['serve', 'owner-stop'])
+                self.assertIsNone(fixture.service.poll())
+                record = json.loads(_io_path(owner.directory / 'lifecycle.json').read_bytes())
+                self.assertEqual(record['shutdownOutcome'], 'unknown')
+                self.assertFalse(record['shutdownVerified'])
+                self.assertEqual(record['controls']['owner-stop']['exitCode'], 3)
+                self.assertEqual(json.loads(_io_path(owner.directory / 'owner-identity.json').read_bytes()), IDENTITY)
+            finally:
+                fixture.close_fixture()
+
     def test_default_resolver_stays_in_child_and_control_uses_exact_expected_test_root(self):
         fixture = Fixture()
         with tempfile.TemporaryDirectory() as directory:

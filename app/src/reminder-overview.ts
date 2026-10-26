@@ -175,8 +175,18 @@ export class ReminderOverview {
   private delivery(host: HTMLElement, scope: LocaleScope, status: ReminderDelivery): void {
     if (status.invalidated) host.append(this.text(scope, "reminder.cancelled"));
     if (status.handled) host.append(this.text(scope, "reminder.handled"));
-    host.append(this.text(scope, status.delivery.state === "submittedToSystem" ? "reminder.submitted" : status.delivery.state === "unknown" ? "reminder.unknown" : "reminder.failedBeforeCall"));
-    if (status.delivery.at) this.detail(host, scope, status.delivery.at);
+    host.append(this.text(scope, status.delivery.state === "submittedToSystem" ? "reminder.submitted" : status.delivery.state === "unknown" ? "reminder.unknown" : status.delivery.state === "inAppOnly" ? "reminder.inAppOnly" : "reminder.failedBeforeCall"));
+    if (status.delivery.state !== "inAppOnly") {
+      const observation = status.submissionObservation;
+      if (observation) {
+        this.detail(host, scope, message("reminder.submissionStartedAt", { at: observation.startedAt }));
+        this.detail(host, scope, message("reminder.submissionReturnedAt", { at: observation.returnedAt }));
+        this.detail(host, scope, message("reminder.submissionElapsed", { nanoseconds: observation.elapsedNanoseconds }));
+        if (observation.result.kind === "returnedSuccess") host.append(this.text(scope, "reminder.submissionReturnedSuccess"));
+        else this.detail(host, scope, message("reminder.submissionReturnedFailure", { hresult: observation.result.hresult }));
+      } else host.append(this.text(scope, "reminder.submissionObservationMissing"));
+    }
+    if (status.delivery.state === "submittedToSystem" && status.delivery.at) this.detail(host, scope, message("reminder.ledgerConfirmedAt", { at: status.delivery.at }));
     if (status.delivery.diagnostic) this.detail(host, scope, status.delivery.diagnostic);
     if (!status.handled) host.append(this.button(host, scope, "reminder.handle", async current => {
       await this.host.request("/api/reminders/handle", { executionKey: status.executionKey }); if (current()) await this.refresh();

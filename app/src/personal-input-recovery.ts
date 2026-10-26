@@ -4,12 +4,21 @@ import type { AuthorInputOwner, AuthorProducerCheckpoint, ValuePath } from "./au
 import { IndexedDBPersonalInputBackend, PersonalInputStoreConflict, type PersonalInputBackend, type PersonalInputBundle } from "./personal-input-storage";
 import type { CaptureRawProvenance, CaptureTextSlot } from "./capture-draft-state";
 
+export type PersonalOperationRoute = { route: "known"; resource: string } | { route: "unknownOriginalRoute" };
+export type PersonalPendingOperation = { operationId: string; status: "unresolved" | "committed" | "cancelled" | "resolved" } & PersonalOperationRoute;
+export type PersonalOriginalRouteProof = {
+  kind: "hostedDraft"; audience: string;
+  pending: { operationId: string; resource: string; request: { operationId: string } };
+} | {
+  kind: "coreReceipt"; audience: string;
+  receipt: { operationId: string; resource: string; status: "committed" | "cancelled" | "resolved" | "recoveryPending" | "notCommitted" };
+};
 export interface PersonalInputRecord {
   kind: "text";
   id: string; owner: Exclude<AuthorInputOwner, { kind: "capture" }>; slot?: string; path?: readonly ValuePath[];
   producer?: AuthorProducerCheckpoint;
   baseHash?: string; origin: InputOrigin; candidate?: PendingInputCheckpoint;
-  pending?: { operationId: string; status: "unresolved" | "committed" | "cancelled" | "resolved" };
+  pending?: PersonalPendingOperation;
   sequence: number;
 }
 type PersonalInputUpdate = Omit<PersonalInputRecord, "sequence" | "kind">;
@@ -27,7 +36,7 @@ export interface CaptureTransportRecord {
 }
 export type CaptureTransportCurrent = Omit<CaptureTransportRecord, "sequence" | "pending">;
 type ProposalRecord = PersonalInputRecord | CaptureTransportRecord;
-interface Records { version: 3; records: ProposalRecord[] }
+interface Records { version: 4; records: ProposalRecord[] }
 const invalid = () => new Error("本人输入恢复记录无法完整读取；原件保留，未采用旧正文或资格。");
 const integer = (value: unknown) => Number.isSafeInteger(value) && (value as number) >= 0;
 const uuid = (value: unknown): value is string => typeof value === "string" && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value);
@@ -93,9 +102,9 @@ function captureTransport(record: CaptureTransportRecord, convert: (value: unkno
 }
 function mapTexts(value: unknown, convert: (value: unknown, key: string) => unknown): Records {
   const data = value as Records;
-  if (!data || data.version !== 3 || !Array.isArray(data.records) || data.records.length > 128) throw invalid();
-  const ids = new Set<string>();
-  return { version: 3, records: data.records.map((record): ProposalRecord => {
+  if (!data || data.version !== 4 || !Array.isArray(data.records) || data.records.length > 128) throw invalid();
+  const ids = new Set<string>(), operationRoutes = new Map<string, PersonalPendingOperation>();
+  return { version: 4, records: data.records.map((record): ProposalRecord => {
     if (!record || typeof record.id !== "string" || !/^[a-zA-Z0-9:-]{1,128}$/.test(record.id) || ids.has(record.id) || !integer(record.sequence)) throw invalid();
     ids.add(record.id);
     if (record.kind === "captureTransport") return captureTransport(record, convert);
@@ -132,11 +141,91 @@ function mapTexts(value: unknown, convert: (value: unknown, key: string) => unkn
     return { baseLength: origin.baseLength, revision: origin.revision, pieces, detached: texts(origin.detached, "detached"), copyOnly: texts(origin.copyOnly, "copy") };
     };
     const pending = record.pending;
-    if (pending && (typeof pending.operationId !== "string" || !pending.operationId || !["unresolved", "committed", "cancelled", "resolved"].includes(pending.status))) throw invalid();
+    if (pending !== undefined) {
+      if (!pending || typeof pending !== "object" || Array.isArray(pending)) throw invalid();
+      if (pending.route === "known") { exact(pending, ["operationId", "route", "resource", "status"]); string(pending.resource); }
+      else if (pending.route === "unknownOriginalRoute") exact(pending, ["operationId", "route", "status"]);
+      else throw invalid();
+      if (typeof pending.operationId !== "string" || !pending.operationId) throw invalid();
+      if (!["unresolved", "committed", "cancelled", "resolved"].includes(pending.status)) throw invalid();
+      const previousRoute = operationRoutes.get(pending.operationId);
+      if (previousRoute && !sameRoute(previousRoute, pending)) throw invalid();
+      operationRoutes.set(pending.operationId, pending);
+    }
     const candidate = record.candidate;
     if (candidate && (owner.kind !== "body" || candidate.operationId !== pending?.operationId || candidate.baseHash !== undefined && !/^[a-f0-9]{64}$/.test(candidate.baseHash))) throw invalid();
-    return { kind: "text", id: record.id, owner, ...(record.slot !== undefined ? { slot: record.slot } : {}), ...(path ? { path } : {}), ...(record.baseHash ? { baseHash: record.baseHash } : {}), ...(producer ? { producer: { ...producer } } : {}), sequence: record.sequence, origin: readOrigin(record.origin, "confirmed"), ...(candidate ? { candidate: { operationId: candidate.operationId, baseHash: candidate.baseHash, origin: readOrigin(candidate.origin, "candidate") } } : {}), ...(pending ? { pending: { operationId: pending.operationId, status: pending.status } } : {}) };
+    return { kind: "text", id: record.id, owner, ...(record.slot !== undefined ? { slot: record.slot } : {}), ...(path ? { path } : {}), ...(record.baseHash ? { baseHash: record.baseHash } : {}), ...(producer ? { producer: { ...producer } } : {}), sequence: record.sequence, origin: readOrigin(record.origin, "confirmed"), ...(candidate ? { candidate: { operationId: candidate.operationId, baseHash: candidate.baseHash, origin: readOrigin(candidate.origin, "candidate") } } : {}), ...(pending ? { pending: pending.route === "known" ? { operationId: pending.operationId, route: "known", resource: pending.resource, status: pending.status } : { operationId: pending.operationId, route: "unknownOriginalRoute", status: pending.status } } : {}) };
   }) };
+}
+
+function legacyKeys(value: unknown, required: string[], optional: string[] = []): void {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw invalid();
+  const keys = Object.keys(value);
+  if (required.some(key => !keys.includes(key)) || keys.some(key => !required.includes(key) && !optional.includes(key))) throw invalid();
+}
+function legacyText(value: unknown): void {
+  if (typeof value === "string") return;
+  legacyKeys(value, ["snapshot", "from", "to", "insert"]);
+}
+function legacyOrigin(value: unknown): void {
+  legacyKeys(value, ["baseLength", "pieces", "detached", "revision"], ["copyOnly"]);
+  const origin = value as InputOrigin;
+  if (!Array.isArray(origin.pieces) || !Array.isArray(origin.detached) || origin.copyOnly !== undefined && !Array.isArray(origin.copyOnly)) throw invalid();
+  for (const piece of origin.pieces) {
+    if (!piece || typeof piece !== "object") throw invalid();
+    if ("text" in piece) { legacyKeys(piece, ["text"]); legacyText(piece.text); }
+    else if ("base" in piece) legacyKeys(piece, ["base", "length"]);
+    else legacyKeys(piece, ["opaque"]);
+  }
+  for (const text of [...origin.detached, ...(origin.copyOnly ?? [])]) { legacyKeys(text, ["id", "revision", "text"]); legacyText(text.text); }
+}
+/** Decode the complete closed v3 shape before converting it. No input owner
+ * proves an operation route; unverifiable pending saves remain explicit. */
+function upgradeVersion3(value: unknown): unknown {
+  legacyKeys(value, ["version", "records"]);
+  const data = value as { version: unknown; records: unknown[] };
+  if (data.version !== 3 || !Array.isArray(data.records) || data.records.length > 128) throw invalid();
+  return { version: 4, records: data.records.map(value => {
+    if (!value || typeof value !== "object") throw invalid();
+    if ((value as ProposalRecord).kind === "captureTransport") {
+      captureTransport(value as CaptureTransportRecord, text => { legacyText(text); return text; });
+      return value;
+    }
+    legacyKeys(value, ["kind", "id", "owner", "origin", "sequence"], ["slot", "path", "producer", "baseHash", "candidate", "pending"]);
+    const record = value as PersonalInputRecord;
+    if (record.kind !== "text" || !record.owner || typeof record.owner !== "object") throw invalid();
+    const owner = record.owner;
+    switch (owner.kind) {
+      case "body": legacyKeys(owner, ["kind", "resource"], ["reference"]); break;
+      case "field": legacyKeys(owner, ["kind", "resource", "fieldId"]); break;
+      case "review": legacyKeys(owner, ["kind", "resource"], ["annotationId", "asset", "revision"]); break;
+      case "library": legacyKeys(owner, ["kind", "role"]); break;
+      case "registry": legacyKeys(owner, ["kind", "target"]); break;
+      default: throw invalid();
+    }
+    legacyOrigin(record.origin);
+    if (record.producer !== undefined) legacyKeys(record.producer, ["producerId", "revision"]);
+    if (record.path !== undefined) {
+      if (!Array.isArray(record.path)) throw invalid();
+      for (const part of record.path) {
+        if (part?.kind === "member") legacyKeys(part, ["kind", "key"]);
+        else if (part?.kind === "index") legacyKeys(part, ["kind", "index"]);
+        else throw invalid();
+      }
+    }
+    if (record.candidate !== undefined) { legacyKeys(record.candidate, ["operationId", "origin"], ["baseHash"]); legacyOrigin(record.candidate.origin); }
+    const pending = record.pending;
+    if (pending === undefined) return record;
+    legacyKeys(pending, ["operationId", "status"]);
+    if (owner.kind !== "body" || typeof pending.operationId !== "string" || !pending.operationId || !["unresolved", "committed", "cancelled", "resolved"].includes(pending.status)) throw invalid();
+    return { ...record, pending: { operationId: pending.operationId, status: pending.status, route: "unknownOriginalRoute" } };
+  }) };
+}
+function sameTexts(left: ReadonlyMap<string, string>, right: ReadonlyMap<string, string>): boolean {
+  return left.size === right.size && [...left].every(([id, text]) => right.get(id) === text);
+}
+function sameRoute(left: PersonalPendingOperation, right: PersonalPendingOperation): boolean {
+  return left.route === right.route && (left.route !== "known" || right.route === "known" && left.resource === right.resource);
 }
 
 interface AudienceState {
@@ -151,14 +240,15 @@ class MapStorage implements StoragePort {
   removeItem(key: string): void { this.values.delete(key); }
 }
 export interface BrowserProposalAck { kind: "browserProposal"; audience: string; commitId: number; version: number }
-const empty = (): Records => ({ version: 3, records: [] });
+const empty = (): Records => ({ version: 4, records: [] });
 // Codec reconstruction can reorder closed object members. Equality compares
 // their meaning while preserving array order, revisions and exact UTF16 text.
 const equal = (left: unknown, right: unknown) => {
   const ordered=(value:unknown):unknown=>Array.isArray(value)?value.map(ordered):value && typeof value==="object"?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a<b?-1:a>b?1:0).map(([key,child])=>[key,ordered(child)])):value;
   return JSON.stringify(ordered(left))===JSON.stringify(ordered(right));
 };
-/** One pure-input proposal namespace. IndexedDB ACKs only prove browser
+/** One pure-input proposal namespace. Version 4 freezes each pending operation resource independently of its input owner.
+ * IndexedDB ACKs only prove browser
  * recovery transport; they never become Core/native close acknowledgements. */
 export class PersonalInputRecovery {
   private audiences = new Map<string, AudienceState>();
@@ -171,14 +261,43 @@ export class PersonalInputRecovery {
     const records = bundle ? cache.read("state") ?? empty() : empty();
     return { records, base: structuredClone(records), storage, cache, prefix, commitId: bundle?.commitId ?? 0, version: 0, durableVersion: 0, dirty: new Set(), loaded: !!bundle };
   }
+  private async migrateVersion3(audience: string, original: PersonalInputBundle): Promise<PersonalInputBundle> {
+    if (!integer(original.commitId) || original.commitId < 1) throw invalid();
+    const converted = { ...original, metadata: JSON.stringify(upgradeVersion3(JSON.parse(original.metadata))), texts: new Map(original.texts) };
+    // Decode every original text reference and the full converted contract before
+    // keeping a backup or changing the active pointer.
+    this.make(audience, converted);
+    const archiveAudience = `weftext-personal-input-original:${JSON.stringify([3, audience, original.commitId])}`;
+    // The archive coordinate binds the original audience and commit. Keep the
+    // metadata bytes directly: wrapping them would double-escape a full bundle.
+    const metadata = original.metadata;
+    let archived = await this.backend.read(archiveAudience);
+    if (!archived) {
+      try { await this.backend.compareAndWrite(archiveAudience, 0, metadata, original.texts); }
+      catch (error) { if (!(error instanceof PersonalInputStoreConflict)) throw error; }
+      archived = await this.backend.read(archiveAudience);
+    }
+    if (!archived || archived.metadata !== metadata || !sameTexts(archived.texts, original.texts)) throw invalid();
+    const commitId = await this.backend.compareAndWrite(audience, original.commitId, converted.metadata, converted.texts);
+    return { ...converted, commitId };
+  }
+  private async load(audience: string): Promise<AudienceState> {
+    for (let conflicts = 0; ; conflicts++) {
+      const bundle = await this.backend.read(audience);
+      if (!bundle) return this.make(audience);
+      if (JSON.parse(bundle.metadata)?.version !== 3) return this.make(audience, bundle);
+      try { return this.make(audience, await this.migrateVersion3(audience, bundle)); }
+      catch (error) { if (!(error instanceof PersonalInputStoreConflict) || conflicts >= 3) throw error; }
+    }
+  }
   async open(audience: string): Promise<void> {
     let state = this.audiences.get(audience);
     if (!state) { state = this.make(audience); this.audiences.set(audience, state); }
     if (state.loading) return state.loading;
     if (state.loaded) { if (state.readFailure) throw state.readFailure; return; }
     const selected = state;
-    selected.loading = this.backend.read(audience).then(bundle => {
-      const loaded = this.make(audience, bundle); loaded.loaded = true; loaded.loading = selected.loading; this.audiences.set(audience, loaded);
+    selected.loading = this.load(audience).then(loaded => {
+      loaded.loaded = true; loaded.loading = selected.loading; this.audiences.set(audience, loaded);
     }).catch(error => { selected.loaded = true; selected.readFailure = error instanceof Error ? error : invalid(); throw selected.readFailure; });
     return selected.loading;
   }
@@ -191,7 +310,7 @@ export class PersonalInputRecovery {
   captureTransports(audience: string, draftId?: string): CaptureTransportRecord[] { return structuredClone(this.state(audience).records.records.filter((record): record is CaptureTransportRecord => record.kind === "captureTransport" && (!draftId || record.owner.draftId === draftId))); }
   notice(audience: string): string | undefined { const state = this.state(audience); return state.readFailure?.message ?? state.failure?.message; }
   pending(audience?: string): boolean {
-    const pending=(state:AudienceState)=>!!state.readFailure || !!state.failure || !!state.loading && !state.loaded || state.version>state.durableVersion;
+    const pending=(state:AudienceState)=>!!state.readFailure || !!state.failure || !!state.loading && !state.loaded || state.version>state.durableVersion || state.records.records.some(record => record.kind === "text" && record.pending?.route === "unknownOriginalRoute" && record.pending.status === "unresolved");
     return audience===undefined?[...this.audiences.values()].some(pending):pending(this.state(audience));
   }
   update(audience: string, updates: PersonalInputUpdate[]): Promise<BrowserProposalAck> {
@@ -200,8 +319,11 @@ export class PersonalInputRecovery {
       const index = state.records.records.findIndex(record => record.id === update.id), old = state.records.records[index];
       if (old && (old.kind !== "text" || !equal(old.owner, update.owner))) throw invalid();
       let next: PersonalInputRecord = { ...structuredClone(update), kind: "text", ...(!update.pending && old?.kind === "text" && old.pending ? { pending: old.pending } : {}), sequence: (old?.sequence ?? 0) + 1 };
+      if (old?.kind === "text" && old.pending?.route === "unknownOriginalRoute" && old.pending.status === "unresolved" && next.pending?.operationId !== old.pending.operationId) throw invalid();
+      if (next.pending?.route === "unknownOriginalRoute" && !(old?.kind === "text" && old.pending?.route === "unknownOriginalRoute" && old.pending.operationId === next.pending.operationId)) throw invalid();
+      if (next.pending && state.records.records.some(record => record.kind === "text" && record.pending?.operationId === next.pending!.operationId && !sameRoute(record.pending, next.pending!))) throw invalid();
       if (old?.kind === "text" && old.pending?.operationId === next.pending?.operationId && old.pending && old.pending.status !== "unresolved") next = settledRecord(next, old.pending.status);
-      next = mapTexts({ version: 3, records: [next] }, value => { if (typeof value !== "string") throw invalid(); return value; }).records[0] as PersonalInputRecord;
+      next = mapTexts({ version: 4, records: [next] }, value => { if (typeof value !== "string") throw invalid(); return value; }).records[0] as PersonalInputRecord;
       if (!hasPersonalInput(next.origin) && !next.pending) { if (index >= 0) state.records.records.splice(index, 1); }
       else if (index < 0) state.records.records.push(next); else state.records.records[index] = next;
       state.dirty.add(update.id);
@@ -228,7 +350,30 @@ export class PersonalInputRecovery {
     return structuredClone(current);
   }
   settle(audience: string, record: PersonalInputRecord, status: "committed" | "cancelled" | "resolved"): Promise<BrowserProposalAck> {
-    const current = this.current(audience, record); if (!current.pending) throw invalid(); return this.update(audience, [settledRecord(current, status)]);
+    const current = this.current(audience, record); if (!current.pending || current.pending.route !== "known") throw invalid(); return this.update(audience, [settledRecord(current, status)]);
+  }
+  /** Only an explicit same-audience original request or Core receipt may supply
+   * a route missing from v3. Ordinary input updates cannot promote it. */
+  proveOriginalRoute(audience: string, record: PersonalInputRecord, proof: PersonalOriginalRouteProof): Promise<BrowserProposalAck> {
+    const current = this.current(audience, record), pending = current.pending;
+    if (!pending || pending.route !== "unknownOriginalRoute" || current.owner.kind !== "body" || !proof || proof.audience !== audience) throw invalid();
+    let resource: string;
+    if (proof.kind === "hostedDraft") {
+      if (proof.pending?.operationId !== pending.operationId || proof.pending.request?.operationId !== pending.operationId) throw invalid();
+      resource = proof.pending.resource;
+    } else if (proof.kind === "coreReceipt") {
+      if (proof.receipt?.operationId !== pending.operationId || !["committed", "cancelled", "resolved", "recoveryPending", "notCommitted"].includes(proof.receipt.status)) throw invalid();
+      resource = proof.receipt.resource;
+    } else throw invalid();
+    if (typeof resource !== "string" || !resource || resource.length > 4096) throw invalid();
+    const state = this.state(audience);
+    for (const existing of state.records.records) if (existing.kind === "text" && existing.pending?.operationId === pending.operationId && existing.pending.route === "known" && existing.pending.resource !== resource) throw invalid();
+    state.records.records = state.records.records.map(existing => {
+      if (existing.kind !== "text" || existing.pending?.operationId !== pending.operationId || existing.pending.route !== "unknownOriginalRoute") return existing;
+      const next = { ...existing, sequence: existing.sequence + 1, pending: { ...existing.pending, route: "known" as const, resource } };
+      state.dirty.add(next.id); return next;
+    });
+    state.version++; return this.flush(audience);
   }
   remove(audience: string, record: PersonalInputRecord): Promise<BrowserProposalAck> {
     const current = this.current(audience, record); if (current.pending?.status === "unresolved") throw new Error("原保存操作尚未核定，未移除其原编号。");
@@ -278,7 +423,8 @@ export class PersonalInputRecovery {
           if (!equal(before, latest) && !equal(local, latest)) throw new PersonalInputStoreConflict();
           merged.records = merged.records.filter(record => record.id !== id); if (local) merged.records.push(structuredClone(local));
         }
-        state.records = merged; state.base = remote.base; state.storage = remote.storage; state.cache = remote.cache; state.commitId = remote.commitId;
+        const checked = mapTexts(merged, value => { if (typeof value !== "string") throw invalid(); return value; });
+        state.records = checked; state.base = remote.base; state.storage = remote.storage; state.cache = remote.cache; state.commitId = remote.commitId;
         continue;
       }
       state.base = cut; state.durableVersion = version;

@@ -327,6 +327,51 @@
       "en-US": "The system accepted the reminder. This does not mean it was read.",
       "params": {}
     },
+    "reminder.submissionStartedAt": {
+      "zh-CN": "系统通知调用开始（UTC）：{at}",
+      "en-US": "Notification call started (UTC): {at}",
+      "params": {
+        "at": "text"
+      }
+    },
+    "reminder.submissionReturnedAt": {
+      "zh-CN": "系统通知调用返回（UTC）：{at}",
+      "en-US": "Notification call returned (UTC): {at}",
+      "params": {
+        "at": "text"
+      }
+    },
+    "reminder.submissionElapsed": {
+      "zh-CN": "调用单调耗时：{nanoseconds} ns",
+      "en-US": "Monotonic call duration: {nanoseconds} ns",
+      "params": {
+        "nanoseconds": "text"
+      }
+    },
+    "reminder.submissionReturnedSuccess": {
+      "zh-CN": "系统通知调用返回成功；不代表用户已看到。",
+      "en-US": "The notification call returned success. This does not mean the user saw it.",
+      "params": {}
+    },
+    "reminder.submissionReturnedFailure": {
+      "zh-CN": "系统通知调用返回失败（HRESULT {hresult}）；此返回本身不能确定系统送达结果。",
+      "en-US": "The notification call returned failure (HRESULT {hresult}). This return alone does not establish the delivery outcome.",
+      "params": {
+        "hresult": "integer"
+      }
+    },
+    "reminder.submissionObservationMissing": {
+      "zh-CN": "没有实际系统通知调用的时间记录；账本确认时间不能替代调用时间。",
+      "en-US": "No actual notification-call timing was recorded. Ledger confirmation time cannot substitute for call time.",
+      "params": {}
+    },
+    "reminder.ledgerConfirmedAt": {
+      "zh-CN": "账本确认时间（UTC；可能来自后续系统历史核查）：{at}",
+      "en-US": "Ledger confirmation time (UTC; may come from a later system-history check): {at}",
+      "params": {
+        "at": "text"
+      }
+    },
     "reminder.unknown": {
       "zh-CN": "系统提交结果未知，未盲目重发。",
       "en-US": "The system submission result is unknown. It was not blindly resubmitted.",
@@ -6269,6 +6314,11 @@
     "definitionProposal.originalCheckedNotApplied": {
       "zh-CN": "原定义提案已核对。当前依据或会话不同，请明确比较后恢复；未自动贴回正文。",
       "en-US": "The original definition proposal was checked. The current basis or session differs; compare explicitly before recovery. It was not automatically pasted into the body.",
+      "params": {}
+    },
+    "personalInput.unknownOriginalRoute": {
+      "zh-CN": "原保存的目标路由尚无可靠证明；原编号与本人文字保留。核对原请求前，不能查询、核定或再次保存到可能相同的笔记。",
+      "en-US": "Proof of the original save route is missing. Its operation ID and personal text are retained; query, settle, and saving to a possibly identical note remain unavailable until the original request is verified.",
       "params": {}
     },
     "personalInput.title": {
@@ -52899,6 +52949,186 @@
     "capture.unselectedTarget": {
       "zh-CN": "未选择目标",
       "en-US": "No target selected",
+      "params": {}
+    },
+    "workspaceRibbon.label": {
+      "zh-CN": "文档功能区",
+      "en-US": "Document ribbon",
+      "params": {}
+    },
+    "workspaceRibbon.file": {
+      "zh-CN": "文件",
+      "en-US": "File",
+      "params": {}
+    },
+    "workspaceRibbon.home": {
+      "zh-CN": "开始",
+      "en-US": "Home",
+      "params": {}
+    },
+    "workspaceRibbon.insert": {
+      "zh-CN": "插入",
+      "en-US": "Insert",
+      "params": {}
+    },
+    "workspaceRibbon.knowledge": {
+      "zh-CN": "资料",
+      "en-US": "Knowledge",
+      "params": {}
+    },
+    "workspaceRibbon.review": {
+      "zh-CN": "审阅",
+      "en-US": "Review",
+      "params": {}
+    },
+    "workspaceRibbon.view": {
+      "zh-CN": "视图",
+      "en-US": "View",
+      "params": {}
+    },
+    "workspaceRibbon.collapse": {
+      "zh-CN": "收起功能区",
+      "en-US": "Collapse ribbon",
+      "params": {}
+    },
+    "workspaceRibbon.expand": {
+      "zh-CN": "展开功能区",
+      "en-US": "Expand ribbon",
+      "params": {}
+    },
+    "localChrome.files": {
+      "zh-CN": "打开与创建",
+      "en-US": "Open and create",
+      "params": {}
+    },
+    "localChrome.document": {
+      "zh-CN": "当前文档",
+      "en-US": "Current document",
+      "params": {}
+    },
+    "localChrome.preferences": {
+      "zh-CN": "设置",
+      "en-US": "Settings",
+      "params": {}
+    },
+    "localChrome.panes": {
+      "zh-CN": "面板",
+      "en-US": "Panes",
+      "params": {}
+    },
+    "localChrome.blocks": {
+      "zh-CN": "内容块",
+      "en-US": "Content blocks",
+      "params": {}
+    },
+    "localChrome.note": {
+      "zh-CN": "笔记与查询",
+      "en-US": "Notes and queries",
+      "params": {}
+    },
+    "localChrome.exchange": {
+      "zh-CN": "导入与输出",
+      "en-US": "Import and output",
+      "params": {}
+    },
+    "localChrome.library": {
+      "zh-CN": "资料库",
+      "en-US": "Library",
+      "params": {}
+    },
+    "localChrome.objects": {
+      "zh-CN": "公式与图表",
+      "en-US": "Equations and diagrams",
+      "params": {}
+    },
+    "localChrome.review": {
+      "zh-CN": "批注与校对",
+      "en-US": "Annotations and proofreading",
+      "params": {}
+    },
+    "localChrome.navigation": {
+      "zh-CN": "导航",
+      "en-US": "Navigation",
+      "params": {}
+    },
+    "localChrome.history": {
+      "zh-CN": "撤销与重做",
+      "en-US": "Undo and redo",
+      "params": {}
+    },
+    "localChrome.text": {
+      "zh-CN": "文字格式",
+      "en-US": "Text formatting",
+      "params": {}
+    },
+    "localChrome.content": {
+      "zh-CN": "插入内容",
+      "en-US": "Insert content",
+      "params": {}
+    },
+    "localChrome.annotations": {
+      "zh-CN": "批注",
+      "en-US": "Annotations",
+      "params": {}
+    },
+    "hostedChrome.editing": {
+      "zh-CN": "编辑",
+      "en-US": "Editing",
+      "params": {}
+    },
+    "hostedChrome.format": {
+      "zh-CN": "文字",
+      "en-US": "Text",
+      "params": {}
+    },
+    "hostedChrome.content": {
+      "zh-CN": "内容",
+      "en-US": "Content",
+      "params": {}
+    },
+    "hostedChrome.inspector": {
+      "zh-CN": "笔记检查器",
+      "en-US": "Note inspector",
+      "params": {}
+    },
+    "hostedChrome.navigation": {
+      "zh-CN": "资料库导航",
+      "en-US": "Library navigation",
+      "params": {}
+    },
+    "hostedChrome.files": {
+      "zh-CN": "文件",
+      "en-US": "Files",
+      "params": {}
+    },
+    "hostedChrome.library": {
+      "zh-CN": "资料库",
+      "en-US": "Library",
+      "params": {}
+    },
+    "hostedChrome.settings": {
+      "zh-CN": "设置",
+      "en-US": "Settings",
+      "params": {}
+    },
+    "hostedChrome.note": {
+      "zh-CN": "当前笔记",
+      "en-US": "Current note",
+      "params": {}
+    },
+    "hostedChrome.knowledge": {
+      "zh-CN": "知识与资料",
+      "en-US": "Knowledge and resources",
+      "params": {}
+    },
+    "hostedChrome.review": {
+      "zh-CN": "审阅",
+      "en-US": "Review",
+      "params": {}
+    },
+    "hostedChrome.preview": {
+      "zh-CN": "预览",
+      "en-US": "Preview",
       "params": {}
     }
   }

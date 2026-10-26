@@ -120,7 +120,7 @@ export class ReminderDeviceControl {
       if (retained?.invalidated) this.element.append(this.text("p", "reminder.cancelled"));
       if (retained?.handled) this.element.append(this.text("p", "reminder.handled"));
       if (retained) {
-        this.element.append(this.text("p", retained.delivery.state === "submittedToSystem" ? "reminder.submitted" : retained.delivery.state === "unknown" ? "reminder.unknown" : "reminder.failedBeforeCall"));
+        this.element.append(this.text("p", retained.delivery.state === "submittedToSystem" ? "reminder.submitted" : retained.delivery.state === "unknown" ? "reminder.unknown" : retained.delivery.state === "inAppOnly" ? "reminder.inAppOnly" : "reminder.failedBeforeCall"));
         if (retained.delivery.diagnostic) this.detail(retained.delivery.diagnostic);
         if (!retained.handled) this.element.append(this.button("reminder.handle", basis, async () => {
           const generation = this.generation; await this.host.request("/api/reminders/handle", { executionKey: retained.executionKey });

@@ -15,6 +15,27 @@ MAX_MESSAGE = 16 * 1024
 MAX_CAPTURE = 16 * 1024 * 1024
 
 
+def _io_path(path):
+    """Encode only Python filesystem access; retain the caller's path spelling.
+
+    Lexical absolutization supports relative log destinations without resolving
+    links. Existing Windows namespaces are already explicit and stay unchanged.
+    This is neither a product-path qualifier nor an owner/control argument.
+    """
+    path = Path(path)
+    if os.name != 'nt':
+        return path
+    value = os.fspath(path)
+    if value.startswith(('\\\\?\\', '\\\\.\\')):
+        return path
+    value = os.path.abspath(value)
+    if value.startswith(('\\\\?\\', '\\\\.\\')):
+        return Path(value)
+    if value.startswith('\\\\'):
+        return Path('\\\\?\\UNC\\' + value[2:])
+    return Path('\\\\?\\' + value)
+
+
 def serve_command(executable, arguments):
     if not Path(executable).is_absolute():
         raise ValueError('The actual CLI executable must be an absolute path')
@@ -154,14 +175,14 @@ class OwnedServe:
                 raise ValueError('Default-resolver evidence requires its explicit owned TEST parent')
             parent = Path(evidence_parent)
             if (not parent.is_absolute() or '..' in parent.parts or '..' in self.data_dir.parts or self.data_dir == parent
-                    or not self.data_dir.is_relative_to(parent) or not parent.is_dir()):
+                    or not self.data_dir.is_relative_to(parent) or not _io_path(parent).is_dir()):
                 raise ValueError('Expected default data must be inside its existing owned TEST parent')
         else:
             if evidence_parent is not None:
                 raise ValueError('Explicit serve data uses its own evidence parent')
             parent = self.data_dir.parent
         self.directory = parent / f'server-control-{uuid.uuid4()}'
-        self.directory.mkdir(exist_ok=False)
+        _io_path(self.directory).mkdir(exist_ok=False)
         self.log_prefix = None if log_prefix is None else Path(log_prefix)
         self.hosted, self.ready, self._owner_identity = hosted, None, None
         self._lines, self._streams = queue.Queue(), {'stdout': bytearray(), 'stderr': bytearray()}
@@ -191,12 +212,12 @@ class OwnedServe:
             self._threads.append(thread)
 
     def _save(self):
-        (self.directory / 'lifecycle.json').write_text(json.dumps(self.record, indent=2), encoding='utf-8')
+        _io_path(self.directory / 'lifecycle.json').write_text(json.dumps(self.record, indent=2), encoding='utf-8')
 
     def _read(self, name):
         stream = getattr(self.process, name)
         try:
-            with (self.directory / f'serve.{name}.bin').open('xb') as output:
+            with _io_path(self.directory / f'serve.{name}.bin').open('xb') as output:
                 while True:
                     chunk = stream.readline(MAX_MESSAGE + 1) if name == 'stdout' else stream.read1(65536)
                     if not chunk:
@@ -263,7 +284,7 @@ class OwnedServe:
         record = {'command': command}
         self.record.setdefault('controls', {})[name] = record
         self._save()
-        with (self.directory / f'{name}.stdout.bin').open('xb') as out, (self.directory / f'{name}.stderr.bin').open('xb') as err:
+        with _io_path(self.directory / f'{name}.stdout.bin').open('xb') as out, _io_path(self.directory / f'{name}.stderr.bin').open('xb') as err:
             control = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=out, stderr=err,
                                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             record['pid'] = control.pid
@@ -276,9 +297,9 @@ class OwnedServe:
                 raise
         self._save()
         path = self.directory / f'{name}.stdout.bin'
-        if path.stat().st_size > MAX_MESSAGE:
+        if _io_path(path).stat().st_size > MAX_MESSAGE:
             raise ValueError(f'{name} output exceeds its bounded message size')
-        return record['exitCode'], path.read_bytes()
+        return record['exitCode'], _io_path(path).read_bytes()
 
     def _existing_identity(self, timeout):
         if self._status_attempted:
@@ -325,7 +346,7 @@ class OwnedServe:
             text = bytes(data).decode('utf-8', errors='replace')
             if self.ready and self.ready['token']:
                 text = text.replace(self.ready['token'], '<redacted>')
-            with Path(str(self.log_prefix) + f'.{name}.log').open('a', encoding='utf-8') as output:
+            with _io_path(Path(str(self.log_prefix) + f'.{name}.log')).open('a', encoding='utf-8') as output:
                 output.write(text)
         self._logs_written = True
 
@@ -375,7 +396,7 @@ class OwnedServe:
             identity_bytes = json.dumps(self._owner_identity, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
             if len(identity_bytes) > MAX_MESSAGE:
                 raise ValueError('Verified owner identity exceeds the CLI input limit')
-            with identity_file.open('xb') as output:
+            with _io_path(identity_file).open('xb') as output:
                 output.write(identity_bytes)
             code, data = self._control('owner-stop', ['owner-stop', '--data-dir', str(self.data_dir),
                                                     '--owner-identity', str(identity_file)], control_timeout)

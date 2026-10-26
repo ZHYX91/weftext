@@ -25,6 +25,8 @@ export function renderPersonalInputs(host: HTMLElement, recovery: PersonalInputR
     }
     for (const record of recovery.list(audience)) {
         const row = document.createElement("section"), input = document.createElement("textarea"), status = document.createElement("p");
+        const unknownOriginalRoute = record.pending?.route === "unknownOriginalRoute";
+        const unresolvedOriginalRoute = unknownOriginalRoute && record.pending?.status === "unresolved";
         input.value = personalInputText(record);
         input.readOnly = true;
         input.rows = 5;
@@ -49,10 +51,21 @@ export function renderPersonalInputs(host: HTMLElement, recovery: PersonalInputR
             setUiText(operation, displayMessage("personalInput.originalSaveSummary", { p0: uiDisplayParameter(record.pending.operationId), p1: uiDisplayParameter(record.pending.status) }));
             row.append(operation);
         }
-        if (record.pending?.status === "unresolved")
-            row.append(action(uiMessage("personalInput.resolveOriginalSave"), () => actions.operation(record)));
-        if (record.owner.kind === "body")
-            row.append(action(uiMessage("personalInput.restoreDraft"), () => actions.restore(record)));
+        if (unresolvedOriginalRoute) {
+            const reason = document.createElement("p");
+            setUiText(reason, uiMessage("personalInput.unknownOriginalRoute"));
+            row.append(reason);
+        }
+        if (record.pending?.status === "unresolved") {
+            const resolve = action(uiMessage("personalInput.resolveOriginalSave"), () => actions.operation(record));
+            resolve.disabled = unknownOriginalRoute;
+            row.append(resolve);
+        }
+        if (record.owner.kind === "body") {
+            const restore = action(uiMessage("personalInput.restoreDraft"), () => actions.restore(record));
+            restore.disabled = unresolvedOriginalRoute;
+            row.append(restore);
+        }
         const remove = action(uiMessage("personalInput.removeRetrieved"), async () => { await recovery.remove(audience, record); row.remove(); });
         remove.disabled = record.pending?.status === "unresolved";
         row.append(remove, status);

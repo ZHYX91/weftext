@@ -8,16 +8,16 @@ import vm from "node:vm";
 import ts from "typescript";
 import { HostedDraftCache } from "./hosted-draft-cache";
 import { PersonalInputRecovery } from "./personal-input-recovery";
-import type { PersonalInputBundle } from "./personal-input-storage";
+import { PersonalInputStoreConflict, type PersonalInputBackend, type PersonalInputBundle } from "./personal-input-storage";
 import { OrderedDraft } from "./ordered-draft";
-import { applySaveResult, freezeHostedSave, hostedOpenedDraft, hostedDocumentDraft, qualifyHostedDraft } from "./hosted-state";
+import { applySaveResult, bindHostedDraftReference, draftDisposition, freezeHostedSave, hostedOpenedDraft, hostedDocumentDraft, qualifyHostedDraft } from "./hosted-state";
 import { freezeOriginalAttempt } from "./original-operation";
 import { unavailableCommittedHistory } from "./hosted-history-state";
 
 // Execute the production lifecycle functions and their actual logout/pagehide
 // registrations. DOM/editor panels and HTTP are the only substituted boundaries.
 const sourceFile = ts.createSourceFile("hosted.ts", readFileSync(new URL("./hosted.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const names = new Set(["sessionAudience", "closeOwnedSession", "confirmHostedRetirementCuts", "confirmDraftBasis", "releaseViewSessions", "retryHostedRetirements", "capturedDraftAck", "queueHostedWriterRetirement", "retireHostedWriters", "hostedInput", "draftOrder", "bindHostedTransmission", "issueHostedInput", "persistHostedDraft", "hostedHistoryBasis", "finishUnavailableHistory", "save", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus"]);
+const names = new Set(["sessionAudience", "closeOwnedSession", "confirmHostedRetirementCuts", "confirmDraftBasis", "releaseViewSessions", "retryHostedRetirements", "capturedDraftAck", "queueHostedWriterRetirement", "retireHostedWriters", "hostedInput", "draftOrder", "bindHostedTransmission", "issueHostedInput", "persistHostedDraft", "hostedHistoryBasis", "finishUnavailableHistory", "save", "refreshOpenSession", "clearDisplay", "controls", "retain", "personalAudience", "unresolvedPersonalSave", "observePersonalWrite", "persistPersonalInputs", "open", "checkedSaveStatus", "readDocumentReference", "publishDocumentReference", "installDocument", "verifyPersonalIdentity", "recoverPersonalOperation", "qualifyPersonalOriginalRoute", "finishPersonalOperation"]);
 const statements = sourceFile.statements.filter(node =>
   ts.isFunctionDeclaration(node) && !!node.name && names.has(node.name.text)
   || ts.isClassDeclaration(node) && node.name?.text === "HostedError"
@@ -40,14 +40,17 @@ async function fixture() {
     return nodes.get(id);
   };
   const context: any = {
-    hostedWriterRetirements: new Map(), orderedDrafts:new WeakMap(), OrderedDraft, hostedDocumentDraft, qualifyHostedDraft,
-    applySaveResult, freezeHostedSave, freezeOriginalAttempt, unavailableCommittedHistory, crypto,
+    hostedWriterRetirements: new Map(), orderedDrafts:new WeakMap(), OrderedDraft, hostedDocumentDraft, hostedOpenedDraft, qualifyHostedDraft,
+    applySaveResult, bindHostedDraftReference, draftDisposition, freezeHostedSave, freezeOriginalAttempt, unavailableCommittedHistory, crypto,
     ApiError, UiError, uiMessage, locale, uiTextValue, setUiText, errorUiText, displayMessage, uiDisplayParameter, localeDisposals: 0, interfaceLocale: { dispose() { context.localeDisposals++; } }, mountInterfaceLocale() {},
     el, window: { addEventListener(name: string, listener: (event: any) => void) { const prior = listeners.get(name); listeners.set(name, event => { prior?.(event); listener(event); }); } },
     document: { querySelectorAll() { return []; } },
     everydayNavigation: { clear() {} }, everydayBar: { replaceChildren() {} },
     personalControls: { clear() {} },
-    renderEverydayBar() {}, noteInputAudience() { return null; }, noteInputRecovery: { count() { return 0; } },
+    // Chrome remains a presentation port in this lifecycle harness. Its title
+    // stores and tab DOM are real so actual logout must clear them as well.
+    openDocumentTitles: new Map(), openDocumentButtons: new Map(), documentTabs: testDocument.createElement("nav"), closeHostedInspector() {},
+    renderEverydayBar() {}, renderHostedDocumentTabs() {}, syncHostedPanels() {}, noteInputAudience() { return null; }, noteInputRecovery: { count() { return 0; } },
     authoringEditable() { return false; }, actionVersion: 0,
     requestEpoch: 0, authorizationEpoch: 0, cachePrefix: "weftext-hosted-draft:space:alice:0:",
     hostedCapture: undefined, captureVersion: 0, capturePanel: testDocument.createElement("section"),
@@ -68,18 +71,20 @@ async function fixture() {
   }
   context.draftCache = new HostedDraftCache(context.sessionStorage, () => context.cachePrefix);
   const proposals = new Map<string, PersonalInputBundle>();
-  context.personalInputs = new PersonalInputRecovery({
+  const proposalBackend: PersonalInputBackend = {
     async read(audience) { return structuredClone(proposals.get(audience)); },
     async compareAndWrite(audience, expectedCommit, metadata, texts) {
       assert.equal(proposals.get(audience)?.commitId ?? 0, expectedCommit);
       proposals.set(audience, { commitId: expectedCommit + 1, metadata, texts: new Map(texts) });
       return expectedCommit + 1;
     },
-  });
+  };
+  context.personalInputs = new PersonalInputRecovery(proposalBackend);
   await context.personalInputs.open(context.verifiedPersonalAudience);
   context.source.personalInputRecords = () => [];
+  context.source.personalInputReference = (resource: string, reference: string) => { context.personalReferences ??= new Map(); context.personalReferences.set(resource, reference); };
   vm.createContext(context); vm.runInContext(compiled, context);
-  return { context, nodes, listeners, calls, storage, cleared };
+  return { context, nodes, listeners, calls, storage, cleared, proposals, proposalBackend };
 }
 
 test("logout releases the original document before clearing its credential and all panels", async () => {
@@ -89,9 +94,15 @@ test("logout releases the original document before clearing its credential and a
     f.context.draft = { source: "saved", baseSource: "saved" };
     f.context.identity = { actor: "alice", deployment: "space", generation: 0 };
     f.context.token = "alice-credential";
+    const tab = f.context.documentTabs.ownerDocument.createElement("button");
+    tab.textContent = "Alice current note";
+    f.context.openDocumentTitles.set("Shared", tab.textContent);
+    f.context.openDocumentButtons.set("Shared", tab);
+    f.context.documentTabs.append(tab);
     f.nodes.get("logout").onclick();
     await f.context.retryHostedRetirements();
     assert.equal(f.context.doc, undefined); assert.equal(f.context.token, ""); assert.equal(f.context.identity, undefined);
+    assert.equal(f.context.openDocumentTitles.size, 0); assert.equal(f.context.openDocumentButtons.size, 0); assert.equal(f.context.documentTabs.children.length, 0);
     assert.equal(f.calls.length, index + 1, "logout must dispatch the owned-session close");
     assert.equal(f.calls[index].url, "/api/hosted/close");
     assert.equal((f.calls[index].options.headers as Record<string, string>).Authorization, "Bearer alice-credential");
@@ -182,7 +193,7 @@ test("alias recovery queries only the frozen resource, retains unknown input and
     c.cached = () => undefined; c.hostedOpenedDraft = hostedOpenedDraft; c.applySaveResult = applySaveResult;
     c.finishPersonalOperation = (id: string, state: string) => { assert.equal(id, operation); assert.equal(state, "committed"); acknowledged++; };
     c.scheduleCurrentDraft = () => {};
-    c.installDocument = (opened: any, draft: any, recovered: boolean) => { assert.equal(recovered, true); assert.equal(draft.source, "later input Y"); assert.equal(draft.baseSource, "submitted X"); assert.equal(draft.pending, undefined); assert.equal(draft.basis, undefined, "alias recovery must not borrow the alias open's new Base"); c.doc = opened; c.draft = draft; installed++; };
+    c.installDocument = (opened: any, draft: any, stableReference: string, recovered: boolean, staged: boolean, alias: boolean) => { assert.equal(stableReference, reference); assert.equal(draft.reference, reference); assert.equal(recovered, true); assert.equal(staged, true); assert.equal(alias, true); c.source.rebindResourceAlias(opened.resource); assert.equal(draft.source, "later input Y"); assert.equal(draft.baseSource, "submitted X"); assert.equal(draft.pending, undefined); assert.equal(draft.basis, undefined, "alias recovery must not borrow the alias open's new Base"); c.doc = opened; c.draft = draft; installed++; };
     const requests: { path: string; data: any }[] = [];
     c.request = async (path: string, data?: any) => {
       requests.push({ path, data });
@@ -200,6 +211,101 @@ test("alias recovery queries only the frozen resource, retains unknown input and
     assert.equal(requests.some(call => ["save", "operation/settle"].includes(call.path)), false);
     assert.equal(f.calls.length, 1); assert.equal(JSON.parse(f.calls[0].options.body as string).sessionId, terminal ? "alice-original" : "new-alias-session");
   }
+});
+
+async function navigationReferenceFixture() {
+  const f = await fixture(), c = f.context, original = c.doc, originalDraft = c.draft;
+  const opened = { resource: "Target", title: "Target title", sessionId: crypto.randomUUID(), baseId: crypto.randomUUID(), source: "saved B 😀", rights: { read: true, write: true } };
+  const reference = "weftext-node://workspace/target", started = deferred<void>(), reply = deferred<any>(), producers: any[] = [], requests: any[] = [];
+  Object.assign(c.source, {
+    serial: 1, authorInputId: crypto.randomUUID(), checkNavigationCapacity() {}, flush: async () => {},
+    open(sessionId: string, resource: string, value: string) {
+      const bound = c.personalReferences?.get(resource);
+      assert.equal(bound, reference, "the first target producer must already have its stable owner");
+      producers.push({ sessionId, resource, value, reference: bound }); c.source.value = value;
+    },
+  });
+  c.nodeAudience = () => ({ ...c.sessionAudience(), epoch: c.requestEpoch, sessionId: c.doc?.sessionId, source: c.source.value, serial: c.source.serial, inputId: c.source.authorInputId });
+  c.sameHostedNodeAudience = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right);
+  c.cached = (resource: string) => c.draftCache.read(resource);
+  c.queries.authorChanged = () => {}; c.history.documentChanged = () => {}; c.knowledgeAuthorChanged = () => {};
+  c.request = async (path: string, data?: any, bytes?: boolean, attempt?: number, signal?: AbortSignal, scope?: string) => {
+    requests.push({ path, data, bytes, attempt, signal, scope });
+    if (path === "me") return c.identity;
+    if (path === "open") return opened;
+    assert.equal(path, "navigation/ref"); assert.equal(data.sessionId, opened.sessionId);
+    assert.equal(bytes, false); assert.equal(attempt, 0); assert.equal(scope, "stagedTarget"); assert.ok(signal instanceof AbortSignal);
+    started.resolve(); return reply.promise;
+  };
+  return { ...f, original, originalDraft, opened, reference, started, reply, producers, requests };
+}
+
+test("a delayed staged reference keeps A's exact Draft and Undo owner until the first B producer has a stable identity", async () => {
+  const f = await navigationReferenceFixture(), c = f.context, pending = c.open(f.opened.resource);
+  await f.started.promise;
+  assert.equal(c.doc, f.original); assert.equal(c.draft, f.originalDraft); assert.equal(c.source.value, "unsaved draft");
+  assert.deepEqual(f.producers, []); assert.equal(c.personalReferences?.has(f.opened.resource) ?? false, false); assert.equal(f.calls.length, 0);
+  assert.equal(c.draftCache.read(f.opened.resource), undefined);
+  f.reply.resolve({ resource: f.opened.resource, reference: f.reference }); await pending;
+  assert.equal(c.doc, f.opened); assert.equal(c.draft.reference, f.reference); assert.equal(c.source.value, f.opened.source);
+  assert.equal(f.nodes.get("copy-reference").disabled, false, "publishing the qualified target must enable the original copy-reference entry synchronously");
+  assert.deepEqual(f.producers, [{ sessionId: f.opened.sessionId, resource: f.opened.resource, value: f.opened.source, reference: f.reference }]);
+  assert.equal(f.calls.length, 1); assert.equal(JSON.parse(f.calls[0].options.body as string).sessionId, f.original.sessionId);
+  assert.equal((f.calls[0].options.headers as Record<string, string>).Authorization, "Bearer alice-credential");
+});
+
+test("installing a target at the retained-editor capacity leaves every current owner and reference unchanged", async () => {
+  const f = await navigationReferenceFixture(), c = f.context, epoch = c.requestEpoch, inputId = c.source.authorInputId;
+  c.source.checkNavigationCapacity = (resource: string) => { assert.equal(resource, f.opened.resource); throw new Error("retained editor capacity"); };
+  assert.throws(() => c.installDocument(f.opened, hostedDocumentDraft(f.opened), f.reference), /retained editor capacity/);
+  assert.equal(c.doc, f.original); assert.equal(c.draft, f.originalDraft); assert.equal(c.source.value, "unsaved draft"); assert.equal(c.source.authorInputId, inputId); assert.equal(c.requestEpoch, epoch);
+  assert.equal(c.personalReferences?.size ?? 0, 0); assert.equal(c.stableReference, undefined); assert.deepEqual(f.producers, []); assert.equal(f.calls.length, 0);
+  assert.equal(c.draftCache.read(f.opened.resource), undefined);
+});
+
+test("late target references cannot install over a different actor or over newer input in A", async () => {
+  for (const changed of ["actor", "source"] as const) {
+    const f = await navigationReferenceFixture(), c = f.context, pending = c.open(f.opened.resource);
+    await f.started.promise;
+    let expectedDoc = f.original;
+    if (changed === "actor") {
+      expectedDoc = { sessionId: "bob-current", resource: "Other", rights: { read: true, write: true } };
+      c.doc = expectedDoc; c.token = "bob-credential"; c.identity = { actor: "bob", deployment: "space", generation: 1 }; c.authorizationEpoch++; c.requestEpoch++;
+    } else { c.source.value = "newer A input 😀"; c.source.serial++; }
+    f.reply.resolve({ resource: f.opened.resource, reference: f.reference }); await pending;
+    assert.equal(c.doc, expectedDoc); assert.equal(c.draft, f.originalDraft); assert.deepEqual(f.producers, []);
+    assert.equal(c.source.value, changed === "source" ? "newer A input 😀" : "unsaved draft");
+    assert.equal(c.personalReferences?.has(f.opened.resource) ?? false, false); assert.equal(c.draftCache.read(f.opened.resource), undefined);
+    assert.equal(f.calls.length, 1); assert.equal(JSON.parse(f.calls[0].options.body as string).sessionId, f.opened.sessionId);
+    assert.equal((f.calls[0].options.headers as Record<string, string>).Authorization, "Bearer alice-credential");
+    assert.equal(c.token, changed === "actor" ? "bob-credential" : "alice-credential");
+  }
+});
+
+test("failed or malformed staged references preserve A and close B using its original actor", async () => {
+  for (const failure of ["network", "resource", "reference"] as const) {
+    const f = await navigationReferenceFixture(), c = f.context, pending = c.open(f.opened.resource), rejected = assert.rejects(pending);
+    await f.started.promise;
+    if (failure === "network") f.reply.reject(new Error("reference unavailable"));
+    else f.reply.resolve({ resource: failure === "resource" ? "unrelated" : f.opened.resource, reference: failure === "reference" ? "https://untrusted/node" : f.reference });
+    await rejected;
+    assert.equal(c.doc, f.original); assert.equal(c.draft, f.originalDraft); assert.equal(c.source.value, "unsaved draft"); assert.deepEqual(f.producers, []);
+    assert.equal(c.personalReferences?.has(f.opened.resource) ?? false, false); assert.equal(c.draftCache.read(f.opened.resource), undefined);
+    assert.equal(f.calls.length, 1); assert.equal(JSON.parse(f.calls[0].options.body as string).sessionId, f.opened.sessionId);
+    assert.equal((f.calls[0].options.headers as Record<string, string>).Authorization, "Bearer alice-credential");
+  }
+});
+
+test("a final retention failure after target qualification does not publish B or replace A's producer", async () => {
+  const f = await navigationReferenceFixture(), c = f.context, retainOriginal = c.retain;
+  let qualified = false;
+  c.retain = () => { if (qualified) return Promise.reject(new Error("final retention failed")); return retainOriginal(); };
+  const pending = c.open(f.opened.resource), rejected = assert.rejects(pending, /final retention failed/);
+  await f.started.promise; qualified = true; f.reply.resolve({ resource: f.opened.resource, reference: f.reference }); await rejected;
+  assert.equal(c.doc, f.original); assert.equal(c.draft, f.originalDraft); assert.equal(c.source.value, "unsaved draft"); assert.deepEqual(f.producers, []);
+  assert.equal(c.personalReferences?.has(f.opened.resource) ?? false, false); assert.equal(c.draftCache.read(f.opened.resource), undefined);
+  assert.equal(f.calls.length, 1); assert.equal(JSON.parse(f.calls[0].options.body as string).sessionId, f.opened.sessionId);
+  assert.equal((f.calls[0].options.headers as Record<string, string>).Authorization, "Bearer alice-credential");
 });
 
 test("an acknowledged target keeps a failed close handle until the original credential confirms expiry", async()=>{
@@ -338,6 +444,232 @@ test("unavailable-history cleanup retains Alice's late open handle when Bob conn
   accepts = true; await c.retryHostedRetirements();
   assert.deepEqual(credentials, ["Bearer alice-credential", "Bearer alice-credential"]); assert.equal(c.hostedWriterRetirements.size, 0);
   assert.equal(c.doc.sessionId, "bob-current"); assert.equal(c.token, "bob-credential");
+});
+
+test("unavailable-history reference failures and final retention rejection leave the original producer intact", async () => {
+  for (const failure of ["network", "resource", "actor", "retention"] as const) {
+    const f = await fixture(), c = f.context, selected = c.doc, originalDraft = c.draft;
+    const fresh = { ...selected, sessionId: crypto.randomUUID(), source: "saved history source" };
+    const record = { request: { resource: selected.resource, operationId: "unavailable-restore" }, status: { status: "committed", resultStatus: "unavailable" } };
+    const started = deferred<void>(), reply = deferred<any>(), producers: any[] = [];
+    Object.assign(c.source, { flush: async () => {}, open: (...args: any[]) => producers.push(args) });
+    c.history.installStatus = () => {};
+    if (failure === "retention") c.retain = () => Promise.reject(new Error("unavailable history retention failed"));
+    c.request = async (path: string, data?: any, bytes?: boolean, attempt?: number, signal?: AbortSignal, scope?: string) => {
+      if (path === "open") return fresh;
+      if (path === "history/status") return record.status;
+      assert.equal(path, "navigation/ref"); assert.equal(data.sessionId, fresh.sessionId);
+      assert.equal(bytes, false); assert.equal(attempt, 0); assert.equal(scope, "stagedTarget"); assert.ok(signal instanceof AbortSignal);
+      started.resolve(); return reply.promise;
+    };
+    const pending = c.finishUnavailableHistory(record), rejected = assert.rejects(pending); await started.promise;
+    assert.equal(c.doc, selected); assert.equal(c.draft, originalDraft); assert.equal(c.source.value, "unsaved draft"); assert.deepEqual(producers, []); assert.equal(f.calls.length, 0);
+    let expectedDoc = selected;
+    if (failure === "actor") {
+      expectedDoc = { sessionId: "bob-current", resource: "Other" }; c.doc = expectedDoc;
+      c.token = "bob-credential"; c.identity = { actor: "bob", deployment: "space", generation: 1 }; c.authorizationEpoch++; c.requestEpoch++;
+    }
+    if (failure === "network") reply.reject(new Error("unavailable history reference failed"));
+    else reply.resolve({ resource: failure === "resource" ? "unrelated" : fresh.resource, reference: "weftext-node://workspace/original" });
+    await rejected;
+    assert.equal(c.doc, expectedDoc); assert.equal(c.draft, originalDraft); assert.equal(c.source.value, "unsaved draft"); assert.deepEqual(producers, []);
+    assert.equal(c.personalReferences?.size ?? 0, 0); assert.equal(f.calls.length, 1); assert.equal(JSON.parse(f.calls[0].options.body as string).sessionId, fresh.sessionId);
+    assert.equal((f.calls[0].options.headers as Record<string, string>).Authorization, "Bearer alice-credential");
+  }
+});
+
+async function personalOperationFixture() {
+  const f = await fixture(), c = f.context, audience = c.verifiedPersonalAudience;
+  const original = { id: "original-input", owner: { kind: "body" as const, resource: "Shared", reference: "weftext-node://workspace/original" },
+    origin: { baseLength: 0, pieces: [{ text: "own alias input 😀" }], detached: [], revision: 1 },
+    pending: { operationId: "save-through-alias", route: "known" as const, resource: "Alias-B", status: "unresolved" as const } };
+  await c.personalInputs.update(audience, [original]);
+  const finished: any[] = [], requests: any[] = [];
+  c.source.settlePersonalSave = (operationId: string, committed: boolean) => finished.push({ operationId, committed });
+  return { ...f, audience, original, record: c.personalInputs.list(audience)[0], finished, requests };
+}
+
+async function unknownPersonalOperationFixture(status = "unresolved", ownerReference: string | null = "weftext-node://workspace/original") {
+  const f = await fixture(), c = f.context, audience = c.verifiedPersonalAudience;
+  const owner = { kind: "body", resource: "Shared", ...(ownerReference ? { reference: ownerReference } : {}) };
+  f.proposals.set(audience, { commitId: 3, metadata: JSON.stringify({ version: 3, records: [{ kind: "text", id: "original-input", sequence: 1, owner,
+    origin: { baseLength: 0, pieces: [{ text: "original own input 😀" }], detached: [], revision: 1 }, pending: { operationId: "unknown-save", status } }] }), texts: new Map() });
+  c.personalInputs = new PersonalInputRecovery(f.proposalBackend); await c.personalInputs.open(audience);
+  return { ...f, audience, record: c.personalInputs.list(audience)[0] };
+}
+
+test("unknown original routes block only unresolved saves that cannot be excluded by a fresh different node identity", async () => {
+  const cases = [
+    { name: "original resource", resource: "Shared", ownerReference: "weftext-node://workspace/original", currentReference: "weftext-node://workspace/other", blocked: true },
+    { name: "alias of same node", resource: "Alias", ownerReference: "weftext-node://workspace/original", currentReference: "weftext-node://workspace/original", blocked: true },
+    { name: "missing original reference", resource: "Other", ownerReference: null, currentReference: "weftext-node://workspace/other", blocked: true },
+    { name: "missing current reference", resource: "Other", ownerReference: "weftext-node://workspace/original", currentReference: undefined, blocked: true },
+    { name: "fresh different node", resource: "Other", ownerReference: "weftext-node://workspace/original", currentReference: "weftext-node://workspace/other", blocked: false },
+  ];
+  for (const scenario of cases) {
+    const f = await unknownPersonalOperationFixture("unresolved", scenario.ownerReference), c = f.context;
+    c.doc.resource = scenario.resource; c.stableReference = scenario.currentReference ? { resource: c.doc.resource, sessionId: c.doc.sessionId, reference: scenario.currentReference } : undefined;
+    assert.equal(c.unresolvedPersonalSave(c.doc), scenario.blocked, scenario.name); c.controls(); assert.equal(f.nodes.get("save").disabled, scenario.blocked, scenario.name);
+    assert.equal(c.personalInputs.pending(), true);
+    if (scenario.blocked) { let requests = 0; c.request = async () => { requests++; throw new Error("unknown route must not issue an author request"); }; await c.save(); assert.equal(requests, 0); }
+    assert.equal(c.source.value, "unsaved draft"); assert.equal(c.personalInputs.list(f.audience)[0].pending.route, "unknownOriginalRoute");
+  }
+  for (const terminal of ["committed", "cancelled", "resolved"]) {
+    const f = await unknownPersonalOperationFixture(terminal), c = f.context; assert.equal(c.unresolvedPersonalSave(c.doc), false); c.controls(); assert.equal(f.nodes.get("save").disabled, false); assert.equal(c.personalInputs.pending(), false);
+  }
+});
+
+test("an unknown original route cannot query or settle by borrowing its input owner's resource", async () => {
+  const f = await unknownPersonalOperationFixture(), c = f.context, requests: string[] = [];
+  c.request = async (path: string) => { requests.push(path); assert.equal(path, "me"); return c.identity; };
+  await assert.rejects(c.recoverPersonalOperation(f.record, f.audience));
+  assert.deepEqual(requests, ["me"]); assert.deepEqual(c.personalInputs.list(f.audience)[0], f.record); assert.equal(c.source.value, "unsaved draft"); assert.equal(c.personalInputs.pending(), true);
+});
+
+test("a known unresolved original remains a Save barrier after actual logout and a fresh recovery instance", async () => {
+  const f = await personalOperationFixture(), c = f.context, original = c.doc;
+  f.nodes.get("logout").onclick(); await c.retryHostedRetirements(); assert.equal(c.doc, undefined); assert.equal(c.identity, undefined);
+  c.identity = { actor: "alice", deployment: "space", generation: 0 }; c.token = "alice-credential"; c.verifiedPersonalAudience = f.audience; c.cachePrefix = "weftext-hosted-draft:space:alice:0:";
+  c.personalInputs = new PersonalInputRecovery(f.proposalBackend); await c.personalInputs.open(f.audience);
+  c.doc = { ...original, resource: "Current-alias", sessionId: "relogin-session" }; c.draft = { source: "unsaved draft", baseSource: "saved source" };
+  c.stableReference = { resource: c.doc.resource, sessionId: c.doc.sessionId, reference: f.original.owner.reference };
+  let requests = 0, flushes = 0; c.source.flush = async () => { flushes++; }; c.request = async () => { requests++; throw new Error("a retained unresolved operation cannot issue a new Save"); };
+  assert.equal(c.unresolvedPersonalSave(c.doc), true); c.controls(); assert.equal(f.nodes.get("save").disabled, true); await c.save();
+  assert.equal(requests, 0); assert.equal(flushes, 0); assert.deepEqual(c.personalInputs.list(f.audience)[0].pending, f.record.pending); assert.equal(c.source.value, "unsaved draft");
+});
+
+test("proving a route does not settle its operation; only a terminal receipt permits the next actual prepared Save", async () => {
+  const f = await unknownPersonalOperationFixture(), c = f.context, selected = c.doc, inputId = crypto.randomUUID(), baseId = crypto.randomUUID();
+  Object.assign(selected, { sessionId: crypto.randomUUID(), baseId, source: "saved B" });
+  c.draft = { source: "new X 😀", baseSource: selected.source, basis: { sessionId: selected.sessionId, baseId }, inputId };
+  c.stableReference = { resource: selected.resource, sessionId: selected.sessionId, reference: f.record.owner.reference };
+  let prepared: any, posts = 0;
+  Object.assign(c.source, {
+    value: "new X 😀", serial: 1, authorInputId: inputId, flush: async () => {}, refreshQueries() {},
+    beginPersonalSave: async (operationId: string, source: string) => { prepared = { id: "prepared-input", owner: { kind: "body", resource: selected.resource, reference: f.record.owner.reference }, origin: { baseLength: 0, pieces: [{ text: source }], detached: [], revision: 1 }, pending: { operationId, route: "known", resource: selected.resource, status: "unresolved" } }; },
+    settlePersonalSave: (operationId: string, committed: boolean) => { if (prepared?.pending.operationId === operationId) prepared.pending.status = committed ? "committed" : "cancelled"; },
+    personalInputRecords: () => prepared ? [prepared] : [],
+  });
+  c.queries = { authorChanged() {}, refreshCatalog: async () => {} }; c.knowledgeAuthorChanged = () => {};
+  c.request = async (path: string, wire: any) => {
+    if (path === "draft") return { status: "inputAcknowledged", evidence: "authorDraft", inputRevision: wire.inputRevision };
+    assert.equal(path, "save"); posts++; assert.notEqual(wire.operationId, "unknown-save"); assert.equal(c.unresolvedPersonalSave(selected), true); assert.equal(c.unresolvedPersonalSave(selected, wire.operationId), false);
+    return { resource: selected.resource, operationId: wire.operationId, status: "committed", baseId: crypto.randomUUID() };
+  };
+  await c.qualifyPersonalOriginalRoute({ kind: "coreReceipt", audience: f.audience, receipt: { operationId: "unknown-save", resource: "Alias-original", status: "recoveryPending" } });
+  assert.equal(c.personalInputs.list(f.audience)[0].pending.route, "known"); assert.equal(c.unresolvedPersonalSave(selected), true); await c.save(); assert.equal(posts, 0);
+  await c.finishPersonalOperation("unknown-save", "cancelled", { resource: "Alias-original", operationId: "unknown-save", status: "cancelled" });
+  assert.equal(c.unresolvedPersonalSave(selected), false); c.controls(); assert.equal(f.nodes.get("save").disabled, false); await c.save();
+  assert.equal(posts, 1); assert.equal(c.draft.pending, undefined); assert.equal(c.source.value, "new X 😀"); assert.equal(c.personalInputs.list(f.audience).find((record: any) => record.id === "original-input").pending.status, "cancelled");
+});
+
+test("a same-node unresolved operation merged during final retention prevents the new Save POST without inventing a terminal result", async () => {
+  const f = await fixture(), c = f.context, audience = c.verifiedPersonalAudience, selected = c.doc, inputId = crypto.randomUUID(), baseId = crypto.randomUUID();
+  Object.assign(selected, { sessionId: crypto.randomUUID(), baseId, source: "saved B" });
+  c.draft = { source: "new X 😀", baseSource: selected.source, basis: { sessionId: selected.sessionId, baseId }, inputId };
+  c.stableReference = { resource: selected.resource, sessionId: selected.sessionId, reference: "weftext-node://workspace/same-node" };
+  let prepared: any, posted = 0; const settled: string[] = [];
+  Object.assign(c.source, {
+    value: "new X 😀", serial: 1, authorInputId: inputId, flush: async () => {}, refreshQueries() {},
+    beginPersonalSave: async (operationId: string, source: string) => { prepared = { id: "new-prepared-input", owner: { kind: "body", resource: selected.resource, reference: c.stableReference.reference }, origin: { baseLength: 0, pieces: [{ text: source }], detached: [], revision: 1 }, pending: { operationId, route: "known", resource: selected.resource, status: "unresolved" } }; },
+    settlePersonalSave: (operationId: string) => settled.push(operationId), personalInputRecords: () => prepared ? [prepared] : [],
+  });
+  c.queries = { authorChanged() {}, refreshCatalog: async () => {} }; c.knowledgeAuthorChanged = () => {};
+  const write = f.proposalBackend.compareAndWrite.bind(f.proposalBackend); let injected = false;
+  f.proposalBackend.compareAndWrite = async (...args) => {
+    if (!injected && args[0] === audience && JSON.parse(args[2]).records.some((record: any) => record.id === "new-prepared-input")) {
+      injected = true;
+      const anotherPage = new PersonalInputRecovery(f.proposalBackend); await anotherPage.open(audience);
+      await anotherPage.update(audience, [{ id: "older-unresolved-input", owner: { kind: "body", resource: "Original-alias", reference: c.stableReference.reference },
+        origin: { baseLength: 0, pieces: [{ text: "other page original input" }], detached: [], revision: 1 },
+        pending: { operationId: "older-unresolved-save", route: "known", resource: "Original-alias", status: "unresolved" } }]);
+    }
+    if ((f.proposals.get(args[0])?.commitId ?? 0) !== args[1]) throw new PersonalInputStoreConflict();
+    return write(...args);
+  };
+  c.request = async (path: string, wire: any) => { if (path === "draft") return { status: "inputAcknowledged", evidence: "authorDraft", inputRevision: wire.inputRevision }; posted++; throw new Error("final guard must prevent every new author request"); };
+  await c.save(); assert.equal(injected, true); assert.equal(posted, 0); assert.deepEqual(settled, []); assert.equal(c.source.value, "new X 😀");
+  assert.equal(c.draft.pending.operationId, prepared.pending.operationId); assert.equal(c.draft.pending.request.operationId, prepared.pending.operationId);
+  const retained = c.personalInputs.list(audience); assert.equal(retained.length, 2);
+  assert.deepEqual(retained.find((record: any) => record.id === "new-prepared-input").pending, prepared.pending);
+  assert.equal(retained.find((record: any) => record.id === "older-unresolved-input").pending.status, "unresolved");
+  assert.equal(c.unresolvedPersonalSave(selected, prepared.pending.operationId), true);
+  const reloaded = new PersonalInputRecovery(f.proposalBackend); await reloaded.open(audience); assert.deepEqual(reloaded.list(audience), retained);
+});
+
+test("an actual terminal receipt proves the original route durably before settling its input owner", async () => {
+  for (const actorChanged of [false, true]) {
+    const f = await unknownPersonalOperationFixture(), c = f.context, started = deferred<void>(), acknowledged = deferred<void>(), settled: any[] = [];
+    const write = f.proposalBackend.compareAndWrite.bind(f.proposalBackend); let first = true;
+    f.proposalBackend.compareAndWrite = async (...args) => { if (first && args[0] === f.audience) { first = false; started.resolve(); await acknowledged.promise; } return write(...args); };
+    c.source.settlePersonalSave = (operationId: string, committed: boolean) => settled.push({ operationId, committed });
+    const pending = c.finishPersonalOperation("unknown-save", "committed", { operationId: "unknown-save", resource: "Alias-original", status: "committed", baseId: "saved-base" });
+    const finished = actorChanged ? assert.rejects(pending) : pending; await started.promise;
+    assert.deepEqual(settled, []); assert.equal(JSON.parse(f.proposals.get(f.audience)!.metadata).records[0].pending.route, "unknownOriginalRoute");
+    if (actorChanged) { c.token = "bob-credential"; c.identity = { actor: "bob", deployment: "space", generation: 1 }; c.authorizationEpoch++; }
+    acknowledged.resolve(); await finished;
+    const record = c.personalInputs.list(f.audience)[0]; assert.deepEqual(record.owner, f.record.owner); assert.equal(record.id, f.record.id);
+    assert.deepEqual(record.pending, { operationId: "unknown-save", route: "known", resource: "Alias-original", status: actorChanged ? "unresolved" : "committed" });
+    assert.deepEqual(settled, actorChanged ? [] : [{ operationId: "unknown-save", committed: true }]); assert.equal(c.source.value, "unsaved draft");
+  }
+});
+
+test("personal operation recovery uses its frozen alias route while the same input keeps its original owner", async () => {
+  for (const initial of ["committed", "notCommitted"] as const) {
+    const f = await personalOperationFixture(), c = f.context;
+    c.request = async (path: string, data?: any) => {
+      if (path === "me") return c.identity;
+      f.requests.push({ path, data }); assert.equal(c.token, "alice-credential");
+      assert.deepEqual(JSON.parse(JSON.stringify(data)), { resource: "Alias-B", operationId: "save-through-alias" });
+      assert.ok(path === "operation" || path === "operation/settle");
+      return { resource: "Alias-B", operationId: "save-through-alias", status: path === "operation" ? initial : "cancelled", baseId: "saved-base" };
+    };
+    await c.recoverPersonalOperation(f.record, f.audience);
+    assert.deepEqual(f.requests.map(request => request.path), initial === "committed" ? ["operation"] : ["operation", "operation/settle"]);
+    assert.deepEqual(f.finished, [{ operationId: "save-through-alias", committed: initial === "committed" }]);
+    const retained = c.personalInputs.list(f.audience)[0]; assert.equal(retained.id, f.original.id); assert.deepEqual(retained.owner, f.original.owner);
+    assert.deepEqual(retained.pending, { operationId: "save-through-alias", route: "known", resource: "Alias-B", status: initial === "committed" ? "committed" : "cancelled" });
+    assert.equal(c.source.value, "unsaved draft"); assert.equal(f.calls.length, 0);
+  }
+});
+
+test("personal recovery cannot accept another operation, its input-owner route, or a still-unknown original result", async () => {
+  for (const malformed of ["operation", "resource", "unresolved"] as const) {
+    const f = await personalOperationFixture(), c = f.context;
+    c.request = async (path: string, data?: any) => {
+      if (path === "me") return c.identity;
+      assert.equal(path, "operation"); assert.equal(data.resource, "Alias-B");
+      return { resource: malformed === "resource" ? "Shared" : "Alias-B", operationId: malformed === "operation" ? "another-save" : "save-through-alias", status: malformed === "unresolved" ? "recoveryPending" : "committed", baseId: "saved-base" };
+    };
+    await assert.rejects(c.recoverPersonalOperation(f.record, f.audience));
+    assert.deepEqual(f.finished, []); assert.deepEqual(c.personalInputs.list(f.audience)[0], f.record); assert.equal(c.source.value, "unsaved draft");
+  }
+});
+
+test("actor changes during personal recovery cannot settle Alice's original under Bob", async () => {
+  for (const phase of ["identity", "operation"] as const) {
+    const f = await personalOperationFixture(), c = f.context, started = deferred<void>(), reply = deferred<any>();
+    c.request = async (path: string, data?: any) => {
+      if (path === "me" && phase !== "identity") return c.identity;
+      assert.equal(path, phase === "identity" ? "me" : "operation"); if (data) assert.equal(data.resource, "Alias-B");
+      started.resolve(); return reply.promise;
+    };
+    const pending = c.recoverPersonalOperation(f.record, f.audience), rejected = phase === "identity" ? assert.rejects(pending) : pending;
+    await started.promise;
+    c.token = "bob-credential"; c.identity = { actor: "bob", deployment: "space", generation: 1 }; c.authorizationEpoch++;
+    reply.resolve(phase === "identity" ? { actor: "alice", deployment: "space", generation: 0 } : { resource: "Alias-B", operationId: "save-through-alias", status: "notCommitted" });
+    await rejected;
+    assert.deepEqual(f.finished, []); assert.deepEqual(c.personalInputs.list(f.audience)[0], f.record); assert.equal(c.token, "bob-credential"); assert.equal(c.source.value, "unsaved draft");
+  }
+});
+
+test("a personal recovery response cannot settle a newer revision of the same input record", async () => {
+  const f = await personalOperationFixture(), c = f.context, started = deferred<void>(), reply = deferred<any>();
+  c.request = async (path: string) => { if (path === "me") return c.identity; assert.equal(path, "operation"); started.resolve(); return reply.promise; };
+  const pending = c.recoverPersonalOperation(f.record, f.audience), rejected = assert.rejects(pending, /变化/); await started.promise;
+  await c.personalInputs.update(f.audience, [{ ...f.original, origin: { ...f.original.origin, pieces: [{ text: "newer own input 😀" }], revision: 2 } }]);
+  reply.resolve({ resource: "Alias-B", operationId: "save-through-alias", status: "committed", baseId: "saved-base" }); await rejected;
+  assert.deepEqual(f.finished, []); const latest = c.personalInputs.list(f.audience)[0]; assert.equal(latest.pending.resource, "Alias-B"); assert.equal(latest.pending.status, "unresolved"); assert.equal(latest.origin.pieces[0].text, "newer own input 😀");
 });
 
 test("the actual normal Save consumer advances its confirmed Base while late Y remains the next author input", async () => {
