@@ -2,6 +2,7 @@
 from contextlib import contextmanager, redirect_stdout
 import io
 from pathlib import Path
+import shutil
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -9,6 +10,7 @@ import uuid
 from unittest.mock import Mock, patch
 
 import mvp
+import build_receipt as receipt
 from build_receipt import GROUPS
 from test_build_receipt import Fixture
 
@@ -24,6 +26,12 @@ class NpmFixture:
 
 
 class EntrySelection(unittest.TestCase):
+    def setUp(self):
+        self.original_license_collector = mvp.dependency_licenses
+        collector = patch.object(mvp, 'dependency_licenses', side_effect=AssertionError('License preflight is package-only'))
+        self.license_collector = collector.start()
+        self.addCleanup(collector.stop)
+
     def test_tag_fixture_default_is_independent_of_deep_frozen_source(self):
         self._tag_fixture_parent(False)
 
@@ -150,11 +158,29 @@ class EntrySelection(unittest.TestCase):
 
     def test_default_check_builds_once_and_requests_all_original_groups(self):
         artifact = object()
-        with patch.object(mvp, 'build', return_value=artifact) as build, patch.object(mvp, 'check') as check:
-            result = mvp.main(['check'])
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertFalse((root / '.git').exists())
+            with patch.object(mvp, 'ROOT', root), \
+                    patch.object(mvp, 'require_checkout', side_effect=AssertionError('Standalone check needs no Git')), \
+                    patch.object(mvp, 'build', return_value=artifact) as build, patch.object(mvp, 'check') as check:
+                result = mvp.main(['check'])
         self.assertIs(result, artifact)
         build.assert_called_once_with(False, package_input=False, linker=None, windows_sdk=None)
         check.assert_called_once_with(artifact, GROUPS)
+
+    def test_plain_build_still_accepts_standalone_source_without_a_git_preflight(self):
+        artifact = object()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self.assertFalse((root / '.git').exists())
+            with patch.object(mvp, 'ROOT', root), \
+                    patch.object(mvp, 'require_checkout', side_effect=AssertionError('Standalone build needs no Git')), \
+                    patch.object(mvp, 'build', return_value=artifact) as build, patch.object(mvp, 'check') as check:
+                result = mvp.main(['build', '--release'])
+        self.assertIs(result, artifact)
+        build.assert_called_once_with(True, package_input=False, linker=None, windows_sdk=None)
+        check.assert_not_called()
 
     def test_receipt_source_group_still_qualifies_before_partial_execution(self):
         artifact = object()
@@ -167,14 +193,14 @@ class EntrySelection(unittest.TestCase):
                 patch.object(mvp, 'build', side_effect=AssertionError('No rebuild')), \
                 patch.object(mvp, 'check') as check:
             mvp.main(['check', '--release', '--artifacts', '/fixture-receipt.json', '--group', 'source'])
-        checkout.assert_called_once()
+        checkout.assert_not_called()
         self.assertEqual(metadata.call_count, 2)
         self.assertEqual(load.call_args.args[3], 'release')
         check.assert_called_once_with(artifact, ('source',))
 
     def test_receipt_without_group_requests_full_check_without_build(self):
         artifact = object()
-        with patch.object(mvp, 'require_checkout'), \
+        with patch.object(mvp, 'require_checkout') as checkout, \
                 patch.object(mvp, 'metadata', return_value={'target_directory': '/fixture-target'}), \
                 patch.object(mvp, 'validate_target', return_value=Path('/fixture-target')), \
                 patch.object(mvp.NpmTool, 'discover', return_value=NpmFixture()), \
@@ -182,7 +208,143 @@ class EntrySelection(unittest.TestCase):
                 patch.object(mvp, 'build', side_effect=AssertionError('Receipt must not rebuild')), \
                 patch.object(mvp, 'check') as check:
             mvp.main(['check', '--artifacts', '/fixture-receipt.json'])
+        checkout.assert_not_called()
         check.assert_called_once_with(artifact, GROUPS)
+
+    def test_actual_gitless_receipt_uses_the_cli_entry_without_rebuilding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(directory)
+            original = fixture.path.read_bytes()
+            self.assertFalse((fixture.root / '.git').exists())
+            with patch.object(mvp, 'ROOT', fixture.root), \
+                    patch.object(mvp, 'require_checkout', side_effect=AssertionError('Receipt source needs no Git')), \
+                    patch.object(mvp, 'metadata', return_value=fixture.metadata) as metadata, \
+                    patch.object(mvp.NpmTool, 'discover', return_value=NpmFixture()), \
+                    patch.object(receipt, 'qualify', return_value=fixture.qualification) as qualify, \
+                    patch.object(mvp, 'build', side_effect=AssertionError('Receipt must not rebuild')), \
+                    patch.object(mvp, 'check') as check:
+                result = mvp.main(['check', '--artifacts', str(fixture.path), '--group', 'cli'])
+            self.assertIsInstance(result, receipt.QualifiedArtifacts)
+            self.assertEqual(result.source_root, fixture.root)
+            self.assertEqual(result.receipt_path, fixture.path)
+            self.assertEqual(result.binaries, fixture.artifacts.binaries)
+            self.assertEqual(metadata.call_count, 2)
+            qualify.assert_called_once()
+            check.assert_called_once_with(result, ('cli',))
+            self.assertFalse((fixture.root / '.git').exists())
+            self.assertEqual(fixture.path.read_bytes(), original)
+
+    def test_actual_cli_rejects_identical_other_source_before_qualification_or_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(directory)
+            other = Path(directory) / 'another-source'
+            shutil.copytree(fixture.root, other)
+            self.assertFalse((other / '.git').exists())
+            self.assertEqual(receipt.snapshot(other, [fixture.target]), fixture.artifacts.source)
+            self.assertEqual(receipt.snapshot(other / 'app/dist'), fixture.artifacts.frontend)
+            original = fixture.path.read_bytes()
+            with patch.object(mvp, 'ROOT', other), \
+                    patch.object(mvp, 'require_checkout', side_effect=AssertionError('Receipt source needs no Git')), \
+                    patch.object(mvp, 'metadata', return_value=fixture.metadata), \
+                    patch.object(mvp.NpmTool, 'discover', return_value=NpmFixture()), \
+                    patch.object(receipt, 'qualify', return_value=fixture.qualification) as qualify, \
+                    patch.object(mvp, 'build', side_effect=AssertionError('Receipt must not rebuild')), \
+                    patch.object(mvp, 'check') as check:
+                with self.assertRaisesRegex(ValueError, 'Receipt version, checkout, target, batch or profile does not match'):
+                    mvp.main(['check', '--artifacts', str(fixture.path), '--group', 'cli'])
+            qualify.assert_not_called()
+            check.assert_not_called()
+            self.assertFalse((other / '.git').exists())
+            self.assertEqual(fixture.path.read_bytes(), original)
+
+    def test_package_git_preflight_failure_stops_before_tools_materials_or_build(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            failure = ValueError('Packaging requires an actual Git product checkout')
+            with patch.object(mvp, 'ROOT', root), patch.object(mvp, 'os', SimpleNamespace(name='nt')), \
+                    patch.object(mvp, 'require_checkout', side_effect=failure) as checkout, \
+                    patch.object(mvp, 'read_checked', side_effect=AssertionError('No input read before Git')), \
+                    patch.object(mvp, 'sdk_tools') as sdk, patch.object(mvp, 'freeze_materials') as materials, \
+                    patch.object(mvp, 'build') as build, patch.object(mvp, 'check') as check:
+                with self.assertRaises(ValueError) as caught:
+                    mvp.main(['package', '--release', '--windows-sdk', str(root / 'sdk'),
+                              '--offline-materials', str(root / 'materials'), '--msvc-linker', str(root / 'link.exe')])
+            self.assertIs(caught.exception, failure)
+            checkout.assert_called_once_with(root)
+            sdk.assert_not_called()
+            materials.assert_not_called()
+            build.assert_not_called()
+            check.assert_not_called()
+            self.license_collector.assert_not_called()
+
+    def test_package_preflight_uses_the_same_original_license_owner_as_final_packaging(self):
+        self.assertIs(self.original_license_collector, mvp.package_windows.__globals__['dependency_licenses'])
+
+    def test_package_still_qualifies_the_checkout_tools_and_materials_before_build(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sources = {'packaging/windows/host-contract.json': b'contract',
+                       'packaging/windows/offline-materials.json': b'locked materials',
+                       'crates/weftext-app/Cargo.toml': b'[package]\nversion = "0.7.0"\n'}
+            artifact = SimpleNamespace(source_root=root / 'frozen', source=sources,
+                                       metadata={'packages': [{'id': 'selected-build-participant'}]},
+                                       built_package_ids=frozenset({'selected-build-participant'}))
+            contract, tools = {'fixture': 'contract'}, {'fixture': 'SDK tools'}
+            materials = {'lockSha256': mvp.sha256(sources['packaging/windows/offline-materials.json'])}
+            events = []
+            sdk, linker, originals = root / 'sdk', root / 'link.exe', root / 'materials'
+            with patch.object(mvp, 'ROOT', root), patch.object(mvp, 'os', SimpleNamespace(name='nt')), \
+                    patch.object(mvp, 'require_checkout', side_effect=lambda _: events.append('checkout')) as checkout, \
+                    patch.object(mvp, 'read_checked', side_effect=lambda path, _: sources[path.relative_to(root).as_posix()]), \
+                    patch.object(mvp, 'load_contract', return_value=contract), \
+                    patch.object(mvp, 'sdk_tools', side_effect=lambda _: events.append('sdk') or tools), \
+                    patch.object(mvp, 'freeze_materials', side_effect=lambda *_: events.append('materials') or materials), \
+                    patch.object(mvp, 'build', side_effect=lambda *_, **__: events.append('build') or artifact) as build, \
+                    patch.object(mvp, 'dependency_licenses', side_effect=lambda *_: events.append('license-preflight')) as licenses, \
+                    patch.object(mvp, 'check', side_effect=lambda *_: events.append('all-checks')) as check, \
+                    patch.object(mvp, 'package_windows', side_effect=lambda *_, **__: events.append('package')) as package:
+                result = mvp.main(['package', '--release', '--windows-sdk', str(sdk),
+                                   '--offline-materials', str(originals), '--msvc-linker', str(linker)])
+            self.assertIs(result, artifact)
+            self.assertEqual(events, ['checkout', 'sdk', 'materials', 'build', 'license-preflight', 'all-checks', 'package'])
+            checkout.assert_called_once_with(root)
+            build.assert_called_once_with(True, package_input=True, linker=linker, windows_sdk=sdk)
+            licenses.assert_called_once_with(artifact.source_root, artifact.metadata, artifact.built_package_ids)
+            check.assert_called_once_with(artifact, GROUPS)
+            package.assert_called_once_with(artifact.source_root, artifact, '0.7.0', contract, materials, tools, output_root=root)
+
+    def test_package_missing_license_keeps_the_original_error_and_stops_all_checks_and_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sources = {'packaging/windows/host-contract.json': b'contract',
+                       'crates/weftext-app/Cargo.toml': b'[package]\nversion = "0.7.0"\n'}
+            artifact = SimpleNamespace(source_root=root / 'frozen',
+                                       metadata={'packages': [{'id': 'selected-build-participant'}]},
+                                       built_package_ids=frozenset({'selected-build-participant'}))
+            failure = ValueError('Missing original license text: cargo selected-build-participant 0.7.0')
+            events = []
+
+            def missing(*_):
+                events.append('license-preflight')
+                raise failure
+
+            with patch.object(mvp, 'ROOT', root), patch.object(mvp, 'os', SimpleNamespace(name='nt')), \
+                    patch.object(mvp, 'require_checkout'), \
+                    patch.object(mvp, 'read_checked', side_effect=lambda path, _: sources[path.relative_to(root).as_posix()]), \
+                    patch.object(mvp, 'load_contract', return_value={}), patch.object(mvp, 'sdk_tools'), \
+                    patch.object(mvp, 'freeze_materials'), \
+                    patch.object(mvp, 'build', side_effect=lambda *_, **__: events.append('build') or artifact) as build, \
+                    patch.object(mvp, 'dependency_licenses', side_effect=missing) as licenses, \
+                    patch.object(mvp, 'check') as check, patch.object(mvp, 'package_windows') as package:
+                with self.assertRaises(ValueError) as caught:
+                    mvp.main(['package', '--release', '--windows-sdk', str(root / 'sdk'),
+                              '--offline-materials', str(root / 'materials'), '--msvc-linker', str(root / 'link.exe')])
+            self.assertIs(caught.exception, failure)
+            self.assertEqual(events, ['build', 'license-preflight'])
+            self.assertEqual(build.call_count, 1)
+            licenses.assert_called_once_with(artifact.source_root, artifact.metadata, artifact.built_package_ids)
+            check.assert_not_called()
+            package.assert_not_called()
 
 
 class FrozenRouting(unittest.TestCase):

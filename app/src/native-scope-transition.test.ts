@@ -72,6 +72,7 @@ function fixture() {
     releaseOpenedSession: async (id: string) => { released.push(id); },
     renderContent: () => { effects.push("content"); }, scheduleRender: () => { effects.push("schedule"); },
     toast: () => { effects.push("toast"); }, pendingCreation: null,
+    showError: (error: unknown) => { throw error; },
     acceptCreatedDocument: async () => { effects.push("adopt-created"); },
     refreshInventory: async () => { effects.push("refresh-inventory"); },
     nodeContents: { dispose() { effects.push("dispose-node-contents"); } },
@@ -87,6 +88,7 @@ function fixture() {
   Object.assign(workspace, {
     closeGuard: new ProposalCloseGuard(), queryPanel: query, library: original,
     invalidateQueryEnvironment() { effects.push("invalidate-environment"); },
+    selectedDocumentChanged: async () => {},
   });
   context.workspaceTools = workspace;
   const actualRenderSidebar = context.renderSidebar;

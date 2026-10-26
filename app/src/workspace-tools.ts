@@ -330,6 +330,15 @@ export class WorkspaceTools {
         });
     }
     selectKnowledgeTab(tab: import("./knowledge-panel").KnowledgePanelTab): void { if (this.closeGuard.frozen) return; this.knowledgePanel.selectTab(tab); }
+    /** Selection/adoption must renew an open property consumer even when its
+     * empty or previous form owns focus. Body edits keep their debounce below. */
+    async selectedDocumentChanged(): Promise<void> {
+        if (this.closeGuard.frozen || this.active !== "data") return;
+        return this.closeGuard.run(async () => {
+            clearTimeout(this.refreshTimer);
+            await this.propertyPanel.refresh();
+        });
+    }
     documentChanged(): void { if (this.closeGuard.frozen) return;
         clearTimeout(this.refreshTimer);
         this.knowledgePanel.attachSurface(null);

@@ -1,15 +1,16 @@
 """Real Server DOC conversions and original-ID recovery, without desktop input.
 
-Usage: python scripts/test_hosted_legacy_office.py EXE NEW_EVIDENCE_DIRECTORY [NEW_WORK_DIRECTORY] [explicit|default|long]
+Usage: python scripts/test_hosted_legacy_office.py EXE NEW_EVIDENCE_DIRECTORY [NEW_WORK_DIRECTORY] [explicit|long]
 The executable, library, policy, data, conversion processes and artifacts belong
-to this one run. No Word/WPS automation or synthetic conversion receipt is used.
+to this one run. Every owner uses an explicit owned data directory; this test
+does not exercise the real OS default profile. No Word/WPS automation or
+synthetic conversion receipt is used.
 """
 from _creation_result import created_document
 import base64
 import hashlib
 from html.parser import HTMLParser
 import json
-import os
 from pathlib import Path
 import secrets
 import sys
@@ -22,16 +23,14 @@ from urllib.request import Request, urlopen
 import test_hosted
 from test_hosted import uid, digest, Server as BaseServer
 from test_hosted_office import HostedOffice
-from windows_package import load_contract
 
 
 EXE = Path(sys.argv[1]).resolve()
 EVIDENCE = Path(sys.argv[2]).resolve()
 RUN_ROOT = Path(sys.argv[3]).resolve() if len(sys.argv) > 3 else EVIDENCE
 MODE = sys.argv[4] if len(sys.argv) > 4 else 'explicit'
-HOST_PATHS = load_contract((Path(__file__).resolve().parents[1] / 'packaging/windows/host-contract.json').read_bytes())['paths']
-if MODE not in {'explicit', 'default', 'long'}:
-    raise ValueError('Mode must be explicit, default or long')
+if MODE not in {'explicit', 'long'}:
+    raise ValueError('Mode must be explicit or long; default-profile execution is not supported')
 test_hosted.EXE = EXE
 
 
@@ -85,10 +84,6 @@ class HostedLegacyOffice(HostedOffice):
                        'actualExecution': 'owned Windows Server process; its private LibreOffice profile',
                        'workDirectory': str(RUN_ROOT), 'dataDirectoryMode': MODE,
                        'wordOrWpsStarted': False, 'cases': []}
-        if MODE == 'default':
-            # Exercise the actual default data-dir resolver while keeping all
-            # writes in this new owned fixture, away from a real user's state.
-            os.environ['LOCALAPPDATA'] = str(RUN_ROOT)
 
     @classmethod
     def tearDownClass(cls):
@@ -98,10 +93,9 @@ class HostedLegacyOffice(HostedOffice):
         # Keep this Windows fixture short: CreateProcess's cwd does not accept
         # arbitrary extended-length paths even when file IO supports them.
         self.folder = EVIDENCE
-        self.data = RUN_ROOT / HOST_PATHS['persistentRelativeRoot'] / HOST_PATHS['coreRelativePath'] if MODE == 'default' else RUN_ROOT / 's'
+        self.data = RUN_ROOT / 's'
         self.root = RUN_ROOT / 'l'
-        local = Server([ *self.data_args()], expected_default_data_dir=self.data if MODE == 'default' else None,
-                       evidence_parent=RUN_ROOT if MODE == 'default' else None)
+        local = Server(['--data-dir', str(self.data)])
         try:
             self.assertEqual(local.call('/api/library/create', {'path': str(self.root), 'operationId': uid()})[0], 200)
             code, doc, _ = local.call('/api/note/create', {'root': str(self.root), 'parent': str(self.root), 'name': 'Shared', 'operationId': uid()})
@@ -121,14 +115,9 @@ class HostedLegacyOffice(HostedOffice):
         self.config_path = EVIDENCE / 'server.json'
         self.start()
 
-    def data_args(self):
-        return [] if MODE == 'default' else ['--data-dir', str(self.data)]
-
     def start(self):
         self.config_path.write_text(json.dumps(self.config), 'utf-8')
-        self.server = Server([ *self.data_args(), '--server-config', str(self.config_path)], hosted=True,
-                             expected_default_data_dir=self.data if MODE == 'default' else None,
-                             evidence_parent=RUN_ROOT if MODE == 'default' else None)
+        self.server = Server(['--data-dir', str(self.data), '--server-config', str(self.config_path)], hosted=True)
 
     def call(self, route, data=None, actor='alice', status=200, headers=None):
         result = super().call(route, data, actor, status, headers)

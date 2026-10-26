@@ -98,29 +98,23 @@ jobs:
                   if not isinstance(value, str) or any(char in value for char in '\r\n'):
                       raise ValueError('Prepared environment contains a newline')
                   output.write(f'{key}={value}\n')
-      - name: Build the release batch for cross-process receipt verification
-        id: build
-        run: python scripts/ci_windows_package.py smoke-build
-      - name: Verify the exact receipt and CLI in a separate process
-        env:
-          WEFTEXT_BUILD_RECEIPT: ${{ steps.build.outputs.receipt }}
-          TEMP: ${{ steps.build.outputs.temp }}
-          TMP: ${{ steps.build.outputs.temp }}
-        run: python scripts/mvp.py check --release --group cli --artifacts "$env:WEFTEXT_BUILD_RECEIPT"
-      - name: Run the canonical release package with every original product check
+      - name: Initialize this attempt's original evidence without building
+        id: evidence
+        run: python scripts/ci_windows_package.py init
+      - name: Build the canonical release package, verify its receipt independently and run every original check
         id: package
         env:
-          WEFTEXT_CI_EVIDENCE: ${{ steps.build.outputs.evidence }}
+          WEFTEXT_CI_EVIDENCE: ${{ steps.evidence.outputs.evidence }}
           WEFTEXT_CI_PREPARATION: ${{ steps.inputs.outputs.preparation }}
-          TEMP: ${{ steps.build.outputs.temp }}
-          TMP: ${{ steps.build.outputs.temp }}
+          TEMP: ${{ steps.evidence.outputs.temp }}
+          TMP: ${{ steps.evidence.outputs.temp }}
         run: python scripts/ci_windows_package.py package --evidence "$env:WEFTEXT_CI_EVIDENCE" --preparation "$env:WEFTEXT_CI_PREPARATION"
       - run: git diff --exit-code
       - name: Retain original controls and exact new package identities
         id: collect
-        if: always() && steps.build.outputs.evidence != ''
+        if: always() && steps.evidence.outputs.evidence != ''
         env:
-          WEFTEXT_CI_EVIDENCE: ${{ steps.build.outputs.evidence }}
+          WEFTEXT_CI_EVIDENCE: ${{ steps.evidence.outputs.evidence }}
         run: python scripts/ci_windows_package.py collect --evidence "$env:WEFTEXT_CI_EVIDENCE"
       - name: Retain this attempt's unsigned review artifacts and original evidence
         if: always() && steps.inputs.outputs.root != ''
@@ -134,13 +128,15 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Preserve identities if evidence collection itself failed
-        if: always() && steps.build.outputs.evidence != '' && steps.collect.outcome == 'failure'
+        if: always() && steps.evidence.outputs.evidence != '' && steps.collect.outcome == 'failure'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: windows-evidence-failure-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            ${{ steps.build.outputs.evidence }}/*.json
-            ${{ steps.build.outputs.evidence }}/process-controls.zip
+            ${{ steps.evidence.outputs.evidence }}/*.json
+            ${{ steps.evidence.outputs.evidence }}/process-controls.zip
+            ${{ steps.evidence.outputs.evidence }}/receipt-cli.stdout.bin
+            ${{ steps.evidence.outputs.evidence }}/receipt-cli.stderr.bin
           if-no-files-found: error
           retention-days: 7
       - name: Preserve input originals when no complete package was generated

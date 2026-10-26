@@ -11,7 +11,8 @@ import uuid
 from cargo_cache import CargoCache, digest_json
 from build_receipt import (GROUPS, NpmTool, QualifiedArtifacts, RECEIPT, load_receipt,
                            publish_receipt, qualify, selected_node, verify_qualified)
-from package_inputs import BuildArtifacts, collect_artifact, read_checked, require_checkout, sha256, snapshot, validate_target
+from package_inputs import (BuildArtifacts, collect_artifact, dependency_licenses, read_checked,
+                            require_checkout, sha256, snapshot, validate_target)
 from windows_package import artifact_catalog, load_contract, msix_version, package_windows, pe_info, sdk_tools
 from windows_materials import freeze_materials
 
@@ -285,7 +286,7 @@ def main(argv=None):
     parser.add_argument('action', choices=['build', 'check', 'package'])
     parser.add_argument('--release', action='store_true', help='Use the optimized Rust profile')
     parser.add_argument('--group', action='append', choices=GROUPS, help='Run selected check groups; partial unless all groups run')
-    parser.add_argument('--artifacts', type=Path, help='Absolute receipt for same-checkout frozen artifacts; check only, never reuses PASS')
+    parser.add_argument('--artifacts', type=Path, help='Absolute receipt for frozen artifacts from this exact source root; check only, never reuses PASS')
     parser.add_argument('--windows-sdk', type=Path, help='x64 Windows SDK bin directory; package only')
     parser.add_argument('--offline-materials', type=Path, help='Directory containing exact repository-locked offline installers')
     parser.add_argument('--msvc-linker', type=Path, help='Installed x64 MSVC link.exe used explicitly by the package build')
@@ -306,7 +307,6 @@ def main(argv=None):
     elif any((args.windows_sdk, args.offline_materials, args.msvc_linker)):
         parser.error('Windows packaging inputs are accepted only for package')
     if args.artifacts is not None:
-        require_checkout(ROOT)
         environment = dict(os.environ)
         npm = NpmTool.discover(environment)
         environment = npm.environment(environment)
@@ -320,6 +320,8 @@ def main(argv=None):
     else:
         artifacts = build(args.release, package_input=args.action == 'package', linker=args.msvc_linker,
                           windows_sdk=args.windows_sdk)
+    if args.action == 'package':
+        dependency_licenses(artifacts.source_root, artifacts.metadata, artifacts.built_package_ids)
     if args.action in {'check', 'package'}:
         check(artifacts, groups)
     if args.action == 'package':

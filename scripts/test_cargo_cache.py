@@ -1,5 +1,6 @@
 """Actual owned offline Cargo regressions without third-party packages."""
 import argparse
+import copy
 import ctypes
 import hashlib
 import json
@@ -16,6 +17,7 @@ from unittest import mock
 import uuid
 
 from cargo_cache import CargoCache, EXTRA_INPUTS, STATE
+import cargo_cache as cache_module
 from package_inputs import snapshot
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -625,6 +627,180 @@ print(json.dumps({"forced":result["forced"]}),flush=True)
         repaired = fixture.run(feature=True)
         self.assertIn('data/Cargo.toml', repaired['forced'])
         self.assertEqual(fixture.value(), '23:owned-build-asset-b')
+
+
+class RuntimeModeQualification(unittest.TestCase):
+    """In-memory Cargo artifact qualification; no Cargo, lock or target IO."""
+    def setUp(self):
+        self.root, self.target = BASE, BASE / 'unopened-target'
+        self.entry = BASE / 'logical-source.rs'
+        self.package = 'path+file:///owned#mode-fixture@0.1.0'
+        self.key = 'owned/Cargo.toml'
+        self.state = {'schemaVersion': 1, 'pending': False, 'modes': {}}
+        self.writes, self.executions, self.invalidations, self.metadata_commands = [], [], [], []
+        self.source_token, self.tool_token = 'source-a', 'tool-a'
+        self.artifact_token, self.generated_token = 'artifact-a', 'generated-a'
+        self.exit_code, self.forced, self.current_command = 0, set(), None
+        self.cache = CargoCache(self.root, self.target, {'CARGO_BUILD_JOBS': '1'})
+        self.cache.lock = object()  # Held ownership is mocked; never enter a real lock.
+        def metadata(command, **kwargs):
+            self.metadata_commands.append(copy.deepcopy(command))
+            return subprocess.CompletedProcess(command, 0, stdout=json.dumps({
+                'target_directory': str(self.target)}).encode())
+        def inputs(*_):
+            return {self.key: {'id': self.package, 'sha256': self.source_token,
+                'entries': [self.entry], 'customBuild': True}}
+        def write(value):
+            self.writes.append(copy.deepcopy(value))
+            self.state = copy.deepcopy(value)
+        def state():
+            return copy.deepcopy(self.state if self.state['pending'] is False else
+                {'schemaVersion': 1, 'pending': False, 'modes': {}})
+        def invalidate(inputs, forced, metadata, command):
+            self.assertIs(command, self.current_command)
+            self.forced = set(forced)
+            self.invalidations.append((copy.deepcopy(command), set(forced)))
+            return {self.package} if forced else set()
+        def stream(command, root, environment, consume):
+            self.assertIs(command, self.current_command)
+            self.assertEqual(self.writes[-1], {'schemaVersion': 1, 'pending': True, 'modes': {}})
+            self.executions.append(copy.deepcopy(command))
+            if self.forced:
+                self.artifact_token = f'artifact-{len(self.executions)}-{self.source_token}'
+                self.generated_token = f'generated-{len(self.executions)}-{self.source_token}'
+            for event in ({'reason': 'compiler-artifact', 'package_id': self.package,
+                    'target': {'src_path': str(self.entry)}, 'filenames': [str(self.target / 'unit')],
+                    'fresh': not bool(self.forced)},
+                    {'reason': 'build-script-executed', 'package_id': self.package,
+                     'out_dir': str(self.target / 'logical-generated')}):
+                consume(json.dumps(event).encode() + b'\n')
+            return self.exit_code
+        def generated(events):
+            self.assertEqual(len(events), 1)
+            self.assertEqual(events[0]['package_id'], self.package)
+            return self.generated_witness()
+        patches = [mock.patch.object(cache_module.subprocess, 'run', side_effect=metadata),
+            mock.patch.object(cache_module, 'compiler_inputs', side_effect=inputs),
+            mock.patch.object(cache_module, 'tool_identity', side_effect=lambda *_: {'identity': self.tool_token}),
+            mock.patch.object(cache_module, 'read_checked', side_effect=lambda *_: self.source_token.encode()),
+            mock.patch.object(cache_module.os, 'utime'),
+            mock.patch.object(cache_module, 'stream_owned_process', side_effect=stream),
+            mock.patch.object(self.cache, '_state', side_effect=state),
+            mock.patch.object(self.cache, '_write', side_effect=write),
+            mock.patch.object(self.cache, '_invalidate_local_fingerprints', side_effect=invalidate),
+            mock.patch.object(self.cache, '_matches', side_effect=lambda values: values == self.artifact_witness()),
+            mock.patch.object(self.cache, '_witness', side_effect=lambda _: self.artifact_witness()),
+            mock.patch.object(self.cache, '_matches_generated', side_effect=lambda values, required:
+                required is True and values == self.generated_witness()),
+            mock.patch.object(self.cache, '_generated', side_effect=generated)]
+        for patcher in patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def artifact_witness(self):
+        return [{'path': 'unit', 'bytes': len(self.artifact_token), 'sha256': self.artifact_token}]
+
+    def generated_witness(self):
+        return [{'path': 'logical-generated', 'sha256': self.generated_token, 'declarations': 'owned'}]
+
+    def command(self, *tail, verb='test', options=()):
+        return ['cargo', verb, '--locked', '-p', 'mode-fixture', '--lib',
+            '--message-format=json-render-diagnostics', *options, *tail]
+
+    def invoke(self, command):
+        original = copy.deepcopy(command)
+        self.current_command = command
+        try:
+            return self.cache.run(command)
+        finally:
+            self.assertEqual(command, original)
+
+    def test_runtime_filters_exact_skip_and_threads_share_qualification_but_execute_every_original_argv(self):
+        first = self.invoke(self.command('--', 'first', '--exact', '--test-threads=1'))
+        second = self.invoke(self.command('--', '--skip', 'first', '--test-threads=8', '--nocapture'))
+        self.assertEqual(first['mode'], second['mode'])
+        self.assertEqual(first['forced'], [self.key])
+        self.assertEqual(second['forced'], [])
+        self.assertTrue(second['artifacts'][0]['fresh'])
+        self.assertEqual(len(self.executions), 2)
+        self.assertEqual(self.executions, [item[0] for item in self.invalidations])
+        self.assertEqual(self.executions[1][-5:], ['--', '--skip', 'first', '--test-threads=8', '--nocapture'])
+
+    def test_warm_runtime_failure_keeps_original_command_and_pending_then_requires_requalification(self):
+        first = self.invoke(self.command('--', 'first', '--exact'))
+        self.exit_code = 101
+        failed = self.command('--', 'failing-assertion', '--test-threads=1')
+        with self.assertRaises(subprocess.CalledProcessError) as raised:
+            self.invoke(failed)
+        self.assertEqual(raised.exception.returncode, 101)
+        self.assertIs(raised.exception.cmd, failed)
+        self.assertEqual(self.invalidations[-1][1], set())
+        self.assertEqual(self.state, {'schemaVersion': 1, 'pending': True, 'modes': {}})
+        self.exit_code = 0
+        recovered = self.invoke(self.command('--', '--skip', 'failing-assertion'))
+        self.assertEqual(first['mode'], recovered['mode'])
+        self.assertEqual(recovered['forced'], [self.key])
+        self.assertEqual(len(self.executions), 3)
+
+    def test_compile_prefix_features_profile_target_package_and_target_kind_remain_distinct(self):
+        commands = [self.command('--', 'first'),
+            self.command('--', 'first', options=('--features=extra',)),
+            self.command('--', 'first', options=('--release',)),
+            self.command('--', 'first', options=('--target', 'other-triple')),
+            [part if part != 'mode-fixture' else 'another-package' for part in self.command('--', 'first')],
+            [part if part != '--lib' else '--bins' for part in self.command('--', 'first')]]
+        modes = [self.invoke(command)['mode'] for command in commands]
+        self.assertEqual(len(set(modes)), len(modes))
+        self.assertEqual(self.metadata_commands[1][-1], '--features=extra')
+
+    def test_non_test_compiler_tail_is_retained_and_unsupported_rustc_stays_rejected(self):
+        for verb in ('build', 'check', 'clippy'):
+            with self.subTest(verb=verb):
+                deny = self.invoke(self.command('--', '-D', 'warnings', verb=verb))
+                allow = self.invoke(self.command('--', '-A', 'warnings', verb=verb))
+                self.assertNotEqual(deny['mode'], allow['mode'])
+        before = len(self.executions)
+        with self.assertRaisesRegex(ValueError, 'supported compile command'):
+            self.invoke(self.command('--', '-C', 'opt-level=3', verb='rustc'))
+        self.assertEqual(len(self.executions), before)
+
+    def test_first_delimiter_empty_tail_multiple_delimiters_and_no_delimiter_share_test_context(self):
+        commands = [self.command(), self.command('--'), self.command('--', 'first'),
+            self.command('--', '--', 'second', '--exact')]
+        results = [self.invoke(command) for command in commands]
+        self.assertEqual(len({result['mode'] for result in results}), 1)
+        self.assertTrue(all(not result['forced'] for result in results[1:]))
+        self.assertEqual(self.executions, commands)
+
+    def test_source_tool_environment_and_source_root_keep_their_existing_identity_boundaries(self):
+        first = self.invoke(self.command('--', 'first'))
+        self.source_token = 'source-b'
+        source = self.invoke(self.command('--', 'second'))
+        self.assertEqual(first['mode'], source['mode'])
+        self.assertEqual(source['forced'], [self.key])
+        self.tool_token = 'tool-b'
+        tool = self.invoke(self.command('--', 'third'))
+        self.assertNotEqual(source['mode'], tool['mode'])
+        self.assertEqual(tool['forced'], [self.key])
+        self.cache.environment['RUSTFLAGS'] = '--cfg=owned'
+        environment = self.invoke(self.command('--', 'fourth'))
+        self.assertNotEqual(tool['mode'], environment['mode'])
+        self.assertEqual(environment['forced'], [self.key])
+        self.cache.root = BASE.parent
+        root = self.invoke(self.command('--', 'fifth'))
+        self.assertNotEqual(environment['mode'], root['mode'])
+        self.assertEqual(root['forced'], [self.key])
+
+    def test_artifact_and_generated_witness_changes_still_force_the_same_context(self):
+        first = self.invoke(self.command('--', 'first'))
+        self.artifact_token = 'changed by another compiler'
+        artifact = self.invoke(self.command('--', 'second'))
+        self.assertEqual(first['mode'], artifact['mode'])
+        self.assertEqual(artifact['forced'], [self.key])
+        self.generated_token = 'changed generated input'
+        generated = self.invoke(self.command('--', 'third'))
+        self.assertEqual(first['mode'], generated['mode'])
+        self.assertEqual(generated['forced'], [self.key])
 
 
 if __name__ == '__main__':

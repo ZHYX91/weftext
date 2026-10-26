@@ -435,7 +435,10 @@ class CargoCache:
                  for tool in (command[0], self.environment.get('RUSTC', 'rustc'))]
         environment = {key: value for key, value in self.environment.items()
                        if key.startswith(('RUST', 'CARGO_BUILD_', 'CARGO_TARGET_')) and key != 'CARGO_TARGET_DIR'}
-        mode = digest_json({'command': command, 'tools': tools, 'environment': environment,
+        mode_command = command
+        if command[1] == 'test' and '--' in command[2:]:
+            mode_command = command[:command.index('--', 2)]
+        mode = digest_json({'command': mode_command, 'tools': tools, 'environment': environment,
                             'sourceRoot': str(self.root.resolve(strict=True))})
         state = self._state()
         previous = state['modes'].get(mode, {})

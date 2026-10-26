@@ -1,10 +1,14 @@
 """CI identities and original evidence around the unchanged product entry."""
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
 from pathlib import Path
+import signal
 import subprocess
+import sys
+import threading
 import zipfile
 
 import mvp
@@ -53,7 +57,7 @@ def artifact_identity(artifacts):
             'artifactCatalogSha256': sha256(artifacts.catalog)}
 
 
-def smoke_build():
+def initialize():
     environment = dict(os.environ)
     target = mvp.validate_target(ROOT, mvp.metadata(ROOT, environment)['target_directory'])
     evidence = Path(os.environ['RUNNER_TEMP']) / (
@@ -75,13 +79,68 @@ def smoke_build():
         'distBefore': children(ROOT / 'dist'),
         'fixedControlRootsBefore': {str(fixed): children(fixed)}}
     write_json(evidence / 'provenance.json', provenance)
-    artifacts = mvp.main(['build', '--release'])
-    identity = artifact_identity(artifacts)
-    if artifacts.target_directory != target or artifacts.source_root != ROOT:
-        raise ValueError('Smoke build source/target changed')
-    write_json(evidence / 'smoke-batch.json', identity)
-    write_json(evidence / 'cargo-metadata.json', artifacts.metadata)
-    output('receipt', artifacts.receipt_path)
+
+
+def verify_receipt(evidence, artifacts):
+    """Run the original receipt CLI in a fresh process on this package batch."""
+    source, receipt = artifacts.source_root, artifacts.receipt_path
+    python = Path(sys.executable)
+    if not python.is_absolute() or not source.is_absolute() or not receipt.is_absolute():
+        raise ValueError('The receipt child requires the selected absolute Python, source and receipt')
+    command = [str(python), str(source / 'scripts/mvp.py'), 'check', '--release',
+               '--group', 'cli', '--artifacts', str(receipt)]
+    environment = {**os.environ, **artifacts.build_environment}
+    stdout, stderr = evidence / 'receipt-cli.stdout.bin', evidence / 'receipt-cli.stderr.bin'
+    record = {**artifact_identity(artifacts), 'schemaVersion': 1,
+        'scope': 'independent receipt and CLI check; never replaces canonical full checks',
+        'command': command, 'cwd': str(source), 'python': str(python),
+        'stdout': str(stdout), 'stderr': str(stderr), 'exitCode': None,
+        'startedUtc': datetime.now(timezone.utc).isoformat(), 'status': 'invoking'}
+    write_json(evidence / 'receipt-cli-intent.json', record)
+    try:
+        with _io_path(stdout).open('xb') as out, _io_path(stderr).open('xb') as err:
+            with subprocess.Popen(command, cwd=source, env=environment,
+                    stdin=subprocess.DEVNULL, stdout=out, stderr=err) as process:
+                record['pid'] = process.pid
+                interrupted, previous, deferred = None, None, False
+                try:
+                    while True:
+                        try:
+                            record['exitCode'] = process.wait()
+                            break
+                        except (KeyboardInterrupt, SystemExit):
+                            interrupted = interrupted or sys.exc_info()
+                            if not deferred and threading.current_thread() is threading.main_thread():
+                                try:
+                                    previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+                                except Exception as error:
+                                    interrupted[1].add_note(f'Could not defer later SIGINT: {error!r}')
+                                else:
+                                    deferred = True
+                finally:
+                    if deferred:
+                        try:
+                            signal.signal(signal.SIGINT, previous)
+                        except Exception as error:
+                            interrupted[1].add_note(f'Could not restore SIGINT handler: {error!r}')
+                if interrupted is not None:
+                    raise interrupted[1].with_traceback(interrupted[2])
+        if record['exitCode']:
+            raise subprocess.CalledProcessError(record['exitCode'], command)
+        record['status'] = 'passedPartialCliOnly'
+    except BaseException as error:
+        record['status'] = 'failedOriginalsRetained'
+        record['error'] = repr(error)
+        raise
+    finally:
+        record['endedUtc'] = datetime.now(timezone.utc).isoformat()
+        primary = sys.exception()
+        try:
+            write_json(evidence / 'receipt-cli-result.json', record)
+        except Exception as error:
+            if primary is None:
+                raise
+            primary.add_note(f'Receipt child result write also failed: {error!r}')
 
 
 def stream_identity(path):
@@ -135,8 +194,8 @@ def package(evidence, preparation):
         raise ValueError('Windows packaging inputs were not prepared')
     original_build = mvp.build
     def observed_build(*args, **kwargs):
-        # Observe the actual canonical build result before its original full check.
-        # Never replace a check, select groups, load an old receipt or reuse PASS.
+        # Validate this canonical batch independently before returning it to the
+        # original full check. No original group or PASS result is replaced.
         artifacts = original_build(*args, **kwargs)
         identity = artifact_identity(artifacts)
         if str(artifacts.target_directory) != provenance['targetRoot'] or artifacts.source_root == ROOT:
@@ -144,6 +203,8 @@ def package(evidence, preparation):
         fixed = artifacts.source_root / 'target/test-fixtures/hierarchical-tags'
         identity['fixedControlRootsBefore'] = {str(fixed): children(fixed)}
         write_json(evidence / 'package-batch.json', identity)
+        write_json(evidence / 'cargo-metadata.json', artifacts.metadata)
+        verify_receipt(evidence, artifacts)
         return artifacts
     try:
         mvp.build = observed_build
@@ -197,6 +258,7 @@ def collect(evidence):
         'selectedRoots': [{'label': label, 'path': str(root)} for label, root in roots]})
     archive_controls(evidence, roots)
     paths = [evidence / '*.json', evidence / 'process-controls.zip',
+        evidence / 'receipt-cli.stdout.bin', evidence / 'receipt-cli.stderr.bin',
         *new_children(target / 'weftext-build-artifacts', provenance['batchesBefore'])]
     new_dist = new_children(ROOT / 'dist', provenance['distBefore'])
     success = evidence / 'package-success.json'
@@ -220,12 +282,12 @@ def collect(evidence):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('action', choices=('smoke-build', 'package', 'collect'))
+    parser.add_argument('action', choices=('init', 'package', 'collect'))
     parser.add_argument('--evidence', type=Path)
     parser.add_argument('--preparation', type=Path)
     args = parser.parse_args(argv)
-    if args.action == 'smoke-build':
-        smoke_build()
+    if args.action == 'init':
+        initialize()
     else:
         if args.evidence is None or args.action == 'package' and args.preparation is None:
             parser.error('This phase requires explicit evidence/preparation paths')

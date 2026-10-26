@@ -157,7 +157,9 @@ def walk_files(root, excluded=()):
     if is_reparse(root.lstat()):
         raise ValueError(f'Packaging refuses a reparse root: {root}')
     excluded = {Path(path).absolute() for path in excluded}
-    for directory, children, names in os.walk(root, followlinks=False):
+    def onerror(error):
+        raise error
+    for directory, children, names in os.walk(root, followlinks=False, onerror=onerror):
         allowed = []
         for name in sorted(children):
             path = Path(directory) / name
@@ -260,11 +262,46 @@ def dependency_licenses(root, metadata, built_package_ids):
     """Freeze exact published license texts; missing originals are not a pass."""
     files, packages = {}, []
     overrides_path = root / 'packaging/windows/licenses/provenance.json'
-    overrides = parse_json(read_checked(overrides_path, root)) if overrides_path.exists() else {'rust': {}}
+    overrides = parse_json(read_checked(overrides_path, root)) if overrides_path.exists() else {'schemaVersion': 2}
+    if not isinstance(overrides, dict) or type(overrides.get('schemaVersion')) is not int or overrides['schemaVersion'] != 2:
+        raise ValueError('Unsupported dependency license provenance schema')
+    for section in ('rust', 'npm'):
+        entries = overrides.get(section, {})
+        if not isinstance(entries, dict):
+            raise ValueError(f'Invalid {section} license provenance section')
+        for key, item in entries.items():
+            if (not isinstance(key, str) or not isinstance(item, dict) or 'files' not in item
+                    or {'file', 'sha256', 'size'}.intersection(item)):
+                raise ValueError(f'Invalid upstream license files record: {section} {key}')
+            if not isinstance(item['files'], list) or not item['files']:
+                raise ValueError(f'Empty upstream license files: {section} {key}')
+            if 'selectedLicense' in item and (not isinstance(item['selectedLicense'], str) or not item['selectedLicense'].strip()):
+                raise ValueError(f'Invalid selected upstream license: {section} {key}')
+            basenames = set()
+            for record in item['files']:
+                if not isinstance(record, dict):
+                    raise ValueError(f'Invalid upstream license file: {section} {key}')
+                name = record.get('file')
+                if not isinstance(name, str) or not name:
+                    raise ValueError(f'Invalid upstream original path: {section} {key}')
+                relative = PurePosixPath(name)
+                if (relative.is_absolute() or relative.as_posix() != name or '..' in relative.parts
+                        or '\\' in name or ':' in name or not relative.parts):
+                    raise ValueError(f'Invalid upstream original path: {section} {key}')
+                if type(record.get('size')) is not int or record['size'] <= 0:
+                    raise ValueError(f'Invalid upstream original size: {section} {key}')
+                digest = record.get('sha256')
+                if not isinstance(digest, str) or len(digest) != 64 or any(value not in '0123456789abcdef' for value in digest):
+                    raise ValueError(f'Invalid upstream original SHA256: {section} {key}')
+                basename = relative.name.casefold()
+                if basename in basenames:
+                    raise ValueError(f'Duplicate upstream license payload basename: {section} {key}')
+                basenames.add(basename)
 
     def collect(name, version, folder, license_id, repository, ecosystem):
         label = f'{ecosystem}-{name.replace("/", "-").replace("@", "")}-{version}'
         copies = []
+        selected_license = None
         for path in walk_files(folder):
             if path.name.lower().startswith(('license', 'licence', 'copying', 'notice', 'ofl')):
                 target = f'third-party/{label}/{path.relative_to(folder).as_posix()}'
@@ -273,18 +310,26 @@ def dependency_licenses(root, metadata, built_package_ids):
                     raise ValueError(f'Empty original license text: {path}')
                 files[target] = original
                 copies.append(target)
-        if not copies and ecosystem == 'cargo':
-            item = overrides.get('rust', {}).get(f'{name}-{version}')
-            if item:
-                data = read_checked(root / item['file'], root)
-                if sha256(data) != item['sha256'] or len(data) != item['size'] or not data.strip():
-                    raise ValueError(f'Changed upstream license original: {name}')
-                target = f'third-party/{label}/LICENSE.upstream'
-                files[target] = data
-                copies.append(target)
+        if not copies and ecosystem in ('cargo', 'npm'):
+            section = 'rust' if ecosystem == 'cargo' else 'npm'
+            item = overrides.get(section, {}).get(f'{name}-{version}')
+            if item is not None:
+                selected_license = item.get('selectedLicense')
+                for record in item['files']:
+                    data = read_checked(root / record['file'], root)
+                    if sha256(data) != record['sha256'] or len(data) != record['size'] or not data.strip():
+                        raise ValueError(f'Changed upstream license original: {ecosystem} {name} {version}')
+                    target = f'third-party/{label}/{PurePosixPath(record["file"]).name}'
+                    if target in files:
+                        raise ValueError(f'Duplicate upstream license payload target: {target}')
+                    files[target] = data
+                    copies.append(target)
         if not copies:
             raise ValueError(f'Missing original license text: {ecosystem} {name} {version}')
-        packages.append({'ecosystem': ecosystem, 'name': name, 'version': version, 'license': license_id, 'repository': repository, 'licenseFiles': copies})
+        package = {'ecosystem': ecosystem, 'name': name, 'version': version, 'license': license_id, 'repository': repository, 'licenseFiles': copies}
+        if selected_license is not None:
+            package['selectedLicense'] = selected_license
+        packages.append(package)
 
     for item in metadata['packages']:
         if item['id'] not in built_package_ids:

@@ -4,7 +4,7 @@ import copy
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import struct
 import subprocess
 import tempfile
@@ -80,7 +80,7 @@ class VersionAndPolicy(unittest.TestCase):
                 msix_version(value)
 
     def test_persistent_scope_is_closed_even_if_sdk_accepts_profile(self):
-        for key, value in (('persistentKnownFolder', 'Profile'), ('persistentRelativeRoot', '../Private'), ('cacheRelativeRoot', 'Weftext-MVP/cache')):
+        for key, value in (('persistentKnownFolder', 'Profile'), ('persistentRelativeRoot', '../Private'), ('browserDataRelativeRoot', 'Weftext-MVP/cache')):
             changed = copy.deepcopy(CONTRACT)
             changed['paths'][key] = value
             with self.subTest(key=key), self.assertRaises(ValueError):
@@ -89,6 +89,48 @@ class VersionAndPolicy(unittest.TestCase):
         changed['additionalWriter'] = True
         with self.assertRaises(ValueError):
             load_contract(json.dumps(changed))
+
+
+    def test_persistent_browser_data_keeps_one_original_physical_root(self):
+        paths = CONTRACT['paths']
+        self.assertEqual(paths['browserDataKnownFolder'], 'LocalAppData')
+        self.assertEqual(paths['browserDataRelativeRoot'], 'Weftext/Cache')
+        for known_folder in ('Profile', 'RoamingAppData', 'LocalAppData/..', ''):
+            changed = copy.deepcopy(CONTRACT)
+            changed['paths']['browserDataKnownFolder'] = known_folder
+            with self.subTest(known_folder=known_folder), self.assertRaises(ValueError):
+                load_contract(json.dumps(changed))
+        for relative_root in ('', '.', '..', 'Weftext', '../Weftext/Cache',
+                              '/Weftext/Cache', 'C:/Weftext/Cache',
+                              'Weftext/Cache/child', 'Weftext/../Cache'):
+            changed = copy.deepcopy(CONTRACT)
+            changed['paths']['browserDataRelativeRoot'] = relative_root
+            with self.subTest(relative_root=relative_root), self.assertRaises(ValueError):
+                load_contract(json.dumps(changed))
+        # There is one current contract, not an old/new field alias or fallback.
+        for current, retired in (('browserDataKnownFolder', 'cacheKnownFolder'),
+                                 ('browserDataRelativeRoot', 'cacheRelativeRoot')):
+            changed = copy.deepcopy(CONTRACT)
+            changed['paths'][retired] = changed['paths'].pop(current)
+            with self.subTest(retired=retired), self.assertRaises(ValueError):
+                load_contract(json.dumps(changed))
+
+    def test_core_and_browser_data_roots_cannot_overlap_in_either_direction(self):
+        for changes in (
+            {'browserDataRelativeRoot': 'Weftext-MVP/core'},
+            {'browserDataRelativeRoot': 'Weftext-MVP/core/browser-data'},
+            {'browserDataRelativeRoot': 'Weftext-MVP'},
+            {'persistentRelativeRoot': 'Weftext/Cache'},
+            {'persistentRelativeRoot': 'Weftext/Cache/profile'},
+        ):
+            changed = copy.deepcopy(CONTRACT)
+            changed['paths'].update(changes)
+            paths = changed['paths']
+            core = PureWindowsPath(paths['persistentRelativeRoot']) / paths['coreRelativePath']
+            browser = PureWindowsPath(paths['browserDataRelativeRoot'])
+            self.assertTrue(core.is_relative_to(browser) or browser.is_relative_to(core))
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                load_contract(json.dumps(changed))
 
     def test_core_and_private_host_state_are_required_disjoint_contract_children(self):
         self.assertEqual(CONTRACT['paths']['coreRelativePath'], 'core')
@@ -114,7 +156,18 @@ class VersionAndPolicy(unittest.TestCase):
         tree = ET.fromstring(manifest(CONTRACT, '0.7.0.1'))
         ns = {key or 'f': value for key, value in NS.items()}
         excluded = tree.findall('.//virtualization:ExcludedDirectory', ns)
-        self.assertEqual([item.text for item in excluded], ['$(KnownFolder:LocalAppData)\\Weftext-MVP'])
+        self.assertEqual([item.text for item in excluded], [
+            '$(KnownFolder:LocalAppData)\\Weftext-MVP',
+            '$(KnownFolder:LocalAppData)\\Weftext\\Cache',
+        ])
+        # Two exact owned trees, never all LocalAppData or a registry opt-out.
+        self.assertIsNone(tree.find('.//virtualization:RegistryWriteVirtualization', ns))
+        desktop6 = 'http://schemas.microsoft.com/appx/manifest/desktop/windows10/6'
+        for property_name in ('FileSystemWriteVirtualization', 'RegistryWriteVirtualization'):
+            self.assertIsNone(tree.find(f'.//{{{desktop6}}}{property_name}'))
+        capabilities = tree.findall('.//rescap:Capability', ns)
+        self.assertEqual({item.attrib['Name'] for item in capabilities},
+                         {'runFullTrust', 'unvirtualizedResources'})
         extensions = tree.findall('.//desktop:Extension', ns)
         startup = next(node for node in extensions if node.attrib['Category'] == 'windows.startupTask')
         self.assertEqual(startup.attrib['{' + NS['uap10'] + '}Parameters'], '--login-startup')
@@ -382,6 +435,283 @@ class InputAndContainerBoundaries(unittest.TestCase):
         packed, portable = containers(common, xml)
         with self.assertRaises(ValueError):
             verify_containers({'weftext.exe': b'different bytes'}, xml, packed, portable)
+
+
+class OriginalLicenseBoundaries(unittest.TestCase):
+    """Synthetic originals exercise the full collector, including fonts and SDK."""
+
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.provenance_path = self.root / 'packaging/windows/licenses/provenance.json'
+        self.cargo_folder = self.root / 'registry/same-name'
+        self.npm_folder = self.root / 'app/node_modules/same-name'
+        self.cargo_folder.mkdir(parents=True)
+        self.npm_folder.mkdir(parents=True)
+        self._put('app/node_modules/same-name/package.json', json.dumps({'name': 'same-name', 'version': '1.2.3', 'license': 'MIT OR Apache-2.0'}).encode())
+        self._put('app/package-lock.json', json.dumps({'packages': {'': {}, 'node_modules/same-name': {'version': '1.2.3'}}}).encode())
+        self._put('resources/fonts/LICENSE.txt', b'synthetic font original\r\n')
+        for name in ('manifest.json', 'builtin-manifest.json', 'web-manifest.json'):
+            self._put('resources/fonts/' + name, b'{}\n')
+        sdk_folder = self.root / 'registry/webview2-com-sys'
+        self._put('registry/webview2-com-sys/LICENSE.txt', b'synthetic Rust binding license\n')
+        loader = self._put('registry/webview2-com-sys/x64/WebView2LoaderStatic.lib', b'synthetic loader only')
+        self.metadata = {'packages': [
+            {'id': 'actual', 'name': 'same-name', 'version': '1.2.3', 'source': 'registry', 'manifest_path': str(self.cargo_folder / 'Cargo.toml'), 'license': 'MIT OR Apache-2.0'},
+            {'id': 'sdk', 'name': 'webview2-com-sys', 'version': '0.39.1', 'source': 'registry', 'manifest_path': str(sdk_folder / 'Cargo.toml'), 'license': 'MIT'},
+        ]}
+        self.built = {'actual', 'sdk'}
+        self.provenance = {
+            'schemaVersion': 2,
+            'rust': {'same-name-1.2.3': {'files': [
+                self._record('packaging/windows/licenses/upstream/rust/LICENSE.txt', b'synthetic Rust license\r\n'),
+                self._record('packaging/windows/licenses/upstream/rust/NOTICE.txt', b'synthetic Rust notice\n'),
+            ]}},
+            'npm': {'same-name-1.2.3': {'files': [
+                self._record('packaging/windows/licenses/upstream/npm/LICENSE.txt', b'synthetic npm license\n'),
+                self._record('packaging/windows/licenses/upstream/npm/NOTICE.txt', b'synthetic npm notice\r\n'),
+            ]}},
+            'webview2Sdk': {
+                'version': 'synthetic-1', 'sysCrateVersion': '0.39.1',
+                'staticLoaderX64Sha256': sha256(loader),
+                'files': {
+                    'LICENSE.txt': self._record('packaging/windows/licenses/sdk/LICENSE.txt', b'synthetic Microsoft license\n'),
+                    'NOTICE.txt': self._record('packaging/windows/licenses/sdk/NOTICE.txt', b'synthetic Microsoft notice\n'),
+                },
+            },
+        }
+
+    def _put(self, relative, data):
+        path = self.root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        return data
+
+    def _record(self, relative, data):
+        self._put(relative, data)
+        return {'file': relative, 'sha256': sha256(data), 'size': len(data), 'sourceUrl': 'https://example.invalid/synthetic-original'}
+
+    def _collect(self, provenance=None):
+        self.provenance_path.parent.mkdir(parents=True, exist_ok=True)
+        self.provenance_path.write_text(json.dumps(self.provenance if provenance is None else provenance), encoding='utf-8')
+        return dependency_licenses(self.root, self.metadata, self.built)
+
+    def test_cargo_and_npm_multifile_fallbacks_preserve_each_original_byte(self):
+        files, packages = self._collect()
+        for ecosystem, section in (('cargo', 'rust'), ('npm', 'npm')):
+            expected = []
+            for record in self.provenance[section]['same-name-1.2.3']['files']:
+                target = f'third-party/{ecosystem}-same-name-1.2.3/{Path(record["file"]).name}'
+                expected.append(target)
+                self.assertEqual(files[target], (self.root / record['file']).read_bytes())
+            package = next(value for value in packages if value['ecosystem'] == ecosystem and value['name'] == 'same-name')
+            self.assertEqual(package['licenseFiles'], expected)
+        self.assertEqual(files['third-party/microsoft-webview2-sdk-synthetic-1/NOTICE.txt'], b'synthetic Microsoft notice\n')
+        self.assertIn('FONTS-web-manifest.json', files)
+
+    def test_existing_nonempty_originals_are_not_replaced_by_fallbacks(self):
+        for folder in (self.cargo_folder, self.npm_folder):
+            (folder / 'LICENSE.local').write_bytes(b'actual installed original\r\n')
+        files, packages = self._collect()
+        for ecosystem in ('cargo', 'npm'):
+            prefix = f'third-party/{ecosystem}-same-name-1.2.3/'
+            self.assertEqual(files[prefix + 'LICENSE.local'], b'actual installed original\r\n')
+            self.assertNotIn(prefix + 'LICENSE.txt', files)
+            package = next(value for value in packages if value['ecosystem'] == ecosystem and value['name'] == 'same-name')
+            self.assertEqual(package['licenseFiles'], [prefix + 'LICENSE.local'])
+
+    def test_explicit_license_selection_preserves_declaration_and_original_bytes(self):
+        changed = copy.deepcopy(self.provenance)
+        for section in ('rust', 'npm'):
+            changed[section]['same-name-1.2.3'].update({
+                'selectedLicense': 'Apache-2.0',
+                'declarationSourceUrls': ['https://example.invalid/upstream/declaration'],
+                'sourceKind': 'synthetic-official-original-and-upstream-declaration',
+            })
+        files, packages = self._collect(changed)
+        for ecosystem, section in (('cargo', 'rust'), ('npm', 'npm')):
+            package = next(value for value in packages if value['ecosystem'] == ecosystem and value['name'] == 'same-name')
+            self.assertEqual(package['license'], 'MIT OR Apache-2.0')
+            self.assertEqual(package['selectedLicense'], 'Apache-2.0')
+            for record in changed[section]['same-name-1.2.3']['files']:
+                target = f'third-party/{ecosystem}-same-name-1.2.3/{Path(record["file"]).name}'
+                self.assertEqual(files[target], (self.root / record['file']).read_bytes())
+
+    def test_invalid_explicit_license_selection_is_rejected(self):
+        for section in ('rust', 'npm'):
+            for value in (None, False, '', ' \r\n\t', 42, []):
+                changed = copy.deepcopy(self.provenance)
+                changed[section]['same-name-1.2.3']['selectedLicense'] = value
+                with self.subTest(section=section, value=value), self.assertRaisesRegex(ValueError, 'Invalid selected upstream license'):
+                    self._collect(changed)
+
+    def test_missing_or_other_version_never_qualifies_a_package(self):
+        for section in ('rust', 'npm'):
+            for key in ('same-name', 'same-name-9.9.9'):
+                changed = copy.deepcopy(self.provenance)
+                changed[section][key] = changed[section].pop('same-name-1.2.3')
+                with self.subTest(section=section, key=key), self.assertRaisesRegex(ValueError, 'Missing original license'):
+                    self._collect(changed)
+
+    def test_other_ecosystem_does_not_supply_a_missing_original(self):
+        for section in ('rust', 'npm'):
+            changed = copy.deepcopy(self.provenance)
+            changed[section] = {}
+            with self.subTest(section=section), self.assertRaisesRegex(ValueError, 'Missing original license'):
+                self._collect(changed)
+
+    def test_missing_provenance_and_empty_defaults_do_not_invent_originals(self):
+        with self.assertRaisesRegex(ValueError, 'Missing original license'):
+            dependency_licenses(self.root, self.metadata, self.built)
+        for value in ({'schemaVersion': 2}, {'schemaVersion': 2, 'rust': {}, 'npm': {}}):
+            with self.subTest(value=value), self.assertRaisesRegex(ValueError, 'Missing original license'):
+                self._collect(value)
+
+    def test_schema_one_missing_or_noninteger_version_is_rejected(self):
+        for version in (None, 1, True, '2', 2.0):
+            changed = copy.deepcopy(self.provenance)
+            if version is None:
+                del changed['schemaVersion']
+            else:
+                changed['schemaVersion'] = version
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'provenance schema'):
+                self._collect(changed)
+
+    def test_sections_and_files_records_have_one_current_shape(self):
+        for section in ('rust', 'npm'):
+            for value in (None, [], 'not a section'):
+                changed = copy.deepcopy(self.provenance)
+                changed[section] = value
+                with self.subTest(section=section, value=value), self.assertRaisesRegex(ValueError, 'provenance section'):
+                    self._collect(changed)
+            scalar = self.provenance[section]['same-name-1.2.3']['files'][0]
+            for value in (scalar, {'files': [], **scalar}, {'files': []}, {'files': 'LICENSE'}, {'files': [None]}):
+                changed = copy.deepcopy(self.provenance)
+                changed[section]['same-name-1.2.3'] = value
+                with self.subTest(section=section, value=value), self.assertRaises(ValueError):
+                    self._collect(changed)
+
+    def test_second_original_wrong_size_or_hash_is_not_hidden_by_first(self):
+        for section in ('rust', 'npm'):
+            for field, value in (('size', 9999), ('sha256', '0' * 64)):
+                changed = copy.deepcopy(self.provenance)
+                changed[section]['same-name-1.2.3']['files'][1][field] = value
+                with self.subTest(section=section, field=field), self.assertRaisesRegex(ValueError, 'Changed upstream license original'):
+                    self._collect(changed)
+
+    def test_bad_size_and_hash_types_are_rejected(self):
+        for section in ('rust', 'npm'):
+            for field, values in (('size', (True, 0, -1, '1', 1.0)), ('sha256', (None, 'short', 'G' * 64, 'A' * 64))):
+                for value in values:
+                    changed = copy.deepcopy(self.provenance)
+                    changed[section]['same-name-1.2.3']['files'][1][field] = value
+                    with self.subTest(section=section, field=field, value=value), self.assertRaisesRegex(ValueError, 'Invalid upstream original'):
+                        self._collect(changed)
+
+    def test_second_original_missing_or_directory_is_not_hidden_by_first(self):
+        for section in ('rust', 'npm'):
+            for relative in ('packaging/windows/licenses/missing/NOTICE.txt', 'resources/fonts'):
+                changed = copy.deepcopy(self.provenance)
+                changed[section]['same-name-1.2.3']['files'][1]['file'] = relative
+                with self.subTest(section=section, relative=relative), self.assertRaises((ValueError, OSError)):
+                    self._collect(changed)
+
+    def test_matching_whitespace_second_original_is_rejected(self):
+        for section in ('rust', 'npm'):
+            changed = copy.deepcopy(self.provenance)
+            second = changed[section]['same-name-1.2.3']['files'][1]
+            path = self.root / second['file']
+            original = path.read_bytes()
+            try:
+                second.update(self._record(second['file'], b' \t\r\n'))
+                with self.subTest(section=section), self.assertRaisesRegex(ValueError, 'Changed upstream license original'):
+                    self._collect(changed)
+            finally:
+                path.write_bytes(original)
+
+    def test_escaping_or_noncanonical_original_paths_are_rejected(self):
+        for section in ('rust', 'npm'):
+            for value in ('../LICENSE', '/LICENSE', 'C:/outside/LICENSE', '//server/share/LICENSE', r'folder\LICENSE', 'folder/../LICENSE', './LICENSE'):
+                changed = copy.deepcopy(self.provenance)
+                changed[section]['same-name-1.2.3']['files'][1]['file'] = value
+                with self.subTest(section=section, value=value), self.assertRaisesRegex(ValueError, 'Invalid upstream original path'):
+                    self._collect(changed)
+
+    def test_second_original_read_errors_are_not_hidden(self):
+        for section in ('rust', 'npm'):
+            target = self.root / self.provenance[section]['same-name-1.2.3']['files'][1]['file']
+            original_read = read_checked
+            def deny_selected(path, root, **keywords):
+                if Path(path) == target:
+                    raise PermissionError('synthetic original read denial')
+                return original_read(path, root, **keywords)
+            with self.subTest(section=section), patch('package_inputs.read_checked', side_effect=deny_selected), self.assertRaisesRegex(PermissionError, 'synthetic original read denial'):
+                self._collect()
+
+    def test_dependency_directory_enumeration_denial_cannot_become_fallback(self):
+        original_scandir = os.scandir
+        for folder in (self.cargo_folder, self.npm_folder):
+            def deny_selected(path):
+                if Path(path) == folder:
+                    raise PermissionError('synthetic dependency directory enumeration denial')
+                return original_scandir(path)
+            with self.subTest(folder=folder), patch('package_inputs.os.scandir', side_effect=deny_selected), self.assertRaisesRegex(PermissionError, 'synthetic dependency directory enumeration denial'):
+                self._collect()
+
+    def test_snapshot_keeps_original_bytes_and_excludes_installed_dependencies(self):
+        files = snapshot(self.root)
+        self.assertEqual(files['resources/fonts/LICENSE.txt'], b'synthetic font original\r\n')
+        self.assertEqual(files['app/package-lock.json'], (self.root / 'app/package-lock.json').read_bytes())
+        self.assertFalse(any(name.startswith('app/node_modules/') for name in files))
+
+    def test_snapshot_root_and_nested_enumeration_denials_propagate(self):
+        original_scandir = os.scandir
+        for folder in (self.root, self.root / 'resources/fonts'):
+            def deny_selected(path):
+                if Path(path) == folder:
+                    raise PermissionError('synthetic source directory enumeration denial')
+                return original_scandir(path)
+            with self.subTest(folder=folder), patch('package_inputs.os.scandir', side_effect=deny_selected), self.assertRaisesRegex(PermissionError, 'synthetic source directory enumeration denial'):
+                snapshot(self.root)
+
+    def test_second_original_reparse_is_not_followed(self):
+        import package_inputs
+        for section in ('rust', 'npm'):
+            target = self.root / self.provenance[section]['same-name-1.2.3']['files'][1]['file']
+            inode = target.lstat().st_ino
+            original_reparse = package_inputs.is_reparse
+            def selected_reparse(info):
+                return original_reparse(info) or info.st_ino == inode
+            with self.subTest(section=section), patch('package_inputs.is_reparse', side_effect=selected_reparse), self.assertRaisesRegex(ValueError, 'reparse input'):
+                self._collect()
+
+    def test_duplicate_casefold_payload_basename_is_rejected(self):
+        for section in ('rust', 'npm'):
+            changed = copy.deepcopy(self.provenance)
+            changed[section]['same-name-1.2.3']['files'][1] = self._record('packaging/windows/licenses/other/license.TXT', b'independent original\n')
+            with self.subTest(section=section), self.assertRaisesRegex(ValueError, 'Duplicate upstream license payload basename'):
+                self._collect(changed)
+
+    def test_an_existing_empty_license_is_not_masked_by_valid_fallbacks(self):
+        for folder in (self.cargo_folder, self.npm_folder):
+            path = folder / 'LICENSE.empty'
+            try:
+                path.write_bytes(b' \r\n\t')
+                with self.subTest(folder=folder), self.assertRaisesRegex(ValueError, 'Empty original license text'):
+                    self._collect()
+            finally:
+                path.unlink()
+
+    def test_sdk_actual_binding_and_loader_requirements_still_apply(self):
+        changed = copy.deepcopy(self.provenance)
+        changed['webview2Sdk']['sysCrateVersion'] = 'other'
+        with self.assertRaisesRegex(ValueError, 'Built WebView2 binding'):
+            self._collect(changed)
+        changed = copy.deepcopy(self.provenance)
+        changed['webview2Sdk']['staticLoaderX64Sha256'] = '0' * 64
+        with self.assertRaisesRegex(ValueError, 'Built static WebView2 Loader'):
+            self._collect(changed)
 
 
 class OfflinePreflight(unittest.TestCase):

@@ -82,8 +82,8 @@ def load_contract(data):
     # boundary closed rather than accepting arbitrary paths from a caller.
     if value['paths'] != {'persistentKnownFolder': 'LocalAppData', 'persistentRelativeRoot': 'Weftext-MVP',
                           'coreRelativePath': 'core', 'hostStateRelativePath': 'host-state',
-                          'cacheKnownFolder': 'LocalAppData', 'cacheRelativeRoot': 'Weftext/Cache'}:
-        raise ValueError('Persistent envelope, disjoint Core/host-state or cache paths differ from the supported contract')
+                          'browserDataKnownFolder': 'LocalAppData', 'browserDataRelativeRoot': 'Weftext/Cache'}:
+        raise ValueError('Persistent Core/host-state and browser-data paths differ from the supported contract')
     activation = value['activation']
     closed(activation, ('portableAumid', 'startupTaskId', 'startupArgument', 'toastClsid', 'toastArgument'), 'Activation')
     if activation['startupArgument'] != '--login-startup' or activation['toastArgument'] != '--toast-server':
@@ -243,7 +243,12 @@ def manifest(contract, version):
         add(properties, key, text=text)
     excluded = add(add(properties, 'virtualization:FileSystemWriteVirtualization'), 'virtualization:ExcludedDirectories')
     paths = contract['paths']
-    add(excluded, 'virtualization:ExcludedDirectory', text=f"$(KnownFolder:{paths['persistentKnownFolder']})\\{paths['persistentRelativeRoot']}")
+    # Both roots contain durable author recovery; the historical browser path
+    # is unchanged. Do not unvirtualize all AppData or unrelated registry data.
+    for folder, root in (('persistentKnownFolder', 'persistentRelativeRoot'),
+                         ('browserDataKnownFolder', 'browserDataRelativeRoot')):
+        relative_root = paths[root].replace('/', '\\')
+        add(excluded, 'virtualization:ExcludedDirectory', text=f"$(KnownFolder:{paths[folder]})\\{relative_root}")
     add(add(package, 'Dependencies'), 'TargetDeviceFamily', {'Name': 'Windows.Desktop', 'MinVersion': platform['minVersion'], 'MaxVersionTested': platform['maxVersionTested']})
     resources = add(package, 'Resources')
     for language in ('zh-CN', 'en-US'):

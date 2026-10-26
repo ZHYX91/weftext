@@ -1,11 +1,12 @@
 """Pure CI association/evidence tests; no product, network or SDK execution."""
+from contextlib import ExitStack
 import json
 import os
 from pathlib import Path
 import tempfile
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, call, patch
 import zipfile
 
 import ci_windows_package as ci
@@ -93,6 +94,264 @@ class CandidateAssociation(unittest.TestCase):
             ci.match_package(self.dist, ['old'], self.identity)
 
 
+class ReceiptChildRouting(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory(prefix='weftext-ci-receipt-')
+        self.addCleanup(self.temp.cleanup)
+        folder = Path(self.temp.name)
+        self.root, self.target, self.evidence = folder / 'checkout', folder / 'target', folder / 'evidence'
+        self.root.mkdir()
+        self.evidence.mkdir()
+        self.source = self.target / 'weftext-package-inputs/fixed/source'
+        self.source.mkdir(parents=True)
+        source = {'packaging/windows/host-contract.json': b'{}',
+            'packaging/windows/offline-materials.json': b'locked original materials',
+            'crates/weftext-app/Cargo.toml': b'[package]\nversion = "0.7.0-rc.1"\n'}
+        for name, data in source.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        self.batch = self.target / 'weftext-build-artifacts/fixed'
+        self.batch.mkdir(parents=True)
+        self.receipt = self.batch / 'build-input-receipt.json'
+        self.receipt.write_bytes(b'original mocked build receipt; never execute')
+        self.build_environment = {'CARGO_TARGET_DIR': str(self.target),
+            'CARGO_BUILD_TARGET': 'x86_64-pc-windows-msvc',
+            'CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER': str(folder / 'installed/link.exe'),
+            'WEFTEXT_WINDOWS_SDK_BIN': str(folder / 'installed/sdk')}
+        self.artifacts = ci.mvp.QualifiedArtifacts(self.source, {}, {}, source, {},
+            {'target_directory': str(self.target), 'packages': []}, frozenset(), self.target, 'release',
+            build_environment=self.build_environment, receipt_path=self.receipt,
+            catalog=b'{"buildId":"actual-canonical-build"}')
+        ci.write_json(self.evidence / 'provenance.json', {'targetRoot': str(self.target), 'distBefore': []})
+        self.preparation = self.evidence / 'preparation.json'
+        ci.write_json(self.preparation, {'status': 'preparedInputsOnly',
+            'sdk': {'directory': self.build_environment['WEFTEXT_WINDOWS_SDK_BIN']},
+            'materialsDirectory': str(folder / 'materials'),
+            'linker': {'path': self.build_environment['CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_LINKER']}})
+        self.timeline, self.invocations = [], []
+
+    def child(self, exit_code=0, waits=None):
+        process = MagicMock()
+        process.__enter__.return_value = process
+        process.__exit__.return_value = False
+        process.pid = 27182
+        process.wait.side_effect = waits
+        process.wait.return_value = exit_code
+        def launch(command, **kwargs):
+            self.assertTrue((self.evidence / 'receipt-cli-intent.json').is_file())
+            self.assertFalse(kwargs['stdout'].closed)
+            self.assertFalse(kwargs['stderr'].closed)
+            kwargs['stdout'].write(b'original stdout\x00\xff\r\n')
+            kwargs['stderr'].write(b'original stderr\x80\r\n')
+            self.invocations.append((command, kwargs))
+            self.timeline.append('receipt-child')
+            return process
+        return process, launch
+
+    def canonical(self, launch):
+        stack = ExitStack()
+        self.addCleanup(stack.close)
+        stack.enter_context(patch.object(ci, 'ROOT', self.root))
+        stack.enter_context(patch.object(ci.mvp, 'ROOT', self.root))
+        stack.enter_context(patch.object(ci.mvp, 'require_checkout'))
+        stack.enter_context(patch.object(ci.mvp, 'sdk_tools', return_value={'qualified': 'fixture'}))
+        stack.enter_context(patch.object(ci.mvp, 'freeze_materials', return_value={
+            'lockSha256': ci.sha256(self.artifacts.source['packaging/windows/offline-materials.json'])}))
+        stack.enter_context(patch.object(ci.mvp, 'load_contract', return_value={'identity': 'fixture'}))
+        def build(*args, **kwargs):
+            self.timeline.append('canonical-build')
+            return self.artifacts
+        def check(artifacts, groups):
+            self.assertIs(artifacts, self.artifacts)
+            self.assertEqual(groups, ci.mvp.GROUPS)
+            record = json.loads((self.evidence / 'receipt-cli-result.json').read_text(encoding='utf-8'))
+            self.assertEqual(record['status'], 'passedPartialCliOnly')
+            self.timeline.append('original-full-checks')
+        def packaged(source, artifacts, *args, **kwargs):
+            self.assertEqual(source, self.source)
+            self.assertIs(artifacts, self.artifacts)
+            self.timeline.append('original-package')
+        def licenses(source, metadata, built_package_ids):
+            self.assertEqual(source, self.source)
+            self.assertIs(metadata, self.artifacts.metadata)
+            self.assertIs(built_package_ids, self.artifacts.built_package_ids)
+            self.timeline.append('license-preflight')
+            return {'original': b'license fixture'}, ['package fixture']
+        build_mock = stack.enter_context(patch.object(ci.mvp, 'build', side_effect=build))
+        self.licenses = stack.enter_context(patch.object(ci.mvp, 'dependency_licenses', side_effect=licenses))
+        check_mock = stack.enter_context(patch.object(ci.mvp, 'check', side_effect=check))
+        package_mock = stack.enter_context(patch.object(ci.mvp, 'package_windows', side_effect=packaged))
+        stack.enter_context(patch.object(ci, 'match_package', return_value=(self.root / 'dist/new', {'containers': []})))
+        stack.enter_context(patch.object(ci.subprocess, 'Popen', side_effect=launch))
+        return build_mock, check_mock, package_mock
+
+    def test_exact_package_batch_is_checked_in_a_child_before_original_full_continuation(self):
+        process, launch = self.child()
+        build, check, package = self.canonical(launch)
+        with patch.dict(os.environ, {'CARGO_TARGET_DIR': 'must be replaced by actual build target',
+                'PATH': 'the selected Node and npm path', 'TEMP': 'same attempt temp', 'TMP': 'same attempt temp'}):
+            ci.package(self.evidence, self.preparation)
+            self.assertEqual(os.environ['CARGO_TARGET_DIR'], 'must be replaced by actual build target')
+        self.assertEqual(self.timeline, ['canonical-build', 'receipt-child', 'license-preflight',
+            'original-full-checks', 'original-package'])
+        build.assert_called_once()
+        self.licenses.assert_called_once_with(self.source, self.artifacts.metadata, self.artifacts.built_package_ids)
+        check.assert_called_once_with(self.artifacts, ci.mvp.GROUPS)
+        package.assert_called_once()
+        self.assertIs(ci.mvp.build, build)
+        self.assertIs(ci.mvp.check, check)
+        command, kwargs = self.invocations[0]
+        self.assertEqual(command, [ci.sys.executable, str(self.source / 'scripts/mvp.py'),
+            'check', '--release', '--group', 'cli', '--artifacts', str(self.receipt)])
+        self.assertTrue(Path(command[0]).is_absolute())
+        self.assertEqual(kwargs['cwd'], self.source)
+        self.assertEqual(kwargs['stdin'], ci.subprocess.DEVNULL)
+        self.assertNotIn('timeout', kwargs)
+        self.assertEqual({key: kwargs['env'][key] for key in self.build_environment}, self.build_environment)
+        self.assertEqual(kwargs['env']['PATH'], 'the selected Node and npm path')
+        self.assertEqual(kwargs['env']['TEMP'], 'same attempt temp')
+        self.assertEqual(kwargs['env']['TMP'], 'same attempt temp')
+        self.assertTrue(kwargs['stdout'].closed)
+        self.assertTrue(kwargs['stderr'].closed)
+        self.assertEqual((self.evidence / 'receipt-cli.stdout.bin').read_bytes(), b'original stdout\x00\xff\r\n')
+        self.assertEqual((self.evidence / 'receipt-cli.stderr.bin').read_bytes(), b'original stderr\x80\r\n')
+        record = json.loads((self.evidence / 'receipt-cli-result.json').read_text(encoding='utf-8'))
+        self.assertEqual(record['exitCode'], 0)
+        self.assertEqual(record['receipt'], str(self.receipt))
+        self.assertEqual(record['sourceRoot'], str(self.source))
+        self.assertEqual(record['pid'], process.pid)
+        self.assertTrue((self.evidence / 'package-success.json').is_file())
+        self.assertFalse((self.source / '.git').exists())
+
+    def test_nonzero_child_retains_exit_and_streams_and_stops_original_full_checks(self):
+        _, launch = self.child(exit_code=23)
+        build, check, package = self.canonical(launch)
+        with self.assertRaises(ci.subprocess.CalledProcessError) as raised:
+            ci.package(self.evidence, self.preparation)
+        self.assertEqual(raised.exception.returncode, 23)
+        self.assertEqual(self.timeline, ['canonical-build', 'receipt-child'])
+        self.assertIs(ci.mvp.build, build)
+        check.assert_not_called()
+        package.assert_not_called()
+        self.licenses.assert_not_called()
+        self.assertTrue((self.evidence / 'package-batch.json').is_file())
+        self.assertTrue((self.evidence / 'cargo-metadata.json').is_file())
+        self.assertFalse((self.evidence / 'package-success.json').exists())
+        record = json.loads((self.evidence / 'receipt-cli-result.json').read_text(encoding='utf-8'))
+        self.assertEqual(record['exitCode'], 23)
+        self.assertEqual(record['status'], 'failedOriginalsRetained')
+        self.assertEqual((self.evidence / 'receipt-cli.stderr.bin').read_bytes(), b'original stderr\x80\r\n')
+
+    def test_missing_original_license_after_child_success_stops_full_checks_and_package(self):
+        _, launch = self.child()
+        build, check, package = self.canonical(launch)
+        original = ValueError('Missing original license text: cargo cel 0.15.0')
+        def missing(*args):
+            self.timeline.append('license-preflight')
+            raise original
+        self.licenses.side_effect = missing
+        with self.assertRaises(ValueError) as raised:
+            ci.package(self.evidence, self.preparation)
+        self.assertIs(raised.exception, original)
+        self.assertEqual(self.timeline, ['canonical-build', 'receipt-child', 'license-preflight'])
+        self.licenses.assert_called_once_with(self.source, self.artifacts.metadata, self.artifacts.built_package_ids)
+        self.assertIs(ci.mvp.build, build)
+        check.assert_not_called()
+        package.assert_not_called()
+        self.assertTrue((self.evidence / 'package-batch.json').is_file())
+        self.assertFalse((self.evidence / 'package-success.json').exists())
+        child = json.loads((self.evidence / 'receipt-cli-result.json').read_text(encoding='utf-8'))
+        self.assertEqual(child['status'], 'passedPartialCliOnly')
+
+    def test_spawn_failure_preserves_original_error_empty_streams_and_no_false_exit(self):
+        original = FileNotFoundError('selected interpreter disappeared')
+        build, check, package = self.canonical(MagicMock(side_effect=original))
+        with self.assertRaises(FileNotFoundError) as raised:
+            ci.package(self.evidence, self.preparation)
+        self.assertIs(raised.exception, original)
+        self.assertIs(ci.mvp.build, build)
+        check.assert_not_called()
+        package.assert_not_called()
+        self.licenses.assert_not_called()
+        record = json.loads((self.evidence / 'receipt-cli-result.json').read_text(encoding='utf-8'))
+        self.assertIsNone(record['exitCode'])
+        self.assertNotIn('pid', record)
+        self.assertEqual((self.evidence / 'receipt-cli.stdout.bin').read_bytes(), b'')
+        self.assertEqual((self.evidence / 'receipt-cli.stderr.bin').read_bytes(), b'')
+        self.assertFalse((self.evidence / 'package-success.json').exists())
+
+    def test_interruption_waits_for_exact_child_exit_then_preserves_interrupt_without_full_continuation(self):
+        original = KeyboardInterrupt('first original interruption')
+        process, launch = self.child(waits=[original, 0])
+        build, check, package = self.canonical(launch)
+        with patch.object(ci.signal, 'signal', return_value='previous handler') as handler:
+            with self.assertRaises(KeyboardInterrupt) as raised:
+                ci.package(self.evidence, self.preparation)
+        self.assertIs(raised.exception, original)
+        self.assertEqual(process.wait.call_count, 2)
+        self.assertEqual(handler.call_args_list, [
+            call(ci.signal.SIGINT, ci.signal.SIG_IGN), call(ci.signal.SIGINT, 'previous handler')])
+        self.assertIs(ci.mvp.build, build)
+        check.assert_not_called()
+        package.assert_not_called()
+        self.licenses.assert_not_called()
+        record = json.loads((self.evidence / 'receipt-cli-result.json').read_text(encoding='utf-8'))
+        self.assertEqual(record['exitCode'], 0)
+        self.assertEqual(record['status'], 'failedOriginalsRetained')
+        self.assertFalse((self.evidence / 'package-success.json').exists())
+
+    def test_result_write_failure_does_not_replace_nonzero_child_error(self):
+        _, launch = self.child(exit_code=17)
+        original_write = ci.write_json
+        def write(path, value):
+            if path.name == 'receipt-cli-result.json':
+                raise OSError('result write failed')
+            return original_write(path, value)
+        with patch.object(ci.subprocess, 'Popen', side_effect=launch), patch.object(ci, 'write_json', side_effect=write):
+            with self.assertRaises(ci.subprocess.CalledProcessError) as raised:
+                ci.verify_receipt(self.evidence, self.artifacts)
+        self.assertEqual(raised.exception.returncode, 17)
+        self.assertTrue(any('result write failed' in note for note in raised.exception.__notes__))
+        self.assertTrue((self.evidence / 'receipt-cli-intent.json').is_file())
+        self.assertTrue((self.evidence / 'receipt-cli.stdout.bin').is_file())
+
+    def test_handler_restore_failure_does_not_replace_the_original_interrupt(self):
+        original = SystemExit('original interruption')
+        process, launch = self.child(waits=[original, 0])
+        with patch.object(ci.subprocess, 'Popen', side_effect=launch), \
+                patch.object(ci.signal, 'signal', side_effect=['previous handler', OSError('restore failed')]):
+            with self.assertRaises(SystemExit) as raised:
+                ci.verify_receipt(self.evidence, self.artifacts)
+        self.assertIs(raised.exception, original)
+        self.assertEqual(process.wait.call_count, 2)
+        self.assertTrue(any('restore failed' in note for note in original.__notes__))
+        record = json.loads((self.evidence / 'receipt-cli-result.json').read_text(encoding='utf-8'))
+        self.assertEqual(record['exitCode'], 0)
+        self.assertEqual(record['status'], 'failedOriginalsRetained')
+
+    def test_initialize_records_attempt_without_any_build_or_check(self):
+        runner = self.evidence / 'runner'
+        runner.mkdir()
+        outputs = self.evidence / 'outputs'
+        environment = {'RUNNER_TEMP': str(runner), 'GITHUB_RUN_ID': '123', 'GITHUB_RUN_ATTEMPT': '2',
+            'GITHUB_OUTPUT': str(outputs), 'GITHUB_REPOSITORY': 'owner/weftext', 'GITHUB_SHA': 'checkout-sha'}
+        with patch.object(ci, 'ROOT', self.root), patch.dict(os.environ, environment), \
+                patch.object(ci.mvp, 'metadata', return_value={'target_directory': str(self.target)}), \
+                patch.object(ci.subprocess, 'check_output', side_effect=['commit', 'tree']), \
+                patch.object(ci.mvp, 'main', side_effect=AssertionError('No product invocation')), \
+                patch.object(ci.mvp, 'build', side_effect=AssertionError('No build')), \
+                patch.object(ci.mvp, 'check', side_effect=AssertionError('No check')):
+            ci.initialize()
+        evidence = runner / 'weftext-ci-123-2'
+        record = json.loads((evidence / 'provenance.json').read_text(encoding='utf-8'))
+        self.assertEqual(record['targetRoot'], str(self.target))
+        self.assertEqual(record['checkoutCommit'], 'commit')
+        self.assertEqual(record['checkoutTree'], 'tree')
+        self.assertEqual(set(path.name for path in evidence.iterdir()), {'provenance.json', 'temp'})
+        self.assertNotIn('receipt=', outputs.read_text(encoding='utf-8'))
+
+
 class EvidencePreservation(unittest.TestCase):
     def test_archive_retains_original_bytes_and_only_selected_controls(self):
         with tempfile.TemporaryDirectory(prefix='weftext-ci-unit-') as directory:
@@ -136,6 +395,8 @@ class EvidencePreservation(unittest.TestCase):
             self.assertNotIn(str(batches / 'cached'), listed)
             self.assertIn(str(root / 'dist/partial'), listed)
             self.assertNotIn(str(root / 'dist/old'), listed)
+            self.assertIn(str(evidence / 'receipt-cli.stdout.bin'), listed)
+            self.assertIn(str(evidence / 'receipt-cli.stderr.bin'), listed)
             self.assertFalse((evidence / 'package-success.json').exists())
 
     def test_failed_package_restores_actual_build_without_replacing_checks(self):

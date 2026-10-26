@@ -48,8 +48,8 @@ pub(crate) struct Paths {
     pub persistent_relative_root: String,
     pub core_relative_path: String,
     pub host_state_relative_path: String,
-    pub cache_known_folder: String,
-    pub cache_relative_root: String,
+    pub browser_data_known_folder: String,
+    pub browser_data_relative_root: String,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -97,7 +97,7 @@ pub(crate) fn get() -> io::Result<&'static Contract> {
                 || max_version.is_none()
                 || min_version > max_version
                 || contract.paths.persistent_known_folder != "LocalAppData"
-                || contract.paths.cache_known_folder != "LocalAppData"
+                || contract.paths.browser_data_known_folder != "LocalAppData"
                 || contract.roles.desktop.pe_subsystem != 2
                 || contract.roles.cli.pe_subsystem != 3
                 || !leaf(&contract.roles.desktop.filename)

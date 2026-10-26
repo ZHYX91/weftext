@@ -123,7 +123,7 @@ impl Desktop {
         let paths = crate::host_paths::NativePaths::qualify(profile).map_err(|_| {
             error(
                 "desktopPaths",
-                "The durable Core and disposable WebView namespaces could not be qualified",
+                "The Core and persistent browser-data namespaces could not be qualified",
             )
         })?;
         let preferences = crate::core_call(state, |core| core.desktop_preferences())

@@ -37,9 +37,11 @@ cargo test --locked -p weftext-app --message-format=json-render-diagnostics -- -
 
 首条测试命令保留其他 Core／workspace 用例的默认并行度与全部默认目标，只把完整名称匹配的真实 64 成员许可用例交给第二条独立运行；[固定 Rust 1.99.1 的 libtest 实现](https://github.com/rust-lang/rust/blob/1.99.1/library/test/src/lib.rs#L498-L537)对 `--exact --skip` 采用完整名称相等，不排除名称带此前缀的新增用例。第二条仍使用真实单调时钟、原 5 秒硬期限和全部容量／授权断言，作为隔离时间基准；不缩减 setup、放宽期限或省略用例。第三条运行完整 App 默认目标。三条合计覆盖原 workspace 的全部默认 lib／bin／doctests，并保留当前 manifest 的默认 feature 选择；Core 当前没有可选 feature。独立 App Core／HTTP fixture 共享进程级后台 producer registry，服务退出必须排空该 registry，因此 App 用例之间串行调度。每个用例内部的 Tokio 多线程运行时、并发 HTTP、真实容量、退出排空及原截止时间保持不变。直接运行 App 测试或带名称筛选时也使用 `-- --test-threads=1`，不依赖私有环境变量。隔离时间基准通过不代表并行 I/O 压力下仍满足期限；此前并行压力失败保留为该次实际结果，不能用隔离通过改写。
 
-Windows `build`／完整 `check` 在固定双角色批次旁生成 `build-input-receipt.json`。`check --artifacts ABSOLUTE_RECEIPT` 只复用这批产物字节，所选检查每次重新执行，不读取旧 PASS。回执严格绑定同一检出／target／profile、完整公开源码与前端、双角色和原 catalog、实际顶层 Rust／Cargo／Node／npm 与所列明确构建配置；源码中的脚本、文档或 fixture 变化也要求新批次。每组边界及最终重新核输入；源根改变、缺失或未完成回执、非法路径、角色／字节／配置不一致均拒绝。资格观察要求外部 Cargo home、明确工具／SDK 路径及工具搜索目录为绝对路径；Cargo 配置中的自定义工具须以直接环境覆盖明确选择，未解析的 include、条件 linker 与 `[env]` 工具选择均拒绝，不猜测实际工具。它不证明所有隐式 SDK、系统库及传递依赖相同，也不证明可重现构建或整版验收。`package` 拒绝分组和外部回执，继续在固定源码副本执行原完整检查与打包。
+Windows 构建在固定双角色批次旁生成 `build-input-receipt.json`。`check --artifacts ABSOLUTE_RECEIPT` 在该回执记录的同一源码根执行，可用于实际 Git 检出或规范打包拥有的固定源码副本；它只复用这批产物字节，所选检查每次重新执行，不读取旧 PASS。回执严格绑定准确源码根／target／profile、完整公开源码与前端、双角色和原 catalog、实际顶层 Rust／Cargo／Node／npm 与所列明确构建配置；源码中的脚本、文档或 fixture 变化也要求新批次。每组边界及最终重新核输入；源根改变、缺失或未完成回执、非法路径、角色／字节／配置不一致均拒绝。资格观察要求外部 Cargo home、明确工具／SDK 路径及工具搜索目录为绝对路径；Cargo 配置中的自定义工具须以直接环境覆盖明确选择，未解析的 include、条件 linker 与 `[env]` 工具选择均拒绝，不猜测实际工具。它不证明所有隐式 SDK、系统库及传递依赖相同，也不证明可重现构建或整版验收。普通 `build` 继续支持没有 Git 元数据的解压 `source.zip`；`package` 仍要求实际 Git 产品检出，拒绝分组和外部回执，并在固定源码副本执行原完整检查与打包。
 
-Windows CI 先构建优化的检出批次，以独立进程核该次准确回执与 CLI；随后对新固定源码批次调用原规范 `package --release`，执行全部 source／scripts／frontend／格式／Clippy／Core／App／CLI 与 40 个 HTTP 检查，保留真实容量用例及原五秒期限。这样不重复两轮完整检查；前一 smoke 批次不为打包批次背书。两个构建共用显式 x64 target 与编译缓存。只有完整打包成功，才提供同批对应的 ZIP／MSIX、PACKAGE 和 BUILD；原回执／catalog、checkout／run 身份与控制／CLI 原件仍绑定各自实际批次及固定源码，失败 SDK 输出保留为未核定原件。材料获取见 [PACKAGING](PACKAGING.zh-CN.md)，不签名、改信任、安装或发布；下载后不得改写 CI 回执源根冒本地构建。上传成功不等于检查通过。
+规范 `package` 在真实构建返回后、完整检查之前，用现有 `dependency_licenses` 收集器，依据实际固定源码根、完整 metadata 和实际 built package IDs，核 Cargo 依赖与已安装 npm 包的许可原文；CI 中这一步在独立回执子进程成功后执行。缺少原文立即停止打包并保留原物；成功仍执行全部原完整检查，最终 `package_windows` 在原收集位置再次调用同一收集器。提前检查的结果不缓存，也不代替最终收集；普通 `build`、`check` 和回执验证保持不变。
+
+Windows CI 先初始化本轮证据目录，不在这一步构建；随后调用原规范 `package --release`，只构建一次新的固定源码 release 批次。原构建返回准确产物后、原完整检查之前，用已选定的绝对 Python 3.11 从该固定源码根启动独立进程，运行原 `mvp.py check --release --group cli --artifacts ABSOLUTE_RECEIPT`；它继承该批实际构建环境，包括原显式 x64 target、linker 和 SDK，记录命令、工作目录、完整原 stdout／stderr 与退出码。子进程失败立即阻断后续检查与打包；成功后先执行打包许可预检，再让原产物继续执行全部 source／scripts／frontend／格式／Clippy／Core／App／CLI 与 40 个 HTTP 检查，保留真实容量用例及原五秒期限，不以子进程 PASS 代替任何完整检查。只有完整打包成功，才提供同批对应的 ZIP／MSIX、PACKAGE 和 BUILD；原回执／catalog、checkout／run 身份与控制／CLI 原件均绑定该实际批次及固定源码。失败控制、部分输出、SDK 日志与未打包材料原件继续保留为未核定证据，未签名复核产物按原策略保留 7 天。材料获取见 [PACKAGING](PACKAGING.zh-CN.md)，不签名、改信任、安装或发布；下载后不得改写 CI 回执源根冒本地构建。上传成功不等于检查通过。
 
 CLI 合同入口保留业务用例与唯一报告，Win32／ConPTY、受控 relay、安全失败摘要及纯传输夹具分别放在支持模块。2048 个确定性 token 的 DOCX 夹具仍经过真实转换、多块下载和完整摘要／内容断言，不以模拟产物代替。并发输入测试在真实冻结捕获后确认原宿主的新 worker，再执行原修改并核特定后置拒绝和严格事件先后；不能用初始捕获失败、任意 409 或 worker 失败冒充撤权／依赖重验通过。
 
@@ -55,7 +57,7 @@ CLI 合同入口保留业务用例与唯一报告，Win32／ConPTY、受控 rela
 
 受控 Linux 编译传输另须在 Linux 上执行既有 `cargo test --locked -p weftext-worker-broker` 及 `cargo test --locked -p weftext-app compiler_worker -- --test-threads=1`。Windows 执行仅覆盖共用严格帧／回执校验，不覆盖 Linux socket、取消、匿名管道取消或终局状态映射。显式运行的 `scripts/test_linux_worker_broker.py` 要求已独立审查的 root 所有部署，不得替换为无约束进程或省略失败的内核条件。宣称产品集成前，须对 broker 准确批准的产品映像执行托管渲染／编辑／引用授权及原操作回归。
 
-Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 使用 Python 3.11 调用同一 `check --group frontend`，按锁执行 TypeScript 测试、类型检查和 Vite 构建；Windows 使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，执行上述独立进程回执 smoke 与一次完整规范 release 打包。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
+Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 使用 Python 3.11 调用同一 `check --group frontend`，按锁执行 TypeScript 测试、类型检查和 Vite 构建；Windows 使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，在一次完整规范 release 打包的同批固定源码产物上执行上述独立进程回执检查。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
 
 Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust 与 40 个 HTTP 脚本。CLI 合同先于较长的 Rust 检查运行；失败时立即输出有界、脱敏的原异常和本用例近期子进程／relay 诊断，并标明本轮新建的结果目录与产物目录，避免把缓存中的旧结果当成当前通过。产品操作和各用例本身的截止时间保持不变。
 
@@ -92,7 +94,7 @@ Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust �
 
 问题复现保留原候选、环境和最小触发步骤，记录实际观察；只复现一个故障不能报整场景通过。修复后用新候选重跑反例和直接受影响的正常路径；实现、依赖与环境没有变化且身份可确认的通过结果可以复用。发布验收另核对目标平台承诺、此前未验证项及候选完整性，不能把复现或执行环境资格当成发布通过。
 
-复用仓库的构建／检查／打包入口，每个平台的一轮候选只构建一次，再让后台、客体与必要人工场景消费同一份产物。默认 `python scripts/mvp.py check` 与 `package` 都会先构建并检查；按是否需要打包选其一。需要分组或跨进程检查时，使用 `build` 打印的新回执，再以 `check --artifacts ABSOLUTE_RECEIPT` 检查该批产物，不串联多个默认入口重复构建。Windows 打包参数、同次构建的 GUI／CLI 角色及严格离线材料前置见 [PACKAGING](PACKAGING.zh-CN.md)：`package` 在固定源码副本检查和生成，材料不全则拒绝完整候选。`package` 后在该打包候选上完成补充实测；源、依赖或打包内容改变则建立新候选并检查受影响范围，不沿用旧产物通过。其他平台尚未交付相应候选入口。
+复用仓库的构建／检查／打包入口，每个平台的一轮候选只构建一次，再让后台、客体与必要人工场景消费同一份产物。默认 `python scripts/mvp.py check` 与 `package` 都会先构建并检查；按是否需要打包选其一。需要分组或跨进程检查时，使用本次构建打印的新回执，从回执绑定的同一源码根以 `check --artifacts ABSOLUTE_RECEIPT` 检查该批产物，不串联多个默认入口重复构建。Windows 打包参数、同次构建的 GUI／CLI 角色及严格离线材料前置见 [PACKAGING](PACKAGING.zh-CN.md)：`package` 在固定源码副本检查和生成，材料不全则拒绝完整候选。`package` 后在该打包候选上完成补充实测；源、依赖或打包内容改变则建立新候选并检查受影响范围，不沿用旧产物通过。其他平台尚未交付相应候选入口。
 
 每个可交付切片只保留一份简短验收记录：提交或候选标识（必要时产物哈希）、目标 OS／浏览器／客体或设备版本、改动影响及场景、实际命令／手动步骤、通过／失败／未验证／工具错误、已知限制与必要证据位置。环境资格与产品结果分清；仅失败或关键操作保必要截图／片段，正常日志保摘要，不新建另一套验收事实库。用户真实输入与输出分开放置，原件不被测试覆盖。文档链接检查和有限模型不计作产品验收。
 

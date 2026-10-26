@@ -3,6 +3,7 @@ import { LocaleScope, errorUiText, message, type MessageKey, type MessageParams,
 import type { ReminderOwner as Owner, ReminderInspection as Inspection } from "./reminder-types";
 import { openReminderOverview } from "./reminder-overview";
 import { ProposalCloseGuard } from "./proposal-close-guard";
+import { coreDescriptionUiText, coreErrorUiText, descriptionUiText } from "./ui-diagnostics";
 
 type ReminderKey = Extract<MessageKey, `reminder.${string}`>;
 type LabelKey = { [K in ReminderKey]: keyof MessageParams<K> extends never ? K : never }[ReminderKey];
@@ -121,7 +122,7 @@ export class ReminderDeviceControl {
       if (retained?.handled) this.element.append(this.text("p", "reminder.handled"));
       if (retained) {
         this.element.append(this.text("p", retained.delivery.state === "submittedToSystem" ? "reminder.submitted" : retained.delivery.state === "unknown" ? "reminder.unknown" : retained.delivery.state === "inAppOnly" ? "reminder.inAppOnly" : "reminder.failedBeforeCall"));
-        if (retained.delivery.diagnostic) this.detail(retained.delivery.diagnostic);
+        if (retained.delivery.state === "unknown" || retained.delivery.state === "failedBeforeCall") this.detail(coreDescriptionUiText(retained.delivery.description));
         if (!retained.handled) this.element.append(this.button("reminder.handle", basis, async () => {
           const generation = this.generation; await this.host.request("/api/reminders/handle", { executionKey: retained.executionKey });
           if (this.current(generation, basis)) await this.refresh(basis);
@@ -131,8 +132,8 @@ export class ReminderDeviceControl {
       } else if (eligibility) this.element.append(this.text("p", eligibility.timing === "upcoming" ? "reminder.upcoming" : "reminder.due"));
     }
     if (!candidate.taskOpen) this.element.append(this.text("p", "reminder.cancelled"));
-    if (result.issue && result.issue.code !== "reminderDisabled") this.detail(result.issue.message, "data-warning");
-    for (const diagnostic of candidate.resolution.diagnostics) this.detail(diagnostic, "data-warning");
+    if (result.issue && result.issue.code !== "reminderDisabled") this.detail(coreErrorUiText(result.issue), "data-warning");
+    for (const diagnostic of candidate.resolution.diagnostics) this.detail(descriptionUiText(diagnostic), "data-warning");
     this.element.append(this.refreshButton(basis));
     this.renderPending();
   }

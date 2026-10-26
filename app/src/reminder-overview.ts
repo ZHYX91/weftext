@@ -1,4 +1,5 @@
 import { ProposalCloseGuard } from "./proposal-close-guard";
+import { coreDescriptionUiText, coreErrorUiText, descriptionUiText } from "./ui-diagnostics";
 import { registerNativeProposalOwner } from "./native-proposal-owners";
 import type { PanelHost } from "./data-panel";
 import type { OpenedDocument } from "./types";
@@ -187,7 +188,7 @@ export class ReminderOverview {
       } else host.append(this.text(scope, "reminder.submissionObservationMissing"));
     }
     if (status.delivery.state === "submittedToSystem" && status.delivery.at) this.detail(host, scope, message("reminder.ledgerConfirmedAt", { at: status.delivery.at }));
-    if (status.delivery.diagnostic) this.detail(host, scope, status.delivery.diagnostic);
+    if (status.delivery.state === "unknown" || status.delivery.state === "failedBeforeCall") this.detail(host, scope, coreDescriptionUiText(status.delivery.description));
     if (!status.handled) host.append(this.button(host, scope, "reminder.handle", async current => {
       await this.host.request("/api/reminders/handle", { executionKey: status.executionKey }); if (current()) await this.refresh();
     }));
@@ -208,18 +209,19 @@ export class ReminderOverview {
           if (entry.eligibility?.retained) this.delivery(row, this.queueScope, entry.eligibility.retained);
           else if (entry.eligibility?.timing === "missed") { const text = document.createElement("p"); this.queueScope.bindText(text, message("reminder.missed", { count: 1 })); row.append(text); }
           else if (entry.eligibility) row.append(this.text(this.queueScope, entry.eligibility.timing === "due" ? "reminder.due" : "reminder.upcoming"));
-          if (entry.issue) { row.append(this.text(this.queueScope, "reminder.unavailable")); this.detail(row, this.queueScope, entry.issue.message); }
-          for (const diagnostic of entry.candidate.resolution.diagnostics) this.detail(row, this.queueScope, diagnostic);
+          if (entry.issue) { row.append(this.text(this.queueScope, "reminder.unavailable")); this.detail(row, this.queueScope, coreErrorUiText(entry.issue)); }
+          for (const diagnostic of entry.candidate.resolution.diagnostics) this.detail(row, this.queueScope, descriptionUiText(diagnostic));
           this.queueHost.append(row);
         }
         for (const issue of page.issues) {
           const row = document.createElement("section"); row.className = "data-warning";
-          row.append(this.text(this.queueScope, "reminder.unavailable")); this.detail(row, this.queueScope, issue.message);
+          const { owner, reminderId, ...error } = issue;
+          row.append(this.text(this.queueScope, "reminder.unavailable")); this.detail(row, this.queueScope, coreErrorUiText(error));
           if (this.settings) {
             const revision = this.settings.settingsRevision;
             row.append(this.button(row, this.queueScope, "reminder.disable", async () => {
-              const target = JSON.stringify([issue.owner, issue.reminderId]);
-              const pending = this.pending.get(target) ?? { route: "/api/reminders/subscription", request: { root: "", owner: structuredClone(issue.owner), reminderId: issue.reminderId, enabled: false, expectedRevision: revision, mutationId: crypto.randomUUID() } };
+              const target = JSON.stringify([owner, reminderId]);
+              const pending = this.pending.get(target) ?? { route: "/api/reminders/subscription", request: { root: "", owner: structuredClone(owner), reminderId, enabled: false, expectedRevision: revision, mutationId: crypto.randomUUID() } };
               this.pending.set(target, pending); await this.submit(target, pending);
             }));
           }

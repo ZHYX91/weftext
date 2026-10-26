@@ -1088,6 +1088,7 @@ async function acceptResolvedDocument(opened: OpenedDocument, confirmed?: (accep
             activeSourceOrigin = null;
             renderContent();
             renderSidebar();
+            void workspaceTools.selectedDocumentChanged().catch(showError);
         }
         shell.classList.remove("sidebar-open");
     } finally {
@@ -2606,6 +2607,7 @@ function addDocument(opened: OpenedDocument): void {
     activeSourceOrigin = null;
     renderSidebar();
     renderContent();
+    void workspaceTools.selectedDocumentChanged().catch(showError);
     scheduleRender(doc, 0);
     if (session.recovered)
         toast(uiMessage("shell.lastUnsavedDraftRecovered"));
@@ -2698,6 +2700,7 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
         activeSourceOrigin = null;
         renderSidebar();
         renderContent();
+        void workspaceTools.selectedDocumentChanged().catch(showError);
         if (saved) {
             const tree = sidebar.querySelector(".file-tree");
             if (tree)

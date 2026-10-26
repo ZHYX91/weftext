@@ -28,7 +28,11 @@ CI 可用 `python scripts/prepare_windows_package.py --materials ABSOLUTE_NEW_DI
 
 ## 共同合同与材料
 
-[`host-contract.json`](../packaging/windows/host-contract.json) 是原生宿主和清单的单一身份／路径／激活配置：Win11 x64、最低 build22000；本地包身份 `Weftext.Desktop`、Publisher `CN=Weftext`、AppId `Weftext`。Publisher 是本地签名 Subject 的要求，不是已取得证书或系统信任的声明。`persistentRelativeRoot` 为 `%LOCALAPPDATA%/Weftext-MVP` 保全范围，`coreRelativePath=core` 指向默认 Core，`hostStateRelativePath=host-state` 指向此 OS 用户的私有宿主元数据。两个目录必须独立，显式 Core 也不得等于、包含或被 host-state 包含；通知路由目录不成为第二个 Core。旧顶层 Core 原件不自动采用，需保留并显式导入／一次性转换，不保留双路径兼容。cache／WebView UDF 仍位于范围外的 `Weftext/Cache`。清单排除整个准确 Weftext-MVP 保全范围，覆盖这两个子目录；拒绝任意 KnownFolder、上层目录或路径穿越，不会整体关闭 AppData／注册表虚拟化。
+[`host-contract.json`](../packaging/windows/host-contract.json) 是原生宿主和清单的单一身份／路径／激活配置：Win11 x64、最低 build22000；本地包身份 `Weftext.Desktop`、Publisher `CN=Weftext`、AppId `Weftext`。Publisher 是本地签名 Subject 的要求，不是已取得证书或系统信任的声明。`persistentRelativeRoot` 为 `%LOCALAPPDATA%/Weftext-MVP` 保全范围，`coreRelativePath=core` 指向默认 Core，`hostStateRelativePath=host-state` 指向此 OS 用户的私有宿主元数据。两个目录必须独立，显式 Core 也不得等于、包含或被 host-state 包含；通知路由目录不成为第二个 Core。旧顶层 Core 原件不自动采用，需保留并显式导入／一次性转换，不保留双路径兼容。
+
+`browserDataKnownFolder=LocalAppData` 和 `browserDataRelativeRoot=Weftext/Cache` 指定持久 WebView2 浏览器数据，配置的 UDF 路径与 profile 身份键派生保持不变。目录虽名为 Cache，UDF 不是可丢弃缓存：其中 IndexedDB 可能持有尚未被 Core 确认的唯一的本人输入副本。Core 与浏览器数据根必须保持物理隔离。
+
+清单准确排除 `Weftext-MVP` 根（Core 和 host-state）以及此应用拥有的 `Weftext/Cache` 浏览器数据根。拒绝任意 KnownFolder、上层目录或路径穿越，不会整体关闭 AppData／注册表虚拟化。这些声明不是数据连续性的证明：实际安装、升级与卸载／重装验收须核原 Core profile／设备、保留的本机 origin 及浏览器输入。旧 MSIX 虚拟化 UDF 即使逻辑路径相同也可能具有不同物理映射；本变更不宣称已经迁移。
 
 StartupTask 默认关闭，登录入口只传 `--login-startup`；通知 COM 使用固定 CLSID 和 `--toast-server`，激活只转发 opaque 原任务键并重新授权。CLI 的包内执行别名明确选择 console 子系统。清单资源包含同源图标和中英文 PRI；本机界面语言偏好不由包资源代替。
 
@@ -42,4 +46,4 @@ StartupTask 默认关闭，登录入口只传 `--login-startup`；通知 COM 使
 
 本地版本映射仅支持规范 `major.minor.patch-rc.N`（`0 ≤ N < 65535`）及正式 SemVer：RC 的第四段为 N，正式版为65535，下一 patch 高于前一正式版。拒绝其它预发布／build metadata、非规范前导零和溢出。这是本地 MSIX 策略，未声称符合 Store 的另一套发布编号政策。同包身份／版本的不同字节不能视为成功升级；实际升级验收使用更高的真实候选号。
 
-生成只建立包结构和字节对应；签名／信任、最低系统、缺依赖离线安装、真实通知／StartupTask、带 CaptureDraft／pending／ledger 升级、升级失败恢复及卸载重装保全仍按 [WORKFLOW](WORKFLOW.zh-CN.md) 和 DSK09／DSK10 在同一最终候选实测。不能把 SDK 空白探针、单元测试或未运行项算作这些通过，也不能把当前 `0.7.0-rc.1` 字段当成 v0.7 完成。
+生成只建立包结构和字节对应；签名／信任、最低系统、缺依赖离线安装、真实通知／StartupTask、带 CaptureDraft／pending／ledger 升级、升级失败恢复及卸载重装保全仍按 [WORKFLOW](WORKFLOW.zh-CN.md) 和 DSK09／DSK10 在同一最终候选实测。不能把 SDK 空白探针、单元测试或未运行项算作这些通过，也不能把当前 `0.7.0-rc.2` 字段当成 v0.7 完成。

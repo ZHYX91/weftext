@@ -163,7 +163,7 @@ BibTeX、CSL JSON 和 RIS 导入先展示完整字段映射、未知数据和冲
 
 已纳管笔记顶部的“时间线”列出 Core 实际保留的保存记录，显示保存时间、未知时间或准确源码缺失。可以只读查看并与当前已保存内容或明确选择的草稿快照比较。恢复前确认保护草稿，旧版成为一次新的保存，后来的记录保留；原脏稿及期间的新输入仍在编辑器和恢复记录中。历史预览目前为准确源码与文本差异，不重建旧字体、模块或配置的富预览。
 
-Windows 默认 Core 私有数据在 `%LOCALAPPDATA%\Weftext-MVP\core`，包括草稿、操作前后稿和实际身份记录，不是可随意删除的缓存。同一产品保全范围下的 `host-state` 独立保存此 OS 用户的私有宿主元数据，显式 Core 与它不能相同或互为祖先／子孙。旧顶层 Core 不自动采用，原件需保留并显式导入或一次性转换。同一数据目录只允许一个进程使用；不要用不同数据目录同时操作同一资料树。相同文件 ID 本身不能重建接纳证据。
+Windows 默认 Core 私有数据在 `%LOCALAPPDATA%\Weftext-MVP\core`，包括草稿、操作前后稿和实际身份记录，不是可随意删除的缓存。Native WebView2 浏览器数据保持原配置的 `%LOCALAPPDATA%/Weftext/Cache/<profile-key>/webview2` UDF 路径，可能持有尚未被 Core 确认的唯一的本人输入副本，同样属于持久数据。同一产品保全范围下的 `host-state` 独立保存此 OS 用户的私有宿主元数据，显式 Core 与它不能相同或互为祖先／子孙。旧顶层 Core 不自动采用，原件需保留并显式导入或一次性转换。同一数据目录只允许一个进程使用；不要用不同数据目录同时操作同一资料树。相同文件 ID 本身不能重建接纳证据。
 
 保存核对实际文件对象和原文，拒绝用旧稿覆盖外部新稿。另存为只创建不存在的目标，并核对重新打开结果；期间输入仍留在草稿与 Undo。改名、移动、回收后按原对象衔接打开会话与草稿；多个保留稿需要比较，不静默择一。
 
@@ -223,7 +223,7 @@ Windows 原生 GUI 的本批目标是 Windows 11 x64、build 22000 起，并要�
 
 系统关闭通知时仍可在应用内查看提醒状态；注册成功不表示已经送达。未知投递结果保留原记录，不自动换号重发。上述 MSIX 路径的实际安装、通知激活和 StartupTask 尚待同一最终候选验收。
 
-显式 `--data-dir` 仍指定当前本机服务的 Core 持久状态。Windows 默认使用 `%LOCALAPPDATA%/Weftext-MVP/core`，私有宿主元数据使用独立的 `Weftext-MVP/host-state`；旧顶层 Core 不自动采用。macOS 目录选择为 `$HOME/Library/Application Support/Weftext`，Linux 为绝对 `$XDG_DATA_HOME/weftext` 或未设置该变量时的 `$HOME/.local/share/weftext`。默认根目录缺失、为空或不是绝对路径时明确失败，不回退临时目录；Core 仍会核实际后端能力，目录选择不表示非 Windows 写后端已支持。MSIX 保全声明覆盖整个准确 Weftext-MVP 范围，实际升级／卸载保证仍须同一候选验收。
+显式 `--data-dir` 仍指定当前本机服务的 Core 持久状态。Windows 默认使用 `%LOCALAPPDATA%/Weftext-MVP/core`，私有宿主元数据使用独立的 `Weftext-MVP/host-state`；旧顶层 Core 不自动采用。macOS 目录选择为 `$HOME/Library/Application Support/Weftext`，Linux 为绝对 `$XDG_DATA_HOME/weftext` 或未设置该变量时的 `$HOME/.local/share/weftext`。默认根目录缺失、为空或不是绝对路径时明确失败，不回退临时目录；Core 仍会核实际后端能力，目录选择不表示非 Windows 写后端已支持。MSIX 保全声明准确覆盖 Weftext-MVP 范围与此应用拥有的 Weftext/Cache 浏览器数据根，不整体关闭 AppData 或注册表虚拟化。实际升级／卸载与原浏览器输入的连续性仍须同一候选验收，保持相同逻辑路径不能证明旧 MSIX 物理映射已保留。
 
 本机 WebView 使用按实际物理 profile 隔离的配置和保留的回环端口；端口被占用、原配置缺失或身份变化时明确拒绝，不自动换来源而藏起尚未进入 Core 的恢复输入。CLI `serve --port 0` 对已有 profile 表示复用该端口，首次才分配；Hosted Server 仍使用配置中的 public bind。GUI 外部链接才使用系统浏览器交接，交接失败或超时不等于页面已加载，也不自动重发。内部 worker 参数只接受各自一个固定角色，不能与用户启动模式混用；CLI `serve --root` 必须与 `--open` 同用。
 
