@@ -24,7 +24,7 @@ use crate::{
         Command,
         windows::{HostRequest, OwnerPipe},
     },
-    launch::ServeError,
+    launch::{LocalOriginDiagnostic, LocalOriginPhase, ServeError},
     local_client::{OwnerRole, ProfileLocator},
     local_service::{LocalService, LocalServiceOptions},
 };
@@ -76,7 +76,11 @@ struct ExistingOwner {
     reason: ExistingReason,
 }
 fn error(code: &'static str, diagnostic: &'static str) -> ServeError {
-    ServeError { code, diagnostic }
+    ServeError {
+        code,
+        diagnostic,
+        local_origin: None,
+    }
 }
 fn closing() -> io::Error {
     io::Error::other("The owner is already closing or the author surface cannot safely close")
@@ -451,9 +455,12 @@ async fn run_owner(
         )
     })?;
     let (listener, origin_guard, origin_profile) = crate::work::spawn_blocking(move || {
-        let listener =
-            crate::host_state::Root::qualify(false)?.bind_local(&origin_profile, requested_port)?;
-        Ok::<_, io::Error>((listener, origin_guard, origin_profile))
+        let listener = crate::host_state::Root::qualify(false)
+            .map_err(|error| {
+                LocalOriginDiagnostic::from_io(LocalOriginPhase::RootQualification, &error)
+            })?
+            .bind_local(&origin_profile, requested_port)?;
+        Ok::<_, LocalOriginDiagnostic>((listener, origin_guard, origin_profile))
     })
     .await
     .map_err(|_| {
@@ -462,17 +469,18 @@ async fn run_owner(
             "The original local origin reservation did not complete",
         )
     })?
-    .map_err(|_| {
-        error(
-            "localOriginUnavailable",
-            "The retained local origin is unavailable; no changed-origin fallback was used",
-        )
+    .map_err(|diagnostic| ServeError {
+        code: "localOriginUnavailable",
+        diagnostic: "The retained local origin is unavailable; no changed-origin fallback was used",
+        local_origin: Some(diagnostic),
     })?;
-    let listener = tokio::net::TcpListener::from_std(listener).map_err(|_| {
-        error(
-            "localOriginUnavailable",
-            "The retained local listener could not be adopted",
-        )
+    let listener = tokio::net::TcpListener::from_std(listener).map_err(|error| ServeError {
+        code: "localOriginUnavailable",
+        diagnostic: "The retained local listener could not be adopted",
+        local_origin: Some(LocalOriginDiagnostic::from_io(
+            LocalOriginPhase::ListenerAdopt,
+            &error,
+        )),
     })?;
     let options = LocalServiceOptions {
         data_dir: data,
@@ -731,7 +739,17 @@ async fn run_owner(
                                         match action {
                                             tray::Action::Library=>{if let Err(error)=activate(&state,&profile,&url,&mut desktop,Activation::Library,&continuation).await&& let Some(desktop)=&desktop{let _=desktop.feedback(&error);}}
                                             tray::Action::Capture=>{if let Err(error)=activate(&state,&profile,&url,&mut desktop,Activation::Capture,&continuation).await&& let Some(desktop)=&desktop{let _=desktop.feedback(&error);}}
-                                            tray::Action::Reminders=>{if activate(&state,&profile,&url,&mut desktop,Activation::Library,&continuation).await.is_ok(){let _=desktop.as_ref().unwrap().thread.sender.send(ui::Command::Post{kind:SurfaceKind::Library,message:serde_json::json!({"type":"open-reminders"}),activate:true});}}
+                                            tray::Action::Reminders=>{
+                                                let admitted=match activate(&state,&profile,&url,&mut desktop,Activation::Library,&continuation).await {
+                                                    Err(failure)=>Err(failure),
+                                                    Ok(())=>match desktop.as_ref().unwrap().thread.sender.post(SurfaceKind::Library,serde_json::json!({"type":"open-reminders"}),true).await {
+                                                        Ok(ui::PostAdmission::Accepted)=>Ok(()),
+                                                        Ok(ui::PostAdmission::Rejected)=>Err(error("nativeNavigationRejected","The native reminder navigation was not admitted")),
+                                                        Err(_)=>Err(error("nativeNavigationUnknown","The original native reminder navigation admission is unknown")),
+                                                    },
+                                                };
+                                                if let Err(failure)=admitted&&let Some(desktop)=&desktop {let _=desktop.feedback(&failure);}
+                                            }
                                             tray::Action::Exit=>{if !exit_requested {if desktop.as_ref().unwrap().thread.sender.send(ui::Command::BeginExit).is_err(){failure=Some(error("nativeFailed","The native close request was not delivered"));if desktop.as_ref().unwrap().thread.returned_without_exposed(){break;}}else{exit_requested=true;}}}
                                             action=>{if let Some(desktop)=desktop.as_mut()&& let Err(error)=update_preference(&state,&profile,desktop,action).await{let _=desktop.feedback(&error);}}
                                         }
@@ -1113,20 +1131,28 @@ async fn open_document(
             "The explicit document could not be registered",
         )
     })?;
-    desktop
+    // The Core Session already exists. Rejection/unknown admission must retain
+    // it and its original author state, without retrying or inventing retirement.
+    match desktop
         .thread
         .sender
-        .send(ui::Command::Post {
-            kind: SurfaceKind::Library,
-            message: serde_json::json!({"type":"open-document","document":value}),
-            activate: true,
-        })
-        .map_err(|_| {
-            error(
-                "documentDelivery",
-                "The explicit document delivery was not confirmed",
-            )
-        })
+        .post(
+            SurfaceKind::Library,
+            serde_json::json!({"type":"open-document","document":value}),
+            true,
+        )
+        .await
+    {
+        Ok(ui::PostAdmission::Accepted) => Ok(()),
+        Ok(ui::PostAdmission::Rejected) => Err(error(
+            "documentDeliveryRejected",
+            "The explicit document was not admitted to the original native surface",
+        )),
+        Err(_) => Err(error(
+            "documentDeliveryUnknown",
+            "The original explicit document admission is unknown",
+        )),
+    }
 }
 async fn open_capture_document(
     state: &crate::AppState,

@@ -14,7 +14,11 @@ use std::{
 use tokio::sync::{mpsc, watch};
 
 fn failed(code: &'static str, diagnostic: &'static str) -> ServeError {
-    ServeError { code, diagnostic }
+    ServeError {
+        code,
+        diagnostic,
+        local_origin: None,
+    }
 }
 
 pub(crate) async fn run(data_dir: PathBuf, config: PathBuf) -> Result<(), ServeError> {

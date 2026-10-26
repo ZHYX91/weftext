@@ -40,6 +40,8 @@ Shell 可以自行改变重定向或管道编码。特别是 Windows PowerShell 
 
 启动失败不输出 Ready；stderr 先输出一行经批准的固定诊断 `{"schemaVersion":1,"diagnostic":{"code":"...","message":"..."}}`，再输出标准错误行并返回 3，不回显配置内容、任意运行时错误字符串或凭据。
 
+本地 origin 启动失败若带有安全的类型化诊断，会在同一 `diagnostic` 对象内增加 `phase`、`ioKind` 和 `osCode`。`phase` 来自固定阶段枚举，`ioKind` 仅表示标准库 `io::ErrorKind` 判别，`osCode` 是可用的数值 OS 错误码，否则为 `null`；这些字段不包含底层错误的 Display、Debug、source 链、路径或凭据。未附此诊断时，原 `code`／`message` 记录保持不变；不会新增第三行，最终标准错误仍保留原 code 和退出码 3。阶段说明失败位置，不证明原操作未产生任何效果；没有这些字段的历史失败不能由后来的诊断补认为已知原因。
+
 以下示例中的 `C:\Notes` 是作者库，当前目录是外部工作目录，输出路径尚不存在。
 
 ```text

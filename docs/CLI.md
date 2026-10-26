@@ -40,6 +40,8 @@ Shells can transform redirected or piped bytes. Windows PowerShell 5.1 redirecti
 
 A failed start writes no Ready. Its approved static diagnostic is a stderr JSON line `{"schemaVersion":1,"diagnostic":{"code":"...","message":"..."}}`, followed by the standard error line and exit 3. Configuration contents, arbitrary runtime error strings and credentials are not echoed.
 
+When a local-origin startup failure carries a safe typed diagnostic, the same `diagnostic` object adds `phase`, `ioKind` and `osCode`. `phase` comes from a fixed stage enum; `ioKind` contains only the standard library's `io::ErrorKind` discriminant; `osCode` is a numeric OS error code when available, otherwise `null`. These fields contain no underlying error Display, Debug, source chain, paths or credentials. Without this diagnostic, the original `code`/`message` record stays unchanged. No third line is added, and the final standard error retains its original code and exit code 3. A stage identifies where failure occurred; it does not prove that the original operation had no effect. Later diagnostics cannot establish the cause of historical failures that lacked these fields.
+
 In these examples, `C:\Notes` is the author library, the current directory is external working storage, and output paths do not yet exist.
 
 ```text

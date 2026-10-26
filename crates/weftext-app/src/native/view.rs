@@ -2,7 +2,7 @@ use super::{
     events::{Event, Queue},
     window::WindowState,
 };
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, rc::Rc, time::Instant};
 use webview2_com::{
     Microsoft::Web::WebView2::Win32::*, NavigationCompletedEventHandler,
     NavigationStartingEventHandler, NewWindowRequestedEventHandler, ProcessFailedEventHandler,
@@ -110,6 +110,7 @@ struct InitialNavigation {
     policy: NavigationPolicy,
     started: Cell<bool>,
     pending: Cell<Option<u64>>,
+    succeeded_at: Cell<Option<Instant>>,
 }
 impl InitialNavigation {
     fn new(policy: NavigationPolicy) -> Self {
@@ -117,6 +118,7 @@ impl InitialNavigation {
             policy,
             started: Cell::new(false),
             pending: Cell::new(None),
+            succeeded_at: Cell::new(None),
         }
     }
     fn start(&self, address: &str, navigation_id: u64) -> bool {
@@ -126,11 +128,14 @@ impl InitialNavigation {
         self.pending.set(Some(navigation_id));
         true
     }
-    fn failed_completion(&self, navigation_id: u64, success: bool) -> bool {
+    fn failed_completion(&self, navigation_id: u64, success: bool, now: Instant) -> bool {
         if self.pending.get() != Some(navigation_id) {
             return false;
         }
         self.pending.set(None);
+        if success {
+            self.succeeded_at.set(Some(now));
+        }
         !success
     }
 }
@@ -142,6 +147,7 @@ pub(super) struct View {
     closed: bool,
     queue: Queue,
     pub policy: NavigationPolicy,
+    initial: Rc<InitialNavigation>,
 }
 
 // An OpenedDocument contains a 2 MiB source (up to 12 MiB after JSON escaping)
@@ -180,13 +186,15 @@ impl View {
                 return Err(error);
             }
         };
+        let initial = Rc::new(InitialNavigation::new(policy.clone()));
         let mut view = Self {
             controller,
             webview,
             tokens: Vec::new(),
             closed: false,
             queue: queue.clone(),
-            policy: policy.clone(),
+            policy,
+            initial: initial.clone(),
         };
         let settings = unsafe { view.webview.Settings()? };
         unsafe {
@@ -198,7 +206,6 @@ impl View {
                 .SetAreBrowserAcceleratorKeysEnabled(false)?;
             view.controller.SetIsVisible(false)?;
         }
-        let initial = Rc::new(InitialNavigation::new(policy));
         let starting = initial.clone();
         let callback = NavigationStartingEventHandler::create(Box::new(move |_, args| {
             let args = args.ok_or_else(|| Error::from(E_POINTER))?;
@@ -229,7 +236,7 @@ impl View {
                 args.NavigationId(&mut navigation_id)?;
                 args.IsSuccess(&mut success)?;
             }
-            if initial.failed_completion(navigation_id, success.as_bool()) {
+            if initial.failed_completion(navigation_id, success.as_bool(), Instant::now()) {
                 // Navigation errors (including a failed local response) need
                 // not crash a WebView process. Keep the existing exact-surface
                 // failure/author-retention path instead of waiting forever for
@@ -318,6 +325,9 @@ impl View {
         }
         Ok(view)
     }
+    pub fn initial_load_succeeded_at(&self) -> Option<Instant> {
+        self.initial.succeeded_at.get()
+    }
     pub fn post(&self, message: &serde_json::Value) -> Result<()> {
         let text = post_json(message)?;
         unsafe { self.webview.PostWebMessageAsJson(&HSTRING::from(text)) }
@@ -395,29 +405,34 @@ mod tests {
     fn admitted_initial_navigation_failure_is_reported_once() {
         let initial = initial_navigation();
         assert!(initial.start("http://127.0.0.1:47821/?native=library", 41));
-        assert!(initial.failed_completion(41, false));
-        assert!(!initial.failed_completion(41, false));
+        assert!(initial.failed_completion(41, false, Instant::now()));
+        assert!(!initial.failed_completion(41, false, Instant::now()));
+        assert!(initial.succeeded_at.get().is_none());
     }
 
     #[test]
     fn cancelled_other_navigation_cannot_erase_the_initial_failure() {
         let initial = initial_navigation();
         assert!(!initial.start("https://example.invalid/", 40));
-        assert!(!initial.failed_completion(40, false));
+        assert!(!initial.failed_completion(40, false, Instant::now()));
         assert!(initial.start("http://127.0.0.1:47821/?native=library", 41));
         assert!(!initial.start("http://127.0.0.1:47821/?native=library", 42));
-        assert!(!initial.failed_completion(42, false));
-        assert!(initial.failed_completion(41, false));
+        assert!(!initial.failed_completion(42, false, Instant::now()));
+        assert!(initial.failed_completion(41, false, Instant::now()));
     }
 
     #[test]
     fn successful_initial_load_is_not_failed_by_cancelled_reload_or_late_completion() {
         let initial = initial_navigation();
+        let loaded = Instant::now();
         assert!(initial.start("http://127.0.0.1:47821/?native=library", 41));
-        assert!(!initial.failed_completion(41, true));
+        assert!(!initial.failed_completion(41, true, loaded));
+        assert_eq!(initial.succeeded_at.get(), Some(loaded));
         assert!(!initial.start("http://127.0.0.1:47821/?native=library", 42));
-        assert!(!initial.failed_completion(42, false));
-        assert!(!initial.failed_completion(41, false));
+        assert!(!initial.failed_completion(42, false, Instant::now()));
+        assert!(!initial.failed_completion(41, false, Instant::now()));
+        assert!(!initial.failed_completion(41, true, loaded + std::time::Duration::from_secs(30)));
+        assert_eq!(initial.succeeded_at.get(), Some(loaded));
     }
 
     #[test]
@@ -428,9 +443,10 @@ mod tests {
         );
         assert!(library.start("http://127.0.0.1:47821/?native=library", 41));
         assert!(capture.start("http://127.0.0.1:47821/capture?native=capture", 52));
-        assert!(!library.failed_completion(52, false));
-        assert!(capture.failed_completion(52, false));
-        assert!(library.failed_completion(41, false));
+        assert!(!library.failed_completion(52, true, Instant::now()));
+        assert!(library.succeeded_at.get().is_none());
+        assert!(capture.failed_completion(52, false, Instant::now()));
+        assert!(library.failed_completion(41, false, Instant::now()));
     }
 
     #[test]

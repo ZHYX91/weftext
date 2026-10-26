@@ -16,6 +16,7 @@ fn main() -> std::process::ExitCode {
             weftext_app::launch::report_desktop_error(&weftext_app::launch::ServeError {
                 code: "runtimeStartFailed",
                 diagnostic: "The application runtime could not start",
+                local_origin: None,
             });
             return std::process::ExitCode::FAILURE;
         }

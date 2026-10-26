@@ -49,6 +49,31 @@ class Win32:
         self.check(self.k.QueryFullProcessImageNameW(handle, 0, image, ctypes.byref(size)))
         return {'pid': int(pid), 'created': created, 'image': str(Path(image.value).resolve())}
 
+    @staticmethod
+    def local_app_data():
+        # FOLDERID_LocalAppData; no environment-variable fallback or create flag.
+        folder_id = (ctypes.c_ubyte * 16).from_buffer_copy(
+            bytes.fromhex('8527b3f1ba6fcf4f9d557b8e7f157091'))
+        shell = ctypes.WinDLL('shell32.dll', winmode=0x800)
+        ole = ctypes.WinDLL('ole32.dll', winmode=0x800)
+        query = shell.SHGetKnownFolderPath
+        query.argtypes = [ctypes.c_void_p, wintypes.DWORD, wintypes.HANDLE,
+                          ctypes.POINTER(ctypes.c_void_p)]
+        query.restype = ctypes.c_long
+        free = ole.CoTaskMemFree
+        free.argtypes = [ctypes.c_void_p]
+        free.restype = None
+        value = ctypes.c_void_p()
+        result = query(ctypes.byref(folder_id), 0, None, ctypes.byref(value))
+        try:
+            if result < 0:
+                raise OSError(result, 'LocalAppData Known Folder lookup failed')
+            if not value.value:
+                raise OSError('LocalAppData Known Folder returned no path')
+            return Path(ctypes.wstring_at(value))
+        finally:
+            free(value)
+
     def open_owner(self, expected, executable):
         handle = self.k.OpenProcess(0x1000 | 0x100000, False, expected['pid'])
         self.check(handle)

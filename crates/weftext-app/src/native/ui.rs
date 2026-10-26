@@ -50,6 +50,7 @@ pub(super) enum Command {
         kind: SurfaceKind,
         message: serde_json::Value,
         activate: bool,
+        admission: PostAdmissionRequest,
     },
     ConfirmedPost {
         message: serde_json::Value,
@@ -122,6 +123,59 @@ pub(super) struct Sender {
     wake: Wake,
     terminal: Arc<Terminal>,
 }
+const POST_ADMISSION_TIMEOUT: Duration = Duration::from_secs(5);
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum PostAdmission {
+    Accepted,
+    Rejected,
+}
+pub(super) struct PostAdmissionRequest {
+    deadline: Instant,
+    completed: tokio::sync::oneshot::Sender<PostAdmission>,
+}
+impl PostAdmissionRequest {
+    fn reject(self) {
+        let _ = self.completed.send(PostAdmission::Rejected);
+    }
+}
+/// The real STA decision around a post/queue effect, not a browser adoption
+/// acknowledgement. A missing receipt leaves the original effect unknown.
+fn admit_post(
+    readiness: InitialReadiness,
+    admission: PostAdmissionRequest,
+    now: Instant,
+    deliver: impl FnOnce() -> Result<()>,
+) -> Result<()> {
+    if readiness.expired() || now >= admission.deadline || admission.completed.is_closed() {
+        admission.reject();
+        return Ok(());
+    }
+    deliver()?;
+    let _ = admission.completed.send(PostAdmission::Accepted);
+    Ok(())
+}
+#[derive(Debug, PartialEq, Eq)]
+enum CloseReplyAdmission {
+    Ignore,
+    Blocked,
+    Current,
+}
+fn admit_close_reply(
+    readiness: InitialReadiness,
+    gate: &Gate,
+    request: &Request,
+    pending_work: impl FnOnce() -> bool,
+) -> CloseReplyAdmission {
+    // Check the original attempt before inspecting work that could cancel all
+    // windows' closes. A stale reply has no authority over another attempt.
+    if readiness.expired() || !gate.owns_attempt(request) {
+        CloseReplyAdmission::Ignore
+    } else if pending_work() {
+        CloseReplyAdmission::Blocked
+    } else {
+        CloseReplyAdmission::Current
+    }
+}
 impl Sender {
     pub fn send(&self, command: Command) -> io::Result<()> {
         if !self.terminal.accepts_commands() {
@@ -135,6 +189,43 @@ impl Sender {
         })?;
         self.wake.notify();
         Ok(())
+    }
+    pub async fn post(
+        &self,
+        kind: SurfaceKind,
+        message: serde_json::Value,
+        activate: bool,
+    ) -> io::Result<PostAdmission> {
+        let (completed, received) = tokio::sync::oneshot::channel();
+        let deadline = Instant::now() + POST_ADMISSION_TIMEOUT;
+        if self
+            .send(Command::Post {
+                kind,
+                message,
+                activate,
+                admission: PostAdmissionRequest {
+                    deadline,
+                    completed,
+                },
+            })
+            .is_err()
+        {
+            // Terminal rejection and failed try_send both prove this command
+            // never entered the queue. Core-open state remains retained by the
+            // caller, but this UI admission is known to have been rejected.
+            return Ok(PostAdmission::Rejected);
+        }
+        match tokio::time::timeout_at(tokio::time::Instant::from_std(deadline), received).await {
+            Ok(Ok(admission)) => Ok(admission),
+            Ok(Err(_)) => Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "Native post admission is unknown",
+            )),
+            Err(_) => Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "Native post admission is unknown",
+            )),
+        }
     }
     /// Only the supervisor's final Core lease handoff may publish this result.
     /// Publication is retained even when a normal queue or OS signalling fails.
@@ -234,6 +325,102 @@ struct Surface {
     capture_requests: std::collections::BTreeSet<String>,
     confirmed_posts: BTreeMap<String, ConfirmedAction>,
     exposed: bool,
+    initial_readiness: InitialReadiness,
+}
+const INITIAL_READY_TIMEOUT: Duration = Duration::from_secs(60);
+
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+enum InitialReadiness {
+    #[default]
+    Pending,
+    Ready,
+    Expired,
+}
+#[derive(Debug, PartialEq, Eq)]
+enum InitialExpiry {
+    Retain,
+    DestroyUnowned,
+}
+/// Native ownership at the deadline, before any rejection or retirement can
+/// remove it. This is not a claim that bootstrap HTTP/Core work is absent.
+struct InitialOwnership<'a> {
+    exposed: bool,
+    sessions: &'a std::collections::BTreeSet<String>,
+    draft_calls: &'a std::collections::BTreeSet<String>,
+    after_ready: &'a [PendingPost],
+    confirmed_posts: &'a BTreeMap<String, ConfirmedAction>,
+    capture_delivery: Option<&'a CaptureDelivery>,
+}
+impl InitialReadiness {
+    fn expired(&self) -> bool {
+        *self == Self::Expired
+    }
+    fn expire(
+        &mut self,
+        gate: &mut Gate,
+        succeeded_at: Option<Instant>,
+        now: Instant,
+        ownership: InitialOwnership<'_>,
+    ) -> Option<InitialExpiry> {
+        if *self != Self::Pending
+            || !succeeded_at.is_some_and(|started| {
+                now.saturating_duration_since(started) >= INITIAL_READY_TIMEOUT
+            })
+        {
+            return None;
+        }
+        // Never clear an accepted delivery/session to make this decision true.
+        // A not-yet-bound Capture result must not later bind a replacement
+        // Library. Generic queued posts can also own opened Core documents.
+        let unowned = !ownership.exposed
+            && ownership.sessions.is_empty()
+            && ownership.draft_calls.is_empty()
+            && ownership.after_ready.is_empty()
+            && !ownership
+                .confirmed_posts
+                .values()
+                .any(|action| action.posted || !action.completed.is_closed())
+            && !ownership.capture_delivery.is_some_and(|delivery| {
+                gate.kind == SurfaceKind::Library || delivery.blocks(&gate.id, &gate.epoch)
+            });
+        *self = Self::Expired;
+        gate.ready = false;
+        gate.cancel();
+        Some(if unowned {
+            InitialExpiry::DestroyUnowned
+        } else {
+            InitialExpiry::Retain
+        })
+    }
+    fn accept_ready(&mut self, gate: &mut Gate, kind: SurfaceKind) -> Result<bool> {
+        if kind != gate.kind || gate.ready {
+            return Err(failed());
+        }
+        if self.expired() {
+            return Ok(false);
+        }
+        *self = Self::Ready;
+        gate.ready = true;
+        Ok(true)
+    }
+    fn accept_failure(&self, gate: &Gate, kind: SurfaceKind) -> Result<bool> {
+        if kind != gate.kind {
+            return Err(failed());
+        }
+        // A later page failure cannot change a timeout's ownership decision.
+        Ok(!self.expired())
+    }
+    fn admit_confirmation(
+        &self,
+        completed: tokio::sync::oneshot::Sender<bool>,
+    ) -> Option<ConfirmedAction> {
+        if self.expired() {
+            let _ = completed.send(false);
+            None
+        } else {
+            ConfirmedAction::admit(completed)
+        }
+    }
 }
 struct ConfirmedAction {
     completed: tokio::sync::oneshot::Sender<bool>,
@@ -308,6 +495,52 @@ fn failed() -> Error {
     Error::from(E_FAIL)
 }
 impl Reducer {
+    fn expire_initial_surface(&mut self, key: u64, now: Instant) -> Result<()> {
+        if self.core_retirement.is_some()
+            || self.owner_lifetime.is_closing()
+            || !self.visibility.accepts_exposure()
+        {
+            return Ok(());
+        }
+        let Some(surface) = self.surfaces.get_mut(&key) else {
+            return Ok(());
+        };
+        let expiry = surface.initial_readiness.expire(
+            &mut surface.gate,
+            surface
+                .view
+                .as_ref()
+                .and_then(View::initial_load_succeeded_at),
+            now,
+            InitialOwnership {
+                exposed: surface.exposed,
+                sessions: &surface.sessions,
+                draft_calls: &surface.draft_calls,
+                after_ready: &surface.after_ready,
+                confirmed_posts: &surface.confirmed_posts,
+                capture_delivery: self.capture_delivery.as_ref(),
+            },
+        );
+        let Some(expiry) = expiry else {
+            return Ok(());
+        };
+        self.cancel_all()?;
+        self.notice(Notice::CloseBlocked)?;
+        self.native_notice
+            .show(&UiMessage::native_host_start_failed(), self.locale)?;
+        if expiry == InitialExpiry::DestroyUnowned {
+            // Only the never-exposed controller is disposable. No Core session
+            // is unregistered and no author close proof is synthesized here.
+            self.destroy_surface(key)?;
+        }
+        Ok(())
+    }
+    fn expire_initial_surfaces(&mut self, now: Instant) -> Result<()> {
+        for key in self.surfaces.keys().copied().collect::<Vec<_>>() {
+            self.expire_initial_surface(key, now)?;
+        }
+        Ok(())
+    }
     fn notice(&self, notice: Notice) -> Result<()> {
         self.notices.try_send(notice).map_err(|_| {
             self.wake.fail();
@@ -589,6 +822,11 @@ impl Reducer {
                 self.admission_epoch = admission_epoch;
                 let key = id(kind);
                 if let Some(surface) = self.surfaces.get_mut(&key) {
+                    if surface.initial_readiness.expired() {
+                        return self
+                            .native_notice
+                            .show(&UiMessage::native_host_start_failed(), self.locale);
+                    }
                     let request = surface.gate.current_request();
                     if surface.gate.reactivate()
                         && let Some(request) = request
@@ -623,6 +861,7 @@ impl Reducer {
                         capture_requests: Default::default(),
                         confirmed_posts: Default::default(),
                         exposed: false,
+                        initial_readiness: Default::default(),
                     },
                 );
                 self.begin_controller(key)?;
@@ -631,37 +870,44 @@ impl Reducer {
                 kind,
                 message,
                 activate,
+                admission,
             } => {
+                self.expire_initial_surface(id(kind), Instant::now())?;
                 let Some(surface) = self.surfaces.get_mut(&id(kind)) else {
-                    return Err(failed());
+                    admission.reject();
+                    return Ok(());
                 };
-                let message = surface.gate.bind_message(message).ok_or_else(failed)?;
-                if surface.gate.ready {
-                    surface.view.as_ref().ok_or_else(failed)?.post(&message)?;
-                    if activate {
-                        surface.window.show();
+                admit_post(surface.initial_readiness, admission, Instant::now(), || {
+                    let message = surface.gate.bind_message(message).ok_or_else(failed)?;
+                    if surface.gate.ready {
+                        surface.view.as_ref().ok_or_else(failed)?.post(&message)?;
+                        if activate {
+                            surface.window.show();
+                        }
+                    } else if surface.after_ready.len() < 64 {
+                        surface.after_ready.push(PendingPost {
+                            message,
+                            activate,
+                            delivery_id: None,
+                        });
+                    } else {
+                        return Err(failed());
                     }
-                } else if surface.after_ready.len() < 64 {
-                    surface.after_ready.push(PendingPost {
-                        message,
-                        activate,
-                        delivery_id: None,
-                    });
-                } else {
-                    return Err(failed());
-                }
+                    Ok(())
+                })?;
             }
             Command::ConfirmedPost {
                 mut message,
                 completed,
             } => {
+                self.expire_initial_surface(id(SurfaceKind::Library), Instant::now())?;
                 // This command may have waited in the main native queue past
                 // its original caller's deadline, before any surface was bound.
-                let Some(action) = ConfirmedAction::admit(completed) else {
+                let Some(surface) = self.surfaces.get_mut(&id(SurfaceKind::Library)) else {
+                    let _ = completed.send(false);
                     return Ok(());
                 };
-                let Some(surface) = self.surfaces.get_mut(&id(SurfaceKind::Library)) else {
-                    let _ = action.completed.send(false);
+                let Some(action) = surface.initial_readiness.admit_confirmation(completed) else {
                     return Ok(());
                 };
                 surface
@@ -669,6 +915,7 @@ impl Reducer {
                     .retain(|_, action| !action.completed.is_closed());
                 if self.global_exit
                     || self.fatal
+                    || surface.initial_readiness.expired()
                     || surface.gate.closing()
                     || surface.confirmed_posts.len() >= 16
                     || surface.after_ready.len() >= 64
@@ -942,7 +1189,12 @@ impl Reducer {
             }
             Event::Close(weak) => {
                 if let Some(key) = self.live_key(&weak) {
-                    self.begin_close(key)?;
+                    if self.surfaces[&key].initial_readiness.expired() {
+                        self.native_notice
+                            .show(&UiMessage::native_host_start_failed(), self.locale)?;
+                    } else {
+                        self.begin_close(key)?;
+                    }
                 }
             }
             Event::Resize(weak) => {
@@ -979,6 +1231,16 @@ impl Reducer {
                 {
                     return Err(failed());
                 }
+                // A queued Ready must not beat the same original deadline just
+                // because the pump has not reached its next periodic check.
+                self.expire_initial_surfaces(Instant::now())?;
+                let library_expired = self
+                    .surfaces
+                    .get(&id(SurfaceKind::Library))
+                    .is_some_and(|surface| surface.initial_readiness.expired());
+                let Some(surface) = self.surfaces.get_mut(&key) else {
+                    return Ok(());
+                };
                 let incoming: Message = match serde_json::from_str(&json) {
                     Ok(message) => message,
                     Err(_) => {
@@ -995,11 +1257,13 @@ impl Reducer {
                         surface_id,
                         surface_epoch,
                     } => {
-                        if surface.gate.owns_surface(
-                            SurfaceKind::Capture,
-                            &surface_id,
-                            &surface_epoch,
-                        ) {
+                        if !surface.initial_readiness.expired()
+                            && surface.gate.owns_surface(
+                                SurfaceKind::Capture,
+                                &surface_id,
+                                &surface_epoch,
+                            )
+                        {
                             self.begin_close(key)?;
                         }
                     }
@@ -1035,6 +1299,7 @@ impl Reducer {
                             return Ok(());
                         }
                         if !surface.gate.ready
+                            || library_expired
                             || surface.gate.closing()
                             || self.global_exit
                             || self.fatal
@@ -1096,10 +1361,27 @@ impl Reducer {
                             || !crate::broker::canonical_uuid(&request_id)
                             || !crate::broker::canonical_uuid(request.session_id())
                             || surface.draft_calls.len() >= 8
-                            || !surface.draft_calls.insert(request_id.clone())
+                            || surface.draft_calls.contains(&request_id)
                         {
                             return Err(failed());
                         }
+                        if surface.initial_readiness.expired() {
+                            let error = weftext_core::CoreError::new(
+                                "nativeSurfaceExpired",
+                                UiMessage::native_host_start_failed(),
+                            );
+                            surface
+                                .view
+                                .as_ref()
+                                .ok_or_else(failed)?
+                                .post(&serde_json::json!({
+                                    "type":"core-draft-result", "surfaceId":surface_id,
+                                    "surfaceEpoch":surface_epoch, "requestId":request_id,
+                                    "body":{"error":error}
+                                }))?;
+                            return Ok(());
+                        }
+                        surface.draft_calls.insert(request_id.clone());
                         let cancelled = surface.gate.current_request();
                         let invalidated = surface.gate.draft_call();
                         if invalidated {
@@ -1125,13 +1407,22 @@ impl Reducer {
                         if surface.gate.id != surface_id || surface.gate.epoch != surface_epoch {
                             return Err(failed());
                         }
+                        if surface.initial_readiness.expired() {
+                            return Ok(());
+                        }
                         surface.gate.ready = false;
                         self.cancel_all()?;
                         self.notice(Notice::CloseBlocked)?;
                     }
                     Message::SurfaceFailed { kind } => {
-                        if kind != surface.gate.kind {
-                            return Err(failed());
+                        if !surface
+                            .initial_readiness
+                            .accept_failure(&surface.gate, kind)?
+                        {
+                            // The original timeout already retained this
+                            // surface's ownership. A later failure cannot clear
+                            // its delivery/session and retroactively retire it.
+                            return Ok(());
                         }
                         let rejects_delivery =
                             self.capture_delivery.as_ref().is_some_and(|delivery| {
@@ -1156,10 +1447,12 @@ impl Reducer {
                         }
                     }
                     Message::SurfaceReady { kind } => {
-                        if kind != surface.gate.kind || surface.gate.ready {
-                            return Err(failed());
+                        if !surface
+                            .initial_readiness
+                            .accept_ready(&mut surface.gate, kind)?
+                        {
+                            return Ok(());
                         }
-                        surface.gate.ready = true;
                         let view = surface.view.as_ref().ok_or_else(failed)?;
                         view.post(&serde_json::json!({"type":"surface-bound","surfaceId":surface.gate.id,"surfaceEpoch":surface.gate.epoch}))?;
                         view.show()?;
@@ -1245,20 +1538,30 @@ impl Reducer {
                         surface_edit_revision,
                         proofs,
                     } => {
-                        if !surface.draft_calls.is_empty()
-                            || self.capture_delivery.as_ref().is_some_and(|delivery| {
-                                delivery.blocks(&surface.gate.id, &surface.gate.epoch)
-                            })
-                        {
-                            self.blocked()?;
-                            return Ok(());
-                        }
-                        if proofs.iter().any(|proof|matches!(proof,Proof::Document{session_id,..} if !surface.sessions.contains(session_id))){self.blocked()?;return Ok(())}
                         let request = Request {
                             surface_id,
                             surface_epoch,
                             close_attempt_id,
                         };
+                        match admit_close_reply(
+                            surface.initial_readiness,
+                            &surface.gate,
+                            &request,
+                            || {
+                                !surface.draft_calls.is_empty()
+                                    || self.capture_delivery.as_ref().is_some_and(|delivery| {
+                                        delivery.blocks(&surface.gate.id, &surface.gate.epoch)
+                                    })
+                            },
+                        ) {
+                            CloseReplyAdmission::Ignore => return Ok(()),
+                            CloseReplyAdmission::Blocked => {
+                                self.blocked()?;
+                                return Ok(());
+                            }
+                            CloseReplyAdmission::Current => {}
+                        }
+                        if proofs.iter().any(|proof|matches!(proof,Proof::Document{session_id,..} if !surface.sessions.contains(session_id))){self.blocked()?;return Ok(())}
                         if let Some(proofs) =
                             surface
                                 .gate
@@ -1279,19 +1582,29 @@ impl Reducer {
                         close_attempt_id,
                         surface_edit_revision,
                     } => {
-                        if !surface.draft_calls.is_empty()
-                            || self.capture_delivery.as_ref().is_some_and(|delivery| {
-                                delivery.blocks(&surface.gate.id, &surface.gate.epoch)
-                            })
-                        {
-                            self.blocked()?;
-                            return Ok(());
-                        }
                         let request = Request {
                             surface_id,
                             surface_epoch,
                             close_attempt_id,
                         };
+                        match admit_close_reply(
+                            surface.initial_readiness,
+                            &surface.gate,
+                            &request,
+                            || {
+                                !surface.draft_calls.is_empty()
+                                    || self.capture_delivery.as_ref().is_some_and(|delivery| {
+                                        delivery.blocks(&surface.gate.id, &surface.gate.epoch)
+                                    })
+                            },
+                        ) {
+                            CloseReplyAdmission::Ignore => return Ok(()),
+                            CloseReplyAdmission::Blocked => {
+                                self.blocked()?;
+                                return Ok(());
+                            }
+                            CloseReplyAdmission::Current => {}
+                        }
                         if let Some(proofs) = surface.gate.frozen(&request, surface_edit_revision) {
                             self.notice(Notice::Verify {
                                 kind: self.surfaces[&key].gate.kind,
@@ -1445,6 +1758,9 @@ fn run(
                 }
             }
         }
+        if reducer.expire_initial_surfaces(Instant::now()).is_err() {
+            reducer.fail();
+        }
         while let Some(event) = reducer.queue.pop() {
             if let Some(outcome) = terminal.outcome() {
                 reducer.terminal(outcome);
@@ -1528,6 +1844,539 @@ fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct InitialFixture {
+        gate: Gate,
+        readiness: InitialReadiness,
+        exposed: bool,
+        sessions: std::collections::BTreeSet<String>,
+        draft_calls: std::collections::BTreeSet<String>,
+        after_ready: Vec<PendingPost>,
+        confirmed_posts: BTreeMap<String, ConfirmedAction>,
+        delivery: Option<CaptureDelivery>,
+    }
+    impl InitialFixture {
+        fn new(kind: SurfaceKind) -> Self {
+            Self {
+                gate: Gate::new(kind),
+                readiness: Default::default(),
+                exposed: false,
+                sessions: Default::default(),
+                draft_calls: Default::default(),
+                after_ready: Default::default(),
+                confirmed_posts: Default::default(),
+                delivery: None,
+            }
+        }
+        fn expire(&mut self, loaded: Option<Instant>, now: Instant) -> Option<InitialExpiry> {
+            self.readiness.expire(
+                &mut self.gate,
+                loaded,
+                now,
+                InitialOwnership {
+                    exposed: self.exposed,
+                    sessions: &self.sessions,
+                    draft_calls: &self.draft_calls,
+                    after_ready: &self.after_ready,
+                    confirmed_posts: &self.confirmed_posts,
+                    capture_delivery: self.delivery.as_ref(),
+                },
+            )
+        }
+        fn ready(&mut self) -> bool {
+            let kind = self.gate.kind;
+            self.readiness.accept_ready(&mut self.gate, kind).unwrap()
+        }
+        fn delivery_from(&mut self, source: &Gate) {
+            self.delivery = CaptureDelivery::new(CaptureOpen {
+                surface_id: source.id.clone(),
+                surface_epoch: source.epoch.clone(),
+                request_id: uuid::Uuid::new_v4().to_string(),
+                draft_id: uuid::Uuid::new_v4().to_string(),
+                operation_id: uuid::Uuid::new_v4().to_string(),
+            });
+            assert!(self.delivery.is_some());
+        }
+    }
+
+    #[test]
+    fn initial_deadline_requires_successful_load_and_repeated_checks_do_not_extend_it() {
+        let loaded = Instant::now();
+        let mut surface = InitialFixture::new(SurfaceKind::Library);
+        assert_eq!(
+            surface.expire(None, loaded + Duration::from_secs(120)),
+            None
+        );
+        assert_eq!(
+            surface.expire(Some(loaded), loaded + Duration::from_secs(59)),
+            None
+        );
+        assert!(!surface.gate.reactivate());
+        assert_eq!(
+            surface.expire(Some(loaded), loaded + INITIAL_READY_TIMEOUT),
+            Some(InitialExpiry::DestroyUnowned)
+        );
+        assert!(!surface.ready());
+        assert!(
+            !surface
+                .readiness
+                .accept_failure(&surface.gate, SurfaceKind::Library)
+                .unwrap()
+        );
+        assert_eq!(
+            surface.expire(Some(loaded), loaded + Duration::from_secs(120)),
+            None
+        );
+        assert!(!surface.gate.ready);
+        assert!(surface.gate.begin().is_none());
+        assert!(surface.gate.proofs().is_empty());
+
+        // An explicit replacement owns a new incarnation and a fresh initial
+        // handshake; the old state never receives permission to revive.
+        let mut replacement = InitialFixture::new(SurfaceKind::Library);
+        assert_ne!(surface.gate.id, replacement.gate.id);
+        assert_ne!(surface.gate.epoch, replacement.gate.epoch);
+        assert!(replacement.ready());
+        assert!(!surface.ready());
+    }
+
+    #[test]
+    fn ready_before_completion_and_later_unready_keep_the_existing_ready_protocol() {
+        let loaded = Instant::now();
+        let mut surface = InitialFixture::new(SurfaceKind::Library);
+        assert!(surface.ready());
+        assert_eq!(
+            surface.expire(Some(loaded), loaded + Duration::from_secs(120)),
+            None
+        );
+        surface.gate.ready = false;
+        assert_eq!(
+            surface.expire(Some(loaded), loaded + Duration::from_secs(180)),
+            None
+        );
+        assert!(surface.ready());
+        assert!(
+            surface
+                .readiness
+                .accept_failure(&surface.gate, SurfaceKind::Library)
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn initial_timeout_retains_original_native_work_and_never_makes_a_close_proof() {
+        let loaded = Instant::now();
+        for owner in ["exposed", "session", "draft", "post", "confirmed", "posted"] {
+            let mut surface = InitialFixture::new(SurfaceKind::Library);
+            let identity = uuid::Uuid::new_v4().to_string();
+            let (completed, receiver) = tokio::sync::oneshot::channel();
+            match owner {
+                "exposed" => surface.exposed = true,
+                "session" => { surface.sessions.insert(identity.clone()); }
+                "draft" => { surface.draft_calls.insert(identity.clone()); }
+                "post" => surface.after_ready.push(PendingPost {
+                    message: serde_json::json!({"type":"open-document", "document":{"sessionId":identity}}),
+                    activate: true,
+                    delivery_id: None,
+                }),
+                "confirmed" | "posted" => { surface.confirmed_posts.insert(identity.clone(), ConfirmedAction {
+                    completed,
+                    posted: owner == "posted",
+                }); }
+                _ => unreachable!(),
+            }
+            // A posted effect remains owned even after its caller stops waiting.
+            let _receiver = if owner == "posted" {
+                drop(receiver);
+                None
+            } else {
+                Some(receiver)
+            };
+            surface.gate.ready = true;
+            let old_close = surface.gate.begin().unwrap();
+            assert_eq!(
+                surface.expire(Some(loaded), loaded + INITIAL_READY_TIMEOUT),
+                Some(InitialExpiry::Retain),
+                "{owner}"
+            );
+            assert!(!surface.ready(), "{owner}");
+            assert!(
+                !surface
+                    .readiness
+                    .accept_failure(&surface.gate, SurfaceKind::Library)
+                    .unwrap()
+            );
+            assert!(surface.gate.prepared(&old_close, 0, Vec::new()).is_none());
+            assert!(!surface.gate.final_verified(&old_close, 0));
+            assert!(surface.gate.proofs().is_empty());
+            match owner {
+                "session" => assert!(surface.sessions.contains(&identity)),
+                "draft" => assert!(surface.draft_calls.contains(&identity)),
+                "post" => assert_eq!(
+                    surface.after_ready[0].message["document"]["sessionId"],
+                    identity
+                ),
+                "confirmed" | "posted" => assert!(surface.confirmed_posts.contains_key(&identity)),
+                _ => {}
+            }
+            // Even after the original work settles, a later failure/tick must
+            // not retroactively turn the retained controller into a clean one.
+            surface.sessions.clear();
+            surface.draft_calls.clear();
+            surface.after_ready.clear();
+            surface.confirmed_posts.clear();
+            surface.exposed = false;
+            assert_eq!(
+                surface.expire(Some(loaded), loaded + Duration::from_secs(120)),
+                None
+            );
+            assert!(
+                !surface
+                    .readiness
+                    .accept_failure(&surface.gate, SurfaceKind::Library)
+                    .unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn initial_timeout_keeps_unbound_capture_delivery_on_the_original_surfaces() {
+        let loaded = Instant::now();
+        let source = Gate::new(SurfaceKind::Capture);
+        let mut library = InitialFixture::new(SurfaceKind::Library);
+        library.delivery_from(&source);
+        assert!(
+            !library
+                .delivery
+                .as_ref()
+                .unwrap()
+                .blocks(&library.gate.id, &library.gate.epoch)
+        );
+        assert_eq!(
+            library.expire(Some(loaded), loaded + INITIAL_READY_TIMEOUT),
+            Some(InitialExpiry::Retain)
+        );
+        let session = uuid::Uuid::new_v4().to_string();
+        assert!(library.delivery.as_mut().unwrap().bind(
+            &library.gate.id,
+            &library.gate.epoch,
+            &session
+        ));
+        library.sessions.insert(session.clone());
+        assert!(!library.ready());
+        assert!(
+            !library
+                .readiness
+                .accept_failure(&library.gate, SurfaceKind::Library)
+                .unwrap()
+        );
+        assert_eq!(
+            library.delivery.as_ref().unwrap().session_id(),
+            Some(session.as_str())
+        );
+
+        let mut capture = InitialFixture::new(SurfaceKind::Capture);
+        capture.delivery_from(&source);
+        capture.gate = source;
+        assert_eq!(
+            capture.expire(Some(loaded), loaded + INITIAL_READY_TIMEOUT),
+            Some(InitialExpiry::Retain)
+        );
+        let mut unrelated = InitialFixture::new(SurfaceKind::Capture);
+        unrelated.delivery = capture.delivery;
+        assert_eq!(
+            unrelated.expire(Some(loaded), loaded + INITIAL_READY_TIMEOUT),
+            Some(InitialExpiry::DestroyUnowned)
+        );
+    }
+
+    #[test]
+    fn cancelled_confirmation_keeps_its_actual_pending_post_at_initial_timeout() {
+        let loaded = Instant::now();
+        let mut surface = InitialFixture::new(SurfaceKind::Library);
+        let (completed, receiver) = tokio::sync::oneshot::channel();
+        drop(receiver);
+        let action_id = uuid::Uuid::new_v4().to_string();
+        surface.confirmed_posts.insert(
+            action_id.clone(),
+            ConfirmedAction {
+                completed,
+                posted: false,
+            },
+        );
+        surface.after_ready.push(PendingPost {
+            message: serde_json::json!({"type":"reminder-activation","actionId":action_id}),
+            activate: true,
+            delivery_id: None,
+        });
+        assert_eq!(
+            surface.expire(Some(loaded), loaded + INITIAL_READY_TIMEOUT),
+            Some(InitialExpiry::Retain)
+        );
+        assert_eq!(surface.after_ready.len(), 1);
+    }
+
+    #[test]
+    fn initial_deadline_is_applied_before_new_confirmation_admission() {
+        let loaded = Instant::now();
+        let mut surface = InitialFixture::new(SurfaceKind::Library);
+        surface.sessions.insert(uuid::Uuid::new_v4().to_string());
+        let (completed, mut result) = tokio::sync::oneshot::channel();
+        // Same production sequence as ConfirmedPost: advance the original
+        // deadline before admitting any newly queued confirmation.
+        assert_eq!(
+            surface.expire(Some(loaded), loaded + INITIAL_READY_TIMEOUT),
+            Some(InitialExpiry::Retain)
+        );
+        assert!(surface.readiness.admit_confirmation(completed).is_none());
+        assert!(!result.try_recv().unwrap());
+        assert!(surface.confirmed_posts.is_empty());
+        assert!(surface.after_ready.is_empty());
+        assert_eq!(surface.sessions.len(), 1);
+    }
+
+    #[test]
+    fn cancelled_close_replies_are_ignored_before_retained_work_can_block_another_window() {
+        let mut original = Gate::new(SurfaceKind::Capture);
+        original.ready = true;
+        let cancelled = original.begin().unwrap();
+        original.cancel();
+        let current = original.begin().unwrap();
+        let mut other = Gate::new(SurfaceKind::Library);
+        other.ready = true;
+        let other_close = other.begin().unwrap();
+
+        assert_eq!(
+            admit_close_reply(InitialReadiness::Ready, &original, &cancelled, || {
+                panic!("a stale reply must not inspect pending Draft/Capture work")
+            }),
+            CloseReplyAdmission::Ignore
+        );
+        assert!(original.owns_attempt(&current));
+        assert!(other.owns_attempt(&other_close));
+        assert_eq!(
+            admit_close_reply(InitialReadiness::Expired, &original, &current, || {
+                panic!("an expired surface cannot cancel another window's close")
+            }),
+            CloseReplyAdmission::Ignore
+        );
+        assert!(other.owns_attempt(&other_close));
+
+        let mut wrong_epoch = current.clone();
+        wrong_epoch.surface_epoch = uuid::Uuid::new_v4().to_string();
+        assert_eq!(
+            admit_close_reply(InitialReadiness::Ready, &original, &wrong_epoch, || {
+                panic!("another incarnation cannot inspect current work")
+            }),
+            CloseReplyAdmission::Ignore
+        );
+        assert!(original.owns_attempt(&current));
+        assert!(other.owns_attempt(&other_close));
+    }
+
+    #[test]
+    fn current_close_replies_still_require_their_original_work_to_be_drained() {
+        let mut gate = Gate::new(SurfaceKind::Library);
+        gate.ready = true;
+        let request = gate.begin().unwrap();
+        let inspected = std::cell::Cell::new(false);
+        assert_eq!(
+            admit_close_reply(InitialReadiness::Ready, &gate, &request, || {
+                inspected.set(true);
+                true
+            }),
+            CloseReplyAdmission::Blocked
+        );
+        assert!(inspected.get());
+        assert!(gate.owns_attempt(&request));
+        assert_eq!(
+            admit_close_reply(InitialReadiness::Ready, &gate, &request, || false),
+            CloseReplyAdmission::Current
+        );
+    }
+
+    fn post_sender() -> (Sender, Receiver<Command>) {
+        let (wake, _fault) = Wake::new().unwrap();
+        let (send, queued) = std::sync::mpsc::sync_channel(64);
+        (
+            Sender {
+                send,
+                wake,
+                terminal: Arc::new(Terminal::default()),
+            },
+            queued,
+        )
+    }
+
+    async fn enqueue_post<F: std::future::Future>(mut sent: std::pin::Pin<&mut F>) {
+        let initial =
+            std::future::poll_fn(|context| std::task::Poll::Ready(sent.as_mut().poll(context)))
+                .await;
+        assert!(initial.is_pending());
+    }
+
+    #[tokio::test]
+    async fn real_sender_known_prequeue_failures_are_rejected_without_an_unknown_receipt() {
+        let (sender, queued) = post_sender();
+        sender.terminal.stopped();
+        assert_eq!(
+            sender
+                .post(
+                    SurfaceKind::Library,
+                    serde_json::json!({"type":"open-reminders"}),
+                    true
+                )
+                .await
+                .unwrap(),
+            PostAdmission::Rejected
+        );
+        assert!(matches!(queued.try_recv(), Err(TryRecvError::Empty)));
+
+        let (sender, queued) = post_sender();
+        drop(queued);
+        assert_eq!(
+            sender
+                .post(
+                    SurfaceKind::Library,
+                    serde_json::json!({"type":"open-reminders"}),
+                    true
+                )
+                .await
+                .unwrap(),
+            PostAdmission::Rejected
+        );
+
+        let (sender, queued) = post_sender();
+        for _ in 0..64 {
+            sender.send(Command::CancelClose).unwrap();
+        }
+        assert_eq!(
+            sender
+                .post(
+                    SurfaceKind::Library,
+                    serde_json::json!({"type":"open-document","document":{"sessionId":"original"}}),
+                    true
+                )
+                .await
+                .unwrap(),
+            PostAdmission::Rejected
+        );
+        let retained = queued.try_iter().collect::<Vec<_>>();
+        assert_eq!(retained.len(), 64);
+        assert!(
+            retained
+                .iter()
+                .all(|command| matches!(command, Command::CancelClose))
+        );
+    }
+
+    #[tokio::test]
+    async fn real_sender_post_receipt_requires_the_sta_admission_effect() {
+        let (sender, queued) = post_sender();
+        let mut sent = Box::pin(sender.post(
+            SurfaceKind::Library,
+            serde_json::json!({"type":"open-document","document":{"sessionId":"original"}}),
+            true,
+        ));
+        enqueue_post(sent.as_mut()).await;
+        let Command::Post {
+            message, admission, ..
+        } = queued.try_recv().unwrap()
+        else {
+            panic!("expected Post");
+        };
+        let gate = Gate::new(SurfaceKind::Library);
+        let mut after_ready = Vec::new();
+        admit_post(InitialReadiness::Pending, admission, Instant::now(), || {
+            after_ready.push(PendingPost {
+                message: gate.bind_message(message).unwrap(),
+                activate: true,
+                delivery_id: None,
+            });
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(sent.await.unwrap(), PostAdmission::Accepted);
+        assert_eq!(after_ready[0].message["document"]["sessionId"], "original");
+        assert_eq!(after_ready[0].message["surfaceEpoch"], gate.epoch);
+        // Accepted here is a real queue admission; no browser adoption was run.
+        assert!(!gate.ready);
+    }
+
+    #[tokio::test]
+    async fn real_sender_rejects_expired_surface_or_original_deadline_before_posting() {
+        for expired_surface in [true, false] {
+            let (sender, queued) = post_sender();
+            let mut sent = Box::pin(sender.post(
+                SurfaceKind::Library,
+                serde_json::json!({"type":"open-reminders"}),
+                true,
+            ));
+            enqueue_post(sent.as_mut()).await;
+            let Command::Post { mut admission, .. } = queued.try_recv().unwrap() else {
+                panic!("expected Post");
+            };
+            let now = Instant::now();
+            let readiness = if expired_surface {
+                InitialReadiness::Expired
+            } else {
+                admission.deadline = now;
+                InitialReadiness::Pending
+            };
+            admit_post(readiness, admission, now, || {
+                panic!("rejected admission must not post or queue")
+            })
+            .unwrap();
+            assert_eq!(sent.await.unwrap(), PostAdmission::Rejected);
+        }
+    }
+
+    #[tokio::test]
+    async fn real_sender_cancelled_original_does_not_admit_its_late_queued_post() {
+        let (sender, queued) = post_sender();
+        let mut sent = Box::pin(sender.post(
+            SurfaceKind::Library,
+            serde_json::json!({"type":"open-document"}),
+            true,
+        ));
+        enqueue_post(sent.as_mut()).await;
+        let Command::Post { admission, .. } = queued.try_recv().unwrap() else {
+            panic!("expected Post");
+        };
+        drop(sent);
+        assert!(admission.completed.is_closed());
+        admit_post(InitialReadiness::Pending, admission, Instant::now(), || {
+            panic!("cancelled original must not post or queue")
+        })
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn real_sender_missing_receipt_retains_the_original_effect_as_unknown() {
+        let (sender, queued) = post_sender();
+        let mut sent = Box::pin(sender.post(
+            SurfaceKind::Library,
+            serde_json::json!({"type":"open-document"}),
+            true,
+        ));
+        enqueue_post(sent.as_mut()).await;
+        let Command::Post {
+            message, admission, ..
+        } = queued.try_recv().unwrap()
+        else {
+            panic!("expected Post");
+        };
+        let mut retained = Vec::new();
+        assert!(
+            admit_post(InitialReadiness::Pending, admission, Instant::now(), || {
+                retained.push(message);
+                Err(failed())
+            })
+            .is_err()
+        );
+        assert_eq!(sent.await.unwrap_err().kind(), io::ErrorKind::BrokenPipe);
+        assert_eq!(retained.len(), 1);
+    }
 
     #[test]
     fn notification_reply_requires_a_posted_action_on_the_original_library_incarnation() {

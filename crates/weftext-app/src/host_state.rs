@@ -1,6 +1,7 @@
 //! Mutable private activation routing, separate from immutable build artifacts
 //! and from every Core profile. It carries locators/identity metadata, never
 //! author input, bearer credentials, delivery outcomes or a second Core journal.
+use crate::launch::{LocalOriginDiagnostic, LocalOriginPhase};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
@@ -144,7 +145,9 @@ impl Root {
         // A publisher may rename its staged file between read_dir and metadata.
         // Qualification must inspect members under the same physical lock as
         // publication, not interpret that live transition as corrupt evidence.
-        drop(root.locked()?);
+        drop(root.locked().map_err(|error| {
+            LocalOriginDiagnostic::from_io(LocalOriginPhase::CatalogLock, &error).into_io()
+        })?);
         Ok(root)
     }
     fn inspect_members(&self) -> io::Result<()> {
@@ -402,11 +405,13 @@ impl Root {
         &self,
         profile: &weftext_core::QualifiedProfile,
         requested: u16,
-    ) -> io::Result<std::net::TcpListener> {
+    ) -> Result<std::net::TcpListener, LocalOriginDiagnostic> {
         self.bind_local_at(
             profile,
             requested,
-            &crate::host_paths::user_data_path(profile)?,
+            &crate::host_paths::user_data_path(profile).map_err(|error| {
+                LocalOriginDiagnostic::from_io(LocalOriginPhase::UserDataPath, &error)
+            })?,
         )
     }
     fn bind_local_at(
@@ -414,14 +419,23 @@ impl Root {
         profile: &weftext_core::QualifiedProfile,
         requested: u16,
         user_data: &Path,
-    ) -> io::Result<std::net::TcpListener> {
-        self.separate(profile)?;
-        let locator = std::fs::canonicalize(profile.path())?
+    ) -> Result<std::net::TcpListener, LocalOriginDiagnostic> {
+        use LocalOriginPhase as Phase;
+        let diagnostic = LocalOriginDiagnostic::from_io;
+        self.separate(profile)
+            .map_err(|error| diagnostic(Phase::ProfileSeparation, &error))?;
+        let locator = std::fs::canonicalize(profile.path())
+            .map_err(|error| diagnostic(Phase::ProfileCanonicalize, &error))?
             .to_str()
-            .ok_or_else(invalid)?
+            .ok_or_else(|| diagnostic(Phase::ProfileCanonicalize, &invalid()))?
             .to_owned();
-        let mut locked = self.locked()?;
-        let mut catalog = locked.read()?.unwrap_or_else(Catalog::empty);
+        let mut locked = self
+            .locked()
+            .map_err(|error| diagnostic(Phase::CatalogLock, &error))?;
+        let mut catalog = locked
+            .read()
+            .map_err(|error| diagnostic(Phase::CatalogRead, &error))?
+            .unwrap_or_else(Catalog::empty);
         let identity = profile.physical_identity();
         let found = catalog
             .origins
@@ -432,29 +446,41 @@ impl Root {
         let retained_user_data = match weftext_core::qualify_existing_profile(user_data) {
             Ok(qualified) => Some(qualified),
             Err(error) if error.code == "missing" => None,
-            Err(error) => return Err(io::Error::other(error)),
+            Err(error) => {
+                return Err(diagnostic(
+                    Phase::BrowserDataQualification,
+                    &io::Error::other(error),
+                ));
+            }
         };
         if found.is_none() && retained_user_data.is_some() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "The original browser data remains but its retained local origin is missing",
+            return Err(diagnostic(
+                Phase::OriginMetadataMissing,
+                &io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "The original browser data remains but its retained local origin is missing",
+                ),
             ));
         }
         if catalog.origins.iter().any(|origin| {
             origin.physical_identity != identity && same_locator(&origin.locator, &locator)
         }) {
-            return Err(invalid());
+            return Err(diagnostic(Phase::LocatorConflict, &invalid()));
         }
         let listener = if let Some(index) = found {
             let origin = &catalog.origins[index];
             if requested != 0 && requested != origin.port {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "This physical profile already has a different retained local origin",
+                return Err(diagnostic(
+                    Phase::RetainedPortMismatch,
+                    &io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "This physical profile already has a different retained local origin",
+                    ),
                 ));
             }
             // Occupied/unknown does not change origin or discover an owner.
-            std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, origin.port))?
+            std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, origin.port))
+                .map_err(|error| diagnostic(Phase::RetainedBind, &error))?
         } else {
             if requested != 0
                 && catalog
@@ -462,13 +488,17 @@ impl Root {
                     .iter()
                     .any(|origin| origin.port == requested)
             {
-                return Err(invalid());
+                return Err(diagnostic(Phase::RequestedPortReserved, &invalid()));
             }
             let mut selected = None;
             for _ in 0..32 {
                 let candidate =
-                    std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, requested))?;
-                let port = candidate.local_addr()?.port();
+                    std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, requested))
+                        .map_err(|error| diagnostic(Phase::CandidateBind, &error))?;
+                let port = candidate
+                    .local_addr()
+                    .map_err(|error| diagnostic(Phase::CandidateAddress, &error))?
+                    .port();
                 if !catalog.origins.iter().any(|origin| origin.port == port) {
                     selected = Some(candidate);
                     break;
@@ -476,9 +506,12 @@ impl Root {
                 // First-start ephemeral collision, before router/author use.
                 drop(candidate);
             }
-            selected.ok_or_else(invalid)?
+            selected.ok_or_else(|| diagnostic(Phase::CandidateExhausted, &invalid()))?
         };
-        let port = listener.local_addr()?.port();
+        let port = listener
+            .local_addr()
+            .map_err(|error| diagnostic(Phase::ListenerAddress, &error))?
+            .port();
         let changed = if let Some(index) = found {
             let old = &mut catalog.origins[index];
             if old.locator == locator {
@@ -496,10 +529,17 @@ impl Root {
             true
         };
         if changed {
-            catalog.revision = catalog.revision.checked_add(1).ok_or_else(invalid)?;
-            locked.publish(&catalog)?;
+            catalog.revision = catalog
+                .revision
+                .checked_add(1)
+                .ok_or_else(|| diagnostic(Phase::CatalogRevision, &invalid()))?;
+            locked
+                .publish(&catalog)
+                .map_err(|error| diagnostic(Phase::CatalogPublish, &error))?;
         }
-        listener.set_nonblocking(true)?;
+        listener
+            .set_nonblocking(true)
+            .map_err(|error| diagnostic(Phase::ListenerNonblocking, &error))?;
         Ok(listener)
     }
 }
@@ -767,7 +807,7 @@ mod tests {
         root: &Root,
         profile: &weftext_core::QualifiedProfile,
         port: u16,
-    ) -> io::Result<std::net::TcpListener> {
+    ) -> Result<std::net::TcpListener, LocalOriginDiagnostic> {
         root.bind_local_at(
             profile,
             port,
@@ -808,13 +848,25 @@ mod tests {
         let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
         let listener = bind(&root, &profile, 0).unwrap();
         let original = bytes(&root);
-        assert!(bind(&root, &profile, 0).is_err());
+        let occupied = serde_json::to_value(bind(&root, &profile, 0).unwrap_err()).unwrap();
+        assert_eq!(occupied["phase"], "retainedBind");
+        let os_code = i32::try_from(occupied["osCode"].as_i64().unwrap()).unwrap();
+        assert_eq!(
+            occupied["ioKind"],
+            format!("{:?}", io::Error::from_raw_os_error(os_code).kind())
+        );
+        assert_eq!(bytes(&root), original);
         let different = if listener.local_addr().unwrap().port() == 1 {
             2
         } else {
             1
         };
-        assert!(bind(&root, &profile, different).is_err());
+        assert_eq!(
+            serde_json::to_value(bind(&root, &profile, different).unwrap_err()).unwrap(),
+            serde_json::json!({
+                "phase": "retainedPortMismatch", "ioKind": "InvalidInput", "osCode": null
+            })
+        );
         assert_eq!(bytes(&root), original);
     }
 
@@ -858,7 +910,10 @@ mod tests {
         drop(bind(&root, &profile, 0).unwrap());
         let bad = b"{\"schemaVersion\":1,\"revision\":1,\"origins\":[],\"unexpected\":true}";
         std::fs::write(root.profile.path().join(LEAF), bad).unwrap();
-        assert!(bind(&root, &profile, 0).is_err());
+        assert_eq!(
+            serde_json::to_value(bind(&root, &profile, 0).unwrap_err()).unwrap()["phase"],
+            "catalogRead"
+        );
         assert_eq!(bytes(&root), bad);
     }
 
@@ -886,7 +941,12 @@ mod tests {
         let user_data = profile.path().with_extension("test-webview2");
         std::fs::create_dir(&user_data).unwrap();
         std::fs::write(user_data.join("retained-input"), b"original input").unwrap();
-        assert!(bind(&root, &profile, 0).is_err());
+        assert_eq!(
+            serde_json::to_value(bind(&root, &profile, 0).unwrap_err()).unwrap(),
+            serde_json::json!({
+                "phase": "originMetadataMissing", "ioKind": "InvalidData", "osCode": null
+            })
+        );
         assert!(!root.profile.path().join(LEAF).exists());
         assert_eq!(
             std::fs::read(user_data.join("retained-input")).unwrap(),
@@ -907,7 +967,10 @@ mod tests {
             .join(format!(".host-routing.{}.pending", uuid::Uuid::new_v4()));
         let partial = b"retained incomplete publication";
         std::fs::write(&pending, partial).unwrap();
-        assert!(bind(&root, &profile, 0).is_err());
+        assert_eq!(
+            serde_json::to_value(bind(&root, &profile, 0).unwrap_err()).unwrap()["phase"],
+            "catalogLock"
+        );
         assert_eq!(bytes(&root), original);
         assert_eq!(std::fs::read(pending).unwrap(), partial);
     }
@@ -1022,9 +1085,17 @@ mod tests {
         let partial = b"original unconfirmed publication";
         std::fs::write(&pending, partial).unwrap();
         drop(locked);
+        let failure = Root::at(path, false).err().unwrap();
+        assert_eq!(failure.kind(), io::ErrorKind::InvalidData);
         assert_eq!(
-            Root::at(path, false).err().unwrap().kind(),
-            io::ErrorKind::InvalidData
+            serde_json::to_value(LocalOriginDiagnostic::from_io(
+                LocalOriginPhase::RootQualification,
+                &failure,
+            ))
+            .unwrap(),
+            serde_json::json!({
+                "phase": "catalogLock", "ioKind": "InvalidData", "osCode": null
+            })
         );
         assert_eq!(bytes(&root), original);
         assert_eq!(std::fs::read(pending).unwrap(), partial);
