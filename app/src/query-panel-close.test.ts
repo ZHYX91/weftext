@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { createHash } from "node:crypto";
 import { QueryPanel } from "./query-panel";
 import { ProposalCloseGuard } from "./proposal-close-guard";
-import type { NativeValue, SchemaField } from "./native-value-form";
+import type { DocumentBasis, NativeValue, SchemaField } from "./native-value-form";
 import type { QueryRow } from "./query-panel";
 
 function owner() {
@@ -55,6 +56,12 @@ interface InlineOwner {
     applyInlineDraft(row: QueryRow, field: SchemaField, key: string, draft: InlineDraft): Promise<void>;
 }
 const inlineField: SchemaField = { id: "field", key: "amount", shape: { kind: "scalar", semantic: "int" }, nullable: false };
+const sourceDigest = (source: string): string => createHash("sha256").update(source, "utf8").digest("hex");
+function projectionResponse(basis: DocumentBasis) {
+    return { serial: basis.serial, sourceHash: sourceDigest(basis.source), schemaRevision: null, schemaHash: sourceDigest("schema"), readOnly: false,
+        projection: { qualification: "qualified", id: null, types: [], resolvedTypes: [], unknownFields: [], diagnostics: [], budgetExhausted: false,
+            fields: [{ fieldId: "field", key: "amount", cell: { state: "value", value: { kind: "int", value: "0" } }, sourceRange: null, raw: null, writable: true, required: false, unbound: [] }] } };
+}
 
 for (const stage of ["transport", "delivery"] as const) {
     for (const edit of ["typed", "invalidRaw", "equalBytes", "replacement"] as const) {
@@ -92,10 +99,10 @@ test("Query inline delivery consumes only the unchanged submitted draft", async 
     assert.equal(inlineDrafts.size, 0); assert.doesNotThrow(() => panel.assertCloseReady());
 });
 
-for (const stage of ["data/edit", "applyPatch"] as const) test(`Query real ${stage} delivery preserves a later invalid raw producer cut`, async () => {
+for (const stage of ["data/edit", "applyPatch"] as const) test(`Query real ${stage} delivery accepts replacement characters and emoji while preserving a later invalid raw producer cut`, async () => {
     const { panel, inlineDrafts } = owner(), port = panel as unknown as InlineOwner;
     const draft: InlineDraft = { value: { kind: "int", value: "1" }, raw: {}, binding: "binding", revision: 1 };
-    const basis = { root: "/library", path: "note.typ", sessionId: "session", source: "source", serial: 1, baseId: "base" };
+    const basis: DocumentBasis = { inputId: "original-input", root: "/library", path: "note.typ", sessionId: "session", source: "source \ufffd \ud83d\ude00", serial: 1, baseId: "base" };
     const edit = deferred(), editReached = deferred(), delivery = deferred(), deliveryReached = deferred();
     let delivered = false;
     const failures: unknown[] = [];
@@ -103,8 +110,7 @@ for (const stage of ["data/edit", "applyPatch"] as const) test(`Query real ${sta
     Object.assign(panel, { root: basis.root, resultPlan: null, result: null, confirmChange: async () => true, host: {
         getDocument: () => basis, openDocument: async () => {}, notify(value: unknown, error: boolean) { if (error) failures.push(value); },
         async request(route: string) {
-            if (route === "/api/data/project") return { qualification: "qualified", id: null, types: [], resolvedTypes: [], unknownFields: [], diagnostics: [], budgetExhausted: false,
-                fields: [{ fieldId: "field", key: "amount", cell: { state: "value", value: { kind: "int", value: "0" } }, sourceRange: null, raw: null, writable: true, required: false, unbound: [] }] };
+            if (route === "/api/data/project") return projectionResponse(basis);
             assert.equal(route, "/api/data/edit"); editReached.resolve(); await edit.promise; return { from: 0, to: 0, text: "applied" };
         },
         async applyPatch() { deliveryReached.resolve(); await delivery.promise; delivered = true; },
@@ -119,3 +125,87 @@ for (const stage of ["data/edit", "applyPatch"] as const) test(`Query real ${sta
     assert.deepEqual(inlineDrafts.get("row").raw, { integer: "-" });
     assert.equal(panel.freezeForClose(), false);
 });
+
+for (const stage of ["projection", "confirmation"] as const) for (const changed of ["document", "inputIdentity"] as const) {
+    test(`Query real ${stage} ignores a changed ${changed} and preserves later invalid raw input`, async () => {
+        const { panel, inlineDrafts } = owner(), port = panel as unknown as InlineOwner;
+        const draft: InlineDraft = { value: { kind: "int", value: "1" }, raw: {}, binding: "binding", revision: 1 };
+        const basis: DocumentBasis = { inputId: "original-input", root: "/library", path: "note.typ", sessionId: "session", source: "source", serial: 1, baseId: "base" };
+        let current = { ...basis }, edits = 0, deliveries = 0, confirmations = 0;
+        const pending = deferred(), reached = deferred();
+        inlineDrafts.set("row", draft);
+        Object.assign(panel, { root: basis.root, resultPlan: null, result: null,
+            async confirmChange() { confirmations++; if (stage === "confirmation") { reached.resolve(); await pending.promise; } return true; },
+            host: {
+                getDocument: () => current, openDocument: async () => {}, notify() {},
+                async request(route: string) {
+                    if (route === "/api/data/project") {
+                        if (stage === "projection") { reached.resolve(); await pending.promise; }
+                        return projectionResponse(basis);
+                    }
+                    assert.equal(route, "/api/data/edit"); edits++; return { from: 0, to: 0, text: "applied" };
+                },
+                async applyPatch() { deliveries++; },
+            } });
+        const applying = port.applyInlineDraft({ key: "row", path: basis.path, lifecycle: "live", readOnly: false, cells: {} }, inlineField, "row", draft);
+        await reached.promise;
+        port.retainInlineDraft("row", draft, undefined, { integer: "-" });
+        if (changed === "document") current = { ...basis, path: "other.typ", source: "other source", sessionId: "other-session", inputId: "other-input" };
+        else current.inputId = "same-bytes-new-input";
+        pending.resolve(); await applying;
+        assert.equal(confirmations, stage === "confirmation" ? 1 : 0);
+        assert.equal(edits, 0); assert.equal(deliveries, 0);
+        assert.equal(inlineDrafts.get("row"), draft); assert.deepEqual(draft.raw, { integer: "-" });
+        assert.equal(panel.freezeForClose(), false);
+    });
+}
+
+for (const mismatch of ["serial", "sourceHash"] as const) test(`Query real projection rejects mismatched ${mismatch} before confirmation or editing`, async () => {
+    const { panel, inlineDrafts } = owner(), port = panel as unknown as InlineOwner;
+    const draft: InlineDraft = { value: { kind: "int", value: "1" }, raw: { integer: "-" }, binding: "binding", revision: 1 };
+    const basis: DocumentBasis = { inputId: "original-input", root: "/library", path: "note.typ", sessionId: "session", source: "source", serial: 1, baseId: "base" };
+    const response = projectionResponse(basis);
+    if (mismatch === "serial") response.serial++;
+    else response.sourceHash = sourceDigest("other source");
+    let confirmations = 0, edits = 0, deliveries = 0;
+    inlineDrafts.set("row", draft);
+    Object.assign(panel, { root: basis.root, resultPlan: null, result: null, confirmChange: async () => { confirmations++; return true; }, host: {
+        getDocument: () => basis, openDocument: async () => {}, notify() {},
+        async request(route: string) {
+            if (route === "/api/data/project") return response;
+            assert.equal(route, "/api/data/edit"); edits++; return { from: 0, to: 0, text: "applied" };
+        },
+        async applyPatch() { deliveries++; },
+    } });
+    await port.applyInlineDraft({ key: "row", path: basis.path, lifecycle: "live", readOnly: false, cells: {} }, inlineField, "row", draft);
+    assert.equal(confirmations, 0); assert.equal(edits, 0); assert.equal(deliveries, 0);
+    assert.equal(inlineDrafts.get("row"), draft); assert.deepEqual(draft.raw, { integer: "-" });
+    assert.equal(panel.freezeForClose(), false);
+});
+
+for (const [kind, source] of [["high", "source\ud800"], ["low", "source\udc00"]] as const) {
+    test(`Query real projection rejects an unpaired ${kind} surrogate before any project request and retains the original input`, async () => {
+        const { panel, inlineDrafts } = owner(), port = panel as unknown as InlineOwner;
+        const draft: InlineDraft = { value: { kind: "int", value: "1" }, raw: { integer: "-" }, binding: "binding", revision: 1 };
+        const basis: DocumentBasis = { inputId: "original-input", root: "/library", path: "note.typ", sessionId: "session", source, serial: 1, baseId: "base" };
+        // A successful response for replacement text must never qualify the original
+        // unpaired UTF16 input, even though an encoder would produce the same hash.
+        const replacement = projectionResponse({ ...basis, source: "source\ufffd" });
+        let projectReads = 0, confirmations = 0, edits = 0, deliveries = 0;
+        inlineDrafts.set("row", draft);
+        Object.assign(panel, { root: basis.root, resultPlan: null, result: null, confirmChange: async () => { confirmations++; return true; }, host: {
+            getDocument: () => basis, openDocument: async () => {}, notify() {},
+            async request(route: string) {
+                if (route === "/api/data/project") { projectReads++; return replacement; }
+                assert.equal(route, "/api/data/edit"); edits++; return { from: 0, to: 0, text: "applied" };
+            },
+            async applyPatch() { deliveries++; },
+        } });
+        await port.applyInlineDraft({ key: "row", path: basis.path, lifecycle: "live", readOnly: false, cells: {} }, inlineField, "row", draft);
+        assert.equal(projectReads, 0); assert.equal(confirmations, 0); assert.equal(edits, 0); assert.equal(deliveries, 0);
+        assert.equal(basis.source, source); assert.equal(basis.inputId, "original-input");
+        assert.equal(inlineDrafts.get("row"), draft); assert.deepEqual(draft.raw, { integer: "-" });
+        assert.deepEqual(draft.value, { kind: "int", value: "1" });
+        assert.equal(panel.freezeForClose(), false);
+    });
+}

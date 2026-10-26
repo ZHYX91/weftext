@@ -7,7 +7,8 @@ import type { OpenedDocument } from "./types";
 import { apiErrorUiText, decodeApiErrorBody, type ApiErrorBody } from "./api-error";
 export * from "./native-value-form";
 import { uiDisplayParameter, message as uiMessage, displayMessage, setUiText, setUiAttr, uiTextValue, joinUiText, errorUiText, UiError, type UiText } from "./ui-locale";
-import { decodeProjection, type Cell, type NoteProjection } from "./data-projection";
+import { type Cell, type NoteProjection } from "./data-projection";
+import { readNoteProjection, sameProjectionInput } from "./data-projection-read";
 export { decodeProjection, decodeCell, type Cell, type FieldProjection, type NoteProjection } from "./data-projection";
 import { descriptionUiText, coreDescriptionUiText } from "./ui-diagnostics";
 import { submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
@@ -106,8 +107,10 @@ export class DataPanel {
     }
     private async refreshOwned(): Promise<void> {
         this.rememberInputs();
-        const basis = this.host.getDocument();
+        const selected = this.host.getDocument();
+        const basis = selected && { ...selected };
         const generation = ++this.generation;
+        const current = () => generation === this.generation && !!basis && sameProjectionInput(this.host.getDocument(), basis);
         const identity = (doc: DocumentBasis) => JSON.stringify([doc.workspaceId, doc.nodeId ?? doc.path]);
         if (!basis) {
             if (this.basis)
@@ -131,19 +134,14 @@ export class DataPanel {
         this.basis = { ...basis };
         this.element.setAttribute("aria-busy", "true");
         try {
-            const schemaResult = await this.host.request<DataSchema | {
-                schema: DataSchema;
-            }>("/api/data/schema", { root: basis.root });
-            const schema = "schema" in schemaResult ? schemaResult.schema : schemaResult;
-            const projectionResult = await this.host.request<NoteProjection | {
-                projection: NoteProjection;
-            }>("/api/data/project", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial });
-            const projection = decodeProjection(projectionResult);
-            if (generation !== this.generation || this.host.getDocument()?.source !== basis.source || this.host.getDocument()?.sessionId !== basis.sessionId || this.host.getDocument()?.serial !== basis.serial)
+            const schemaResult = await this.host.request<SchemaRead>("/api/data/schema", { root: basis.root });
+            if (!current()) return;
+            const projection = await readNoteProjection(this.host.request.bind(this.host), basis, schemaResult);
+            if (!current())
                 return;
-            this.schema = schema;
+            this.schema = schemaResult.schema;
             this.projection = { ...projection, readOnly: projection.readOnly || this.host.canEdit?.() === false };
-            this.schemaRead = "schema" in schemaResult ? schemaResult as SchemaRead : null;
+            this.schemaRead = schemaResult;
             try {
                 this.pinned = new Set(JSON.parse(localStorage.getItem(`weftext-fields:${basis.workspaceId ?? basis.root}`) ?? "[]") as string[]);
             }
@@ -159,7 +157,7 @@ export class DataPanel {
                 await loadFormReferences(this.host, basis.root, this.references, this.element, () => !this.closeGuard.frozen && generation === this.generation && this.referencesRoot === basis.root);
         }
         catch (error) {
-            if (generation === this.generation) {
+            if (current()) {
                 const discard = this.discardAllButton(() => discard.remove());
                 this.element.replaceChildren(ui("h2", "", uiMessage("dataPanel.title")), ui("p", "data-warning", error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse")), action(uiMessage("dataPanel.retryRead"), () => this.refresh()), discard);
                 this.reminderDevice.retire();

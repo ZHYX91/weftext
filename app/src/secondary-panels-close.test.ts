@@ -4,6 +4,8 @@ import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import ts from "typescript";
 import { ProposalCloseGuard } from "./proposal-close-guard";
+import { createHash } from "node:crypto";
+import * as projectionRead from "./data-projection-read";
 import * as locale from "./ui-locale";
 import * as recognition from "./recognition-state";
 
@@ -16,7 +18,7 @@ function prototype(file: string, name: string): object {
     const exports: Record<string, { prototype: object }> = {};
     runInNewContext(result.outputText, {
         exports, setTimeout, clearTimeout, URL,
-        require: (id: string) => id === "./proposal-close-guard" ? { ProposalCloseGuard }
+        require: (id: string) => id === "./data-projection-read" ? projectionRead : id === "./proposal-close-guard" ? { ProposalCloseGuard }
             : id === "./ui-locale" ? { ...locale, setUiText: () => {}, disposeUiTree: () => {} }
                 : id === "./recognition-state" ? recognition : {},
     });
@@ -29,12 +31,57 @@ const dialog = () => ({ open: false, showModal() { this.open = true; }, close() 
 function outputOwner() {
     return Object.assign(Object.create(outputPrototype), {
         closeGuard: new ProposalCloseGuard(), dialog: dialog(), discarded: false,
+        fieldReadGeneration: 0, fields: [],
         outputEdited: false, importEdited: false, deliveredImport: false, uploadedImport: null,
         output: { busy: false, uncertain: null, prepared: null, received: false, basis: { root: "owned" } },
         exchange: { busy: false, uncertain: null, input: null, receipt: null },
         unregisterClose() {}, onDiscard() {}, report() {},
     });
 }
+
+const outputBasis = { inputId: "frozen-input", sessionId: "frozen-session", source: "original 中文", serial: 1, baseId: "frozen-base", root: "library", path: "original.typ" };
+function projectionWire(key = "status") {
+    return { projection: { qualification: "qualified", id: null, types: ["task"], resolvedTypes: ["tasks/task"],
+        fields: [{ fieldId: `tasks/${key}`, key, cell: { state: "value", value: { kind: "text", value: "open" } }, sourceRange: null, raw: null, writable: true, required: false, unbound: [] }],
+        unknownFields: [], diagnostics: [], budgetExhausted: false },
+        serial: outputBasis.serial, sourceHash: createHash("sha256").update(outputBasis.source).digest("hex"),
+        schemaRevision: null, schemaHash: "a".repeat(64), readOnly: false };
+}
+
+test("output field reads use the frozen source after navigation and preserve later mapping input", async () => {
+    const owner = outputOwner();
+    let finish!: (value: unknown) => void, draws = 0;
+    const pending = new Promise<unknown>(resolve => { finish = resolve; });
+    owner.output.basis = Object.freeze({ ...outputBasis });
+    const bindings = [{ slot: "original-slot", key: "original-field" }];
+    owner.output.draft = { bindings };
+    owner.drawBindings = () => { draws++; };
+    owner.host = { getDocument() { throw new Error("A frozen output must not follow the active document"); }, async request(route: string, body: unknown) {
+        assert.equal(route, "/api/data/project");
+        assert.deepEqual(body, { sessionId: outputBasis.sessionId, source: outputBasis.source, serial: outputBasis.serial });
+        return pending;
+    } };
+    const reading = owner.loadFields();
+    bindings[0].key = "later-user-selection";
+    finish(projectionWire()); await reading;
+    assert.equal(owner.fields[0].key, "status"); assert.equal(draws, 1);
+    assert.equal(owner.output.draft.bindings, bindings); assert.equal(bindings[0].key, "later-user-selection");
+    assert.equal(owner.closeGuard.freeze(false), true);
+});
+
+for (const lateFailure of [false, true]) test(`an older output field ${lateFailure ? "failure" : "response"} cannot replace the latest fields or mapping`, async () => {
+    const owner = outputOwner();
+    let finish!: (value: unknown) => void, calls = 0, draws = 0;
+    const pending = new Promise<unknown>(resolve => { finish = resolve; });
+    owner.output.basis = Object.freeze({ ...outputBasis }); owner.output.draft = { bindings: [{ slot: "retained", key: "keep" }] };
+    owner.drawBindings = () => { draws++; };
+    owner.host = { async request() { return ++calls === 1 ? pending : projectionWire("newer"); } };
+    const oldRead = owner.loadFields(); await owner.loadFields();
+    finish(lateFailure ? { ...projectionWire(), sourceHash: "b".repeat(64) } : projectionWire("older"));
+    await oldRead;
+    assert.equal(owner.fields[0].key, "newer"); assert.equal(draws, 1);
+    assert.equal(owner.output.draft.bindings[0].key, "keep"); assert.equal(owner.closeGuard.freeze(false), true);
+});
 
 test("hidden output/import proposals and unknown operations reject close and cancel cannot erase unknown", () => {
     const owner = outputOwner();

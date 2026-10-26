@@ -69,10 +69,11 @@ test("minimal patch joining preserves Chinese, emoji and untouched source bytes"
   assert.throws(() => decodeSourcePatch({ patches: [{ from: fromA, to: fromB + 1, text: "x" }, { from: fromB, to: fromB + 1, text: "y" }] }, source));
 });
 
-test("projection adapter unwraps only the real projection", () => {
+test("projection domain parser accepts only the real raw projection", () => {
   const projection = { qualification: "qualified", id:null, types: [], resolvedTypes:[], fields: [], unknownFields: [], diagnostics: [],budgetExhausted:false };
-  assert.deepEqual(decodeProjection({ projection }), projection);
-  assert.equal(decodeProjection({ projection, readOnly: true }).readOnly, true);
+  assert.deepEqual(decodeProjection(projection), projection);
+  assert.throws(() => decodeProjection({ projection }));
+  assert.throws(() => decodeProjection({ projection, readOnly: true }));
 });
 
 test("typed reference facets keep reference and literal tag branches distinct", () => {

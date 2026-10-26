@@ -4,7 +4,8 @@ import { registerNativeProposalOwner } from "./native-proposal-owners";
 import { joinUiText } from "./ui-locale";
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
-import { action, decodeProjection, diagnosticText, fieldNames, formatNativeValue, ui, type NoteProjection, type PanelHost } from "./data-panel";
+import { action, diagnosticText, fieldNames, formatNativeValue, ui, type PanelHost } from "./data-panel";
+import { readNoteProjection } from "./data-projection-read";
 import { bibliographyConflictCount, decodeBibliographyInspection, ExchangeController, OutputController, OutputReadGate, type BibliographyInspection, type DocxImportAnalysis, type ExchangeFormat, type ExchangeReceipt, type ExportFormat, type EmbeddedQuerySelection, type ExportStylePolicy, type FrozenQuery, type LegacyCapabilities, type OutputBinding, type OutputFile, type TemplateInspection } from "./export-state";
 import { descriptionUiText } from "./ui-diagnostics";
 import { decodeLegacyCapabilities, decodeTemplateInspection, exportErrorUiText, legacyMetadataUiText, officeLossUiText, officePreviewFacts, officePreviewNotices, type LegacyMetadata, type OfficeLoss, type OfficePreview } from "./office-wire";
@@ -184,6 +185,7 @@ class OutputDialog {
         key: string;
         label: UiText;
     }[] = [];
+    private fieldReadGeneration = 0;
     private readingTemplate = false;
     private templateError = false;
     private readingImport = false;
@@ -419,17 +421,18 @@ class OutputDialog {
     }
     private async loadFields(): Promise<void> {
         const endCloseWork = this.closeGuard.begin();
+        const generation = ++this.fieldReadGeneration;
+        const current = () => generation === this.fieldReadGeneration && !this.discarded && !this.closeGuard.frozen;
         try {
             try {
                 const basis = this.output.basis;
-                const result = await this.host.request<NoteProjection | {
-                    projection: NoteProjection;
-                }>("/api/data/project", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial });
-                this.fields = decodeProjection(result).fields.map(field => ({ key: field.key, label: () => `${uiTextValue(fieldNames[field.key] ?? field.key)}（${uiTextValue(field.key)}）` }));
+                const projection = await readNoteProjection(this.host.request.bind(this.host), basis);
+                if (!current()) return;
+                this.fields = projection.fields.map(field => ({ key: field.key, label: () => `${uiTextValue(fieldNames[field.key] ?? field.key)}（${uiTextValue(field.key)}）` }));
                 this.drawBindings();
             }
             catch {
-                setUiText(this.templateNote, uiMessage("export.notePropertiesUnreadable"));
+                if (current()) setUiText(this.templateNote, uiMessage("export.notePropertiesUnreadable"));
             }
         } finally { endCloseWork(); }
     }

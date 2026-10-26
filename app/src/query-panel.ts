@@ -1,4 +1,5 @@
 import { ProposalCloseGuard } from "./proposal-close-guard";
+import { readNoteProjection, sameProjectionInput } from "./data-projection-read";
 import { joinUiText } from "./ui-locale";
 import { apiErrorUiText, decodeApiErrorBody, type ApiErrorBody } from "./api-error";
 import type { UiMessage } from "./ui-locale";
@@ -8,7 +9,7 @@ import { uiDisplayParameter } from "./ui-locale";
 import { displayMessage } from "./ui-locale";
 import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
-import { action, cellLabels, decodeProjection, decodeSourcePatch, diagnosticText, fieldNames, formatNativeValue, nativeMember, nativeFormControls, QuickCapture, resolveShape, scalarFromInput, typeNames, ui, unionVariant, valueEditor, loadTagFormReferences, type FormReferences, type Cell, type DataSchema, type DocumentBasis, type NativeValue, type NoteProjection, type PanelHost, type Shape, type SourcePatch, type SchemaField } from "./data-panel";
+import { action, cellLabels, decodeSourcePatch, diagnosticText, fieldNames, formatNativeValue, nativeMember, nativeFormControls, QuickCapture, resolveShape, scalarFromInput, typeNames, ui, unionVariant, valueEditor, loadTagFormReferences, type FormReferences, type Cell, type DataSchema, type DocumentBasis, type NativeValue, type PanelHost, type Shape, type SourcePatch, type SchemaField } from "./data-panel";
 import { mountListThumbnail, type ListPreview } from "./list-thumbnail";
 import type { OpenedDocument } from "./types";
 import type { FrozenQuery } from "./export-state";
@@ -2919,17 +2920,19 @@ export class QueryPanel {
                 const target = row.entityKey ? await this.openStrong(row.entityKey) : { path: row.path, nodeId: undefined };
                 if (!row.entityKey)
                     await this.host.openDocument(target.path, this.root ?? undefined);
-                const basis = this.host.getDocument();
-                if (!basis || (target.nodeId ? basis.nodeId !== target.nodeId : basis.path !== target.path))
+                const selected = this.host.getDocument();
+                if (!selected || (target.nodeId ? selected.nodeId !== target.nodeId : selected.path !== target.path))
                     throw new UiError(message("queryEdit.documentIdentityMismatch"));
-                const projection = decodeProjection(await this.host.request<NoteProjection | {
-                    projection: NoteProjection;
-                }>("/api/data/project", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial }));
+                const basis = { ...selected }, generation = this.generation;
+                const current = () => generation === this.generation && this.host.canEdit?.() !== false && sameProjectionInput(this.host.getDocument(), basis);
+                const projection = await readNoteProjection(this.host.request.bind(this.host), basis);
+                if (!current()) throw new UiError(message("queryEdit.documentIdentityMismatch"));
                 const projected = projection.fields.find(field => field.key === key);
-                if (!projected?.writable || projected.cell.state !== "value" || !expectedFieldId || projected.fieldId !== expectedFieldId)
+                if (projection.readOnly || !projected?.writable || projected.cell.state !== "value" || !expectedFieldId || projected.fieldId !== expectedFieldId)
                     throw new UiError(message("queryEdit.fieldIdentityChanged"));
                 if (!await this.confirmChange(key, projected.cell.value, value))
                     return;
+                if (!current()) throw new UiError(message("queryEdit.documentIdentityMismatch"));
                 const result = await this.host.request<SourcePatch | {
                     edit: SourcePatch;
                 } | {

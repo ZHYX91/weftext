@@ -16,9 +16,19 @@ export interface NoteProjection {
     unknownFields:{key:string;raw:string;range?:{from:number;to:number};value?:NativeValue|null}[];
     diagnostics:readonly ErrorDescription[];budgetExhausted:boolean;readOnly?:boolean;
 }
+export interface ProjectionResponse {
+    readonly projection: NoteProjection;
+    readonly serial: number;
+    readonly sourceHash: string;
+    readonly schemaRevision: string|null;
+    readonly schemaHash: string;
+    readonly readOnly: boolean;
+}
 const object = (value:unknown): Record<string,unknown>|undefined => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string,unknown> : undefined;
 const strings = (value:unknown): value is string[] => Array.isArray(value) && value.every(item=>typeof item === "string");
 const range = (value:unknown): value is {from:number;to:number} => { const item=object(value); return !!item && exactKeys(item,["from","to"]) && Number.isSafeInteger(item.from) && Number.isSafeInteger(item.to) && (item.from as number)>=0 && (item.to as number)>=(item.from as number); };
+const hash = (value:unknown): value is string => typeof value === "string" && /^[0-9a-f]{64}$/.test(value);
+function invalidProjection(): never { throw new UiError(message("error.invalidResponse")); }
 
 export function decodeCell(value:unknown): Cell|undefined {
     const item=object(value); if(!item) return;
@@ -35,16 +45,12 @@ export function decodeCell(value:unknown): Cell|undefined {
     }
 }
 
+/** Decode the Data domain value. Transport metadata belongs to its route's response. */
 export function decodeProjection(value:unknown): NoteProjection {
-    const fail = ():never => {throw new UiError(message("error.invalidResponse"));};
-    let item=object(value); if(!item) return fail();
-    let readOnly: boolean|undefined;
-    if(Object.hasOwn(item,"projection")) {
-        if(!exactKeys(item,["projection"],["readOnly"]) || Object.hasOwn(item,"readOnly") && typeof item.readOnly !== "boolean") return fail();
-        readOnly=item.readOnly as boolean|undefined; item=object(item.projection); if(!item) return fail();
-    }
+    const fail = invalidProjection;
+    const item=object(value); if(!item) return fail();
     const diagnostics=decodeErrorDescriptions(item.diagnostics);
-    if(!exactKeys(item,["qualification","id","types","resolvedTypes","fields","unknownFields","diagnostics","budgetExhausted"],["readOnly"]) || typeof item.qualification !== "string" || item.id !== null && typeof item.id !== "string" || !strings(item.types) || !strings(item.resolvedTypes) || !Array.isArray(item.fields) || !Array.isArray(item.unknownFields) || !diagnostics || typeof item.budgetExhausted !== "boolean" || Object.hasOwn(item,"readOnly") && typeof item.readOnly !== "boolean") return fail();
+    if(!exactKeys(item,["qualification","id","types","resolvedTypes","fields","unknownFields","diagnostics","budgetExhausted"]) || typeof item.qualification !== "string" || item.id !== null && typeof item.id !== "string" || !strings(item.types) || !strings(item.resolvedTypes) || !Array.isArray(item.fields) || !Array.isArray(item.unknownFields) || !diagnostics || typeof item.budgetExhausted !== "boolean") return fail();
     const fields:FieldProjection[]=[];
     for(const value of item.fields) {
         const field=object(value),cell=field && decodeCell(field.cell);
@@ -57,5 +63,18 @@ export function decodeProjection(value:unknown): NoteProjection {
         if(!field || !exactKeys(field,["key","raw","range","value"]) || typeof field.key !== "string" || typeof field.raw !== "string" || !range(field.range) || native===undefined) return fail();
         unknownFields.push({key:field.key,raw:field.raw,range:field.range,value:native});
     }
-    return {qualification:item.qualification,id:item.id as string|null,types:[...item.types],resolvedTypes:[...item.resolvedTypes],fields,unknownFields,diagnostics,budgetExhausted:item.budgetExhausted, ...(readOnly !== undefined || typeof item.readOnly === "boolean" ? {readOnly:readOnly === true || item.readOnly === true} : {})};
+    return {qualification:item.qualification,id:item.id as string|null,types:[...item.types],resolvedTypes:[...item.resolvedTypes],fields,unknownFields,diagnostics,budgetExhausted:item.budgetExhausted};
+}
+
+/** The local /api/data/project response retains the exact snapshot and schema
+ * metadata for the caller to bind before consuming the projection. */
+export function decodeProjectionResponse(value:unknown): ProjectionResponse {
+    const item=object(value);
+    if(!item || !exactKeys(item,["projection","serial","sourceHash","schemaRevision","schemaHash","readOnly"])
+        || typeof item.serial !== "number" || !Number.isSafeInteger(item.serial) || item.serial < 0
+        || !hash(item.sourceHash) || !hash(item.schemaHash)
+        || item.schemaRevision !== null && typeof item.schemaRevision !== "string"
+        || typeof item.readOnly !== "boolean") return invalidProjection();
+    return {projection:decodeProjection(item.projection),serial:item.serial,sourceHash:item.sourceHash,
+        schemaRevision:item.schemaRevision as string|null,schemaHash:item.schemaHash,readOnly:item.readOnly};
 }

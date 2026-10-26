@@ -91,7 +91,9 @@ export function joinUiText(values: readonly UiText[], separator = ""): UiText {
     const captured = [...values];
     return () => captured.map(value => uiTextValue(value)).join(separator);
 }
-function scalarText(value: string): boolean {
+/** Exact UTF-8 inputs must already consist of Unicode scalar values. Never
+ * repair author text here: unmatched UTF-16 code units remain in their owner. */
+export function isUnicodeScalarText(value: string): boolean {
     for (let index = 0; index < value.length; index++) {
         const unit = value.charCodeAt(index);
         if (unit >= 0xd800 && unit <= 0xdbff) {
@@ -122,7 +124,7 @@ export function parseUiMessage(value: unknown): UiMessage | undefined {
         return;
     for (const [name, type] of Object.entries(expected)) {
         const item = params[name];
-        if (type === "text" ? typeof item !== "string" || !scalarText(item) : type === "integer" ? typeof item !== "number" || !Number.isSafeInteger(item) : typeof item !== "number" || !Number.isFinite(item))
+        if (type === "text" ? typeof item !== "string" || !isUnicodeScalarText(item) : type === "integer" ? typeof item !== "number" || !Number.isSafeInteger(item) : typeof item !== "number" || !Number.isFinite(item))
             return;
     }
     const parsed = { key, params: Object.freeze({ ...params }) };
