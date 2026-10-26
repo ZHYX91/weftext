@@ -200,6 +200,8 @@ def check(artifacts=None, groups=None):
     def scripts():
         checked(sys.executable, 'scripts/test_cargo_cache.py', '--fixture-root', check_root / 'cargo-inputs')
         checked(sys.executable, 'scripts/test_windows_package.py')
+        checked(sys.executable, 'scripts/test_prepare_windows_package.py')
+        checked(sys.executable, 'scripts/test_ci_windows_package.py')
         checked(sys.executable, 'scripts/test_build_receipt.py')
         checked(sys.executable, 'scripts/test_mvp_entry.py')
         checked(sys.executable, 'scripts/test_cli_contract_support.py')

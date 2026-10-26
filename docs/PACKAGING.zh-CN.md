@@ -24,6 +24,8 @@ python scripts/mvp.py package --release --windows-sdk "C:\Program Files (x86)\Wi
 
 示例材料／linker 路径需替换为本次准确输入。打包显式使用该实际 x64 MSVC linker，并要求离线 VC 版本不早于其真实文件版本。构建及依赖获取仍需已有 Node／Rust 工具链；生成阶段不下载、运行安装器、签名、安装或改信任／注册表。没有跳过角色、许可、锁或离线签名检查的开关。
 
+CI 可用 `python scripts/prepare_windows_package.py --materials ABSOLUTE_NEW_DIRECTORY --output ABSOLUTE_NEW_JSON` 准备输入。独立获取步骤仅请求锁中的官方最终 URL，约束长度和读取，核准确 SHA-256 与原许可，再执行相同 cache-only 签名资格。每轮新建路径；失败保留部分原件与请求记录，不采用旧下载或自动重试。它选择本机已安装的 x64 SDK 工具与真实文件版本不晚于锁定 VC Runtime 的最新已装 x64 MSVC linker，记录工具摘要、路径及显式编译环境；没有兼容工具就失败，不安装新 toolset、不执行安装器、不改变锁、信任或验收阈值。规范 `package` 仍自行冻结并重新核定全部输入。
+
 ## 共同合同与材料
 
 [`host-contract.json`](../packaging/windows/host-contract.json) 是原生宿主和清单的单一身份／路径／激活配置：Win11 x64、最低 build22000；本地包身份 `Weftext.Desktop`、Publisher `CN=Weftext`、AppId `Weftext`。Publisher 是本地签名 Subject 的要求，不是已取得证书或系统信任的声明。`persistentRelativeRoot` 为 `%LOCALAPPDATA%/Weftext-MVP` 保全范围，`coreRelativePath=core` 指向默认 Core，`hostStateRelativePath=host-state` 指向此 OS 用户的私有宿主元数据。两个目录必须独立，显式 Core 也不得等于、包含或被 host-state 包含；通知路由目录不成为第二个 Core。旧顶层 Core 原件不自动采用，需保留并显式导入／一次性转换，不保留双路径兼容。cache／WebView UDF 仍位于范围外的 `Weftext/Cache`。清单排除整个准确 Weftext-MVP 保全范围，覆盖这两个子目录；拒绝任意 KnownFolder、上层目录或路径穿越，不会整体关闭 AppData／注册表虚拟化。

@@ -39,7 +39,7 @@ cargo test --locked -p weftext-app --message-format=json-render-diagnostics -- -
 
 Windows `build`／完整 `check` 在固定双角色批次旁生成 `build-input-receipt.json`。`check --artifacts ABSOLUTE_RECEIPT` 只复用这批产物字节，所选检查每次重新执行，不读取旧 PASS。回执严格绑定同一检出／target／profile、完整公开源码与前端、双角色和原 catalog、实际顶层 Rust／Cargo／Node／npm 与所列明确构建配置；源码中的脚本、文档或 fixture 变化也要求新批次。每组边界及最终重新核输入；源根改变、缺失或未完成回执、非法路径、角色／字节／配置不一致均拒绝。资格观察要求外部 Cargo home、明确工具／SDK 路径及工具搜索目录为绝对路径；Cargo 配置中的自定义工具须以直接环境覆盖明确选择，未解析的 include、条件 linker 与 `[env]` 工具选择均拒绝，不猜测实际工具。它不证明所有隐式 SDK、系统库及传递依赖相同，也不证明可重现构建或整版验收。`package` 拒绝分组和外部回执，继续在固定源码副本执行原完整检查与打包。
 
-Windows CI 通过同一产品入口构建一次，再以独立进程和该次回执执行完整检查；保留这批双角色、catalog、原回执、实际 checkout commit／tree／run 身份及该次检查限定的控制／CLI 原件。下载后核原件与源码对应关系，再执行所需运行时验收；不得改写 CI 回执的源根或重签成另一检出的本地构建。CI 日志与产物可用于失败诊断，上传成功不等于检查通过。
+Windows CI 先构建优化的检出批次，以独立进程核该次准确回执与 CLI；随后对新固定源码批次调用原规范 `package --release`，执行全部 source／scripts／frontend／格式／Clippy／Core／App／CLI 与 40 个 HTTP 检查，保留真实容量用例及原五秒期限。这样不重复两轮完整检查；前一 smoke 批次不为打包批次背书。两个构建共用显式 x64 target 与编译缓存。只有完整打包成功，才提供同批对应的 ZIP／MSIX、PACKAGE 和 BUILD；原回执／catalog、checkout／run 身份与控制／CLI 原件仍绑定各自实际批次及固定源码，失败 SDK 输出保留为未核定原件。材料获取见 [PACKAGING](PACKAGING.zh-CN.md)，不签名、改信任、安装或发布；下载后不得改写 CI 回执源根冒本地构建。上传成功不等于检查通过。
 
 CLI 合同入口保留业务用例与唯一报告，Win32／ConPTY、受控 relay、安全失败摘要及纯传输夹具分别放在支持模块。2048 个确定性 token 的 DOCX 夹具仍经过真实转换、多块下载和完整摘要／内容断言，不以模拟产物代替。并发输入测试在真实冻结捕获后确认原宿主的新 worker，再执行原修改并核特定后置拒绝和严格事件先后；不能用初始捕获失败、任意 409 或 worker 失败冒充撤权／依赖重验通过。
 
@@ -55,7 +55,7 @@ CLI 合同入口保留业务用例与唯一报告，Win32／ConPTY、受控 rela
 
 受控 Linux 编译传输另须在 Linux 上执行既有 `cargo test --locked -p weftext-worker-broker` 及 `cargo test --locked -p weftext-app compiler_worker -- --test-threads=1`。Windows 执行仅覆盖共用严格帧／回执校验，不覆盖 Linux socket、取消、匿名管道取消或终局状态映射。显式运行的 `scripts/test_linux_worker_broker.py` 要求已独立审查的 root 所有部署，不得替换为无约束进程或省略失败的内核条件。宣称产品集成前，须对 broker 准确批准的产品映像执行托管渲染／编辑／引用授权及原操作回归。
 
-Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 作业使用 Python 3.11 调用同一入口的 `check --group frontend`，按锁文件安装依赖并运行 TypeScript 测试、类型检查和 Vite 构建；Windows 作业使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，执行现有 `python scripts/mvp.py check`。该入口只构建一次，再检查字体、Rust 格式／Clippy／测试和实际程序的本地、托管与同步 HTTP 场景。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不执行发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
+Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 使用 Python 3.11 调用同一 `check --group frontend`，按锁执行 TypeScript 测试、类型检查和 Vite 构建；Windows 使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，执行上述独立进程回执 smoke 与一次完整规范 release 打包。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
 
 Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust 与 40 个 HTTP 脚本。CLI 合同先于较长的 Rust 检查运行；失败时立即输出有界、脱敏的原异常和本用例近期子进程／relay 诊断，并标明本轮新建的结果目录与产物目录，避免把缓存中的旧结果当成当前通过。产品操作和各用例本身的截止时间保持不变。
 
