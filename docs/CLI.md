@@ -42,6 +42,8 @@ A failed start writes no Ready. Its approved static diagnostic is a stderr JSON 
 
 When a local-origin startup failure carries a safe typed diagnostic, the same `diagnostic` object adds `phase`, `ioKind` and `osCode`. `phase` comes from a fixed stage enum; `ioKind` contains only the standard library's `io::ErrorKind` discriminant; `osCode` is a numeric OS error code when available, otherwise `null`. These fields contain no underlying error Display, Debug, source chain, paths or credentials. Without this diagnostic, the original `code`/`message` record stays unchanged. No third line is added, and the final standard error retains its original code and exit code 3. A stage identifies where failure occurred; it does not prove that the original operation had no effect. Later diagnostics cannot establish the cause of historical failures that lacked these fields.
 
+The local-origin catalog retains at most 4096 records. At capacity, a new origin is rejected with `originCapacity` before binding a candidate port. Existing retained origins still attempt their original ports; capacity or occupancy does not change them. A new origin selects at most `N + 1` candidates, where `N` is the number of retained ports in the catalog. Listeners that collide with retained ports remain held until that selection ends, then are released. This does not guarantee OS resource availability: any bind or address-query error immediately ends selection, preserving its stage, original `ioKind` and available `osCode`.
+
 In these examples, `C:\Notes` is the author library, the current directory is external working storage, and output paths do not yet exist.
 
 ```text

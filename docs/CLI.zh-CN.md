@@ -42,6 +42,8 @@ Shell 可以自行改变重定向或管道编码。特别是 Windows PowerShell 
 
 本地 origin 启动失败若带有安全的类型化诊断，会在同一 `diagnostic` 对象内增加 `phase`、`ioKind` 和 `osCode`。`phase` 来自固定阶段枚举，`ioKind` 仅表示标准库 `io::ErrorKind` 判别，`osCode` 是可用的数值 OS 错误码，否则为 `null`；这些字段不包含底层错误的 Display、Debug、source 链、路径或凭据。未附此诊断时，原 `code`／`message` 记录保持不变；不会新增第三行，最终标准错误仍保留原 code 和退出码 3。阶段说明失败位置，不证明原操作未产生任何效果；没有这些字段的历史失败不能由后来的诊断补认为已知原因。
 
+本地 origin 目录最多保留 4096 条记录；达到容量时，新增 origin 在绑定候选端口前以 `originCapacity` 拒绝。现存保留 origin 仍按原端口尝试，不因容量或占用改号。新 origin 最多选择 `N + 1` 个候选，其中 `N` 是目录中已保留的端口数；与保留端口冲突的 listener 持有到本次选择结束再释放。这不保证 OS 资源可用；任何绑定或取地址错误都会立即结束选择，并保留对应阶段、原 `ioKind` 和可用的 `osCode`。
+
 以下示例中的 `C:\Notes` 是作者库，当前目录是外部工作目录，输出路径尚不存在。
 
 ```text

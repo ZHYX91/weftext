@@ -38,11 +38,53 @@ use windows::{
 const LIMIT: usize = 16 * 1024 * 1024;
 const LEAF: &str = "host-routing.json";
 const LOCK_WAIT: Duration = Duration::from_secs(5);
+const MAX_ORIGINS: usize = 4096;
 fn invalid() -> io::Error {
     io::Error::new(
         io::ErrorKind::PermissionDenied,
         "The private activation routing evidence is not qualified",
     )
+}
+
+fn select_new_origin<T>(
+    reserved: &BTreeSet<u16>,
+    requested: u16,
+    mut bind: impl FnMut(u16) -> io::Result<T>,
+    mut address: impl FnMut(&T) -> io::Result<u16>,
+) -> Result<T, LocalOriginDiagnostic> {
+    use LocalOriginPhase as Phase;
+    if requested != 0 && reserved.contains(&requested) {
+        return Err(LocalOriginDiagnostic::from_io(
+            Phase::RequestedPortReserved,
+            &invalid(),
+        ));
+    }
+    if reserved.len() >= MAX_ORIGINS {
+        return Err(LocalOriginDiagnostic::from_io(
+            Phase::OriginCapacity,
+            &io::Error::other("The retained local-origin catalog is at capacity"),
+        ));
+    }
+    // Windows may allocate consecutive ephemeral ports. A fixed retry count
+    // can end inside a contiguous retained range despite other free ports.
+    // Keep collisions bound so the kernel cannot offer them again: with N
+    // reserved ports, N+1 distinct successful binds must include a new port.
+    // These temporary listeners retire on every return, before publication.
+    let mut collisions = Vec::new();
+    for _ in 0..=reserved.len() {
+        let candidate = bind(requested)
+            .map_err(|error| LocalOriginDiagnostic::from_io(Phase::CandidateBind, &error))?;
+        let port = address(&candidate)
+            .map_err(|error| LocalOriginDiagnostic::from_io(Phase::CandidateAddress, &error))?;
+        if !reserved.contains(&port) {
+            return Ok(candidate);
+        }
+        collisions.push(candidate);
+    }
+    Err(LocalOriginDiagnostic::from_io(
+        Phase::CandidateExhausted,
+        &invalid(),
+    ))
 }
 struct Descriptor(PSECURITY_DESCRIPTOR);
 impl Drop for Descriptor {
@@ -482,31 +524,13 @@ impl Root {
             std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, origin.port))
                 .map_err(|error| diagnostic(Phase::RetainedBind, &error))?
         } else {
-            if requested != 0
-                && catalog
-                    .origins
-                    .iter()
-                    .any(|origin| origin.port == requested)
-            {
-                return Err(diagnostic(Phase::RequestedPortReserved, &invalid()));
-            }
-            let mut selected = None;
-            for _ in 0..32 {
-                let candidate =
-                    std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, requested))
-                        .map_err(|error| diagnostic(Phase::CandidateBind, &error))?;
-                let port = candidate
-                    .local_addr()
-                    .map_err(|error| diagnostic(Phase::CandidateAddress, &error))?
-                    .port();
-                if !catalog.origins.iter().any(|origin| origin.port == port) {
-                    selected = Some(candidate);
-                    break;
-                }
-                // First-start ephemeral collision, before router/author use.
-                drop(candidate);
-            }
-            selected.ok_or_else(|| diagnostic(Phase::CandidateExhausted, &invalid()))?
+            let reserved = catalog.origins.iter().map(|origin| origin.port).collect();
+            select_new_origin(
+                &reserved,
+                requested,
+                |port| std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)),
+                |listener| listener.local_addr().map(|address| address.port()),
+            )?
         };
         let port = listener
             .local_addr()
@@ -649,7 +673,7 @@ impl Catalog {
             || self.revision == 0
             || self.profiles.len() > 128
             || self.activations.len() > 32768
-            || self.origins.len() > 4096
+            || self.origins.len() > MAX_ORIGINS
         {
             return Err(invalid());
         }
@@ -817,6 +841,193 @@ mod tests {
 
     fn bytes(root: &Root) -> Vec<u8> {
         std::fs::read(root.profile.path().join(LEAF)).unwrap()
+    }
+
+    #[derive(Debug)]
+    struct Candidate {
+        port: u16,
+        retired: std::rc::Rc<std::cell::RefCell<Vec<u16>>>,
+    }
+    impl Drop for Candidate {
+        fn drop(&mut self) {
+            self.retired.borrow_mut().push(self.port);
+        }
+    }
+
+    #[test]
+    fn new_origin_crosses_long_retained_ranges_and_retires_collisions_before_return() {
+        let reserved = (50000..50041).collect();
+        let retired = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let calls = std::cell::Cell::new(0_u16);
+        let selected = select_new_origin(
+            &reserved,
+            0,
+            |requested| {
+                assert_eq!(requested, 0);
+                assert!(
+                    retired.borrow().is_empty(),
+                    "a prior candidate was released too soon"
+                );
+                let port = 50000 + calls.get();
+                calls.set(calls.get() + 1);
+                Ok(Candidate {
+                    port,
+                    retired: retired.clone(),
+                })
+            },
+            |candidate| Ok(candidate.port),
+        )
+        .unwrap();
+        assert_eq!(calls.get(), 42);
+        assert_eq!(selected.port, 50041);
+        let mut actual = retired.borrow().clone();
+        actual.sort_unstable();
+        assert_eq!(actual, (50000..50041).collect::<Vec<_>>());
+        drop(selected);
+        assert_eq!(retired.borrow().len(), 42);
+    }
+
+    #[test]
+    fn new_origin_preserves_os_failures_and_retires_all_held_candidates() {
+        for address_fails in [false, true] {
+            let retired = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+            let calls = std::cell::Cell::new(0_u16);
+            let os_code = if address_fails { 87 } else { 10055 };
+            let error = select_new_origin(
+                &[50000].into_iter().collect(),
+                0,
+                |_| {
+                    assert!(retired.borrow().is_empty());
+                    let index = calls.get();
+                    calls.set(index + 1);
+                    if index == 1 && !address_fails {
+                        return Err(io::Error::from_raw_os_error(os_code));
+                    }
+                    Ok(Candidate {
+                        port: 50000 + index,
+                        retired: retired.clone(),
+                    })
+                },
+                |candidate| {
+                    if address_fails && candidate.port == 50001 {
+                        Err(io::Error::from_raw_os_error(os_code))
+                    } else {
+                        Ok(candidate.port)
+                    }
+                },
+            )
+            .unwrap_err();
+            assert_eq!(calls.get(), 2);
+            assert_eq!(retired.borrow().len(), if address_fails { 2 } else { 1 });
+            assert_eq!(
+                serde_json::to_value(error).unwrap(),
+                serde_json::json!({
+                    "phase": if address_fails { "candidateAddress" } else { "candidateBind" },
+                    "ioKind": format!("{:?}", io::Error::from_raw_os_error(os_code).kind()),
+                    "osCode": os_code,
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn new_origin_exhaustion_is_bounded_even_for_a_repeating_binder() {
+        let retired = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let calls = std::cell::Cell::new(0);
+        let error = select_new_origin(
+            &[50000, 50001].into_iter().collect(),
+            0,
+            |_| {
+                assert!(retired.borrow().is_empty());
+                calls.set(calls.get() + 1);
+                Ok(Candidate {
+                    port: 50000,
+                    retired: retired.clone(),
+                })
+            },
+            |candidate| Ok(candidate.port),
+        )
+        .unwrap_err();
+        assert_eq!(calls.get(), 3);
+        assert_eq!(retired.borrow().len(), 3);
+        assert_eq!(
+            serde_json::to_value(error).unwrap(),
+            serde_json::json!({
+                "phase": "candidateExhausted", "ioKind": "PermissionDenied", "osCode": null,
+            })
+        );
+    }
+
+    #[test]
+    fn new_origin_capacity_and_reserved_requests_never_bind_a_candidate() {
+        let full = (1..=MAX_ORIGINS as u16).collect();
+        let capacity = select_new_origin(
+            &full,
+            0,
+            |_| -> io::Result<u16> { panic!("capacity must be checked before bind") },
+            |port| Ok(*port),
+        )
+        .unwrap_err();
+        assert_eq!(
+            serde_json::to_value(capacity).unwrap(),
+            serde_json::json!({
+                "phase": "originCapacity", "ioKind": "Other", "osCode": null,
+            })
+        );
+        let reserved = select_new_origin(
+            &[50000].into_iter().collect(),
+            50000,
+            |_| -> io::Result<u16> {
+                panic!("a retained port must not be allocated to a new origin")
+            },
+            |port| Ok(*port),
+        )
+        .unwrap_err();
+        assert_eq!(
+            serde_json::to_value(reserved).unwrap(),
+            serde_json::json!({
+                "phase": "requestedPortReserved", "ioKind": "PermissionDenied", "osCode": null,
+            })
+        );
+    }
+
+    #[test]
+    fn full_catalog_refuses_new_profiles_but_preserves_existing_origins() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("existing")).unwrap();
+        let listener = bind(&root, &profile, 0).unwrap();
+        let retained = listener.local_addr().unwrap().port();
+        drop(listener);
+        let mut locked = root.locked().unwrap();
+        let mut catalog = locked.read().unwrap().unwrap();
+        for port in (1..=u16::MAX)
+            .filter(|port| *port != retained)
+            .take(MAX_ORIGINS - 1)
+        {
+            catalog.origins.push(Origin {
+                physical_identity: format!("fixture-{port}"),
+                locator: temp
+                    .path()
+                    .join(format!("unused-{port}"))
+                    .to_string_lossy()
+                    .into_owned(),
+                port,
+            });
+        }
+        catalog.revision += 1;
+        locked.publish(&catalog).unwrap();
+        drop(locked);
+        let original = bytes(&root);
+        let new_profile = weftext_core::qualify_profile(temp.path().join("new")).unwrap();
+        assert_eq!(
+            serde_json::to_value(bind(&root, &new_profile, 0).unwrap_err()).unwrap(),
+            serde_json::json!({ "phase": "originCapacity", "ioKind": "Other", "osCode": null })
+        );
+        assert_eq!(bytes(&root), original);
+        let reopened = bind(&root, &profile, 0).unwrap();
+        assert_eq!(reopened.local_addr().unwrap().port(), retained);
+        assert_eq!(bytes(&root), original);
     }
 
     #[test]

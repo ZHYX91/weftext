@@ -54,6 +54,7 @@ pub enum LocalOriginPhase {
     RetainedPortMismatch,
     RetainedBind,
     RequestedPortReserved,
+    OriginCapacity,
     CandidateBind,
     CandidateAddress,
     CandidateExhausted,
