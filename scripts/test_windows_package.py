@@ -170,10 +170,19 @@ class VersionAndPolicy(unittest.TestCase):
                          {'runFullTrust', 'unvirtualizedResources'})
         extensions = tree.findall('.//desktop:Extension', ns)
         startup = next(node for node in extensions if node.attrib['Category'] == 'windows.startupTask')
+        # Overriding the startup executable requires its complete Win11 activation combination.
+        self.assertEqual(startup.attrib['Executable'], 'weftext.exe')
+        self.assertEqual(startup.attrib['{' + NS['uap10'] + '}RuntimeBehavior'], 'packagedClassicApp')
+        self.assertEqual(startup.attrib['{' + NS['uap10'] + '}TrustLevel'], 'mediumIL')
+        self.assertNotIn('EntryPoint', startup.attrib)
         self.assertEqual(startup.attrib['{' + NS['uap10'] + '}Parameters'], '--login-startup')
         self.assertEqual(startup.find('desktop:StartupTask', ns).attrib['Enabled'], 'false')
         self.assertEqual(tree.find('.//com:ExeServer', ns).attrib['Arguments'], '--toast-server')
         self.assertEqual(tree.find('.//com:Class', ns).attrib['Id'], tree.find('.//desktop:ToastNotificationActivation', ns).attrib['ToastActivatorCLSID'])
+        # A console alias requires its parent Application to explicitly permit multiple processes.
+        application = tree.find('f:Applications/f:Application', ns)
+        self.assertEqual(application.attrib['Executable'], 'weftext.exe')
+        self.assertEqual(application.attrib['{' + NS['uap10'] + '}SupportsMultipleInstances'], 'true')
         self.assertEqual(tree.find('.//uap5:AppExecutionAlias', ns).attrib['{' + NS['uap10'] + '}Subsystem'], 'console')
         self.assertEqual(tree.find('.//uap5:Extension', ns).attrib['Executable'], 'weftext-cli.exe')
 

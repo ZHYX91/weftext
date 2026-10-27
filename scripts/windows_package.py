@@ -253,10 +253,10 @@ def manifest(contract, version):
     resources = add(package, 'Resources')
     for language in ('zh-CN', 'en-US'):
         add(resources, 'Resource', {'Language': language})
-    application = add(add(package, 'Applications'), 'Application', {'Id': identity['applicationId'], 'Executable': gui, 'uap10:RuntimeBehavior': 'packagedClassicApp', 'uap10:TrustLevel': 'mediumIL'})
+    application = add(add(package, 'Applications'), 'Application', {'Id': identity['applicationId'], 'Executable': gui, 'uap10:RuntimeBehavior': 'packagedClassicApp', 'uap10:TrustLevel': 'mediumIL', 'uap10:SupportsMultipleInstances': 'true'})
     add(application, 'uap:VisualElements', {'DisplayName': 'ms-resource:DisplayName', 'Description': 'ms-resource:Description', 'BackgroundColor': '#163B51', 'Square150x150Logo': 'Assets/Square150x150Logo.png', 'Square44x44Logo': 'Assets/Square44x44Logo.png'})
     extensions = add(application, 'Extensions')
-    startup = add(extensions, 'desktop:Extension', {'Category': 'windows.startupTask', 'Executable': gui, 'uap10:Parameters': activation['startupArgument']})
+    startup = add(extensions, 'desktop:Extension', {'Category': 'windows.startupTask', 'Executable': gui, 'uap10:RuntimeBehavior': 'packagedClassicApp', 'uap10:TrustLevel': 'mediumIL', 'uap10:Parameters': activation['startupArgument']})
     add(startup, 'desktop:StartupTask', {'TaskId': activation['startupTaskId'], 'Enabled': 'false', 'DisplayName': 'ms-resource:DisplayName'})
     server = add(add(add(extensions, 'com:Extension', {'Category': 'windows.comServer'}), 'com:ComServer'), 'com:ExeServer', {'Executable': gui, 'Arguments': activation['toastArgument'], 'DisplayName': 'Weftext'})
     add(server, 'com:Class', {'Id': activation['toastClsid'], 'DisplayName': 'Weftext'})
