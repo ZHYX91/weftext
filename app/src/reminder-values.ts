@@ -5,7 +5,10 @@ export function reminderMember(value: NativeValue, key: string): NativeValue | u
 export function reminderText(value: NativeValue, key: string): string { const member = reminderMember(value, key); return member && "value" in member && typeof member.value === "string" ? member.value : ""; }
 export function setReminderMember(value: NativeValue, key: string, next: NativeValue | undefined): NativeValue {
   if (value.kind !== "record") throw new Error("Reminder requires a native record");
-  const members = value.value.filter(member => member.key !== key); if (next) members.push({ key, value: next }); return { kind: "record", value: members };
+  const present = value.value.some(member => member.key === key);
+  const members = next ? value.value.map(member => member.key === key ? { ...member, value: next } : member) : value.value.filter(member => member.key !== key);
+  if (next && !present) members.push({ key, value: next });
+  return { kind: "record", value: members };
 }
 export function newReminder(kind: ReminderKind, previous?: NativeValue): NativeValue {
   const id = previous ? reminderText(previous, "id") : "";

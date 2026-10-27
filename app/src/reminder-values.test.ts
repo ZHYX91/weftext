@@ -1,6 +1,30 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { advanceMinutes, changeAdvanceMinutes, changeClockMinute, changeInstantMinute, clockFraction, composeInstantMinute, exactAdvance, exactClock, explicitOffset, instantMinute, newReminder, reminderText } from "./reminder-values";
+import { advanceMinutes, changeAdvanceMinutes, changeClockMinute, changeInstantMinute, clockFraction, composeInstantMinute, exactAdvance, exactClock, explicitOffset, instantMinute, newReminder, reminderMember, reminderText, setReminderMember } from "./reminder-values";
+import type { NativeValue } from "./data-panel";
+
+test("all-day minute editing retains author record order, zone and nested precision", () => {
+  const original: NativeValue = { kind: "record", value: [
+    { key: "id", value: { kind: "text", value: "11111111-1111-4111-8111-111111111111" } },
+    { key: "kind", value: { kind: "text", value: "due_day" } },
+    { key: "clock", value: { kind: "record", value: [
+      { key: "time", value: { kind: "time", value: "09:00:37" } },
+      { key: "fraction", value: { kind: "text", value: "0.123456789123" } },
+    ] } },
+    { key: "zone", value: { kind: "text", value: "UTC" } },
+    { key: "zone_version", value: { kind: "text", value: "fixed-utc.v1" } },
+  ] };
+  const before = structuredClone(original), expected = structuredClone(original);
+  const clock = reminderMember(original, "clock")!;
+  const next = setReminderMember(original, "clock", setReminderMember(clock, "time", { kind: "time", value: changeClockMinute(reminderText(clock, "time"), "09:01") }));
+  const expectedClock = reminderMember(expected, "clock")!;
+  assert.equal(expectedClock.kind, "record");
+  if (expectedClock.kind !== "record") throw new Error("Expected authored clock record");
+  expectedClock.value[0].value = { kind: "time", value: "09:01:37" };
+  assert.deepEqual(next, expected);
+  assert.deepEqual(original, before);
+});
+
 test("minute edits retain author seconds, arbitrary precision and the original explicit offset", () => {
   const original = "2026-10-23T17:00:12.123456789123+08:00";
   assert.equal(instantMinute(original), "2026-10-23T17:00");
