@@ -6,6 +6,33 @@ use crate::local_service::{InitialDocument, LocalServiceOptions};
 use clap::Parser;
 use std::{ffi::OsString, io, path::PathBuf};
 
+/// Keep the process MTA alive across idle WinRT workers. The generated Windows
+/// bindings cache agile activation factories for the process; balancing each
+/// worker's RoInitialize alone can tear their apartment down between calls.
+/// Create this before the async runtime and drop it after every worker retires.
+#[cfg(windows)]
+pub struct ProcessWinRt(windows::Win32::System::Com::CO_MTA_USAGE_COOKIE);
+#[cfg(windows)]
+impl ProcessWinRt {
+    pub fn enter() -> Result<Self, ServeError> {
+        unsafe { windows::Win32::System::Com::CoIncrementMTAUsage() }
+            .map(Self)
+            .map_err(|_| ServeError {
+                code: "windowsRuntimeStartFailed",
+                diagnostic: "The process Windows Runtime lifetime could not start",
+                local_origin: None,
+            })
+    }
+}
+#[cfg(windows)]
+impl Drop for ProcessWinRt {
+    fn drop(&mut self) {
+        // This is the final process COM boundary, after the async runtime and
+        // its WinRT work have stopped. Each worker still balances its own init.
+        let _ = unsafe { windows::Win32::System::Com::CoDecrementMTAUsage(self.0) };
+    }
+}
+
 #[derive(Debug, Clone, clap::Args)]
 pub struct ServeArgs {
     #[arg(skip)]
