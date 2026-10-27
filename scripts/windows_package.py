@@ -12,7 +12,7 @@ import uuid
 import xml.etree.ElementTree as ET
 import zipfile
 
-from package_inputs import dependency_licenses, inventory, parse_json, read_checked, sha256, zip_bytes
+from package_inputs import container_members, dependency_licenses, inventory, is_reparse, parse_json, read_checked, sha256, zip_bytes
 
 NS = {
     '': 'http://schemas.microsoft.com/appx/manifest/foundation/windows10',
@@ -326,24 +326,24 @@ def run_sdk(tools, tool, args, directory, label):
 def verify_containers(common, manifest_bytes, msix, portable):
     """Check complete uncompressed bytes, not just archive names or CRCs."""
     with zipfile.ZipFile(msix) as packed, zipfile.ZipFile(portable) as zipped:
-        if len(zipped.namelist()) != len(set(zipped.namelist())) or set(zipped.namelist()) != set(common):
-            raise ValueError('Portable ZIP inventory differs from frozen payload')
-        expected_package = set(common) | {'AppxManifest.xml', 'AppxBlockMap.xml', '[Content_Types].xml'}
-        if len(packed.namelist()) != len(set(packed.namelist())) or set(packed.namelist()) != expected_package:
-            raise ValueError('MSIX has unqualified or duplicate container members')
+        zipped_members = container_members(zipped, common)
+        packed_members = container_members(packed, [*common, 'AppxManifest.xml', 'AppxBlockMap.xml', '[Content_Types].xml'], msix=True)
         for name, data in common.items():
-            if packed.read(name) != data or zipped.read(name) != data:
+            if packed.read(packed_members[name]) != data or zipped.read(zipped_members[name]) != data:
                 raise ValueError(f'Container payload differs from frozen bytes: {name}')
-        if packed.read('AppxManifest.xml') != manifest_bytes or 'AppxSignature.p7x' in packed.namelist():
+        if packed.read(packed_members['AppxManifest.xml']) != manifest_bytes:
             raise ValueError('Unexpected signed/changed package manifest')
-        blockmap = ET.fromstring(packed.read('AppxBlockMap.xml'))
+        blockmap = ET.fromstring(packed.read(packed_members['AppxBlockMap.xml']))
         if blockmap.attrib['HashMethod'] != 'http://www.w3.org/2001/04/xmlenc#sha256':
             raise ValueError('Unexpected blockmap hash method')
         names = set()
         for member in blockmap:
-            name = member.attrib['Name'].replace('\\', '/')
-            data = packed.read(name)
-            if name in names or len(data) != int(member.attrib['Size']):
+            name = member.attrib.get('Name', '').replace('\\', '/')
+            if (member.tag != '{http://schemas.microsoft.com/appx/2010/blockmap}File'
+                    or name not in packed_members or name in names):
+                raise ValueError('Invalid blockmap file inventory')
+            data = packed.read(packed_members[name])
+            if len(data) != int(member.attrib['Size']):
                 raise ValueError('Invalid blockmap file inventory')
             names.add(name)
             blocks = member.findall('{http://schemas.microsoft.com/appx/2010/blockmap}Block')
@@ -360,7 +360,10 @@ def verify_containers(common, manifest_bytes, msix, portable):
             raise ValueError('MSIX contains an unexpected payload inventory')
 
 
-def package_windows(root, artifacts, version, contract, materials, tools, *, output_root):
+def package_windows(root, artifacts, version, contract, materials, tools, *, output_root, before_finalize):
+    """Generate once, run this invocation's full checks, then qualify unchanged bytes."""
+    if not callable(before_finalize):
+        raise TypeError('A full-product check callback is required')
     if os.name != 'nt':
         raise ValueError('Windows packaging requires Windows and the qualified x64 SDK')
     artifacts.verify_inputs(root)
@@ -374,6 +377,7 @@ def package_windows(root, artifacts, version, contract, materials, tools, *, out
         raise ValueError('Offline VC Runtime does not meet the exact MSVC linker used by this build')
     package_version = msix_version(version)
     common, packages = dependency_licenses(root, artifacts.metadata, artifacts.built_package_ids)
+    license_files = dict(common)
     common.update(materials['files'])
     common['artifact-catalog.json'] = artifacts.catalog
     for role, policy in contract['roles'].items():
@@ -392,7 +396,7 @@ def package_windows(root, artifacts, version, contract, materials, tools, *, out
     common['DEPENDENCIES.json'] = json.dumps({'scope': 'Actual Cargo build participants and installed npm build dependencies; includes build/test licenses, not a claim that every package is loaded at runtime.', 'packages': packages, 'offline': materials['records']}, ensure_ascii=False, indent=2).encode()
     build = {
         'schemaVersion': 1,
-        'status': 'unsigned local candidate; installation, trust and DSK09/10 remain unqualified',
+        'status': 'payload identity only; full product checks require finalized PACKAGE.json; installation, trust and DSK09/10 remain unqualified',
         'version': version, 'msixVersion': package_version, 'profile': artifacts.profile, 'roles': roles,
         'msvcLinkerVersion': list(artifacts.msvc_version),
         'sourceSha256': sha256(common['source.zip']),
@@ -413,7 +417,11 @@ def package_windows(root, artifacts, version, contract, materials, tools, *, out
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     destination = output_root / 'dist' / f'weftext-{version}-local-{stamp}'
     destination.mkdir(parents=True, exist_ok=False)
+    incomplete = destination / 'INCOMPLETE.json'
+    phase = 'generatingContainers'
     try:
+        incomplete.write_text(json.dumps({'status': 'incomplete; preserve original outputs, do not install',
+                                          'phase': phase}, indent=2), encoding='utf-8')
         payload = destination / 'payload'
         for name, data in common.items():
             path = payload / name
@@ -440,13 +448,49 @@ def package_windows(root, artifacts, version, contract, materials, tools, *, out
         with portable.open('xb') as stream:
             stream.write(zip_bytes(common))
         verify_containers(common, manifest_bytes, msix, portable)
+        containers = inventory({path.name: path.read_bytes() for path in (msix, portable)})
+        phase = 'awaitingFullProductChecks'
+        incomplete.write_text(json.dumps({'status': 'incomplete; preserve original outputs, do not install',
+                                          'phase': phase}, indent=2), encoding='utf-8')
+        before_finalize()
+        phase = 'verifyingFinalInputsAndContainers'
+        artifacts.verify_inputs(root)
+        if (validate_roles(artifacts.binaries, contract) != roles
+                or artifact_catalog(artifacts.source, artifacts.binaries, contract) != artifacts.catalog):
+            raise ValueError('The fixed build roles or catalog changed during product checks')
+        final_licenses, final_packages = dependency_licenses(root, artifacts.metadata, artifacts.built_package_ids)
+        if final_licenses != license_files or final_packages != packages:
+            raise ValueError('Original dependency licenses changed during product checks')
+        for tool in tools.values():
+            if sha256(read_checked(tool['path'], tool['path'].parent)) != tool['sha256']:
+                raise ValueError('SDK tool changed during product checks')
+        # Payload is not source: include every member and use each frozen
+        # member's exact length, without source exclusions or a source budget.
+        def payload_scan_error(error):
+            raise error
+        if is_reparse(payload.lstat()):
+            raise ValueError('Prepared payload root became a reparse point')
+        payload_names = set()
+        for folder, directories, names in os.walk(payload, followlinks=False, onerror=payload_scan_error):
+            for name in (*directories, *names):
+                if is_reparse((Path(folder) / name).lstat()):
+                    raise ValueError('Prepared payload contains a reparse point')
+            payload_names.update((Path(folder) / name).relative_to(payload).as_posix() for name in names)
+        if payload_names != set(common):
+            raise ValueError('Prepared payload inventory changed during product checks')
+        if (any(read_checked(payload / name, payload, max_bytes=len(data)) != data for name, data in common.items())
+                or read_checked(destination / 'AppxManifest.xml', destination) != manifest_bytes):
+            raise ValueError('Prepared payload or manifest changed during product checks')
+        if inventory({path.name: path.read_bytes() for path in (msix, portable)}) != containers:
+            raise ValueError('Prepared container bytes changed during product checks')
+        verify_containers(common, manifest_bytes, msix, portable)
         receipt = {
             'schemaVersion': 1,
             'status': 'unsigned generated candidate; no installation or publication',
             'identity': contract['identity'], 'version': package_version, 'roles': roles,
             'buildId': build['buildId'], 'artifactCatalogSha256': sha256(artifacts.catalog),
             'commonPayload': inventory(common), 'manifestSha256': sha256(manifest_bytes),
-            'containers': inventory({msix.name: msix.read_bytes(), portable.name: portable.read_bytes()}),
+            'containers': containers,
             'sdkTools': {
                 name: {key: str(value) if isinstance(value, Path) else value for key, value in record.items()}
                 for name, record in tools.items()
@@ -454,9 +498,15 @@ def package_windows(root, artifacts, version, contract, materials, tools, *, out
             'signed': False, 'installed': False, 'upgradeQualified': False,
             'dataPreservationQualified': False,
         }
-        (destination / 'PACKAGE.json').write_text(json.dumps(receipt, ensure_ascii=False, indent=2), encoding='utf-8')
+        with (destination / 'PACKAGE.json').open('x', encoding='utf-8') as stream:
+            stream.write(json.dumps(receipt, ensure_ascii=False, indent=2))
+        incomplete.unlink()
     except BaseException as error:
-        (destination / 'INCOMPLETE.json').write_text(json.dumps({'status': 'incomplete; preserve original outputs, do not install', 'error': str(error)}, ensure_ascii=False, indent=2), encoding='utf-8')
+        try:
+            incomplete.write_text(json.dumps({'status': 'incomplete; preserve original outputs, do not install',
+                                              'phase': phase, 'error': str(error)}, ensure_ascii=False, indent=2), encoding='utf-8')
+        except BaseException as recording_error:
+            error.add_note(f'Incomplete package record also failed: {recording_error!r}')
         raise
     print(f'Unsigned local candidate: {destination}')
     return destination

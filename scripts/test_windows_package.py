@@ -11,12 +11,14 @@ import tempfile
 import tracemalloc
 from types import SimpleNamespace
 import unittest
+import warnings
+import zipfile
 from unittest.mock import Mock, patch
 import xml.etree.ElementTree as ET
 
 import mvp
 from _cli_serve import serve_command
-from package_inputs import BuildArtifacts, collect_artifact, dependency_licenses, read_checked, require_checkout, sha256, snapshot, validate_target, zip_bytes
+from package_inputs import container_members, msix_part_name, BuildArtifacts, collect_artifact, dependency_licenses, read_checked, require_checkout, sha256, snapshot, validate_target, zip_bytes
 from windows_materials import freeze_materials, validate_record
 from windows_package import NS, artifact_catalog, load_contract, manifest, msix_version, pe_info, run_sdk, validate_roles, verify_containers
 
@@ -52,7 +54,7 @@ def containers(common, manifest_bytes, *, extra=False, corrupt_hash=False):
     uri = 'http://schemas.microsoft.com/appx/2010/blockmap'
     blockmap = ET.Element('BlockMap', {'xmlns': uri, 'HashMethod': 'http://www.w3.org/2001/04/xmlenc#sha256'})
     for name, data in {**common, 'AppxManifest.xml': manifest_bytes}.items():
-        node = ET.SubElement(blockmap, 'File', {'Name': name, 'Size': str(len(data)), 'LfhSize': '30'})
+        node = ET.SubElement(blockmap, 'File', {'Name': name.replace('/', '\\'), 'Size': str(len(data)), 'LfhSize': '30'})
         for offset in range(0, len(data), 65536):
             digest = bytes.fromhex(sha256(data[offset:offset + 65536]))
             ET.SubElement(node, 'Block', {'Hash': base64.b64encode(b'0' * 32 if corrupt_hash else digest).decode()})
@@ -60,7 +62,7 @@ def containers(common, manifest_bytes, *, extra=False, corrupt_hash=False):
     files = {**common, 'AppxManifest.xml': manifest_bytes, 'AppxBlockMap.xml': ET.tostring(blockmap), '[Content_Types].xml': b'<Types/>'}
     if extra:
         files['unqualified.dll'] = b'not in the approved payload'
-    return io.BytesIO(zip_bytes(files)), io.BytesIO(zip_bytes(common))
+    return io.BytesIO(zip_bytes({msix_part_name(name): data for name, data in files.items()})), io.BytesIO(zip_bytes(common))
 
 
 class VersionAndPolicy(unittest.TestCase):
@@ -444,6 +446,147 @@ class InputAndContainerBoundaries(unittest.TestCase):
         packed, portable = containers(common, xml)
         with self.assertRaises(ValueError):
             verify_containers({'weftext.exe': b'different bytes'}, xml, packed, portable)
+
+
+class ContainerPartNames(unittest.TestCase):
+    """Small byte fixtures cover the SDK URI namespace without invoking the SDK."""
+
+    @staticmethod
+    def archive(rows):
+        output = io.BytesIO()
+        with warnings.catch_warnings(), zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
+            warnings.simplefilter('ignore', UserWarning)  # Deliberate duplicate-entry fixture.
+            for name, data in rows:
+                archive.writestr(name, data)
+        output.seek(0)
+        return output
+
+    def test_sdk_encoding_table_and_content_types_footprint(self):
+        # Microsoft Encoding.cpp table, not an expectation computed by the codec.
+        self.assertEqual(msix_part_name("a/ !#$%&'()+,;=@[]^`{}.txt"),
+                         'a/%20%21%23%24%25%26%27%28%29%2B%2C%3B%3D%40%5B%5D%5E%60%7B%7D.txt')
+        self.assertEqual(msix_part_name('a/Az09-._~.txt'), 'a/Az09-._~.txt')
+        self.assertEqual(msix_part_name('a/中文😀.txt'), 'a/%E4%B8%AD%E6%96%87%F0%9F%98%80.txt')
+        self.assertEqual(msix_part_name('[Content_Types].xml'), '[Content_Types].xml')
+        self.assertEqual(msix_part_name('a/[Content_Types].xml'), 'a/%5BContent_Types%5D.xml')
+
+    def test_sdk_encoded_license_names_and_logical_blockmap_preserve_bytes(self):
+        common = {'BUILD.json': b'{"synthetic":true}', 'weftext.exe': b'fixture, never executed'}
+        for crate in ('proc-macro-hack-0.5.20+deprecated', 'serde_yaml-0.9.34+deprecated'):
+            for license_name in ('LICENSE-APACHE', 'LICENSE-MIT'):
+                common[f'third-party/cargo-{crate}/{license_name}'] = b'original license bytes\r\n' * 4000
+        packed, portable = containers(common, b'<Package/>')
+        with zipfile.ZipFile(packed) as archive:
+            self.assertIn('third-party/cargo-serde_yaml-0.9.34%2Bdeprecated/LICENSE-MIT', archive.namelist())
+            blockmap = archive.read('AppxBlockMap.xml')
+            self.assertIn(b'cargo-serde_yaml-0.9.34+deprecated\\LICENSE-MIT', blockmap)
+            self.assertNotIn(b'%2B', blockmap)
+        verify_containers(common, b'<Package/>', packed, portable)
+
+    def test_literal_plus_space_and_percent_are_distinct(self):
+        common = {'a+b': b'plus', 'a b': b'space', 'a%2Bb': b'literal percent', 'a%2Fb': b'not a separator'}
+        packed, portable = containers(common, b'<Package/>')
+        with zipfile.ZipFile(packed) as archive:
+            self.assertTrue({'a%2Bb', 'a%20b', 'a%252Bb', 'a%252Fb'} <= set(archive.namelist()))
+        verify_containers(common, b'<Package/>', packed, portable)
+
+    def test_raw_aliases_and_encoded_separators_are_rejected(self):
+        aliases = ('d%2Ffile', 'd%2ffile', 'd%5Cfile', 'd//file', './d/file', 'd/../d/file',
+                   'd/%2E%2E/file', '/d/file', 'd/%FF', 'd/%C0%AF', 'd/%ED%A0%80',
+                   'd/%00file', 'd/%GG', 'd/%', 'd/%66ile', 'D/file', 'd/file.', 'd/file ')
+        for raw in aliases:
+            with self.subTest(raw=raw), zipfile.ZipFile(self.archive([(raw, b'bytes')])) as archive:
+                with self.assertRaises(ValueError):
+                    container_members(archive, ['d/file'], msix=True)
+        for raw, expected in (('a+b', 'a+b'), ('a%2bb', 'a+b'), ('%5BContent_Types%5D.xml', '[Content_Types].xml'),
+                              ('a/e%CC%81', 'a/é')):
+            with self.subTest(raw=raw), zipfile.ZipFile(self.archive([(raw, b'bytes')])) as archive:
+                with self.assertRaises(ValueError):
+                    container_members(archive, [expected], msix=True)
+
+    def test_duplicate_raw_and_decoded_aliases_are_rejected(self):
+        for names in (('a%2Bb', 'a%2Bb'), ('a%2Bb', 'a+b'), ('a%2Bb', 'a%2bb'), ('a%2Bb', 'A%2Bb')):
+            with self.subTest(names=names), zipfile.ZipFile(self.archive([(name, b'bytes') for name in names])) as archive:
+                with self.assertRaises(ValueError):
+                    container_members(archive, ['a+b'], msix=True)
+
+    def test_portable_zip_uses_original_logical_names(self):
+        logical = 'a/中文+%.txt'
+        with zipfile.ZipFile(self.archive([(logical, b'bytes')])) as archive:
+            members = container_members(archive, [logical])
+            self.assertEqual(archive.read(members[logical]), b'bytes')
+            with self.assertRaises(ValueError):
+                container_members(archive, [logical], msix=True)
+        with zipfile.ZipFile(self.archive([(msix_part_name(logical), b'bytes')])) as archive:
+            with self.assertRaises(ValueError):
+                container_members(archive, [logical])
+
+    def test_directory_extra_missing_and_nonregular_members_are_rejected(self):
+        for rows in ([('a/', b'')], [('a', b'bytes'), ('extra', b'')], []):
+            with self.subTest(rows=rows), zipfile.ZipFile(self.archive(rows)) as archive:
+                with self.assertRaises(ValueError):
+                    container_members(archive, ['a'], msix=True)
+        for attributes in (0x10, 0o120777 << 16, 0o040755 << 16):
+            entry = zipfile.ZipInfo('a')
+            entry.external_attr = attributes
+            with self.subTest(attributes=attributes), zipfile.ZipFile(self.archive([(entry, b'bytes')])) as archive:
+                with self.assertRaises(ValueError):
+                    container_members(archive, ['a'], msix=True)
+
+    def test_expected_logical_paths_cannot_hide_normalization_or_case_collisions(self):
+        invalid = ('', '/a', 'a/', 'a//b', './a', 'a/../b', 'a\\b', 'a\0b', 'a\x1fb', 'a\x7fb',
+                   'C:a', 'a*', 'a?', 'a"', 'a<', 'a>', 'a|', 'a.', 'a ', 'NUL.txt', 'a/COM1', '\ud800')
+        for name in invalid:
+            with self.subTest(name=repr(name)), self.assertRaises(ValueError):
+                msix_part_name(name)
+        for names in (['a', 'a'], ['a', 'A'], ['a', 'a/b'], ['a', 'A/b']):
+            with self.subTest(names=names), zipfile.ZipFile(self.archive([])) as archive:
+                with self.assertRaises(ValueError):
+                    container_members(archive, names, msix=True)
+
+    def test_nul_in_central_directory_cannot_be_silently_truncated(self):
+        raw = self.archive([('BUILD.jsonXhidden', b'bytes')]).getvalue()
+        raw = raw.replace(b'BUILD.jsonXhidden', b'BUILD.json\0hidden')
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            self.assertEqual(archive.namelist(), ['BUILD.json'])  # Python truncates filename at NUL.
+            with self.assertRaises(ValueError):
+                container_members(archive, ['BUILD.json'], msix=True)
+
+    def test_raw_backslash_cannot_be_normalized_by_python_zipinfo(self):
+        # On Windows ZipInfo construction rewrites os.sep. Mutate both headers
+        # so the fixture exercises actual archive bytes rather than its writer.
+        raw = self.archive([('dXfile', b'bytes')]).getvalue().replace(b'dXfile', b'd\\file')
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+            with self.assertRaises(ValueError):
+                container_members(archive, ['d/file'], msix=True)
+
+    def test_invalid_utf8_zip_filename_is_rejected(self):
+        raw = bytearray(self.archive([('x.txt', b'bytes')]).getvalue())
+        central = raw.index(b'PK\x01\x02')
+        struct.pack_into('<H', raw, 6, struct.unpack_from('<H', raw, 6)[0] | 0x800)
+        struct.pack_into('<H', raw, central + 8, struct.unpack_from('<H', raw, central + 8)[0] | 0x800)
+        raw = raw.replace(b'x.txt', b'\xff.txt')
+        with self.assertRaises(ValueError):
+            with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                container_members(archive, ['x.txt'], msix=True)
+
+    def test_blockmap_must_use_unique_logical_names_and_keep_complete_file_hash(self):
+        common, xml = {'a+b': b'bytes' * 20000}, b'<Package/>'
+        for change in ('encoded-name', 'duplicate-name', 'complete-file-hash'):
+            packed, portable = containers(common, xml)
+            with zipfile.ZipFile(packed) as archive:
+                files = {name: archive.read(name) for name in archive.namelist()}
+            blockmap = ET.fromstring(files['AppxBlockMap.xml'])
+            member = next(node for node in blockmap if node.get('Name') == 'a+b')
+            if change == 'encoded-name':
+                member.set('Name', 'a%2Bb')
+            elif change == 'duplicate-name':
+                blockmap.append(copy.deepcopy(member))
+            else:
+                member.find('{http://schemas.microsoft.com/appx/2021/blockmap}FileHash').set('Hash', base64.b64encode(b'x' * 32).decode())
+            files['AppxBlockMap.xml'] = ET.tostring(blockmap)
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                verify_containers(common, xml, self.archive(files.items()), portable)
 
 
 class OriginalLicenseBoundaries(unittest.TestCase):

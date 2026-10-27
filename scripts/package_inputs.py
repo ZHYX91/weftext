@@ -4,10 +4,12 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import stat
 import subprocess
 import sys
+from urllib.parse import quote
 import zipfile
 
 IGNORED = {'.git', 'node_modules', 'target', 'dist', '.workspace', '__pycache__'}
@@ -207,6 +209,62 @@ def zip_bytes(files):
             entry.external_attr = 0o100644 << 16
             archive.writestr(entry, data)
     return output.getvalue()
+
+
+
+def container_logical_name(name):
+    """Validate a file path without normalizing aliases into the inventory."""
+    if not isinstance(name, str) or not name:
+        raise ValueError('Invalid logical container path')
+    name.encode('utf-8', errors='strict')
+    parts = name.split('/')
+    if (any(ord(char) < 32 or ord(char) == 127 or char in '\\:*?"<>|' for char in name)
+            or any(not part or part in {'.', '..'} or part.endswith((' ', '.'))
+                   or re.match(r'(?i)^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)', part)
+                   for part in parts)):
+        raise ValueError(f'Invalid logical container path: {name!r}')
+    return name
+
+
+def msix_part_name(name):
+    """MSIX EncodeFileName, not form encoding; content types is a footprint.
+
+    Microsoft msix-packaging Encoding.cpp and AppxPackageWriter.cpp encode
+    valid Windows names as UTF-8 percent octets, except [Content_Types].xml.
+    """
+    container_logical_name(name)
+    return name if name == '[Content_Types].xml' else quote(name, safe='/-._~', encoding='utf-8', errors='strict')
+
+
+def container_members(archive, expected, *, msix=False):
+    """Map trusted logical names to exact ZIP entries; never decode raw aliases."""
+    raw_to_logical = {}
+    folded = set()
+    for name in expected:
+        container_logical_name(name)
+        raw = msix_part_name(name) if msix else name
+        if raw in raw_to_logical or name.casefold() in folded:
+            raise ValueError('Duplicate/case-aliased logical container path')
+        raw_to_logical[raw] = name
+        folded.add(name.casefold())
+    for name in raw_to_logical.values():
+        parts = name.casefold().split('/')
+        if any('/'.join(parts[:index]) in folded for index in range(1, len(parts))):
+            raise ValueError('File/directory collision in logical container paths')
+    result = {}
+    for entry in archive.infolist():
+        raw = entry.filename
+        name = raw_to_logical.get(raw)
+        mode = stat.S_IFMT(entry.external_attr >> 16)
+        if (name is None or name in result or entry.orig_filename != raw
+                or entry.is_dir() or entry.external_attr & 0x10
+                or mode not in (0, stat.S_IFREG)
+                or (not entry.flag_bits & 0x800 and not raw.isascii())):
+            raise ValueError('Unqualified, duplicate or non-file container member')
+        result[name] = entry
+    if len(result) != len(raw_to_logical):
+        raise ValueError('Container is missing expected members')
+    return result
 
 
 def validate_target(root, target):

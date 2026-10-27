@@ -322,7 +322,7 @@ def main(argv=None):
                           windows_sdk=args.windows_sdk)
     if args.action == 'package':
         dependency_licenses(artifacts.source_root, artifacts.metadata, artifacts.built_package_ids)
-    if args.action in {'check', 'package'}:
+    if args.action == 'check':
         check(artifacts, groups)
     if args.action == 'package':
         source = artifacts.source_root
@@ -331,7 +331,8 @@ def main(argv=None):
         if sha256(artifacts.source['packaging/windows/offline-materials.json']) != materials['lockSha256']:
             raise ValueError('Offline material lock changed after package preflight')
         version = tomllib.loads(artifacts.source['crates/weftext-app/Cargo.toml'].decode('utf-8'))['package']['version']
-        package_windows(source, artifacts, version, contract, materials, tools, output_root=ROOT)
+        package_windows(source, artifacts, version, contract, materials, tools, output_root=ROOT,
+                        before_finalize=lambda: check(artifacts, GROUPS))
     return artifacts
 
 

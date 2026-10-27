@@ -302,16 +302,18 @@ class EntrySelection(unittest.TestCase):
                     patch.object(mvp, 'build', side_effect=lambda *_, **__: events.append('build') or artifact) as build, \
                     patch.object(mvp, 'dependency_licenses', side_effect=lambda *_: events.append('license-preflight')) as licenses, \
                     patch.object(mvp, 'check', side_effect=lambda *_: events.append('all-checks')) as check, \
-                    patch.object(mvp, 'package_windows', side_effect=lambda *_, **__: events.append('package')) as package:
+                    patch.object(mvp, 'package_windows', side_effect=lambda *_, **kwargs:
+                        (events.append('prepare-containers'), kwargs['before_finalize'](), events.append('finalize-package'))) as package:
                 result = mvp.main(['package', '--release', '--windows-sdk', str(sdk),
                                    '--offline-materials', str(originals), '--msvc-linker', str(linker)])
             self.assertIs(result, artifact)
-            self.assertEqual(events, ['checkout', 'sdk', 'materials', 'build', 'license-preflight', 'all-checks', 'package'])
+            self.assertEqual(events, ['checkout', 'sdk', 'materials', 'build', 'license-preflight', 'prepare-containers', 'all-checks', 'finalize-package'])
             checkout.assert_called_once_with(root)
             build.assert_called_once_with(True, package_input=True, linker=linker, windows_sdk=sdk)
             licenses.assert_called_once_with(artifact.source_root, artifact.metadata, artifact.built_package_ids)
             check.assert_called_once_with(artifact, GROUPS)
-            package.assert_called_once_with(artifact.source_root, artifact, '0.7.0', contract, materials, tools, output_root=root)
+            package.assert_called_once_with(artifact.source_root, artifact, '0.7.0', contract, materials, tools,
+                                            output_root=root, before_finalize=package.call_args.kwargs['before_finalize'])
 
     def test_package_missing_license_keeps_the_original_error_and_stops_all_checks_and_output(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -473,6 +475,260 @@ class FrozenRouting(unittest.TestCase):
             self.assertIs(caught.exception, primary)
             self.assertEqual(run.call_count, 1)
             self.assertEqual(len(primary.__notes__), 1)
+
+
+class PackageFinalization(unittest.TestCase):
+    """Real container-byte checks with only SDK execution/full product work mocked."""
+
+    def setUp(self):
+        from dataclasses import replace
+        from test_windows_package import CONTRACT, artifact_catalog
+        from package_inputs import snapshot
+        import windows_package
+        self.packaging = windows_package
+        self.temp = tempfile.TemporaryDirectory(prefix='weftext-package-phase-')
+        self.addCleanup(self.temp.cleanup)
+        self.folder = Path(self.temp.name)
+        self.fixture = Fixture(self.folder)
+        self.root = self.fixture.root
+        required = ('LICENSE', 'NOTICE', 'app/example.typ', 'packaging/windows/README.txt',
+                    'packaging/windows/README.zh-CN.txt', 'resources/recognition/runtime-lock.json',
+                    'packaging/windows/priconfig.xml', 'packaging/windows/strings/zh-CN/Resources.resw',
+                    'packaging/windows/strings/en-US/Resources.resw',
+                    'packaging/windows/assets/StoreLogo.png', 'packaging/windows/assets/Square150x150Logo.png',
+                    'packaging/windows/assets/Square44x44Logo.png', 'packaging/windows/assets/weftext.ico')
+        for name in required:
+            target = self.root / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(('owned fixture: ' + name).encode())
+        source = snapshot(self.root, [self.fixture.target])
+        catalog = artifact_catalog(source, self.fixture.artifacts.binaries, CONTRACT)
+        self.fixture.artifacts.catalog_path.write_bytes(catalog)
+        self.artifacts = replace(self.fixture.artifacts, source=source, catalog=catalog, msvc_version=(14, 0, 0, 0))
+        self.contract = CONTRACT
+        self.materials = {'files': {}, 'records': [{'id': 'vc-runtime', 'version': '14.0.0.0'}]}
+        self.tools = {}
+        for name in ('makepri.exe', 'makeappx.exe', 'rc.exe'):
+            path = self.folder / name
+            path.write_bytes(b'never executed: SDK mock fixture')
+            self.tools[name] = {'path': path, 'sha256': mvp.sha256(path.read_bytes())}
+        self.license_files, self.packages = {'licenses/original.txt': b'original license'}, [{'name': 'actual fixture'}]
+        self.events = []
+        self.output = io.StringIO()
+        self.destination = None
+        self.original_verify = windows_package.verify_containers
+        self.sdk = self.enterContext(patch.object(windows_package, 'run_sdk', side_effect=self.run_sdk))
+        self.licenses = self.enterContext(patch.object(windows_package, 'dependency_licenses',
+                    side_effect=lambda *_: (dict(self.license_files), list(self.packages))))
+        self.verify = self.enterContext(patch.object(windows_package, 'verify_containers', side_effect=self.verify_containers))
+        self.enterContext(patch.object(windows_package.subprocess, 'Popen', side_effect=AssertionError('No product or SDK process')))
+        self.enterContext(redirect_stdout(self.output))
+
+    def run_sdk(self, tools, tool, args, destination, label):
+        from test_windows_package import containers
+        from package_inputs import snapshot
+        self.destination = destination
+        self.events.append('sdk:' + label)
+        self.assertTrue((destination / 'INCOMPLETE.json').is_file())
+        self.assertFalse((destination / 'PACKAGE.json').exists())
+        if label == 'resources':
+            (destination / 'payload/resources.pri').write_bytes(b'owned PRI mock bytes')
+        elif label == 'package':
+            packed, _ = containers(snapshot(destination / 'payload'), (destination / 'AppxManifest.xml').read_bytes())
+            Path(args[args.index('/p') + 1]).write_bytes(packed.getvalue())
+        else:
+            self.fail('Unexpected SDK phase')
+
+    def verify_containers(self, *args):
+        self.events.append('verify')
+        return self.original_verify(*args)
+
+    def ready_for_full_checks(self):
+        self.assertEqual(self.events, ['sdk:resources', 'sdk:package', 'verify'])
+        self.assertEqual(self.verify.call_count, 1)
+        self.assertEqual(len(list(self.destination.glob('*.msix'))), 1)
+        self.assertEqual(len(list(self.destination.glob('*.zip'))), 1)
+        self.assertFalse((self.destination / 'PACKAGE.json').exists())
+        marker = self.packaging.parse_json((self.destination / 'INCOMPLETE.json').read_bytes())
+        self.assertEqual(marker['phase'], 'awaitingFullProductChecks')
+        self.assertNotIn('Unsigned local candidate:', self.output.getvalue())
+        self.events.append('full-checks')
+
+    def package(self, callback):
+        return self.packaging.package_windows(self.root, self.artifacts, '0.7.0-rc.1', self.contract,
+            self.materials, self.tools, output_root=self.folder, before_finalize=callback)
+
+    def assert_incomplete(self):
+        destination = next((self.folder / 'dist').iterdir())
+        self.assertTrue((destination / 'INCOMPLETE.json').is_file())
+        self.assertFalse((destination / 'PACKAGE.json').exists())
+        self.assertNotIn('Unsigned local candidate:', self.output.getvalue())
+
+    def test_same_prepared_containers_run_full_checks_once_then_finalize_without_second_sdk(self):
+        callback = Mock(side_effect=self.ready_for_full_checks)
+        destination = self.package(callback)
+        self.assertEqual(self.events, ['sdk:resources', 'sdk:package', 'verify', 'full-checks', 'verify'])
+        callback.assert_called_once_with()
+        self.assertEqual(self.sdk.call_count, 2)  # One makepri and one makeappx.
+        self.assertEqual(self.licenses.call_count, 2)  # Prepare and original final collection.
+        self.assertFalse((destination / 'INCOMPLETE.json').exists())
+        self.assertTrue((destination / 'PACKAGE.json').is_file())
+        self.assertIn('Unsigned local candidate:', self.output.getvalue())
+
+    def test_sdk_failure_retains_original_and_never_calls_full_checks(self):
+        failure = RuntimeError('original makeappx failure')
+        self.sdk.side_effect = failure
+        callback = Mock()
+        with self.assertRaises(RuntimeError) as caught:
+            self.package(callback)
+        self.assertIs(caught.exception, failure)
+        callback.assert_not_called()
+        self.assert_incomplete()
+
+    def test_real_early_inventory_failure_never_calls_full_checks(self):
+        import zipfile
+        original = self.run_sdk
+        def extra_member(*args):
+            original(*args)
+            if args[-1] == 'package':
+                msix = next(args[-2].glob('*.msix'))
+                with zipfile.ZipFile(msix, 'a') as archive:
+                    archive.writestr('unexpected.dll', b'unqualified')
+        self.sdk.side_effect = extra_member
+        callback = Mock()
+        with self.assertRaises(ValueError):
+            self.package(callback)
+        self.assertEqual(self.sdk.call_count, 2)
+        self.assertEqual(self.verify.call_count, 1)
+        callback.assert_not_called()
+        self.assert_incomplete()
+
+    def test_full_check_failure_retains_original_and_never_publishes(self):
+        failure = RuntimeError('original full product group failure')
+        def check():
+            self.ready_for_full_checks()
+            raise failure
+        with self.assertRaises(RuntimeError) as caught:
+            self.package(check)
+        self.assertIs(caught.exception, failure)
+        self.assertEqual(self.verify.call_count, 1)
+        self.assert_incomplete()
+
+    def test_product_check_cannot_rewrite_container_even_if_its_payload_still_verifies(self):
+        def check():
+            self.ready_for_full_checks()
+            msix = next(self.destination.glob('*.msix'))
+            msix.write_bytes(msix.read_bytes() + b'changed trailing metadata')
+        with self.assertRaisesRegex(ValueError, 'container bytes changed'):
+            self.package(check)
+        self.assert_incomplete()
+
+    def test_product_check_cannot_rewrite_actual_pe_role(self):
+        from test_windows_package import pe
+        def check():
+            self.ready_for_full_checks()
+            self.artifacts.paths['cli'].write_bytes(pe(2))
+        with self.assertRaisesRegex(ValueError, 'cli executable changed'):
+            self.package(check)
+        self.assert_incomplete()
+
+    def test_product_check_cannot_change_source(self):
+        def check():
+            self.ready_for_full_checks()
+            (self.root / 'README.md').write_bytes(b'changed during checks')
+        with self.assertRaisesRegex(ValueError, 'Source changed'):
+            self.package(check)
+        self.assert_incomplete()
+
+    def test_product_check_cannot_change_prepared_payload(self):
+        def check():
+            self.ready_for_full_checks()
+            (self.destination / 'payload/NOTICE').write_bytes(b'changed during checks')
+        with self.assertRaisesRegex(ValueError, 'payload or manifest changed'):
+            self.package(check)
+        self.assert_incomplete()
+
+    def test_source_exclusions_do_not_hide_an_extra_prepared_payload_member(self):
+        def check():
+            self.ready_for_full_checks()
+            extra = self.destination / 'payload/dist/hidden.pyc'
+            extra.parent.mkdir()
+            extra.write_bytes(b'extra payload must not inherit source exclusions')
+        with self.assertRaisesRegex(ValueError, 'payload inventory changed'):
+            self.package(check)
+        self.assert_incomplete()
+
+    def test_payload_enumeration_denial_propagates_without_qualification(self):
+        failure = PermissionError('controlled original payload scan denial')
+        original = self.packaging.os.walk
+        def walk(path, *args, **kwargs):
+            if self.destination is not None and Path(path) == self.destination / 'payload' and 'full-checks' in self.events:
+                kwargs['onerror'](failure)
+            return original(path, *args, **kwargs)
+        with patch.object(self.packaging.os, 'walk', side_effect=walk), self.assertRaises(PermissionError) as caught:
+            self.package(self.ready_for_full_checks)
+        self.assertIs(caught.exception, failure)
+        self.assert_incomplete()
+
+    def test_original_installed_license_is_collected_again_after_full_checks(self):
+        def check():
+            self.ready_for_full_checks()
+            self.license_files['licenses/original.txt'] = b'changed installed dependency original'
+        with self.assertRaisesRegex(ValueError, 'licenses changed'):
+            self.package(check)
+        self.assertEqual(self.licenses.call_count, 2)
+        self.assert_incomplete()
+
+    def test_final_strict_container_verification_is_not_skipped(self):
+        failure = ValueError('original final blockmap verification failure')
+        def verify(*args):
+            if self.verify.call_count == 2:
+                raise failure
+            return self.verify_containers(*args)
+        self.verify.side_effect = verify
+        with self.assertRaises(ValueError) as caught:
+            self.package(self.ready_for_full_checks)
+        self.assertIs(caught.exception, failure)
+        self.assert_incomplete()
+
+    def test_failure_recording_error_never_replaces_original_full_check_error(self):
+        failure = RuntimeError('original full product failure')
+        original = Path.write_text
+        def write(path, *args, **kwargs):
+            if path.name == 'INCOMPLETE.json' and self.events[-1:] == ['full-checks']:
+                raise OSError('controlled evidence write failure')
+            return original(path, *args, **kwargs)
+        def check():
+            self.ready_for_full_checks()
+            raise failure
+        with patch.object(Path, 'write_text', new=write), self.assertRaises(RuntimeError) as caught:
+            self.package(check)
+        self.assertIs(caught.exception, failure)
+        self.assertIn('Incomplete package record also failed', failure.__notes__[0])
+        self.assert_incomplete()
+
+    def test_full_check_callback_is_mandatory_before_any_sdk_or_output(self):
+        with self.assertRaises(TypeError):
+            self.packaging.package_windows(self.root, self.artifacts, '0.7.0-rc.1', self.contract,
+                self.materials, self.tools, output_root=self.folder)
+        with self.assertRaisesRegex(TypeError, 'full-product check callback is required'):
+            self.package(None)
+        self.sdk.assert_not_called()
+        self.assertFalse((self.folder / 'dist').exists())
+
+    def test_payload_verification_does_not_inherit_the_512_mib_source_budget(self):
+        # Real fixed PEs already exceed that source-only budget in aggregate.
+        # No large allocation is needed to forbid that wrong helper and prove
+        # each final read uses the frozen member's own exact length instead.
+        original_read = self.packaging.read_checked
+        with patch.object(self.packaging, 'snapshot', create=True,
+                side_effect=AssertionError('Payload must not use source snapshot/budget')) as source_snapshot, \
+                patch.object(self.packaging, 'read_checked', wraps=original_read) as reads:
+            destination = self.package(self.ready_for_full_checks)
+        source_snapshot.assert_not_called()
+        receipt = self.packaging.parse_json((destination / 'PACKAGE.json').read_bytes())
+        for member in receipt['commonPayload']:
+            reads.assert_any_call(destination / 'payload' / member['path'], destination / 'payload', max_bytes=member['bytes'])
 
 
 if __name__ == '__main__':

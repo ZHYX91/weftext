@@ -171,7 +171,9 @@ class ReceiptChildRouting(unittest.TestCase):
         def packaged(source, artifacts, *args, **kwargs):
             self.assertEqual(source, self.source)
             self.assertIs(artifacts, self.artifacts)
-            self.timeline.append('original-package')
+            self.timeline.append('prepare-containers')
+            kwargs['before_finalize']()
+            self.timeline.append('finalize-package')
         def licenses(source, metadata, built_package_ids):
             self.assertEqual(source, self.source)
             self.assertIs(metadata, self.artifacts.metadata)
@@ -194,7 +196,7 @@ class ReceiptChildRouting(unittest.TestCase):
             ci.package(self.evidence, self.preparation)
             self.assertEqual(os.environ['CARGO_TARGET_DIR'], 'must be replaced by actual build target')
         self.assertEqual(self.timeline, ['canonical-build', 'receipt-child', 'license-preflight',
-            'original-full-checks', 'original-package'])
+            'prepare-containers', 'original-full-checks', 'finalize-package'])
         build.assert_called_once()
         self.licenses.assert_called_once_with(self.source, self.artifacts.metadata, self.artifacts.built_package_ids)
         check.assert_called_once_with(self.artifacts, ci.mvp.GROUPS)
