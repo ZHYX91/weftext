@@ -232,7 +232,7 @@ function renderHostedDocumentTabs(): void {
     }
 }
 documentTabs.addEventListener("keydown", event => {
-    if (event.isComposing || event.keyCode === 229 || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
     const buttons = [...openDocumentButtons.values()].filter(button => !button.disabled);
     const index = buttons.indexOf(document.activeElement as HTMLButtonElement);
     if (index < 0 || !buttons.length) return;

@@ -17,7 +17,7 @@ import { message as uiMessage, setUiText, errorUiText } from "./ui-locale";
 const workspaceSource = ts.createSourceFile("workspace-tools.ts", readFileSync(new URL("./workspace-tools.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const workspaceClass = workspaceSource.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === "WorkspaceTools") as ts.ClassDeclaration;
 assert.ok(workspaceClass);
-const methodNames = ["closeOwners", "assertCloseReady", "freezeForClose", "thawAfterClose", "button", "show", "showPanel", "selectedDocumentChanged", "documentChanged"];
+const methodNames = ["closeOwners", "assertCloseReady", "freezeForClose", "thawAfterClose", "button", "show", "showPanel", "captureInspectorOrigin", "closeInspector", "selectedDocumentChanged", "documentChanged"];
 const methods = workspaceClass.members.filter(node => ts.isMethodDeclaration(node) && methodNames.includes(node.name.getText(workspaceSource)));
 assert.equal(methods.length, methodNames.length);
 const compiled = ts.transpileModule(`class TestedWorkspaceTools { ${methods.map(node => node.getText(workspaceSource)).join("\n")} }\nglobalThis.TestedWorkspaceTools = TestedWorkspaceTools;`, {

@@ -138,6 +138,14 @@ async function selectTab(id) {
   assert.equal(await ribbon().locator('[role="tabpanel"]:visible').count(), 1);
   assert.equal(await ribbon().locator('[role="tabpanel"]:visible').getAttribute('data-tab'), id);
 }
+async function keyboardRebuild(control, key, label) {
+  const previous = await control.elementHandle(); assert.ok(previous, `${label}: original control is missing`);
+  try {
+    await control.focus(); await page.keyboard.press(key);
+    await until(() => previous.evaluate(element => !element.isConnected), `${label}: original control was not rebuilt`);
+    assert.equal(await control.evaluate(element => document.activeElement === element), true, `${label}: rebuilt control lost keyboard focus`);
+  } finally { await previous.dispose(); }
+}
 async function editorSnapshot() {
   return source().evaluate(element => {
     const view = element.cmTile?.root?.view;
@@ -309,12 +317,26 @@ try {
 
   await selectTab('view');
   for (const name of ['源码', '样式源码', '按需语法', '可视编辑', '阅读']) assert.equal(await ribbon().getByRole('button', { name, exact: true }).count(), 1);
-  await ribbon().getByRole('button', { name: '源码', exact: true }).click(); await expectSource(parentSource);
+  const sourceMode = ribbon().getByRole('button', { name: '源码', exact: true });
+  await keyboardRebuild(sourceMode, 'Enter', 'Source mode'); await expectSource(parentSource);
+  const layoutChoice = ribbon().locator('select.layout-choice');
+  await keyboardRebuild(layoutChoice, 'End', 'Paged layout');
+  await until(async () => await layoutChoice.inputValue() === 'paged', 'Keyboard did not choose paged layout');
+  await keyboardRebuild(layoutChoice, 'Home', 'Continuous layout');
+  await until(async () => await layoutChoice.inputValue() === 'continuous', 'Keyboard did not restore continuous layout');
+  const previewToggle = ribbon().locator('.preview-toggle'), previewLabel = await previewToggle.textContent();
+  await keyboardRebuild(previewToggle, 'Enter', 'Preview toggle');
+  await until(async () => await previewToggle.textContent() !== previewLabel, 'Keyboard preview toggle did not settle');
+  await keyboardRebuild(previewToggle, 'Enter', 'Restore preview preference');
+  await until(async () => await previewToggle.textContent() === previewLabel, 'Keyboard did not restore preview preference');
   await selectTab('knowledge');
-  await ribbon().getByRole('button', { name: '属性', exact: true }).click();
+  const properties = ribbon().getByRole('button', { name: '属性', exact: true });
+  await properties.focus(); await page.keyboard.press('Enter');
   await page.locator('.workspace-inspector').waitFor({ state: 'visible' });
-  await page.locator('.workspace-inspector .inspector-header').getByRole('button', { name: '关闭', exact: true }).click();
+  await page.locator('.workspace-inspector .inspector-header').getByRole('button', { name: '关闭', exact: true }).focus();
+  await page.keyboard.press('Enter');
   await page.locator('.workspace-inspector').waitFor({ state: 'hidden' });
+  assert.equal(await properties.evaluate(element => document.activeElement === element), true, 'Closing inspector did not return to its opener');
   await selectTab('home');
   pass('View exposes all five modes and the authorized property inspector opens and closes independently');
 

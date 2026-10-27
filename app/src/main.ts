@@ -1626,6 +1626,7 @@ function renderDocument(): void {
     if (comparisonMessage)
         doc.session.error = comparisonMessage;
     const controls = el("div", "document-controls");
+    controls.dataset.documentOwner = doc.navigationKey;
     const viewSwitch = el("div", "view-switch");
     viewSwitch.setAttribute("role", "group");
     setUiAttr(viewSwitch, "aria-label", uiMessage("shell.documentView"));
@@ -1633,10 +1634,12 @@ function renderDocument(): void {
         const choice = button(mode.title, () => changeMode(mode.id), doc.mode === mode.id ? "view-choice active" : "view-choice");
         setUiAttr(choice, "title", () => `${uiTextValue(mode.short)} · ${uiTextValue(mode.hint)}`);
         choice.setAttribute("aria-pressed", String(doc.mode === mode.id));
+        choice.dataset.documentControl = `mode:${mode.id}`;
         viewSwitch.append(choice);
     }
     controls.append(viewSwitch);
     const layout = el("select", "layout-choice");
+    layout.dataset.documentControl = "layout";
     setUiAttr(layout, "aria-label", uiMessage("shell.documentLayout"));
     for (const [value, label] of [["continuous", uiMessage("shell.continuousLayout")], ["paged", uiMessage("shell.pagedPreview")]] as const) {
         const option = el("option", "", label);
@@ -1650,6 +1653,7 @@ function renderDocument(): void {
     controls.append(layout);
     if (doc.mode === "source") {
         const preview = button(previewVisible ? uiMessage("shell.collapsePreview") : uiMessage("shell.showPreview"), () => { previewVisible = !previewVisible; localStorage.setItem("weftext-preview", String(previewVisible)); renderContent(); }, "text-button preview-toggle", "eye");
+        preview.dataset.documentControl = "preview";
         controls.append(preview);
     }
     setDocumentGroup("view", "document-mode", uiMessage("shell.documentView"), [controls]);
@@ -1817,6 +1821,9 @@ function sourceToolbar(doc: LiveDocument): HTMLElement {
     return toolbar;
 }
 function renderContent(): void {
+    const focusDocument = current, focusGeneration = navigationGeneration;
+    const focused = document.activeElement as HTMLElement | null, controlKey = focused?.dataset.documentControl;
+    const ownedControl = focused?.closest<HTMLElement>("[data-document-owner]")?.dataset.documentOwner === focusDocument?.navigationKey;
     const recognitionCurrent = current?.session.opened.root ?? "";
     if (recognitionSession !== recognitionCurrent) {
         recognitionPanel.retireDisplay(true);
@@ -1847,6 +1854,13 @@ function renderContent(): void {
     renderTabs();
     renderStatus();
     renderEverydayBar();
+    if (focusDocument && controlKey && ownedControl && current === focusDocument && navigationGeneration === focusGeneration
+        && !bodyCloseFrozen && !focusDocument.editor.composing && !focusDocument.writing.state.composing
+        && (document.activeElement === focused || document.activeElement === document.body)) {
+        const target = ribbon.element.querySelector<HTMLElement>(`[data-document-owner="${CSS.escape(focusDocument.navigationKey)}"] [data-document-control="${CSS.escape(controlKey)}"]`);
+        if (target?.isConnected && !target.matches(":disabled") && !target.closest("[hidden],[inert]") && target.getClientRects().length)
+            target.focus({ preventScroll: true });
+    }
 }
 function refreshChrome(): void {
     const comparisonMessage = current && documentComparisonMessage(current);

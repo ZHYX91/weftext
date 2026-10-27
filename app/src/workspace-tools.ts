@@ -100,6 +100,8 @@ export class WorkspaceTools {
         workspaceId?: string;
     } | null = null;
     private active: WorkspacePanelKind | null = null;
+    private ribbon: WorkspaceRibbon | null = null;
+    private inspectorFocus: { element: HTMLElement; documentKey: string } | null = null;
     private readonly styles = new Map<string, NativeStyleController>();
     private refreshTimer?: ReturnType<typeof setTimeout>;
     private pendingImport: {
@@ -212,6 +214,7 @@ export class WorkspaceTools {
     /** Ribbon switches retain these same command nodes and every proposal owner. */
     mountRibbon(ribbon: WorkspaceRibbon): void {
         this.closeGuard.bind(ribbon.element);
+        this.ribbon = ribbon;
         for (const group of this.commandGroups) ribbon.setGroup(group.tab, group.id, group.label, group.nodes);
     }
 
@@ -295,31 +298,55 @@ export class WorkspaceTools {
     /** Opening is idempotent; a retained active panel must never turn this into
      * closing after navigation or a repeated command. */
     async show(kind: WorkspacePanelKind): Promise<void> {
+        const origin = this.captureInspectorOrigin();
         return this.closeGuard.run(async () => {
             await this.host.beforeAction();
-            await this.showPanel(kind);
+            await this.showPanel(kind, origin);
         });
     }
     /** Only toolbar switches use toggle; explicit open actions always use show. */
     private async toggle(kind: WorkspacePanelKind): Promise<void> {
+        const origin = this.captureInspectorOrigin();
         return this.closeGuard.run(async () => {
             await this.host.beforeAction();
             if (this.active === kind) {
-                this.active = null;
-                this.inspector.hidden = true;
+                this.closeInspector();
                 return;
             }
-            await this.showPanel(kind);
+            await this.showPanel(kind, origin);
         });
     }
-    private async showPanel(kind: WorkspacePanelKind): Promise<void> {
+    private captureInspectorOrigin(): { element: HTMLElement; documentKey: string } | null {
+        const element = document.activeElement as HTMLElement | null;
+        if (!element || this.inspector.contains(element)) return null;
+        const basis = this.host.getDocument();
+        return { element, documentKey: basis ? JSON.stringify([basis.sessionId, basis.root]) : "" };
+    }
+    private closeInspector(): void {
+        if (this.closeGuard.frozen) return;
+        const ownedFocus = this.inspector.contains(document.activeElement), origin = this.inspectorFocus;
+        this.active = null;
+        this.inspectorFocus = null;
+        this.inspector.hidden = true;
+        if (!ownedFocus) return;
+        const basis = this.host.getDocument(), documentKey = basis ? JSON.stringify([basis.sessionId, basis.root]) : "";
+        if (origin?.documentKey === documentKey && origin.element.isConnected && !origin.element.matches(":disabled")
+            && !origin.element.closest("[hidden],[inert]") && origin.element.getClientRects().length) {
+            origin.element.focus({ preventScroll: true });
+            // A focus handler may deliberately choose another surviving control.
+            if (document.activeElement && document.activeElement !== document.body && !this.inspector.contains(document.activeElement)) return;
+        }
+        this.ribbon?.select(this.ribbon.selected, true);
+    }
+    private async showPanel(kind: WorkspacePanelKind, origin: { element: HTMLElement; documentKey: string } | null = null): Promise<void> {
         return this.closeGuard.run(async () => {
+            if (origin) this.inspectorFocus = origin;
             this.active = kind;
             this.inspector.hidden = false;
             this.inspector.classList.toggle("wide", kind === "query");
             const title = document.createElement("strong");
             setUiText(title, { data: uiMessage("dataPanel.regionLabel"), knowledge: uiMessage("workspaceTools.linksAnnotations"), query: uiMessage("workspaceTools.queriesViews") }[kind]);
-            this.header.replaceChildren(title, this.button(uiMessage("common.close"), () => { this.active = null; this.inspector.hidden = true; }));
+            this.header.replaceChildren(title, this.button(uiMessage("common.close"), () => this.closeInspector()));
             this.panelBody.replaceChildren(kind === "data" ? this.propertyPanel.element : kind === "query" ? this.queryPanel.element : this.knowledgeContainer);
             if (kind === "data")
                 await this.propertyPanel.refresh();
