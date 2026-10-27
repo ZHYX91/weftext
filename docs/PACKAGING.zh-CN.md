@@ -46,4 +46,4 @@ StartupTask 默认关闭，登录入口只传 `--login-startup`；通知 COM 使
 
 本地版本映射仅支持规范 `major.minor.patch-rc.N`（`0 ≤ N < 65535`）及正式 SemVer：RC 的第四段为 N，正式版为65535，下一 patch 高于前一正式版。拒绝其它预发布／build metadata、非规范前导零和溢出。这是本地 MSIX 策略，未声称符合 Store 的另一套发布编号政策。同包身份／版本的不同字节不能视为成功升级；实际升级验收使用更高的真实候选号。
 
-生成只建立包结构和字节对应；签名／信任、最低系统、缺依赖离线安装、真实通知／StartupTask、带 CaptureDraft／pending／ledger 升级、升级失败恢复及卸载重装保全仍按 [WORKFLOW](WORKFLOW.zh-CN.md) 和 DSK09／DSK10 在同一最终候选实测。不能把 SDK 空白探针、单元测试或未运行项算作这些通过，也不能把当前 `0.7.0-rc.6` 字段当成 v0.7 完成。
+生成只建立包结构和字节对应；签名／信任、最低系统、缺依赖离线安装、真实通知／StartupTask、带 CaptureDraft／pending／ledger 升级、升级失败恢复及卸载重装保全仍按 [WORKFLOW](WORKFLOW.zh-CN.md) 和 DSK09／DSK10 在同一最终候选实测。不能把 SDK 空白探针、单元测试或未运行项算作这些通过，也不能把当前 `0.7.0-rc.7` 字段当成 v0.7 完成。
