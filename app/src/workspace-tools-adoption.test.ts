@@ -85,7 +85,7 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
     const views = { data: panel.element, knowledge: document.createElement("section"), query: document.createElement("section"), outline: document.createElement("section") };
     for (const view of Object.values(views)) document.body.append(view as unknown as Element);
     const visible = new Set<WorkspaceViewKind>(), refreshed: WorkspaceViewKind[] = [], knowledgeTabs: string[] = [];
-    const outline = { refreshes: 0, invalidations: 0 }, background = { enabled: false };
+    const outline = { refreshes: 0, invalidations: 0 }, background = { enabled: false }, knowledgeContext = { changes: 0 };
     const environments: { consumer: string; root: string }[] = [];
     const presentation = {
         reveal: (kind: WorkspaceViewKind) => { visible.add(kind); views[kind].hidden = false; },
@@ -98,7 +98,7 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
     const tools = Object.assign(new TestedWorkspaceTools(), {
         closeGuard: guard, host, propertyPanel: panel, views, presentation: null,
         queryPanel: { refresh: async () => { refreshed.push("query"); }, environmentChanged: (root: string) => { environments.push({ consumer: "query", root }); }, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
-        knowledgePanel: { refresh: async () => { refreshed.push("knowledge"); }, environmentChanged: (root: string) => { environments.push({ consumer: "knowledge", root }); }, backgroundEnabled: () => background.enabled, selectTab: (tab: string) => { knowledgeTabs.push(tab); }, attachSurface() {}, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
+        knowledgePanel: { refresh: async () => { refreshed.push("knowledge"); }, contextChanged: () => { knowledgeContext.changes++; }, environmentChanged: (root: string) => { environments.push({ consumer: "knowledge", root }); }, backgroundEnabled: () => background.enabled, selectTab: (tab: string) => { knowledgeTabs.push(tab); }, attachSurface() {}, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         outlinePanel: { refresh: () => { outline.refreshes++; refreshed.push("outline"); }, invalidate: () => { outline.invalidations++; } },
         outputPanel: { assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         libraryTrash: { assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
@@ -110,7 +110,7 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
         await tools.selectedDocumentChanged();
         await turn();
     };
-    return { document, state, requests, notices, panel, guard, tools, host, select, views, presentation, visible, refreshed, knowledgeTabs, outline, background, environments };
+    return { document, state, requests, notices, panel, guard, tools, host, select, views, presentation, visible, refreshed, knowledgeTabs, outline, background, environments, knowledgeContext };
 }
 
 test("library mutation retires Knowledge before notifying Query, with one shared invalidation entry", t => {
@@ -135,6 +135,22 @@ test("post-sync invalidates Knowledge before awaiting Query and then performs a 
     waiting.resolve(); await syncing;
     assert.deepEqual(f.refreshed, ["outline", "query", "knowledge"]);
     f.tools.assertCloseReady();
+});
+
+test("selected document retires Knowledge before awaiting the focused property consumer", async t => {
+    const f = fixture(t), waiting = deferred<void>(); f.state.current = basis();
+    f.presentation.reveal("data"); f.presentation.reveal("knowledge");
+    Object.assign(f.panel, { refresh: async () => { assert.equal(f.knowledgeContext.changes, 1); await waiting.promise; } });
+    const selected = f.tools.selectedDocumentChanged();
+    assert.equal(f.knowledgeContext.changes, 1); assert.deepEqual(f.refreshed, ["outline"]);
+    waiting.resolve(); await selected; assert.deepEqual(f.refreshed, ["outline", "knowledge"]);
+});
+
+test("body changes notify Knowledge synchronously before its debounced refresh", t => {
+    const f = fixture(t); f.state.current = basis(); f.presentation.reveal("knowledge");
+    f.tools.documentChanged();
+    assert.equal(f.knowledgeContext.changes, 1); assert.deepEqual(f.refreshed, []);
+    assert.equal(f.tools.freezeForClose(), true, "freezing cancels the still-unstarted debounce");
 });
 
 test("a known commit with unavailable delivery invalidates library reads before returning its original error", async t => {

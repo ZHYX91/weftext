@@ -18,6 +18,7 @@ import { nodeSourceHash } from "./hosted-navigation-state";
 import { RelationshipGraphView } from "./relationship-graph-view";
 import type { GraphSnapshot, GraphEdge, GraphNode } from "./relationship-graph-state";
 import type { HeadingSnapshot } from "./heading-structure-state";
+import { KnowledgeReadQueue, type KnowledgeReadOutcome } from "./knowledge-read-queue";
 export interface KnowledgeContext extends KnowledgeBasis {
     inputId: string;
     inputRevision?: number;
@@ -245,6 +246,7 @@ export interface KnowledgePanel {
     freezeForClose(): boolean;
     thawAfterClose(): void;
     backgroundEnabled(): boolean;
+    contextChanged(): void;
     environmentChanged(root: string): void;
     refresh(): Promise<void>;
     selectTab(tab: KnowledgePanelTab): void;
@@ -331,9 +333,9 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     container.classList.add("knowledge-panel");
     setUiAttr(container, "aria-label", uiMessage("knowledge.title"));
     const gate = new KnowledgeReadGate();
-    type PendingRead = { context: KnowledgeContext; generation: number; completion: Promise<boolean> };
-    let pendingRead: PendingRead | null = null;
-    function invalidateRead(): void { gate.invalidate(); pendingRead = null; }
+    type ReadInput = { context: KnowledgeContext; generation: number };
+    const reads = new KnowledgeReadQueue<ReadInput>(read => readSnapshot(read.context, read.generation));
+    function invalidateRead(): void { gate.invalidate(); reads.invalidate(); }
     const graph = new RelationshipGraphView();
     let graphSession = "";
     const proofreading = new ProofreadingPanel({ resultScope: "local", context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new UiError(uiMessage("knowledge.proofreadingApiUnavailable"))), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults, notify: message => host.notify(message, true) });
@@ -1820,9 +1822,11 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         if (!closeGuard.freeze(false)) return false;
         if (!proofreading.freezeForClose()) { closeGuard.thaw(); return false; }
         invalidateRead();
+        loading = false;
+        setUiText(status, "");
         return true;
     }
-    function thawAfterClose(): void { proofreading.thawAfterClose(); closeGuard.thaw(); }
+    function thawAfterClose(): void { proofreading.thawAfterClose(); closeGuard.thaw(); renderReadState(); }
     function render(): void {
         if (disposed || closeGuard.frozen)
             return;
@@ -1935,8 +1939,9 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         if (closeGuard.frozen || disposed) return;
         // Keep the exact captured inputs even if a host later mutates its object.
         const context = structuredClone(host.context());
-        if (context && pendingRead && gate.accepts(pendingRead.generation, pendingRead.context, context) && sameKnowledgeReadContext(pendingRead.context, context)) {
-            await finishRead(pendingRead, strict);
+        const desired = reads.current;
+        if (context && desired && gate.accepts(desired.generation, desired.context, context) && sameKnowledgeReadContext(desired.context, context)) {
+            await finishRead(reads.join()!, strict);
             return;
         }
         invalidateRead();
@@ -1945,6 +1950,8 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             graph.clear();
         }
         if (!context) {
+            loading = false;
+            setUiText(status, "");
             snapshot = null;
             snapshotBasis = null;
             clearOverlay();
@@ -1967,27 +1974,46 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         if (!(container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select")))
             render();
         const generation = gate.begin();
-        const read = { context, generation, completion: readSnapshot(context, generation) };
-        pendingRead = read;
-        await finishRead(read, strict);
+        await finishRead(reads.request({ context, generation }), strict);
     }
     /** Every caller waits independently, including strict post-commit readback.
      * The shared completion installs/reports once and never swallows its error. */
-    async function finishRead(read: PendingRead, strict: boolean): Promise<void> {
-        try {
-            const installed = await read.completion;
-            if (strict && !installed) throw new UiError(uiMessage("knowledge.readBasisChanged"));
-        }
-        catch (error) { if (strict) throw error; }
-        finally { if (pendingRead === read) pendingRead = null; }
+    async function finishRead(completion: Promise<KnowledgeReadOutcome>, strict: boolean): Promise<void> {
+        const outcome = await completion;
+        if (!strict) return;
+        if (outcome.status === "failed") throw outcome.error;
+        if (outcome.status === "retired") throw new UiError(uiMessage("knowledge.readBasisChanged"));
+    }
+    function renderReadState(): void {
+        if (sameKnowledgeBasis(renderedBasis, host.context()) && container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))
+            deferredRender = true;
+        else
+            render();
+    }
+    function retireUndeliverableRead(generation: number): void {
+        if (reads.current?.generation !== generation) return;
+        invalidateRead();
+        loading = false;
+        snapshot = null;
+        snapshotBasis = null;
+        clearOverlay();
+        setUiText(status, uiMessage("knowledge.readBasisChanged"));
+        renderReadState();
     }
     async function readSnapshot(context: KnowledgeContext, generation: number): Promise<boolean> {
         try {
+            // A queued request may lose its owner before the previous transport ends.
+            if (closeGuard.frozen || disposed || !gate.accepts(generation, context, host.context())) {
+                retireUndeliverableRead(generation);
+                return false;
+            }
             const next = await host.load(context);
             // Sharing compares all inputs; delivery retains the source/owner gate.
             // Core knowledge reads do not consume caret/selection or Draft ACKs.
-            if (closeGuard.frozen || disposed || !gate.accepts(generation, context, host.context()))
+            if (closeGuard.frozen || disposed || !gate.accepts(generation, context, host.context())) {
+                retireUndeliverableRead(generation);
                 return false;
+            }
             snapshot = decodeKnowledgeSnapshot(next);
             snapshotBasis = context;
             loading = false;
@@ -2011,14 +2037,29 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 else
                     render();
             }
+            else retireUndeliverableRead(generation);
             throw error;
         }
+    }
+    /** Retire the old logical owner before a consumer awaits or debounces. */
+    function contextChanged(): void {
+        if (closeGuard.frozen || disposed) return;
+        const context = host.context(), previous = reads.current?.context ?? snapshotBasis ?? renderedBasis;
+        if (sameKnowledgeBasis(previous, context) || previous === null && context === null) return;
+        invalidateRead();
+        loading = false;
+        snapshot = null;
+        snapshotBasis = null;
+        rules.closePreviews();
+        clearOverlay();
+        setUiText(status, "");
+        renderReadState();
     }
     /** Library sidecars, settings and other notes can change with equal Draft bytes. */
     function environmentChanged(root: string): void {
         if (closeGuard.frozen || disposed) return;
         const coordinate = (value: string): string => value.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
-        if (![host.context()?.root, pendingRead?.context.root, snapshotBasis?.root].some(value => value !== undefined && coordinate(value) === coordinate(root))) return;
+        if (![host.context()?.root, reads.current?.context.root, snapshotBasis?.root].some(value => value !== undefined && coordinate(value) === coordinate(root))) return;
         invalidateRead();
         loading = false;
         snapshot = null;
@@ -2035,6 +2076,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     return {
         assertCloseReady, freezeForClose, thawAfterClose,
         backgroundEnabled: () => enabled || problemHints,
+        contextChanged,
         environmentChanged,
         refresh,
         selectTab(next) { closeGuard.assertMutable(); tab = next; render(); },

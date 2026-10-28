@@ -632,9 +632,30 @@ try {
     assert.equal(path.normalize(await nodesView().locator('.node-browser-path').getAttribute('title')), path.normalize(parentFolder));
     await expectSource(dirtyParent);
   }
-  await expectSource(dirtyParent); await workspaceCommand(page, 'knowledge', '链接与批注'); await until(async () => !await knowledge().isVisible(), 'toolbar still closes its own active inspector');
-  await workspaceCommand(page, 'knowledge', '链接与批注'); await knowledge().waitFor({ state: 'visible' }); await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent); assert.equal(await disk(image.path), savedImage);
-  await pass('Repeated graph and heading commands keep their requested views visible, while the resource command reveals the independent Nodes owner; the knowledge toolbar still closes/reopens its own retained owner without saving or changing the author Draft.');
+  await expectSource(dirtyParent);
+  const initialKnowledgeVisibility = await knowledge().isVisible(), toggleClient = pageClients.get(page);
+  assert.ok(toggleClient, 'Knowledge toolbar toggles must belong to the observed original browser client');
+  result.knowledgeToggleInitialVisibility = initialKnowledgeVisibility;
+  result.knowledgeToggleActions = [];
+  for (const expectedAfter of [!initialKnowledgeVisibility, initialKnowledgeVisibility]) {
+    const startedMs = performance.now(), action = { client: toggleClient, at: new Date().toISOString(),
+      before: await knowledge().isVisible(), expectedAfter, budgetMs: 30000, requestCountAtStart: result.requests.length, completed: false };
+    result.knowledgeToggleActions.push(action);
+    try {
+      await workspaceCommand(page, 'knowledge', '链接与批注'); action.clickedAt = new Date().toISOString();
+      await until(async () => await knowledge().isVisible() === expectedAfter, 'knowledge toolbar visibility reverses and restores its actual initial state', action.budgetMs);
+      await expectSource(dirtyParent);
+      action.completed = true;
+    } finally {
+      action.elapsedMs = performance.now() - startedMs; action.endedAt = new Date().toISOString();
+      try { action.after = await knowledge().isVisible(); } catch (error) { action.visibilityObservationError = String(error); }
+      action.originalRequests = result.requests.slice(action.requestCountAtStart).filter(entry => entry.client === toggleClient)
+        .map(entry => ({ id: entry.id, route: entry.route, at: entry.at, status: entry.status, responseElapsedMs: entry.responseElapsedMs,
+          elapsedMs: entry.elapsedMs, bodyRecordedAt: entry.bodyRecordedAt, failedAt: entry.failedAt, failure: entry.failure }));
+    }
+  }
+  await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent); assert.equal(await disk(image.path), savedImage);
+  await pass('Repeated graph and heading commands keep their requested views visible, while the resource command reveals the independent Nodes owner; the knowledge toolbar toggles its retained owner twice and restores its actual initial visibility without saving or changing the author Draft.');
   result.expectedHttpStates = []; result.unexpectedHttpErrors = [];
   for (const event of result.httpErrors) { let code; try { code = JSON.parse(event.body).error?.code; } catch { /* An unclassified response stays unexpected. */ }
     const expected = event.status === 409 && (code === 'stale_draft' && ['/api/render', '/api/knowledge/read'].includes(event.route)

@@ -23,13 +23,19 @@ mod trash;
 const MAX_OPERATION_BYTES: usize = 64 * 1024 * 1024;
 const MAX_OPERATION_FILES: usize = 5000;
 
-// A single synchronous node qualification reads every original committed Plan
-// and Birth in their original order. It is not retained by a returned witness,
+// A single synchronous qualification reads every original committed Plan and
+// Birth in their original order. It is not retained by a returned witness,
 // an App capture or a worker, and it never substitutes for current file guards.
 pub(crate) struct QualifiedReadObservation<'a> {
     core: &'a Core,
     plans: Vec<&'a journal::Plan>,
     births: BTreeMap<String, Vec<Birth>>,
+    snapshot_records: Option<SnapshotReadObservation<'a>>,
+    resource_births: Option<Result<Vec<ResourceBirth>>>,
+}
+struct SnapshotReadObservation<'a> {
+    records: ObservationRecordPaths<'a>,
+    facts: BTreeMap<String, Vec<RevisionFact>>,
 }
 impl<'a> QualifiedReadObservation<'a> {
     pub(crate) fn read(core: &'a Core) -> Result<Self> {
@@ -47,7 +53,55 @@ impl<'a> QualifiedReadObservation<'a> {
             core,
             plans,
             births,
+            snapshot_records: None,
+            resource_births: None,
         })
+    }
+    fn read_snapshots(core: &'a Core) -> Result<Self> {
+        let mut observation = Self::read(core)?;
+        let records = core.observation_record_paths()?;
+        let mut facts = BTreeMap::new();
+        for plan in &observation.plans {
+            facts.insert(
+                plan.operation_id.clone(),
+                core.read_observation_facts_from_paths(&plan.operation_id, &records)?,
+            );
+        }
+        observation.snapshot_records = Some(SnapshotReadObservation { records, facts });
+        Ok(observation)
+    }
+    fn check_snapshot_records(&self) -> Result<()> {
+        if let Some(snapshot) = &self.snapshot_records {
+            self.core
+                .check_observation_record_paths(&snapshot.records, &self.plans)?;
+        }
+        Ok(())
+    }
+    fn resource_admitted(
+        &mut self,
+        id: &str,
+        workspace: &str,
+        node: &str,
+        identity: &FileIdentity,
+    ) -> Result<bool> {
+        if self.resource_births.is_none() {
+            let result = self
+                .plans
+                .iter()
+                .map(|plan| self.core.resource_births(plan))
+                .collect::<Result<Vec<_>>>()
+                .map(|births| births.into_iter().flatten().collect());
+            self.resource_births = Some(result);
+        }
+        match self.resource_births.as_ref().unwrap() {
+            Ok(births) => Ok(births.iter().any(|birth| {
+                birth.resource_id == id
+                    && birth.workspace_id == workspace
+                    && birth.node_id == node
+                    && &birth.identity == identity
+            })),
+            Err(error) => Err(error.clone()),
+        }
     }
     pub(crate) fn binding(&self, identity: &FileIdentity) -> Option<&Birth> {
         self.plans
@@ -68,8 +122,25 @@ impl<'a> QualifiedReadObservation<'a> {
             .unwrap())
     }
     pub(crate) fn revision(&self, captured: &CapturedFile) -> Result<Option<String>> {
+        Ok(self.revisions(&[captured])?.pop().unwrap())
+    }
+    fn revisions(&self, captured: &[&CapturedFile]) -> Result<Vec<Option<String>>> {
+        if let Some(snapshot) = &self.snapshot_records {
+            return self
+                .core
+                .accepted_revisions_with_facts(&self.plans, captured, |id| {
+                    Ok(snapshot.facts[id].clone())
+                });
+        }
+        let records = self.core.observation_record_paths()?;
+        let revisions = self
+            .core
+            .accepted_revisions_with_facts(&self.plans, captured, |id| {
+                self.core.read_observation_facts_from_paths(id, &records)
+            })?;
         self.core
-            .accepted_revision_with_plans(captured, &self.plans)
+            .check_observation_record_paths(&records, &self.plans)?;
+        Ok(revisions)
     }
 }
 // A single observation-name cut retains the original enumeration's directory
@@ -462,6 +533,12 @@ pub struct ManagedResource {
     pub manifest_base_id: String,
     pub manifest_bytes: Vec<u8>,
 }
+/// Ordered, bounded resource-index capture. A failed member retains its own
+/// error; the first member beyond the aggregate read budget is not returned.
+pub struct ManagedResourceSnapshotBatch {
+    pub entries: Vec<(String, Result<Vec<ManagedResource>>)>,
+    pub budget_exhausted: bool,
+}
 #[derive(Clone, Serialize, Deserialize)]
 struct ResourceBirth {
     resource_id: String,
@@ -538,6 +615,7 @@ pub(crate) struct SnapshotBinding {
     pub(crate) captured: Option<CapturedFile>,
     pub(crate) parent: FileIdentity,
 }
+type SnapshotBindings = Vec<(String, SnapshotBinding)>;
 /// An owned read witness. It cannot be deserialized or used as a write basis;
 /// dropping it releases the captured bytes without retaining them in Core.
 #[derive(Clone)]
@@ -2237,13 +2315,96 @@ impl Core {
     ) -> Result<Vec<ManagedResource>> {
         let root = absolute_path(root.as_ref())?;
         let path = absolute_path(node_source.as_ref())?;
+        self.require_workspace(&root)?;
+        let mut facts = QualifiedReadObservation::read_snapshots(self)?;
+        let (resources, bindings) =
+            self.capture_managed_resource_snapshot(&root, &path, &mut facts)?;
+        facts.check_snapshot_records()?;
+        drop(facts);
+        self.snapshots.extend(bindings);
+        Ok(resources)
+    }
+    /// Share only this synchronous call's complete original journal evidence.
+    /// Each member still captures and qualifies its own physical inputs. Keep
+    /// the existing knowledge-index resource-payload budget and ordered errors.
+    pub fn managed_resource_snapshots(
+        &mut self,
+        root: impl AsRef<Path>,
+        node_sources: &[String],
+    ) -> Result<ManagedResourceSnapshotBatch> {
+        let root = absolute_path(root.as_ref())?;
+        self.require_workspace(&root)?;
+        if node_sources.len() > MAX_OPERATION_FILES {
+            return Err(CoreError::new(
+                "budget",
+                UiMessage::error_core_operations_admitted_set_exceeds5000_nodes(),
+            ));
+        }
+        if node_sources.is_empty() {
+            return Ok(ManagedResourceSnapshotBatch {
+                entries: vec![],
+                budget_exhausted: false,
+            });
+        }
+        let mut entries = Vec::new();
+        let mut bindings = Vec::new();
+        let mut total = 0usize;
+        let mut count = 0usize;
+        let mut budget_exhausted = false;
+        let mut facts = match QualifiedReadObservation::read_snapshots(self) {
+            Ok(facts) => facts,
+            Err(error) => {
+                return Ok(ManagedResourceSnapshotBatch {
+                    entries: node_sources
+                        .iter()
+                        .map(|path| (path.clone(), Err(error.clone())))
+                        .collect(),
+                    budget_exhausted: false,
+                });
+            }
+        };
+        for path in node_sources {
+            let result = absolute_path(Path::new(path))
+                .and_then(|path| self.capture_managed_resource_snapshot(&root, &path, &mut facts));
+            let result = match result {
+                Ok((resources, captured)) => {
+                    let size = resources.iter().map(|resource| resource.bytes.len()).sum();
+                    if total.saturating_add(size) > MAX_OPERATION_BYTES
+                        || count + resources.len() > MAX_OPERATION_FILES
+                    {
+                        budget_exhausted = true;
+                        break;
+                    }
+                    total += size;
+                    count += resources.len();
+                    bindings.extend(captured);
+                    Ok(resources)
+                }
+                Err(error) => Err(error),
+            };
+            entries.push((path.clone(), result));
+        }
+        facts.check_snapshot_records()?;
+        drop(facts);
+        self.snapshots.extend(bindings);
+        Ok(ManagedResourceSnapshotBatch {
+            entries,
+            budget_exhausted,
+        })
+    }
+    fn capture_managed_resource_snapshot(
+        &self,
+        root: &Path,
+        path: &Path,
+        facts: &mut QualifiedReadObservation<'_>,
+    ) -> Result<(Vec<ManagedResource>, SnapshotBindings)> {
         let directory = path.parent().ok_or_else(|| {
             CoreError::new(
                 "invalidPath",
                 UiMessage::error_core_operations_missing_node_parent(),
             )
         })?;
-        let in_trash = directory.strip_prefix(&root).is_ok_and(|relative| {
+        let in_trash = directory.strip_prefix(root).is_ok_and(|relative| {
             relative.components().next().is_some_and(|component| {
                 component
                     .as_os_str()
@@ -2252,11 +2413,12 @@ impl Core {
             })
         });
         let node = if in_trash {
-            let original = capture_optional(&self.backend, &path)?.ok_or_else(|| {
+            let original = capture_optional(&self.backend, path)?.ok_or_else(|| {
                 CoreError::new("missingNode", weftext_messages::UiMessage::error_core_operations_retained_canonical_source_missing())
             })?;
-            let birth = self
-                .admitted_binding(&original.stamp.identity)?
+            let birth = facts
+                .binding(&original.stamp.identity)
+                .cloned()
                 .ok_or_else(|| {
                     CoreError::new(
                         "identityPending",
@@ -2265,8 +2427,8 @@ impl Core {
                     )
                 })?;
             let qualified = self.qualified_query_node_at(
-                &root,
-                &path,
+                root,
+                path,
                 &weftext_knowledge::NodeRef {
                     workspace_id: birth.workspace_id,
                     node_id: birth.node_id,
@@ -2277,7 +2439,7 @@ impl Core {
             Self::merge_query_node_feature_witness(&mut witnesses, &qualified.witness)?;
             let current = witnesses
                 .into_iter()
-                .find(|witness| locator_equal(&witness.binding.path, &display(&path)))
+                .find(|witness| locator_equal(&witness.binding.path, &display(path)))
                 .and_then(|witness| witness.binding.captured)
                 .ok_or_else(|| {
                     CoreError::new(
@@ -2293,16 +2455,16 @@ impl Core {
             }
             current
         } else {
-            self.managed_node(&root, directory, false)?
+            self.managed_node_with_observation(root, directory, false, Some(facts))?
         };
-        let birth = self.admitted_binding(&node.stamp.identity)?.unwrap();
+        let birth = facts.binding(&node.stamp.identity).unwrap().clone();
         let manifest_path = directory.join("weftext.resources.json");
-        let manifest = self
-            .read_snapshot(&root, &[display(&manifest_path)])?
-            .files
-            .remove(0);
+        let (mut initial, initial_bindings) =
+            self.capture_bounded_snapshot(root, &[display(&manifest_path)], 64, Some(facts))?;
+        let manifest = initial.files.remove(0);
+        drop(initial_bindings);
         let Some(bytes) = manifest.bytes.clone() else {
-            return Ok(Vec::new());
+            return Ok((Vec::new(), Vec::new()));
         };
         let value: serde_json::Value = serde_json::from_slice(&bytes)?;
         if value["version"] != 1 {
@@ -2348,10 +2510,10 @@ impl Core {
             paths.push(display(&resource_path(directory, name)?));
         }
         if paths.is_empty() {
-            return Ok(vec![]);
+            return Ok((vec![], vec![]));
         }
         paths.push(display(&manifest_path));
-        let cut = self.read_snapshot(&root, &paths)?;
+        let (cut, bindings) = self.capture_bounded_snapshot(root, &paths, 64, Some(facts))?;
         let current_manifest = cut.files.last().unwrap();
         if current_manifest.bytes != manifest.bytes {
             return Err(CoreError::new(
@@ -2368,8 +2530,15 @@ impl Core {
                     UiMessage::error_core_operations_registered_resource_file_absent(),
                 ));
             };
-            let capture = self.snapshots[&f.base_id].captured.as_ref().unwrap();
-            let admitted = self.admitted_resource(
+            let capture = bindings
+                .iter()
+                .find(|(base_id, _)| base_id == &f.base_id)
+                .unwrap()
+                .1
+                .captured
+                .as_ref()
+                .unwrap();
+            let admitted = facts.resource_admitted(
                 id,
                 &birth.workspace_id,
                 &birth.node_id,
@@ -2389,7 +2558,7 @@ impl Core {
                 manifest_bytes: current_manifest.bytes.clone().unwrap(),
             });
         }
-        Ok(result)
+        Ok((result, bindings))
     }
     pub fn prepare_import_resource(
         &mut self,
@@ -2503,6 +2672,13 @@ impl Core {
                     UiMessage::error_core_operations_original_snapshot_unavailable(),
                 )
             })
+    }
+    /// Release only the caller's original read tokens. Independently captured
+    /// bases, owned witnesses and prepared Plans keep their own evidence.
+    pub fn release_snapshot_bases(&mut self, base_ids: &[String]) {
+        for base_id in base_ids {
+            self.snapshots.remove(base_id);
+        }
     }
     pub fn validate_snapshot_witness(
         &self,
@@ -3297,6 +3473,17 @@ impl Core {
         paths: &[String],
         limit: usize,
     ) -> Result<SnapshotSet> {
+        let (snapshot, bindings) = self.capture_bounded_snapshot(root, paths, limit, None)?;
+        self.snapshots.extend(bindings);
+        Ok(snapshot)
+    }
+    fn capture_bounded_snapshot(
+        &self,
+        root: &Path,
+        paths: &[String],
+        limit: usize,
+        shared: Option<&QualifiedReadObservation<'_>>,
+    ) -> Result<(SnapshotSet, SnapshotBindings)> {
         let root = absolute_path(root)?;
         self.require_workspace(&root)?;
         if paths.is_empty() || paths.len() > limit {
@@ -3339,10 +3526,9 @@ impl Core {
             guards.push((path, guard));
             handles.push(handle);
         }
-        let mut output = Vec::new();
-        let mut bindings = Vec::new();
+        let mut captures = Vec::new();
         let mut total = 0usize;
-        for ((path, guard), handle) in guards.iter().zip(&mut handles) {
+        for ((path, _guard), handle) in guards.iter().zip(&mut handles) {
             let captured = match handle {
                 Some(f) => Some(CapturedFile {
                     path: display(path),
@@ -3358,17 +3544,45 @@ impl Core {
                     UiMessage::error_core_operations_selected_snapshot_exceeds64_mi_b_no_partial_snapshot_published(),
                 ));
             }
-            let birth = captured
-                .as_ref()
-                .map(|f| self.admitted_binding(&f.stamp.identity))
-                .transpose()?
-                .flatten();
+            captures.push(captured);
+        }
+        // Keep all original file/parent handles held while qualifying the
+        // complete captured set. Journal admission and observation facts are
+        // shared within this call, rather than rescanned for every file.
+        let present = captures.iter().flatten().collect::<Vec<_>>();
+        let qualifications = if present.is_empty() {
+            vec![(None, None); captures.len()]
+        } else {
+            let local_facts;
+            let facts = match shared {
+                Some(facts) => facts,
+                None => {
+                    local_facts = QualifiedReadObservation::read_snapshots(self)?;
+                    &local_facts
+                }
+            };
+            let mut revisions = facts.revisions(&present)?.into_iter();
+            let qualifications = captures
+                .iter()
+                .map(|captured| match captured {
+                    Some(file) => (
+                        facts.binding(&file.stamp.identity).cloned(),
+                        revisions.next().unwrap(),
+                    ),
+                    None => (None, None),
+                })
+                .collect::<Vec<_>>();
+            if shared.is_none() {
+                facts.check_snapshot_records()?;
+            }
+            qualifications
+        };
+        let mut output = Vec::new();
+        let mut bindings = Vec::new();
+        for (((path, guard), captured), (birth, revision)) in
+            guards.iter().zip(captures).zip(qualifications)
+        {
             let base_id = fresh();
-            let revision = captured
-                .as_ref()
-                .map(|f| self.accepted_revision(f))
-                .transpose()?
-                .flatten();
             output.push(SnapshotFile {
                 path: display(path),
                 bytes: captured.as_ref().map(|f| f.bytes.clone()),
@@ -3392,11 +3606,13 @@ impl Core {
                 },
             ));
         }
-        self.snapshots.extend(bindings);
-        Ok(SnapshotSet {
-            files: output,
-            complete: true,
-        })
+        Ok((
+            SnapshotSet {
+                files: output,
+                complete: true,
+            },
+            bindings,
+        ))
     }
     /// Original committed relocation or Clone birth evidence locates Trash
     /// trees; neither a path name nor a matching declaration creates a member.
@@ -6455,6 +6671,15 @@ impl Core {
         directory: &Path,
         allow_trash: bool,
     ) -> Result<CapturedFile> {
+        self.managed_node_with_observation(root, directory, allow_trash, None)
+    }
+    fn managed_node_with_observation(
+        &self,
+        root: &Path,
+        directory: &Path,
+        allow_trash: bool,
+        facts: Option<&QualifiedReadObservation<'_>>,
+    ) -> Result<CapturedFile> {
         if !directory.starts_with(root) {
             return Err(CoreError::new(
                 "outsideRoot",
@@ -6473,14 +6698,16 @@ impl Core {
             )
         })?;
         self.check_pending(&path)?;
-        let birth = self
-            .admitted_binding(&file.stamp.identity)?
-            .ok_or_else(|| {
+        let birth = match facts {
+            Some(facts) => facts.binding(&file.stamp.identity).cloned(),
+            None => self.admitted_binding(&file.stamp.identity)?,
+        }
+        .ok_or_else(|| {
                 CoreError::new(
                     "identityConflict",
                     weftext_messages::UiMessage::error_core_operations_source_object_has_no_committed_admission(),
                 )
-            })?;
+        })?;
         let workspace = self.require_workspace(root)?;
         if birth.workspace_id != workspace.workspace_id
             || weftext_engine::inspect(&decode(&file.bytes)?).id.as_ref() != Some(&birth.node_id)

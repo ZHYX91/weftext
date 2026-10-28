@@ -86,6 +86,7 @@ mod native;
 mod navigation_api;
 mod owned_process;
 mod processing_api;
+mod readonly_evidence;
 mod recognition_api;
 mod request_json;
 pub(crate) use request_json::RequestJson;

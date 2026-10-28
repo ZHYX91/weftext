@@ -160,7 +160,9 @@ pub(crate) async fn resource_set(
     .await?;
     analyze_resources(managed).await
 }
-async fn analyze_resources(managed: Vec<ManagedResource>) -> Result<ResourceSet, ApiError> {
+pub(crate) async fn analyze_resources(
+    managed: Vec<ManagedResource>,
+) -> Result<ResourceSet, ApiError> {
     crate::work::spawn_blocking(move || {
         let mut resources = Vec::new();
         let mut warnings = Vec::new();

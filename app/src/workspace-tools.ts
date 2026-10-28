@@ -369,6 +369,7 @@ export class WorkspaceTools {
     async selectedDocumentChanged(): Promise<void> {
         if (this.closeGuard.frozen) return;
         return this.closeGuard.run(async () => {
+            this.knowledgePanel.contextChanged();
             this.outlinePanel.refresh();
             if (this.viewVisible("data")) {
                 clearTimeout(this.refreshTimer);
@@ -379,6 +380,7 @@ export class WorkspaceTools {
         });
     }
     documentChanged(): void { if (this.closeGuard.frozen) return;
+        this.knowledgePanel.contextChanged();
         clearTimeout(this.refreshTimer);
         this.outlinePanel.invalidate();
         this.knowledgePanel.attachSurface(null);

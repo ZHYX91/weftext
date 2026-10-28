@@ -4,6 +4,7 @@
 use super::*;
 #[cfg(test)]
 use crate::CoreTestFixture;
+use crate::readonly_evidence::capture_readonly;
 use serde::de::{MapAccess, Visitor};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -266,22 +267,26 @@ pub(crate) async fn knowledge_schema(
     state: &AppState,
     root: PathBuf,
 ) -> Result<(Schema, String), ApiError> {
-    let (config, schema) = core_call(state, move |core| resolved_schema(core, &root)).await?;
-    let generation = format!(
-        "{}:{}",
-        config.revision.as_deref().unwrap_or("observed"),
-        weftext_engine::source_hash(&config.source)
-    );
-    Ok((schema, generation))
+    let (config, _evidence) = capture_readonly(state, move |capture| {
+        capture.read_config(&root, ConfigRole::Schema)
+    })
+    .await?;
+    knowledge_schema_from_bytes(config.bytes.as_deref(), config.revision.as_deref())
+        .map_err(ApiError::from)
 }
 
 pub(crate) fn knowledge_schema_from_snapshot(
     snapshot: &weftext_core::SnapshotFile,
 ) -> Result<(Schema, String), CoreError> {
-    let source = snapshot
-        .bytes
-        .as_ref()
-        .map(|bytes| String::from_utf8(bytes.clone()))
+    knowledge_schema_from_bytes(snapshot.bytes.as_deref(), snapshot.revision.as_deref())
+}
+
+fn knowledge_schema_from_bytes(
+    bytes: Option<&[u8]>,
+    revision: Option<&str>,
+) -> Result<(Schema, String), CoreError> {
+    let source = bytes
+        .map(std::str::from_utf8)
         .transpose()
         .map_err(|_| {
             CoreError::new(
@@ -289,13 +294,13 @@ pub(crate) fn knowledge_schema_from_snapshot(
                 UiMessage::error_api_export_conversion_frozen_schema_encoding(),
             )
         })?
-        .unwrap_or_else(|| BUNDLED_SCHEMA_SOURCE.to_owned());
-    let schema = Schema::from_author_json(&source)
+        .unwrap_or(BUNDLED_SCHEMA_SOURCE);
+    let schema = Schema::from_author_json(source)
         .map_err(|error| CoreError::from_data("invalid_data", error))?;
     let generation = format!(
         "{}:{}",
-        snapshot.revision.as_deref().unwrap_or("observed"),
-        weftext_engine::source_hash(&source)
+        revision.unwrap_or("observed"),
+        weftext_engine::source_hash(source)
     );
     Ok((schema, generation))
 }
