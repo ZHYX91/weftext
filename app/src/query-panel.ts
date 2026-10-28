@@ -1824,7 +1824,8 @@ export class QueryPanel {
             body.checked = this.includeBody;
             lifecycle.value = this.lifecycle;
             descendants.disabled = body.disabled = lifecycle.disabled = !!selected || !!this.exactPlan;
-            const nextChips = queryRefreshKey([this.types, this.conditions]);
+            // Display labels are reactive local UI values, never serializable Query state.
+            const nextChips = queryRefreshKey([this.types, this.conditions.map(({ id, expr, tag }) => [id, expr, tag?.reference, tag?.mode])]);
             if (nextChips !== chipsKey) {
                 chipsKey = nextChips;
                 chips.replaceChildren();
@@ -2220,12 +2221,13 @@ export class QueryPanel {
             this.renderControls();
         }), warning, list, recent, ui("p", "data-help", message("queryShortcut.localStorageHelp")));
         this.shortcutsHost.append(shortcuts);
-        let previous = "";
+        let previous = "", previousError: UiText | undefined;
         this.controlUpdates!.push(reset => {
-            const key = queryRefreshKey([this.shortcutError, this.shortcuts, this.recent]);
-            if (!reset && key === previous)
+            const key = queryRefreshKey([this.shortcuts, this.recent]);
+            if (!reset && key === previous && this.shortcutError === previousError)
                 return;
             previous = key;
+            previousError = this.shortcutError;
             warning.replaceChildren();
             list.replaceChildren();
             recent.replaceChildren();
