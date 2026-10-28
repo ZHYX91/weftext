@@ -13,7 +13,7 @@ import { message as uiMessage, setUiText, setUiAttr, uiTextNode, uiTextValue, er
 const main = ts.createSourceFile("main.ts", readFileSync(new URL("./main.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const workspace = ts.createSourceFile("workspace-tools.ts", readFileSync(new URL("./workspace-tools.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const owner = workspace.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === "WorkspaceTools") as ts.ClassDeclaration;
-const methodNames = ["button", "show", "showPanel", "toggle", "captureInspectorOrigin", "closeInspector"];
+const methodNames = ["show", "toggle", "refreshView"];
 const methods = owner.members.filter(node => ts.isMethodDeclaration(node) && methodNames.includes(node.name.getText(workspace)));
 assert.equal(methods.length, methodNames.length);
 const workspaceCode = ts.transpileModule(`class Owner { ${methods.map(node => node.getText(workspace)).join("\n")} } globalThis.Owner = Owner;`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
@@ -73,47 +73,50 @@ function dom(t: TestContext) {
     const append = (tag = "button") => { const element = document.createElement(tag); document.body.append(element); return element; };
     return { document, append };
 }
-function inspectorFixture(t: TestContext) {
-    const { document, append } = dom(t), opener = append(), fallback = append(), outside = append();
-    const inspector = append("aside"), header = document.createElement("header"), panelBody = document.createElement("div");
-    inspector.hidden = true; inspector.append(header, panelBody);
-    const state = { document: { sessionId: "session-a", root: "root-a" }, before: async () => {} };
+function dockCommandFixture(t: TestContext) {
+    const { document, append } = dom(t), opener = append(), outside = append();
+    const view = append("section"), input = document.createElement("input"); view.append(input);
+    input.value = "retained proposal";
+    const state = { document: { sessionId: "session-a", root: "root-a", source: "author draft", undo: ["prior"] }, before: async () => {} };
+    const visible = new Set<string>(), changes: string[] = [];
     const context = vm.createContext({ document, uiMessage, setUiText, errorUiText });
     vm.runInContext(workspaceCode, context);
     const tools = Object.assign(new context.Owner(), {
-        closeGuard: new ProposalCloseGuard(), inspector, header, panelBody, active: null, inspectorFocus: null,
+        closeGuard: new ProposalCloseGuard(),
+        presentation: { visible: (kind: string) => visible.has(kind), reveal: (kind: string) => { visible.add(kind); changes.push(`reveal:${kind}`); }, hide: (kind: string) => { visible.delete(kind); changes.push(`hide:${kind}`); } },
         host: { beforeAction: () => state.before(), getDocument: () => state.document, notify(error: unknown) { throw error; } },
-        propertyPanel: { element: document.createElement("div"), refresh: async () => {} },
-        queryPanel: { element: document.createElement("div"), refresh: async () => {} }, knowledgeContainer: document.createElement("div"), knowledgePanel: { refresh: async () => {} },
-        ribbon: { selected: "knowledge", select: (_tab: string, focus: boolean) => { if (focus) fallback.focus(); } },
+        propertyPanel: { element: view, refresh: async () => {} },
+        queryPanel: { element: document.createElement("div"), refresh: async () => {} }, knowledgePanel: { refresh: async () => {} },
     });
-    const close = async () => { const button = header.querySelector("button"); assert.ok(button); button.focus(); button.onclick?.(); await turn(); };
-    return { document, opener, outside, fallback, inspector, state, tools, close };
+    return { document, opener, outside, state, tools, visible, changes, view, input };
 }
 
-test("inspector close returns to the surviving opener and keeps its source document", async t => {
-    const f = inspectorFixture(t); f.opener.focus(); await f.tools.show("data"); await f.close();
-    assert.equal(f.document.activeElement, f.opener); assert.equal(f.inspector.hidden, true); assert.equal(f.fallback.focusCount, 0);
-});
-for (const unavailable of ["removed", "disabled", "hidden", "inert", "new-document"] as const) test(`inspector close uses current ribbon fallback when opener is ${unavailable}`, async t => {
-    const f = inspectorFixture(t); f.opener.focus(); await f.tools.show("data");
-    if (unavailable === "removed") f.opener.remove();
-    else if (unavailable === "disabled") f.opener.disabled = true;
-    else if (unavailable === "hidden") f.opener.hidden = true;
-    else if (unavailable === "inert") f.opener.inert = true;
-    else f.state.document = { sessionId: "session-b", root: "root-b" };
-    await f.close(); assert.equal(f.document.activeElement, f.fallback);
-});
-test("deferred inspector opening and programmatic close never reclaim focus moved elsewhere", async t => {
-    const f = inspectorFixture(t), wait = deferred(); f.state.before = () => wait.promise;
+test("deferred workspace reveal preserves focus moved away during author settlement", async t => {
+    const f = dockCommandFixture(t), wait = deferred(); f.state.before = () => wait.promise;
     f.opener.focus(); const opening = f.tools.show("data"); f.outside.focus(); wait.resolve(); await opening;
-    assert.equal(f.document.activeElement, f.outside); f.tools.closeInspector();
-    assert.equal(f.document.activeElement, f.outside); assert.equal(f.fallback.focusCount, 0);
+    assert.equal(f.document.activeElement, f.outside); assert.deepEqual(f.changes, ["reveal:data"]);
 });
-test("frozen inspector close does not hide its controls or move focus", async t => {
-    const f = inspectorFixture(t); f.opener.focus(); await f.tools.show("data");
-    const close = f.inspector.querySelector("button")!; close.focus(); assert.equal(f.tools.closeGuard.freeze(false), true);
-    f.tools.closeInspector(); assert.equal(f.inspector.hidden, false); assert.equal(f.document.activeElement, close);
+test("workspace view switch delegates presentation while keeping the focused proposal and author owner", async t => {
+    const f = dockCommandFixture(t), author = f.state.document, parent = f.input.parentNode;
+    await f.tools.show("data"); f.input.focus(); await f.tools.show("outline");
+    assert.equal(f.document.activeElement, f.input);
+    assert.equal(f.input.parentNode, parent); assert.equal(f.input.value, "retained proposal");
+    assert.equal(f.state.document, author); assert.deepEqual(author.undo, ["prior"]);
+    assert.equal(author.source, "author draft"); assert.deepEqual([...f.visible], ["data", "outline"]);
+});
+test("toolbar hide delegates to the dock without disposing its view or mutating author input", async t => {
+    const f = dockCommandFixture(t), author = f.state.document;
+    await f.tools.show("data"); await f.tools.toggle("data");
+    assert.deepEqual(f.changes, ["reveal:data", "hide:data"]);
+    assert.equal(f.view.isConnected, true); assert.equal(f.input.value, "retained proposal");
+    assert.equal(f.state.document, author); assert.equal(author.source, "author draft");
+});
+test("frozen workspace commands cannot hide a view or move focus", async t => {
+    const f = dockCommandFixture(t); await f.tools.show("data"); f.input.focus();
+    assert.equal(f.tools.closeGuard.freeze(false), true);
+    await assert.rejects(f.tools.toggle("data")); await assert.rejects(f.tools.show("outline"));
+    assert.deepEqual(f.changes, ["reveal:data"]); assert.equal(f.visible.has("data"), true);
+    assert.equal(f.document.activeElement, f.input);
 });
 
 function viewFixture(t: TestContext) {

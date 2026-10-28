@@ -1,5 +1,101 @@
 // Generated from assets/ui-messages.json. Run node scripts/generate_ui_messages.mjs.
 export const zhCN = {
+  "heading.outlineMatchCount": "{p0} 个大纲项命中",
+  "heading.outlineEntrySummary": "{p0}：{p1} 个直接子项／{p2} 个后代子项",
+  "heading.searchOutline": "搜索标题与题注",
+  "heading.outlineSearchPlaceholder": "搜索标题或题注",
+  "workPanel.cancelled": "已取消",
+  "workActivity.details": "查看详情",
+  "workActivity.originalUnavailable": "当前窗口已不再持有这次原操作的详情，请从原恢复入口查看。",
+  "navigationLayout.restorePaneWidths": "恢复侧栏宽度",
+  "workspaceDock.leftSidebar": "左侧栏",
+  "workspaceDock.rightSidebar": "右侧栏",
+  "workspaceDock.viewActions": "视图布局操作",
+  "workspaceDock.collapseGroup": "折叠分区",
+  "workspaceDock.expandGroup": "展开分区",
+  "workspaceDock.maximizeGroup": "最大化分区",
+  "workspaceDock.restoreGroups": "恢复分区",
+  "workspaceDock.hideView": "隐藏视图",
+  "workspaceDock.moveLeft": "移到左侧栏",
+  "workspaceDock.moveRight": "移到右侧栏",
+  "workspaceDock.splitAbove": "拆分到上方",
+  "workspaceDock.splitBelow": "拆分到下方",
+  "workspaceDock.previousGroup": "移到上方分区",
+  "workspaceDock.nextGroup": "移到下方分区",
+  "workspaceDock.mergePrevious": "合并到上方分区",
+  "workspaceDock.mergeNext": "合并到下方分区",
+  "workspaceDock.resetLayout": "恢复默认布局",
+  "workspaceDock.waitComposition": "请先完成当前输入，再调整布局。",
+  "workspaceDock.emptySide": "从另一侧拖入视图，或从视图菜单打开。",
+  "workspaceDock.groupResize": "调整分区高度",
+  "workspaceDock.resizeHint": "上／下方向键调整分区高度，Shift 加速；Enter 均分。",
+  "workPanel.label": "工作面板",
+  "workPanel.problems": "问题",
+  "workPanel.tasks": "任务",
+  "workPanel.results": "结果",
+  "workPanel.collapse": "收起工作面板",
+  "workPanel.expand": "展开工作面板",
+  "workPanel.resize": "调整工作面板高度",
+  "workPanel.resizeHint": "使用上／下方向键调整高度，Shift 加速，Home 最小，End 最大，Enter 恢复默认。",
+  "workPanel.height": "{p0} 像素高",
+  "workPanel.status": "工作面板：{p0} 个问题，{p1} 个待处理任务，{p2} 个结果",
+  "workPanel.tabCount": "{p0}（{p1}）",
+  "workPanel.problemsEmpty": "当前文档没有已报告的问题。",
+  "workPanel.tasksEmpty": "当前没有已报告的任务。",
+  "workPanel.resultsEmpty": "当前没有已生成的结果。",
+  "workPanel.running": "正在进行",
+  "workPanel.waiting": "等待处理",
+  "workPanel.failed": "失败",
+  "workPanel.succeeded": "完成",
+  "workPanel.error": "错误",
+  "workPanel.warning": "警告",
+  "workPanel.info": "提示",
+  "workPanel.progress": "已完成 {p0}%",
+  "workPanel.preferenceUnavailable": "工作面板布局偏好暂时无法保存，本次仍可使用。",
+  "heading.outlineList": "大纲列表",
+  "heading.mindMap": "标题导图",
+  "heading.headingsAndCaptions": "标题与题注",
+  "heading.headingsOnly": "仅标题",
+  "heading.captionsOnly": "仅题注",
+  "heading.itemKindHeading": "标题",
+  "heading.itemKindFigure": "图",
+  "heading.itemKindTable": "表",
+  "heading.itemKindEquation": "公式",
+  "heading.itemKindCode": "代码",
+  "heading.itemKindCaption": "题注",
+  "numberingPanel.effectiveSettings": "当前生效设置",
+  "numberingPanel.followNativeDocument": "遵循文档原生编号",
+  "numberingPanel.personalDefaultShown": "默认显示个人编号",
+  "numberingPanel.personalDefaultHidden": "默认隐藏个人编号",
+  "nodeContents.childNodes": "子节点",
+  "nodeContents.album": "相册",
+  "nodeContents.files": "文件",
+  "nodeContents.emptySection": "暂无项目",
+  "nodeContents.showMore": "显示更多",
+  "nodeContents.resourceUnavailable": "资源当前不可用，请刷新后重试。",
+  "nodeContents.readOnlyResource": "只读资源",
+  "inventory.resourceNotListed": "所选文件已不在当前文件夹的可浏览清单中，请刷新节点视图。",
+  "inventory.resourceReadChanged": "读取期间文件或所在目录发生变化，请刷新后重试。",
+  "inventory.resourceVersionChanged": "文件预览版本已变化，请刷新节点视图。",
+  "timeline.details": "比较与恢复…",
+  "timeline.scope": "当前文档的已保存版本",
+  "timeline.retry": "重新读取时间线",
+  "workspaceViews.files": "文件",
+  "workspaceViews.nodes": "节点",
+  "workspaceViews.outline": "大纲",
+  "workspaceViews.timeline": "时间线",
+  "workspaceViews.search": "搜索",
+  "workspaceViews.calendar": "日历",
+  "workspaceViews.people": "人员",
+  "workspaceViews.followDocument": "跟随当前文档",
+  "workspaceViews.pinnedFolder": "固定浏览位置",
+  "workspaceViews.chooseNode": "选择节点以浏览内容",
+  "workspaceViews.extensionsPending": "此扩展尚未实现。可在视图菜单中隐藏此选项卡。",
+  "workspaceViews.nodeGraph": "关系图",
+  "workspaceViews.refresh": "刷新视图",
+  "workspaceViews.openResource": "打开资源",
+  "workspaceViews.nodeSearch": "筛选节点内容",
+  "workspaceViews.resourceScope": "资源属于当前浏览的文件夹，按只读方式打开。",
   "app.title": "Weftext · 写作与知识",
   "app.hostedTitle": "Weftext · 远端写作",
   "locale.label": "界面语言",
@@ -10267,6 +10363,102 @@ export const zhCN = {
 
 export type MessageKey = keyof typeof zhCN;
 export interface MessageParamsMap {
+  "heading.outlineMatchCount": { p0: number };
+  "heading.outlineEntrySummary": { p0: string; p1: number; p2: number };
+  "heading.searchOutline": {  };
+  "heading.outlineSearchPlaceholder": {  };
+  "workPanel.cancelled": {  };
+  "workActivity.details": {  };
+  "workActivity.originalUnavailable": {  };
+  "navigationLayout.restorePaneWidths": {  };
+  "workspaceDock.leftSidebar": {  };
+  "workspaceDock.rightSidebar": {  };
+  "workspaceDock.viewActions": {  };
+  "workspaceDock.collapseGroup": {  };
+  "workspaceDock.expandGroup": {  };
+  "workspaceDock.maximizeGroup": {  };
+  "workspaceDock.restoreGroups": {  };
+  "workspaceDock.hideView": {  };
+  "workspaceDock.moveLeft": {  };
+  "workspaceDock.moveRight": {  };
+  "workspaceDock.splitAbove": {  };
+  "workspaceDock.splitBelow": {  };
+  "workspaceDock.previousGroup": {  };
+  "workspaceDock.nextGroup": {  };
+  "workspaceDock.mergePrevious": {  };
+  "workspaceDock.mergeNext": {  };
+  "workspaceDock.resetLayout": {  };
+  "workspaceDock.waitComposition": {  };
+  "workspaceDock.emptySide": {  };
+  "workspaceDock.groupResize": {  };
+  "workspaceDock.resizeHint": {  };
+  "workPanel.label": {  };
+  "workPanel.problems": {  };
+  "workPanel.tasks": {  };
+  "workPanel.results": {  };
+  "workPanel.collapse": {  };
+  "workPanel.expand": {  };
+  "workPanel.resize": {  };
+  "workPanel.resizeHint": {  };
+  "workPanel.height": { p0: number };
+  "workPanel.status": { p0: number; p1: number; p2: number };
+  "workPanel.tabCount": { p0: string; p1: number };
+  "workPanel.problemsEmpty": {  };
+  "workPanel.tasksEmpty": {  };
+  "workPanel.resultsEmpty": {  };
+  "workPanel.running": {  };
+  "workPanel.waiting": {  };
+  "workPanel.failed": {  };
+  "workPanel.succeeded": {  };
+  "workPanel.error": {  };
+  "workPanel.warning": {  };
+  "workPanel.info": {  };
+  "workPanel.progress": { p0: number };
+  "workPanel.preferenceUnavailable": {  };
+  "heading.outlineList": {  };
+  "heading.mindMap": {  };
+  "heading.headingsAndCaptions": {  };
+  "heading.headingsOnly": {  };
+  "heading.captionsOnly": {  };
+  "heading.itemKindHeading": {  };
+  "heading.itemKindFigure": {  };
+  "heading.itemKindTable": {  };
+  "heading.itemKindEquation": {  };
+  "heading.itemKindCode": {  };
+  "heading.itemKindCaption": {  };
+  "numberingPanel.effectiveSettings": {  };
+  "numberingPanel.followNativeDocument": {  };
+  "numberingPanel.personalDefaultShown": {  };
+  "numberingPanel.personalDefaultHidden": {  };
+  "nodeContents.childNodes": {  };
+  "nodeContents.album": {  };
+  "nodeContents.files": {  };
+  "nodeContents.emptySection": {  };
+  "nodeContents.showMore": {  };
+  "nodeContents.resourceUnavailable": {  };
+  "nodeContents.readOnlyResource": {  };
+  "inventory.resourceNotListed": {  };
+  "inventory.resourceReadChanged": {  };
+  "inventory.resourceVersionChanged": {  };
+  "timeline.details": {  };
+  "timeline.scope": {  };
+  "timeline.retry": {  };
+  "workspaceViews.files": {  };
+  "workspaceViews.nodes": {  };
+  "workspaceViews.outline": {  };
+  "workspaceViews.timeline": {  };
+  "workspaceViews.search": {  };
+  "workspaceViews.calendar": {  };
+  "workspaceViews.people": {  };
+  "workspaceViews.followDocument": {  };
+  "workspaceViews.pinnedFolder": {  };
+  "workspaceViews.chooseNode": {  };
+  "workspaceViews.extensionsPending": {  };
+  "workspaceViews.nodeGraph": {  };
+  "workspaceViews.refresh": {  };
+  "workspaceViews.openResource": {  };
+  "workspaceViews.nodeSearch": {  };
+  "workspaceViews.resourceScope": {  };
   "app.title": {  };
   "app.hostedTitle": {  };
   "locale.label": {  };
@@ -20532,6 +20724,119 @@ export interface MessageParamsMap {
   "personalInput.copyFinished": {  };
 }
 export const messageParamTypes = {
+  "heading.outlineMatchCount": {
+    "p0": "integer"
+  },
+  "heading.outlineEntrySummary": {
+    "p0": "text",
+    "p1": "integer",
+    "p2": "integer"
+  },
+  "heading.searchOutline": {},
+  "heading.outlineSearchPlaceholder": {},
+  "workPanel.cancelled": {},
+  "workActivity.details": {},
+  "workActivity.originalUnavailable": {},
+  "navigationLayout.restorePaneWidths": {},
+  "workspaceDock.leftSidebar": {},
+  "workspaceDock.rightSidebar": {},
+  "workspaceDock.viewActions": {},
+  "workspaceDock.collapseGroup": {},
+  "workspaceDock.expandGroup": {},
+  "workspaceDock.maximizeGroup": {},
+  "workspaceDock.restoreGroups": {},
+  "workspaceDock.hideView": {},
+  "workspaceDock.moveLeft": {},
+  "workspaceDock.moveRight": {},
+  "workspaceDock.splitAbove": {},
+  "workspaceDock.splitBelow": {},
+  "workspaceDock.previousGroup": {},
+  "workspaceDock.nextGroup": {},
+  "workspaceDock.mergePrevious": {},
+  "workspaceDock.mergeNext": {},
+  "workspaceDock.resetLayout": {},
+  "workspaceDock.waitComposition": {},
+  "workspaceDock.emptySide": {},
+  "workspaceDock.groupResize": {},
+  "workspaceDock.resizeHint": {},
+  "workPanel.label": {},
+  "workPanel.problems": {},
+  "workPanel.tasks": {},
+  "workPanel.results": {},
+  "workPanel.collapse": {},
+  "workPanel.expand": {},
+  "workPanel.resize": {},
+  "workPanel.resizeHint": {},
+  "workPanel.height": {
+    "p0": "integer"
+  },
+  "workPanel.status": {
+    "p0": "integer",
+    "p1": "integer",
+    "p2": "integer"
+  },
+  "workPanel.tabCount": {
+    "p0": "text",
+    "p1": "integer"
+  },
+  "workPanel.problemsEmpty": {},
+  "workPanel.tasksEmpty": {},
+  "workPanel.resultsEmpty": {},
+  "workPanel.running": {},
+  "workPanel.waiting": {},
+  "workPanel.failed": {},
+  "workPanel.succeeded": {},
+  "workPanel.error": {},
+  "workPanel.warning": {},
+  "workPanel.info": {},
+  "workPanel.progress": {
+    "p0": "integer"
+  },
+  "workPanel.preferenceUnavailable": {},
+  "heading.outlineList": {},
+  "heading.mindMap": {},
+  "heading.headingsAndCaptions": {},
+  "heading.headingsOnly": {},
+  "heading.captionsOnly": {},
+  "heading.itemKindHeading": {},
+  "heading.itemKindFigure": {},
+  "heading.itemKindTable": {},
+  "heading.itemKindEquation": {},
+  "heading.itemKindCode": {},
+  "heading.itemKindCaption": {},
+  "numberingPanel.effectiveSettings": {},
+  "numberingPanel.followNativeDocument": {},
+  "numberingPanel.personalDefaultShown": {},
+  "numberingPanel.personalDefaultHidden": {},
+  "nodeContents.childNodes": {},
+  "nodeContents.album": {},
+  "nodeContents.files": {},
+  "nodeContents.emptySection": {},
+  "nodeContents.showMore": {},
+  "nodeContents.resourceUnavailable": {},
+  "nodeContents.readOnlyResource": {},
+  "inventory.resourceNotListed": {},
+  "inventory.resourceReadChanged": {},
+  "inventory.resourceVersionChanged": {},
+  "timeline.details": {},
+  "timeline.scope": {},
+  "timeline.retry": {},
+  "workspaceViews.files": {},
+  "workspaceViews.nodes": {},
+  "workspaceViews.outline": {},
+  "workspaceViews.timeline": {},
+  "workspaceViews.search": {},
+  "workspaceViews.calendar": {},
+  "workspaceViews.people": {},
+  "workspaceViews.followDocument": {},
+  "workspaceViews.pinnedFolder": {},
+  "workspaceViews.chooseNode": {},
+  "workspaceViews.extensionsPending": {},
+  "workspaceViews.nodeGraph": {},
+  "workspaceViews.refresh": {},
+  "workspaceViews.openResource": {},
+  "workspaceViews.nodeSearch": {},
+  "workspaceViews.resourceScope": {},
   "app.title": {},
   "app.hostedTitle": {},
   "locale.label": {},
@@ -32648,6 +32953,102 @@ export const messageParamTypes = {
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
+  "heading.outlineMatchCount": "{p0} outline matches",
+  "heading.outlineEntrySummary": "{p0}: {p1} direct items / {p2} descendant items",
+  "heading.searchOutline": "Search headings and captions",
+  "heading.outlineSearchPlaceholder": "Search heading or caption",
+  "workPanel.cancelled": "Cancelled",
+  "workActivity.details": "View details",
+  "workActivity.originalUnavailable": "This window no longer holds these original operation details. Use the original recovery entry.",
+  "navigationLayout.restorePaneWidths": "Reset sidebar widths",
+  "workspaceDock.leftSidebar": "Left sidebar",
+  "workspaceDock.rightSidebar": "Right sidebar",
+  "workspaceDock.viewActions": "View layout actions",
+  "workspaceDock.collapseGroup": "Collapse group",
+  "workspaceDock.expandGroup": "Expand group",
+  "workspaceDock.maximizeGroup": "Maximize group",
+  "workspaceDock.restoreGroups": "Restore groups",
+  "workspaceDock.hideView": "Hide view",
+  "workspaceDock.moveLeft": "Move to left sidebar",
+  "workspaceDock.moveRight": "Move to right sidebar",
+  "workspaceDock.splitAbove": "Split above",
+  "workspaceDock.splitBelow": "Split below",
+  "workspaceDock.previousGroup": "Move to previous group",
+  "workspaceDock.nextGroup": "Move to next group",
+  "workspaceDock.mergePrevious": "Merge into previous group",
+  "workspaceDock.mergeNext": "Merge into next group",
+  "workspaceDock.resetLayout": "Reset layout",
+  "workspaceDock.waitComposition": "Finish the current input before changing the layout.",
+  "workspaceDock.emptySide": "Drag a view here or open one from the View menu.",
+  "workspaceDock.groupResize": "Resize groups",
+  "workspaceDock.resizeHint": "Use Up/Down to resize groups, Shift for larger steps, and Enter for equal heights.",
+  "workPanel.label": "Work panel",
+  "workPanel.problems": "Problems",
+  "workPanel.tasks": "Tasks",
+  "workPanel.results": "Results",
+  "workPanel.collapse": "Collapse work panel",
+  "workPanel.expand": "Expand work panel",
+  "workPanel.resize": "Resize work panel height",
+  "workPanel.resizeHint": "Use Up/Down to resize, Shift for larger steps, Home for minimum, End for maximum, Enter to reset.",
+  "workPanel.height": "{p0} pixels high",
+  "workPanel.status": "Work panel: {p0} problems, {p1} tasks need attention, {p2} results",
+  "workPanel.tabCount": "{p0} ({p1})",
+  "workPanel.problemsEmpty": "No reported problems for the current document.",
+  "workPanel.tasksEmpty": "No reported tasks.",
+  "workPanel.resultsEmpty": "No generated results.",
+  "workPanel.running": "Running",
+  "workPanel.waiting": "Waiting",
+  "workPanel.failed": "Failed",
+  "workPanel.succeeded": "Complete",
+  "workPanel.error": "Error",
+  "workPanel.warning": "Warning",
+  "workPanel.info": "Information",
+  "workPanel.progress": "{p0}% complete",
+  "workPanel.preferenceUnavailable": "Work panel layout preferences could not be saved; this session remains usable.",
+  "heading.outlineList": "Outline list",
+  "heading.mindMap": "Heading mind map",
+  "heading.headingsAndCaptions": "Headings and captions",
+  "heading.headingsOnly": "Headings only",
+  "heading.captionsOnly": "Captions only",
+  "heading.itemKindHeading": "Heading",
+  "heading.itemKindFigure": "Figure",
+  "heading.itemKindTable": "Table",
+  "heading.itemKindEquation": "Equation",
+  "heading.itemKindCode": "Code",
+  "heading.itemKindCaption": "Caption",
+  "numberingPanel.effectiveSettings": "Effective settings",
+  "numberingPanel.followNativeDocument": "Follow native document numbering",
+  "numberingPanel.personalDefaultShown": "Show personal numbers by default",
+  "numberingPanel.personalDefaultHidden": "Hide personal numbers by default",
+  "nodeContents.childNodes": "Child nodes",
+  "nodeContents.album": "Album",
+  "nodeContents.files": "Files",
+  "nodeContents.emptySection": "No items",
+  "nodeContents.showMore": "Show more",
+  "nodeContents.resourceUnavailable": "This resource is unavailable. Refresh and try again.",
+  "nodeContents.readOnlyResource": "Read-only resource",
+  "inventory.resourceNotListed": "The selected file is no longer in this folder’s browsable inventory. Refresh the Nodes view.",
+  "inventory.resourceReadChanged": "The file or its directory changed during reading. Refresh and try again.",
+  "inventory.resourceVersionChanged": "The file preview version changed. Refresh the Nodes view.",
+  "timeline.details": "Compare and restore…",
+  "timeline.scope": "Saved versions of the current document",
+  "timeline.retry": "Retry timeline",
+  "workspaceViews.files": "Files",
+  "workspaceViews.nodes": "Nodes",
+  "workspaceViews.outline": "Outline",
+  "workspaceViews.timeline": "Timeline",
+  "workspaceViews.search": "Search",
+  "workspaceViews.calendar": "Calendar",
+  "workspaceViews.people": "People",
+  "workspaceViews.followDocument": "Follow current document",
+  "workspaceViews.pinnedFolder": "Pin browsing position",
+  "workspaceViews.chooseNode": "Choose a node to browse its contents",
+  "workspaceViews.extensionsPending": "This extension is not implemented yet. Hide this tab from the View menu.",
+  "workspaceViews.nodeGraph": "Relationship graph",
+  "workspaceViews.refresh": "Refresh view",
+  "workspaceViews.openResource": "Open resource",
+  "workspaceViews.nodeSearch": "Filter node contents",
+  "workspaceViews.resourceScope": "Resources belong to the browsed folder and open read-only.",
   "app.title": "Weftext · Writing and knowledge",
   "app.hostedTitle": "Weftext · Remote writing",
   "locale.label": "Interface language",

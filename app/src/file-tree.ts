@@ -9,6 +9,15 @@ export interface FileTreeEntry extends InventoryEntry {
     collapsed: boolean;
 }
 const normalized = (path: string): string => path.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
+/** A known birth can still have kind=node after an external move or identity
+ * conflict. Only the admitted canonical source represents a directory. */
+export function canonicalNodeSources(entries: readonly InventoryEntry[]): ReadonlyMap<string, InventoryEntry> {
+    return new Map(entries.filter(entry => {
+        const directory = normalized(entry.parentPath);
+        return entry.kind === "node" && entry.identityStatus === "admitted"
+            && normalized(entry.path) === `${directory}/${directory.split("/").at(-1)}.typ`;
+    }).map(entry => [normalized(entry.parentPath), entry]));
+}
 function* ancestors(path: string): Generator<string> {
     for (let slash = path.lastIndexOf("/"); slash >= 0; slash = path.lastIndexOf("/")) {
         path = path.slice(0, slash);
@@ -22,9 +31,9 @@ export function fileTreeEntries(
     collapsed: ReadonlySet<string>,
 ): FileTreeEntry[] {
     const directories = new Set(entries.filter(entry => entry.kind === "directory").map(entry => normalized(entry.path)));
-    const paired = new Map(entries.filter(entry => entry.kind === "node").map(entry => [normalized(entry.parentPath), entry]));
+    const paired = canonicalNodeSources(entries);
     const navigation = entries.flatMap(entry => {
-        if (entry.kind === "node" && directories.has(normalized(entry.parentPath))) return [];
+        if (paired.get(normalized(entry.parentPath)) === entry && directories.has(normalized(entry.parentPath))) return [];
         const primary = entry.kind === "directory" ? paired.get(normalized(entry.path)) : undefined;
         const projected = primary ? { ...primary, relativePath: entry.relativePath, name: entry.name } : entry;
         const folderPath = entry.kind === "directory" ? entry.path : null;

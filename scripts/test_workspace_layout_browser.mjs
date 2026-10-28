@@ -8,6 +8,7 @@ import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { deflateSync } from 'node:zlib';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 
@@ -132,6 +133,28 @@ const tab = id => ribbon().locator(`[role="tab"][data-tab="${id}"]`);
 const source = () => page.locator('.source-host .cm-content');
 const treeRow = name => page.locator('.file-tree').getByRole('button', { name, exact: true });
 const treeWrapper = name => treeRow(name).locator('..');
+const dockTab = id => page.locator(`[data-dock-tab="${id}"]`);
+const dockView = id => page.locator(`#workspace-view-${id}`);
+async function revealView(id) {
+  if (!await dockTab(id).isVisible()) {
+    await selectTab('view');
+    const menu = ribbon().locator('.workspace-dock-view-menu');
+    await menu.locator('summary').click();
+    await menu.locator(`[data-show-view="${id}"]`).click();
+  } else await dockTab(id).click();
+  await dockView(id).waitFor({ state: 'visible' });
+}
+async function viewAction(id, label) {
+  await dockTab(id).focus(); await page.keyboard.press('Shift+F10');
+  await page.locator('.workspace-dock-menu').getByRole('menuitem', { name: label, exact: true }).click();
+}
+async function showFiles() { await revealView('files'); }
+function png() {
+  function crc(bytes) { let value = 0xffffffff; for (const byte of bytes) { value ^= byte; for (let bit = 0; bit < 8; bit++) value = (value >>> 1) ^ (value & 1 ? 0xedb88320 : 0); } return (value ^ 0xffffffff) >>> 0; }
+  function chunk(kind, bytes) { const type = Buffer.from(kind), length = Buffer.alloc(4), checksum = Buffer.alloc(4); length.writeUInt32BE(bytes.length); checksum.writeUInt32BE(crc(Buffer.concat([type, bytes]))); return Buffer.concat([length, type, bytes, checksum]); }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(2, 0); ihdr.writeUInt32BE(2, 4); ihdr[8] = 8; ihdr[9] = 2;
+  return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(Buffer.from([0, 255, 0, 0, 0, 255, 0, 0, 255, 0, 0, 0, 255, 0]))), chunk('IEND', Buffer.alloc(0))]);
+}
 async function selectTab(id) {
   await tab(id).click();
   assert.equal(await tab(id).getAttribute('aria-selected'), 'true');
@@ -206,14 +229,19 @@ try {
   const parent = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Parent', operationId: randomUUID() }));
   const child = createdDocument(await api('/api/note/create', { root, parent: path.dirname(parent.path), name: 'Child', operationId: randomUUID() }));
   const sibling = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Sibling', operationId: randomUUID() }));
-  const parentSource = parent.source + '\n\n= Layout TEST\n\nLayout selection TEST\n\n#table(columns: 2, [A], [B], [one], [two])\n';
+  const parentFolder = path.dirname(parent.path), imagePath = path.join(parentFolder, 'layout-resource.png'), ordinaryPath = path.join(parentFolder, 'layout-resource.txt');
+  await writeFile(imagePath, png(), { flag: 'wx' });
+  await writeFile(ordinaryPath, 'Owned ordinary resource\n', { flag: 'wx' });
+  const parentSource = parent.source + '\n\n= Layout TEST\n\nLayout selection TEST\n\n== Layout child heading\n\n#table(columns: 2, [A], [B], [one], [two])\n\n#figure(rect(width: 10pt, height: 10pt), kind: "figure", caption: [Layout figure caption])\n';
   await api('/api/save', { sessionId: parent.sessionId, baseId: parent.baseId, source: parentSource, operationId: randomUUID() });
   for (const document of [parent, child, sibling]) originals.set(document.path, await readFile(document.path));
+  for (const filename of [imagePath, ordinaryPath]) originals.set(filename, await readFile(filename));
   assert.equal(originals.get(parent.path).toString('utf8'), parentSource);
   await stop();
   await start(['--open', parent.path, '--root', root]);
   browser = await chromium.launch({ headless: true,
     ...(process.env.WEFTEXT_BROWSER_EXECUTABLE ? { executablePath: process.env.WEFTEXT_BROWSER_EXECUTABLE } : { channel: 'chrome' }) });
+  result.browserVersion = browser.version();
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: 'zh-CN' });
   page = await context.newPage();
   page.setDefaultTimeout(30000);
@@ -259,6 +287,85 @@ try {
   await treeRow('Parent').click(); await expectSource(parentSource);
   assert.equal(await page.locator('nav.tabs .document-tab[aria-current="page"] .tab-name').textContent(), 'Parent.typ');
   pass('One disclosure keeps its parent, hides descendants only, retains order and opens the real selected source');
+
+  // Directory browsing has its own view and never narrows the filesystem tree.
+  await treeWrapper('Parent').locator(':scope > .tree-scope-button').filter({ has: page.locator('svg') }).click();
+  await dockView('nodes').waitFor({ state: 'visible' });
+  const nodes = () => dockView('nodes').locator('.workspace-nodes-view');
+  const nodePath = () => nodes().locator('.node-browser-path');
+  assert.equal(await nodes().getAttribute('data-follow'), 'false');
+  assert.equal(path.normalize(await nodePath().getAttribute('title')), path.normalize(parentFolder));
+  for (const section of ['nodes', 'album', 'files'])
+    assert.equal(await nodes().locator(`[data-contents-section="${section}"]`).count(), 1);
+  assert.equal(await nodes().locator('[data-contents-section="nodes"] .node-content-row').count(), 1);
+  const imageRow = nodes().locator('.node-content-row').filter({ has: page.locator('[data-control-role="title"]', { hasText: 'layout-resource.png' }) });
+  const fileRow = nodes().locator('.node-content-row').filter({ has: page.locator('[data-control-role="title"]', { hasText: 'layout-resource.txt' }) });
+  await imageRow.locator('[data-control-role="open"]').click();
+  const resourceDialog = page.locator('.inventory-resource-dialog[open]');
+  await resourceDialog.waitFor();
+  await until(() => resourceDialog.locator('img').evaluateAll(images => images.some(image => image.naturalWidth === 2 && image.naturalHeight === 2)), 'Ordinary image did not display its actual owned pixels');
+  await resourceDialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await fileRow.locator('[data-control-role="open"]').click();
+  await resourceDialog.waitFor();
+  await until(async () => (await resourceDialog.textContent()).includes('Owned ordinary resource'), 'Ordinary file did not display its exact owned text');
+  await resourceDialog.getByRole('button', { name: '关闭', exact: true }).click();
+  const albumToggle = nodes().locator('[data-section-control="album-toggle"]');
+  await albumToggle.focus(); await page.keyboard.press('Enter');
+  assert.equal(await albumToggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(await albumToggle.evaluate(element => document.activeElement === element), true);
+  await page.keyboard.press('Enter');
+  await nodes().locator('.node-browser-filter').fill('layout-resource.png');
+  assert.equal(await nodes().locator('.node-content-row').count(), 1);
+  await showFiles();
+  assert.deepEqual(await page.locator('.file-tree .tree-row .tree-name').allTextContents(), originalOrder, 'Nodes filter changed the independent file tree');
+  await revealView('nodes'); await nodes().locator('.node-browser-filter').fill('');
+  await nodes().locator('.node-browser-toolbar button').first().click();
+  assert.equal(await nodes().getAttribute('data-follow'), 'true');
+  await showFiles(); await treeRow('Sibling').click(); await expectSource(sibling.source);
+  await revealView('nodes');
+  assert.equal(path.normalize(await nodePath().getAttribute('title')), path.normalize(path.dirname(sibling.path)));
+  await nodes().locator('.node-browser-toolbar button').first().click();
+  await showFiles(); await treeRow('Parent').click(); await expectSource(parentSource);
+  await revealView('nodes');
+  assert.equal(path.normalize(await nodePath().getAttribute('title')), path.normalize(path.dirname(sibling.path)), 'Pinned node browsing followed another editor');
+  await nodes().locator('.node-browser-toolbar button').first().click();
+  assert.equal(path.normalize(await nodePath().getAttribute('title')), path.normalize(parentFolder));
+  await showFiles();
+  pass('Independent Nodes sections open exact ordinary resources, retain filter/fold focus and distinguish follow from pinned browsing');
+
+  await revealView('timeline');
+  const timeline = dockView('timeline');
+  await until(async () => await timeline.locator('[data-history-version]').count() > 0, 'Timeline did not show actual retained saves');
+  assert.equal(path.normalize(await timeline.locator('.timeline-path').textContent()), path.normalize(parent.path));
+  await timeline.locator('.timeline-version-summary').first().click();
+  assert.equal(await timeline.locator('[data-history-version]').first().getAttribute('open'), '');
+  await timeline.getByRole('button', { name: '比较与恢复…', exact: true }).click();
+  const history = page.locator('.history-panel[open]'); await history.waitFor();
+  await history.getByRole('button', { name: '关闭时间线', exact: true }).click();
+  await expectSource(parentSource); await showFiles();
+  pass('Timeline reads actual saved versions and routes comparison to the existing guarded history owner');
+
+  await revealView('outline');
+  const outline = () => dockView('outline').locator('.outline-view');
+  await until(async () => await outline().locator('[data-outline-kind="figure"]').count() === 1, 'Native figure caption did not enter the independent Outline');
+  const outlineHandle = await source().elementHandle();
+  await outline().locator('[data-outline-control="search"]').fill('Layout figure caption');
+  assert.equal(await outline().locator('[data-outline-kind="figure"]').count(), 1);
+  assert.ok((await outline().locator('.outline-match-controls').textContent()).includes('1 个大纲项命中'));
+  assert.equal(await outline().locator('[data-outline-control="search"]').evaluate(element => document.activeElement === element), true);
+  await outline().locator('[data-outline-control="search"]').fill('');
+  await outline().locator('[data-outline-control="filter"]').selectOption('caption');
+  assert.equal(await outline().locator('[data-outline-kind="heading"]').count(), 0);
+  await outline().locator('[data-outline-kind="figure"] .outline-jump').click();
+  const captionSelection = await editorSnapshot();
+  assert.ok(captionSelection.source.slice(captionSelection.from, captionSelection.to).includes('Layout figure caption'), 'Caption jump did not select its exact native author range');
+  await outline().locator('[data-outline-control="filter"]').selectOption('all');
+  await outline().locator('[data-outline-control="map"]').click();
+  await outline().locator('svg').first().waitFor();
+  await outline().locator('[data-outline-control="list"]').click();
+  assert.equal(await source().evaluate((element, original) => element === original, outlineHandle), true);
+  await expectSource(parentSource); await showFiles();
+  pass('Independent Outline lists native headings and captions, preserves filter focus, navigates exact source and offers a heading map');
   await page.screenshot({ path: path.join(out, 'workspace-initial-1440.png'), fullPage: false });
   await observeEditorInput();
 
@@ -266,6 +373,22 @@ try {
   const handle = await source().elementHandle(), stable = await editorSnapshot();
   const opens = () => result.requests.filter(item => ['/api/open', '/api/data/open', '/api/bootstrap'].includes(item.route)).length;
   const openCount = opens(), navigations = navigationCount;
+  for (const id of ['nodes', 'query', 'timeline', 'outline', 'files']) {
+    await revealView(id); await assertSameEditor(handle, stable);
+  }
+  const groupsBefore = await page.locator('.workspace-dock-left .workspace-dock-group').count();
+  await viewAction('nodes', '拆分到下方');
+  assert.equal(await page.locator('.workspace-dock-left .workspace-dock-group').count(), groupsBefore + 1);
+  await assertSameEditor(handle, stable);
+  const separator = page.locator('.workspace-dock-left .workspace-dock-divider').first();
+  const initialSize = Number(await separator.getAttribute('aria-valuenow'));
+  await separator.focus(); await page.keyboard.press('ArrowDown');
+  assert.notEqual(Number(await separator.getAttribute('aria-valuenow')), initialSize);
+  await viewAction('nodes', '合并到上方分区');
+  assert.equal(await page.locator('.workspace-dock-left .workspace-dock-group').count(), groupsBefore);
+  await showFiles(); await assertSameEditor(handle, stable);
+  assert.equal(opens(), openCount); assert.equal(navigationCount, navigations);
+  pass('Independent sidebar views, keyboard split/merge and vertical resize retain the real editor and selection without reopening source');
   for (const id of ['file', 'insert', 'knowledge', 'review', 'view', 'home']) {
     await selectTab(id); await assertSameEditor(handle, stable);
   }
@@ -332,19 +455,90 @@ try {
   await selectTab('knowledge');
   const properties = ribbon().getByRole('button', { name: '属性', exact: true });
   await properties.focus(); await page.keyboard.press('Enter');
-  await page.locator('.workspace-inspector').waitFor({ state: 'visible' });
-  await page.locator('.workspace-inspector .inspector-header').getByRole('button', { name: '关闭', exact: true }).focus();
-  await page.keyboard.press('Enter');
-  await page.locator('.workspace-inspector').waitFor({ state: 'hidden' });
-  assert.equal(await properties.evaluate(element => document.activeElement === element), true, 'Closing inspector did not return to its opener');
+  await dockView('data').waitFor({ state: 'visible' });
+  const crossSideEditor = await editorSnapshot(), propertyElement = await dockView('data').elementHandle();
+  const rightGroup = page.locator('.workspace-dock-right .workspace-dock-group').first();
+  const targetRect = await rightGroup.boundingBox(); assert.ok(targetRect);
+  await dockTab('nodes').dragTo(rightGroup, { targetPosition: { x: targetRect.width / 2, y: targetRect.height / 2 } });
+  await page.locator('.workspace-dock-right [data-dock-tab="nodes"]').waitFor({ state: 'visible' });
+  await assertSameEditor(handle, crossSideEditor);
+  assert.equal(await dockView('data').evaluate((element, original) => element === original, propertyElement), true);
+  await viewAction('nodes', '移到左侧栏');
+  await revealView('data'); await viewAction('data', '隐藏视图');
+  await page.locator('.workspace-dock-right').waitFor({ state: 'hidden' });
+  assert.equal(await dockView('data').evaluate(element => element.isConnected && !!element.closest('[hidden][inert]')), true, 'Hidden property owner was detached rather than parked');
+  await showFiles();
   await selectTab('home');
-  pass('View exposes all five modes and the authorized property inspector opens and closes independently');
+  pass('Five modes remain reachable; cross-side drag and hidden property owners preserve mounted controls and the author editor');
+
+  const workPanel = page.locator('.work-panel'), workStatus = page.locator('.work-panel-status-button');
+  assert.equal(await workPanel.getAttribute('hidden'), '');
+  await source().focus(); await page.keyboard.press('Control+End');
+  const invalidSuffix = '#layout_test_missing(';
+  await page.keyboard.type(invalidSuffix); await expectSource(parentSource + invalidSuffix);
+  await until(async () => await workPanel.locator('.work-panel-item[data-state="error"]').count() > 0, 'Actual invalid native source did not report a bottom-panel problem');
+  assert.equal(await workPanel.getAttribute('hidden'), '', 'Automatic compiler reports opened the work panel');
+  assert.equal(await source().evaluate(element => document.activeElement === element), true, 'Automatic diagnostics stole author focus');
+  await workStatus.click();
+  await workPanel.locator('.work-panel-tab[data-tab="problems"]').click();
+  await workPanel.locator('.work-panel-item[data-state="error"] .work-panel-item-actions button').first().click();
+  const diagnosticSelection = await editorSnapshot();
+  assert.ok(diagnosticSelection.from >= parentSource.length && diagnosticSelection.to <= parentSource.length + invalidSuffix.length, 'Diagnostic navigation did not stay within the actual failing source fragment');
+  await source().focus(); await page.keyboard.press('Control+z'); await expectSource(parentSource);
+  await until(async () => await workPanel.locator('.work-panel-item[data-state="error"]').count() === 0, 'Current clean projection retained stale diagnostics');
+  await workPanel.locator('.work-panel-collapse').click();
+  pass('Actual compile problems update the collapsed bottom panel without stealing focus, jump to source and retire after Undo');
+
+  await selectTab('file');
+  await ribbon().getByRole('button', { name: '输出与导入', exact: true }).click();
+  const output = page.locator('.output-panel[open]'); await output.waitFor();
+  await output.getByLabel('输出格式', { exact: true }).selectOption('source');
+  const preparedResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/api/export/prepare' && response.request().method() === 'POST');
+  await output.getByRole('button', { name: '生成并查看预览', exact: true }).click();
+  const outputResponse = await preparedResponse;
+  assert.equal(outputResponse.status(), 200);
+  const actualOutput = await outputResponse.json(), originalOutputRequest = outputResponse.request().postDataJSON();
+  assert.equal(actualOutput.requestId, originalOutputRequest.requestId);
+  await until(async () => await workPanel.locator(`.work-panel-item[data-id="${actualOutput.requestId}"][data-state="waiting"]`).count() === 1, 'Generated output did not retain its actual original request in Tasks');
+  assert.equal(await workPanel.getAttribute('hidden'), '', 'Automatic output progress opened the work panel');
+  await output.getByRole('button', { name: '关闭', exact: true }).first().click();
+  await workStatus.click();
+  await workPanel.locator('.work-panel-tab[data-tab="results"]').click();
+  const resultRow = workPanel.locator(`.work-panel-item[data-id="${actualOutput.id}"]`);
+  await resultRow.waitFor();
+  assert.ok((await resultRow.textContent()).includes(actualOutput.filename));
+  await resultRow.getByRole('button', { name: '查看详情', exact: true }).click();
+  await output.waitFor();
+  await output.getByRole('button', { name: '确认本次文件', exact: true }).click();
+  await until(() => output.getByRole('button', { name: '下载已确认文件', exact: true }).isEnabled(), 'Exact generated source was not confirmed');
+  const downloadPromise = page.waitForEvent('download');
+  await output.getByRole('button', { name: '下载已确认文件', exact: true }).click();
+  const download = await downloadPromise, downloadPath = path.join(out, 'actual-output.typ');
+  await download.saveAs(downloadPath);
+  assert.equal((await readFile(downloadPath)).toString('utf8'), parentSource);
+  await until(async () => await workPanel.locator(`.work-panel-item[data-id="${actualOutput.requestId}"][data-state="succeeded"]`).count() === 1, 'Downloaded original output did not become a completed task');
+  await output.getByRole('button', { name: '关闭', exact: true }).first().click();
+  await workPanel.locator('.work-panel-collapse').click();
+  await selectTab('home'); await expectSource(parentSource);
+  result.actualOutput = { requestId: actualOutput.requestId, id: actualOutput.id, filename: actualOutput.filename, digest: actualOutput.digest, length: actualOutput.length, downloadedSha256: hash(await readFile(downloadPath)) };
+  pass('Actual output tasks and generated results retain their original IDs and route review, confirmation and exact download to the original owner');
+
+  const leftWidthHandle = page.locator('.navigation-sidebar-resizer');
+  const previousWidth = Number(await leftWidthHandle.getAttribute('aria-valuenow'));
+  await leftWidthHandle.focus(); await page.keyboard.press('ArrowRight');
+  assert.equal(Number(await leftWidthHandle.getAttribute('aria-valuenow')), previousWidth + 12);
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(Number(await leftWidthHandle.getAttribute('aria-valuenow')), previousWidth);
+  await expectSource(parentSource);
+  pass('Sidebar width geometry remains keyboard-adjustable independently of Dock visibility and grouping');
 
   await until(async () => (await page.locator('.status-right').textContent()).includes('草稿预览已更新'), 'Current author source did not finish its preview before layout capture');
   for (const [width, label] of [[1440, 'desktop'], [1024, 'compact-desktop'], [768, 'tablet'], [720, '1440-at-200-percent-equivalent'], [390, 'phone'], [320, '1280-at-400-percent-equivalent']]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    if (width <= 768) await until(() => page.locator('.sidebar').evaluate(element => getComputedStyle(element).visibility === 'hidden' || element.getBoundingClientRect().right <= 0), 'Collapsed sidebar transition did not finish');
+    if (width <= 768 && !await page.locator('.sidebar').evaluate(element => element.hidden))
+      await page.locator('.sidebar-overlay-close').click();
+    if (width <= 768) await until(() => page.locator('.sidebar').evaluate(element => element.hidden && element.inert), 'Dock did not hide the explicitly collapsed sidebar');
     const observed = await page.evaluate(() => {
       const visible = element => element.getClientRects().length > 0 && getComputedStyle(element).visibility !== 'hidden' && !element.closest('[hidden],[inert]');
       const controls = [...document.querySelectorAll('.topbar button,.workspace-ribbon button,.workspace-ribbon input,.workspace-ribbon select,.workspace-ribbon textarea,.sidebar button,.sidebar input,.workspace-inspector button,.workspace-inspector input,.workspace-inspector select,.workspace-inspector textarea')].filter(visible);
@@ -352,15 +546,21 @@ try {
       return {
         viewport: innerWidth, documentWidth: document.documentElement.scrollWidth, bodyWidth: document.body.scrollWidth,
         smallControls: controls.filter(element => parseFloat(getComputedStyle(element).fontSize) < 12).map(element => ({ text: element.textContent, fontSize: getComputedStyle(element).fontSize })),
-        sidebarHidden: sidebar?.getAttribute('aria-hidden'), sidebarInert: sidebar?.inert,
+        sidebarHidden: sidebar?.hidden, sidebarInert: sidebar?.inert,
       };
     });
     result.layouts.push({ width, label, ...observed });
     assert.ok(observed.documentWidth <= width + 1 && observed.bodyWidth <= width + 1, `Workspace overflows horizontally at ${width}px: ${JSON.stringify(observed)}`);
     assert.deepEqual(observed.smallControls, [], `Interactive controls shrink below 12px at ${width}px`);
     if (width <= 768) {
-      assert.equal(observed.sidebarHidden, 'true'); assert.equal(observed.sidebarInert, true);
+      assert.equal(observed.sidebarHidden, true); assert.equal(observed.sidebarInert, true);
       assert.ok(await page.locator('.header-sidebar-toggle').isVisible());
+    }
+    if (width === 390) {
+      await page.locator('.header-sidebar-toggle').click();
+      assert.equal(await page.locator('.sidebar').evaluate(element => element.hidden || element.inert), false);
+      await page.locator('.sidebar-overlay-close').click();
+      assert.equal(await page.locator('.sidebar').evaluate(element => element.hidden && element.inert), true);
     }
     if (width === 1440 || width === 390) await page.screenshot({ path: path.join(out, `workspace-${width}.png`), fullPage: false });
   }

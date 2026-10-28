@@ -248,6 +248,8 @@ export interface KnowledgePanel {
     backgroundEnabled(): boolean;
     refresh(): Promise<void>;
     selectTab(tab: KnowledgePanelTab): void;
+    /** Share the same authorized snapshot and jump guard with an independent outline view. */
+    attachOutline(container: HTMLElement | null): void;
     attachSurface(surface: HTMLElement | null, mappings?: KnowledgeTextMapping[]): void;
     dispose(): void;
 }
@@ -322,7 +324,16 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     container.classList.add("knowledge-panel");
     setUiAttr(container, "aria-label", uiMessage("knowledge.title"));
     const gate = new KnowledgeReadGate();
-    const graph = new RelationshipGraphView(), headings = new HeadingStructureView();
+    const graph = new RelationshipGraphView();
+    const outlineViews = new Map<string, HeadingStructureView>();
+    let outlineContainer: HTMLElement | null = null;
+    let mountedOutlineSession = "";
+    const currentOutline = (): HeadingStructureView => {
+        const key = host.context()?.sessionId ?? "";
+        let view = outlineViews.get(key);
+        if (!view) { view = new HeadingStructureView(); outlineViews.set(key, view); }
+        return view;
+    };
     let graphSession = "";
     const proofreading = new ProofreadingPanel({ resultScope: "local", context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new UiError(uiMessage("knowledge.proofreadingApiUnavailable"))), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults, notify: message => host.notify(message, true) });
     let snapshot: KnowledgeSnapshot | null = null;
@@ -1822,10 +1833,23 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         return true;
     }
     function thawAfterClose(): void { proofreading.thawAfterClose(); closeGuard.thaw(); }
+    function renderOutline(): void {
+        if (!outlineContainer || disposed || closeGuard.frozen) return;
+        const view = currentOutline();
+        const context = host.context();
+        // Detach another document without disposing its navigation state. Keep
+        // the active subtree attached until the view captures focus and scroll.
+        if (mountedOutlineSession !== (context?.sessionId ?? "")) {
+            for (const child of [...outlineContainer.children]) child.remove();
+            mountedOutlineSession = context?.sessionId ?? "";
+        }
+        view.render(outlineContainer, sameKnowledgeBasis(snapshotBasis, context) ? snapshot?.headingStructure : undefined, openHeading);
+    }
     function render(): void {
         if (disposed || closeGuard.frozen)
             return;
         deferredRender = false;
+        renderOutline();
         const focused = document.activeElement instanceof HTMLElement && container.contains(document.activeElement) ? document.activeElement : null;
         const focusKey = sameKnowledgeBasis(renderedBasis, host.context()) ? focused?.dataset.knowledgeFocus : undefined;
         renderedBasis = host.context();
@@ -1845,6 +1869,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         tabs.setAttribute("role", "tablist");
         setUiAttr(tabs, "aria-label", uiMessage("knowledge.knowledgePanel"));
         for (const [id, label] of [["links", uiMessage("knowledge.relationships")], ["graph", uiMessage("knowledge.graph2d")], ["headings", uiMessage("knowledge.headingStructure")], ["citations", uiMessage("knowledge.insertCitation")], ["mentions", uiMessage("knowledge.potentialLinks")], ["annotations", uiMessage("hostedShell.panelAnnotations")], ["proofreading", uiMessage("knowledge.proofreading")], ["files", uiMessage("knowledge.files")], ["templates", uiMessage("knowledge.templates")]] as const) {
+            if (id === "headings" && outlineContainer) continue;
             const control = action(label, () => { tab = id; render(); }, "knowledge-tab");
             control.setAttribute("role", "tab");
             control.setAttribute("aria-selected", String(tab === id));
@@ -1853,7 +1878,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key))
                     return;
                 event.preventDefault();
-                const ids = ["links", "graph", "headings", "citations", "mentions", "annotations", "proofreading", "files", "templates"];
+                const ids = ["links", "graph", "headings", "citations", "mentions", "annotations", "proofreading", "files", "templates"].filter(id => id !== "headings" || !outlineContainer);
                 const index = ids.indexOf(tab);
                 tab = event.key === "Home" ? ids[0] : event.key === "End" ? ids.at(-1)! : ids[(index + (event.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length];
                 render();
@@ -1903,7 +1928,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         else if (tab === "graph")
             graph.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.graph : undefined, `${host.context()?.workspaceId}/${host.context()?.nodeId}`, { open: node => closeGuard.run(() => Promise.resolve(host.navigate(node.reference))), source: openGraphSource, error: report });
         else if (tab === "headings")
-            headings.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.headingStructure : undefined, openHeading);
+            currentOutline().render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.headingStructure : undefined, openHeading);
         else if (tab === "citations") {
             const context = host.context()!;
             let state = citationInputs.get(context.sessionId);
@@ -1939,7 +1964,6 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         if ((context?.sessionId ?? "") !== graphSession) {
             graphSession = context?.sessionId ?? "";
             graph.clear();
-            headings.clear();
         }
         if (!context) {
             snapshot = null;
@@ -1967,6 +1991,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             snapshotBasis = context;
             loading = false;
             setUiText(status, "");
+            renderOutline();
             if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))
                 deferredRender = true;
             else
@@ -1978,6 +2003,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 loading = false;
                 snapshotBasis = null;
                 clearOverlay();
+                renderOutline();
                 report(error);
                 setUiText(status, displayMessage("knowledge.scanFailedLastResultStale", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse")) }));
                 if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))
@@ -1991,9 +2017,10 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     render();
     return {
         assertCloseReady, freezeForClose, thawAfterClose,
-        backgroundEnabled: () => enabled || problemHints,
+        backgroundEnabled: () => enabled || problemHints || outlineContainer !== null,
         refresh,
-        selectTab(next) { closeGuard.assertMutable(); tab = next; render(); },
+        selectTab(next) { closeGuard.assertMutable(); if (next === "headings" && outlineContainer) { renderOutline(); return; } tab = next; render(); },
+        attachOutline(next) { closeGuard.assertMutable(); if (outlineContainer !== next) { outlineContainer?.replaceChildren(); outlineContainer = next; mountedOutlineSession = ""; } if (next && tab === "headings") tab = "links"; renderOutline(); },
         attachSurface(next, nextMappings = []) {
             closeGuard.assertMutable();
             clearOverlay();
@@ -2003,6 +2030,6 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 surface.classList.add("knowledge-surface");
             drawOverlay();
         },
-        dispose() { assertCloseReady(); disposed = true; gate.invalidate(); graph.clear(); headings.clear(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); snapshot = null; snapshotBasis = null; window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.removeEventListener("input", authoredInput, true); container.removeEventListener("change", authoredInput, true); disposeUiTree(container); container.replaceChildren(); },
+        dispose() { assertCloseReady(); disposed = true; gate.invalidate(); graph.clear(); for (const view of outlineViews.values()) view.clear(); outlineViews.clear(); outlineContainer?.replaceChildren(); outlineContainer = null; rules.closePreviews(); clearOverlay(); mediaController?.dispose(); snapshot = null; snapshotBasis = null; window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.removeEventListener("input", authoredInput, true); container.removeEventListener("change", authoredInput, true); disposeUiTree(container); container.replaceChildren(); },
     };
 }

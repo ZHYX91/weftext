@@ -10,6 +10,23 @@ test("personal display and default changes never call author preview or apply", 
   const controller = new NumberingController(host({ preview: async () => { throw new Error("author preview forbidden"); }, apply: async () => { throw new Error("author apply forbidden"); }, displayPersonal: value => { display = value; } }), retained);
   controller.setPersonal("show"); assert.equal(display, true); controller.setPersonalDefault(false); assert.equal(display, true); controller.setPersonal("default"); assert.equal(display, false); assert.equal(retained.getItem("user:note"), null);
 });
+
+test("native numbering accepts common nine levels and deeper positive u32 levels", () => {
+  const controller = new NumberingController(host(), storage());
+  assert.equal(controller.action.maxLevel, 9);
+  for (const maxLevel of [1, 6, 9, 10, 64, 4294967295]) {
+    controller.change({ scheme: "decimal", start: 1, maxLevel, excludeLabels: [] });
+    assert.equal(controller.action.maxLevel, maxLevel);
+  }
+  for (const maxLevel of [0, -1, 1.5, 4294967296, Number.MAX_SAFE_INTEGER])
+    assert.throws(() => controller.change({ scheme: "decimal", start: 1, maxLevel, excludeLabels: [] }));
+});
+
+test("inspection rejects out-of-contract settings and keeps existing native six-level settings", () => {
+  const base = { sourceHash: "source", editable: true, frozenEndnotesRequired: false, reason: null };
+  for (const maxLevel of [6, 9, 10, 4294967295]) assert.equal(decodeHeadingNumberingInspection({ ...base, settings: { scheme: "decimal", start: 1, maxLevel, excludeLabels: [] } }).settings!.maxLevel, maxLevel);
+  for (const maxLevel of [0, 4294967296]) assert.throws(() => decodeHeadingNumberingInspection({ ...base, settings: { scheme: "decimal", start: 1, maxLevel, excludeLabels: [] } }));
+});
 test("late source changes and stale prepared inputs cannot modify the draft", async () => {
   let source = "= 一、原有前缀", release: (preview: HeadingNumberingPreview) => void = () => {};
   const controller = new NumberingController(host({ source: () => source, preview: async () => new Promise(resolve => { release = resolve; }) }), storage());

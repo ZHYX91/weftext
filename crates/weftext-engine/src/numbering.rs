@@ -30,7 +30,7 @@ impl Default for HeadingNumberingIntent {
         Self {
             scheme: HeadingNumberingScheme::Decimal,
             start: 1,
-            max_level: 6,
+            max_level: 9,
             exclude_labels: vec![],
         }
     }
@@ -54,7 +54,7 @@ pub struct HeadingNumberingInspection {
 fn generate(settings: &HeadingNumberingIntent) -> Result<String, EngineError> {
     if settings.start == 0
         || settings.start > 1_000_000
-        || !(1..=6).contains(&settings.max_level)
+        || settings.max_level == 0
         || settings.exclude_labels.len() > 200
     {
         return Err(EngineError::new(
@@ -108,7 +108,7 @@ fn parse_header(source: &str) -> Option<(HeadingNumberingIntent, Range<usize>)> 
         .strip_prefix("#set heading(numbering: ")?
         .strip_suffix(')')?;
     let (scheme, max_level) = if numbering == "none" {
-        (HeadingNumberingScheme::None, 6)
+        (HeadingNumberingScheme::None, 9)
     } else {
         let body = numbering.strip_prefix("(..n) => if n.pos().len() <= ")?;
         let (level, pattern) = body.split_once(" { numbering(\"")?;
@@ -468,6 +468,49 @@ pub(crate) fn edit_heading_numbering_qualified(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn numbering_retains_deep_native_levels_without_an_artificial_six_level_cap() {
+        let source = "= Root\n#heading(level: 10)[Deep native heading]\n";
+        for scheme in [
+            HeadingNumberingScheme::Decimal,
+            HeadingNumberingScheme::Chinese,
+        ] {
+            for max_level in [7, 9, 10, u32::MAX] {
+                let action = HeadingNumberingIntent {
+                    scheme,
+                    max_level,
+                    ..Default::default()
+                };
+                let edited = edit_heading_numbering(source, &action).unwrap();
+                assert!(edited.ends_with(source));
+                assert_eq!(inspect_heading_numbering(&edited).settings, Some(action));
+                assert!(verified_numbering_header_range(&edited).is_some());
+            }
+        }
+        assert!(
+            edit_heading_numbering(
+                source,
+                &HeadingNumberingIntent {
+                    max_level: 0,
+                    ..Default::default()
+                }
+            )
+            .is_err()
+        );
+        // Existing generated six-level rules remain exact source and editable.
+        let old = edit_heading_numbering(
+            source,
+            &HeadingNumberingIntent {
+                max_level: 6,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            inspect_heading_numbering(&old).settings.unwrap().max_level,
+            6
+        );
+    }
     #[test]
     fn native_document_title_does_not_block_heading_numbering() {
         let source = "#metadata((id: \"note\", types: ())) <weftext>\n#set document(title: [文档标题])\n#title()\n#block[副标题] <weftext-subtitle>\n\n= 一、已有前缀 <one>\n\n正文#footnote[说明]\n";

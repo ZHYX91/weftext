@@ -8,7 +8,7 @@ import { TestDocument, TestElement } from "./dom.test-support";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
-import type { WorkspaceTools } from "./workspace-tools";
+import type { WorkspaceTools, WorkspaceViewKind } from "./workspace-tools";
 import { message as uiMessage, setUiText, errorUiText } from "./ui-locale";
 
 // Follow the existing native-scope-transition owner boundary: execute the real
@@ -17,7 +17,7 @@ import { message as uiMessage, setUiText, errorUiText } from "./ui-locale";
 const workspaceSource = ts.createSourceFile("workspace-tools.ts", readFileSync(new URL("./workspace-tools.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const workspaceClass = workspaceSource.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === "WorkspaceTools") as ts.ClassDeclaration;
 assert.ok(workspaceClass);
-const methodNames = ["closeOwners", "assertCloseReady", "freezeForClose", "thawAfterClose", "button", "show", "showPanel", "captureInspectorOrigin", "closeInspector", "selectedDocumentChanged", "documentChanged"];
+const methodNames = ["closeOwners", "assertCloseReady", "freezeForClose", "thawAfterClose", "button", "attachDock", "viewVisible", "show", "toggle", "refreshView", "selectKnowledgeTab", "selectedDocumentChanged", "documentChanged"];
 const methods = workspaceClass.members.filter(node => ts.isMethodDeclaration(node) && methodNames.includes(node.name.getText(workspaceSource)));
 assert.equal(methods.length, methodNames.length);
 const compiled = ts.transpileModule(`class TestedWorkspaceTools { ${methods.map(node => node.getText(workspaceSource)).join("\n")} }\nglobalThis.TestedWorkspaceTools = TestedWorkspaceTools;`, {
@@ -80,25 +80,32 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
         }, notify: (...args: unknown[]) => notices.push(args), beforeAction: async () => {},
     } as unknown as PanelHost;
     const panel = new DataPanel(host), guard = new ProposalCloseGuard();
-    const inspector = document.createElement("aside"), header = document.createElement("header"), panelBody = document.createElement("div");
-    inspector.append(header, panelBody); document.body.append(inspector);
+    const views = { data: panel.element, knowledge: document.createElement("section"), query: document.createElement("section"), outline: document.createElement("section") };
+    for (const view of Object.values(views)) document.body.append(view as unknown as Element);
+    const visible = new Set<WorkspaceViewKind>(), refreshed: WorkspaceViewKind[] = [], knowledgeTabs: string[] = [];
+    const presentation = {
+        reveal: (kind: WorkspaceViewKind) => { visible.add(kind); views[kind].hidden = false; },
+        hide: (kind: WorkspaceViewKind) => { visible.delete(kind); views[kind].hidden = true; },
+        visible: (kind: WorkspaceViewKind) => visible.has(kind),
+    };
     const context = vm.createContext({ document, setTimeout, clearTimeout, uiMessage, setUiText, errorUiText });
     vm.runInContext(compiled, context);
     const TestedWorkspaceTools = context.TestedWorkspaceTools as new () => SelectedTools;
     const tools = Object.assign(new TestedWorkspaceTools(), {
-        closeGuard: guard, host, propertyPanel: panel, inspector, header, panelBody, active: null,
-        queryPanel: { refresh: async () => {}, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
-        knowledgePanel: { refresh: async () => {}, attachSurface() {}, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
+        closeGuard: guard, host, propertyPanel: panel, views, presentation: null,
+        queryPanel: { refresh: async () => { refreshed.push("query"); }, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
+        knowledgePanel: { refresh: async () => { refreshed.push("knowledge"); }, selectTab: (tab: string) => { knowledgeTabs.push(tab); }, attachSurface() {}, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         outputPanel: { assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         libraryTrash: { assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         styles: new Map(), pendingImport: null,
     }) as SelectedTools;
+    tools.attachDock(presentation);
     const select = async (next: DocumentBasis | null) => {
         state.current = next;
         await tools.selectedDocumentChanged();
         await turn();
     };
-    return { document, state, requests, notices, panel, guard, tools, select, inspector };
+    return { document, state, requests, notices, panel, guard, tools, select, views, presentation, visible, refreshed, knowledgeTabs };
 }
 
 test("delayed open adoption renews an already open empty property consumer while it owns focus", async t => {
@@ -120,9 +127,64 @@ test("selection without an open property pane starts no property/reminder reads"
     const f = fixture(t); await f.select(basis()); assert.equal(f.requests.length, 0);
 });
 
+test("independent dock views coexist and do not detach the property owner", async t => {
+    const f = fixture(t); f.state.current = basis();
+    await f.tools.show("data"); await turn();
+    const parent = (f.panel.element as unknown as Element).parentNode;
+    await f.tools.show("query");
+    assert.equal(f.visible.has("data"), true);
+    assert.equal(f.visible.has("query"), true);
+    assert.equal((f.panel.element as unknown as Element).parentNode, parent);
+    assert.deepEqual(f.refreshed, ["query"]);
+    const count = f.requests.length;
+    await f.select(basis("next"));
+    assert.ok(f.requests.length > count, "visible property view renews while Query also remains visible");
+});
+
+test("outline routes to its own view and leaves a focused knowledge input mounted", async t => {
+    const f = fixture(t);
+    await f.tools.show("knowledge");
+    const input = f.document.createElement("input");
+    f.views.knowledge.append(input);
+    input.value = "retained annotation proposal";
+    f.document.activeElement = input;
+    f.tools.selectKnowledgeTab("headings");
+    assert.equal(f.visible.has("outline"), true);
+    assert.equal(f.visible.has("knowledge"), true);
+    assert.deepEqual(f.knowledgeTabs, []);
+    assert.equal(input.value, "retained annotation proposal");
+    assert.equal(f.document.activeElement, input);
+    assert.equal(input.parentNode, f.views.knowledge);
+    f.tools.selectKnowledgeTab("annotations");
+    assert.deepEqual(f.knowledgeTabs, ["annotations"]);
+});
+
+test("direct dock activation reads context without preparing or settling author input", async t => {
+    const f = fixture(t); let prepares = 0;
+    Object.assign((f.tools as unknown as { host: object }).host, { beforeAction: async () => { prepares++; } });
+    await f.tools.refreshView("outline");
+    assert.equal(prepares, 0);
+    assert.deepEqual(f.refreshed, ["knowledge"]);
+});
+
+test("direct outline selection reads once while tab selection after show reuses the fresh knowledge view", async t => {
+    const f = fixture(t);
+    f.tools.selectKnowledgeTab("headings"); await turn();
+    assert.deepEqual(f.refreshed, ["knowledge"]);
+    assert.equal(f.visible.has("outline"), true);
+    await f.tools.show("knowledge");
+    f.tools.selectKnowledgeTab("annotations"); await turn();
+    assert.deepEqual(f.refreshed, ["knowledge", "knowledge"]);
+    assert.deepEqual(f.knowledgeTabs, ["annotations"]);
+    f.presentation.hide("knowledge");
+    f.tools.selectKnowledgeTab("links"); await turn();
+    assert.deepEqual(f.refreshed, ["knowledge", "knowledge", "knowledge"]);
+    assert.deepEqual(f.knowledgeTabs, ["annotations", "links"]);
+});
+
 test("selection leaves an unrelated query refresh timer owned by its existing path", async t => {
     const f = fixture(t); let calls = 0;
-    Object.assign(f.tools, { active: "query" });
+    f.presentation.reveal("query");
     Object.assign((f.tools as unknown as { queryPanel: object }).queryPanel, { documentChanged: () => { calls++; } });
     f.tools.documentChanged();
     await f.select(basis()); await new Promise<void>(resolve => setTimeout(resolve, 500));

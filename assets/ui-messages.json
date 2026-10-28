@@ -6,6 +6,465 @@
     "en-US"
   ],
   "messages": {
+    "heading.outlineMatchCount": { "zh-CN": "{p0} 个大纲项命中", "en-US": "{p0} outline matches", "params": { "p0": "integer" } },
+    "heading.outlineEntrySummary": { "zh-CN": "{p0}：{p1} 个直接子项／{p2} 个后代子项", "en-US": "{p0}: {p1} direct items / {p2} descendant items", "params": { "p0": "text", "p1": "integer", "p2": "integer" } },
+    "heading.searchOutline": { "zh-CN": "搜索标题与题注", "en-US": "Search headings and captions", "params": {} },
+    "heading.outlineSearchPlaceholder": { "zh-CN": "搜索标题或题注", "en-US": "Search heading or caption", "params": {} },
+    "workPanel.cancelled": { "zh-CN": "已取消", "en-US": "Cancelled", "params": {} },
+    "workActivity.details": { "zh-CN": "查看详情", "en-US": "View details", "params": {} },
+    "workActivity.originalUnavailable": { "zh-CN": "当前窗口已不再持有这次原操作的详情，请从原恢复入口查看。", "en-US": "This window no longer holds these original operation details. Use the original recovery entry.", "params": {} },
+    "navigationLayout.restorePaneWidths": { "zh-CN": "恢复侧栏宽度", "en-US": "Reset sidebar widths", "params": {} },
+    "workspaceDock.leftSidebar": {
+      "zh-CN": "左侧栏",
+      "en-US": "Left sidebar",
+      "params": {}
+    },
+    "workspaceDock.rightSidebar": {
+      "zh-CN": "右侧栏",
+      "en-US": "Right sidebar",
+      "params": {}
+    },
+    "workspaceDock.viewActions": {
+      "zh-CN": "视图布局操作",
+      "en-US": "View layout actions",
+      "params": {}
+    },
+    "workspaceDock.collapseGroup": {
+      "zh-CN": "折叠分区",
+      "en-US": "Collapse group",
+      "params": {}
+    },
+    "workspaceDock.expandGroup": {
+      "zh-CN": "展开分区",
+      "en-US": "Expand group",
+      "params": {}
+    },
+    "workspaceDock.maximizeGroup": {
+      "zh-CN": "最大化分区",
+      "en-US": "Maximize group",
+      "params": {}
+    },
+    "workspaceDock.restoreGroups": {
+      "zh-CN": "恢复分区",
+      "en-US": "Restore groups",
+      "params": {}
+    },
+    "workspaceDock.hideView": {
+      "zh-CN": "隐藏视图",
+      "en-US": "Hide view",
+      "params": {}
+    },
+    "workspaceDock.moveLeft": {
+      "zh-CN": "移到左侧栏",
+      "en-US": "Move to left sidebar",
+      "params": {}
+    },
+    "workspaceDock.moveRight": {
+      "zh-CN": "移到右侧栏",
+      "en-US": "Move to right sidebar",
+      "params": {}
+    },
+    "workspaceDock.splitAbove": {
+      "zh-CN": "拆分到上方",
+      "en-US": "Split above",
+      "params": {}
+    },
+    "workspaceDock.splitBelow": {
+      "zh-CN": "拆分到下方",
+      "en-US": "Split below",
+      "params": {}
+    },
+    "workspaceDock.previousGroup": {
+      "zh-CN": "移到上方分区",
+      "en-US": "Move to previous group",
+      "params": {}
+    },
+    "workspaceDock.nextGroup": {
+      "zh-CN": "移到下方分区",
+      "en-US": "Move to next group",
+      "params": {}
+    },
+    "workspaceDock.mergePrevious": {
+      "zh-CN": "合并到上方分区",
+      "en-US": "Merge into previous group",
+      "params": {}
+    },
+    "workspaceDock.mergeNext": {
+      "zh-CN": "合并到下方分区",
+      "en-US": "Merge into next group",
+      "params": {}
+    },
+    "workspaceDock.resetLayout": {
+      "zh-CN": "恢复默认布局",
+      "en-US": "Reset layout",
+      "params": {}
+    },
+    "workspaceDock.waitComposition": {
+      "zh-CN": "请先完成当前输入，再调整布局。",
+      "en-US": "Finish the current input before changing the layout.",
+      "params": {}
+    },
+    "workspaceDock.emptySide": {
+      "zh-CN": "从另一侧拖入视图，或从视图菜单打开。",
+      "en-US": "Drag a view here or open one from the View menu.",
+      "params": {}
+    },
+    "workspaceDock.groupResize": {
+      "zh-CN": "调整分区高度",
+      "en-US": "Resize groups",
+      "params": {}
+    },
+    "workspaceDock.resizeHint": {
+      "zh-CN": "上／下方向键调整分区高度，Shift 加速；Enter 均分。",
+      "en-US": "Use Up/Down to resize groups, Shift for larger steps, and Enter for equal heights.",
+      "params": {}
+    },
+    "workPanel.label": {
+      "zh-CN": "工作面板",
+      "en-US": "Work panel",
+      "params": {}
+    },
+    "workPanel.problems": {
+      "zh-CN": "问题",
+      "en-US": "Problems",
+      "params": {}
+    },
+    "workPanel.tasks": {
+      "zh-CN": "任务",
+      "en-US": "Tasks",
+      "params": {}
+    },
+    "workPanel.results": {
+      "zh-CN": "结果",
+      "en-US": "Results",
+      "params": {}
+    },
+    "workPanel.collapse": {
+      "zh-CN": "收起工作面板",
+      "en-US": "Collapse work panel",
+      "params": {}
+    },
+    "workPanel.expand": {
+      "zh-CN": "展开工作面板",
+      "en-US": "Expand work panel",
+      "params": {}
+    },
+    "workPanel.resize": {
+      "zh-CN": "调整工作面板高度",
+      "en-US": "Resize work panel height",
+      "params": {}
+    },
+    "workPanel.resizeHint": {
+      "zh-CN": "使用上／下方向键调整高度，Shift 加速，Home 最小，End 最大，Enter 恢复默认。",
+      "en-US": "Use Up/Down to resize, Shift for larger steps, Home for minimum, End for maximum, Enter to reset.",
+      "params": {}
+    },
+    "workPanel.height": {
+      "zh-CN": "{p0} 像素高",
+      "en-US": "{p0} pixels high",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "workPanel.status": {
+      "zh-CN": "工作面板：{p0} 个问题，{p1} 个待处理任务，{p2} 个结果",
+      "en-US": "Work panel: {p0} problems, {p1} tasks need attention, {p2} results",
+      "params": {
+        "p0": "integer",
+        "p1": "integer",
+        "p2": "integer"
+      }
+    },
+    "workPanel.tabCount": {
+      "zh-CN": "{p0}（{p1}）",
+      "en-US": "{p0} ({p1})",
+      "params": {
+        "p0": "text",
+        "p1": "integer"
+      }
+    },
+    "workPanel.problemsEmpty": {
+      "zh-CN": "当前文档没有已报告的问题。",
+      "en-US": "No reported problems for the current document.",
+      "params": {}
+    },
+    "workPanel.tasksEmpty": {
+      "zh-CN": "当前没有已报告的任务。",
+      "en-US": "No reported tasks.",
+      "params": {}
+    },
+    "workPanel.resultsEmpty": {
+      "zh-CN": "当前没有已生成的结果。",
+      "en-US": "No generated results.",
+      "params": {}
+    },
+    "workPanel.running": {
+      "zh-CN": "正在进行",
+      "en-US": "Running",
+      "params": {}
+    },
+    "workPanel.waiting": {
+      "zh-CN": "等待处理",
+      "en-US": "Waiting",
+      "params": {}
+    },
+    "workPanel.failed": {
+      "zh-CN": "失败",
+      "en-US": "Failed",
+      "params": {}
+    },
+    "workPanel.succeeded": {
+      "zh-CN": "完成",
+      "en-US": "Complete",
+      "params": {}
+    },
+    "workPanel.error": {
+      "zh-CN": "错误",
+      "en-US": "Error",
+      "params": {}
+    },
+    "workPanel.warning": {
+      "zh-CN": "警告",
+      "en-US": "Warning",
+      "params": {}
+    },
+    "workPanel.info": {
+      "zh-CN": "提示",
+      "en-US": "Information",
+      "params": {}
+    },
+    "workPanel.progress": {
+      "zh-CN": "已完成 {p0}%",
+      "en-US": "{p0}% complete",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "workPanel.preferenceUnavailable": {
+      "zh-CN": "工作面板布局偏好暂时无法保存，本次仍可使用。",
+      "en-US": "Work panel layout preferences could not be saved; this session remains usable.",
+      "params": {}
+    },
+    "heading.outlineList": {
+      "zh-CN": "大纲列表",
+      "en-US": "Outline list",
+      "params": {}
+    },
+    "heading.mindMap": {
+      "zh-CN": "标题导图",
+      "en-US": "Heading mind map",
+      "params": {}
+    },
+    "heading.headingsAndCaptions": {
+      "zh-CN": "标题与题注",
+      "en-US": "Headings and captions",
+      "params": {}
+    },
+    "heading.headingsOnly": {
+      "zh-CN": "仅标题",
+      "en-US": "Headings only",
+      "params": {}
+    },
+    "heading.captionsOnly": {
+      "zh-CN": "仅题注",
+      "en-US": "Captions only",
+      "params": {}
+    },
+    "heading.itemKindHeading": {
+      "zh-CN": "标题",
+      "en-US": "Heading",
+      "params": {}
+    },
+    "heading.itemKindFigure": {
+      "zh-CN": "图",
+      "en-US": "Figure",
+      "params": {}
+    },
+    "heading.itemKindTable": {
+      "zh-CN": "表",
+      "en-US": "Table",
+      "params": {}
+    },
+    "heading.itemKindEquation": {
+      "zh-CN": "公式",
+      "en-US": "Equation",
+      "params": {}
+    },
+    "heading.itemKindCode": {
+      "zh-CN": "代码",
+      "en-US": "Code",
+      "params": {}
+    },
+    "heading.itemKindCaption": {
+      "zh-CN": "题注",
+      "en-US": "Caption",
+      "params": {}
+    },
+    "numberingPanel.effectiveSettings": {
+      "zh-CN": "当前生效设置",
+      "en-US": "Effective settings",
+      "params": {}
+    },
+    "numberingPanel.followNativeDocument": {
+      "zh-CN": "遵循文档原生编号",
+      "en-US": "Follow native document numbering",
+      "params": {}
+    },
+    "numberingPanel.personalDefaultShown": {
+      "zh-CN": "默认显示个人编号",
+      "en-US": "Show personal numbers by default",
+      "params": {}
+    },
+    "numberingPanel.personalDefaultHidden": {
+      "zh-CN": "默认隐藏个人编号",
+      "en-US": "Hide personal numbers by default",
+      "params": {}
+    },
+    "nodeContents.childNodes": {
+      "zh-CN": "子节点",
+      "en-US": "Child nodes",
+      "params": {}
+    },
+    "nodeContents.album": {
+      "zh-CN": "相册",
+      "en-US": "Album",
+      "params": {}
+    },
+    "nodeContents.files": {
+      "zh-CN": "文件",
+      "en-US": "Files",
+      "params": {}
+    },
+    "nodeContents.emptySection": {
+      "zh-CN": "暂无项目",
+      "en-US": "No items",
+      "params": {}
+    },
+    "nodeContents.showMore": {
+      "zh-CN": "显示更多",
+      "en-US": "Show more",
+      "params": {}
+    },
+    "nodeContents.resourceUnavailable": {
+      "zh-CN": "资源当前不可用，请刷新后重试。",
+      "en-US": "This resource is unavailable. Refresh and try again.",
+      "params": {}
+    },
+    "nodeContents.readOnlyResource": {
+      "zh-CN": "只读资源",
+      "en-US": "Read-only resource",
+      "params": {}
+    },
+    "inventory.resourceNotListed": {
+      "zh-CN": "所选文件已不在当前文件夹的可浏览清单中，请刷新节点视图。",
+      "en-US": "The selected file is no longer in this folder’s browsable inventory. Refresh the Nodes view.",
+      "params": {}
+    },
+    "inventory.resourceReadChanged": {
+      "zh-CN": "读取期间文件或所在目录发生变化，请刷新后重试。",
+      "en-US": "The file or its directory changed during reading. Refresh and try again.",
+      "params": {}
+    },
+    "inventory.resourceVersionChanged": {
+      "zh-CN": "文件预览版本已变化，请刷新节点视图。",
+      "en-US": "The file preview version changed. Refresh the Nodes view.",
+      "params": {}
+    },
+    "timeline.details": {
+      "zh-CN": "比较与恢复…",
+      "en-US": "Compare and restore…",
+      "params": {}
+    },
+    "timeline.scope": {
+      "zh-CN": "当前文档的已保存版本",
+      "en-US": "Saved versions of the current document",
+      "params": {}
+    },
+    "timeline.retry": {
+      "zh-CN": "重新读取时间线",
+      "en-US": "Retry timeline",
+      "params": {}
+    },
+    "workspaceViews.files": {
+      "zh-CN": "文件",
+      "en-US": "Files",
+      "params": {}
+    },
+    "workspaceViews.nodes": {
+      "zh-CN": "节点",
+      "en-US": "Nodes",
+      "params": {}
+    },
+    "workspaceViews.outline": {
+      "zh-CN": "大纲",
+      "en-US": "Outline",
+      "params": {}
+    },
+    "workspaceViews.timeline": {
+      "zh-CN": "时间线",
+      "en-US": "Timeline",
+      "params": {}
+    },
+    "workspaceViews.search": {
+      "zh-CN": "搜索",
+      "en-US": "Search",
+      "params": {}
+    },
+    "workspaceViews.calendar": {
+      "zh-CN": "日历",
+      "en-US": "Calendar",
+      "params": {}
+    },
+    "workspaceViews.people": {
+      "zh-CN": "人员",
+      "en-US": "People",
+      "params": {}
+    },
+    "workspaceViews.followDocument": {
+      "zh-CN": "跟随当前文档",
+      "en-US": "Follow current document",
+      "params": {}
+    },
+    "workspaceViews.pinnedFolder": {
+      "zh-CN": "固定浏览位置",
+      "en-US": "Pin browsing position",
+      "params": {}
+    },
+    "workspaceViews.chooseNode": {
+      "zh-CN": "选择节点以浏览内容",
+      "en-US": "Choose a node to browse its contents",
+      "params": {}
+    },
+    "workspaceViews.extensionsPending": {
+      "zh-CN": "此扩展尚未实现。可在视图菜单中隐藏此选项卡。",
+      "en-US": "This extension is not implemented yet. Hide this tab from the View menu.",
+      "params": {}
+    },
+    "workspaceViews.nodeGraph": {
+      "zh-CN": "关系图",
+      "en-US": "Relationship graph",
+      "params": {}
+    },
+    "workspaceViews.refresh": {
+      "zh-CN": "刷新视图",
+      "en-US": "Refresh view",
+      "params": {}
+    },
+    "workspaceViews.openResource": {
+      "zh-CN": "打开资源",
+      "en-US": "Open resource",
+      "params": {}
+    },
+    "workspaceViews.nodeSearch": {
+      "zh-CN": "筛选节点内容",
+      "en-US": "Filter node contents",
+      "params": {}
+    },
+    "workspaceViews.resourceScope": {
+      "zh-CN": "资源属于当前浏览的文件夹，按只读方式打开。",
+      "en-US": "Resources belong to the browsed folder and open read-only.",
+      "params": {}
+    },
     "app.title": {
       "zh-CN": "Weftext · 写作与知识",
       "en-US": "Weftext · Writing and knowledge",

@@ -92,7 +92,7 @@ function fixture() {
   });
   context.workspaceTools = workspace;
   const actualRenderSidebar = context.renderSidebar;
-  context.renderSidebar = () => { workspace.setLibrary(context.inventory, context.selectedFolder); effects.push("sidebar"); };
+  context.renderSidebar = () => { workspace.setLibrary(context.inventory); effects.push("sidebar"); };
   const savedMain = () => ({
     inventory: context.inventory, current: context.current, query: context.query, folder: context.selectedFolder,
     collapsed: [...context.collapsed], selection: [...context.contentSelections], origin: context.activeSourceOrigin,
@@ -112,7 +112,7 @@ function fixture() {
       editor: { clearTokens() { effects.push("clear-tokens"); } }, queries: { invalidate() { effects.push("invalidate-document"); } },
       mode: "source", scroll: {}, sourceTrashed: false,
     };
-    const saved = { inventory: next, query: "target-filter", folder: null, collapsed: ["target-collapsed"], scroll: 9, contentScroll: 7, selection: ["target-selection"] };
+    const saved = { inventory: next, query: "target-filter", collapsed: ["target-collapsed"], scroll: 9 };
     context.documents.push(doc); context.navigationContexts.set(doc, saved);
     return { doc, saved, prior };
   };
@@ -335,8 +335,9 @@ test("saveDocument clears a resolved original attempt while retaining its typed 
   assert.equal(session.opened, prior); assert.deepEqual(f.released, []);
 });
 
-test("activateDocument publishes an admitted context without inventing another writer producer", async () => {
+test("activateDocument publishes an admitted file context without another writer or replacing independent node browsing", async () => {
   const f = fixture(), { doc, saved, prior } = f.target(), serialized = JSON.stringify(saved);
+  const nodeFolder = f.context.selectedFolder, nodeSelection = [...f.context.contentSelections];
   const fresh = { ...prior, baseId: "fresh-base" };
   const latest = { ...f.next, entries: [] };
   f.context.api = async (route: string) => route === "/api/open" ? fresh : latest;
@@ -345,7 +346,8 @@ test("activateDocument publishes an admitted context without inventing another w
   await f.context.activateDocument(doc);
   assert.equal(f.context.current, doc); assert.equal(f.context.inventory, latest);
   assert.equal(f.workspace.library, latest); assert.equal(f.query.root, latest.root);
-  assert.equal(f.context.query, saved.query); assert.equal(f.context.selectedFolder, saved.folder);
+  assert.equal(f.context.query, saved.query); assert.equal(f.context.selectedFolder, nodeFolder);
+  assert.deepEqual([...f.context.contentSelections], nodeSelection);
   assert.notEqual(f.context.navigationContexts.get(doc), saved); assert.equal(JSON.stringify(saved), serialized);
   assert.equal(f.context.navigationContexts.get(doc).inventory, latest);
   assert.equal(doc.session.opened, fresh); assert.equal(f.context.ownsOpenedSession(fresh.sessionId), true);

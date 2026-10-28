@@ -1,18 +1,12 @@
 import { uiDisplayParameter } from "./ui-locale";
-import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
+import { message as uiMessage, displayMessage, setUiText, setUiAttr, UiError, type UiText } from "./ui-locale";
 export interface NavigationContext {
     root: string;
     workspaceId?: string;
-    scope?: {
-        kind: "library" | "directory" | "tag" | "query";
-        key: string;
-    };
 }
 export interface NavigationPreference {
     sidebarWidth: number;
     inspectorWidth: number;
-    inspectorWideWidth: number;
-    sidebarCollapsed: boolean;
     sidebarScroll: number;
 }
 export interface NavigationStorage {
@@ -20,7 +14,7 @@ export interface NavigationStorage {
     setItem(key: string, value: string): void;
     removeItem(key: string): void;
 }
-export const defaultNavigationPreference = (): NavigationPreference => ({ sidebarWidth: 264, inspectorWidth: 380, inspectorWideWidth: 680, sidebarCollapsed: false, sidebarScroll: 0 });
+export const defaultNavigationPreference = (): NavigationPreference => ({ sidebarWidth: 264, inspectorWidth: 380, sidebarScroll: 0 });
 const numberWithin = (value: unknown, min: number, max: number, fallback: number): number => typeof value === "number" && Number.isFinite(value) && value >= min && value <= max ? Math.round(value) : fallback;
 /** This projection stores geometry only: no result rows, author data, or writers. */
 export function decodeNavigationPreference(value: unknown): NavigationPreference {
@@ -31,14 +25,12 @@ export function decodeNavigationPreference(value: unknown): NavigationPreference
     return {
         sidebarWidth: numberWithin(item.sidebarWidth, 184, 480, defaults.sidebarWidth),
         inspectorWidth: numberWithin(item.inspectorWidth, 260, 960, defaults.inspectorWidth),
-        inspectorWideWidth: numberWithin(item.inspectorWideWidth, 260, 960, defaults.inspectorWideWidth),
-        sidebarCollapsed: typeof item.sidebarCollapsed === "boolean" ? item.sidebarCollapsed : false,
         sidebarScroll: numberWithin(item.sidebarScroll, 0, 10000000, 0),
     };
 }
 export function navigationContextKey(context: NavigationContext): string {
     const library = context.workspaceId ? ["workspace", context.workspaceId] : ["ordinary", context.root.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase()];
-    return `weftext-navigation-layout:v1:${encodeURIComponent(JSON.stringify([library, context.scope?.kind ?? "library", context.scope?.key ?? ""]))}`;
+    return `weftext-navigation-geometry:v2:${encodeURIComponent(JSON.stringify(library))}`;
 }
 export class NavigationPreferenceStore {
     private readonly memory = new Map<string, NavigationPreference>();
@@ -130,8 +122,6 @@ export interface NavigationLayoutOptions {
     workspaceBody: HTMLElement;
     inspector: HTMLElement;
     toolbar?: HTMLElement;
-    /** A persistent header control remains reachable while the ribbon is hidden. */
-    sidebarToggle?: HTMLButtonElement;
     storage?: NavigationStorage | null;
     notify?: (message: UiText) => void;
 }
@@ -142,12 +132,11 @@ export interface NavigationLayoutController {
     captureSidebarState(): void;
     /** Call after rebuilding the sidebar DOM; never reloads a cached result. */
     restoreSidebarState(): void;
-    toggleSidebar(): void;
     reset(): void;
     refresh(): void;
     destroy(): void;
 }
-/** Import navigation-layout.css once in the host; installation touches layout only. */
+/** Import navigation-layout.css once. Dock owns visibility; this owns width/scroll geometry only. */
 export function installNavigationLayout(options: NavigationLayoutOptions): NavigationLayoutController {
     const { shell, sidebar, workspaceBody, inspector } = options;
     const doc = shell.ownerDocument;
@@ -181,10 +170,6 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
     } | null = null;
     const lifetime = new AbortController();
     const priorSidebarId = sidebar.id, priorInspectorId = inspector.id;
-    const priorInert = sidebar.hasAttribute("inert");
-    const priorSidebarAriaHidden = sidebar.getAttribute("aria-hidden");
-    const externalToggle = options.sidebarToggle;
-    const priorExternalAttributes = externalToggle ? new Map(["aria-label", "title", "aria-controls", "aria-expanded"].map(name => [name, externalToggle.getAttribute(name)] as const)) : null;
     const priorSidebarWidth = shell.style.getPropertyValue("--navigation-sidebar-width");
     const priorInspectorWidth = shell.style.getPropertyValue("--navigation-inspector-width");
     if (!sidebar.id)
@@ -195,16 +180,11 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
     workspaceBody.classList.add("navigation-workspace-body");
     const controls = doc.createElement("div");
     controls.className = "navigation-layout-controls";
-    const toggle = doc.createElement("button");
-    toggle.type = "button";
-    toggle.className = "text-button navigation-layout-toggle";
-    toggle.setAttribute("aria-controls", sidebar.id);
-    externalToggle?.setAttribute("aria-controls", sidebar.id);
     const resetButton = doc.createElement("button");
     resetButton.type = "button";
     resetButton.className = "text-button";
-    setUiText(resetButton, uiMessage("navigationLayout.restorePanelLayout"));
-    controls.append(toggle, resetButton);
+    setUiText(resetButton, uiMessage("navigationLayout.restorePaneWidths"));
+    controls.append(resetButton);
     options.toolbar?.append(controls);
     if (!options.toolbar) {
         controls.classList.add("navigation-layout-floating");
@@ -234,12 +214,9 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
     const dockedInspector = (): boolean => view.innerWidth > 1000 && !inspector.hidden;
     function sidebarBounds(): ResizeBounds { return sidebarResizeBounds(shell.clientWidth || view.innerWidth, dockedInspector()); }
     function inspectorBounds(): ResizeBounds { return inspectorResizeBounds(shell.clientWidth || view.innerWidth, workspaceBody.clientWidth); }
-    function inspectorPreferredWidth(): number { return inspector.classList.contains("wide") ? preference.inspectorWideWidth : preference.inspectorWidth; }
     function setPreferredWidth(pane: "sidebar" | "inspector", width: number): void {
         if (pane === "sidebar")
             preference.sidebarWidth = width;
-        else if (inspector.classList.contains("wide"))
-            preference.inspectorWideWidth = width;
         else
             preference.inspectorWidth = width;
     }
@@ -252,39 +229,20 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
     function refresh(): void {
         if (destroyed)
             return;
-        const wide = wideSidebar();
-        const collapsed = wide && preference.sidebarCollapsed;
-        if (shell.classList.contains("navigation-sidebar-collapsed") !== collapsed)
-            shell.classList.toggle("navigation-sidebar-collapsed", collapsed);
-        const opened = wide ? !collapsed : shell.classList.contains("sidebar-open");
-        const hidden = !opened;
-        // Move focus before making the old owner unavailable to keyboard and AT.
-        // A translated off-screen sidebar must not remain a second tab sequence.
-        if (hidden && (sidebar.contains(doc.activeElement) || doc.activeElement === sidebarHandle))
-            (externalToggle ?? toggle).focus({ preventScroll: true });
-        sidebar.toggleAttribute("inert", priorInert || hidden);
-        if (hidden || priorSidebarAriaHidden === "true")
-            sidebar.setAttribute("aria-hidden", "true");
-        else if (priorSidebarAriaHidden === null)
-            sidebar.removeAttribute("aria-hidden");
-        else
-            sidebar.setAttribute("aria-hidden", priorSidebarAriaHidden);
         const sidebarWidth = clampPaneWidth(preference.sidebarWidth, sidebarBounds());
         shell.style.setProperty("--navigation-sidebar-width", `${sidebarWidth}px`);
-        const inspectorWidth = clampPaneWidth(inspectorPreferredWidth(), inspectorBounds());
+        const inspectorWidth = clampPaneWidth(preference.inspectorWidth, inspectorBounds());
         shell.style.setProperty("--navigation-inspector-width", `${inspectorWidth}px`);
-        sidebarHandle.hidden = !wide || collapsed;
-        inspectorHandle.hidden = !dockedInspector();
+        const sidebarUnavailable = !wideSidebar() || sidebar.hidden;
+        const inspectorUnavailable = !dockedInspector();
+        if (drag && (drag.pane === "sidebar" ? sidebarUnavailable : inspectorUnavailable)) {
+            cancelDrag();
+            return;
+        }
+        sidebarHandle.hidden = sidebarUnavailable;
+        inspectorHandle.hidden = inspectorUnavailable;
         setAccessibleRange(sidebarHandle, sidebarWidth, sidebarBounds());
         setAccessibleRange(inspectorHandle, inspectorWidth, inspectorBounds());
-        const label = opened ? uiMessage("navigationLayout.collapseNavigation") : uiMessage("navigationLayout.showNavigation");
-        setUiText(toggle, label);
-        toggle.setAttribute("aria-expanded", String(opened));
-        if (externalToggle) {
-            setUiAttr(externalToggle, "aria-label", label);
-            setUiAttr(externalToggle, "title", label);
-            externalToggle.setAttribute("aria-expanded", String(opened));
-        }
     }
     function captureSidebarState(): void {
         const tree = sidebar.querySelector<HTMLElement>(".file-tree");
@@ -300,9 +258,9 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
             tree.scrollTop = preference.sidebarScroll;
         // Only an explicit, surviving DOM ID can restore focus. A remembered title,
         // path, or list index never selects another object with the same name.
-        if (!sidebar.hasAttribute("inert") && previousFocus?.owned && previousFocus.id && (!doc.activeElement || doc.activeElement === doc.body)) {
+        if (!sidebar.hidden && !sidebar.hasAttribute("inert") && previousFocus?.owned && previousFocus.id && (!doc.activeElement || doc.activeElement === doc.body)) {
             const target = doc.getElementById(previousFocus.id);
-            if (target && sidebar.contains(target))
+            if (target && sidebar.contains(target) && !target.closest("[hidden],[inert]"))
                 target.focus({ preventScroll: true });
         }
         previousFocus = null;
@@ -315,18 +273,6 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
         doc.body.classList.remove("navigation-resizing");
         refresh();
     }
-    function toggleSidebar(): void {
-        const ownedFocus = sidebar.contains(doc.activeElement) || doc.activeElement === sidebarHandle;
-        if (wideSidebar()) {
-            preference.sidebarCollapsed = !preference.sidebarCollapsed;
-            store.write(context, preference);
-        }
-        else
-            shell.classList.toggle("sidebar-open");
-        refresh();
-        if (ownedFocus && (preference.sidebarCollapsed || !shell.classList.contains("sidebar-open")))
-            (externalToggle ?? toggle).focus({ preventScroll: true });
-    }
     function reset(): void { cancelDrag(); store.reset(context); preference = defaultNavigationPreference(); refresh(); restoreSidebarState(); }
     function keyboardResize(pane: "sidebar" | "inspector", event: KeyboardEvent): void {
         if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey)
@@ -337,9 +283,9 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
             return;
         }
         const bounds = pane === "sidebar" ? sidebarBounds() : inspectorBounds();
-        const current = clampPaneWidth(pane === "sidebar" ? preference.sidebarWidth : inspectorPreferredWidth(), bounds);
+        const current = clampPaneWidth(pane === "sidebar" ? preference.sidebarWidth : preference.inspectorWidth, bounds);
         const defaults = defaultNavigationPreference();
-        const next = keyboardPaneWidth(current, pane, event.key, event.shiftKey, bounds, pane === "sidebar" ? defaults.sidebarWidth : inspector.classList.contains("wide") ? defaults.inspectorWideWidth : defaults.inspectorWidth);
+        const next = keyboardPaneWidth(current, pane, event.key, event.shiftKey, bounds, pane === "sidebar" ? defaults.sidebarWidth : defaults.inspectorWidth);
         if (next == null)
             return;
         event.preventDefault();
@@ -353,7 +299,7 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
         event.preventDefault();
         cancelDrag();
         const bounds = pane === "sidebar" ? sidebarBounds() : inspectorBounds();
-        drag = { pane, pointer: event.pointerId, startX: event.clientX, startWidth: clampPaneWidth(pane === "sidebar" ? preference.sidebarWidth : inspectorPreferredWidth(), bounds), original: { ...preference } };
+        drag = { pane, pointer: event.pointerId, startX: event.clientX, startWidth: clampPaneWidth(pane === "sidebar" ? preference.sidebarWidth : preference.inspectorWidth, bounds), original: { ...preference } };
         doc.body.classList.add("navigation-resizing");
         try {
             (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
@@ -392,15 +338,14 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
     }, { signal: lifetime.signal });
     view.addEventListener("blur", cancelDrag, { signal: lifetime.signal });
     view.addEventListener("resize", refresh, { signal: lifetime.signal });
-    toggle.addEventListener("click", toggleSidebar, { signal: lifetime.signal });
-    externalToggle?.addEventListener("click", toggleSidebar, { signal: lifetime.signal });
     resetButton.addEventListener("click", reset, { signal: lifetime.signal });
     const observer = new MutationObserver(refresh);
     observer.observe(inspector, { attributes: true, attributeFilter: ["hidden", "class"] });
+    observer.observe(sidebar, { attributes: true, attributeFilter: ["hidden", "class"] });
     observer.observe(shell, { attributes: true, attributeFilter: ["class"] });
     refresh();
     return {
-        controls, refresh, captureSidebarState, restoreSidebarState, toggleSidebar, reset,
+        controls, refresh, captureSidebarState, restoreSidebarState, reset,
         setContext(next): void {
             if ((context && next && navigationContextKey(context) === navigationContextKey(next)) || (!context && !next)) {
                 refresh();
@@ -424,20 +369,8 @@ export function installNavigationLayout(options: NavigationLayoutOptions): Navig
             controls.remove();
             sidebarHandle.remove();
             inspectorHandle.remove();
-            shell.classList.remove("navigation-layout", "navigation-sidebar-collapsed");
+            shell.classList.remove("navigation-layout");
             workspaceBody.classList.remove("navigation-workspace-body");
-            sidebar.toggleAttribute("inert", priorInert);
-            if (priorSidebarAriaHidden === null) sidebar.removeAttribute("aria-hidden");
-            else sidebar.setAttribute("aria-hidden", priorSidebarAriaHidden);
-            if (externalToggle && priorExternalAttributes)
-                for (const [name, value] of priorExternalAttributes) {
-                    // Retire this controller's translated bindings before restoring
-                    // the caller's original attribute bytes.
-                    if (name === "aria-label" || name === "title")
-                        setUiAttr(externalToggle, name, value ?? "");
-                    if (value === null) externalToggle.removeAttribute(name);
-                    else externalToggle.setAttribute(name, value);
-                }
             if (!priorSidebarId)
                 sidebar.removeAttribute("id");
             if (!priorInspectorId)

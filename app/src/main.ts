@@ -34,6 +34,16 @@ import { DocumentSession, encodeLiteral, canRebindSaveAs, rebindCommittedSave, s
 import { decodeEditorMapResponse, WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, textareaSourceDraft, type WritingMap, type WritingRange } from "./writing";
 import { nativeElement } from "./native-node";
 import { installNavigationLayout } from "./navigation-layout";
+import { WorkspaceDock } from "./workspace-dock";
+import "./workspace-dock.css";
+import "./workspace-views.css";
+import { WorkPanel } from "./work-panel";
+import "./work-panel.css";
+import { workActivity } from "./work-activity";
+import { TimelineView } from "./timeline-view";
+import "./timeline-view.css";
+import { mountResourceViewer } from "./media-viewer";
+import { inventoryResource } from "./inventory-resource";
 import { ensureOfflineFonts } from "./font-readiness";
 import "./navigation-layout.css";
 import "./writing.css";
@@ -162,8 +172,15 @@ interface LiveDocument {
 function sourceConsumersAvailable(doc: LiveDocument): boolean { return !doc.sourceRefreshing && !sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget); }
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const shell = el("div", "shell");
-const sidebar = el("aside", "sidebar");
+const toastHost = el("div", "toast-host");
+toastHost.setAttribute("aria-live", "polite");
+const sidebar = el("section", "workspace-files-view");
 setUiAttr(sidebar, "aria-label", uiMessage("shell.libraryNavigation"));
+const nodesView = el("section", "workspace-nodes-view");
+const dock = new WorkspaceDock({ notify: toast, onActivate: id => queueMicrotask(() => refreshDockView(id)) });
+dock.left.classList.add("sidebar");
+dock.right.classList.add("workspace-inspector");
+const workPanel = new WorkPanel({ notify: toast });
 const workspace = el("main", "workspace");
 const topbar = el("header", "topbar");
 const ribbon = new WorkspaceRibbon();
@@ -195,12 +212,10 @@ setUiAttr(tabs, "aria-label", uiMessage("shell.openDocuments"));
 const content = el("div", "content");
 const workspaceBody = el("div", "workspace-body");
 const statusbar = el("footer", "statusbar");
-const toastHost = el("div", "toast-host");
-toastHost.setAttribute("aria-live", "polite");
-shell.append(sidebar, workspace);
+shell.append(dock.left, workspace);
 topbar.append(headerSidebarToggle, everydayBar, headerHome, tabs, headerActions);
-workspace.append(topbar, ribbon.element, workspaceBody, statusbar);
-workspaceBody.append(content);
+workspace.append(topbar, ribbon.element, workspaceBody, workPanel.element, statusbar);
+workspaceBody.append(content, dock.right);
 app.append(shell, toastHost);
 let inventory: Inventory | null = null;
 let documents: LiveDocument[] = [];
@@ -317,14 +332,17 @@ let navigationGeneration = 0;
 const navigationContexts = new Map<LiveDocument, {
     inventory: Inventory | null;
     query: string;
-    folder: string | null;
     collapsed: string[];
     scroll: number;
-    contentScroll: number;
-    selection: string[];
 }>();
 let query = "";
 let selectedFolder: string | null = null;
+let nodeQuery = "";
+let followDocument = true;
+let nodeContext = "";
+let renderedNodeInventory: Inventory | null = null;
+let renderedNodeFolder = "";
+let renderedNodeQuery = "";
 let sidebarComposing = false;
 const contentSelections = new Set<string>();
 let nodeContents: {
@@ -333,6 +351,7 @@ let nodeContents: {
 const folderViews = new Map<string, {
     query: string;
     scroll: number;
+    selection: string[];
 }>();
 const collapsed = new Set<string>();
 let previewVisible = localStorage.getItem("weftext-preview") !== "false";
@@ -351,7 +370,7 @@ let pagedPreview: PagedPreview | null = null;
 function captureNavigation(): void {
     if (!current)
         return;
-    navigationContexts.set(current, { inventory, query, folder: selectedFolder, collapsed: [...collapsed], scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0, contentScroll: sidebar.querySelector(".node-contents")?.scrollTop ?? 0, selection: [...contentSelections] });
+    navigationContexts.set(current, { inventory, query, collapsed: [...collapsed], scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0 });
 }
 function restoreNavigation(doc: LiveDocument): void {
     const saved = navigationContexts.get(doc);
@@ -360,11 +379,8 @@ function restoreNavigation(doc: LiveDocument): void {
     workspaceTools.assertLibraryChange(saved.inventory);
     inventory = saved.inventory;
     query = saved.query;
-    selectedFolder = saved.folder;
     collapsed.clear();
     saved.collapsed.forEach(path => collapsed.add(path));
-    contentSelections.clear();
-    saved.selection.forEach(path => contentSelections.add(path));
 }
 function everydayEntries(): EverydayEntry[] {
     const entries = new Map<string, EverydayEntry>();
@@ -413,9 +429,9 @@ function everydayCommands(): EverydayCommand[] {
         { id: "new-note", label: uiMessage("shell.newNote"), unavailable: !inventory?.workspaceId ? uiMessage("shell.openLibraryFirst") : undefined, run: createNote },
         { id: "open-file", label: uiMessage("shell.openOutsideTypst"), run: openOutsideFile },
         { id: "save", label: uiMessage("shell.saveCurrentNote"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: () => saveDocument(doc!) },
-        { id: "resources", label: uiMessage("shell.browseImportResources"), run: () => libraryCloseActivity.run(async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("files"); }) },
+        { id: "resources", label: uiMessage("shell.browseImportResources"), run: () => { dock.reveal("nodes"); } },
         { id: "relationship-graph", label: uiMessage("shell.openRelationshipGraph"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: () => libraryCloseActivity.run(async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("graph"); }) },
-        { id: "heading-structure", label: uiMessage("shell.openHeadingStructure"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: () => libraryCloseActivity.run(async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings"); }) },
+        { id: "heading-structure", label: uiMessage("shell.openHeadingStructure"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: () => libraryCloseActivity.run(async () => { await workspaceTools.show("outline"); }) },
         ...everydayWritingCommands(doc?.writing, !!doc && sourceConsumersAvailable(doc) && doc.mode !== "read" && !readOnlySource(doc) && !doc.writing.state.composing && !doc.editor.composing, insertEverydayQuery),
     ];
 }
@@ -928,8 +944,7 @@ document.documentElement.lang = locale.current;
 locale.subscribe(value => { document.documentElement.lang = value; });
 window.addEventListener("pagehide", event => { if (!event.persisted)
     interfaceLocale.dispose(); });
-workspaceBody.append(workspaceTools.inspector);
-const navigationLayout = installNavigationLayout({ shell, sidebar, workspaceBody, inspector: workspaceTools.inspector, toolbar: ribbon.element, sidebarToggle: headerSidebarToggle, notify: toast });
+const navigationLayout = installNavigationLayout({ shell, sidebar: dock.left, workspaceBody, inspector: dock.right, toolbar: ribbon.element, notify: toast });
 function historyContext(doc: LiveDocument | null): HistoryContext | null {
   if (!doc) return null;
   const { session } = doc;
@@ -996,6 +1011,44 @@ const historyPanel = new HistoryPanel({
 
     }),
 });
+const timelineView = new TimelineView({ getDocument: () => historyContext(current), request: api, openHistory: () => historyPanel.open(), notify: toast });
+const outlineView = el("section", "workspace-outline-view");
+outlineView.append(button(uiMessage("shell.numberingControls"), () => current ? openLocalNumbering(current) : undefined, "text-button"), workspaceTools.views.outline);
+dock.register({ id: "files", label: uiMessage("workspaceViews.files"), element: sidebar, group: "navigation" });
+dock.register({ id: "nodes", label: uiMessage("workspaceViews.nodes"), element: nodesView, group: "navigation" });
+dock.register({ id: "query", label: uiMessage("workspaceViews.search"), element: workspaceTools.views.query, group: "navigation" });
+dock.register({ id: "timeline", label: uiMessage("workspaceViews.timeline"), element: timelineView.element, group: "navigation" });
+dock.register({ id: "outline", label: uiMessage("workspaceViews.outline"), element: outlineView, group: "structure" });
+dock.register({ id: "data", label: uiMessage("dataPanel.title"), element: workspaceTools.views.data, side: "right", hidden: true });
+dock.register({ id: "knowledge", label: uiMessage("workspaceTools.linksAnnotations"), element: workspaceTools.views.knowledge, side: "right", hidden: true });
+for (const id of ["calendar", "people"] as const) {
+    const view = el("section", "workspace-extension-view");
+    view.append(el("p", "", uiMessage("workspaceViews.extensionsPending")));
+    dock.register({ id, label: uiMessage(`workspaceViews.${id}`), element: view, side: "right", hidden: true });
+}
+workspaceTools.attachDock({ reveal: kind => dock.reveal(kind, { activate: false }), hide: kind => dock.hide(kind), visible: kind => viewVisible(workspaceTools.views[kind]) });
+setUiAttr(headerSidebarToggle, "aria-label", uiMessage("workspaceDock.leftSidebar"));
+headerSidebarToggle.setAttribute("aria-controls", dock.left.id = "weftext-navigation-pane");
+headerSidebarToggle.onclick = () => dock.toggleSide("left");
+const overlayClose = button(uiMessage("common.close"), () => dock.toggleSide("left"), "text-button sidebar-overlay-close");
+dock.left.append(overlayClose);
+const sidebarVisibility = new MutationObserver(() => headerSidebarToggle.setAttribute("aria-expanded", String(!dock.left.hidden)));
+sidebarVisibility.observe(dock.left, { attributes: true, attributeFilter: ["hidden"] });
+headerSidebarToggle.setAttribute("aria-expanded", String(!dock.left.hidden));
+workActivity.subscribe(event => {
+    if (event.kind === "task") workPanel.reportTask(event.task);
+    else if (event.kind === "result") workPanel.addResult(event.result);
+    else workPanel.removeResult(event.id);
+}, { replay: true });
+function viewVisible(element: HTMLElement): boolean {
+    return element.isConnected && !element.closest("[hidden],[inert]") && element.getClientRects().length > 0;
+}
+function refreshDockView(id: string): void {
+    if (id === "data" || id === "knowledge" || id === "query" || id === "outline")
+        void workspaceTools.refreshView(id).catch(showError);
+    else if (id === "timeline") void timelineView.documentChanged().catch(showError);
+    else if (id === "nodes") renderNodeBrowser();
+}
 function saveBusy(doc: LiveDocument): boolean { return doc.session.savePending || historyPanel.hasPending(historyContext(doc)); }
 function pendingSave(doc: LiveDocument): LiveDocument["lastSave"] { return doc.lastSave?.deliveryEnded ? undefined : doc.lastSave; }
 
@@ -1217,11 +1270,12 @@ function renderSidebar(): void {
     if (sidebarComposing)
         return;
     workspaceTools.assertLibraryChange(inventory);
-    nodeContents?.dispose();
-    nodeContents = undefined;
     navigationLayout.captureSidebarState();
-    navigationLayout.setContext(inventory ? { root: inventory.root, workspaceId: inventory.workspaceId, scope: selectedFolder ? { kind: "directory", key: `path:${normalize(selectedFolder)}` } : undefined } : null);
-    workspaceTools.setLibrary(inventory, selectedFolder);
+    navigationLayout.setContext(inventory ? { root: inventory.root, workspaceId: inventory.workspaceId } : null);
+    const context = inventory ? JSON.stringify([inventory.workspaceId ?? "ordinary", normalize(inventory.root)]) : null;
+    dock.setContext(context);
+    workPanel.setContext(context);
+    workspaceTools.setLibrary(inventory);
     const focused = document.activeElement as HTMLInputElement | null;
     const restoreSearch = focused?.id === "library-search";
     const selection = restoreSearch ? [focused!.selectionStart, focused!.selectionEnd] : null;
@@ -1263,12 +1317,8 @@ function renderSidebar(): void {
     sidebar.append(search);
     if (inventory) {
         const scope = el("div", "search-scope");
-        scope.append(button(uiMessage("shell.bodyPropertyQuery"), () => workspaceTools.search(query, true), "text-button"), el("span", "", selectedFolder ? basename(selectedFolder) : uiMessage("queryPanel.entireLibrary")));
+        scope.append(button(uiMessage("shell.bodyPropertyQuery"), () => workspaceTools.search(query, true), "text-button"), el("span", "", uiMessage("queryPanel.entireLibrary")));
         sidebar.append(scope);
-        if (selectedFolder)
-            sidebar.append(button(uiMessage("shell.returnEntireLibrary"), () => browseFolder(null), "clear-scope"));
-        if (selectedFolder)
-            renderNodeContents(sidebar, selectedFolder);
     }
     const list = el("div", "file-tree");
     if (!inventory) {
@@ -1281,7 +1331,7 @@ function renderSidebar(): void {
         if (!inventory.complete)
             heading.append(el("span", "partial-label", uiMessage("shell.scanIncomplete")));
         list.append(heading);
-        const visible = fileTreeEntries(inventory.entries, selectedFolder, query, collapsed);
+        const visible = fileTreeEntries(inventory.entries, null, query, collapsed);
         for (const entry of visible) {
             const directory = entry.kind === "directory";
             const row = button("", () => directory ? browseFolder(entry.folderPath!) : openInventoryEntry(entry, inventory!.root, inventory!.workspaceId), `tree-row ${current && normalize(current.session.path) === normalize(entry.path) ? "active" : ""}`, entry.folderPath ? "folder" : "file");
@@ -1354,21 +1404,21 @@ function renderSidebar(): void {
             newInput.setSelectionRange(selection[0], selection[1]);
     }
     navigationLayout.restoreSidebarState();
+    renderNodeBrowser();
 }
 function toggleFolder(path: string): void { const key = normalize(path); collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key); renderSidebar(); }
 function browseFolder(path: string | null): void {
     workspaceTools.assertLibraryChange(inventory);
-    const old = selectedFolder ?? inventory?.root;
-    if (old)
-        folderViews.set(normalize(old), { query, scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0 });
+    rememberNodeFolder();
+    followDocument = false;
     selectedFolder = path;
     contentSelections.clear();
     const saved = folderViews.get(normalize(path ?? inventory?.root ?? ""));
-    query = saved?.query ?? "";
-    renderSidebar();
-    const tree = sidebar.querySelector(".file-tree");
-    if (tree)
-        tree.scrollTop = saved?.scroll ?? 0;
+    nodeQuery = saved?.query ?? "";
+    saved?.selection.forEach(value => contentSelections.add(value));
+    persistNodeBrowse();
+    renderNodeBrowser();
+    dock.reveal("nodes");
 }
 function nodeMenu(entries: InventoryEntry[], folder?: string): void {
     const selected = entries.filter(entry => entry.path.toLowerCase().endsWith(".typ")), root = inventory?.root, workspaceId = inventory?.workspaceId;
@@ -1399,14 +1449,124 @@ async function previewNodes(entries: InventoryEntry[]): Promise<void> {
         });
     } finally { finishNativeActivity(); }
 }
+function rememberNodeFolder(): void {
+    if (renderedNodeFolder)
+        folderViews.set(normalize(renderedNodeFolder), { query: nodeQuery, scroll: nodesView.querySelector(".node-contents")?.scrollTop ?? 0, selection: [...contentSelections] });
+}
+function persistNodeBrowse(): void {
+    if (!nodeContext) return;
+    try { localStorage.setItem(`weftext-node-browser:v1:${nodeContext}`, JSON.stringify({ follow: followDocument, folder: selectedFolder })); }
+    catch { /* Browsing still works when presentation preferences cannot persist. */ }
+}
+function nodeFolderAvailable(path: unknown): path is string {
+    return typeof path === "string" && !!inventory && (normalize(path) === normalize(inventory.root)
+        || inventory.entries.some(entry => entry.kind === "directory" && normalize(entry.path) === normalize(path)));
+}
+function renderNodeBrowser(): void {
+    const context = inventory ? JSON.stringify([inventory.workspaceId ?? "ordinary", normalize(inventory.root)]) : "";
+    if (context !== nodeContext) {
+        rememberNodeFolder();
+        nodeContext = context;
+        followDocument = true; selectedFolder = null; nodeQuery = ""; contentSelections.clear();
+        if (context) try {
+            const raw = localStorage.getItem(`weftext-node-browser:v1:${context}`);
+            if (raw && raw.length < 8192) {
+                const value = JSON.parse(raw);
+                if (value && typeof value.follow === "boolean" && nodeFolderAvailable(value.folder)) {
+                    followDocument = value.follow; selectedFolder = value.folder;
+                }
+            }
+        } catch { /* Invalid display preferences never change authored content. */ }
+    }
+    if (followDocument && inventory) {
+        const folder = current && normalize(current.session.opened.root) === normalize(inventory.root)
+            ? current.session.path.replaceAll("\\", "/").split("/").slice(0, -1).join("/") : inventory.root;
+        if (normalize(folder) !== normalize(selectedFolder ?? "")) {
+            rememberNodeFolder();
+            selectedFolder = nodeFolderAvailable(folder) ? folder : inventory.root;
+            const saved = folderViews.get(normalize(selectedFolder));
+            nodeQuery = saved?.query ?? "";
+            contentSelections.clear(); saved?.selection.forEach(path => contentSelections.add(path));
+        }
+    }
+    if (inventory && selectedFolder && !nodeFolderAvailable(selectedFolder)) {
+        rememberNodeFolder();
+        selectedFolder = inventory.root;
+        const saved = folderViews.get(normalize(selectedFolder));
+        nodeQuery = saved?.query ?? "";
+        contentSelections.clear(); saved?.selection.forEach(path => contentSelections.add(path));
+        persistNodeBrowse();
+        toast(uiMessage("shell.oldDirectoryScopeUnavailable"));
+    }
+    const folder = selectedFolder ?? inventory?.root ?? "";
+    const existingFilter = nodesView.querySelector<HTMLInputElement>(".node-browser-filter");
+    if (existingFilter?.matches(":focus") && sidebarComposing) return;
+    if (renderedNodeInventory === inventory && renderedNodeFolder === folder && renderedNodeQuery === nodeQuery
+        && nodesView.dataset.follow === String(followDocument)) return;
+    const focused = document.activeElement === existingFilter;
+    const selection = focused ? [existingFilter?.selectionStart, existingFilter?.selectionEnd] : null;
+    nodeContents?.dispose(); nodeContents = undefined;
+    renderedNodeInventory = inventory; renderedNodeFolder = folder; renderedNodeQuery = nodeQuery;
+    nodesView.dataset.follow = String(followDocument);
+    disposeUiTree(nodesView); nodesView.replaceChildren();
+    const toolbar = el("div", "node-browser-toolbar");
+    const follow = button(followDocument ? uiMessage("workspaceViews.followDocument") : uiMessage("workspaceViews.pinnedFolder"), () => {
+        rememberNodeFolder(); followDocument = !followDocument; persistNodeBrowse(); renderNodeBrowser();
+    }, "text-button");
+    follow.setAttribute("aria-pressed", String(followDocument));
+    toolbar.append(follow, button(uiMessage("workspaceViews.nodeGraph"), async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("graph"); }, "text-button"));
+    nodesView.append(toolbar);
+    if (!inventory) { nodesView.append(el("p", "sidebar-empty", uiMessage("workspaceViews.chooseNode"))); return; }
+    const path = el("div", "node-browser-path");
+    path.append(button(basename(inventory.root), () => browseFolder(inventory!.root), "text-button"));
+    if (normalize(folder) !== normalize(inventory.root)) {
+        const parent = folder.replaceAll("\\", "/").split("/").slice(0, -1).join("/");
+        path.append(button("↑", () => browseFolder(parent), "text-button"), el("span", "", basename(folder)));
+        setUiAttr(path.querySelectorAll("button")[1], "aria-label", uiMessage("shell.returnEntireLibrary"));
+    }
+    setUiAttr(path, "title", folder);
+    const filter = el("input", "node-browser-filter");
+    setUiAttr(filter, "aria-label", uiMessage("workspaceViews.nodeSearch"));
+    setUiAttr(filter, "placeholder", uiMessage("workspaceViews.nodeSearch"));
+    filter.value = nodeQuery;
+    filter.oninput = event => { nodeQuery = filter.value; if (!(event as InputEvent).isComposing && !sidebarComposing) renderNodeBrowser(); };
+    filter.addEventListener("compositionstart", () => { sidebarComposing = true; });
+    filter.addEventListener("compositionend", () => { sidebarComposing = false; nodeQuery = filter.value; renderNodeBrowser(); });
+    nodesView.append(path, filter);
+    renderNodeContents(nodesView, folder);
+    const contents = nodesView.querySelector(".node-contents");
+    if (contents) contents.scrollTop = folderViews.get(normalize(folder))?.scroll ?? 0;
+    if (focused) { filter.focus(); if (selection) filter.setSelectionRange(selection[0] ?? 0, selection[1] ?? 0); }
+}
+async function openInventoryResource(root: string, folder: string, path: string): Promise<{ descriptor: import("./media-viewer").MediaResource; read(): Promise<Blob>; open(): Promise<void> }> {
+    const resource = await inventoryResource(root, folder, path);
+    return { ...resource, open: async () => {
+        libraryCloseActivity.assertAvailable();
+        const end = libraryCloseActivity.begin();
+        const dialog = el("dialog", "modal inventory-resource-dialog"), container = el("div");
+        const descriptor = resource.descriptor;
+        const controller = mountResourceViewer(container, {
+            context: () => ({ viewerId: descriptor.resource }), list: async () => ({ resources: [descriptor], warnings: [] }),
+            read: async (_session, reference, revision) => {
+                if (reference !== descriptor.resource || revision !== descriptor.revision) throw new UiError(uiMessage("error.invalidResponse"));
+                return resource.read();
+            }, notify: toast,
+        }, { resource: descriptor.resource, revision: descriptor.revision! }, { allowSaveCopy: true });
+        const close = (): void => { controller.dispose(); disposeUiTree(dialog); dialog.close(); dialog.remove(); end(); };
+        dialog.append(el("h2", "", descriptor.name), el("p", "", uiMessage("workspaceViews.resourceScope")), container, button(uiMessage("common.close"), close, "text-button"));
+        dialog.oncancel = event => { event.preventDefault(); close(); };
+        document.body.append(dialog); dialog.showModal();
+    } };
+}
 function renderNodeContents(host: HTMLElement, folder: string): void {
     if (!inventory)
         return;
     const selected = inventory, panel = el("section", "node-contents");
     setUiAttr(panel, "aria-label", uiMessage("shell.nodeContents"));
     host.append(panel);
-    nodeContents = mountNodeContents(panel, selected, folder, query, contentSelections, {
+    nodeContents = mountNodeContents(panel, selected, folder, nodeQuery, contentSelections, {
         request: api, readBlob: apiBlob, browse: browseFolder, menu: nodeMenu, preview: previewNodes, notify: toast,
+        resource: entry => openInventoryResource(selected.root, folder, entry.path),
         open: entry => entry.kind === "directory" ? browseFolder(entry.path) : openInventoryEntry(entry, selected.root, selected.workspaceId),
         changed: async () => libraryCloseActivity.run(async () => {
 
@@ -1479,7 +1639,7 @@ const statusLeft = el("div", "status-left");
 const statusRight = el("div", "status-right");
 const statusMode = button("", () => { ribbon.select("view", true); ribbon.setCollapsed(false); }, "status-mode");
 setUiAttr(statusMode, "aria-label", uiMessage("shell.documentView"));
-statusbar.append(statusLeft, statusMode, statusRight);
+statusbar.append(statusLeft, statusMode, statusRight, workPanel.statusButton);
 function renderStatus(): void {
     statusLeft.replaceChildren();
     statusRight.replaceChildren();
@@ -1670,7 +1830,7 @@ function renderDocument(): void {
     authoring.append(button(uiMessage("shell.numberingControls"), () => openLocalNumbering(doc), "text-button"), notes);
     setDocumentGroup("insert", "document-notes", uiMessage("documentNotes.title"), [authoring]);
     const outline = button(uiMessage("shell.outlineHeadingStructure"), async () => libraryCloseActivity.run(async () => {
-        await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings");
+        await workspaceTools.show("outline");
     }), "text-button");
     setDocumentGroup("view", "document-outline", uiMessage("localChrome.navigation"), [outline]);
     if (doc.mode !== "read" && !readOnlySource(doc)) {
@@ -1863,6 +2023,9 @@ function renderContent(): void {
     }
 }
 function refreshChrome(): void {
+    workPanel.selectProblemScope(current?.navigationKey ?? null);
+    if (current) renderDiagnostics(current);
+    void timelineView.documentChanged().catch(showError);
     const comparisonMessage = current && documentComparisonMessage(current);
     if (current && comparisonMessage) {
         current.session.error = comparisonMessage;
@@ -2164,17 +2327,19 @@ function captureReadingSelection(): void {
     readingSelection = { sessionId: doc.session.opened.sessionId, serial: doc.session.serial, selection: { from, to, visibleExcerpt: selection.toString(), elementRole: "text" } };
 }
 function renderDiagnostics(doc: LiveDocument): void {
-    content.querySelector(".diagnostics")?.remove();
-    const details = el("details", "diagnostics");
-    const diagnostics = doc.session.projection!.diagnostics;
-    const errors = diagnostics.filter(d => d.severity === "error").length;
-    details.open = errors > 0;
-    details.append(el("summary", "", displayMessage("shell.diagnosticSummary", { p0: uiDisplayParameter(errors ? displayMessage("shell.errorCount", { p0: errors }) : displayMessage("shell.noticeCount", { p0: diagnostics.length })), p1: uiDisplayParameter(doc.session.projection!.compilerVersion) })));
-    for (const diagnostic of diagnostics) {
-        const item = button(engineDiagnosticUiText(diagnostic), () => diagnostic.origin ? revealSource(diagnostic.origin) : changeMode("source"), `diagnostic-item ${diagnostic.severity}`, diagnostic.severity === "error" ? "alert" : "code");
-        details.append(item);
-    }
-    content.append(details);
+    const projection = doc.session.projectionCurrent ? doc.session.projection : null;
+    const serial = doc.session.serial, inputId = doc.session.inputId;
+    workPanel.setProblems(doc.navigationKey, (projection?.diagnostics ?? []).map((diagnostic, index) => ({
+        id: `${doc.navigationKey}:${index}`, severity: diagnostic.severity === "error" ? "error" : diagnostic.severity === "warning" ? "warning" : "info",
+        title: engineDiagnosticUiText(diagnostic), detail: diagnostic.origin?.path,
+        actions: [{ id: "source", label: uiMessage("shell.viewSource"), run: async () => {
+            if (!documents.includes(doc) || doc.session.serial !== serial || doc.session.inputId !== inputId || !doc.session.projectionCurrent)
+                throw new UiError(uiMessage("shell.closeBasisChanged"));
+            if (current !== doc) await activateDocument(doc);
+            if (current !== doc) throw new UiError(uiMessage("shell.closeBasisChanged"));
+            if (diagnostic.origin) await revealSource(diagnostic.origin); else await changeMode("source");
+        } }],
+    })));
 }
 async function changeMode(mode: ViewMode): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
@@ -2660,30 +2825,12 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
         if (generation !== navigationGeneration)
             return;
         const retained = navigationContexts.get(doc);
-        const saved = retained ? { ...retained, selection: [...retained.selection], collapsed: [...retained.collapsed] } : undefined;
+        const saved = retained ? { ...retained, collapsed: [...retained.collapsed] } : undefined;
         if (saved?.inventory) {
             const before = saved.inventory, latest = await api<Inventory>("/api/library/open", { path: before.root });
             if (generation !== navigationGeneration)
                 return;
             workspaceTools.assertLibraryChange(latest);
-            const relocate = (path: string): string | null => {
-                const entry = before.entries.find(item => normalize(item.path) === normalize(path));
-                const primary = entry?.nodeId ? entry : before.entries.find(item => item.kind === "node" && normalize(item.parentPath) === normalize(path));
-                if (!primary?.nodeId)
-                    return null;
-                const next = latest.entries.find(item => item.kind === "node" && item.nodeId === primary.nodeId && item.identityStatus === "admitted");
-                return next ? (entry?.kind === "directory" ? next.parentPath : next.path) : null;
-            };
-            saved.selection = saved.selection.flatMap(path => { const next = relocate(path); return next ? [next] : []; });
-            if (saved.folder) {
-                const next = relocate(saved.folder);
-                if (next)
-                    saved.folder = next;
-                else if (!latest.entries.some(item => item.kind === "directory" && normalize(item.path) === normalize(saved.folder!))) {
-                    saved.folder = null;
-                    toast(uiMessage("shell.oldDirectoryScopeUnavailable"));
-                }
-            }
             saved.inventory = latest;
         }
         workspaceTools.assertLibraryChange(saved ? saved.inventory : inventory);
@@ -2719,9 +2866,6 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
             const tree = sidebar.querySelector(".file-tree");
             if (tree)
                 tree.scrollTop = saved.scroll;
-            const contents = sidebar.querySelector(".node-contents");
-            if (contents)
-                contents.scrollTop = saved.contentScroll;
         }
         if (["source", "styled"].includes(doc.mode))
             doc.editor.view.focus();
@@ -3460,7 +3604,7 @@ function mountWorkspaceRibbon(): void {
     };
     ribbon.setGroup("file", "document", uiMessage("localChrome.document"), [documentFileControls.saveAs, documentFileControls.recognition, documentFileControls.timeline, button(uiMessage("shell.recoveryRecords"), showRecovery, "text-button", "undo")]);
     ribbon.setGroup("file", "preferences", uiMessage("localChrome.preferences"), [interfaceLocale.element]);
-    ribbon.setGroup("view", "panes", uiMessage("localChrome.panes"), [navigationLayout.controls]);
+    ribbon.setGroup("view", "panes", uiMessage("localChrome.panes"), [dock.controls, navigationLayout.controls, button(uiMessage("workPanel.label"), () => workPanel.setCollapsed(!workPanel.collapsed), "text-button")]);
     ribbon.setGroup("insert", "blocks", uiMessage("localChrome.blocks"), [
         button(uiMessage("shell.insertBlockActions"), () => openEverydayMenu(uiMessage("shell.insertBlockActions"), everydayCommands().filter(item => /^(insert-|convert-|move-|resources)/.test(item.id)), toast), "text-button"),
         button(uiMessage("shell.insertEmbeddedQuery"), insertEverydayQuery, "text-button"),

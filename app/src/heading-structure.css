@@ -1,0 +1,18 @@
+.outline-view { min-width: 0; min-height: 0; overflow: auto; height: 100%; padding: 8px; box-sizing: border-box; }
+.outline-view-modes, .outline-controls, .outline-match-controls, .outline-options-body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.outline-view button, .outline-view input, .outline-view select { font: inherit; min-width: 0; }
+.outline-view-modes button[aria-pressed="true"] { background: var(--accent-soft, #e6ece2); color: var(--accent, #38685b); }
+.outline-controls { margin-block: 8px; }
+.outline-controls input[type="search"] { width: 100%; box-sizing: border-box; }
+.outline-controls select { max-width: 100%; }
+.outline-options { margin-block: 4px 8px; }
+.outline-options summary { cursor: pointer; font-size: .88em; }
+.outline-options-body { margin-block: 6px; }
+.outline-options input { width: 5em; }
+.outline-list { margin: 6px 0; padding: 0; list-style: none; }
+.outline-list .outline-row { display: flex; align-items: baseline; gap: 4px; margin: 0; min-width: 0; border-radius: 4px; }
+.outline-row.is-selected { background: var(--accent-soft, #e6ece2); }
+.outline-row .outline-fold, .outline-fold-space { flex: 0 0 20px; width: 20px; box-sizing: border-box; padding-inline: 2px; }
+.outline-item-kind { flex: 0 0 auto; font-size: .75em; color: var(--muted, #6f7f75); white-space: nowrap; }
+.outline-row .outline-jump { flex: 1 1 auto; text-align: start; min-width: 0; padding: 5px 2px; border: 0; background: transparent; overflow-wrap: anywhere; }
+.outline-view .knowledge-graph-canvas { max-width: 100%; }

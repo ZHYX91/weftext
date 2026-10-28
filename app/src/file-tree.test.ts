@@ -55,6 +55,35 @@ test("projection keeps inventory order and original entries unchanged", () => {
     assert.deepEqual(entries, original);
 });
 
+test("moved known births and identity conflicts remain visible instead of pairing with their parent folder", () => {
+    const canonical = node("A", "Canonical title");
+    const moved: InventoryEntry = { ...node("A", "Moved title"), path: `${root}/A/Elsewhere.typ`, relativePath: "A/Elsewhere.typ", name: "Elsewhere.typ", identityStatus: "bindingConflict" };
+    const conflict = { ...node("B", "Conflicting title"), identityStatus: "bindingConflict" };
+    const pending = { ...node("C", "Not admitted"), identityStatus: "unadmitted" };
+    const entries = [directory("A"), canonical, moved, directory("B"), conflict, directory("C"), pending];
+    const original = structuredClone(entries);
+    const projected = rows(entries);
+    assert.deepEqual(projected.map(row => row.path), [canonical.path, moved.path, `${root}/B`, conflict.path, `${root}/C`, pending.path]);
+    assert.equal(projected[0].title, "Canonical title");
+    assert.equal(projected[0].folderPath, `${root}/A`);
+    assert.equal(projected[1].identityStatus, "bindingConflict");
+    assert.equal(projected[1].folderPath, null);
+    assert.equal(projected[2].title, undefined);
+    assert.equal(projected[4].title, undefined);
+    assert.deepEqual(entries, original);
+    assert.deepEqual(rows(entries, [], "moved title").map(row => row.path), [moved.path]);
+});
+
+test("even an admitted noncanonical coordinate cannot become a folder's primary source", () => {
+    const moved = { ...node("A", "Observed noncanonical"), path: `${root}/A/Other.typ`, relativePath: "A/Other.typ", name: "Other.typ" };
+    const projected = rows([directory("A"), moved]);
+    assert.deepEqual(projected.map(row => row.path), [`${root}/A`, moved.path]);
+    assert.equal(projected[0].kind, "directory");
+    assert.equal(projected[0].hasChildren, true);
+    assert.equal(projected[1].folderPath, null);
+    assert.deepEqual(rows([directory("A"), moved], [`${root}/A`]).map(row => row.path), [`${root}/A`]);
+});
+
 test("entering a scope ignores collapsed ancestors but keeps folding within that scope", () => {
     const entries = [directory("A"), node("A"), directory("A/B"), node("A/B"), directory("A/B/C"), node("A/B/C"), directory("Outside"), node("Outside")];
     assert.deepEqual(rows(entries, [`${root}/A`], "", `${root}/A/B`).map(row => row.treePath), [`${root}/A/B`, `${root}/A/B/C`]);

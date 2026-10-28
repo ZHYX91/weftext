@@ -129,7 +129,7 @@ async function source() { return cm().evaluate(element => { const view = element
 async function expectSource(expected) { await until(async () => { assert.equal(await source(), expected); return true; }, 'exact current author Draft'); }
 async function disk(file) { for (let attempt = 0; attempt < 20; attempt++) { try { return await readFile(file, 'utf8'); } catch (error) { if (!['EBUSY', 'EACCES'].includes(error.code) || attempt === 19) throw error; (result.fileReadRetries ??= []).push({ phase, file, attempt, code: error.code }); await pause(100); } } }
 async function command(label) { await page.keyboard.press('Control+Shift+p'); const dialog = page.getByRole('dialog', { name: '命令', exact: true }); await dialog.getByRole('searchbox').fill(label); await dialog.getByRole('searchbox').press('Enter'); }
-async function knowledgeCommand(label, tab) { await command(label); await until(async () => { const control = knowledge().getByRole('tab', { name: tab, exact: true }); return await control.isVisible() && await control.getAttribute('aria-selected') === 'true'; }, 'explicit knowledge command visibly selects ' + tab); }
+async function knowledgeCommand(label, tab) { await command(label); await until(async () => { if (tab === '标题结构') return page.locator('.outline-view').isVisible(); const control = knowledge().getByRole('tab', { name: tab, exact: true }); return await control.isVisible() && await control.getAttribute('aria-selected') === 'true'; }, 'explicit knowledge command visibly selects ' + tab); }
 async function quick(name) { await page.keyboard.press('Control+p'); const dialog = page.getByRole('dialog', { name: '快捷打开', exact: true }); await dialog.getByRole('searchbox').fill(name.endsWith('.typ') ? name : name + '.typ'); await dialog.getByRole('searchbox').press('Enter'); }
 async function panelDetails(label, host = queryPanel()) { const summary = host.getByText(label, { exact: true }); const details = summary.locator('..'); if (!await details.evaluate(element => element.open)) await summary.click(); return details; }
 async function showQuery() { if (!await queryPanel().isVisible()) await workspaceCommand(page, 'knowledge', '查询与视图'); }
@@ -225,7 +225,7 @@ try {
   // library still has 22 notes, one task and the original untyped B-Plain.
   relationTarget = await save(relationTarget, relationTarget.source.replace('types: ()', 'types: ("person",)'));
   relationSource = await save(relationSource, relationSource.source.replace('types: ()', `types: ("person",), parents: ((target: (ref: "${reference(relationTarget)}"),),), siblings: ((target: (ref: "${reference(relationTarget)}"),),)`));
-  parent = await save(parent, parent.source + `\n\n= TEST Duplicate\n\nRoot before.\n\n== TEST Child\n\nChild content.\n\n==== TEST Deep\n\nDeep content.\n\n= TEST Duplicate\n\n#link("${reference(image)}")[first image link]\n\n#link("${reference(image)}")[second image link]\n\n#link("${reference(plain)}")[plain link]\n`);
+  parent = await save(parent, parent.source + `\n\n= TEST Duplicate\n\nRoot before.\n\n== TEST Child\n\nChild content.\n\n==== TEST Deep\n\nDeep content.\n\n= TEST Duplicate\n\n#link("${reference(image)}")[first image link]\n\n#link("${reference(image)}")[second image link]\n\n#link("${reference(plain)}")[plain link]\n\n#figure(rect(width: 10pt, height: 10pt), kind: "figure", caption: [TEST Figure Caption])\n#figure(table(columns: 1, [Data]), caption: [TEST Table Caption])\n#figure(raw("const x = 1", block: true), caption: [TEST Code Caption])\n#set math.equation(numbering: "(1)")\n$ x = 1 $\n`);
   savedParent = parent.source;
   await stop(); await start(['--open', image.path, '--root', root]);
   browser = await chromium.launch({ headless: true, ...(process.env.WEFTEXT_BROWSER_EXECUTABLE ? { executablePath: process.env.WEFTEXT_BROWSER_EXECUTABLE } : { channel: 'chrome' }) });
@@ -419,10 +419,10 @@ try {
   await pass('Actual Core-authored person fields reach the embedded graph as separate directed, symmetric and derived-inverse relations; type filters, arrowheads and original field provenance remain exact, and inverse source navigation opens its real author then returns without writes.');
 
   phase = 'actual-heading-structure'; await knowledgeCommand('打开只读标题结构／大纲', '标题结构'); await knowledgeCommand('打开只读标题结构／大纲', '标题结构'); const headingsReceipt = await refreshKnowledge(dirtyParent), headings = headingsReceipt.result.headingStructure;
-  assert.ok(headings); const repeated = headings.items.filter(heading => heading.text === 'TEST Duplicate'); assert.equal(repeated.length, 2); assert.ok(repeated.every(heading => heading.range)); assert.notEqual(repeated[0].key, repeated[1].key);
-  const heading = repeated[1], structure = () => knowledge().locator('.knowledge-heading-structure');
-  await structure().getByLabel('搜索真实标题', { exact: true }).fill('TEST Duplicate'); await structure().getByLabel('搜索真实标题', { exact: true }).press('Enter');
-  const headingRow = structure().locator(`li[data-heading-key=${JSON.stringify(heading.key)}]`); await headingRow.getByRole('button').first().focus(); await page.keyboard.press('Enter');
+  assert.ok(headings); const repeated = headings.items.filter(heading => heading.kind === 'heading' && heading.text === 'TEST Duplicate'); assert.equal(repeated.length, 2); assert.ok(repeated.every(heading => heading.range)); assert.notEqual(repeated[0].key, repeated[1].key);
+  const heading = repeated[1], structure = () => page.locator('.outline-view');
+  await structure().getByLabel('搜索标题与题注', { exact: true }).fill('TEST Duplicate'); await structure().getByLabel('搜索标题与题注', { exact: true }).press('Enter');
+  const headingRow = structure().locator(`li[data-heading-key=${JSON.stringify(heading.key)}]`); await headingRow.locator('.outline-jump').focus(); await page.keyboard.press('Enter');
   await until(async () => { const actual = await cm().evaluate(element => { const range = element.cmTile.root.view.state.selection.main; return { from: range.from, to: range.to }; }); return actual.from === heading.range.utf16From && actual.to === heading.range.utf16To; }, 'second duplicate heading exact source range');
   await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent);
   await cm().click(); await page.keyboard.press('Control+z'); await expectSource(savedParent); await page.keyboard.press('Control+y'); await expectSource(dirtyParent);
@@ -432,40 +432,71 @@ try {
   phase = 'actual-heading-subtree'; await knowledgeCommand('打开只读标题结构／大纲', '标题结构');
   const structureReceipt = await refreshKnowledge(dirtyParent), nativeHeadings = structureReceipt.result.headingStructure;
   assert.equal(nativeHeadings.coverage, 'complete'); assert.equal(nativeHeadings.truncated, false);
-  assert.deepEqual(nativeHeadings.items.map(item => [item.text, item.level]), [['TEST Duplicate', 1], ['TEST Child', 2], ['TEST Deep', 4], ['TEST Duplicate', 1]]);
-  const [firstRoot, childHeading, deepHeading, secondRoot] = nativeHeadings.items, structureMutations = mutations.length;
-  const structureView = () => knowledge().locator('.knowledge-heading-structure'), structureRow = key => structureView().locator(`li[data-heading-key=${JSON.stringify(key)}]`);
-  const searchHeadings = async text => { await structureView().getByLabel('搜索真实标题', { exact: true }).fill(text); await structureView().getByLabel('搜索真实标题', { exact: true }).press('Enter'); };
-  const selectedHeading = async key => { await until(() => structureView().locator(`g[data-graph-key=${JSON.stringify(key)}].is-selected`).count().then(count => count === 1), 'actual selected heading ' + key); };
-  await searchHeadings(''); await click('整篇', structureView()); await click('全部展开', structureView());
-  assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 5);
-  assert.match(await structureRow('@weftext-document-root').getByRole('button').first().innerText(), /2 个直接子标题／4 个全部子标题$/);
-  assert.match(await structureRow(firstRoot.key).getByRole('button').first().innerText(), /1 个直接子标题／2 个全部子标题$/);
-  assert.match(await structureRow(childHeading.key).getByRole('button').first().innerText(), /1 个直接子标题／1 个全部子标题$/);
-  assert.match(await structureRow(deepHeading.key).getByRole('button').first().innerText(), /0 个直接子标题／0 个全部子标题$/);
-  await structureRow(firstRoot.key).getByRole('button').first().click();
+  const headingItems = nativeHeadings.items.filter(item => item.kind === 'heading'), captionItems = nativeHeadings.items.filter(item => item.kind !== 'heading');
+  assert.deepEqual(headingItems.map(item => [item.text, item.level]), [['TEST Duplicate', 1], ['TEST Child', 2], ['TEST Deep', 4], ['TEST Duplicate', 1]]);
+  assert.deepEqual(captionItems.map(item => item.kind).sort(), ['code', 'equation', 'figure', 'table']);
+  assert.ok(captionItems.every(item => item.level === 0 && item.generated === !item.range));
+  const [firstRoot, childHeading, deepHeading, secondRoot] = headingItems, structureMutations = mutations.length;
+  const structureView = () => page.locator('.outline-view'), structureRow = key => structureView().locator(`li[data-heading-key=${JSON.stringify(key)}]`);
+  const searchHeadings = async text => { await structureView().getByLabel('搜索标题与题注', { exact: true }).fill(text); await structureView().getByLabel('搜索标题与题注', { exact: true }).press('Enter'); };
+  const selectedHeading = async key => { await until(() => structureRow(key).getAttribute('class').then(value => value.includes('is-selected')), 'actual selected heading ' + key); };
+  await searchHeadings(''); await structureView().locator('.outline-options > summary').click(); await click('整篇', structureView()); await click('全部展开', structureView());
+  assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 8);
+  assert.equal(await structureRow('@weftext-document-root').count(), 0, 'The synthetic document root is not a redundant list item');
+  assert.match(await structureRow(firstRoot.key).locator('.outline-jump').getAttribute('aria-label'), /1 个直接子项／2 个后代子项$/);
+  assert.match(await structureRow(childHeading.key).locator('.outline-jump').getAttribute('aria-label'), /1 个直接子项／1 个后代子项$/);
+  assert.match(await structureRow(deepHeading.key).locator('.outline-jump').getAttribute('aria-label'), /0 个直接子项／0 个后代子项$/);
+  await structureRow(firstRoot.key).locator('.outline-jump').click();
   await structureRow(firstRoot.key).getByRole('button', { name: '折叠分支', exact: true }).press('Enter');
-  assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 3);
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.outlineControl), `fold:${firstRoot.key}`);
+  assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 6);
   assert.equal(await structureRow(childHeading.key).count(), 0); assert.equal(await structureRow(deepHeading.key).count(), 0);
   assert.equal(await structureRow(firstRoot.key).getByRole('button', { name: '展开分支', exact: true }).getAttribute('aria-expanded'), 'false');
-  await searchHeadings('TEST Deep'); assert.ok((await structureView().innerText()).includes('1 个标题命中'));
+  await structureRow(firstRoot.key).getByRole('button', { name: '展开分支', exact: true }).press('Space');
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.outlineControl), `fold:${firstRoot.key}`);
+  assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 8);
+  await structureRow(firstRoot.key).getByRole('button', { name: '折叠分支', exact: true }).press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.outlineControl), `fold:${firstRoot.key}`);
+  await searchHeadings('TEST Deep'); assert.ok((await structureView().innerText()).includes('1 个大纲项命中'));
   assert.equal(await structureRow(childHeading.key).count(), 1); assert.equal(await structureRow(deepHeading.key).count(), 1); assert.equal(await structureRow(secondRoot.key).count(), 0);
-  assert.match(await structureRow(firstRoot.key).getByRole('button').first().innerText(), /1 个直接子标题／2 个全部子标题$/);
-  await searchHeadings(''); assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 3);
+  assert.match(await structureRow(firstRoot.key).locator('.outline-jump').getAttribute('aria-label'), /1 个直接子项／2 个后代子项$/);
+  await searchHeadings(''); assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 6);
   assert.equal(await structureRow(deepHeading.key).count(), 0, 'Clearing search restores the original collapsed branch');
-  await searchHeadings('TEST Duplicate'); assert.ok((await structureView().innerText()).includes('2 个标题命中'));
+  await searchHeadings('TEST Duplicate'); assert.ok((await structureView().innerText()).includes('2 个大纲项命中'));
   await structureView().getByRole('button', { name: '下一命中', exact: true }).press('Enter'); await selectedHeading(secondRoot.key);
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.outlineControl), 'next-match');
   await structureView().getByRole('button', { name: '上一命中', exact: true }).press('Enter'); await selectedHeading(firstRoot.key);
   await structureView().getByRole('button', { name: '上一命中', exact: true }).press('Enter'); await selectedHeading(secondRoot.key);
   await structureView().getByRole('button', { name: '下一命中', exact: true }).press('Enter'); await selectedHeading(firstRoot.key);
-  await searchHeadings(''); await click('全部展开', structureView()); await structureRow(childHeading.key).getByRole('button').first().click();
+  await searchHeadings(''); await click('全部展开', structureView()); await structureRow(childHeading.key).locator('.outline-jump').click();
   await structureView().getByRole('button', { name: '所选子树', exact: true }).press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.outlineControl), 'selected-subtree');
   assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 2);
   assert.equal(await structureRow(childHeading.key).count(), 1); assert.equal(await structureRow(deepHeading.key).count(), 1);
   assert.equal(await structureRow('@weftext-document-root').count(), 0); assert.equal(await structureRow(firstRoot.key).count(), 0); assert.equal(await structureRow(secondRoot.key).count(), 0);
-  assert.ok((await structureView().innerText()).includes('子树：TEST Child · 已展示 2 个真实标题'));
-  await structureView().getByRole('button', { name: '整篇', exact: true }).press('Enter'); assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 5);
-  assert.match(await structureRow(firstRoot.key).getByRole('button').first().innerText(), /1 个直接子标题／2 个全部子标题$/);
+  await structureView().getByRole('button', { name: '整篇', exact: true }).press('Enter'); assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 8);
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.outlineControl), 'whole-document');
+  const outlineDepth = structureView().locator('[data-outline-control=depth]');
+  await outlineDepth.focus(); await outlineDepth.fill('1'); await outlineDepth.press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.outlineControl), 'depth');
+  assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 2);
+  await outlineDepth.fill('0'); await outlineDepth.press('Enter');
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.outlineControl), 'depth');
+  assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 8);
+  assert.match(await structureRow(firstRoot.key).locator('.outline-jump').getAttribute('aria-label'), /1 个直接子项／2 个后代子项$/);
+  await structureView().getByLabel('标题与题注', { exact: true }).selectOption('caption');
+  await structureView().getByLabel('标题与题注', { exact: true }).focus();
+  await structureView().getByLabel('标题与题注', { exact: true }).press('Home');
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.outlineControl), 'filter');
+  await structureView().getByLabel('标题与题注', { exact: true }).press('End');
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.outlineControl), 'filter');
+  assert.equal(await structureView().locator('.knowledge-heading-list > li').count(), 4);
+  const caption = captionItems.find(item => item.kind === 'figure'); assert.ok(caption.range, 'Authored native caption has a verified exact source address');
+  await structureRow(caption.key).locator('.outline-jump').press('Enter');
+  await until(async () => { const actual = await cm().evaluate(element => { const range = element.cmTile.root.view.state.selection.main; return { from: range.from, to: range.to }; }); return actual.from === caption.range.utf16From && actual.to === caption.range.utf16To; }, 'caption exact source range');
+  await structureView().getByLabel('标题与题注', { exact: true }).selectOption('all');
+  await click('标题导图', structureView()); assert.equal(await structureView().locator('g[data-graph-key]').count(), 5, 'Heading mind map omits caption ancestry');
+  await click('大纲列表', structureView());
   await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent); assert.equal(mutations.length, structureMutations);
   result.snapshots.push({ headingSubtree: nativeHeadings });
   await pass('The same native endpoint drives actual heading counts, keyboard folding and full/subtree controls; search reveals collapsed ancestors without changing their real counts, clears back to the saved fold and traverses duplicate matches in both directions with wraparound, without author writes.');

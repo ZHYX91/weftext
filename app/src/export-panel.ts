@@ -1,4 +1,6 @@
 import { contentLanguageControl } from "./content-language";
+import { workActivity } from "./work-activity";
+import type { WorkTaskStatus } from "./work-panel";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { registerNativeProposalOwner } from "./native-proposal-owners";
 import { joinUiText } from "./ui-locale";
@@ -201,6 +203,36 @@ class OutputDialog {
     private capabilityError: UiText = "";
     private cancellingOutput = false;
     private cancellingImport = false;
+    private showActivityOriginal(id: string, kind: "output" | "import"): void {
+        this.closeGuard.assertMutable();
+        const matches = kind === "output"
+            ? this.output.requestId === id || this.output.prepared?.requestId === id
+            : this.exchange.requestId === id || this.exchange.plan?.operationId === id || this.exchange.receipt?.operationId === id;
+        if (this.discarded || !matches)
+            throw new UiError(uiMessage("workActivity.originalUnavailable"));
+        if (!this.dialog.open) this.dialog.showModal();
+    }
+    private outputActivity(status: WorkTaskStatus, detail: UiText, id = this.output.requestId ?? this.output.prepared?.requestId): void {
+        if (!id) return;
+        workActivity.task({ id, title: uiMessage("export.generateFile"), detail, status,
+            actions: [{ id: "details", label: uiMessage("workActivity.details"), run: () => this.showActivityOriginal(id, "output") }] });
+    }
+    private importActivity(status: WorkTaskStatus, detail: UiText, id = this.exchange.requestId ?? this.exchange.plan?.operationId ?? this.exchange.receipt?.operationId): void {
+        if (!id) return;
+        workActivity.task({ id, title: uiMessage("export.importWordNativeBibliography"), detail, status,
+            actions: [{ id: "details", label: uiMessage("workActivity.details"), run: () => this.showActivityOriginal(id, "import") }] });
+    }
+    private outputResult(): void {
+        const file = this.output.prepared;
+        if (!file) return;
+        workActivity.result({ id: file.id, title: file.filename, detail: file.summary,
+            actions: [{ id: "details", label: uiMessage("workActivity.details"), run: () => this.showActivityOriginal(file.requestId, "output") },
+                ...(this.output.confirmed ? [{ id: "download", label: uiMessage("export.downloadConfirmedFile"), run: async () => {
+                    this.showActivityOriginal(file.requestId, "output");
+                    if (this.output.prepared?.id !== file.id) throw new UiError(uiMessage("workActivity.originalUnavailable"));
+                    await this.download();
+                } }] : [])] });
+    }
     constructor(private readonly host: OutputPanelHost, basis: NonNullable<ReturnType<PanelHost["getDocument"]>>, query?: FrozenQuery, embedded: EmbeddedQuerySelection[] = [], private readonly onDiscard: () => void = () => {}) {
         this.output = new OutputController({ id: () => crypto.randomUUID(), prepare: request => host.request("/api/export/prepare", request), confirm: request => host.request("/api/export/confirm", request), cancel: request => host.request("/api/export/legacy-cancel", request), download: request => {
                 if (!host.requestBlob)
@@ -572,6 +604,8 @@ class OutputDialog {
             this.outputStatus.classList.remove("data-warning");
             setUiText(this.outputStatus, this.output.uncertain ? uiMessage("export.checkingOriginalOutput") : uiMessage("export.generatingVerifyingFrozenFile"));
             const promise = this.output.prepare();
+            const workId = this.output.requestId ?? this.output.prepared?.requestId;
+            this.outputActivity("running", uiMessage("export.generatingVerifyingFrozenFile"), workId);
             this.drawState();
             try {
                 const result = await promise;
@@ -583,8 +617,11 @@ class OutputDialog {
                 this.outputPreview.append(identity);
                 this.acceptOutput.checked = false;
                 setUiText(this.outputStatus, this.output.confirmed ? uiMessage("export.fileConfirmedSameBytes") : uiMessage("export.exactFileGeneratedAwaitingConfirmation"));
+                this.outputActivity("waiting", this.output.confirmed ? uiMessage("export.fileConfirmedDownloadable") : uiMessage("export.exactFileGeneratedAwaitingConfirmation"), result.requestId);
+                this.outputResult();
             }
             catch (error) {
+                this.outputActivity(this.output.uncertain ? "waiting" : "failed", errorUiText(error), workId);
                 this.report(error, this.outputStatus);
             }
             finally {
@@ -596,14 +633,19 @@ class OutputDialog {
         const endCloseWork = this.closeGuard.begin();
         try {
             const promise = this.output.confirm(this.acceptOutput.checked);
+            const workId = this.output.prepared?.requestId;
+            this.outputActivity("running", uiMessage("export.confirmingSamePreviewedFile"), workId);
             setUiText(this.outputStatus, uiMessage("export.confirmingSamePreviewedFile"));
             this.drawState();
             try {
                 await promise;
                 this.outputStatus.classList.remove("data-warning");
                 setUiText(this.outputStatus, uiMessage("export.fileConfirmedDownloadable"));
+                this.outputActivity("waiting", uiMessage("export.fileConfirmedDownloadable"), workId);
+                this.outputResult();
             }
             catch (error) {
+                this.outputActivity(this.output.uncertain ? "waiting" : "failed", errorUiText(error), workId);
                 this.report(error, this.outputStatus);
             }
             finally {
@@ -615,6 +657,8 @@ class OutputDialog {
         const endCloseWork = this.closeGuard.begin();
         try {
             const promise = this.output.download();
+            const workId = this.output.prepared?.requestId;
+            this.outputActivity("running", uiMessage("export.receivingVerifyingConfirmedFile"), workId);
             setUiText(this.outputStatus, uiMessage("export.receivingVerifyingConfirmedFile"));
             this.drawState();
             try {
@@ -629,8 +673,10 @@ class OutputDialog {
                 setTimeout(() => URL.revokeObjectURL(url), 60000);
                 this.outputStatus.classList.remove("data-warning");
                 setUiText(this.outputStatus, uiMessage("export.confirmedBytesHandedToBrowser"));
+                this.outputActivity("succeeded", uiMessage("export.confirmedBytesHandedToBrowser"), workId);
             }
             catch (error) {
+                this.outputActivity(this.output.uncertain ? "waiting" : "failed", errorUiText(error), workId);
                 this.report(error, this.outputStatus);
             }
             finally {
@@ -833,6 +879,8 @@ class OutputDialog {
                     return;
             }
             const promise = this.exchange.prepare();
+            const workId = this.exchange.requestId ?? this.exchange.plan?.operationId;
+            this.importActivity("running", uiMessage("export.checkingOriginalPreparingImport"), workId);
             setUiText(this.importStatus, uiMessage("export.checkingOriginalPreparingImport"));
             this.drawState();
             try {
@@ -853,8 +901,10 @@ class OutputDialog {
                 this.acceptImport.checked = false;
                 this.importStatus.classList.remove("data-warning");
                 setUiText(this.importStatus, uiMessage("export.importPlanPrepared"));
+                this.importActivity("waiting", uiMessage("export.importPlanPrepared"), plan.operationId);
             }
             catch (error) {
+                this.importActivity(this.exchange.uncertain ? "waiting" : "failed", errorUiText(error), workId);
                 this.report(error, this.importStatus);
             }
             finally {
@@ -866,15 +916,22 @@ class OutputDialog {
         const endCloseWork = this.closeGuard.begin();
         try {
             const promise = this.exchange.commit(this.acceptImport.checked);
+            const workId = this.exchange.plan?.operationId;
+            this.importActivity("running", uiMessage("export.committingSameImportPlan"), workId);
             setUiText(this.importStatus, uiMessage("export.committingSameImportPlan"));
             this.drawState();
             try {
                 const receipt = await promise;
+                workActivity.result({ id: receipt.operationId, title: receipt.path,
+                    detail: displayMessage("export.importCommittedActualCopyDirectory", { p0: uiDisplayParameter(receipt.path) }),
+                    actions: [{ id: "details", label: uiMessage("workActivity.details"), run: () => this.showActivityOriginal(receipt.operationId, "import") }] });
                 const opened = await this.deliverReceipt(receipt);
                 this.importStatus.classList.remove("data-warning");
                 setUiText(this.importStatus, opened ? uiMessage("export.importCommittedOpenedActualNote") : displayMessage("export.importCommittedActualCopyDirectory", { p0: uiDisplayParameter(receipt.path) }));
+                this.importActivity("succeeded", opened ? uiMessage("export.importCommittedOpenedActualNote") : displayMessage("export.importCommittedActualCopyDirectory", { p0: uiDisplayParameter(receipt.path) }), receipt.operationId);
             }
             catch (error) {
+                this.importActivity(this.exchange.uncertain || this.exchange.receipt && !this.deliveredImport ? "waiting" : "failed", errorUiText(error), workId);
                 this.report(error, this.importStatus);
             }
             finally {

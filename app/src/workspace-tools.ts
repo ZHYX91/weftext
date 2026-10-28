@@ -55,7 +55,12 @@ export interface WorkspaceToolsHost {
     refreshLibrary?(root: string): Promise<void>;
     syncApplied(root: string): Promise<void>;
 }
-type WorkspacePanelKind = "data" | "knowledge" | "query";
+export type WorkspaceViewKind = "data" | "knowledge" | "query" | "outline";
+export interface WorkspaceToolsPresentation {
+    reveal(kind: WorkspaceViewKind): void;
+    hide(kind: WorkspaceViewKind): void;
+    visible(kind: WorkspaceViewKind): boolean;
+}
 /** UI composition only: every action uses the document's existing Draft or Core. */
 export class WorkspaceTools {
     private readonly closeGuard = new ProposalCloseGuard();
@@ -86,22 +91,19 @@ export class WorkspaceTools {
     openReminders(): void { this.closeGuard.assertMutable(); openReminderOverview(this.dataHost); }
     activateReminder(activationKey: string): Promise<void> { return this.closeGuard.run(() => activateReminderNotification(this.dataHost, activationKey)); }
     private readonly commandGroups: { tab: RibbonTab; id: string; label: UiText; nodes: HTMLElement[] }[] = [];
-    readonly inspector = document.createElement("aside");
+    /** Stable content owners. Dock layout only moves these elements. */
+    readonly views: Readonly<Record<WorkspaceViewKind, HTMLElement>>;
     private readonly propertyPanel: DataPanel;
     private readonly queryPanel: QueryPanel;
     private readonly outputPanel: OutputPanel;
     private readonly knowledgeContainer = document.createElement("div");
     private readonly knowledgePanel;
     private readonly libraryTrash;
-    private readonly header = document.createElement("header");
-    private readonly panelBody = document.createElement("div");
     private library: {
         root: string;
         workspaceId?: string;
     } | null = null;
-    private active: WorkspacePanelKind | null = null;
-    private ribbon: WorkspaceRibbon | null = null;
-    private inspectorFocus: { element: HTMLElement; documentKey: string } | null = null;
+    private presentation: WorkspaceToolsPresentation | null = null;
     private readonly styles = new Map<string, NativeStyleController>();
     private refreshTimer?: ReturnType<typeof setTimeout>;
     private pendingImport: {
@@ -110,13 +112,7 @@ export class WorkspaceTools {
         receipt?: KnowledgeReceipt;
     } | null = null;
     constructor(private readonly host: WorkspaceToolsHost) {
-        this.closeGuard.bind(this.inspector);
         this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify, environmentChanged: root => this.invalidateQueryEnvironment(root) });
-        this.inspector.className = "workspace-inspector";
-        this.inspector.hidden = true;
-        this.header.className = "inspector-header";
-        this.panelBody.className = "inspector-body";
-        this.inspector.append(this.header, this.panelBody);
         const dataHost: PanelHost = {
             canEdit: host.canEditSource,
             request: api, requestBlob: apiBlob, getDocument: host.getDocument, applyPatch: host.applyPatch,
@@ -185,6 +181,14 @@ export class WorkspaceTools {
                 importResource: (file, sessionId) => this.importResource(file, sessionId), notify: host.notify,
             }, selected, initial),
         });
+        const outline = document.createElement("section");
+        this.views = Object.freeze({ data: this.propertyPanel.element, knowledge: this.knowledgeContainer, query: this.queryPanel.element, outline });
+        for (const [kind, view] of Object.entries(this.views)) {
+            view.classList.add("workspace-tool-view");
+            view.dataset.workspaceTool = kind;
+            this.closeGuard.bind(view);
+        }
+        this.knowledgePanel.attachOutline(outline);
         const add = (tab: RibbonTab, id: string, label: UiText, nodes: HTMLElement[]) => this.commandGroups.push({ tab, id, label, nodes });
         add("knowledge", "note", uiMessage("localChrome.note"), [
             this.button(uiMessage("dataPanel.title"), () => this.toggle("data")),
@@ -214,9 +218,14 @@ export class WorkspaceTools {
     /** Ribbon switches retain these same command nodes and every proposal owner. */
     mountRibbon(ribbon: WorkspaceRibbon): void {
         this.closeGuard.bind(ribbon.element);
-        this.ribbon = ribbon;
         for (const group of this.commandGroups) ribbon.setGroup(group.tab, group.id, group.label, group.nodes);
     }
+
+    attachDock(presentation: WorkspaceToolsPresentation): void {
+        this.closeGuard.assertMutable();
+        this.presentation = presentation;
+    }
+    private viewVisible(kind: WorkspaceViewKind): boolean { return this.presentation?.visible(kind) ?? false; }
 
     private async showProcessingSettings(): Promise<void> {
         return this.closeGuard.run(async () => {
@@ -295,59 +304,31 @@ export class WorkspaceTools {
         document.body.append(dialog);
         dialog.showModal();
     }
-    /** Opening is idempotent; a retained active panel must never turn this into
-     * closing after navigation or a repeated command. */
-    async show(kind: WorkspacePanelKind): Promise<void> {
-        const origin = this.captureInspectorOrigin();
+    /** Opening a view never replaces another view or its proposal owner. */
+    async show(kind: WorkspaceViewKind): Promise<void> {
         return this.closeGuard.run(async () => {
             await this.host.beforeAction();
-            await this.showPanel(kind, origin);
+            if (!this.presentation) throw new Error("Workspace dock is not attached");
+            this.presentation.reveal(kind);
+            await this.refreshView(kind);
         });
     }
     /** Only toolbar switches use toggle; explicit open actions always use show. */
-    private async toggle(kind: WorkspacePanelKind): Promise<void> {
-        const origin = this.captureInspectorOrigin();
+    private async toggle(kind: WorkspaceViewKind): Promise<void> {
         return this.closeGuard.run(async () => {
             await this.host.beforeAction();
-            if (this.active === kind) {
-                this.closeInspector();
+            if (!this.presentation) throw new Error("Workspace dock is not attached");
+            if (this.presentation.visible(kind)) {
+                this.presentation.hide(kind);
                 return;
             }
-            await this.showPanel(kind, origin);
+            this.presentation.reveal(kind);
+            await this.refreshView(kind);
         });
     }
-    private captureInspectorOrigin(): { element: HTMLElement; documentKey: string } | null {
-        const element = document.activeElement as HTMLElement | null;
-        if (!element || this.inspector.contains(element)) return null;
-        const basis = this.host.getDocument();
-        return { element, documentKey: basis ? JSON.stringify([basis.sessionId, basis.root]) : "" };
-    }
-    private closeInspector(): void {
-        if (this.closeGuard.frozen) return;
-        const ownedFocus = this.inspector.contains(document.activeElement), origin = this.inspectorFocus;
-        this.active = null;
-        this.inspectorFocus = null;
-        this.inspector.hidden = true;
-        if (!ownedFocus) return;
-        const basis = this.host.getDocument(), documentKey = basis ? JSON.stringify([basis.sessionId, basis.root]) : "";
-        if (origin?.documentKey === documentKey && origin.element.isConnected && !origin.element.matches(":disabled")
-            && !origin.element.closest("[hidden],[inert]") && origin.element.getClientRects().length) {
-            origin.element.focus({ preventScroll: true });
-            // A focus handler may deliberately choose another surviving control.
-            if (document.activeElement && document.activeElement !== document.body && !this.inspector.contains(document.activeElement)) return;
-        }
-        this.ribbon?.select(this.ribbon.selected, true);
-    }
-    private async showPanel(kind: WorkspacePanelKind, origin: { element: HTMLElement; documentKey: string } | null = null): Promise<void> {
+    /** Dock-tab activation reads the current context without settling author input. */
+    async refreshView(kind: WorkspaceViewKind): Promise<void> {
         return this.closeGuard.run(async () => {
-            if (origin) this.inspectorFocus = origin;
-            this.active = kind;
-            this.inspector.hidden = false;
-            this.inspector.classList.toggle("wide", kind === "query");
-            const title = document.createElement("strong");
-            setUiText(title, { data: uiMessage("dataPanel.regionLabel"), knowledge: uiMessage("workspaceTools.linksAnnotations"), query: uiMessage("workspaceTools.queriesViews") }[kind]);
-            this.header.replaceChildren(title, this.button(uiMessage("common.close"), () => this.closeInspector()));
-            this.panelBody.replaceChildren(kind === "data" ? this.propertyPanel.element : kind === "query" ? this.queryPanel.element : this.knowledgeContainer);
             if (kind === "data")
                 await this.propertyPanel.refresh();
             else if (kind === "query")
@@ -356,14 +337,30 @@ export class WorkspaceTools {
                 await this.knowledgePanel.refresh();
         });
     }
-    selectKnowledgeTab(tab: import("./knowledge-panel").KnowledgePanelTab): void { if (this.closeGuard.frozen) return; this.knowledgePanel.selectTab(tab); }
+    selectKnowledgeTab(tab: import("./knowledge-panel").KnowledgePanelTab): void {
+        if (this.closeGuard.frozen) return;
+        if (tab === "headings") {
+            this.presentation?.reveal("outline");
+            void this.refreshView("outline").catch(error => this.host.notify(errorUiText(error), true));
+            return;
+        }
+        const visible = this.viewVisible("knowledge");
+        this.presentation?.reveal("knowledge");
+        this.knowledgePanel.selectTab(tab);
+        if (!visible)
+            void this.refreshView("knowledge").catch(error => this.host.notify(errorUiText(error), true));
+    }
     /** Selection/adoption must renew an open property consumer even when its
      * empty or previous form owns focus. Body edits keep their debounce below. */
     async selectedDocumentChanged(): Promise<void> {
-        if (this.closeGuard.frozen || this.active !== "data") return;
+        if (this.closeGuard.frozen) return;
         return this.closeGuard.run(async () => {
-            clearTimeout(this.refreshTimer);
-            await this.propertyPanel.refresh();
+            if (this.viewVisible("data")) {
+                clearTimeout(this.refreshTimer);
+                await this.propertyPanel.refresh();
+            }
+            if (this.viewVisible("knowledge") || this.viewVisible("outline") || !this.host.getDocument())
+                await this.knowledgePanel.refresh();
         });
     }
     documentChanged(): void { if (this.closeGuard.frozen) return;
@@ -375,10 +372,12 @@ export class WorkspaceTools {
             void this.knowledgePanel.refresh().catch(error => this.host.notify(String(error), true));
         this.refreshTimer = setTimeout(() => {
             if (this.closeGuard.frozen) return;
-            if (this.active === "data" && !this.inspector.contains(document.activeElement))
+            if (this.viewVisible("data") && !this.views.data.contains(document.activeElement))
                 void this.propertyPanel.refresh().catch(error => this.host.notify(String(error), true));
-            if (this.active === "query" && !this.inspector.contains(document.activeElement))
+            if (this.viewVisible("query") && !this.views.query.contains(document.activeElement))
                 this.queryPanel.documentChanged();
+            if (this.viewVisible("knowledge") || this.viewVisible("outline"))
+                void this.knowledgePanel.refresh().catch(error => this.host.notify(errorUiText(error), true));
         }, 450);
     }
     async refreshAfterSync(root: string): Promise<void> {
@@ -390,14 +389,14 @@ export class WorkspaceTools {
             if (sameRoot(this.library?.root))
                 await this.queryPanel.refresh();
             if (!this.host.getDocument()) {
-                if (this.active === "data")
+                if (this.viewVisible("data"))
                     await this.propertyPanel.refresh();
                 await this.knowledgePanel.refresh();
                 return;
             }
             if (!sameRoot(this.host.getDocument()?.root))
                 return;
-            if (this.active === "data")
+            if (this.viewVisible("data"))
                 await this.propertyPanel.refresh();
             // Knowledge refresh also renews the selected media/annotation catalog.
             // Its own input guard retains an actively edited review form.
@@ -410,7 +409,7 @@ export class WorkspaceTools {
             // Knowledge discovery observes the projection; it must never delay body
             // installation or an unrelated property/navigation action. Default-off
             // hints also avoid compiling other notes while this panel is closed.
-            if (this.host.getDocument()?.nodeId && (this.active === "knowledge" || this.knowledgePanel.backgroundEnabled()))
+            if (this.host.getDocument()?.nodeId && (this.viewVisible("knowledge") || this.viewVisible("outline") || this.knowledgePanel.backgroundEnabled()))
                 void this.knowledgePanel.refresh().catch(error => this.host.notify(String(error), true));
         });
     }
