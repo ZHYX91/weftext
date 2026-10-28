@@ -20,6 +20,7 @@ import type { GraphSnapshot, GraphEdge, GraphNode } from "./relationship-graph-s
 import type { HeadingSnapshot } from "./heading-structure-state";
 export interface KnowledgeContext extends KnowledgeBasis {
     inputId: string;
+    inputRevision?: number;
     root: string;
     nodeId?: string;
     workspaceId?: string;
@@ -244,10 +245,20 @@ export interface KnowledgePanel {
     freezeForClose(): boolean;
     thawAfterClose(): void;
     backgroundEnabled(): boolean;
+    environmentChanged(root: string): void;
     refresh(): Promise<void>;
     selectTab(tab: KnowledgePanelTab): void;
     attachSurface(surface: HTMLElement | null, mappings?: KnowledgeTextMapping[]): void;
     dispose(): void;
+}
+/** Read sharing is narrower than the author basis: every request input must match. */
+function sameKnowledgeReadContext(a: KnowledgeContext, b: KnowledgeContext | null): boolean {
+    return sameKnowledgeBasis(a, b) && b !== null
+        && a.inputRevision === b.inputRevision && a.root === b.root
+        && a.workspaceId === b.workspaceId && a.nodeId === b.nodeId && a.dirty === b.dirty
+        && a.selection?.from === b.selection?.from && a.selection?.to === b.selection?.to
+        && a.selection?.visibleExcerpt === b.selection?.visibleExcerpt
+        && a.selection?.elementRole === b.selection?.elementRole && a.selection?.nodeKey === b.selection?.nodeKey;
 }
 const resolutionLabels: Record<string, UiText> = { exact: uiMessage("hostedReview.exactTarget"), mapped: uiMessage("knowledge.locationMapped"), stale: uiMessage("knowledge.locationNeedsRelocation"), ambiguous: uiMessage("knowledge.locationAmbiguous"), orphaned: uiMessage("knowledge.targetExpired"), unavailable: uiMessage("knowledge.targetUnavailable"), resolved: uiMessage("knowledge.targetValid"), missing: uiMessage("knowledge.targetMissing"), fragmentMissing: uiMessage("knowledge.paragraphLabelMissing"), invalid: uiMessage("knowledge.addressInvalid"), external: uiMessage("knowledge.externalLink") };
 const formLabels: Record<string, UiText> = { id: uiMessage("knowledge.formStableId"), relative: uiMessage("knowledge.formSourceRelative"), workspace: uiMessage("knowledge.formLibraryPath"), file: uiMessage("knowledge.formAbsolutePath") };
@@ -320,6 +331,9 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     container.classList.add("knowledge-panel");
     setUiAttr(container, "aria-label", uiMessage("knowledge.title"));
     const gate = new KnowledgeReadGate();
+    type PendingRead = { context: KnowledgeContext; generation: number; completion: Promise<boolean> };
+    let pendingRead: PendingRead | null = null;
+    function invalidateRead(): void { gate.invalidate(); pendingRead = null; }
     const graph = new RelationshipGraphView();
     let graphSession = "";
     const proofreading = new ProofreadingPanel({ resultScope: "local", context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new UiError(uiMessage("knowledge.proofreadingApiUnavailable"))), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults, notify: message => host.notify(message, true) });
@@ -779,6 +793,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             }
             if (!originalCommitted(receipt))
                 throw new UiError(joinUiText([displayMessage("knowledge.operationIncomplete", { p0: receipt.status }), ...knowledgeDeliveryErrors(receipt)], "\n"));
+            invalidateRead();
             if (!committedDeliveryComplete(receipt))
                 throw new UiError(joinUiText([uiMessage("knowledge.committedDeliveryPending"), ...knowledgeDeliveryErrors(receipt), uiMessage("common.confirmOriginalOperation")], "\n"));
             await refresh(true);
@@ -829,6 +844,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             if (pending.receipt && originalCommitted(pending.receipt) && !originalCommitted(receipt))
                 throw new UiError(uiMessage("knowledge.committedStatusMismatch"));
             pending.receipt = receipt;
+            if (originalCommitted(receipt)) invalidateRead();
             if (committedDeliveryComplete(receipt)) {
                 await refresh(true);
                 pendingPlan = null;
@@ -1803,7 +1819,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         try { assertCloseReady(); } catch { return false; }
         if (!closeGuard.freeze(false)) return false;
         if (!proofreading.freezeForClose()) { closeGuard.thaw(); return false; }
-        gate.invalidate();
+        invalidateRead();
         return true;
     }
     function thawAfterClose(): void { proofreading.thawAfterClose(); closeGuard.thaw(); }
@@ -1819,7 +1835,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         const heading = element("div", "knowledge-heading");
         heading.append(element("strong", "", uiMessage("knowledge.title")), action(uiMessage("reminder.refresh"), refresh, "knowledge-refresh"));
         if (loading)
-            heading.append(action(uiMessage("knowledge.stopWaiting"), () => { gate.invalidate(); loading = false; clearOverlay(); setUiText(status, uiMessage("knowledge.scanWaitStopped")); render(); }));
+            heading.append(action(uiMessage("knowledge.stopWaiting"), () => { invalidateRead(); loading = false; clearOverlay(); setUiText(status, uiMessage("knowledge.scanWaitStopped")); render(); }));
         if (authorProposal) {
             heading.append(createAction(uiMessage("processingSettings.discardInput"), () => {
                 try { discardAuthorProposals(); } catch (error) { report(error); }
@@ -1917,8 +1933,13 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     }
     async function refresh(strict = false): Promise<void> {
         if (closeGuard.frozen || disposed) return;
-        const context = host.context();
-        const generation = gate.begin();
+        // Keep the exact captured inputs even if a host later mutates its object.
+        const context = structuredClone(host.context());
+        if (context && pendingRead && gate.accepts(pendingRead.generation, pendingRead.context, context) && sameKnowledgeReadContext(pendingRead.context, context)) {
+            await finishRead(pendingRead, strict);
+            return;
+        }
+        invalidateRead();
         if ((context?.sessionId ?? "") !== graphSession) {
             graphSession = context?.sessionId ?? "";
             graph.clear();
@@ -1928,6 +1949,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             snapshotBasis = null;
             clearOverlay();
             render();
+            if (strict) throw new UiError(uiMessage("knowledge.readBasisChanged"));
             return;
         }
         if (!sameKnowledgeBasis(snapshotBasis, context)) {
@@ -1935,16 +1957,37 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             snapshot = null;
             snapshotBasis = null;
             clearOverlay();
-            render();
+            if (sameKnowledgeBasis(renderedBasis, context) && container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))
+                deferredRender = true;
+            else
+                render();
         }
         setUiText(status, uiMessage("knowledge.readingAuthorizedKnowledge"));
         loading = true;
         if (!(container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select")))
             render();
+        const generation = gate.begin();
+        const read = { context, generation, completion: readSnapshot(context, generation) };
+        pendingRead = read;
+        await finishRead(read, strict);
+    }
+    /** Every caller waits independently, including strict post-commit readback.
+     * The shared completion installs/reports once and never swallows its error. */
+    async function finishRead(read: PendingRead, strict: boolean): Promise<void> {
+        try {
+            const installed = await read.completion;
+            if (strict && !installed) throw new UiError(uiMessage("knowledge.readBasisChanged"));
+        }
+        catch (error) { if (strict) throw error; }
+        finally { if (pendingRead === read) pendingRead = null; }
+    }
+    async function readSnapshot(context: KnowledgeContext, generation: number): Promise<boolean> {
         try {
             const next = await host.load(context);
+            // Sharing compares all inputs; delivery retains the source/owner gate.
+            // Core knowledge reads do not consume caret/selection or Draft ACKs.
             if (closeGuard.frozen || disposed || !gate.accepts(generation, context, host.context()))
-                return;
+                return false;
             snapshot = decodeKnowledgeSnapshot(next);
             snapshotBasis = context;
             loading = false;
@@ -1954,6 +1997,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             else
                 render();
             drawOverlay();
+            return true;
         }
         catch (error) {
             if (!closeGuard.frozen && !disposed && gate.accepts(generation, context, host.context())) {
@@ -1967,13 +2011,31 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 else
                     render();
             }
-            if (strict) throw error;
+            throw error;
         }
+    }
+    /** Library sidecars, settings and other notes can change with equal Draft bytes. */
+    function environmentChanged(root: string): void {
+        if (closeGuard.frozen || disposed) return;
+        const coordinate = (value: string): string => value.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
+        if (![host.context()?.root, pendingRead?.context.root, snapshotBasis?.root].some(value => value !== undefined && coordinate(value) === coordinate(root))) return;
+        invalidateRead();
+        loading = false;
+        snapshot = null;
+        snapshotBasis = null;
+        rules.closePreviews();
+        clearOverlay();
+        setUiText(status, "");
+        if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))
+            deferredRender = true;
+        else
+            render();
     }
     render();
     return {
         assertCloseReady, freezeForClose, thawAfterClose,
         backgroundEnabled: () => enabled || problemHints,
+        environmentChanged,
         refresh,
         selectTab(next) { closeGuard.assertMutable(); tab = next; render(); },
         attachSurface(next, nextMappings = []) {
@@ -1985,6 +2047,6 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 surface.classList.add("knowledge-surface");
             drawOverlay();
         },
-        dispose() { assertCloseReady(); disposed = true; gate.invalidate(); graph.clear(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); snapshot = null; snapshotBasis = null; window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.removeEventListener("input", authoredInput, true); container.removeEventListener("change", authoredInput, true); disposeUiTree(container); container.replaceChildren(); },
+        dispose() { assertCloseReady(); disposed = true; invalidateRead(); graph.clear(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); snapshot = null; snapshotBasis = null; window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.removeEventListener("input", authoredInput, true); container.removeEventListener("change", authoredInput, true); disposeUiTree(container); container.replaceChildren(); },
     };
 }

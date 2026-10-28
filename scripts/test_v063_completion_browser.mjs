@@ -148,7 +148,8 @@ const click = (name, host = page) => host.getByRole('button', { name, exact: tru
 const cm = () => page.locator('.source-host .cm-content');
 const queryPanel = () => page.locator('.query-panel');
 const knowledge = () => page.getByLabel('知识与批注', { exact: true });
-const contents = () => page.getByRole('region', { name: '节点内容', exact: true });
+const nodesView = () => page.locator('#workspace-view-nodes');
+const contents = () => nodesView().getByRole('region', { name: '节点内容', exact: true });
 async function source() { return cm().evaluate(element => { const view = element.cmTile?.root?.view; if (view?.contentDOM !== element) throw new Error('Actual retained editor unavailable'); return view.state.doc.toString(); }); }
 async function expectSource(expected) { await until(async () => { assert.equal(await source(), expected); return true; }, 'exact current author Draft'); }
 async function disk(file) { for (let attempt = 0; attempt < 20; attempt++) { try { return await readFile(file, 'utf8'); } catch (error) { if (!['EBUSY', 'EACCES'].includes(error.code) || attempt === 19) throw error; (result.fileReadRetries ??= []).push({ phase, file, attempt, code: error.code }); await pause(100); } } }
@@ -383,7 +384,14 @@ try {
 
   phase = 'authored-order'; await quick('TEST-Parent'); await workspaceMode(page, '源码'); await expectSource(savedParent);
   await cm().click(); await page.keyboard.press('Control+End'); await page.keyboard.insertText(' UNSAVED PARENT DRAFT😀'); dirtyParent = savedParent + ' UNSAVED PARENT DRAFT😀'; await expectSource(dirtyParent);
-  await page.getByRole('button', { name: '仅浏览 TEST-Parent 文件夹', exact: true }).click(); await contents().waitFor();
+  // Files and Nodes are independent dock views. Use their actual visible tabs
+  // and existing browse action, rather than operating the hidden Files owner.
+  await page.locator('[data-dock-tab="files"]').click();
+  await page.locator('#workspace-view-files').waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: '仅浏览 TEST-Parent 文件夹', exact: true }).click();
+  await nodesView().waitFor({ state: 'visible' }); await contents().waitFor();
+  assert.equal(await nodesView().locator('.workspace-nodes-view').getAttribute('data-follow'), 'false');
+  assert.equal(path.normalize(await nodesView().locator('.node-browser-path').getAttribute('title')), path.normalize(parentFolder));
   const captured = await api('/api/navigation/capture', { root, path: parentFolder }), before = await api('/api/navigation/order/read', { root, parentRef: captured.targetRef }); assert.equal(before.complete, true);
   const countBeforePreference = mutations.length; await contents().getByLabel('节点内容个人排序', { exact: true }).selectOption('path'); await contents().getByLabel('节点内容个人排序', { exact: true }).selectOption('name');
   assert.equal(mutations.length, countBeforePreference); assert.deepEqual((await api('/api/navigation/order/read', { root, parentRef: captured.targetRef })).orderedRefs, before.orderedRefs);
@@ -398,7 +406,12 @@ try {
   assert.deepEqual((await api('/api/navigation/order/read', { root, parentRef: captured.targetRef })).orderedRefs, after.orderedRefs); await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent);
   result.authoredOrder = { before, after }; await pass('Personal sorting is read-only; pre-prepare and durable prepared cancellation preserve the exact order; explicit keyboard preparation plus confirmation changes shared order without saving the parent Draft.');
 
-  phase = 'lazy-thumbnails'; assert.equal(await contents().getByLabel('节点内容缩略图', { exact: true }).isChecked(), false);
+  phase = 'lazy-thumbnails';
+  // Folder preferences now enable thumbnails by default. Establish this case's
+  // explicit UI starting point; disposing then remounting each node thumbnail
+  // renews its visible-row resolver without changing any author/source owner.
+  await contents().getByLabel('节点内容缩略图', { exact: true }).uncheck();
+  assert.equal(await contents().getByLabel('节点内容缩略图', { exact: true }).isChecked(), false);
   const previewStart = previewRequests.length; await contents().getByLabel('节点内容缩略图', { exact: true }).check();
   const rowFor = doc => contents().locator(`[data-entry-path=${JSON.stringify(path.dirname(doc.path))}]`);
   await rowFor(image).scrollIntoViewIfNeeded(); await until(() => rowFor(image).locator('.node-content-thumbnail').getAttribute('data-preview-state').then(state => state === 'ready'), 'visible actual image pixels');
@@ -572,10 +585,16 @@ try {
   result.snapshots.push({ headingSubtree: nativeHeadings });
   await pass('The same accepted native render drives actual heading counts, keyboard folding and full/subtree controls without extra knowledge reads; search reveals collapsed ancestors without changing their real counts, clears back to the saved fold and traverses duplicate matches in both directions with wraparound, without author writes.');
 
-  phase = 'explicit-inspector-commands'; await knowledgeCommand('导入或浏览图片与资源', '文件'); await knowledgeCommand('导入或浏览图片与资源', '文件');
+  phase = 'explicit-inspector-commands';
+  for (let repetition = 0; repetition < 2; repetition++) {
+    await command('导入或浏览图片与资源');
+    await nodesView().waitFor({ state: 'visible' });
+    assert.equal(path.normalize(await nodesView().locator('.node-browser-path').getAttribute('title')), path.normalize(parentFolder));
+    await expectSource(dirtyParent);
+  }
   await expectSource(dirtyParent); await workspaceCommand(page, 'knowledge', '链接与批注'); await until(async () => !await knowledge().isVisible(), 'toolbar still closes its own active inspector');
   await workspaceCommand(page, 'knowledge', '链接与批注'); await knowledge().waitFor({ state: 'visible' }); await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent); assert.equal(await disk(image.path), savedImage);
-  await pass('Repeated explicit graph, heading and resource commands keep the requested inspector visible; the original toolbar keeps its close/reopen behavior and neither path saves or changes the retained author Draft.');
+  await pass('Repeated graph and heading commands keep their requested views visible, while the resource command reveals the independent Nodes owner; the knowledge toolbar still closes/reopens its own retained owner without saving or changing the author Draft.');
   result.expectedHttpStates = []; result.unexpectedHttpErrors = [];
   for (const event of result.httpErrors) { let code; try { code = JSON.parse(event.body).error?.code; } catch { /* An unclassified response stays unexpected. */ }
     const expected = event.status === 409 && (code === 'stale_draft' && ['/api/render', '/api/knowledge/read'].includes(event.route)

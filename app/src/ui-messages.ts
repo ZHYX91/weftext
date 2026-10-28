@@ -3584,6 +3584,7 @@ export const zhCN = {
   "knowledge.openCurrentNoteLocalGraph": "打开当前笔记局部图",
   "knowledge.citationBasisChanged": "引用依据已变化，请刷新后重试。",
   "knowledge.readingAuthorizedKnowledge": "正在读取当前获权知识信息…",
+  "knowledge.readBasisChanged": "知识读取依据或库环境已变化，未采用旧结果；请刷新重试。",
   "knowledge.scanFailedLastResultStale": "扫描失败，最近结果已过期。{p0} 搜索与个人规则保留，请刷新重试。",
   "export.formatDoc": "旧版 Word 文档（.doc，外部转换）",
   "export.formatWps": "金山文字（.wps，外部转换）",
@@ -13953,6 +13954,7 @@ export interface MessageParamsMap {
   "knowledge.openCurrentNoteLocalGraph": {  };
   "knowledge.citationBasisChanged": {  };
   "knowledge.readingAuthorizedKnowledge": {  };
+  "knowledge.readBasisChanged": {  };
   "knowledge.scanFailedLastResultStale": { p0: string };
   "export.formatDoc": {  };
   "export.formatWps": {  };
@@ -25347,6 +25349,7 @@ export const messageParamTypes = {
   "knowledge.openCurrentNoteLocalGraph": {},
   "knowledge.citationBasisChanged": {},
   "knowledge.readingAuthorizedKnowledge": {},
+  "knowledge.readBasisChanged": {},
   "knowledge.scanFailedLastResultStale": {
     "p0": "text"
   },
@@ -36555,6 +36558,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "knowledge.openCurrentNoteLocalGraph": "Open current note’s local graph",
   "knowledge.citationBasisChanged": "The citation basis changed. Refresh and try again.",
   "knowledge.readingAuthorizedKnowledge": "Reading currently authorized knowledge information…",
+  "knowledge.readBasisChanged": "The knowledge read basis or library environment changed. The old result was not adopted; refresh and try again.",
   "knowledge.scanFailedLastResultStale": "The scan failed and the most recent result is stale. {p0} Search and personal rules are retained; refresh and try again.",
   "export.formatDoc": "Legacy Word document (.doc, external conversion)",
   "export.formatWps": "WPS Writer document (.wps, external conversion)",

@@ -18891,6 +18891,11 @@
       "en-US": "Reading currently authorized knowledge information…",
       "params": {}
     },
+    "knowledge.readBasisChanged": {
+      "zh-CN": "知识读取依据或库环境已变化，未采用旧结果；请刷新重试。",
+      "en-US": "The knowledge read basis or library environment changed. The old result was not adopted; refresh and try again.",
+      "params": {}
+    },
     "knowledge.scanFailedLastResultStale": {
       "zh-CN": "扫描失败，最近结果已过期。{p0} 搜索与个人规则保留，请刷新重试。",
       "en-US": "The scan failed and the most recent result is stale. {p0} Search and personal rules are retained; refresh and try again.",

@@ -6,7 +6,7 @@ import ts from "typescript";
 import { QueryPanel } from "./query-panel";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { LibraryCloseActivity } from "./library-native-close";
-import { message, UiError, errorUiText, uiTextValue, displayMessage, uiDisplayParameter } from "./ui-locale";
+import { message, UiError, errorUiText, uiTextValue, displayMessage, uiDisplayParameter, joinUiText } from "./ui-locale";
 import { ApiError } from "./api-error";
 import { DocumentSession, rebindCommittedSave, canRebindSaveAs, uniqueRetainedDrafts } from "./session";
 import { restoreBufferDisposition } from "./history-state";
@@ -87,7 +87,7 @@ function fixture() {
   const workspace: any = new context.WorkspaceScopePort();
   Object.assign(workspace, {
     closeGuard: new ProposalCloseGuard(), queryPanel: query, library: original,
-    invalidateQueryEnvironment() { effects.push("invalidate-environment"); },
+    invalidateLibraryEnvironment() { effects.push("invalidate-environment"); },
     selectedDocumentChanged: async () => {},
   });
   context.workspaceTools = workspace;
@@ -472,6 +472,23 @@ test("an already flying library switch cannot redirect the new-note dialog targe
   assert.equal(authors, 0); assert.equal(f.context.inventory, f.next);
 });
 
+test("a confirmed new-note commit retires library reads before missing document delivery rejects adoption", async () => {
+  for (const status of ["committed", "resolved"]) {
+    const f = fixture(); f.creationConsumers();
+    Object.assign(f.context, {
+      joinUiText, pendingCreation: { route: "/api/note/create", payload: { name: "Born" } },
+      creation: async (route: string, payload: any, deliver: (receipt: any) => Promise<void>) => {
+        assert.equal(route, "/api/note/create"); assert.equal(payload.root, f.original.root);
+        await deliver({ status, operationId: "original-birth" });
+      },
+    });
+    await assert.rejects(f.context.createNote(), (error: unknown) => error instanceof UiError);
+    assert.equal(f.effects.filter(effect => effect === "invalidate-environment").length, status === "committed" ? 1 : 0);
+    assert.equal(f.context.current.session.opened.sessionId, "current-original");
+    assert.deepEqual(f.released, []);
+  }
+});
+
 function deliveryFixture() {
   const f = fixture(); f.deliveryConsumers();
   const prior = { sessionId: "writer", root: f.original.root, workspaceId: f.original.workspaceId, nodeId: "node", kind: "managed", path: `${f.original.root}/Note/Note.typ`, source: "S", baseId: "old-base" };
@@ -491,6 +508,16 @@ function deliveryFixture() {
   const fact = { ...result.receipt, status: "committed", committedSource: "X", documentSourceMatchesCommit: true, document: comparison };
   return { ...f, doc, prior, session, basis, comparison, result, fact };
 }
+
+test("confirmed Query-definition commits retire library reads before missing delivery while unresolved facts do not", async () => {
+  for (const status of ["committed", "saved", "resolved"]) {
+    const f = deliveryFixture();
+    await assert.rejects(f.context.queryDelivery({ status, operationId: "original-definition" }, f.basis), (error: unknown) => error instanceof UiError);
+    assert.equal(f.effects.filter(effect => effect === "invalidate-environment").length, status === "resolved" ? 0 : 1);
+    assert.equal(f.session.opened, f.prior); assert.equal(f.session.source, "S");
+    assert.equal(f.session.baseId, "old-base"); assert.deepEqual(f.released, []);
+  }
+});
 
 test("history delivery keeps later Y on its original writer and Base without automatic merge", async () => {
   const f = deliveryFixture(), routes: string[] = [];

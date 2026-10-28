@@ -115,12 +115,12 @@ export class WorkspaceTools {
         receipt?: KnowledgeReceipt;
     } | null = null;
     constructor(private readonly host: WorkspaceToolsHost) {
-        this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify, environmentChanged: root => this.invalidateQueryEnvironment(root) });
+        this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify, environmentChanged: root => this.invalidateLibraryEnvironment(root) });
         const dataHost: PanelHost = {
             canEdit: host.canEditSource,
             request: api, requestBlob: apiBlob, getDocument: host.getDocument, applyPatch: host.applyPatch,
             openDocument: host.openDocument, openResolved: host.openResolved, openResolvedConfirmed: host.openResolvedConfirmed, releaseOpenedSession: host.releaseOpenedSession, notify: host.notify,
-            environmentChanged: root => this.invalidateQueryEnvironment(root),
+            environmentChanged: root => this.invalidateLibraryEnvironment(root),
             savedDefinition: host.savedDefinition,
             applyOperationReceipt: (receipt, basis) => host.applyReceipt(receipt as KnowledgeReceipt, { ...basis, dirty: basis.dirty ?? false }),
             prepareAction: host.beforeAction,
@@ -172,8 +172,12 @@ export class WorkspaceTools {
             prepare: (intent, context, id) => api("/api/knowledge/prepare", { operationId: id, context, intent }),
             commit: (plan, context) => this.commit(plan, context),
             navigate: host.navigate, notify: host.notify, beforeAction: host.beforeAction, canEditSource: host.canEditSource,
-            inspectOperation: async (id, context) => { const receipt = decodeKnowledgeDelivery(await api<KnowledgeReceipt>("/api/operations/status", { operationId: id, context })); if (receipt.operationId !== id)
-                throw new UiError(uiMessage("error.invalidResponse")); return deliverCommitted(receipt, value => host.applyReceipt(value, context)); },
+            inspectOperation: async (id, context) => {
+                const receipt = decodeKnowledgeDelivery(await api<KnowledgeReceipt>("/api/operations/status", { operationId: id, context }));
+                if (receipt.operationId !== id) throw new UiError(uiMessage("error.invalidResponse"));
+                if (originalCommitted(receipt) && !committedDeliveryComplete(receipt)) this.invalidateLibraryEnvironment(context.root);
+                return deliverCommitted(receipt, value => host.applyReceipt(value, context));
+            },
             selectSource: host.selectSource,
             previewTemplate: (id, parameters, context) => api("/api/knowledge/template-preview", { templateId: id, parameters, context }),
             linkCopy: (link, form, context) => api("/api/knowledge/link-copy", { occurrence: link.occurrence, form, context }),
@@ -246,7 +250,7 @@ export class WorkspaceTools {
                 status: request => api("/api/processing/status", { root, ...request }),
                 settle: request => api("/api/processing/settle", { root, ...request }),
                 apply: request => api("/api/processing/apply", { request: { root, ...request.request }, planId: request.planId }),
-                committed: () => this.invalidateQueryEnvironment(root),
+                committed: () => this.invalidateLibraryEnvironment(root),
                 onApplied: () => { this.host.notify(uiMessage("workspaceTools.sharedDefaultsCommitted")); },
             });
         });
@@ -278,9 +282,11 @@ export class WorkspaceTools {
         this.queryPanel.setScope(scope);
         this.library = library;
     }
-    invalidateQueryEnvironment(root = this.library?.root): void { if (this.closeGuard.frozen) return;
-        if (root)
+    invalidateLibraryEnvironment(root = this.library?.root): void { if (this.closeGuard.frozen) return;
+        if (root) {
+            this.knowledgePanel.environmentChanged(root);
             this.queryPanel.environmentChanged(root);
+        }
     }
     async search(text: string, includeBody: boolean): Promise<void> {
         return this.closeGuard.run(async () => {
@@ -393,6 +399,8 @@ export class WorkspaceTools {
     async refreshAfterSync(root: string): Promise<void> {
         return this.closeGuard.run(async () => {
             clearTimeout(this.refreshTimer);
+            // Retire pre-sync knowledge before any other consumer can await.
+            this.knowledgePanel.environmentChanged(root);
             this.outlinePanel.refresh();
             const sameRoot = (value?: string): boolean => value?.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase() === root.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
             // Query results depend on the library, even without an open source. The
@@ -438,6 +446,7 @@ export class WorkspaceTools {
                     throw new UiError(uiMessage("workspaceTools.importCommittedStatusMismatch"));
                 pending.receipt = status;
                 if (originalCommitted(status)) {
+                    if (!committedDeliveryComplete(status)) this.invalidateLibraryEnvironment(pending.context.root);
                     const delivered = await deliverCommitted(status, value => this.host.applyReceipt(value, pending.context));
                     pending.receipt = delivered;
                     if (!committedDeliveryComplete(delivered))
@@ -517,6 +526,9 @@ export class WorkspaceTools {
             const receipt = decodeKnowledgeDelivery(await api<KnowledgeReceipt>("/api/operations/commit", { operationId: plan.operationId, planId: plan.planId, context }));
             if (receipt.operationId !== plan.operationId)
                 throw new UiError(uiMessage("error.invalidResponse"));
+            // Delivery errors still describe a known library commit; their early
+            // return in deliverCommitted cannot leave pre-commit reads eligible.
+            if (originalCommitted(receipt) && !committedDeliveryComplete(receipt)) this.invalidateLibraryEnvironment(context.root);
             const delivered = await deliverCommitted(receipt, value => this.host.applyReceipt(value, context));
             if (!committedDeliveryComplete(delivered))
                 this.host.notify(uiMessage("workspaceTools.committedUiUpdateIncomplete"), true);
@@ -534,7 +546,7 @@ export class WorkspaceTools {
                 read: () => api("/api/styles/read", { root }),
                 prepare: request => api("/api/styles/prepare", { root, ...request }),
                 apply: request => api("/api/styles/apply", { root, ...request }),
-                committed: () => this.invalidateQueryEnvironment(root),
+                committed: () => this.invalidateLibraryEnvironment(root),
                 openSource: path => this.host.openDocument(path, root),
                 onApplied: () => this.host.stylesChanged(root), operationId,
             }, this.styles.get(root));

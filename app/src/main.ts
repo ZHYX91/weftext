@@ -637,7 +637,7 @@ let readingSelection: {
 const recognitionPanel = new RecognitionPanel({
     request: (path, body) => api(`/api/recognition${path}`, body),
     identity: () => current ? current.session.opened.root : null,
-    committed: root => workspaceTools.invalidateQueryEnvironment(root),
+    committed: root => workspaceTools.invalidateLibraryEnvironment(root),
     target: () => current ? { sessionId: current.session.opened.sessionId, parent: selectedFolder ?? current.session.opened.root, name: "资料导入" } : null,
     notify: toast,
     created: async (receipt, target) => libraryCloseActivity.run(async () => {
@@ -693,7 +693,7 @@ const workspaceTools = new WorkspaceTools({
     }),
     syncApplied: async (root) => libraryCloseActivity.run(async () => {
 
-        workspaceTools.invalidateQueryEnvironment(root);
+        workspaceTools.invalidateLibraryEnvironment(root);
         if (inventory && normalize(inventory.root) === normalize(root))
             await refreshInventory();
         for (const doc of documents.filter(d => normalize(d.session.opened.root) === normalize(root))) {
@@ -771,12 +771,12 @@ const workspaceTools = new WorkspaceTools({
     }),
     canEditSource: () => !bodyCloseFrozen && !!current && sourceConsumersAvailable(current) && current.mode !== "read" && !readOnlySource(current) && !current.writing.state.composing,
     savedDefinition: async (result, basis) => libraryCloseActivity.run(async () => {
-        const receipt = result as { document?: OpenedDocument; committedSource?: string; documentSourceMatchesCommit?: boolean };
+        const receipt = result as OriginalFact & { document?: OpenedDocument; committedSource?: string; documentSourceMatchesCommit?: boolean };
+        if (originalCommitted(receipt)) workspaceTools.invalidateLibraryEnvironment(basis.root);
         const returned = receipt.document;
         if (!returned || typeof returned.sessionId !== "string" || typeof returned.source !== "string") throw new UiError(uiMessage("shell.querySaveFileReceiptMissing"));
         let opened = returned;
         try {
-            workspaceTools.invalidateQueryEnvironment(basis.root);
             const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
             if (!doc) throw new UiError(uiMessage("shell.querySavedReopen"));
             const comparison = (key: "shell.queryCommittedDiskChanged" | "shell.querySavedNewInputRetained"): never => {
@@ -837,7 +837,7 @@ const workspaceTools = new WorkspaceTools({
         const opened = receipt.document as OpenedDocument | undefined;
         const returned = [opened, ...((receipt.affectedDocuments as { document?: OpenedDocument }[] | undefined) ?? []).map(effect => effect.document)];
         try {
-        workspaceTools.invalidateQueryEnvironment(context.root);
+        workspaceTools.invalidateLibraryEnvironment(context.root);
         const doc = documents.find(item => item.session.opened.sessionId === context.sessionId || Boolean(context.nodeId && context.workspaceId && item.session.opened.nodeId === context.nodeId && item.session.opened.workspaceId === context.workspaceId));
         let deliveryPending: UiText | null = receipt.documentError ? apiErrorUiText(receipt.documentError) : receipt.documentSourceMatchesCommit === false ? uiMessage("shell.committedBodyChanged") : null;
         if (doc)
@@ -970,7 +970,7 @@ const historyPanel = new HistoryPanel({
   getDocument: () => historyContext(current), request: api, prepareRestore: prepareSwitch, notify: toast,
   restorePending: () => { refreshChrome(); },
   restored: async (result, basis) => libraryCloseActivity.run(async () => {
-        if (result.receipt.status === "saved") workspaceTools.invalidateQueryEnvironment(basis.root);
+        if (result.receipt.status === "saved") workspaceTools.invalidateLibraryEnvironment(basis.root);
         const doc = documents.find(item => item.navigationKey === basis.ownerKey && item.session.opened.nodeId === basis.nodeId && item.session.opened.workspaceId === basis.workspaceId);
         if (!doc) throw new UiError(uiMessage("shell.olderVersionSavedReopen"));
         await doc.writing.settleForSessionChange();
@@ -1079,7 +1079,7 @@ async function acceptCreatedDocument(opened: OpenedDocument, operationId: string
         if (!operationId) throw new UiError(uiMessage("shell.originalCommittedReceiptRequired"));
         if (!opened.nodeId || !opened.workspaceId || opened.kind !== "managed") throw new UiError(uiMessage("shell.createdNodeIdentityRequired"));
         workspaceTools.assertLibraryChange(inventory);
-        workspaceTools.invalidateQueryEnvironment(opened.root);
+        workspaceTools.invalidateLibraryEnvironment(opened.root);
         await prepareSwitch();
         const restored = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
         // A delivered birth is not authority to replace an active writer.
@@ -1593,7 +1593,7 @@ function renderNodeContents(host: HTMLElement, folder: string): void {
         open: entry => entry.kind === "directory" ? browseFolder(entry.path) : openInventoryEntry(entry, selected.root, selected.workspaceId),
         changed: async () => libraryCloseActivity.run(async () => {
 
-            workspaceTools.invalidateQueryEnvironment(selected.root);
+            workspaceTools.invalidateLibraryEnvironment(selected.root);
             if (inventory === selected) {
                 const next = await api<Inventory>("/api/library/open", { path: selected.root });
                 workspaceTools.assertLibraryChange(next);
@@ -2582,7 +2582,7 @@ async function createLibrary(): Promise<void> {
 
                 if (!receipt.library || receipt.library.workspaceId !== receipt.workspaceId || normalize(receipt.library.root) !== normalize(receipt.root) || receipt.rootNotePath && !receipt.rootDocument) throw new UiError(uiMessage("shell.libraryExactDeliveryPending"));
                 workspaceTools.assertLibraryChange(receipt.library);
-                workspaceTools.invalidateQueryEnvironment(receipt.root);
+                workspaceTools.invalidateLibraryEnvironment(receipt.root);
                 inventory = receipt.library; query = ""; selectedFolder = null; renderSidebar(); renderContent();
                 if (receipt.rootDocument) await acceptCreatedDocument(receipt.rootDocument, receipt.operationId);
                 else await refreshInventory();
@@ -2641,6 +2641,7 @@ async function createNote(): Promise<void> {
             throw new UiError(uiMessage("shell.creationTargetChanged"));
         await creation<OriginalFact & { document?: OpenedDocument; documentError?: ApiErrorBody }>("/api/note/create", { root: owner.root, parent, name }, async receipt => libraryCloseActivity.run(async () => {
 
+            if (receipt.status === "committed") workspaceTools.invalidateLibraryEnvironment(owner.root);
             if (receipt.status !== "committed" || !receipt.document || receipt.documentError) throw new UiError(joinUiText([uiMessage("shell.noteOriginalDeliveryPending"), receipt.documentError ? apiErrorUiText(receipt.documentError) : uiMessage("shell.checkOriginalOperationSentence")]));
             await acceptCreatedDocument(receipt.document, receipt.operationId);
 
@@ -2801,7 +2802,7 @@ function addDocument(opened: OpenedDocument): void {
     });
     const authoringAssets = new AuthoringAssetsAdapter({ request: api, prefix: "/api/editor/endnotes-module", context: () => doc && current === doc && sourceConsumersAvailable(doc) && !readOnlySource(doc) && !doc.sourceTrashed && doc.mode !== "read" ? { sessionId: doc.session.opened.sessionId, audience: localPersonalAudience(), root: doc.session.opened.root } : null, committed: context => {
             if (context.root)
-                workspaceTools.invalidateQueryEnvironment(context.root);
+                workspaceTools.invalidateLibraryEnvironment(context.root);
         }, changed: async () => libraryCloseActivity.run(async () => {
             doc.session.projection = null; doc.renderGeneration++; doc.queries.invalidate(); await compile(doc);
         }) });
@@ -2987,7 +2988,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             }
             if (receipt.recoveryIssue)
                 toast(uiMessage("shell.savedRecoveryUpdateUnavailable"), true);
-            workspaceTools.invalidateQueryEnvironment(doc.session.opened.root);
+            workspaceTools.invalidateLibraryEnvironment(doc.session.opened.root);
             let delivered = receipt.document;
             // Status can supply an independent comparison. A known adopted
             // writer must be freshly qualified under its original Session.
@@ -3321,7 +3322,7 @@ async function inspectRecovery(id: string): Promise<void> {
         });
         if (decision) {
             await api("/api/recovery/resolve", { operationId: id, action: decision });
-            workspaceTools.invalidateQueryEnvironment();
+            workspaceTools.invalidateLibraryEnvironment();
             toast(uiMessage("shell.recoveryResolutionConfirmed"));
             await refreshInventory();
         }

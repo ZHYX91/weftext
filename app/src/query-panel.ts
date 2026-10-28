@@ -2309,8 +2309,10 @@ export class QueryPanel {
             this.registeredHost.replaceChildren(controls.element);
     }
     private tagRegistryChanged(): void {
-        if (this.root)
-            this.environmentChanged(this.root);
+        if (this.root) {
+            if (this.host.environmentChanged) this.host.environmentChanged(this.root);
+            else this.environmentChanged(this.root);
+        }
     }
     private applyTag(targetRef: string, label: string, mode: TagMatchMode): void {
         try {
@@ -2530,8 +2532,10 @@ export class QueryPanel {
             }
             catch (error) {
                 const code = error && typeof error === "object" && "code" in error ? String(error.code) : "unknown";
-                if (code === "committedResultUnavailable")
-                    this.environmentChanged(pending.basis.root);
+                if (code === "committedResultUnavailable") {
+                    if (this.host.environmentChanged) this.host.environmentChanged(pending.basis.root);
+                    else this.environmentChanged(pending.basis.root);
+                }
                 if (!receiptReceived && error instanceof TerminatedAttempt)
                     this.savedPending = null;
                 this.host.notify(() => `${uiTextValue(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))}${uiTextValue(this.savedPending ? message("queryDefinition.originalSaveRetainedSuffix") : message("queryDefinition.originalDraftRetainedSuffix"))}`, true);

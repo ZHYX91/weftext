@@ -9,7 +9,9 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import type { WorkspaceTools, WorkspaceViewKind } from "./workspace-tools";
-import { message as uiMessage, setUiText, errorUiText } from "./ui-locale";
+import { message as uiMessage, setUiText, errorUiText, UiError } from "./ui-locale";
+import { decodeKnowledgeDelivery, sameKnowledgeBasis } from "./knowledge-state";
+import { committedDeliveryComplete, deliverCommitted, originalCommitted } from "./original-operation";
 
 // Follow the existing native-scope-transition owner boundary: execute the real
 // composition methods without importing the CSS/media/bootstrap dependency graph.
@@ -17,7 +19,7 @@ import { message as uiMessage, setUiText, errorUiText } from "./ui-locale";
 const workspaceSource = ts.createSourceFile("workspace-tools.ts", readFileSync(new URL("./workspace-tools.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const workspaceClass = workspaceSource.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === "WorkspaceTools") as ts.ClassDeclaration;
 assert.ok(workspaceClass);
-const methodNames = ["closeOwners", "assertCloseReady", "freezeForClose", "thawAfterClose", "button", "attachDock", "viewVisible", "show", "toggle", "refreshOutline", "refreshView", "selectKnowledgeTab", "selectedDocumentChanged", "documentChanged", "projectionChanged"];
+const methodNames = ["closeOwners", "assertCloseReady", "freezeForClose", "thawAfterClose", "button", "attachDock", "viewVisible", "show", "toggle", "refreshOutline", "refreshView", "selectKnowledgeTab", "selectedDocumentChanged", "documentChanged", "projectionChanged", "invalidateLibraryEnvironment", "refreshAfterSync", "context", "commit"];
 const methods = workspaceClass.members.filter(node => ts.isMethodDeclaration(node) && methodNames.includes(node.name.getText(workspaceSource)));
 assert.equal(methods.length, methodNames.length);
 const compiled = ts.transpileModule(`class TestedWorkspaceTools { ${methods.map(node => node.getText(workspaceSource)).join("\n")} }\nglobalThis.TestedWorkspaceTools = TestedWorkspaceTools;`, {
@@ -67,7 +69,7 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
     t.after(() => { for (const [key, value] of previous) { if (value) Object.defineProperty(globalThis, key, value); else Reflect.deleteProperty(globalThis, key); } });
     const state = { current: null as DocumentBasis | null }, requests: { route: string; body: unknown }[] = [], notices: unknown[] = [];
     const host = {
-        getDocument: () => state.current, canEdit: () => true,
+        getDocument: () => state.current, canEdit: () => true, selection: () => undefined,
         request: async (route: string, body?: unknown) => {
             requests.push({ route, body });
             if (custom) return custom(route, body);
@@ -84,18 +86,19 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
     for (const view of Object.values(views)) document.body.append(view as unknown as Element);
     const visible = new Set<WorkspaceViewKind>(), refreshed: WorkspaceViewKind[] = [], knowledgeTabs: string[] = [];
     const outline = { refreshes: 0, invalidations: 0 }, background = { enabled: false };
+    const environments: { consumer: string; root: string }[] = [];
     const presentation = {
         reveal: (kind: WorkspaceViewKind) => { visible.add(kind); views[kind].hidden = false; },
         hide: (kind: WorkspaceViewKind) => { visible.delete(kind); views[kind].hidden = true; },
         visible: (kind: WorkspaceViewKind) => visible.has(kind),
     };
-    const context = vm.createContext({ document, setTimeout, clearTimeout, uiMessage, setUiText, errorUiText });
+    const context = vm.createContext({ document, setTimeout, clearTimeout, uiMessage, setUiText, errorUiText, UiError, sameKnowledgeBasis, decodeKnowledgeDelivery, committedDeliveryComplete, deliverCommitted, originalCommitted, api: host.request });
     vm.runInContext(compiled, context);
     const TestedWorkspaceTools = context.TestedWorkspaceTools as new () => SelectedTools;
     const tools = Object.assign(new TestedWorkspaceTools(), {
         closeGuard: guard, host, propertyPanel: panel, views, presentation: null,
-        queryPanel: { refresh: async () => { refreshed.push("query"); }, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
-        knowledgePanel: { refresh: async () => { refreshed.push("knowledge"); }, backgroundEnabled: () => background.enabled, selectTab: (tab: string) => { knowledgeTabs.push(tab); }, attachSurface() {}, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
+        queryPanel: { refresh: async () => { refreshed.push("query"); }, environmentChanged: (root: string) => { environments.push({ consumer: "query", root }); }, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
+        knowledgePanel: { refresh: async () => { refreshed.push("knowledge"); }, environmentChanged: (root: string) => { environments.push({ consumer: "knowledge", root }); }, backgroundEnabled: () => background.enabled, selectTab: (tab: string) => { knowledgeTabs.push(tab); }, attachSurface() {}, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         outlinePanel: { refresh: () => { outline.refreshes++; refreshed.push("outline"); }, invalidate: () => { outline.invalidations++; } },
         outputPanel: { assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         libraryTrash: { assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
@@ -107,8 +110,56 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
         await tools.selectedDocumentChanged();
         await turn();
     };
-    return { document, state, requests, notices, panel, guard, tools, select, views, presentation, visible, refreshed, knowledgeTabs, outline, background };
+    return { document, state, requests, notices, panel, guard, tools, host, select, views, presentation, visible, refreshed, knowledgeTabs, outline, background, environments };
 }
+
+test("library mutation retires Knowledge before notifying Query, with one shared invalidation entry", t => {
+    const f = fixture(t);
+    f.tools.invalidateLibraryEnvironment("library");
+    assert.deepEqual(f.environments, [{ consumer: "knowledge", root: "library" }, { consumer: "query", root: "library" }]);
+    assert.equal(f.refreshed.length, 0, "invalidation itself does not start a duplicate scan");
+    assert.equal(f.tools.freezeForClose(), true);
+    f.tools.invalidateLibraryEnvironment("library");
+    assert.equal(f.environments.length, 2);
+});
+
+test("post-sync invalidates Knowledge before awaiting Query and then performs a current read", async t => {
+    const f = fixture(t), waiting = deferred<void>();
+    f.state.current = basis(); f.presentation.reveal("knowledge");
+    Object.assign(f.tools, { library: { root: "library", workspaceId: "workspace-library" } });
+    Object.assign((f.tools as unknown as { queryPanel: object }).queryPanel, { refresh: async () => { f.refreshed.push("query"); await waiting.promise; } });
+    const syncing = f.tools.refreshAfterSync("LIBRARY/");
+    assert.deepEqual(f.environments, [{ consumer: "knowledge", root: "LIBRARY/" }]);
+    assert.deepEqual(f.refreshed, ["outline", "query"]);
+    assert.equal(f.tools.freezeForClose(), false);
+    waiting.resolve(); await syncing;
+    assert.deepEqual(f.refreshed, ["outline", "query", "knowledge"]);
+    f.tools.assertCloseReady();
+});
+
+test("a known commit with unavailable delivery invalidates library reads before returning its original error", async t => {
+    const documentError = { code: "committedResultUnavailable", explanation: uiMessage("common.unavailable"), diagnostics: [], causes: [] };
+    const f = fixture(t, async (route, body) => {
+        assert.equal(route, "/api/operations/commit");
+        return { status: "committed", operationId: (body as { operationId: string }).operationId, documentError };
+    });
+    const selected = basis(); f.state.current = selected;
+    let delivered = false; Object.assign(f.host, { applyReceipt: async () => { delivered = true; } });
+    const commit = f.tools as unknown as { commit(plan: unknown, context: unknown): Promise<{ operationId: string; documentError: unknown }> };
+    const receipt = await commit.commit({ operationId: "original", planId: "plan" }, { ...selected, dirty: false });
+    assert.equal(receipt.operationId, "original"); assert.deepEqual(receipt.documentError, documentError);
+    assert.equal(delivered, false);
+    assert.deepEqual(f.environments, [{ consumer: "knowledge", root: "library" }, { consumer: "query", root: "library" }]);
+    f.tools.assertCloseReady();
+});
+
+test("an unrelated commit receipt cannot invalidate current library reads", async t => {
+    const f = fixture(t, async () => ({ status: "committed", operationId: "other-operation" }));
+    const selected = basis(); f.state.current = selected;
+    const commit = f.tools as unknown as { commit(plan: unknown, context: unknown): Promise<unknown> };
+    await assert.rejects(commit.commit({ operationId: "original", planId: "plan" }, { ...selected, dirty: false }));
+    assert.deepEqual(f.environments, []); f.tools.assertCloseReady();
+});
 
 test("delayed open adoption renews an already open empty property consumer while it owns focus", async t => {
     const f = fixture(t), opened = deferred<DocumentBasis>();
