@@ -1,10 +1,11 @@
 import type { DataSchema, NativeValue } from "./data-panel";
 import type { ValuePath } from "./author-input";
 import { registerNativeControl, type NativeControlAddress, type NativeControlBinding, type NativeControlIdentity } from "./native-control-identity";
-import { LocaleScope, locale, message, t, type MessageKey } from "./ui-locale";
+import { LocaleScope, locale, message, t, type MessageKey, type MessageParams } from "./ui-locale";
 import { advanceMinutes, changeAdvanceMinutes, changeClockMinute, clockFraction, composeInstantMinute, exactAdvance, exactClock, explicitOffset, instantMinute, instantOffset, newReminder, reminderMember, reminderText, setReminderMember } from "./reminder-values";
 
-type LabelKey = Exclude<Extract<MessageKey, `reminder.${string}`>, "reminder.missed">;
+type ReminderKey = Extract<MessageKey, `reminder.${string}`>;
+type LabelKey = { [K in ReminderKey]: keyof MessageParams<K> extends never ? K : never }[ReminderKey];
 const text = (value: string): NativeValue => ({ kind: "text", value });
 const path = (...keys: string[]): ValuePath[] => keys.map(key => ({ kind: "member", key }));
 const samePath = (a: readonly ValuePath[], b: readonly ValuePath[]): boolean => a.length === b.length && a.every((part, at) => part.kind === b[at].kind && (part.kind === "member" ? part.key === (b[at] as Extract<ValuePath, { kind: "member" }>).key : part.index === (b[at] as Extract<ValuePath, { kind: "index" }>).index));

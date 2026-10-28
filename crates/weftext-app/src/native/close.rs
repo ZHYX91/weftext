@@ -42,6 +42,12 @@ pub(super) enum Message {
         delivery_id: String,
         accepted: bool,
     },
+    ActionDelivered {
+        surface_id: String,
+        surface_epoch: String,
+        action_id: String,
+        accepted: bool,
+    },
     DraftCall {
         surface_id: String,
         surface_epoch: String,

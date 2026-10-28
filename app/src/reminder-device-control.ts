@@ -1,10 +1,12 @@
 import type { DocumentBasis, PanelHost } from "./data-panel";
-import { LocaleScope, errorUiText, message, type MessageKey, type UiText } from "./ui-locale";
+import { LocaleScope, errorUiText, message, type MessageKey, type MessageParams, type UiText } from "./ui-locale";
 import type { ReminderOwner as Owner, ReminderInspection as Inspection } from "./reminder-types";
 import { openReminderOverview } from "./reminder-overview";
 import { ProposalCloseGuard } from "./proposal-close-guard";
+import { coreDescriptionUiText, coreErrorUiText, descriptionUiText } from "./ui-diagnostics";
 
-type LabelKey = Exclude<Extract<MessageKey, `reminder.${string}`>, "reminder.missed">;
+type ReminderKey = Extract<MessageKey, `reminder.${string}`>;
+type LabelKey = { [K in ReminderKey]: keyof MessageParams<K> extends never ? K : never }[ReminderKey];
 interface Pending { route: string; request: Record<string, unknown>; basis: DocumentBasis }
 const ownerEqual = (a: Owner, b: Owner): boolean => a.workspaceId === b.workspaceId && a.nodeId === b.nodeId;
 const sameBasis = (a: DocumentBasis | null, b: DocumentBasis): boolean => !!a && a.sessionId === b.sessionId && a.source === b.source && a.serial === b.serial && a.baseId === b.baseId && a.path === b.path && a.root === b.root && a.nodeId === b.nodeId && a.workspaceId === b.workspaceId && !!a.dirty === !!b.dirty;
@@ -119,8 +121,8 @@ export class ReminderDeviceControl {
       if (retained?.invalidated) this.element.append(this.text("p", "reminder.cancelled"));
       if (retained?.handled) this.element.append(this.text("p", "reminder.handled"));
       if (retained) {
-        this.element.append(this.text("p", retained.delivery.state === "submittedToSystem" ? "reminder.submitted" : retained.delivery.state === "unknown" ? "reminder.unknown" : "reminder.failedBeforeCall"));
-        if (retained.delivery.diagnostic) this.detail(retained.delivery.diagnostic);
+        this.element.append(this.text("p", retained.delivery.state === "submittedToSystem" ? "reminder.submitted" : retained.delivery.state === "unknown" ? "reminder.unknown" : retained.delivery.state === "inAppOnly" ? "reminder.inAppOnly" : "reminder.failedBeforeCall"));
+        if (retained.delivery.state === "unknown" || retained.delivery.state === "failedBeforeCall") this.detail(coreDescriptionUiText(retained.delivery.description));
         if (!retained.handled) this.element.append(this.button("reminder.handle", basis, async () => {
           const generation = this.generation; await this.host.request("/api/reminders/handle", { executionKey: retained.executionKey });
           if (this.current(generation, basis)) await this.refresh(basis);
@@ -130,8 +132,8 @@ export class ReminderDeviceControl {
       } else if (eligibility) this.element.append(this.text("p", eligibility.timing === "upcoming" ? "reminder.upcoming" : "reminder.due"));
     }
     if (!candidate.taskOpen) this.element.append(this.text("p", "reminder.cancelled"));
-    if (result.issue && result.issue.code !== "reminderDisabled") this.detail(result.issue.message, "data-warning");
-    for (const diagnostic of candidate.resolution.diagnostics) this.detail(diagnostic, "data-warning");
+    if (result.issue && result.issue.code !== "reminderDisabled") this.detail(coreErrorUiText(result.issue), "data-warning");
+    for (const diagnostic of candidate.resolution.diagnostics) this.detail(descriptionUiText(diagnostic), "data-warning");
     this.element.append(this.refreshButton(basis));
     this.renderPending();
   }

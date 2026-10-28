@@ -63,6 +63,18 @@ def run_command(argv: list[str], run: Path, label: str, env: dict[str, str], tim
                                    stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
         code = None
         caught = None
+        cleanup_errors = []
+
+        def cleanup_failure(phase, error):
+            cleanup_errors.append(error)
+            detail = {"phase": phase, "type": type(error).__name__, "message": str(error)}
+            if isinstance(error, OSError):
+                detail["errno"] = error.errno
+            entry.setdefault("cleanupErrors", []).append(detail)
+            # A cleanup failure is additional evidence, never a replacement for
+            # the original command deadline, exit or interruption.
+            entry.setdefault("terminationReason", "cleanupUnknown")
+
         try:
             entry.update(pid=process.pid, processGroup=process.pid, state="running")
             save(run, record)
@@ -73,46 +85,67 @@ def run_command(argv: list[str], run: Path, label: str, env: dict[str, str], tim
             caught = error
             entry["terminationReason"] = type(error).__name__
         finally:
+            entry["ownedGroupGone"] = False
+            entry["ownedLeaderReaped"] = False
+            phase = "groupProbe"
             try:
-                os.killpg(process.pid, 0)
-            except ProcessLookupError:
-                entry["ownedGroupGone"] = True
-            else:
-                entry["ownedGroupGone"] = False
-                if "terminationReason" not in entry:
-                    entry["terminationReason"] = "descendantsAfterLauncherExit"
-                # Only the group created here; timeout or launcher exit is not a cleanup receipt.
-                os.killpg(process.pid, signal.SIGKILL)
-                deadline = time.monotonic() + 10
-                while time.monotonic() < deadline:
-                    # Reap our launcher, allowing adopted descendants to be reaped by the OS.
-                    process.poll()
-                    try:
-                        os.killpg(process.pid, 0)
-                    except ProcessLookupError:
-                        entry["ownedGroupGone"] = True
-                        break
-                    time.sleep(0.05)
-            try:
-                code = process.wait(timeout=10)
-                entry["ownedLeaderReaped"] = True
-            except subprocess.TimeoutExpired:
-                entry["ownedLeaderReaped"] = False
-                entry["terminationReason"] = "cleanupUnknown"
+                try:
+                    os.killpg(process.pid, 0)
+                except ProcessLookupError:
+                    entry["ownedGroupGone"] = True
+                else:
+                    if "terminationReason" not in entry:
+                        entry["terminationReason"] = "descendantsAfterLauncherExit"
+                    # Exactly one signal to this original group. A permission
+                    # rejection is retained, not retried or bypassed with sudo.
+                    phase = "groupSignal"
+                    os.killpg(process.pid, signal.SIGKILL)
+                    deadline = time.monotonic() + 10
+                    while time.monotonic() < deadline:
+                        phase = "leaderPoll"
+                        process.poll()
+                        phase = "groupProbeAfterSignal"
+                        try:
+                            os.killpg(process.pid, 0)
+                        except ProcessLookupError:
+                            entry["ownedGroupGone"] = True
+                            break
+                        time.sleep(0.05)
+            except BaseException as error:
+                cleanup_failure(phase, error)
+            finally:
+                # Even failed group probing/signalling must observe the held
+                # original Popen; no numeric-PID reopen or replacement process.
+                try:
+                    code = process.wait(timeout=10)
+                    entry["ownedLeaderReaped"] = True
+                except BaseException as error:
+                    cleanup_failure("leaderWait", error)
+                entry["cleanupUnknown"] = bool(cleanup_errors) or not (
+                    entry["ownedGroupGone"] and entry["ownedLeaderReaped"])
+                if entry["cleanupUnknown"]:
+                    entry.setdefault("terminationReason", "cleanupUnknown")
         entry.update(exitCode=code, durationSeconds=round(time.monotonic() - started, 3),
                      logSha256=hashlib.sha256(log.read_bytes()).hexdigest())
     if caught:
         entry["state"] = "failed"
         save(run, record)
         raise caught
-    if code or entry.get("terminationReason") or not entry["ownedGroupGone"]:
+    if code or entry.get("terminationReason") or entry["cleanupUnknown"]:
         entry["state"] = "failed"
         save(run, record)
-        raise RuntimeError(f"Apple {label} failed; preserve {log}")
+        # Preserve explicit interruption semantics when there was no original
+        # deadline to retain; ordinary cleanup errors remain structured below.
+        interrupted = next((error for error in cleanup_errors
+                            if isinstance(error, (SystemExit, KeyboardInterrupt))), None)
+        if interrupted is not None and entry.get("terminationReason") != "deadline":
+            raise interrupted
+        reason = entry.get("terminationReason", f"exit {code}")
+        raise RuntimeError(f"Apple {label} failed ({reason}); preserve {log}") from (
+            cleanup_errors[0] if cleanup_errors else None)
     entry["state"] = "passed"
     save(run, record)
     return log.read_text(encoding="utf-8", errors="replace")
-
 
 def save(run: Path, record: dict) -> None:
     (run / "result.json").write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n",

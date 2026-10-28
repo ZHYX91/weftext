@@ -1,5 +1,7 @@
-//! Resource reads use the Core's owned manifest and exact current snapshot.
-//! Container metadata is derived from the same bytes that the viewer receives.
+//! Managed resource reads use Core's owned manifest and exact current snapshot.
+//! Local ordinary-file browsing uses an independently qualified inventory cut;
+//! it never creates a managed resource identity. Container metadata is derived
+//! from the same bytes that the viewer receives.
 use super::{ApiError, ApiResult, AppState, core_call, location, value};
 #[cfg(test)]
 use crate::CoreTestFixture;
@@ -29,6 +31,80 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/api/query/preview", post(query_preview))
         .route("/api/query/preview-resource", post(query_preview_resource))
         .route("/api/navigation/preview", post(navigation_preview))
+        .route("/api/navigation/resource", post(inventory_resource))
+        .route(
+            "/api/navigation/resource/read",
+            post(inventory_resource_read),
+        )
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InventoryResourceRequest {
+    root: String,
+    directory: String,
+    path: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InventoryResourceReadRequest {
+    root: String,
+    directory: String,
+    path: String,
+    revision: String,
+}
+/// Local inventory browsing is independent of an editor session. These routes
+/// are intentionally not mounted by the authenticated hosted router, whose
+/// resource/collection authorization remains authoritative.
+async fn inventory_resource(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<InventoryResourceRequest>,
+) -> ApiResult {
+    let file = core_call(&state, move |core| {
+        core.read_inventory_resource(request.root, request.directory, request.path, None)
+    })
+    .await?;
+    let descriptor = crate::work::spawn_blocking(move || {
+        let (metadata, content_type) = inspect_media(&file.bytes);
+        let id = file.revision.rsplit(':').next().unwrap_or_default();
+        json!({
+            "resourceId":id,
+            "resource":format!("weftext-inventory-resource://{id}"),
+            "name":std::path::Path::new(&file.path).file_name().unwrap_or_default().to_string_lossy(),
+            "revision":file.revision,"bytes":file.bytes.len(),
+            "contentType":content_type,"metadata":metadata,
+            "annotationReady":false,"currentness":"observed",
+        })
+    }).await.map_err(|_| ApiError::internal(UiMessage::error_api_media_metadata_read_incomplete()))?;
+    Ok(Json(descriptor))
+}
+async fn inventory_resource_read(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<InventoryResourceReadRequest>,
+) -> Result<Response, ApiError> {
+    let file = core_call(&state, move |core| {
+        core.read_inventory_resource(
+            request.root,
+            request.directory,
+            request.path,
+            Some(&request.revision),
+        )
+    })
+    .await?;
+    let (bytes, content_type) = crate::work::spawn_blocking(move || {
+        let (_, content_type) = inspect_media(&file.bytes);
+        (file.bytes, content_type)
+    })
+    .await
+    .map_err(|_| ApiError::internal(UiMessage::error_api_media_metadata_read_incomplete()))?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, content_type),
+            (header::CONTENT_DISPOSITION, "inline".into()),
+        ],
+        Body::from(bytes),
+    )
+        .into_response())
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -84,7 +160,9 @@ pub(crate) async fn resource_set(
     .await?;
     analyze_resources(managed).await
 }
-async fn analyze_resources(managed: Vec<ManagedResource>) -> Result<ResourceSet, ApiError> {
+pub(crate) async fn analyze_resources(
+    managed: Vec<ManagedResource>,
+) -> Result<ResourceSet, ApiError> {
     crate::work::spawn_blocking(move || {
         let mut resources = Vec::new();
         let mut warnings = Vec::new();
@@ -1365,6 +1443,96 @@ fn mp4_metadata(bytes: &[u8]) -> Result<ResourceMetadata, ErrorDescription> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn inventory_resource_preview_uses_exact_ordinary_bytes_without_editor_session() {
+        use std::sync::{Arc, Mutex};
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("ordinary");
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("preview.png");
+        let mut image = Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(3, 2)
+            .write_to(&mut image, image::ImageFormat::Png)
+            .unwrap();
+        let bytes = image.into_inner();
+        std::fs::write(&path, &bytes).unwrap();
+        let state = AppState {
+            core: Arc::new(Mutex::new(Core::new(temp.path().join("private")).unwrap())),
+            token: Arc::from("test-token"),
+            port: 0,
+            locations: Default::default(),
+            renders: Default::default(),
+            editor_versions: Default::default(),
+            exports: Arc::new(Mutex::new(crate::export_api::ExportStore::default())),
+            native_status: Default::default(),
+            render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
+            sync_remote: Arc::new(Mutex::new(crate::remote_sync::Store::default())),
+            initial: None,
+        };
+        let root_text = root.to_string_lossy().into_owned();
+        let path_text = path.to_string_lossy().into_owned();
+        let descriptor = inventory_resource(
+            State(state.clone()),
+            crate::RequestJson(InventoryResourceRequest {
+                root: root_text.clone(),
+                directory: root_text.clone(),
+                path: path_text.clone(),
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert!(
+            descriptor["resource"]
+                .as_str()
+                .unwrap()
+                .starts_with("weftext-inventory-resource://")
+        );
+        assert!(
+            descriptor.get("nodeId").is_none(),
+            "ordinary browsing cannot invent an admitted node owner"
+        );
+        assert_eq!(descriptor["annotationReady"], false);
+        assert_eq!(descriptor["currentness"], "observed");
+        assert_eq!(
+            descriptor["metadata"],
+            json!({"kind":"image","width":3,"height":2})
+        );
+        let revision = descriptor["revision"].as_str().unwrap().to_string();
+        let response = inventory_resource_read(
+            State(state.clone()),
+            crate::RequestJson(InventoryResourceReadRequest {
+                root: root_text.clone(),
+                directory: root_text.clone(),
+                path: path_text.clone(),
+                revision: revision.clone(),
+            }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "image/png");
+        let delivered = axum::body::to_bytes(response.into_body(), 64 * 1024 * 1024)
+            .await
+            .unwrap();
+        assert_eq!(delivered.as_ref(), bytes.as_slice());
+        assert!(state.locations.lock().unwrap().is_empty());
+        assert_eq!(std::fs::read(&path).unwrap(), bytes);
+        std::fs::rename(&path, root.join("retained-original.png")).unwrap();
+        std::fs::write(&path, &bytes).unwrap();
+        let error = inventory_resource_read(
+            State(state),
+            crate::RequestJson(InventoryResourceReadRequest {
+                root: root_text.clone(),
+                directory: root_text,
+                path: path_text,
+                revision,
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code, "resourceVersion");
+    }
     #[test]
     fn unsupported_media_keeps_product_validation_and_real_parser_diagnostics_separate() {
         let (metadata, content_type) = inspect_media(b"%PDF-invalid-owned-test");

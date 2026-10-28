@@ -29,6 +29,15 @@ pub struct InventoryEntry {
     pub excerpt: Option<String>,
     pub source: Option<String>,
 }
+/// An explicitly selected ordinary inventory file. This read-only observation
+/// is not an admitted resource identity or an author/write basis.
+#[derive(Debug)]
+pub struct InventoryResource {
+    pub path: String,
+    pub bytes: Vec<u8>,
+    pub revision: String,
+}
+
 #[derive(Default)]
 struct Rules {
     ignored: HashSet<PathBuf>,
@@ -36,6 +45,102 @@ struct Rules {
     warnings: Vec<CoreDescription>,
 }
 impl Core {
+    /// Read only an immediate ordinary file that current discovery rules expose
+    /// in the selected folder. Hosted callers must use their independently
+    /// authorized resource APIs; directory discovery never grants actor access.
+    pub fn read_inventory_resource(
+        &self,
+        root: impl AsRef<Path>,
+        directory: impl AsRef<Path>,
+        path: impl AsRef<Path>,
+        expected_revision: Option<&str>,
+    ) -> Result<InventoryResource> {
+        let unavailable = || {
+            CoreError::new(
+                "resourceUnavailable",
+                UiMessage::inventory_resource_not_listed(),
+            )
+        };
+        if self.actor.is_some() {
+            return Err(unavailable());
+        }
+        let root = absolute_path(root.as_ref())?;
+        let directory = absolute_path(directory.as_ref())?;
+        let path = absolute_path(path.as_ref())?;
+        if !directory.starts_with(&root)
+            || path.parent() != Some(directory.as_path())
+            || path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("typ"))
+        {
+            return Err(unavailable());
+        }
+        let root_guard = ParentGuard::acquire(
+            &self.backend,
+            &root.join(".weftext-inventory-resource-root"),
+        )?;
+        let root_identity = root_guard.directory_identity()?;
+        // Qualify the selected root as discovery does, without rescanning every
+        // author note and journal admission for each visible thumbnail.
+        let _ = self.workspace(&root)?;
+        let rules = read_rules(&self.backend, &root)?;
+        let relative = path.strip_prefix(&root).map_err(|_| unavailable())?;
+        if !rules.warnings.is_empty() || internal(relative) || excluded(relative, &rules.ignored) {
+            return Err(unavailable());
+        }
+        self.check_pending(&path)?;
+        let guard = ParentGuard::acquire(&self.backend, &path)?;
+        let parent_identity = guard.directory_identity()?;
+        // Discovery's same bounded entry metadata predicate applies to this
+        // direct folder only. A partial enumeration cannot admit an unseen leaf.
+        let (children, _) = guard.directory_entries(MAX_ENTRIES)?;
+        if !children.iter().any(|(name, metadata)| {
+            path.file_name() == Some(name.as_os_str()) && metadata.is_file()
+        }) {
+            return Err(unavailable());
+        }
+        let mut file = guard.open_read_guard_file()?;
+        let before = stamp(&file)?;
+        self.check_pending_identity(&before.identity)?;
+        let bytes = operations::read_blob(&mut file)?;
+        if stamp(&file)? != before
+            || guard.directory_identity()? != parent_identity
+            || root_guard.directory_identity()? != root_identity
+        {
+            return Err(CoreError::new(
+                "resourceChanged",
+                UiMessage::inventory_resource_read_changed(),
+            ));
+        }
+        // A discovery-rule edit can revoke this browsing membership while the
+        // byte read runs. Recheck it before publishing even though no writer
+        // capability or hosted permission is involved.
+        let final_rules = read_rules(&self.backend, &root)?;
+        if !final_rules.warnings.is_empty() || excluded(relative, &final_rules.ignored) {
+            return Err(unavailable());
+        }
+        let basis = serde_json::to_vec(&(
+            display(&root),
+            display(&directory),
+            display(&path),
+            root_identity,
+            parent_identity,
+            before,
+            hash(&bytes),
+        ))?;
+        let revision = format!("observed-inventory-resource:v1:{}", hash(&basis));
+        if expected_revision.is_some_and(|expected| expected != revision) {
+            return Err(CoreError::new(
+                "resourceVersion",
+                UiMessage::inventory_resource_version_changed(),
+            ));
+        }
+        Ok(InventoryResource {
+            path: display(&path),
+            bytes,
+            revision,
+        })
+    }
     pub fn inventory(&self, root: impl AsRef<Path>) -> Result<Inventory> {
         let root = absolute_path(root.as_ref())?;
         // Qualify and retain the root ancestor closure while browsing; descendants
@@ -497,5 +602,143 @@ mod rules_namespace_tests {
             assert_eq!(distinct.ignored.len(), 3);
             assert!(distinct.ignored.contains(Path::new("A\\child.typ")));
         }
+    }
+}
+
+#[cfg(all(test, windows))]
+mod resource_tests {
+    use super::*;
+
+    #[test]
+    fn inventory_resource_reads_ordinary_files_without_sessions_or_admission() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("ordinary");
+        fs::create_dir(&root).unwrap();
+        let path = root.join("original.txt");
+        fs::write(&path, b"untouched ordinary file").unwrap();
+        let core = Core::new(temp.path().join("private")).unwrap();
+        let first = core
+            .read_inventory_resource(&root, &root, &path, None)
+            .unwrap();
+        let second = core
+            .read_inventory_resource(&root, &root, &path, Some(&first.revision))
+            .unwrap();
+        assert_eq!(first.bytes, b"untouched ordinary file");
+        assert_eq!(first.revision, second.revision);
+        assert!(
+            first
+                .revision
+                .starts_with("observed-inventory-resource:v1:")
+        );
+        assert!(core.sessions.is_empty());
+        assert!(
+            core.snapshots.is_empty(),
+            "browsing must not accumulate writer bases"
+        );
+        assert!(!root.join(".weftext-format").exists());
+        assert_eq!(fs::read(path).unwrap(), first.bytes);
+    }
+
+    #[test]
+    fn inventory_resource_requires_visible_immediate_non_author_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("ordinary");
+        fs::create_dir(&root).unwrap();
+        for name in ["Hidden", "Visible", ".weftext-private"] {
+            fs::create_dir(root.join(name)).unwrap();
+            fs::write(root.join(name).join("asset.txt"), b"original").unwrap();
+        }
+        fs::write(root.join("Note.typ"), b"= Author content").unwrap();
+        fs::write(temp.path().join("outside.txt"), b"outside").unwrap();
+        fs::write(
+            root.join(".weftext-rules"),
+            br#"{"version":1,"ignored":["Hidden"],"unmanaged":["Visible"]}"#,
+        )
+        .unwrap();
+        let mut core = Core::new(temp.path().join("private")).unwrap();
+        let visible = root.join("Visible");
+        assert_eq!(
+            core.read_inventory_resource(&root, &visible, visible.join("asset.txt"), None)
+                .unwrap()
+                .bytes,
+            b"original"
+        );
+        for (directory, path) in [
+            (root.clone(), visible.join("asset.txt")),
+            (root.join("Hidden"), root.join("Hidden/asset.txt")),
+            (
+                root.join(".weftext-private"),
+                root.join(".weftext-private/asset.txt"),
+            ),
+            (root.clone(), root.join("Note.typ")),
+            (root.clone(), root.join("Visible")),
+            (root.clone(), root.join("missing.txt")),
+            (temp.path().to_path_buf(), temp.path().join("outside.txt")),
+        ] {
+            assert!(
+                core.read_inventory_resource(&root, directory, path, None)
+                    .is_err()
+            );
+        }
+        let actor_read = core.with_actor("authenticated-test-actor", |core| {
+            core.read_inventory_resource(&root, &visible, visible.join("asset.txt"), None)
+        });
+        assert_eq!(actor_read.unwrap_err().code, "resourceUnavailable");
+        fs::write(root.join(".weftext-rules"), br#"{"version":99}"#).unwrap();
+        assert!(
+            core.read_inventory_resource(&root, &visible, visible.join("asset.txt"), None)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn inventory_resource_rejects_changed_bytes_replacements_and_hard_links() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("ordinary");
+        let folder = root.join("Folder");
+        fs::create_dir_all(&folder).unwrap();
+        let path = folder.join("asset.txt");
+        fs::write(&path, b"original").unwrap();
+        let core = Core::new(temp.path().join("private")).unwrap();
+        let first = core
+            .read_inventory_resource(&root, &folder, &path, None)
+            .unwrap();
+        fs::write(&path, b"changed").unwrap();
+        assert_eq!(
+            core.read_inventory_resource(&root, &folder, &path, Some(&first.revision))
+                .unwrap_err()
+                .code,
+            "resourceVersion"
+        );
+        let changed = core
+            .read_inventory_resource(&root, &folder, &path, None)
+            .unwrap();
+        fs::rename(&path, folder.join("retained-original.txt")).unwrap();
+        fs::write(&path, &changed.bytes).unwrap();
+        assert_eq!(
+            core.read_inventory_resource(&root, &folder, &path, Some(&changed.revision))
+                .unwrap_err()
+                .code,
+            "resourceVersion"
+        );
+        let replaced = core
+            .read_inventory_resource(&root, &folder, &path, None)
+            .unwrap();
+        fs::rename(&folder, root.join("RetainedFolder")).unwrap();
+        fs::create_dir(&folder).unwrap();
+        fs::write(&path, &replaced.bytes).unwrap();
+        assert_eq!(
+            core.read_inventory_resource(&root, &folder, &path, Some(&replaced.revision))
+                .unwrap_err()
+                .code,
+            "resourceVersion"
+        );
+        fs::hard_link(&path, folder.join("alias.txt")).unwrap();
+        assert_eq!(
+            core.read_inventory_resource(&root, &folder, &path, None)
+                .unwrap_err()
+                .code,
+            "hardLink"
+        );
     }
 }

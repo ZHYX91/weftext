@@ -27,3 +27,56 @@ where
     .await
     .map_err(std::io::Error::other)?
 }
+
+#[cfg(test)]
+mod tests {
+    const CHILD: &str = "WEFTEXT_TEST_WINRT_FACTORY_LIFETIME";
+
+    #[test]
+    fn cached_package_factory_survives_idle_mta_workers() {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "native::winrt::tests::package_factory_child",
+                "--nocapture",
+            ])
+            .env(CHILD, "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "WinRT factory child failed: {:?}\n{}\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+    }
+
+    #[test]
+    fn package_factory_child() {
+        if std::env::var_os(CHILD).is_none() {
+            return;
+        }
+        // A child process owns the factory cache and its final COM teardown.
+        // No package is required: even the expected unpackaged error invokes
+        // IPackageStatics::Current, whose cached pointer crashed the real host.
+        let _process = crate::launch::ProcessWinRt::enter().unwrap();
+        let mut original = None;
+        for _ in 0..4 {
+            let observed = std::thread::spawn(|| {
+                let _apartment = super::Apartment::enter().unwrap();
+                windows::ApplicationModel::Package::Current()
+                    .and_then(|package| package.Id()?.FullName())
+                    .map(|name| name.to_string())
+                    .map_err(|error| error.code().0)
+            })
+            .join()
+            .unwrap();
+            if let Some(expected) = &original {
+                assert_eq!(&observed, expected);
+            } else {
+                original = Some(observed);
+            }
+        }
+    }
+}

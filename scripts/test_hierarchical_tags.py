@@ -2,8 +2,8 @@
 
 Run against an explicitly built executable. Fixtures, original uploads and
 per-request timings are retained in fresh directories; no existing library or
-private journal is rewritten. --artifacts-dir selects the current workspace's
-temporary parent; the portable default stays inside this repository's target.
+private journal is rewritten. --artifacts-dir selects an explicit owned parent;
+the default uses independent temporary directories, including from frozen sources.
 """
 from _creation_result import created_document
 import argparse
@@ -349,20 +349,26 @@ class HierarchicalTags(unittest.TestCase):
         self.assertEqual(len(self.registry()['tags']), 5000)
 
 
-if __name__ == '__main__':
+def main(argv=None):
+    global ARTIFACTS
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('executable', type=Path)
     parser.add_argument('tests', nargs='*', help='Optional exact test method names')
     parser.add_argument('--artifacts-dir', type=Path,
-        default=Path(__file__).resolve().parents[1] / 'target/test-fixtures/hierarchical-tags')
-    arguments = parser.parse_args()
+        help='Explicit owned evidence parent; default is the system temporary directory')
+    arguments = parser.parse_args(argv)
     names = unittest.defaultTestLoader.getTestCaseNames(HierarchicalTags)
     if set(arguments.tests) - set(names):
         parser.error('Unknown exact tests: ' + ', '.join(sorted(set(arguments.tests) - set(names))))
-    ARTIFACTS = arguments.artifacts_dir.resolve()
-    ARTIFACTS.mkdir(parents=True, exist_ok=True)
+    ARTIFACTS = arguments.artifacts_dir.resolve() if arguments.artifacts_dir else None
+    if ARTIFACTS is not None:
+        ARTIFACTS.mkdir(parents=True, exist_ok=True)
     test_hosted.EXE = arguments.executable.resolve(strict=True)
     print('Candidate:', test_hosted.EXE, hashlib.sha256(test_hosted.EXE.read_bytes()).hexdigest(), flush=True)
     suite = unittest.TestSuite(HierarchicalTags(name) for name in (arguments.tests or names))
     result = unittest.TextTestRunner(verbosity=2).run(suite)
-    raise SystemExit(not result.wasSuccessful())
+    return 0 if result.wasSuccessful() else 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

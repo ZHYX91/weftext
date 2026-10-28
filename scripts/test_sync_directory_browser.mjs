@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // An ordinary Directory moves through real public producers, then the real
@@ -90,7 +91,7 @@ try {
   page.on('pageerror', error => result.pageErrors.push(String(error)));
   page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/')) calls.push({ route: new URL(request.url()).pathname, body: request.postData() ? request.postDataJSON() : null }); });
   await page.goto(`${b.base}/#token=${b.token}`);
-  await page.getByRole('button', { name: '源码', exact: true }).click();
+  await workspaceMode(page, '源码');
   const editor = page.locator('.cm-content[contenteditable=true]'); await editor.waitFor();
   assert.equal(await sourceText(editor), savedSource);
   const draft = savedSource + '\n目录移动时必须保留的未保存稿 🌿';
@@ -102,7 +103,7 @@ try {
   assert.equal(produced.plan.kind, 'relocateDirectory');
   const exchange = path.join(out, 'moved');
   await api(a, '/api/sync/export', { root: ra, directory: exchange, objects });
-  await page.getByRole('button', { name: '同步', exact: true }).click();
+  await workspaceCommand(page, 'knowledge', '同步');
   const panel = page.getByRole('dialog', { name: '资料库同步' }); await panel.waitFor();
   await panel.getByRole('status').filter({ hasText: /^操作已完成。$/ }).waitFor();
   await panel.getByLabel('交换目录路径（新目录或已配对目录）', { exact: true }).fill(exchange);

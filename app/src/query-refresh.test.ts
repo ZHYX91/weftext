@@ -19,7 +19,7 @@ function panelHarness(request: (path: string, body: unknown) => Promise<unknown>
     host: { request, notify() {} }, renderControls() {}, renderResults() {}, renderNavigation() {}, loadPreferences() {},
     refreshQueue: undefined as QueryRefreshQueue<unknown> | undefined };
   Object.setPrototypeOf(state, QueryPanel.prototype);
-  const panel = state as unknown as QueryPanel, internals = state as unknown as { executeRefresh(input: unknown, current: () => boolean): Promise<void>; savePreferences(bindFields: boolean): void; saveDefinition(label: string): Promise<void>; runSaved(selection: { owner: string; key: string; label: string; mode: "current" | "pinned"; revision?: string }): Promise<void> };
+  const panel = state as unknown as QueryPanel, internals = state as unknown as { executeRefresh(input: unknown, current: () => boolean): Promise<void>; savePreferences(bindFields: boolean): void; saveDefinition(label: string): Promise<void>; tagRegistryChanged(): void; runSaved(selection: { owner: string; key: string; label: string; mode: "current" | "pinned"; revision?: string }): Promise<void> };
   state.refreshQueue = new QueryRefreshQueue((input, current) => internals.executeRefresh(input, current));
   return { state, panel, internals };
 }
@@ -126,6 +126,20 @@ test("the actual panel rebases only its latest frozen pending parameters after a
   assert.equal(state.result?.cutId, "cut-2"); assert.ok(installed.every(cut => cut === "cut-2")); assert.equal(state.loading, false);
 });
 
+for (const globalOwner of [true, false]) test(`tag registry mutations invalidate ${globalOwner ? "through the shared library owner" : "the standalone Query owner"} exactly once`, () => {
+  const { state, panel, internals } = panelHarness(async () => { throw new Error("invalidation must not start an idle read"); });
+  const forwarded: string[] = [];
+  if (globalOwner) Object.assign(state.host, { environmentChanged: (root: string) => { forwarded.push(root); panel.environmentChanged(root); } });
+  state.result = result("before-tag-rename");
+  internals.tagRegistryChanged();
+  assert.deepEqual(forwarded, globalOwner ? ["D:/notes"] : []);
+  assert.equal(state.environmentEpoch, 1, "the shared callback must not be followed by a second local invalidation");
+  assert.equal(state.result?.superseded, true);
+  state.root = "";
+  internals.tagRegistryChanged();
+  assert.equal(state.environmentEpoch, 1, "a departed library cannot produce another registry notification");
+});
+
 test("saved current and pinned reads use the same panel scheduler, while a different pinned revision remains a new intent", async () => {
   const held = deferred(), sent = deferred(), selections: unknown[] = []; let runs = 0;
   const { state, internals } = panelHarness(async (path, body) => {
@@ -160,6 +174,56 @@ test("a saved definition keeps its frozen original through ordinary errors and d
   await internals.saveDefinition("Changed display input");
   assert.equal(delivered, 2); assert.deepEqual((state.savedPending as { body: unknown }).body, original);
   assert.deepEqual(calls.map(call => call.path), ["/api/query/definition/save", "/api/operations/status", "/api/operations/status"]);
+});
+
+for (const globalOwner of [true, false]) test(`a reconciled committed definition with unavailable delivery invalidates ${globalOwner ? "the shared library" : "the standalone Query"} and retains its exact original`, async () => {
+  const calls: { path: string; body: { operationId: string } }[] = [], forwarded: string[] = [], delivered: unknown[] = [];
+  const { state, panel, internals } = panelHarness(async (path, body) => {
+    calls.push({ path, body: structuredClone(body) as { operationId: string } });
+    if (path === "/api/query/definition/save") throw new Error("response lost after commit");
+    assert.equal(path, "/api/operations/status");
+    return { operationId: (body as { operationId: string }).operationId, status: "committed" };
+  });
+  const basis = { root: "D:/notes", nodeId: "owner", sessionId: "original-session", source: "same draft", serial: 7, inputRevision: 3, baseId: "original-base", path: "D:/notes/A.typ" };
+  Object.assign(state.host, { getDocument: () => basis, savedDefinition: async (_receipt: unknown, originalBasis: unknown) => {
+    delivered.push(originalBasis);
+    throw Object.assign(new Error("committed document cannot be read back"), { code: "committedResultUnavailable" });
+  } });
+  if (globalOwner) Object.assign(state.host, { environmentChanged: (root: string) => { forwarded.push(root); panel.environmentChanged(root); } });
+  state.result = result("before-definition-save");
+  await internals.saveDefinition("Saved");
+  assert.ok(state.savedPending);
+  const original = structuredClone((state.savedPending as { body: unknown }).body);
+  assert.equal(state.environmentEpoch, 1);
+  assert.equal(state.result?.superseded, true);
+  assert.deepEqual(forwarded, globalOwner ? [basis.root] : []);
+  await internals.saveDefinition("Changed-display-input");
+  assert.deepEqual((state.savedPending as { body: unknown }).body, original);
+  assert.deepEqual(delivered, [basis, basis]);
+  assert.equal(state.environmentEpoch, 2, "each actual unavailable committed readback produces one invalidation");
+  assert.deepEqual(forwarded, globalOwner ? [basis.root, basis.root] : []);
+  assert.deepEqual(calls.map(call => call.path), ["/api/query/definition/save", "/api/operations/status", "/api/operations/status"]);
+  assert.ok(calls.every(call => call.body.operationId === calls[0].body.operationId), "readback retries only the original operation");
+});
+
+test("a definition save proven ended without a commit clears its original without invalidating the library", async () => {
+  const forwarded: string[] = [], paths: string[] = [];
+  const { state, internals } = panelHarness(async (path, body) => {
+    paths.push(path);
+    if (path === "/api/query/definition/save") throw new Error("request refused");
+    assert.equal(path, "/api/operations/status");
+    return { operationId: (body as { operationId: string }).operationId, status: "resolved" };
+  });
+  Object.assign(state.host, {
+    getDocument: () => ({ root: "D:/notes", nodeId: "owner", sessionId: "session", source: "draft", serial: 1, inputRevision: 1, baseId: "base", path: "D:/notes/A.typ" }),
+    savedDefinition: async () => { assert.fail("a resolved original has no committed fact to deliver"); },
+    environmentChanged: (root: string) => { forwarded.push(root); },
+  });
+  await internals.saveDefinition("Saved");
+  assert.equal(state.savedPending, null);
+  assert.equal(state.environmentEpoch, 0);
+  assert.deepEqual(forwarded, []);
+  assert.deepEqual(paths, ["/api/query/definition/save", "/api/operations/status"]);
 });
 
 test("definition save cannot switch owners while its initiating draft is being settled", async () => {

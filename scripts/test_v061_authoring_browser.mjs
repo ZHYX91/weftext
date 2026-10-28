@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Owned-library browser acceptance of the embedded native authoring controls.
@@ -96,18 +97,18 @@ try {
   browser = await chromium.launch({ headless: true, ...(process.env.WEFTEXT_BROWSER_EXECUTABLE ? { executablePath: process.env.WEFTEXT_BROWSER_EXECUTABLE } : { channel: 'chrome' }) }); result.browser = browser.version();
   page = await browser.newPage({ viewport: { width: 1480, height: 1080 } }); page.setDefaultTimeout(40000); page.on('pageerror', error => result.pageErrors.push(String(error))); page.on('dialog', dialog => dialog.dismiss());
   result.httpErrors = []; page.on('response', async reply => { if (reply.url().includes('/api/') && reply.status() >= 400) result.httpErrors.push({ url: reply.url(), status: reply.status(), body: await reply.text().catch(() => null) }); });
-  await page.goto(base + '/#token=' + token); await click('源码'); await content().waitFor(); await waitSource(initial); await end();
-  await click('LaTeX 公式'); let dialog = page.locator('dialog.latex-insertion'); const input = dialog.getByLabel('原始 LaTeX（转换或取消均保留）', { exact: true });
+  await page.goto(base + '/#token=' + token); await workspaceMode(page, '源码'); await content().waitFor(); await waitSource(initial); await end();
+  await workspaceCommand(page, 'insert', 'LaTeX 公式'); let dialog = page.locator('dialog.latex-insertion'); const input = dialog.getByLabel('原始 LaTeX（转换或取消均保留）', { exact: true });
   await input.fill(String.raw`\frac{x^2}{\sqrt{y}}+\alpha`); await click('转换并预览', dialog); await dialog.getByRole('button', { name: '确认插入原生公式', exact: true }).waitFor();
   await page.waitForFunction(() => !document.querySelector('dialog.latex-insertion button.primary').disabled);
   const converted = await dialog.locator('.output-source').innerText(); assert.ok(converted.includes('sqrt')); assert.equal(await source(), initial); assert.ok(await dialog.getByLabel('插入后的完整原生文档预览', { exact: true }).isVisible());
   await click('确认插入原生公式', dialog); await waitSource(initial + converted); await click('关闭', dialog); await undoRedo(initial, initial + converted); await content().press('ControlOrMeta+z'); await waitSource(initial);
   await passed('LaTeX toolbar conversion renders a full native preview before confirmation; exact native formula enters one Draft Undo/Redo without saving.');
-  await end(); await click('LaTeX 公式'); dialog = page.locator('dialog.latex-insertion[open]'); await dialog.getByLabel('原始 LaTeX（转换或取消均保留）', { exact: true }).fill(String.raw`\unknown{a}`); await click('转换并预览', dialog); await dialog.getByRole('status').filter({ hasText: /不支持|未知/ }).waitFor(); assert.equal(await dialog.getByRole('button', { name: '确认插入原生公式', exact: true }).isEnabled(), false);
+  await end(); await workspaceCommand(page, 'insert', 'LaTeX 公式'); dialog = page.locator('dialog.latex-insertion[open]'); await dialog.getByLabel('原始 LaTeX（转换或取消均保留）', { exact: true }).fill(String.raw`\unknown{a}`); await click('转换并预览', dialog); await dialog.getByRole('status').filter({ hasText: /不支持|未知/ }).waitFor(); assert.equal(await dialog.getByRole('button', { name: '确认插入原生公式', exact: true }).isEnabled(), false);
   await click('取消本次插入', dialog); assert.equal(await dialog.getByLabel('原始 LaTeX（转换或取消均保留）', { exact: true }).inputValue(), String.raw`\unknown{a}`); assert.equal(await source(), initial); await click('关闭', dialog);
-  await click('LaTeX 公式'); dialog = page.locator('dialog.latex-insertion[open]'); assert.equal(await dialog.getByLabel('原始 LaTeX（转换或取消均保留）', { exact: true }).inputValue(), String.raw`\unknown{a}`); await click('关闭', dialog);
+  await workspaceCommand(page, 'insert', 'LaTeX 公式'); dialog = page.locator('dialog.latex-insertion[open]'); assert.equal(await dialog.getByLabel('原始 LaTeX（转换或取消均保留）', { exact: true }).inputValue(), String.raw`\unknown{a}`); await click('关闭', dialog);
   await passed('Unsupported LaTeX cannot confirm; cancel and reopen retain the exact original input and leave the Draft unchanged.');
-  await click('链接与批注'); await refreshCitations(); await end();
+  await workspaceCommand(page, 'knowledge', '链接与批注'); await refreshCitations(); await end();
   await page.getByLabel('插入引用类型', { exact: true }).selectOption('link'); const target = page.getByLabel('笔记或文献目标', { exact: true });
   const paperOption = target.locator('option').filter({ hasText: /Paper/ }); assert.equal(await paperOption.count(), 1); const paperRef = await paperOption.getAttribute('value'); await target.selectOption(paperRef); await page.getByLabel('自定义显示文字（空值使用当前标题）', { exact: true }).fill('自定😀文献链接');
   await apply('插入普通笔记链接', initial, false); assert.equal(await page.getByLabel('自定义显示文字（空值使用当前标题）', { exact: true }).inputValue(), '自定😀文献链接');
@@ -126,8 +127,8 @@ try {
   await page.getByLabel('关系分类', { exact: true }).selectOption('links'); await inspector().getByRole('button', { name: 'Paper', exact: true }).first().waitFor(); assert.equal(await inspector().getByText('本次原生文内引用', { exact: true }).count(), 0);
   await page.getByLabel('关系分类', { exact: true }).selectOption('citations'); await page.getByLabel('将 browserRenamed 改名为', { exact: true }).waitFor(); assert.equal(await inspector().getByRole('button', { name: '定位源码：browserRenamed', exact: true }).count(), 1); assert.equal(await source(), current);
   await passed('Relationship classification distinguishes native document references, ordinary note links and the actual publication-backed authored citation.');
-  await click('阅读'); await page.getByRole('tab', { name: '插入引用', exact: true }).click(); await page.getByLabel('插入引用类型', { exact: true }).selectOption('citation'); assert.equal(await inspector().getByRole('button', { name: '插入正式文献引用', exact: true }).isEnabled(), false); assert.equal(await inspector().getByRole('button', { name: '预览完整改键范围', exact: true }).isEnabled(), false); assert.equal(await page.locator('.source-host').count(), 0);
-  await click('源码'); await waitSource(current); assert.equal(await readOwnedOriginal(doc.path), initial); assert.equal(await readOwnedOriginal(work.path), workSource);
+  await workspaceMode(page, '阅读'); await page.getByRole('tab', { name: '插入引用', exact: true }).click(); await page.getByLabel('插入引用类型', { exact: true }).selectOption('citation'); assert.equal(await inspector().getByRole('button', { name: '插入正式文献引用', exact: true }).isEnabled(), false); assert.equal(await inspector().getByRole('button', { name: '预览完整改键范围', exact: true }).isEnabled(), false); assert.equal(await page.locator('.source-host').count(), 0);
+  await workspaceMode(page, '源码'); await waitSource(current); assert.equal(await readOwnedOriginal(doc.path), initial); assert.equal(await readOwnedOriginal(work.path), workSource);
   await passed('Read view disables citation mutations and hides the source editor; all authoring tasks preserve both saved originals.');
   await page.screenshot({ path: path.join(out, 'authoring-complete.png'), fullPage: true }); assert.deepEqual(result.pageErrors, []); result.completed = true;
 } catch (error) {

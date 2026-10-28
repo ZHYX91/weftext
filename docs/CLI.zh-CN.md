@@ -18,6 +18,8 @@ translation_status: synced
 
 按需启动的无界面所有者保持运行，让独立的读取、外部编辑、保存命令保留同一真实会话；它不显示托盘或运行桌面提醒调度。`capabilities --output owner.json` 的结果包含经 OS 核对的 `ownerIdentity`。需要结束此所有者时，使用同一 `--data-dir PATH owner-stop --owner-identity owner.json`；它只连接已存在的准确进程，排空已接受任务并等待原进程退出，不启动新所有者或按名称结束进程。所有者重启后旧 basis 会话失效，CLI 明确拒绝，不自动重开替代。
 
+桌面提醒状态沿同一 Core 的原投递记录读取；`submittedToSystem.at` 表示账本确认时间，不是准确 OS 调用时刻。可用的 `submissionObservation` 另保实际调用开始／返回 UTC、十进制字符串纳秒耗时及调用返回结果；缺失明确为 null，系统历史确认不补造调用观察。这不增加 CLI 提醒发送命令或允许无界面所有者调度通知。
+
 `--data-dir PATH owner-status` 只查询现存所有者身份，不启动 Core 或调用作者 API；它可辨本地／托管角色。其 JSON 同样可作为 owner-stop 的准确身份输入。
 
 身份查询输出 `{"schemaVersion":1,"call":"ownerStatus","ownerIdentity":{...}}`。严格身份字段为 `pid`、`created`（Windows 原始 FILETIME，不是 Unix 时间）、`incarnation`、`profileIdentity` 和 `role`（`local` 或 `hosted`）。停止命令接受此信封、capabilities 信封或原始身份对象，输入须为不超过 16 KiB 的 UTF-8 JSON 文件。成功停止输出 `{"schemaVersion":1,"call":"ownerStop","result":{"owner":{...},"exitCode":0}}`，仅在准确的原进程句柄确认退出后返回 0；closing 回执本身不算完成。所有者非零退出返回 3；停止请求已可能接受但结果不确定返回 6，不自动重试。
@@ -39,6 +41,10 @@ Shell 可以自行改变重定向或管道编码。特别是 Windows PowerShell 
 `weftext-cli --data-dir PATH serve` 经共用所有者生命周期运行显式 HTTP 宿主。`serve --port PORT` 选择本地端口（0 表示分配可用端口）；`--open PATH --root PATH` 指定初始本地文档。`serve --server-config FILE` 选择托管 Server 配置，与本地 port/open/root 选项互斥。这些参数只由此子命令持有，`--data-dir` 仍是共用全局选项。启动成功输出一行 Ready JSON：`{"schemaVersion":1,"kind":"ready","url":"...","ownerIdentity":{...}}`，随后持续运行至优雅停止。Ready 只证明启动，结束仍须核对 `owner-stop` 与准确原进程退出。本命令拒绝客户端 `--endpoint`／凭据选项，以及业务 `--output`、`--format human`、`--allow-partial` 选项。
 
 启动失败不输出 Ready；stderr 先输出一行经批准的固定诊断 `{"schemaVersion":1,"diagnostic":{"code":"...","message":"..."}}`，再输出标准错误行并返回 3，不回显配置内容、任意运行时错误字符串或凭据。
+
+本地 origin 启动失败若带有安全的类型化诊断，会在同一 `diagnostic` 对象内增加 `phase`、`ioKind` 和 `osCode`。`phase` 来自固定阶段枚举，`ioKind` 仅表示标准库 `io::ErrorKind` 判别，`osCode` 是可用的数值 OS 错误码，否则为 `null`；这些字段不包含底层错误的 Display、Debug、source 链、路径或凭据。未附此诊断时，原 `code`／`message` 记录保持不变；不会新增第三行，最终标准错误仍保留原 code 和退出码 3。阶段说明失败位置，不证明原操作未产生任何效果；没有这些字段的历史失败不能由后来的诊断补认为已知原因。
+
+本地 origin 目录最多保留 4096 条记录；达到容量时，新增 origin 在绑定候选端口前以 `originCapacity` 拒绝。现存保留 origin 仍按原端口尝试，不因容量或占用改号。新 origin 最多选择 `N + 1` 个候选，其中 `N` 是目录中已保留的端口数；与保留端口冲突的 listener 持有到本次选择结束再释放。这不保证 OS 资源可用；任何绑定或取地址错误都会立即结束选择，并保留对应阶段、原 `ioKind` 和可用的 `osCode`。
 
 以下示例中的 `C:\Notes` 是作者库，当前目录是外部工作目录，输出路径尚不存在。
 

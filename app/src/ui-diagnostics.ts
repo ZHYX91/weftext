@@ -236,6 +236,12 @@ export function coreDescriptionUiText(value: CoreDescription): UiText {
     const primary = descriptionUiText(description);
     return () => uiTextValue(primary) + (description.details ? coreDetailsText(description.details) : "");
 }
+/** Render a Core error without promoting preserved author source into display text. */
+export function coreErrorUiText(value: CoreError): UiText {
+    const error = decodeCoreError(value);
+    if (!error) throw new UiError(message("error.invalidResponse"));
+    return coreDescriptionUiText({ explanation: error.explanation, diagnostics: error.diagnostics, causes: error.causes, ...(error.details ? { details: error.details } : {}) });
+}
 export function coreDetailsText(details: CoreErrorDetails): string {
     return details.groups.map(group => group.kind === "semanticEvidence" ? `\n[semanticEvidence]\n${JSON.stringify(group.gaps, null, 2)}` : `${group.kind === "data" ? `\n[${group.classification}]` : group.code ? `\n[${group.code}]` : ""}${group.diagnostics.map(description => `\n${uiTextValue(descriptionUiText(description))}`).join("")}`).join("");
 }

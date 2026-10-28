@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { DataPanel, QuickCapture, type DocumentBasis, type PanelHost } from "./data-panel";
-import { emptyReferences, loadFormReferences, loadTagFormReferences } from "./native-value-form";
+import { emptyReferences, loadFormReferences, loadTagFormReferences, type DataSchema } from "./native-value-form";
 import { ReminderDeviceControl } from "./reminder-device-control";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { message, uiTextValue } from "./ui-locale";
@@ -66,6 +67,27 @@ function dataOwner() {
         element: { querySelectorAll() { throw new Error("Close proof must not scan DOM"); } },
     }) as DataPanel;
     return { owner, guard, reminder, drafts, draftCache, typeDrafts, schemaDrafts };
+}
+const sourceDigest = (source: string): string => createHash("sha256").update(source, "utf8").digest("hex");
+function schemaRead() {
+    const schema: DataSchema = { fields: [{ id: "field", key: "amount", shape: { kind: "scalar", semantic: "int" }, nullable: false }], definitions: {}, aliases: {}, types: [] };
+    return { schema, source: JSON.stringify(schema), revision: "schema-revision", roleRef: "schema-role", builtinDefault: false, canInstall: true, semanticDigest: sourceDigest("resolved schema") };
+}
+function projectionResponse(document: DocumentBasis, schema = schemaRead()) {
+    return { serial: document.serial, sourceHash: sourceDigest(document.source), schemaRevision: schema.revision, schemaHash: sourceDigest(schema.source), readOnly: false,
+        projection: { qualification: "qualified", id: null, types: [], resolvedTypes: [], unknownFields: [], diagnostics: [], budgetExhausted: false,
+            fields: [{ fieldId: "field", key: "amount", cell: { state: "value", value: { kind: "int", value: "0" } }, sourceRange: null, raw: null, writable: true, required: false, unbound: [] }] } };
+}
+function refreshOwner(context: { after(callback: () => void): void }, request: (route: string, body?: unknown) => Promise<unknown>) {
+    const dom = testDom(context), element = dom.create("aside"), { owner, drafts } = dataOwner();
+    const state = { current: { ...basis } }, rendered: unknown[] = [];
+    const raw = { ...field(), rawInputs: { integer: "-" } }; drafts.set("amount", raw);
+    element.textContent = "retained form controls";
+    const host = { getDocument: () => state.current, request, notify() {} } as unknown as PanelHost;
+    Object.assign(owner, { host, element, reminderDevice: new ReminderDeviceControl(host), basis: { ...basis }, generation: 0,
+        schema: null, projection: null, pinned: new Set(), references: emptyReferences(), referencesRoot: "", reminderDisposers: [],
+        render() { rendered.push((owner as unknown as { projection: unknown }).projection); } });
+    return { owner, drafts, raw, state, rendered, element };
 }
 function captureOwner() {
     const guard = new ProposalCloseGuard();
@@ -193,6 +215,75 @@ test("failed DataPanel reads retain an explicit discard action, blocked while bu
     assert.equal(drafts.size, 0); assert.equal(draftCache.size, 0); assert.equal(typeDrafts.size, 0); assert.equal(schemaDrafts.size, 0);
     assert.equal(element.querySelectorAll("button").some(button => button.textContent === label), false);
     assert.equal(owner.freezeForClose(), true);
+});
+
+test("DataPanel refresh consumes the production projection envelope and retains raw form input", async context => {
+    const schema = schemaRead(), response = { ...projectionResponse(basis, schema), readOnly: true };
+    const requests: string[] = [];
+    const { owner, drafts, raw, rendered } = refreshOwner(context, async route => {
+        requests.push(route);
+        if (route === "/api/data/schema") return schema;
+        assert.equal(route, "/api/data/project"); return response;
+    });
+    await owner.refresh();
+    assert.deepEqual(requests, ["/api/data/schema", "/api/data/project"]);
+    assert.equal(rendered.length, 1);
+    const accepted = rendered[0] as { readOnly: boolean; fields: { fieldId: string }[] };
+    assert.equal(accepted.readOnly, true); assert.equal(accepted.fields[0].fieldId, "field");
+    assert.equal(drafts.get("amount"), raw); assert.deepEqual(raw.rawInputs, { integer: "-" });
+    assert.equal(owner.freezeForClose(), false);
+});
+
+for (const changed of ["schemaRevision", "schemaHash"] as const) test(`DataPanel rejects a changed ${changed} without discarding raw input`, async context => {
+    const schema = schemaRead(), response = projectionResponse(basis, schema);
+    if (changed === "schemaRevision") response.schemaRevision = "later-schema-revision";
+    else response.schemaHash = sourceDigest(schema.source + " ");
+    const { owner, drafts, raw, rendered, element } = refreshOwner(context, async route => route === "/api/data/schema" ? schema : response);
+    await owner.refresh();
+    assert.equal(rendered.length, 0);
+    assert.equal(drafts.get("amount"), raw); assert.deepEqual(raw.rawInputs, { integer: "-" });
+    assert.ok(element.textContent.includes(uiTextValue(message("error.invalidResponse"))));
+    assert.equal(owner.freezeForClose(), false);
+});
+
+for (const outcome of ["success", "failure"] as const) for (const changed of ["document", "inputIdentity"] as const) {
+    test(`DataPanel ignores late ${outcome} after ${changed} changes and preserves the original raw owner`, async context => {
+        const schema = schemaRead();
+        let release!: (value: unknown) => void, reject!: (error: Error) => void, entered!: () => void;
+        const pending = new Promise<unknown>((resolve, fail) => { release = resolve; reject = fail; });
+        const reached = new Promise<void>(resolve => { entered = resolve; });
+        const { owner, drafts, raw, state, rendered, element } = refreshOwner(context, async route => {
+            if (route === "/api/data/schema") return schema;
+            assert.equal(route, "/api/data/project"); entered(); return pending;
+        });
+        const reading = owner.refresh(); await reached;
+        if (changed === "document") state.current = { ...basis, path: "other.typ", source: "other source", sessionId: "other-session", inputId: "other-input" };
+        else state.current.inputId = "same-bytes-new-input";
+        if (outcome === "success") release(projectionResponse(basis, schema));
+        else reject(new Error("late read failure"));
+        await reading;
+        assert.equal(rendered.length, 0); assert.equal(element.textContent, "retained form controls");
+        assert.equal(drafts.get("amount"), raw); assert.deepEqual(raw.rawInputs, { integer: "-" });
+        assert.equal(owner.freezeForClose(), false);
+    });
+}
+
+test("DataPanel ignores an earlier refresh failure after a later refresh accepts the current snapshot", async context => {
+    const schema = schemaRead();
+    let reject!: (error: Error) => void, entered!: () => void, projects = 0;
+    const pending = new Promise<unknown>((_resolve, fail) => { reject = fail; });
+    const reached = new Promise<void>(resolve => { entered = resolve; });
+    const { owner, drafts, raw, rendered, element } = refreshOwner(context, async route => {
+        if (route === "/api/data/schema") return schema;
+        assert.equal(route, "/api/data/project");
+        if (++projects === 1) { entered(); return pending; }
+        return projectionResponse(basis, schema);
+    });
+    const earlier = owner.refresh(); await reached;
+    await owner.refresh(); assert.equal(rendered.length, 1);
+    reject(new Error("retired refresh failure")); await earlier;
+    assert.equal(rendered.length, 1); assert.equal(element.textContent, "retained form controls");
+    assert.equal(drafts.get("amount"), raw); assert.deepEqual(raw.rawInputs, { integer: "-" });
 });
 
 test("a type selection reverted during Apply remains a new proposal after the original delivery", async context => {

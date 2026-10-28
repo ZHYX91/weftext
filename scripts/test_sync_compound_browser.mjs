@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceTab } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Owned replicas and headless Chrome. Requires the compound ApplySync candidate.
@@ -77,7 +78,7 @@ const pending = page => page.evaluate(() => {
   const value = localStorage.getItem('weftext-sync-operation-v1'); return value ? JSON.parse(value) : null;
 });
 async function sourceEditor(page) {
-  const mode = page.getByRole('button', { name: '源码', exact: true }); await mode.waitFor(); await mode.click();
+  const mode = (await workspaceTab(page, 'view')).getByRole('button', { name: '源码', exact: true }); await mode.waitFor(); await mode.click();
   const editor = page.locator('.cm-content[contenteditable=true]'); await editor.waitFor(); return editor;
 }
 async function enterDraft(page, editor, source) {
@@ -87,7 +88,7 @@ async function enterDraft(page, editor, source) {
   assert.equal(await sourceText(editor), source);
 }
 async function sync(page) {
-  await page.getByRole('button', { name: '同步', exact: true }).click();
+  await workspaceCommand(page, 'knowledge', '同步');
   const panel = page.getByRole('dialog', { name: '资料库同步' }); await panel.waitFor();
   await panel.getByRole('status').filter({ hasText: /^操作已完成。$/ }).waitFor(); return panel;
 }
@@ -435,7 +436,7 @@ const cases = [
     await s.page.screenshot({ path: path.join(s.folder, 'success-compound-requires-comparison.png'), fullPage: true });
     await assertDraftAndUndo(s);
     assert.match(await s.page.locator('body').innerText(), /请比较磁盘内容并明确合并/);
-    await s.page.getByRole('button', { name: '链接与批注', exact: true }).click();
+    await workspaceCommand(s.page, 'knowledge', '链接与批注');
     await s.page.locator('.knowledge-empty').waitFor();
     assertNoOldConsumers(s, consumerStart, originalSession);
     await s.page.getByRole('button', { name: '比较磁盘内容', exact: true }).click();

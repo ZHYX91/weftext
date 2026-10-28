@@ -1,4 +1,8 @@
+import { WorkspaceRibbon } from "./workspace-chrome";
+import "./workspace-chrome.css";
+import { disposeUiTree } from "./ui-locale";
 import { LibraryCloseActivity } from "./library-native-close";
+import { fileTreeEntries } from "./file-tree";
 import { originalSaveAsSelection } from "./save-as-origin";
 import { NativeSurface, type CloseRequest } from "./native-host";
 import { nativeApiIdle, freezeNativeApi, thawNativeApi } from "./api";
@@ -12,7 +16,7 @@ import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import "./style.css";
 import { originalCommitted, submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
-import { fileSaveReceipt } from "./file-save-result";
+import { fileSaveReceipt, fileSaveFailure } from "./file-save-result";
 import { RecognitionPanel } from "./recognition-panel";
 import { api, apiBlob, ApiError, operationId } from "./api";
 import { mountNodeContents } from "./node-contents";
@@ -30,11 +34,22 @@ import { DocumentSession, encodeLiteral, canRebindSaveAs, rebindCommittedSave, s
 import { decodeEditorMapResponse, WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, textareaSourceDraft, type WritingMap, type WritingRange } from "./writing";
 import { nativeElement } from "./native-node";
 import { installNavigationLayout } from "./navigation-layout";
+import { WorkspaceDock } from "./workspace-dock";
+import { sameOutlineBasis, type OutlineBasis } from "./document-outline";
+import "./workspace-dock.css";
+import "./workspace-views.css";
+import { WorkPanel } from "./work-panel";
+import "./work-panel.css";
+import { workActivity } from "./work-activity";
+import { TimelineView } from "./timeline-view";
+import "./timeline-view.css";
+import { mountResourceViewer } from "./media-viewer";
+import { inventoryResource } from "./inventory-resource";
 import { ensureOfflineFonts } from "./font-readiness";
 import "./navigation-layout.css";
 import "./writing.css";
 import "./paged-preview.css";
-import { createWritingToolbar, createStructureControls } from "./writing-controls";
+import { createWritingCommandGroups, createStructureControls } from "./writing-controls";
 import { createMathSelectionControls } from "./math-selection";
 import { mountDocumentNotes, openDocumentNotes, type DocumentNotesMount } from "./document-notes";
 import { AuthoringAssetsAdapter } from "./authoring-assets-adapter";
@@ -155,23 +170,54 @@ interface LiveDocument {
     notesMount?: DocumentNotesMount;
     authoringAssets: AuthoringAssetsAdapter;
 }
+const outlineProjections = new WeakMap<RenderOutput, OutlineBasis>();
 function sourceConsumersAvailable(doc: LiveDocument): boolean { return !doc.sourceRefreshing && !sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget); }
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const shell = el("div", "shell");
-const sidebar = el("aside", "sidebar");
+const toastHost = el("div", "toast-host");
+toastHost.setAttribute("aria-live", "polite");
+const sidebar = el("section", "workspace-files-view");
 setUiAttr(sidebar, "aria-label", uiMessage("shell.libraryNavigation"));
+const nodesView = el("section", "workspace-nodes-view");
+const dock = new WorkspaceDock({ notify: toast, onActivate: id => queueMicrotask(() => refreshDockView(id)) });
+dock.left.classList.add("sidebar");
+dock.right.classList.add("workspace-inspector");
+const workPanel = new WorkPanel({ notify: toast });
 const workspace = el("main", "workspace");
 const topbar = el("header", "topbar");
+const ribbon = new WorkspaceRibbon();
+const headerSidebarToggle = el("button", "icon-button header-sidebar-toggle");
+headerSidebarToggle.type = "button";
+headerSidebarToggle.append(icon("menu"));
+const everydayBar = el("nav", "everyday-bar header-navigation");
+setUiAttr(everydayBar, "aria-label", uiMessage("shell.everydayNavigation"));
+const headerHome = el("span", "home-label", "Weftext");
+const headerActions = el("div", "top-actions");
+const headerSaveState = el("span", "save-state");
+const headerSave = button(uiMessage("common.save"), () => current ? saveDocument(current) : undefined, "button-primary compact", "save");
+headerSave.dataset.command = "save";
+headerActions.append(headerSaveState, headerSave);
+let documentFileControls: { recognition: HTMLButtonElement; saveAs: HTMLButtonElement; timeline: HTMLButtonElement } | undefined;
+const documentRibbonGroups: { tab: "home" | "insert" | "view"; id: string; nodes: HTMLElement[] }[] = [];
+function setDocumentGroup(tab: "home" | "insert" | "view", id: string, label: UiText, nodes: HTMLElement[]): void {
+    documentRibbonGroups.push({ tab, id, nodes });
+    ribbon.setGroup(tab, id, label, nodes);
+}
+function clearDocumentGroups(): void {
+    for (const group of documentRibbonGroups.splice(0)) {
+        for (const node of group.nodes) disposeUiTree(node);
+        ribbon.clearGroup(group.tab, group.id);
+    }
+}
 const tabs = el("nav", "tabs");
 setUiAttr(tabs, "aria-label", uiMessage("shell.openDocuments"));
 const content = el("div", "content");
 const workspaceBody = el("div", "workspace-body");
 const statusbar = el("footer", "statusbar");
-const toastHost = el("div", "toast-host");
-toastHost.setAttribute("aria-live", "polite");
-shell.append(sidebar, workspace);
-workspace.append(topbar, tabs, workspaceBody, statusbar);
-workspaceBody.append(content);
+shell.append(dock.left, workspace);
+topbar.append(headerSidebarToggle, everydayBar, headerHome, tabs, headerActions);
+workspace.append(topbar, ribbon.element, workspaceBody, workPanel.element, statusbar);
+workspaceBody.append(content, dock.right);
 app.append(shell, toastHost);
 let inventory: Inventory | null = null;
 let documents: LiveDocument[] = [];
@@ -288,17 +334,17 @@ let navigationGeneration = 0;
 const navigationContexts = new Map<LiveDocument, {
     inventory: Inventory | null;
     query: string;
-    folder: string | null;
     collapsed: string[];
     scroll: number;
-    contentScroll: number;
-    selection: string[];
 }>();
-const everydayBar = el("nav", "everyday-bar");
-setUiAttr(everydayBar, "aria-label", uiMessage("shell.everydayNavigation"));
-workspace.insertBefore(everydayBar, tabs);
 let query = "";
 let selectedFolder: string | null = null;
+let nodeQuery = "";
+let followDocument = true;
+let nodeContext = "";
+let renderedNodeInventory: Inventory | null = null;
+let renderedNodeFolder = "";
+let renderedNodeQuery = "";
 let sidebarComposing = false;
 const contentSelections = new Set<string>();
 let nodeContents: {
@@ -307,6 +353,7 @@ let nodeContents: {
 const folderViews = new Map<string, {
     query: string;
     scroll: number;
+    selection: string[];
 }>();
 const collapsed = new Set<string>();
 let previewVisible = localStorage.getItem("weftext-preview") !== "false";
@@ -325,7 +372,7 @@ let pagedPreview: PagedPreview | null = null;
 function captureNavigation(): void {
     if (!current)
         return;
-    navigationContexts.set(current, { inventory, query, folder: selectedFolder, collapsed: [...collapsed], scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0, contentScroll: sidebar.querySelector(".node-contents")?.scrollTop ?? 0, selection: [...contentSelections] });
+    navigationContexts.set(current, { inventory, query, collapsed: [...collapsed], scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0 });
 }
 function restoreNavigation(doc: LiveDocument): void {
     const saved = navigationContexts.get(doc);
@@ -334,11 +381,8 @@ function restoreNavigation(doc: LiveDocument): void {
     workspaceTools.assertLibraryChange(saved.inventory);
     inventory = saved.inventory;
     query = saved.query;
-    selectedFolder = saved.folder;
     collapsed.clear();
     saved.collapsed.forEach(path => collapsed.add(path));
-    contentSelections.clear();
-    saved.selection.forEach(path => contentSelections.add(path));
 }
 function everydayEntries(): EverydayEntry[] {
     const entries = new Map<string, EverydayEntry>();
@@ -387,9 +431,9 @@ function everydayCommands(): EverydayCommand[] {
         { id: "new-note", label: uiMessage("shell.newNote"), unavailable: !inventory?.workspaceId ? uiMessage("shell.openLibraryFirst") : undefined, run: createNote },
         { id: "open-file", label: uiMessage("shell.openOutsideTypst"), run: openOutsideFile },
         { id: "save", label: uiMessage("shell.saveCurrentNote"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: () => saveDocument(doc!) },
-        { id: "resources", label: uiMessage("shell.browseImportResources"), run: () => libraryCloseActivity.run(async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("files"); }) },
+        { id: "resources", label: uiMessage("shell.browseImportResources"), run: () => { dock.reveal("nodes"); } },
         { id: "relationship-graph", label: uiMessage("shell.openRelationshipGraph"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: () => libraryCloseActivity.run(async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("graph"); }) },
-        { id: "heading-structure", label: uiMessage("shell.openHeadingStructure"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: () => libraryCloseActivity.run(async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings"); }) },
+        { id: "heading-structure", label: uiMessage("shell.openHeadingStructure"), unavailable: !doc ? uiMessage("shell.openNoteFirst") : undefined, run: () => libraryCloseActivity.run(async () => { await workspaceTools.show("outline"); }) },
         ...everydayWritingCommands(doc?.writing, !!doc && sourceConsumersAvailable(doc) && doc.mode !== "read" && !readOnlySource(doc) && !doc.writing.state.composing && !doc.editor.composing, insertEverydayQuery),
     ];
 }
@@ -416,15 +460,20 @@ async function stepNavigation(direction: -1 | 1): Promise<void> {
     } finally { finishNativeActivity(); }
 }
 function renderEverydayBar(): void {
-    if (current && !navigatingHistory)
-        everydayNavigation.visit(current.navigationKey);
+    if (current && !navigatingHistory) everydayNavigation.visit(current.navigationKey);
     everydayBar.replaceChildren();
     for (const [direction, label] of [[-1, uiMessage("shell.back")], [1, uiMessage("shell.forward")]] as const) {
-        const control = button(label, () => stepNavigation(direction));
+        const control = button("", () => stepNavigation(direction), `icon-button navigation-direction ${direction < 0 ? "back" : "forward"}`, "arrow");
+        setUiAttr(control, "aria-label", label);
+        setUiAttr(control, "title", label);
         control.disabled = !everydayNavigation.target(direction);
         everydayBar.append(control);
     }
-    everydayBar.append(button(uiMessage("shell.quickOpen"), () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), toast)), button(uiMessage("shell.recentVisits"), showRecent), button(uiMessage("cli.commandsHeading"), () => openEverydayMenu(uiMessage("cli.commandsHeading"), everydayCommands(), toast)), button(uiMessage("shell.insertBlockActions"), () => openEverydayMenu(uiMessage("shell.insertBlockActions"), everydayCommands().filter(item => /^(insert-|convert-|move-|undo|redo|resources)/.test(item.id)), toast)));
+    const quick = button("", () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), toast), "icon-button", "search");
+    setUiAttr(quick, "aria-label", uiMessage("shell.quickOpen"));
+    setUiAttr(quick, "title", uiMessage("shell.quickOpenShortcut"));
+    const commands = button(uiMessage("cli.commandsHeading"), () => openEverydayMenu(uiMessage("cli.commandsHeading"), everydayCommands(), toast), "text-button command-search");
+    everydayBar.append(quick, commands);
 }
 async function insertEverydayQuery(): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
@@ -588,7 +637,7 @@ let readingSelection: {
 const recognitionPanel = new RecognitionPanel({
     request: (path, body) => api(`/api/recognition${path}`, body),
     identity: () => current ? current.session.opened.root : null,
-    committed: root => workspaceTools.invalidateQueryEnvironment(root),
+    committed: root => workspaceTools.invalidateLibraryEnvironment(root),
     target: () => current ? { sessionId: current.session.opened.sessionId, parent: selectedFolder ?? current.session.opened.root, name: "资料导入" } : null,
     notify: toast,
     created: async (receipt, target) => libraryCloseActivity.run(async () => {
@@ -603,6 +652,14 @@ const recognitionPanel = new RecognitionPanel({
 });
 let recognitionSession = "";
 const workspaceTools = new WorkspaceTools({
+    getOutlineSnapshot: () => {
+        const doc = current;
+        if (!doc || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc) || doc.editor.composing || doc.writing.state.pending || doc.writing.state.composing)
+            return null;
+        const projection = doc.session.projection!, basis = outlineProjections.get(projection);
+        const currentBasis: OutlineBasis = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, inputId: doc.session.inputId, path: doc.session.path, root: doc.session.opened.root };
+        return basis && projection.headingStructure && sameOutlineBasis(basis, currentBasis) ? { basis, snapshot: projection.headingStructure } : null;
+    },
     revealHeading: heading => {
         const doc = current;
         if (!doc || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc) || !renderHost || !renderHost.isConnected || !renderHost.getClientRects().length || !headingMatchesDisplay(doc.session.projection?.tree, heading))
@@ -627,6 +684,7 @@ const workspaceTools = new WorkspaceTools({
         return range.from === range.to ? undefined : range;
     },
     beforeAction: prepareSwitch, notify: toast, openDocument, openResolved: acceptResolvedDocument, releaseOpenedSession,
+    openResolvedConfirmed: async opened => { let accepted = false; await acceptResolvedDocument(opened, value => { accepted = value; }); return accepted; },
     refreshLibrary: async (root) => libraryCloseActivity.run(async () => {
 
         if (inventory && normalize(inventory.root) === normalize(root))
@@ -635,7 +693,7 @@ const workspaceTools = new WorkspaceTools({
     }),
     syncApplied: async (root) => libraryCloseActivity.run(async () => {
 
-        workspaceTools.invalidateQueryEnvironment(root);
+        workspaceTools.invalidateLibraryEnvironment(root);
         if (inventory && normalize(inventory.root) === normalize(root))
             await refreshInventory();
         for (const doc of documents.filter(d => normalize(d.session.opened.root) === normalize(root))) {
@@ -713,12 +771,12 @@ const workspaceTools = new WorkspaceTools({
     }),
     canEditSource: () => !bodyCloseFrozen && !!current && sourceConsumersAvailable(current) && current.mode !== "read" && !readOnlySource(current) && !current.writing.state.composing,
     savedDefinition: async (result, basis) => libraryCloseActivity.run(async () => {
-        const receipt = result as { document?: OpenedDocument; committedSource?: string; documentSourceMatchesCommit?: boolean };
+        const receipt = result as OriginalFact & { document?: OpenedDocument; committedSource?: string; documentSourceMatchesCommit?: boolean };
+        if (originalCommitted(receipt)) workspaceTools.invalidateLibraryEnvironment(basis.root);
         const returned = receipt.document;
         if (!returned || typeof returned.sessionId !== "string" || typeof returned.source !== "string") throw new UiError(uiMessage("shell.querySaveFileReceiptMissing"));
         let opened = returned;
         try {
-            workspaceTools.invalidateQueryEnvironment(basis.root);
             const doc = documents.find(item => item.session.opened.sessionId === basis.sessionId);
             if (!doc) throw new UiError(uiMessage("shell.querySavedReopen"));
             const comparison = (key: "shell.queryCommittedDiskChanged" | "shell.querySavedNewInputRetained"): never => {
@@ -779,7 +837,7 @@ const workspaceTools = new WorkspaceTools({
         const opened = receipt.document as OpenedDocument | undefined;
         const returned = [opened, ...((receipt.affectedDocuments as { document?: OpenedDocument }[] | undefined) ?? []).map(effect => effect.document)];
         try {
-        workspaceTools.invalidateQueryEnvironment(context.root);
+        workspaceTools.invalidateLibraryEnvironment(context.root);
         const doc = documents.find(item => item.session.opened.sessionId === context.sessionId || Boolean(context.nodeId && context.workspaceId && item.session.opened.nodeId === context.nodeId && item.session.opened.workspaceId === context.workspaceId));
         let deliveryPending: UiText | null = receipt.documentError ? apiErrorUiText(receipt.documentError) : receipt.documentSourceMatchesCommit === false ? uiMessage("shell.committedBodyChanged") : null;
         if (doc)
@@ -891,15 +949,12 @@ const workspaceTools = new WorkspaceTools({
 
     }),
 });
-workspace.insertBefore(workspaceTools.bar, workspaceBody);
-const interfaceLocale = new InterfaceLocaleControl(localLocalePreferences(api));
-workspaceTools.bar.append(interfaceLocale.element);
+const interfaceLocale = new InterfaceLocaleControl(localLocalePreferences(api), () => nativeSurface.confirmLocale());
 document.documentElement.lang = locale.current;
 locale.subscribe(value => { document.documentElement.lang = value; });
 window.addEventListener("pagehide", event => { if (!event.persisted)
     interfaceLocale.dispose(); });
-workspaceBody.append(workspaceTools.inspector);
-const navigationLayout = installNavigationLayout({ shell, sidebar, workspaceBody, inspector: workspaceTools.inspector, toolbar: workspaceTools.bar, notify: toast });
+const navigationLayout = installNavigationLayout({ shell, sidebar: dock.left, workspaceBody, inspector: dock.right, toolbar: ribbon.element, notify: toast });
 function historyContext(doc: LiveDocument | null): HistoryContext | null {
   if (!doc) return null;
   const { session } = doc;
@@ -915,7 +970,7 @@ const historyPanel = new HistoryPanel({
   getDocument: () => historyContext(current), request: api, prepareRestore: prepareSwitch, notify: toast,
   restorePending: () => { refreshChrome(); },
   restored: async (result, basis) => libraryCloseActivity.run(async () => {
-        if (result.receipt.status === "saved") workspaceTools.invalidateQueryEnvironment(basis.root);
+        if (result.receipt.status === "saved") workspaceTools.invalidateLibraryEnvironment(basis.root);
         const doc = documents.find(item => item.navigationKey === basis.ownerKey && item.session.opened.nodeId === basis.nodeId && item.session.opened.workspaceId === basis.workspaceId);
         if (!doc) throw new UiError(uiMessage("shell.olderVersionSavedReopen"));
         await doc.writing.settleForSessionChange();
@@ -966,6 +1021,44 @@ const historyPanel = new HistoryPanel({
 
     }),
 });
+const timelineView = new TimelineView({ getDocument: () => historyContext(current), request: api, openHistory: () => historyPanel.open(), notify: toast });
+const outlineView = el("section", "workspace-outline-view");
+outlineView.append(button(uiMessage("shell.numberingControls"), () => current ? openLocalNumbering(current) : undefined, "text-button"), workspaceTools.views.outline);
+dock.register({ id: "files", label: uiMessage("workspaceViews.files"), element: sidebar, group: "navigation" });
+dock.register({ id: "nodes", label: uiMessage("workspaceViews.nodes"), element: nodesView, group: "navigation" });
+dock.register({ id: "query", label: uiMessage("workspaceViews.search"), element: workspaceTools.views.query, group: "navigation" });
+dock.register({ id: "timeline", label: uiMessage("workspaceViews.timeline"), element: timelineView.element, group: "navigation" });
+dock.register({ id: "outline", label: uiMessage("workspaceViews.outline"), element: outlineView, group: "structure" });
+dock.register({ id: "data", label: uiMessage("dataPanel.title"), element: workspaceTools.views.data, side: "right", hidden: true });
+dock.register({ id: "knowledge", label: uiMessage("workspaceTools.linksAnnotations"), element: workspaceTools.views.knowledge, side: "right", hidden: true });
+for (const id of ["calendar", "people"] as const) {
+    const view = el("section", "workspace-extension-view");
+    view.append(el("p", "", uiMessage("workspaceViews.extensionsPending")));
+    dock.register({ id, label: uiMessage(`workspaceViews.${id}`), element: view, side: "right", hidden: true });
+}
+workspaceTools.attachDock({ reveal: kind => dock.reveal(kind, { activate: false }), hide: kind => dock.hide(kind), visible: kind => viewVisible(workspaceTools.views[kind]) });
+setUiAttr(headerSidebarToggle, "aria-label", uiMessage("workspaceDock.leftSidebar"));
+headerSidebarToggle.setAttribute("aria-controls", dock.left.id = "weftext-navigation-pane");
+headerSidebarToggle.onclick = () => dock.toggleSide("left");
+const overlayClose = button(uiMessage("common.close"), () => dock.toggleSide("left"), "text-button sidebar-overlay-close");
+dock.left.append(overlayClose);
+const sidebarVisibility = new MutationObserver(() => headerSidebarToggle.setAttribute("aria-expanded", String(!dock.left.hidden)));
+sidebarVisibility.observe(dock.left, { attributes: true, attributeFilter: ["hidden"] });
+headerSidebarToggle.setAttribute("aria-expanded", String(!dock.left.hidden));
+workActivity.subscribe(event => {
+    if (event.kind === "task") workPanel.reportTask(event.task);
+    else if (event.kind === "result") workPanel.addResult(event.result);
+    else workPanel.removeResult(event.id);
+}, { replay: true });
+function viewVisible(element: HTMLElement): boolean {
+    return element.isConnected && !element.closest("[hidden],[inert]") && element.getClientRects().length > 0;
+}
+function refreshDockView(id: string): void {
+    if (id === "data" || id === "knowledge" || id === "query" || id === "outline")
+        void workspaceTools.refreshView(id).catch(showError);
+    else if (id === "timeline") void timelineView.documentChanged().catch(showError);
+    else if (id === "nodes") renderNodeBrowser();
+}
 function saveBusy(doc: LiveDocument): boolean { return doc.session.savePending || historyPanel.hasPending(historyContext(doc)); }
 function pendingSave(doc: LiveDocument): LiveDocument["lastSave"] { return doc.lastSave?.deliveryEnded ? undefined : doc.lastSave; }
 
@@ -986,7 +1079,7 @@ async function acceptCreatedDocument(opened: OpenedDocument, operationId: string
         if (!operationId) throw new UiError(uiMessage("shell.originalCommittedReceiptRequired"));
         if (!opened.nodeId || !opened.workspaceId || opened.kind !== "managed") throw new UiError(uiMessage("shell.createdNodeIdentityRequired"));
         workspaceTools.assertLibraryChange(inventory);
-        workspaceTools.invalidateQueryEnvironment(opened.root);
+        workspaceTools.invalidateLibraryEnvironment(opened.root);
         await prepareSwitch();
         const restored = documents.find(item => item.session.opened.nodeId === opened.nodeId && item.session.opened.workspaceId === opened.workspaceId);
         // A delivered birth is not authority to replace an active writer.
@@ -1007,12 +1100,13 @@ async function acceptCreatedDocument(opened: OpenedDocument, operationId: string
         await refreshInventory();
     } finally { retireUnownedSessions(opened.sessionId); finishNativeActivity(); }
 }
-async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
+async function acceptResolvedDocument(opened: OpenedDocument, confirmed?: (accepted: boolean) => void): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
     let refreshed: OpenedDocument | null = null;
+    let generation = 0, adopted: LiveDocument | undefined;
     try {
         workspaceTools.assertLibraryChange(inventory);
-        const generation = ++navigationGeneration;
+        generation = ++navigationGeneration;
         await prepareSwitch();
         if (generation !== navigationGeneration) return;
         const existing = opened.nodeId && opened.workspaceId ? documents.find(item =>
@@ -1020,6 +1114,7 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
             && readOnlySource(item) === (opened.readOnly === true || opened.kind === "trash" || opened.kind === "managedTrash")) : undefined;
         if (!existing) {
             addDocument(opened);
+            adopted = current ?? undefined;
         } else {
             await existing.writing.settleForSessionChange();
             if (generation !== navigationGeneration || !documents.includes(existing)) return;
@@ -1043,6 +1138,7 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
                 existing.session.acknowledgeSave(candidate.source, candidate.baseId, candidate.path);
                 existing.session.projection = null;
                 await persistDraft(existing);
+                if (generation !== navigationGeneration || !documents.includes(existing)) return;
                 scheduleRender(existing, 0);
             } else {
                 existing.externalSource = candidate.source;
@@ -1051,15 +1147,17 @@ async function acceptResolvedDocument(opened: OpenedDocument): Promise<void> {
             }
             workspaceTools.assertLibraryChange(inventory);
             current = existing;
+            adopted = existing;
             activeSourceOrigin = null;
             renderContent();
             renderSidebar();
+            void workspaceTools.selectedDocumentChanged().catch(showError);
         }
-        shell.classList.remove("sidebar-open");
     } finally {
         try {
             if (refreshed && !ownsOpenedSession(refreshed.sessionId)) await releaseOpenedSession(refreshed.sessionId);
             if (!ownsOpenedSession(opened.sessionId)) await releaseOpenedSession(opened.sessionId);
+            confirmed?.(adopted !== undefined && current === adopted && documents.includes(adopted) && generation === navigationGeneration);
         } finally { finishNativeActivity(); }
     }
 }
@@ -1181,11 +1279,12 @@ function renderSidebar(): void {
     if (sidebarComposing)
         return;
     workspaceTools.assertLibraryChange(inventory);
-    nodeContents?.dispose();
-    nodeContents = undefined;
     navigationLayout.captureSidebarState();
-    navigationLayout.setContext(inventory ? { root: inventory.root, workspaceId: inventory.workspaceId, scope: selectedFolder ? { kind: "directory", key: `path:${normalize(selectedFolder)}` } : undefined } : null);
-    workspaceTools.setLibrary(inventory, selectedFolder);
+    navigationLayout.setContext(inventory ? { root: inventory.root, workspaceId: inventory.workspaceId } : null);
+    const context = inventory ? JSON.stringify([inventory.workspaceId ?? "ordinary", normalize(inventory.root)]) : null;
+    dock.setContext(context);
+    workPanel.setContext(context);
+    workspaceTools.setLibrary(inventory);
     const focused = document.activeElement as HTMLInputElement | null;
     const restoreSearch = focused?.id === "library-search";
     const selection = restoreSearch ? [focused!.selectionStart, focused!.selectionEnd] : null;
@@ -1227,12 +1326,8 @@ function renderSidebar(): void {
     sidebar.append(search);
     if (inventory) {
         const scope = el("div", "search-scope");
-        scope.append(button(uiMessage("shell.bodyPropertyQuery"), () => workspaceTools.search(query, true), "text-button"), el("span", "", selectedFolder ? basename(selectedFolder) : uiMessage("queryPanel.entireLibrary")));
+        scope.append(button(uiMessage("shell.bodyPropertyQuery"), () => workspaceTools.search(query, true), "text-button"), el("span", "", uiMessage("queryPanel.entireLibrary")));
         sidebar.append(scope);
-        if (selectedFolder)
-            sidebar.append(button(uiMessage("shell.returnEntireLibrary"), () => browseFolder(null), "clear-scope"));
-        if (selectedFolder)
-            renderNodeContents(sidebar, selectedFolder);
     }
     const list = el("div", "file-tree");
     if (!inventory) {
@@ -1241,44 +1336,31 @@ function renderSidebar(): void {
         list.append(empty);
     }
     else {
+        const listedInventory = inventory;
         const heading = el("div", "section-label", query ? uiMessage("shell.searchResults") : uiMessage("shell.filesAndNotes"));
         if (!inventory.complete)
             heading.append(el("span", "partial-label", uiMessage("shell.scanIncomplete")));
         list.append(heading);
-        const paired = new Map(inventory.entries.filter(entry => entry.kind === "node").map(entry => [normalize(entry.parentPath), entry]));
-        const navigation = inventory.entries.filter(entry => entry.kind !== "node" || !inventory!.entries.some(dir => dir.kind === "directory" && normalize(dir.path) === normalize(entry.parentPath))).map(entry => {
-            const primary = entry.kind === "directory" ? paired.get(normalize(entry.path)) : null;
-            return primary ? { ...primary, relativePath: entry.relativePath, name: entry.name, folderPath: entry.path } : { ...entry, folderPath: entry.kind === "directory" ? entry.path : null };
-        });
-        const matching = navigation.filter(entry => {
-            if (selectedFolder && normalize(entry.path) !== normalize(selectedFolder) && !normalize(entry.path).startsWith(normalize(selectedFolder) + "/"))
-                return false;
-            if (!query.trim())
-                return true;
-            const needle = query.toLocaleLowerCase();
-            return `${entry.name} ${entry.relativePath} ${entry.title ?? ""}`.toLocaleLowerCase().includes(needle);
-        });
-        const visible = matching.filter(entry => query || ![...collapsed].some(path => normalize(entry.path).startsWith(normalize(path) + "/")));
+        const visible = fileTreeEntries(inventory.entries, null, query, collapsed);
         for (const entry of visible) {
             const directory = entry.kind === "directory";
-            const row = button("", () => directory ? browseFolder(entry.folderPath!) : openInventoryEntry(entry, inventory!.root, inventory!.workspaceId), `tree-row ${current && normalize(current.session.path) === normalize(entry.path) ? "active" : ""}`, entry.folderPath ? "folder" : "file");
+            const row = button("", async () => {
+                if (directory) browseFolder(entry.folderPath!);
+                else if (entry.kind === "file" && !entry.path.toLowerCase().endsWith(".typ"))
+                    await (await openInventoryResource(listedInventory.root, entry.parentPath, entry.path)).open();
+                else await openInventoryEntry(entry, listedInventory.root, listedInventory.workspaceId);
+            }, `tree-row ${current && normalize(current.session.path) === normalize(entry.path) ? "active" : ""}`, entry.folderPath ? "folder" : "file");
             const depth = Math.max(0, entry.relativePath.replaceAll("\\", "/").split("/").length - 1);
-            row.style.paddingLeft = `${12 + (query ? 0 : Math.min(depth, 5) * 14)}px`;
+            row.style.paddingLeft = "0";
             const names = el("span", "tree-names");
             names.append(el("span", "tree-name", entry.title || entry.name));
             if (query)
                 names.append(el("span", "tree-path", entry.relativePath));
             row.append(names);
-            if (entry.folderPath) {
-                const expand = el("span", "tree-chevron", collapsed.has(entry.folderPath) ? "›" : "⌄");
-                setUiAttr(expand, "title", uiMessage("shell.toggleChildFiles"));
-                expand.onclick = event => { event.stopPropagation(); toggleFolder(entry.folderPath!); };
-                row.append(expand);
-            }
             if (!["ordinary", "admitted"].includes(entry.identityStatus))
                 row.append(el("span", "identity-badge", labelStatus[entry.identityStatus] ?? entry.identityStatus));
             setUiAttr(row, "title", () => `${uiTextValue(entry.path)}\n${uiTextValue(labelStatus[entry.identityStatus] ?? entry.identityStatus)}`);
-            if (entry.kind === "blocked" || !directory && !entry.path.toLowerCase().endsWith(".typ"))
+            if (entry.kind === "blocked")
                 row.disabled = true;
             const menu = () => nodeMenu([entry], entry.folderPath ?? undefined);
             row.oncontextmenu = event => { event.preventDefault(); row.focus(); menu(); };
@@ -1288,30 +1370,33 @@ function renderSidebar(): void {
                     menu();
                 }
             };
+            const wrapper = el("div", "tree-row-with-scope");
+            wrapper.style.paddingInlineStart = `${12 + (query ? 0 : Math.min(depth, 5) * 14)}px`;
+            if (entry.folderPath && entry.hasChildren) {
+                const expand = button(entry.collapsed ? "›" : "⌄", () => toggleFolder(entry.folderPath!), "tree-scope-button tree-expand-button");
+                expand.id = `tree-expand-${encodeURIComponent(normalize(entry.folderPath))}`;
+                setUiAttr(expand, "aria-label", displayMessage("shell.toggleFolder", { p0: uiDisplayParameter(entry.name) }));
+                expand.setAttribute("aria-expanded", String(!entry.collapsed));
+                wrapper.append(expand);
+            }
+            else {
+                const spacer = el("span", "tree-expand-placeholder");
+                spacer.setAttribute("aria-hidden", "true");
+                wrapper.append(spacer);
+            }
+            wrapper.append(row);
             if (entry.folderPath) {
-                const wrapper = el("div", "tree-row-with-scope");
                 const scopeButton = button("", () => browseFolder(entry.folderPath), "tree-scope-button", "search");
                 setUiAttr(scopeButton, "aria-label", displayMessage("shell.browseFolderOnly", { p0: uiDisplayParameter(entry.name) }));
                 setUiAttr(scopeButton, "title", displayMessage("shell.setFolderBrowseScope", { p0: uiDisplayParameter(entry.name) }));
-                const expandButton = button(collapsed.has(entry.folderPath) ? "›" : "⌄", () => toggleFolder(entry.folderPath!), "tree-scope-button");
-                setUiAttr(expandButton, "aria-label", displayMessage("shell.toggleFolder", { p0: uiDisplayParameter(entry.name) }));
-                expandButton.setAttribute("aria-expanded", String(!collapsed.has(entry.folderPath)));
-                const more = button("⋯", menu, "tree-scope-button");
-                more.onkeydown = row.onkeydown;
-                more.oncontextmenu = row.oncontextmenu;
-                setUiAttr(more, "aria-label", displayMessage("shell.moreActionsForEntry", { p0: uiDisplayParameter(entry.name) }));
-                wrapper.append(row, expandButton, scopeButton, more);
-                list.append(wrapper);
+                wrapper.append(scopeButton);
             }
-            else {
-                const wrapper = el("div", "tree-row-with-scope");
-                const more = button("⋯", menu, "tree-scope-button");
-                more.onkeydown = row.onkeydown;
-                more.oncontextmenu = row.oncontextmenu;
-                setUiAttr(more, "aria-label", displayMessage("shell.moreActionsForEntry", { p0: uiDisplayParameter(entry.name) }));
-                wrapper.append(row, more);
-                list.append(wrapper);
-            }
+            const more = button("⋯", menu, "tree-scope-button");
+            more.onkeydown = row.onkeydown;
+            more.oncontextmenu = row.oncontextmenu;
+            setUiAttr(more, "aria-label", displayMessage("shell.moreActionsForEntry", { p0: uiDisplayParameter(entry.name) }));
+            wrapper.append(more);
+            list.append(wrapper);
         }
         if (!visible.length)
             list.append(el("div", "search-empty", query ? displayMessage("shell.searchNoMatch", { p0: uiDisplayParameter(query) }) : uiMessage("shell.folderHasNoNotes")));
@@ -1334,21 +1419,21 @@ function renderSidebar(): void {
             newInput.setSelectionRange(selection[0], selection[1]);
     }
     navigationLayout.restoreSidebarState();
+    renderNodeBrowser();
 }
-function toggleFolder(path: string): void { collapsed.has(path) ? collapsed.delete(path) : collapsed.add(path); renderSidebar(); }
+function toggleFolder(path: string): void { const key = normalize(path); collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key); renderSidebar(); }
 function browseFolder(path: string | null): void {
     workspaceTools.assertLibraryChange(inventory);
-    const old = selectedFolder ?? inventory?.root;
-    if (old)
-        folderViews.set(normalize(old), { query, scroll: sidebar.querySelector(".file-tree")?.scrollTop ?? 0 });
+    rememberNodeFolder();
+    followDocument = false;
     selectedFolder = path;
     contentSelections.clear();
     const saved = folderViews.get(normalize(path ?? inventory?.root ?? ""));
-    query = saved?.query ?? "";
-    renderSidebar();
-    const tree = sidebar.querySelector(".file-tree");
-    if (tree)
-        tree.scrollTop = saved?.scroll ?? 0;
+    nodeQuery = saved?.query ?? "";
+    saved?.selection.forEach(value => contentSelections.add(value));
+    persistNodeBrowse();
+    renderNodeBrowser();
+    dock.reveal("nodes");
 }
 function nodeMenu(entries: InventoryEntry[], folder?: string): void {
     const selected = entries.filter(entry => entry.path.toLowerCase().endsWith(".typ")), root = inventory?.root, workspaceId = inventory?.workspaceId;
@@ -1372,6 +1457,11 @@ function nodeMenu(entries: InventoryEntry[], folder?: string): void {
 async function previewNodes(entries: InventoryEntry[]): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
     try {
+        const resource = entries.length === 1 ? entries[0] : null;
+        if (inventory && resource?.kind === "file" && !resource.path.toLowerCase().endsWith(".typ")) {
+            await (await openInventoryResource(inventory.root, resource.parentPath, resource.path)).open();
+            return;
+        }
         await modal(uiMessage("shell.itemPreview"), uiMessage("shell.itemPreviewDescription"), (form, close) => {
             for (const entry of entries)
                 form.append(el("strong", "", entry.title || entry.name), el("pre", "", () => `${uiTextValue(entry.relativePath)}\n${uiTextValue(labelStatus[entry.identityStatus] ?? entry.identityStatus)}\n${uiTextValue(entry.excerpt ?? uiMessage("shell.itemSummaryUnavailable"))}`));
@@ -1379,18 +1469,131 @@ async function previewNodes(entries: InventoryEntry[]): Promise<void> {
         });
     } finally { finishNativeActivity(); }
 }
+function rememberNodeFolder(): void {
+    if (renderedNodeFolder)
+        folderViews.set(normalize(renderedNodeFolder), { query: nodeQuery, scroll: nodesView.querySelector(".node-contents")?.scrollTop ?? 0, selection: [...contentSelections] });
+}
+function persistNodeBrowse(): void {
+    if (!nodeContext) return;
+    try { localStorage.setItem(`weftext-node-browser:v1:${nodeContext}`, JSON.stringify({ follow: followDocument, folder: selectedFolder })); }
+    catch { /* Browsing still works when presentation preferences cannot persist. */ }
+}
+function nodeFolderAvailable(path: unknown): path is string {
+    return typeof path === "string" && !!inventory && (normalize(path) === normalize(inventory.root)
+        || inventory.entries.some(entry => entry.kind === "directory" && normalize(entry.path) === normalize(path)));
+}
+function renderNodeBrowser(): void {
+    const context = inventory ? JSON.stringify([inventory.workspaceId ?? "ordinary", normalize(inventory.root)]) : "";
+    if (context !== nodeContext) {
+        rememberNodeFolder();
+        nodeContext = context;
+        followDocument = true; selectedFolder = null; nodeQuery = ""; contentSelections.clear();
+        if (context) try {
+            const raw = localStorage.getItem(`weftext-node-browser:v1:${context}`);
+            if (raw && raw.length < 8192) {
+                const value = JSON.parse(raw);
+                if (value && typeof value.follow === "boolean" && nodeFolderAvailable(value.folder)) {
+                    followDocument = value.follow; selectedFolder = value.folder;
+                }
+            }
+        } catch { /* Invalid display preferences never change authored content. */ }
+    }
+    if (followDocument && inventory) {
+        const folder = current && normalize(current.session.opened.root) === normalize(inventory.root)
+            ? current.session.path.replaceAll("\\", "/").split("/").slice(0, -1).join("/") : inventory.root;
+        if (normalize(folder) !== normalize(selectedFolder ?? "")) {
+            rememberNodeFolder();
+            selectedFolder = nodeFolderAvailable(folder) ? folder : inventory.root;
+            const saved = folderViews.get(normalize(selectedFolder));
+            nodeQuery = saved?.query ?? "";
+            contentSelections.clear(); saved?.selection.forEach(path => contentSelections.add(path));
+        }
+    }
+    if (inventory && selectedFolder && !nodeFolderAvailable(selectedFolder)) {
+        rememberNodeFolder();
+        selectedFolder = inventory.root;
+        const saved = folderViews.get(normalize(selectedFolder));
+        nodeQuery = saved?.query ?? "";
+        contentSelections.clear(); saved?.selection.forEach(path => contentSelections.add(path));
+        persistNodeBrowse();
+        toast(uiMessage("shell.oldDirectoryScopeUnavailable"));
+    }
+    const folder = selectedFolder ?? inventory?.root ?? "";
+    const existingFilter = nodesView.querySelector<HTMLInputElement>(".node-browser-filter");
+    if (existingFilter?.matches(":focus") && sidebarComposing) return;
+    if (renderedNodeInventory === inventory && renderedNodeFolder === folder && renderedNodeQuery === nodeQuery
+        && nodesView.dataset.follow === String(followDocument)) return;
+    const focused = document.activeElement === existingFilter;
+    const selection = focused ? [existingFilter?.selectionStart, existingFilter?.selectionEnd] : null;
+    nodeContents?.dispose(); nodeContents = undefined;
+    renderedNodeInventory = inventory; renderedNodeFolder = folder; renderedNodeQuery = nodeQuery;
+    nodesView.dataset.follow = String(followDocument);
+    disposeUiTree(nodesView); nodesView.replaceChildren();
+    const toolbar = el("div", "node-browser-toolbar");
+    const follow = button(followDocument ? uiMessage("workspaceViews.followDocument") : uiMessage("workspaceViews.pinnedFolder"), () => {
+        rememberNodeFolder(); followDocument = !followDocument; persistNodeBrowse(); renderNodeBrowser();
+    }, "text-button");
+    follow.setAttribute("aria-pressed", String(followDocument));
+    const graph = button(uiMessage("workspaceViews.currentDocumentGraph"), async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("graph"); }, "text-button");
+    graph.disabled = !current || !inventory || normalize(current.session.opened.root) !== normalize(inventory.root);
+    if (current) setUiAttr(graph, "title", current.session.path);
+    toolbar.append(follow, graph);
+    nodesView.append(toolbar);
+    if (!inventory) { nodesView.append(el("p", "sidebar-empty", uiMessage("workspaceViews.chooseNode"))); return; }
+    const path = el("div", "node-browser-path");
+    path.append(button(basename(inventory.root), () => browseFolder(inventory!.root), "text-button"));
+    if (normalize(folder) !== normalize(inventory.root)) {
+        const parent = folder.replaceAll("\\", "/").split("/").slice(0, -1).join("/");
+        path.append(button("↑", () => browseFolder(parent), "text-button"), el("span", "", basename(folder)));
+        setUiAttr(path.querySelectorAll("button")[1], "aria-label", uiMessage("workspaceViews.parentFolder"));
+    }
+    setUiAttr(path, "title", folder);
+    const filter = el("input", "node-browser-filter");
+    setUiAttr(filter, "aria-label", uiMessage("workspaceViews.nodeSearch"));
+    setUiAttr(filter, "placeholder", uiMessage("workspaceViews.nodeSearch"));
+    filter.value = nodeQuery;
+    filter.oninput = event => { nodeQuery = filter.value; if (!(event as InputEvent).isComposing && !sidebarComposing) renderNodeBrowser(); };
+    filter.addEventListener("compositionstart", () => { sidebarComposing = true; });
+    filter.addEventListener("compositionend", () => { sidebarComposing = false; nodeQuery = filter.value; renderNodeBrowser(); });
+    nodesView.append(path, filter);
+    renderNodeContents(nodesView, folder);
+    const contents = nodesView.querySelector(".node-contents");
+    if (contents) contents.scrollTop = folderViews.get(normalize(folder))?.scroll ?? 0;
+    if (focused) { filter.focus(); if (selection) filter.setSelectionRange(selection[0] ?? 0, selection[1] ?? 0); }
+}
+async function openInventoryResource(root: string, folder: string, path: string): Promise<{ descriptor: import("./media-viewer").MediaResource; read(): Promise<Blob>; open(): Promise<void> }> {
+    const resource = await inventoryResource(root, folder, path);
+    return { ...resource, open: async () => {
+        libraryCloseActivity.assertAvailable();
+        const end = libraryCloseActivity.begin();
+        const dialog = el("dialog", "modal inventory-resource-dialog"), container = el("div");
+        const descriptor = resource.descriptor;
+        const controller = mountResourceViewer(container, {
+            context: () => ({ viewerId: descriptor.resource }), list: async () => ({ resources: [descriptor], warnings: [] }),
+            read: async (_session, reference, revision) => {
+                if (reference !== descriptor.resource || revision !== descriptor.revision) throw new UiError(uiMessage("error.invalidResponse"));
+                return resource.read();
+            }, notify: toast,
+        }, { resource: descriptor.resource, revision: descriptor.revision! }, { allowSaveCopy: true });
+        const close = (): void => { controller.dispose(); disposeUiTree(dialog); dialog.close(); dialog.remove(); end(); };
+        dialog.append(el("h2", "", descriptor.name), el("p", "", uiMessage("workspaceViews.resourceScope")), container, button(uiMessage("common.close"), close, "text-button"));
+        dialog.oncancel = event => { event.preventDefault(); close(); };
+        document.body.append(dialog); dialog.showModal();
+    } };
+}
 function renderNodeContents(host: HTMLElement, folder: string): void {
     if (!inventory)
         return;
     const selected = inventory, panel = el("section", "node-contents");
     setUiAttr(panel, "aria-label", uiMessage("shell.nodeContents"));
     host.append(panel);
-    nodeContents = mountNodeContents(panel, selected, folder, query, contentSelections, {
+    nodeContents = mountNodeContents(panel, selected, folder, nodeQuery, contentSelections, {
         request: api, readBlob: apiBlob, browse: browseFolder, menu: nodeMenu, preview: previewNodes, notify: toast,
+        resource: entry => openInventoryResource(selected.root, folder, entry.path),
         open: entry => entry.kind === "directory" ? browseFolder(entry.path) : openInventoryEntry(entry, selected.root, selected.workspaceId),
         changed: async () => libraryCloseActivity.run(async () => {
 
-            workspaceTools.invalidateQueryEnvironment(selected.root);
+            workspaceTools.invalidateLibraryEnvironment(selected.root);
             if (inventory === selected) {
                 const next = await api<Inventory>("/api/library/open", { path: selected.root });
                 workspaceTools.assertLibraryChange(next);
@@ -1402,57 +1605,22 @@ function renderNodeContents(host: HTMLElement, folder: string): void {
     });
 }
 function renderTopbar(): void {
-    // Writing blur can report state between pointerdown and click. Preserve the
-    // actual action nodes while updating labels, so the pending click survives.
-    const sessionId = current?.session.opened.sessionId ?? "";
-    if (topbar.dataset.session === sessionId) {
-        if (current) {
-            const title = topbar.querySelector<HTMLElement>(".document-title")!;
-            setUiText(title, basename(current.session.path));
-            const path = topbar.querySelector<HTMLElement>(".document-path")!;
-            setUiText(path, current.session.path);
-            setUiAttr(path, "title", current.session.path);
-            const state = topbar.querySelector<HTMLElement>(".save-state")!;
-            state.className = `save-state ${current.session.dirty ? "dirty" : ""}`;
-            setUiText(state, saveState(current));
-            const save = topbar.querySelector<HTMLButtonElement>('[data-command="save"]')!;
-            save.disabled = saveBusy(current);
-            setUiText(save.lastChild!, saveBusy(current) ? uiMessage("shell.saveAwaitingConfirmationEllipsis") : uiMessage("common.save"));
-        }
-        return;
-    }
-    topbar.dataset.session = sessionId;
-    topbar.replaceChildren();
-    const menu = button("", () => { shell.classList.toggle("sidebar-open"); }, "icon-button mobile-menu", "menu");
-    setUiAttr(menu, "aria-label", uiMessage("shell.showLibraryNavigation"));
-    topbar.append(menu);
-    const location = el("div", "document-location");
+    // These action nodes survive author blur/state acknowledgements. File paths
+    // are tab tooltips, rather than a second permanent document identity row.
+    headerHome.hidden = documents.length > 0;
+    headerSaveState.hidden = !current;
+    headerSave.disabled = !current || saveBusy(current);
     if (current) {
-        const name = el("div", "document-title", basename(current.session.path));
-        const subtitle = el("span", "document-path", current.session.path);
-        setUiAttr(subtitle, "title", current.session.path);
-        location.append(name, subtitle);
+        headerSaveState.className = `save-state ${current.session.dirty ? "dirty" : ""}`;
+        setUiText(headerSaveState, saveState(current));
+        setUiAttr(headerSaveState, "title", saveState(current));
+        setUiText(headerSave.lastChild!, saveBusy(current) ? uiMessage("shell.saveAwaitingConfirmationEllipsis") : uiMessage("common.save"));
     }
-    else
-        location.append(el("span", "home-label", uiMessage("shell.writingAndKnowledge")));
-    topbar.append(location);
-    const actions = el("div", "top-actions");
-    if (current) {
-        const state = el("span", `save-state ${current.session.dirty ? "dirty" : ""}`, saveState(current));
-        actions.append(state);
-        actions.append(button(uiMessage("shell.importRecognition"), () => recognitionPanel.open(), "button-secondary compact"));
-        actions.append(button(uiMessage("shell.saveAs"), saveAs, "button-secondary compact"));
-        const timeline = button(uiMessage("shell.timeline"), () => historyPanel.open(), "button-secondary compact");
-        timeline.disabled = !current.session.opened.nodeId || !current.session.opened.workspaceId;
-        actions.append(timeline);
-        const saveButton = button(saveBusy(current) ? uiMessage("shell.saveAwaitingConfirmationEllipsis") : uiMessage("common.save"), () => saveDocument(current!), "button-primary compact", "save");
-        saveButton.dataset.command = "save";
-        saveButton.disabled = saveBusy(current);
-        actions.append(saveButton);
+    if (documentFileControls) {
+        documentFileControls.recognition.disabled = !current;
+        documentFileControls.saveAs.disabled = !current;
+        documentFileControls.timeline.disabled = !current?.session.opened.nodeId || !current?.session.opened.workspaceId;
     }
-    else
-        actions.append(el("span", "top-note", uiMessage("shell.localNativeTypst")));
-    topbar.append(actions);
 }
 function saveState(doc: LiveDocument): UiText { return doc.writing.state.pending ? uiMessage("shell.textAwaitingConfirmation") : doc.session.opened.recoveredDraftConflict ? uiMessage("shell.recoveredDraftDiskConflict") : historyPanel.hasPending(historyContext(doc)) ? uiMessage("shell.originalHistoryRestorePending") : doc.session.savePending ? uiMessage("shell.saving") : pendingSave(doc) ? uiMessage("shell.saveResultAwaitingConfirmation") : doc.draftFailure ? uiMessage("shell.draftRecoveryWriteFailed") : doc.session.recovered ? uiMessage("shell.draftRecovered") : doc.session.dirty ? uiMessage("shell.unsaved") : uiMessage("shell.saved"); }
 function renderTabs(): void {
@@ -1463,6 +1631,7 @@ function renderTabs(): void {
             tab.className = `document-tab ${doc === current ? "selected" : ""}`;
             tab.setAttribute("aria-current", doc === current ? "page" : "false");
             setUiText(tab.querySelector<HTMLElement>(".tab-name")!, basename(doc.session.path));
+            setUiAttr(tab, "title", doc.session.path);
             const dirty = tab.querySelector(".tab-dirty");
             if (doc.session.dirty && !dirty)
                 tab.append(el("span", "tab-dirty", "•"));
@@ -1477,6 +1646,7 @@ function renderTabs(): void {
     for (const doc of documents) {
         const tab = button("", () => activateDocument(doc), `document-tab ${doc === current ? "selected" : ""}`, "file");
         tab.setAttribute("aria-current", doc === current ? "page" : "false");
+        setUiAttr(tab, "title", doc.session.path);
         tab.append(el("span", "tab-name", basename(doc.session.path)));
         if (doc.session.dirty)
             tab.append(el("span", "tab-dirty", "•"));
@@ -1488,18 +1658,29 @@ function renderTabs(): void {
         tabs.append(add);
     }
 }
+const statusLeft = el("div", "status-left");
+const statusRight = el("div", "status-right");
+const statusMode = button("", () => { ribbon.select("view", true); ribbon.setCollapsed(false); }, "status-mode");
+setUiAttr(statusMode, "aria-label", uiMessage("shell.documentView"));
+statusbar.append(statusLeft, statusMode, statusRight, workPanel.statusButton);
 function renderStatus(): void {
-    statusbar.replaceChildren();
+    statusLeft.replaceChildren();
+    statusRight.replaceChildren();
+    statusMode.hidden = !current;
     if (!current) {
-        statusbar.append(el("span", "", uiMessage("shell.filesOnYourDevice")), el("span", "", uiMessage("shell.localPreviewEdition")));
+        statusLeft.append(el("span", "", uiMessage("shell.filesOnYourDevice")));
+        statusRight.append(el("span", "", uiMessage("shell.localPreviewEdition")));
         return;
     }
     const doc = current;
     const session = doc.session;
-    const left = el("div", "status-left");
+    const left = statusLeft;
+    const activeMode = modes.find(mode => mode.id === doc.mode)!;
+    setUiText(statusMode, activeMode.title);
+    setUiAttr(statusMode, "title", activeMode.hint);
     const chars = doc.editor.source === session.source ? doc.editor.characterCount : countSourceCodePoints(session.source);
     left.append(el("span", "", displayMessage("shell.characterCount", { p0: uiDisplayParameter(chars.toLocaleString()) })), el("span", "status-kind", session.opened.nodeId ? uiMessage("shell.libraryNote") : uiMessage("shell.ordinaryTypstFile")));
-    const right = el("div", "status-right");
+    const right = statusRight;
     if (doc.writing.state.pending || doc.writing.state.busy)
         right.append(el("span", "pending-label", doc.writing.state.busy ? uiMessage("shell.textUpdating") : uiMessage("shell.textSyncingToDraft")));
     else if (!sourceConsumersAvailable(doc))
@@ -1518,7 +1699,6 @@ function renderStatus(): void {
         right.append(el("span", "error-label", displayMessage("shell.recoveryDraftNotWritten", { p0: uiDisplayParameter(doc.draftFailure) })));
     else if (session.dirty && session.lastDraftSource === session.source)
         right.append(el("span", "", uiMessage("shell.recoveryDraftRetained")));
-    statusbar.append(left, right);
 }
 function renderWelcome(): void {
     const welcome = el("section", "welcome");
@@ -1629,6 +1809,7 @@ function renderDocument(): void {
     if (comparisonMessage)
         doc.session.error = comparisonMessage;
     const controls = el("div", "document-controls");
+    controls.dataset.documentOwner = doc.navigationKey;
     const viewSwitch = el("div", "view-switch");
     viewSwitch.setAttribute("role", "group");
     setUiAttr(viewSwitch, "aria-label", uiMessage("shell.documentView"));
@@ -1636,10 +1817,12 @@ function renderDocument(): void {
         const choice = button(mode.title, () => changeMode(mode.id), doc.mode === mode.id ? "view-choice active" : "view-choice");
         setUiAttr(choice, "title", () => `${uiTextValue(mode.short)} · ${uiTextValue(mode.hint)}`);
         choice.setAttribute("aria-pressed", String(doc.mode === mode.id));
+        choice.dataset.documentControl = `mode:${mode.id}`;
         viewSwitch.append(choice);
     }
     controls.append(viewSwitch);
     const layout = el("select", "layout-choice");
+    layout.dataset.documentControl = "layout";
     setUiAttr(layout, "aria-label", uiMessage("shell.documentLayout"));
     for (const [value, label] of [["continuous", uiMessage("shell.continuousLayout")], ["paged", uiMessage("shell.pagedPreview")]] as const) {
         const option = el("option", "", label);
@@ -1653,24 +1836,35 @@ function renderDocument(): void {
     controls.append(layout);
     if (doc.mode === "source") {
         const preview = button(previewVisible ? uiMessage("shell.collapsePreview") : uiMessage("shell.showPreview"), () => { previewVisible = !previewVisible; localStorage.setItem("weftext-preview", String(previewVisible)); renderContent(); }, "text-button preview-toggle", "eye");
+        preview.dataset.documentControl = "preview";
         controls.append(preview);
     }
-    content.append(controls);
+    setDocumentGroup("view", "document-mode", uiMessage("shell.documentView"), [controls]);
     const caption = el("div", "view-caption");
-    caption.append(el("span", "", modes.find(m => m.id === doc.mode)!.hint));
     if (doc.mode === "read" || readOnlySource(doc))
         caption.append(el("span", "readonly-label", readOnlySource(doc) ? uiMessage("shell.recycledReadOnly") : uiMessage("shell.readOnlyCurrentDraft")));
     if (doc.session.recovered)
         caption.append(button(uiMessage("shell.recoveredPreviousDraftView"), showDraftComparison, "recovery-caption"));
     if (noteInputRecovery.count(localPersonalAudience()))
         caption.append(button(uiMessage("shell.retrieveUnappliedNoteInput"), showRecovery, "recovery-caption"));
-    content.append(caption);
+    if (caption.childElementCount) content.append(caption);
     doc.notesMount?.dispose();
     const authoring = el("section", "document-authoring-controls"), notes = el("div", "document-notes-summary");
-    authoring.append(button(uiMessage("shell.numberingControls"), () => openLocalNumbering(doc), "text-button"), button(uiMessage("shell.outlineHeadingStructure"), async () => libraryCloseActivity.run(async () => {
-        await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("headings");
-    }), "text-button"), notes);
-    content.append(authoring);
+    authoring.append(button(uiMessage("shell.numberingControls"), () => openLocalNumbering(doc), "text-button"), notes);
+    setDocumentGroup("insert", "document-notes", uiMessage("documentNotes.title"), [authoring]);
+    const outline = button(uiMessage("shell.outlineHeadingStructure"), async () => libraryCloseActivity.run(async () => {
+        await workspaceTools.show("outline");
+    }), "text-button");
+    setDocumentGroup("view", "document-outline", uiMessage("localChrome.navigation"), [outline]);
+    if (doc.mode !== "read" && !readOnlySource(doc)) {
+        const history = el("div", "source-history-controls");
+        for (const [redo, label] of [[false, uiMessage("hostedEditor.undo")], [true, uiMessage("hostedEditor.redo")]] as const) {
+            const control = button(label, () => doc.writing.deferUntilCompositionEnds(() => redo ? doc.writing.redo() : doc.writing.undo()), "format-button", redo ? "redo" : "undo");
+            control.addEventListener("mousedown", event => event.preventDefault());
+            history.append(control);
+        }
+        setDocumentGroup("home", "document-history", uiMessage("localChrome.history"), [history]);
+    }
     doc.notesMount = mountDocumentNotes(notes, documentNotesHost(localAuthoringEnvironment(doc)));
     if (doc.session.opened.recoveredDraftConflict) {
         const conflict = el("div", "document-error document-conflict");
@@ -1694,7 +1888,7 @@ function renderDocument(): void {
     if (doc.layout === "paged") {
         if (["source", "styled"].includes(doc.mode)) {
             const sourcePane = el("section", "source-pane");
-            sourcePane.append(sourceToolbar(doc));
+            setDocumentGroup("home", "document-format", uiMessage("localChrome.text"), [sourceToolbar(doc)]);
             const host = el("div", "source-host");
             sourcePane.append(host);
             doc.editor.mount(host);
@@ -1718,7 +1912,7 @@ function renderDocument(): void {
     else if (["source", "styled"].includes(doc.mode)) {
         const sourcePane = el("section", "source-pane");
         setUiAttr(sourcePane, "aria-label", uiMessage("shell.sourceEditingArea"));
-        sourcePane.append(sourceToolbar(doc));
+        setDocumentGroup("home", "document-format", uiMessage("localChrome.text"), [sourceToolbar(doc)]);
         const host = el("div", "source-host");
         sourcePane.append(host);
         doc.editor.mount(host);
@@ -1745,13 +1939,20 @@ function renderDocument(): void {
         flowScroll = flow;
         renderProjection(doc);
         if (doc.mode === "write" && !readOnlySource(doc)) {
-            body.before(createWritingToolbar(doc.writing, { onError: showError, insertLink, revealSource: range => revealWritingSource(doc, range) }));
+            const commands = createWritingCommandGroups(doc.writing, { onError: showError, insertLink, revealSource: range => revealWritingSource(doc, range) });
+            setDocumentGroup("home", "document-format", uiMessage("localChrome.text"), [commands.format]);
+            setDocumentGroup("insert", "document-writing", uiMessage("localChrome.content"), [commands.insert]);
+            // Use the same history owner and handlers supplied by the writing adapter.
+            const priorHistory = documentRibbonGroups.find(group => group.tab === "home" && group.id === "document-history");
+            if (priorHistory) { for (const node of priorHistory.nodes) disposeUiTree(node); priorHistory.nodes = [commands.history]; }
+            ribbon.setGroup("home", "document-history", uiMessage("localChrome.history"), [commands.history]);
         }
         if (doc.mode === "focus" && activeSourceOrigin) {
             const source = el("section", "focus-source");
             const heading = el("div", "pane-heading");
             heading.append(el("span", "", uiMessage("shell.currentConstructSyntax")), button(uiMessage("shell.collapseSyntax"), () => { doc.editor.clearReveal(); activeSourceOrigin = null; renderContent(); }, "text-button", "close"));
-            source.append(heading, sourceToolbar(doc));
+            source.append(heading);
+            setDocumentGroup("home", "document-format", uiMessage("localChrome.text"), [sourceToolbar(doc)]);
             const host = el("div", "source-host");
             source.append(host);
             body.append(source);
@@ -1793,16 +1994,19 @@ function sourceToolbar(doc: LiveDocument): HTMLElement {
                 doc.editor.insert(before, after, placeholder);
         }, `format-button format-${role}`);
         control.disabled = readOnlySource(doc);
+        control.addEventListener("mousedown", event => event.preventDefault());
         toolbar.append(control);
     }
     const link = button(uiMessage("shell.formatLink"), insertLink, "format-button", "link");
     link.disabled = readOnlySource(doc);
+    link.addEventListener("mousedown", event => event.preventDefault());
     toolbar.append(link);
-    const spacer = el("span", "toolbar-spacer");
-    toolbar.append(spacer, el("span", "keyboard-hint", uiMessage("shell.sourceKeyboardHint")));
     return toolbar;
 }
 function renderContent(): void {
+    const focusDocument = current, focusGeneration = navigationGeneration;
+    const focused = document.activeElement as HTMLElement | null, controlKey = focused?.dataset.documentControl;
+    const ownedControl = focused?.closest<HTMLElement>("[data-document-owner]")?.dataset.documentOwner === focusDocument?.navigationKey;
     const recognitionCurrent = current?.session.opened.root ?? "";
     if (recognitionSession !== recognitionCurrent) {
         recognitionPanel.retireDisplay(true);
@@ -1825,14 +2029,27 @@ function renderContent(): void {
     }
     renderHost = null;
     flowScroll = null;
+    for (const document of documents) { document.notesMount?.dispose(); document.notesMount = undefined; }
+    clearDocumentGroups();
     content.replaceChildren();
     current ? renderDocument() : renderWelcome();
     renderTopbar();
     renderTabs();
     renderStatus();
     renderEverydayBar();
+    if (focusDocument && controlKey && ownedControl && current === focusDocument && navigationGeneration === focusGeneration
+        && !bodyCloseFrozen && !focusDocument.editor.composing && !focusDocument.writing.state.composing
+        && (document.activeElement === focused || document.activeElement === document.body)) {
+        const target = ribbon.element.querySelector<HTMLElement>(`[data-document-owner="${CSS.escape(focusDocument.navigationKey)}"] [data-document-control="${CSS.escape(controlKey)}"]`);
+        if (target?.isConnected && !target.matches(":disabled") && !target.closest("[hidden],[inert]") && target.getClientRects().length)
+            target.focus({ preventScroll: true });
+    }
 }
 function refreshChrome(): void {
+    workspaceTools.refreshOutline();
+    workPanel.selectProblemScope(current?.navigationKey ?? null);
+    if (current) renderDiagnostics(current);
+    void timelineView.documentChanged().catch(showError);
     const comparisonMessage = current && documentComparisonMessage(current);
     if (current && comparisonMessage) {
         current.session.error = comparisonMessage;
@@ -2134,17 +2351,19 @@ function captureReadingSelection(): void {
     readingSelection = { sessionId: doc.session.opened.sessionId, serial: doc.session.serial, selection: { from, to, visibleExcerpt: selection.toString(), elementRole: "text" } };
 }
 function renderDiagnostics(doc: LiveDocument): void {
-    content.querySelector(".diagnostics")?.remove();
-    const details = el("details", "diagnostics");
-    const diagnostics = doc.session.projection!.diagnostics;
-    const errors = diagnostics.filter(d => d.severity === "error").length;
-    details.open = errors > 0;
-    details.append(el("summary", "", displayMessage("shell.diagnosticSummary", { p0: uiDisplayParameter(errors ? displayMessage("shell.errorCount", { p0: errors }) : displayMessage("shell.noticeCount", { p0: diagnostics.length })), p1: uiDisplayParameter(doc.session.projection!.compilerVersion) })));
-    for (const diagnostic of diagnostics) {
-        const item = button(engineDiagnosticUiText(diagnostic), () => diagnostic.origin ? revealSource(diagnostic.origin) : changeMode("source"), `diagnostic-item ${diagnostic.severity}`, diagnostic.severity === "error" ? "alert" : "code");
-        details.append(item);
-    }
-    content.append(details);
+    const projection = doc.session.projectionCurrent ? doc.session.projection : null;
+    const serial = doc.session.serial, inputId = doc.session.inputId;
+    workPanel.setProblems(doc.navigationKey, (projection?.diagnostics ?? []).map((diagnostic, index) => ({
+        id: `${doc.navigationKey}:${index}`, severity: diagnostic.severity === "error" ? "error" : diagnostic.severity === "warning" ? "warning" : "info",
+        title: engineDiagnosticUiText(diagnostic), detail: diagnostic.origin?.path,
+        actions: [{ id: "source", label: uiMessage("shell.viewSource"), run: async () => {
+            if (!documents.includes(doc) || doc.session.serial !== serial || doc.session.inputId !== inputId || !doc.session.projectionCurrent)
+                throw new UiError(uiMessage("shell.closeBasisChanged"));
+            if (current !== doc) await activateDocument(doc);
+            if (current !== doc) throw new UiError(uiMessage("shell.closeBasisChanged"));
+            if (diagnostic.origin) await revealSource(diagnostic.origin); else await changeMode("source");
+        } }],
+    })));
 }
 async function changeMode(mode: ViewMode): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
@@ -2273,6 +2492,7 @@ async function compile(doc: LiveDocument): Promise<void> {
             void pagedPreview?.render({ sessionId: doc.session.opened.sessionId, source, serial });
         try {
             const basis = { sessionId: doc.session.opened.sessionId, source, serial, inputId: doc.session.inputId };
+            const outlineBasis: OutlineBasis = { ...basis, path: doc.session.path, root: doc.session.opened.root };
             const hadQueries = doc.queries.hasQueries;
             const [result, editorMap] = await Promise.all([
                 api<RenderOutput>("/api/render", queryBasisWire(basis)),
@@ -2284,11 +2504,13 @@ async function compile(doc: LiveDocument): Promise<void> {
             if (result.sourceInfo.notes?.sourceHash === editorMap.sourceHash)
                 editorMap.notes = result.sourceInfo.notes;
             if (doc.session.acceptProjection(result)) {
+                outlineProjections.set(result, outlineBasis);
                 // Map observers consume the accepted projection as well as its source.
                 // Publish it before notifying them so initial notes controls can enable.
                 doc.writing.installMap(editorMap, source, serial);
                 doc.editor.tokens(result.sourceInfo.syntaxTokens, doc.mode === "styled", syntaxBasis);
                 if (doc === current) {
+                    workspaceTools.refreshOutline();
                     if (doc.layout === "paged" && hadQueries !== doc.queries.hasQueries)
                         renderContent();
                     else
@@ -2360,7 +2582,7 @@ async function createLibrary(): Promise<void> {
 
                 if (!receipt.library || receipt.library.workspaceId !== receipt.workspaceId || normalize(receipt.library.root) !== normalize(receipt.root) || receipt.rootNotePath && !receipt.rootDocument) throw new UiError(uiMessage("shell.libraryExactDeliveryPending"));
                 workspaceTools.assertLibraryChange(receipt.library);
-                workspaceTools.invalidateQueryEnvironment(receipt.root);
+                workspaceTools.invalidateLibraryEnvironment(receipt.root);
                 inventory = receipt.library; query = ""; selectedFolder = null; renderSidebar(); renderContent();
                 if (receipt.rootDocument) await acceptCreatedDocument(receipt.rootDocument, receipt.operationId);
                 else await refreshInventory();
@@ -2419,6 +2641,7 @@ async function createNote(): Promise<void> {
             throw new UiError(uiMessage("shell.creationTargetChanged"));
         await creation<OriginalFact & { document?: OpenedDocument; documentError?: ApiErrorBody }>("/api/note/create", { root: owner.root, parent, name }, async receipt => libraryCloseActivity.run(async () => {
 
+            if (receipt.status === "committed") workspaceTools.invalidateLibraryEnvironment(owner.root);
             if (receipt.status !== "committed" || !receipt.document || receipt.documentError) throw new UiError(joinUiText([uiMessage("shell.noteOriginalDeliveryPending"), receipt.documentError ? apiErrorUiText(receipt.documentError) : uiMessage("shell.checkOriginalOperationSentence")]));
             await acceptCreatedDocument(receipt.document, receipt.operationId);
 
@@ -2460,7 +2683,6 @@ async function openDocument(path: string, root?: string): Promise<void> {
             try { addDocument(opened); }
             finally { if (!ownsOpenedSession(opened.sessionId)) await releaseOpenedSession(opened.sessionId); }
         }
-        shell.classList.remove("sidebar-open");
     } finally { finishNativeActivity(); }
 }
 function readOnlySource(doc: LiveDocument): boolean { return doc.session.opened.readOnly === true || doc.session.opened.kind === "trash" || doc.session.opened.kind === "managedTrash"; }
@@ -2580,7 +2802,7 @@ function addDocument(opened: OpenedDocument): void {
     });
     const authoringAssets = new AuthoringAssetsAdapter({ request: api, prefix: "/api/editor/endnotes-module", context: () => doc && current === doc && sourceConsumersAvailable(doc) && !readOnlySource(doc) && !doc.sourceTrashed && doc.mode !== "read" ? { sessionId: doc.session.opened.sessionId, audience: localPersonalAudience(), root: doc.session.opened.root } : null, committed: context => {
             if (context.root)
-                workspaceTools.invalidateQueryEnvironment(context.root);
+                workspaceTools.invalidateLibraryEnvironment(context.root);
         }, changed: async () => libraryCloseActivity.run(async () => {
             doc.session.projection = null; doc.renderGeneration++; doc.queries.invalidate(); await compile(doc);
         }) });
@@ -2591,6 +2813,7 @@ function addDocument(opened: OpenedDocument): void {
     activeSourceOrigin = null;
     renderSidebar();
     renderContent();
+    void workspaceTools.selectedDocumentChanged().catch(showError);
     scheduleRender(doc, 0);
     if (session.recovered)
         toast(uiMessage("shell.lastUnsavedDraftRecovered"));
@@ -2629,30 +2852,12 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
         if (generation !== navigationGeneration)
             return;
         const retained = navigationContexts.get(doc);
-        const saved = retained ? { ...retained, selection: [...retained.selection], collapsed: [...retained.collapsed] } : undefined;
+        const saved = retained ? { ...retained, collapsed: [...retained.collapsed] } : undefined;
         if (saved?.inventory) {
             const before = saved.inventory, latest = await api<Inventory>("/api/library/open", { path: before.root });
             if (generation !== navigationGeneration)
                 return;
             workspaceTools.assertLibraryChange(latest);
-            const relocate = (path: string): string | null => {
-                const entry = before.entries.find(item => normalize(item.path) === normalize(path));
-                const primary = entry?.nodeId ? entry : before.entries.find(item => item.kind === "node" && normalize(item.parentPath) === normalize(path));
-                if (!primary?.nodeId)
-                    return null;
-                const next = latest.entries.find(item => item.kind === "node" && item.nodeId === primary.nodeId && item.identityStatus === "admitted");
-                return next ? (entry?.kind === "directory" ? next.parentPath : next.path) : null;
-            };
-            saved.selection = saved.selection.flatMap(path => { const next = relocate(path); return next ? [next] : []; });
-            if (saved.folder) {
-                const next = relocate(saved.folder);
-                if (next)
-                    saved.folder = next;
-                else if (!latest.entries.some(item => item.kind === "directory" && normalize(item.path) === normalize(saved.folder!))) {
-                    saved.folder = null;
-                    toast(uiMessage("shell.oldDirectoryScopeUnavailable"));
-                }
-            }
             saved.inventory = latest;
         }
         workspaceTools.assertLibraryChange(saved ? saved.inventory : inventory);
@@ -2683,13 +2888,11 @@ async function activateDocument(doc: LiveDocument): Promise<void> {
         activeSourceOrigin = null;
         renderSidebar();
         renderContent();
+        void workspaceTools.selectedDocumentChanged().catch(showError);
         if (saved) {
             const tree = sidebar.querySelector(".file-tree");
             if (tree)
                 tree.scrollTop = saved.scroll;
-            const contents = sidebar.querySelector(".node-contents");
-            if (contents)
-                contents.scrollTop = saved.contentScroll;
         }
         if (["source", "styled"].includes(doc.mode))
             doc.editor.view.focus();
@@ -2785,7 +2988,7 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             }
             if (receipt.recoveryIssue)
                 toast(uiMessage("shell.savedRecoveryUpdateUnavailable"), true);
-            workspaceTools.invalidateQueryEnvironment(doc.session.opened.root);
+            workspaceTools.invalidateLibraryEnvironment(doc.session.opened.root);
             let delivered = receipt.document;
             // Status can supply an independent comparison. A known adopted
             // writer must be freshly qualified under its original Session.
@@ -2857,17 +3060,12 @@ async function saveDocument(doc: LiveDocument, path?: string): Promise<void> {
             if (querySaveNotice) toast(uiMessage("shell.savedQueriesNotRunnable"), true);
         }
         catch (error) {
-            if (!receiptReceived && error instanceof TerminatedAttempt)
+            const failure = fileSaveFailure(error, receiptReceived, !!doc.lastSave);
+            if (failure.clearAttempt)
                 doc.lastSave = undefined;
-            doc.session.error = error instanceof Error ? errorUiText(error) : String(error);
+            doc.session.error = failure.error;
             if (error instanceof ApiError && error.currentSource != null)
                 doc.externalSource = error.currentSource;
-            if (error instanceof ApiError && error.code === "saveAsTargetChanged")
-                doc.session.error = errorUiText(error);
-            else if (receiptReceived)
-                doc.session.error = doc.lastSave ? uiMessage("shell.committedDeliveryIncomplete") : displayMessage("shell.savedRecoveryInformationFailed", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) });
-            else if (!(error instanceof ApiError))
-                doc.session.error = uiMessage("shell.saveUnknownConfirmSameOperation");
             if (doc === current)
                 renderContent();
             throw error;
@@ -3124,7 +3322,7 @@ async function inspectRecovery(id: string): Promise<void> {
         });
         if (decision) {
             await api("/api/recovery/resolve", { operationId: id, action: decision });
-            workspaceTools.invalidateQueryEnvironment();
+            workspaceTools.invalidateLibraryEnvironment();
             toast(uiMessage("shell.recoveryResolutionConfirmed"));
             await refreshInventory();
         }
@@ -3383,6 +3581,22 @@ nativeSurface.register("library-author-owners", {
     thaw: thawLibraryClose,
 });
 nativeSurface.listen(message => {
+    if (message.type === "reminder-activation") {
+        const actionId = typeof message.actionId === "string" ? message.actionId : undefined;
+        void libraryCloseActivity.run(async () => {
+            let accepted = false;
+            try {
+                if (typeof message.activationKey !== "string" || !actionId) throw new UiError(uiMessage("error.invalidResponse"));
+                await workspaceTools.activateReminder(message.activationKey);
+                accepted = true;
+            } catch (error) { showError(error); }
+            finally { if (actionId) nativeSurface.post({ type: "action-delivered", actionId, accepted }); }
+        }).catch(error => {
+            showError(error);
+            if (actionId) nativeSurface.post({ type: "action-delivered", actionId, accepted: false });
+        });
+        return;
+    }
     if (message.type === "open-reminders") {
         void Promise.resolve().then(() => { libraryCloseActivity.assertAvailable(); return workspaceTools.openReminders(); }).catch(showError);
         return;
@@ -3402,6 +3616,28 @@ nativeSurface.listen(message => {
         finally { if (deliveryId) nativeSurface.post({ type: "document-delivered", deliveryId, accepted }); }
     })().catch(showError);
 });
+function mountWorkspaceRibbon(): void {
+    workspaceTools.mountRibbon(ribbon);
+    ribbon.setGroup("file", "open", uiMessage("localChrome.files"), [
+        button(uiMessage("shell.openLibrary"), chooseLibrary, "text-button", "book"),
+        button(uiMessage("shell.createLibrary"), createLibrary, "text-button", "plus"),
+        button(uiMessage("shell.openOutsideTypst"), openOutsideFile, "text-button", "file"),
+        button(uiMessage("shell.recentVisits"), showRecent, "text-button"),
+    ]);
+    documentFileControls = {
+        recognition: button(uiMessage("shell.importRecognition"), () => recognitionPanel.open(), "text-button"),
+        saveAs: button(uiMessage("shell.saveAs"), saveAs, "text-button"),
+        timeline: button(uiMessage("shell.timeline"), () => historyPanel.open(), "text-button"),
+    };
+    ribbon.setGroup("file", "document", uiMessage("localChrome.document"), [documentFileControls.saveAs, documentFileControls.recognition, documentFileControls.timeline, button(uiMessage("shell.recoveryRecords"), showRecovery, "text-button", "undo")]);
+    ribbon.setGroup("file", "preferences", uiMessage("localChrome.preferences"), [interfaceLocale.element]);
+    ribbon.setGroup("view", "panes", uiMessage("localChrome.panes"), [dock.controls, navigationLayout.controls, button(uiMessage("workPanel.label"), () => workPanel.setCollapsed(!workPanel.collapsed), "text-button")]);
+    ribbon.setGroup("insert", "blocks", uiMessage("localChrome.blocks"), [
+        button(uiMessage("shell.insertBlockActions"), () => openEverydayMenu(uiMessage("shell.insertBlockActions"), everydayCommands().filter(item => /^(insert-|convert-|move-|resources)/.test(item.id)), toast), "text-button"),
+        button(uiMessage("shell.insertEmbeddedQuery"), insertEverydayQuery, "text-button"),
+    ]);
+}
+mountWorkspaceRibbon();
 renderSidebar();
 renderContent();
 void bootstrap().then(() => { nativeSurface.markReady(); nativeStartupFinished = true; }).catch(error => { showError(error); nativeSurface.reportFailed(); });

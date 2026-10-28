@@ -187,6 +187,71 @@ fn owned_read_witness_releases_core_storage_but_keeps_exact_validation() {
 }
 
 #[test]
+fn explicit_snapshot_release_keeps_independent_bases_witnesses_and_prepared_plans() {
+    let mut f = Fixture::new("plain");
+    let root = f.temp.path().join("library");
+    f.core.create_library(&root).unwrap();
+    let doc = f.core.create_note_fixture(&root, &root, "Note").unwrap();
+    let original = f
+        .core
+        .read_snapshot(&root, std::slice::from_ref(&doc.path))
+        .unwrap()
+        .files
+        .remove(0);
+    let independent = f
+        .core
+        .read_snapshot(&root, std::slice::from_ref(&doc.path))
+        .unwrap()
+        .files
+        .remove(0);
+    assert_ne!(original.base_id, independent.base_id);
+    let witness = f.core.snapshot_witness(&original.base_id).unwrap();
+    let after = format!("{}\nprepared original effect", doc.source).into_bytes();
+    let preview = f
+        .core
+        .prepare_operation(OperationRequest {
+            operation_id: fresh(),
+            root: display(&root),
+            intent: OperationIntent::UpdateFiles {
+                changes: vec![FileChange {
+                    path: doc.path.clone(),
+                    base_id: Some(original.base_id.clone()),
+                    before: original.bytes,
+                    after: after.clone(),
+                }],
+            },
+        })
+        .unwrap();
+    let before = f.core.snapshots.len();
+    f.core
+        .release_snapshot_bases(&[original.base_id.clone(), original.base_id.clone(), fresh()]);
+    assert_eq!(f.core.snapshots.len(), before - 1);
+    f.core
+        .release_snapshot_bases(std::slice::from_ref(&original.base_id));
+    assert_eq!(f.core.snapshots.len(), before - 1);
+    assert!(
+        f.core
+            .validate_snapshot(&root, &doc.path, &original.base_id)
+            .is_err()
+    );
+    f.core
+        .validate_snapshot(&root, &doc.path, &independent.base_id)
+        .unwrap();
+    f.core
+        .validate_snapshot_witness(&root, &doc.path, &witness)
+        .unwrap();
+    f.core
+        .execute_operation(&preview.operation_id, &preview.plan_id)
+        .unwrap();
+    assert_eq!(fs::read(&doc.path).unwrap(), after);
+    assert!(
+        f.core
+            .validate_snapshot_witness(&root, &doc.path, &witness)
+            .is_err()
+    );
+}
+
+#[test]
 fn failed_bounded_read_does_not_register_partial_snapshot_bytes() {
     let mut f = Fixture::new("plain");
     let root = f.temp.path().join("library");

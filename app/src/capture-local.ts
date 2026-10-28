@@ -1,3 +1,4 @@
+import { UiError, message } from "./ui-locale";
 import { CaptureController, type CaptureControllerState } from "./capture-controller";
 import { CapturePersistence, captureFieldCandidate, captureInputForPersistence, captureUtf8Ready, emptyCaptureInput, type CaptureDraftRecord, type CaptureInput, type CaptureTargetSelection, type CaptureTransport } from "./capture-draft-state";
 import { LocalCapturePersistence } from "./capture-local-persistence";
@@ -16,7 +17,7 @@ export interface LocalCaptureOptions {
   transportFailure?(error: unknown): void;
   changed?(state: CaptureControllerState): void;
 }
-const pointerKey = "weftext:capture:active-draft";
+export const captureDraftPointerKey = "weftext:capture:active-draft";
 const committed = (fact: CaptureCreationFact) => fact.status === "committed";
 
 /** All author effects are dispatched from Core's durable frozen request. The
@@ -35,7 +36,7 @@ export class LocalCaptureSession {
       // A failed enumeration must not be mistaken for no previous draft.
       const records = await request<CaptureDraftRecord[]>("/api/capture/draft/list", {});
       let preferred: string | null = null;
-      try { preferred = options.pointerStorage?.getItem(pointerKey) ?? null; } catch { /* Locator preference is not author durability. */ }
+      try { preferred = options.pointerStorage?.getItem(captureDraftPointerKey) ?? null; } catch { /* Locator preference is not author durability. */ }
       const selected = records.find(record => record.draftId === preferred && (!options.target || record.target?.rootHint === options.target.root))
         ?? (records.length === 1 && (!options.target || records[0].target?.rootHint === options.target.root) ? records[0] : undefined);
       if (selected) record = await persistence.read(selected.draftId);
@@ -44,7 +45,7 @@ export class LocalCaptureSession {
         record = await persistence.mutate("create", { draftId: crypto.randomUUID(), mutationId: crypto.randomUUID(), input, target: options.target });
       }
     }
-    try { options.pointerStorage?.setItem(pointerKey, record.draftId); } catch { /* Core owns every actual input cut. */ }
+    try { options.pointerStorage?.setItem(captureDraftPointerKey, record.draftId); } catch { /* Core owns every actual input cut. */ }
     return this.install(request, record, options);
   }
   private static async install(request: CaptureTransport, record: CaptureDraftRecord, options: LocalCaptureOptions): Promise<LocalCaptureSession> {
@@ -75,6 +76,16 @@ export class LocalCaptureSession {
     this.retained = this.retained.filter(entry => entry.id !== proposal.id || entry.sequence !== proposal.sequence);
   }
   assertRecovered(): void { if (this.retained.length) throw new Error("另一个捕获 producer 的本人原输入尚未核定；先取回或明确处置，未覆盖它。"); }
+  /** A handoff may retire this producer only after its queued full mutations,
+   * pure-input staging and original outbox proofs have all settled. */
+  async settleForHandoff(): Promise<void> {
+    if (this.controller.state.draft.pending || this.controller.composing) throw new UiError(message("capture.pending"));
+    await this.controller.drain();
+    await this.persistence.settleStaging();
+    this.retained = await this.persistence.recover(this.controller.state.draft.draftId);
+    this.assertRecovered();
+    if (this.controller.state.draft.pending || this.controller.composing) throw new UiError(message("capture.pending"));
+  }
   async selectTarget(target: CaptureTargetSelection): Promise<void> {
     const current = this.controller.state.draft;
     if (current.pending) throw new Error("原操作仍保留；先按原编号确认后再更换目标。");
@@ -158,18 +169,5 @@ export class LocalCaptureSession {
     } else if (mode === "next") await this.controller.advance(fact.operationId!, true);
     else await close();
     return fact;
-  }
-  /** Create another library's owner without copying an old capability/candidate.
-   * The old Core draft remains recoverable under its original identity. */
-  async anotherTarget(target: CaptureTargetSelection, changed?: LocalCaptureOptions["changed"]): Promise<LocalCaptureSession> {
-    if (this.controller.state.draft.pending) throw new Error("原操作尚未核定，未把其输入复制到另一资料库提交。");
-    await this.controller.drain();
-    const current = this.controller.state.input;
-    const pureRaw=current.rawInputs.flatMap(raw=>raw.author ? [{...raw,text:structuredClone(raw.author.text),binding:"copyOnly" as const}] : []);
-    const retired=current.detachedRawInputs.flatMap(entry=>entry.input.author ? [{...entry,input:{...entry.input,text:structuredClone(entry.input.author.text),binding:"copyOnly" as const}}] : []);
-    const input: CaptureInput = { ...emptyCaptureInput(), authorTexts:structuredClone(current.authorTexts), authorBodyMode:current.authorBodyMode, detachedRawInputs: [...retired, ...pureRaw.map(raw => ({ retirementId: crypto.randomUUID(), reason: "schema" as const, input: raw }))] };
-    const persistence = new CapturePersistence(this.request);
-    const record = await persistence.mutate("create", { draftId: crypto.randomUUID(), mutationId: crypto.randomUUID(), input, target });
-    return LocalCaptureSession.install(this.request, record, { changed, recovery: this.recovery });
   }
 }

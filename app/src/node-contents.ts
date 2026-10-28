@@ -4,15 +4,25 @@ import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidi
 import type { Inventory, InventoryEntry } from "./types";
 import { nodeSourceHash } from "./hosted-navigation-state";
 import { mountListThumbnail, type ListPreview } from "./list-thumbnail";
-import { decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, movedSibling, type AuthoredOrder, type ContentsPreference, type OrderPlan, type PendingOrder } from "./node-contents-state";
+import type { MediaResource } from "./media-viewer";
+import { contentsPreferenceKey, contentsSection, directContentsEntries, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, movedSibling, type AuthoredOrder, type ContentsPreference, type ContentsSection, type OrderPlan, type PendingOrder } from "./node-contents-state";
+import { canonicalNodeSources } from "./file-tree";
+import "./node-contents.css";
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
-interface ContentsHost {
+/** The host captures an authorized exact version. A raw inventory path is never a resource URI. */
+export interface ContentsResource {
+    descriptor: MediaResource;
+    read(): Promise<Blob>;
+    open(): Promise<void>;
+}
+export interface ContentsHost {
     request: Request;
     readBlob(path: string, body: unknown): Promise<Blob>;
     open(entry: InventoryEntry): void | Promise<void>;
     browse(path: string | null): void;
     menu(entries: InventoryEntry[], folder?: string): void;
     preview(entries: InventoryEntry[]): void | Promise<void>;
+    resource?(entry: InventoryEntry): Promise<ContentsResource | null>;
     changed(): Promise<void>;
     notify(message: UiText): void;
 }
@@ -25,23 +35,28 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
     dispose(): void;
 } {
     let disposed = false, busy = false, order: AuthoredOrder | undefined, pending: PendingOrder | undefined, parentRef: string | undefined;
-    let preference = defaultContentsPreference(), persistenceError: UiText = "", dragging: string | undefined, preferenceEdited = false, recoveryBlocked = false;
+    let preference = defaultContentsPreference(), persistenceError: UiText = "", dragging: string | undefined, recoveryBlocked = false;
     const dialogs = new Set<HTMLDialogElement>();
     let thumbnails: {
         dispose(): void;
     }[] = [];
-    const header = el("header"), rows = el("div"), controls = el("div", "", "node-contents-controls"), notice = el("p"), orderHost = el("div", "", "node-order-controls");
-    const direct = inventory.entries.filter(entry => normalized(entry.parentPath) === normalized(folder) && normalized(entry.path) !== normalized(folder));
+    panel.classList.add("node-resource-view");
+    const header = el("header"), rows = el("div", "", "node-content-sections"), controls = el("div", "", "node-contents-controls"), notice = el("p", "", "node-contents-notice"), orderHost = el("div", "", "node-order-controls");
+    const direct = directContentsEntries(inventory.entries, folder);
+    const canonicalSources = canonicalNodeSources(inventory.entries);
     const visible = direct.filter(entry => !query || `${entry.title ?? ""} ${entry.name} ${entry.relativePath}`.toLocaleLowerCase().includes(query.toLocaleLowerCase()));
     const button = (label: UiText, run: () => void | Promise<void>) => { const control = el("button", label); control.type = "button"; control.onclick = () => { void Promise.resolve().then(run).catch(error => host.notify(error instanceof Error ? errorUiText(error) : String(error))); }; return control; };
-    const key = () => `weftext-node-contents:${encodeURIComponent(parentRef!)}`;
-    const pendingKey = () => `${key()}:operation`;
+    const key = contentsPreferenceKey(inventory.root, inventory.workspaceId, folder);
+    // Pending author operations retain their stable-parent recovery key even
+    // when display preferences use a different folder coordinate.
+    const pendingKey = () => `weftext-node-contents:${encodeURIComponent(parentRef!)}:operation`;
+    try {
+        const raw = localStorage.getItem(key);
+        if (raw && raw.length <= 8192) preference = decodeContentsPreference(JSON.parse(raw));
+    } catch { persistenceError = uiMessage("nodeContents.preferenceRecoveryFailed"); }
     const retainPreference = () => {
-        preferenceEdited = true;
-        if (!parentRef)
-            return;
         try {
-            localStorage.setItem(key(), JSON.stringify(preference));
+            localStorage.setItem(key, JSON.stringify(preference));
         }
         catch {
             persistenceError = uiMessage("nodeContents.preferencePersistenceFailed");
@@ -56,6 +71,24 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
             localStorage.removeItem(pendingKey());
     };
     const member = (entry: InventoryEntry) => order?.members.find(item => normalized(item.path) === normalized(entry.path));
+    const resources = new Map<string, Promise<ContentsResource | null>>();
+    const resource = (entry: InventoryEntry): Promise<ContentsResource | null> => {
+        let captured = resources.get(entry.path);
+        if (!captured) {
+            captured = Promise.resolve().then(() => host.resource?.(entry) ?? null);
+            resources.set(entry.path, captured);
+            // Failed captures are retryable; a successful capture stays pinned
+            // to its exact version until this folder projection is refreshed.
+            void captured.catch(() => { if (resources.get(entry.path) === captured) resources.delete(entry.path); });
+        }
+        return captured;
+    };
+    const openResource = async (entry: InventoryEntry) => {
+        const captured = await resource(entry);
+        if (disposed) return;
+        if (!captured) throw new UiError(uiMessage("nodeContents.resourceUnavailable"));
+        await captured.open();
+    };
     const stopThumbnails = () => { thumbnails.forEach(item => item.dispose()); thumbnails = []; };
     const runBusy = async (work: () => Promise<void>) => {
         if (busy || disposed)
@@ -112,20 +145,23 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
     }
     density.onchange = () => { preference.density = density.value as ContentsPreference["density"]; retainPreference(); renderRows(); };
     controls.append(density);
-    controls.append(button(uiMessage("nodeContents.resetPreferences"), () => { preference = defaultContentsPreference(); retainPreference(); renderRows(); renderOrder(); }));
+    controls.append(button(uiMessage("nodeContents.resetPreferences"), () => { preference = defaultContentsPreference(); retainPreference(); renderRows(false); renderOrder(); }));
     const selectedAction = button(uiMessage("nodeContents.selectedActions"), () => host.menu(visible.filter(entry => selections.has(entry.path))));
     panel.replaceChildren(header, controls, notice, selectedAction, orderHost, rows);
     function updateSelection() {
         rows.querySelectorAll<HTMLElement>("[data-entry-path]").forEach(row => { const selected = selections.has(row.dataset.entryPath!); row.setAttribute("aria-selected", String(selected)); row.querySelector<HTMLInputElement>("input")!.checked = selected; });
         selectedAction.disabled = !visible.some(entry => selections.has(entry.path));
     }
-    function renderRows() {
+    function renderRows(preserveScroll = true) {
         if (disposed)
             return;
         stopThumbnails();
         const active = document.activeElement as HTMLElement | null, focusedRow = active?.closest<HTMLElement>("[data-entry-path]"), focusedPath = focusedRow?.dataset.entryPath;
         const focusedRole = focusedRow && panel.contains(focusedRow) ? active?.dataset.controlRole : undefined;
+        const focusedSectionControl = active && panel.contains(active) ? active.dataset.sectionControl : undefined;
         const scroll = panel.scrollTop;
+        if (preserveScroll) for (const body of rows.querySelectorAll<HTMLElement>("[data-section-body]"))
+            preference.sections[body.dataset.sectionBody as ContentsSection].scroll = body.scrollTop;
         rows.replaceChildren();
         sorting.value = preference.sort;
         density.value = preference.density;
@@ -140,7 +176,29 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
             }
             return (preference.sort === "path" ? a.relativePath : a.title || a.name).localeCompare(preference.sort === "path" ? b.relativePath : b.title || b.name, "zh-CN");
         });
+        const sectionBodies = new Map<ContentsSection, HTMLElement>();
+        for (const [id, label] of [["nodes", uiMessage("nodeContents.childNodes")], ["album", uiMessage("nodeContents.album")], ["files", uiMessage("nodeContents.files")]] as const) {
+            const group = el("section", "", `node-contents-section node-contents-${id}`), body = el("div", "", "node-contents-section-body");
+            group.dataset.contentsSection = id;
+            body.id = `node-contents-${id}-${encodeURIComponent(folder)}`;
+            body.dataset.sectionBody = id;
+            const count = entries.filter(entry => contentsSection(entry) === id).length;
+            const toggle = button(label, () => { preference.sections[id].collapsed = !preference.sections[id].collapsed; retainPreference(); renderRows(); });
+            toggle.className = "node-contents-section-heading";
+            toggle.dataset.sectionControl = `${id}-toggle`;
+            toggle.setAttribute("aria-expanded", String(!preference.sections[id].collapsed));
+            toggle.setAttribute("aria-controls", body.id);
+            toggle.append(el("span", String(count), "node-contents-count"));
+            body.hidden = preference.sections[id].collapsed;
+            body.onscroll = () => { preference.sections[id].scroll = body.scrollTop; retainPreference(); };
+            group.append(toggle, body);
+            rows.append(group);
+            sectionBodies.set(id, body);
+        }
+        const sectionSeen: Record<ContentsSection, number> = { nodes: 0, album: 0, files: 0 };
         for (const entry of entries) {
+            const section = contentsSection(entry);
+            if (++sectionSeen[section] > preference.sections[section].limit) continue;
             const row = el("div", "", "node-content-row");
             row.tabIndex = 0;
             row.dataset.entryPath = entry.path;
@@ -151,11 +209,11 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
             check.onchange = () => { check.checked ? selections.add(entry.path) : selections.delete(entry.path); updateSelection(); };
             const open = () => {
                 if (entry.kind !== "directory" && !entry.path.toLowerCase().endsWith(".typ")) {
-                    host.notify(uiMessage("nodeContents.bodyEntryUnsupported"));
-                    return;
+                    return openResource(entry);
                 }
                 return host.open(entry);
-            }, title = button(() => `${uiTextValue(entry.title || entry.name)} · ${uiTextValue(entry.identityStatus === "admitted" ? uiMessage("queryColumn.note") : entry.kind === "directory" ? uiMessage("nodeContents.directoryKind") : entry.identityStatus)}`, () => { selections.clear(); selections.add(entry.path); updateSelection(); });
+            }, identityLabel = entry.identityStatus === "bindingConflict" ? uiMessage("shell.fileStatusInvalidIdentity") : entry.identityStatus,
+                title = button(() => `${uiTextValue(entry.title || entry.name)} · ${uiTextValue(entry.identityStatus === "admitted" ? uiMessage("queryColumn.note") : entry.kind === "directory" ? uiMessage("nodeContents.directoryKind") : identityLabel)}`, () => { selections.clear(); selections.add(entry.path); updateSelection(); });
             title.dataset.controlRole = "title";
             title.ondblclick = () => { void Promise.resolve(open()).catch(error => host.notify(String(error))); };
             const menu = () => {
@@ -180,18 +238,49 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
                 }
             };
             const openButton = button(uiMessage("common.open"), open);
-            openButton.disabled = entry.kind !== "directory" && !entry.path.toLowerCase().endsWith(".typ");
-            const previewButton = button(uiMessage("nodeContents.preview"), () => host.preview([entry]));
+            const ordinary = entry.kind !== "directory" && !entry.path.toLowerCase().endsWith(".typ");
+            openButton.disabled = entry.kind === "blocked" || ordinary && !host.resource;
+            if (openButton.disabled && ordinary) setUiAttr(openButton, "title", uiMessage("nodeContents.resourceUnavailable"));
+            const previewButton = button(uiMessage("nodeContents.preview"), () => ordinary && host.resource ? openResource(entry) : host.preview([entry]));
             openButton.dataset.controlRole = "open";
             previewButton.dataset.controlRole = "preview";
             row.append(check, title, openButton, previewButton);
-            const source = entry.kind === "directory" ? inventory.entries.find(item => item.kind === "node" && normalized(item.parentPath) === normalized(entry.path)) : entry;
+            if (entry.identityStatus === "bindingConflict") {
+                const warning = el("span", identityLabel, "identity-badge");
+                setUiAttr(warning, "title", entry.identityStatus);
+                row.append(warning);
+            }
+            const source = entry.kind === "directory" ? canonicalSources.get(normalized(entry.path)) : entry;
             if (preference.summaries)
-                row.append(el("p", source?.excerpt ?? uiMessage("nodeContents.summaryUnavailable"), "node-content-summary"));
+                row.append(el("p", ordinary ? uiMessage("nodeContents.readOnlyResource") : source?.excerpt ?? uiMessage("nodeContents.summaryUnavailable"), "node-content-summary"));
             if (preference.thumbnails) {
                 const thumbnail = el("div", "", "node-content-thumbnail");
                 row.append(thumbnail);
-                if (source?.nodeId && source.identityStatus === "admitted" && source.source !== undefined && inventory.workspaceId) {
+                if (ordinary && section === "album" && host.resource && entry.kind !== "blocked") {
+                    let cancelled = false, started = false, renderer: { dispose(): void } | undefined;
+                    setUiText(thumbnail, uiMessage("thumbnail.waitingVisible"));
+                    const start = () => {
+                        if (cancelled || started) return;
+                        started = true;
+                        setUiText(thumbnail, uiMessage("thumbnail.building"));
+                        void resource(entry).then(async captured => {
+                            if (cancelled || disposed) return;
+                            if (!captured || !["image", "pdf"].includes(captured.descriptor.metadata.kind)) {
+                                setUiText(thumbnail, uiMessage("thumbnail.unsupported"));
+                                return;
+                            }
+                            const media = await import("./media-viewer");
+                            if (cancelled || disposed) return;
+                            renderer = media.renderQueryThumbnail(thumbnail, captured.descriptor, captured.read);
+                        }).catch(error => { if (!cancelled && !disposed) setUiText(thumbnail, errorUiText(error)); });
+                    };
+                    const observer = typeof IntersectionObserver === "undefined" ? undefined : new IntersectionObserver(items => {
+                        if (items.some(item => item.isIntersecting)) { observer!.disconnect(); start(); }
+                    }, { root: panel, rootMargin: "120px" });
+                    if (observer) observer.observe(thumbnail); else queueMicrotask(start);
+                    thumbnails.push({ dispose() { cancelled = true; observer?.disconnect(); renderer?.dispose(); } });
+                }
+                else if (source?.nodeId && source.identityStatus === "admitted" && source.source !== undefined && inventory.workspaceId) {
                     const entityKey = `weftext-node://${inventory.workspaceId}/${source.nodeId}`, rowSource = source.source;
                     thumbnails.push(mountListThumbnail(thumbnail, { viewport: panel,
                         resolve: async () => host.request<ListPreview>("/api/navigation/preview", { root: inventory.root, entityKey, sourceHash: await nodeSourceHash(rowSource) }),
@@ -233,16 +322,26 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
                         propose(insertedSibling(order!.orderedRefs, sourceRef, target, after));
                 };
             }
-            rows.append(row);
+            sectionBodies.get(section)!.append(row);
         }
-        if (!entries.length)
-            rows.append(el("p", query ? uiMessage("nodeContents.noFilterMatch") : uiMessage("nodeContents.emptyNode")));
+        for (const [id, body] of sectionBodies) {
+            if (!sectionSeen[id]) body.append(el("p", query ? uiMessage("nodeContents.noFilterMatch") : uiMessage("nodeContents.emptySection"), "node-contents-empty"));
+            if (sectionSeen[id] > preference.sections[id].limit) {
+                const more = button(uiMessage("nodeContents.showMore"), () => { preference.sections[id].limit = Math.min(5000, preference.sections[id].limit + 24); retainPreference(); renderRows(); });
+                more.dataset.sectionControl = `${id}-more`;
+                body.append(more);
+            }
+            body.scrollTop = preference.sections[id].scroll;
+        }
         updateSelection();
         panel.scrollTop = scroll;
         if (focusedPath && focusedRole !== undefined) {
             const replacement = [...rows.querySelectorAll<HTMLElement>("[data-entry-path]")].find(item => item.dataset.entryPath === focusedPath);
             const control = [...replacement?.querySelectorAll<HTMLElement>("button,input") ?? []].find(item => item.dataset.controlRole === focusedRole);
             control?.focus({ preventScroll: true });
+        }
+        else if (focusedSectionControl) {
+            [...rows.querySelectorAll<HTMLElement>("[data-section-control]")].find(item => item.dataset.sectionControl === focusedSectionControl)?.focus({ preventScroll: true });
         }
     }
     function renderOrder() {
@@ -385,16 +484,6 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
                 return;
             }
             try {
-                const raw = localStorage.getItem(key());
-                if (!preferenceEdited && raw && raw.length <= 4096)
-                    preference = decodeContentsPreference(JSON.parse(raw));
-                else if (preferenceEdited)
-                    retainPreference();
-            }
-            catch {
-                persistenceError = uiMessage("nodeContents.preferenceRecoveryFailed");
-            }
-            try {
                 const original = localStorage.getItem(pendingKey());
                 if (original)
                     pending = decodePendingOrder(original, inventory.root, parentRef);
@@ -413,6 +502,9 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
         }
     })();
     return { dispose() {
+            for (const body of rows.querySelectorAll<HTMLElement>("[data-section-body]"))
+                preference.sections[body.dataset.sectionBody as ContentsSection].scroll = body.scrollTop;
+            retainPreference();
             disposed = true;
             stopThumbnails();
             for (const dialog of dialogs) {

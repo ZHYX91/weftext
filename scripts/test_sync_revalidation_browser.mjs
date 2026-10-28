@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Actual semantic-review UI, original pending operation, owned replicas and headless Chrome.
@@ -64,9 +65,9 @@ async function exactTree(root) {
   }
   await visit(root); return values;
 }
-async function editor(s) { await s.page.getByRole('button', { name: '源码', exact: true }).click(); s.editor = s.page.locator('.cm-content[contenteditable=true]'); await s.editor.waitFor(); }
+async function editor(s) { await workspaceMode(s.page, '源码'); s.editor = s.page.locator('.cm-content[contenteditable=true]'); await s.editor.waitFor(); }
 async function done(panel, name) { await panel.getByRole('button', { name, exact: true }).click(); await panel.getByRole('status').filter({ hasText: /^操作已完成。$/ }).waitFor(); }
-async function sync(s) { await s.page.getByRole('button', { name: '同步', exact: true }).click(); const panel = s.page.getByRole('dialog', { name: '资料库同步' }); await panel.waitFor(); await panel.getByRole('status').filter({ hasText: /^操作已完成。$/ }).waitFor(); return panel; }
+async function sync(s) { await workspaceCommand(s.page, 'knowledge', '同步'); const panel = s.page.getByRole('dialog', { name: '资料库同步' }); await panel.waitFor(); await panel.getByRole('status').filter({ hasText: /^操作已完成。$/ }).waitFor(); return panel; }
 async function transfer(s, server, root, receiver, objects) {
   s.transfer++; const directory = path.join(s.folder, `exchange-${s.transfer}`);
   await api(s, server, '/api/sync/export', { root, directory, objects });
@@ -246,7 +247,7 @@ async function receiverMemberUndo(s) {
   }
 }
 async function memberResourcePanel(s) {
-  await s.page.getByRole('button', { name: '链接与批注', exact: true }).click();
+  await workspaceCommand(s.page, 'knowledge', '链接与批注');
   const knowledge = s.page.getByLabel('知识与批注', { exact: true }); await knowledge.getByRole('tab', { name: '批注', exact: true }).click();
   const target = knowledge.locator('select:has(option[value="media"])');
   await target.waitFor({ state: 'visible' }); assert.equal(await target.count(), 1); await target.selectOption('media');

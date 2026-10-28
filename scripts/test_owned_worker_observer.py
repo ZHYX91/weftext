@@ -1,5 +1,6 @@
 """Pure fake-native tests; no real process, worker, host or desktop is started."""
 from pathlib import Path
+import copy
 from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
@@ -357,6 +358,164 @@ class OwnedObservationTests(unittest.TestCase):
         with patch.object(observer, 'SUPPORTED', False):
             with self.assertRaisesRegex(RuntimeError, 'only verified on Windows'):
                 observer.OwnedWorkerObservation(self.owner)
+
+
+class PolicyRevocationTests(unittest.TestCase):
+    def setUp(self):
+        self.path = ('alice', 'enabled')
+        self.original = {'generation': 4, 'users': {'alice': {'enabled': True}, 'other': {'enabled': True}}}
+        self.request = observer.freeze_policy_revocation(self.original, self.path)
+        self.readback = {'generation': 5, 'users': copy.deepcopy(self.request['users'])}
+        self.trace = {'submittedMonotonicNs': 10, 'worker': {'observedMonotonicNs': 20},
+                      'changeStartedMonotonicNs': 30, 'changeAcknowledgedMonotonicNs': 50,
+                      'requestCompletedMonotonicNs': 40, 'policyGeneration': 5, 'status': 401}
+        self.body = {'error': {'code': 'authentication', 'explanation': {'key': 'error.api.hosted.authenticationExpired'}}}
+        self.denial = (401, 'authentication', 'error.api.hosted.authenticationExpired', 'html')
+
+    def verify(self):
+        observer.verify_revocation_delivery(self.request, self.path, self.readback, self.trace, self.body, self.denial)
+
+    def test_acknowledgment_receipt_before_or_after_denial_is_not_publication(self):
+        for acknowledged in (35, 50):
+            with self.subTest(acknowledged=acknowledged):
+                self.trace['changeAcknowledgedMonotonicNs'] = acknowledged
+                self.verify()
+        self.assertTrue(self.original['users']['alice']['enabled'])
+        self.assertTrue(self.request['users']['other']['enabled'])
+
+    def test_proofread_denial_and_exact_nested_authorization_are_supported(self):
+        self.path = ('alice', 'grants', 'Shared', 'annotations', 'proofread')
+        policy = {'generation': 4, 'users': {'alice': {'grants': {'Shared': {'annotations': {'proofread': True}}}}}}
+        self.request = observer.freeze_policy_revocation(policy, self.path)
+        self.readback['users'] = copy.deepcopy(self.request['users'])
+        self.trace['status'] = 404
+        self.body = {'error': {'code': 'unavailable', 'explanation': {'key': 'error.api.hosted.contentUnavailable'}}}
+        self.denial = (404, 'unavailable', 'error.api.hosted.contentUnavailable', 'findings')
+        self.verify()
+        self.body['findings'] = []
+        with self.assertRaisesRegex(AssertionError, 'without content'):
+            self.verify()
+
+    def test_completed_request_or_worker_after_mutation_cannot_claim_inflight(self):
+        for key, value in [('requestCompletedMonotonicNs', 30), ('requestCompletedMonotonicNs', 29),
+                           ('changeStartedMonotonicNs', 20), ('submittedMonotonicNs', 21),
+                           ('changeAcknowledgedMonotonicNs', 29)]:
+            with self.subTest(key=key, value=value):
+                trace = copy.deepcopy(self.trace)
+                self.trace[key] = value
+                with self.assertRaises(AssertionError):
+                    self.verify()
+                self.trace = trace
+
+    def test_wrong_generation_or_unrevoked_target_cannot_be_a_publication_witness(self):
+        for readback in [{'generation': 6, 'users': self.readback['users']},
+                         {'generation': True, 'users': self.readback['users']},
+                         {'generation': 5, 'users': self.original['users']},
+                         {'generation': 5, 'users': {}}]:
+            with self.subTest(readback=readback):
+                self.readback = readback
+                with self.assertRaises(AssertionError):
+                    self.verify()
+
+    def test_success_wrong_error_or_content_is_never_a_revocation_denial(self):
+        for body, status in [(self.body, 200), ({'error': {'code': 'other'}}, 401),
+                             ({**self.body, 'html': 'old private output'}, 401)]:
+            with self.subTest(status=status, body=body):
+                self.body, self.trace['status'] = body, status
+                with self.assertRaises(AssertionError):
+                    self.verify()
+
+    def test_only_a_true_original_grant_can_be_frozen(self):
+        for value in (False, 1, None):
+            with self.subTest(value=value):
+                policy = copy.deepcopy(self.original)
+                policy['users']['alice']['enabled'] = value
+                with self.assertRaises(AssertionError):
+                    observer.freeze_policy_revocation(policy, self.path)
+
+    def test_post_is_immediately_preceded_by_inflight_check_and_requires_exact_ack(self):
+        for acknowledgment in [{'status': 'applied', 'generation': 5},
+                               {'status': 'conflict', 'generation': 5},
+                               {'status': 'applied', 'generation': 6}]:
+            with self.subTest(acknowledgment=acknowledgment):
+                events = []
+                observation = SimpleNamespace(assert_inflight=lambda pending: events.append('inflight'))
+                def post(request):
+                    self.assertEqual(request, self.request)
+                    self.assertEqual(events, ['inflight'])
+                    events.append('post')
+                    return acknowledgment
+                with patch.object(observer, 'event_time_ns', side_effect=[30, 50]), \
+                        patch.object(observer.time, 'monotonic', side_effect=[1, 2]):
+                    if acknowledgment == {'status': 'applied', 'generation': 5}:
+                        result = observer.apply_inflight_revocation(observation, Pending(), self.request, post, 40)
+                        self.assertEqual(result, {key: self.trace[key] for key in
+                                                  ['changeStartedMonotonicNs', 'changeAcknowledgedMonotonicNs', 'policyGeneration']})
+                    else:
+                        with self.assertRaisesRegex(AssertionError, 'acknowledged'):
+                            observer.apply_inflight_revocation(observation, Pending(), self.request, post, 40)
+
+    def test_original_deadline_is_enforced_before_and_after_the_policy_post(self):
+        for times in ([40], [1, 40]):
+            with self.subTest(times=times):
+                post = Mock(return_value={'status': 'applied', 'generation': 5})
+                observation = SimpleNamespace(assert_inflight=Mock())
+                with patch.object(observer.time, 'monotonic', side_effect=times), \
+                        patch.object(observer, 'event_time_ns', side_effect=[30, 50]):
+                    with self.assertRaisesRegex(AssertionError, 'budget exhausted'):
+                        observer.apply_inflight_revocation(observation, Pending(), self.request, post, 40)
+                self.assertEqual(post.call_count, int(len(times) == 2))
+
+
+class MutationBoundaryTests(unittest.TestCase):
+    def test_structured_and_multiple_policy_targets_keep_exact_original_cuts(self):
+        policy = {'generation': 7, 'users': {'alice': {'queryProviders': {'providers':['original'], 'seriesPolicies':[]},
+                  'queryScopes': {'directories':['owned'], 'trash':True}, 'grants':{'Shared':{'read':True,'write':True}}}}}
+        changes = [(('alice','queryProviders'), {'providers':[], 'seriesPolicies':[]}),
+                   (('alice','queryScopes'), {'directories':[], 'trash':False}),
+                   (('alice','grants','Shared','read'),False), (('alice','grants','Shared','write'),False)]
+        request = observer.freeze_policy_changes(policy,changes)
+        trace={'submittedMonotonicNs':10,'worker':{'observedMonotonicNs':20},
+               'changeStartedMonotonicNs':30,'changeAcknowledgedMonotonicNs':50,
+               'requestCompletedMonotonicNs':40,'policyGeneration':8}
+        readback={'generation':8,'users':copy.deepcopy(request['users'])}
+        observer.verify_policy_changes(request,[path for path,_ in changes],readback,trace)
+        self.assertEqual(policy['users']['alice']['queryProviders']['providers'],['original'])
+        self.assertTrue(policy['users']['alice']['grants']['Shared']['read'])
+        changes[0][1]['providers'].append('later')
+        self.assertEqual(request['users']['alice']['queryProviders']['providers'],[])
+        readback['users']['alice']['queryScopes']['trash']=0
+        with self.assertRaisesRegex(AssertionError,'readback'):
+            observer.verify_policy_changes(request,[path for path,_ in changes],readback,trace)
+
+    def test_noop_missing_and_duplicate_policy_targets_are_not_mutation_witnesses(self):
+        policy={'generation':0,'users':{'alice':{'enabled':True}}}
+        for changes in [[],[(('alice','enabled'),True)],[(('alice','missing'),False)],
+                        [(('alice','enabled'),False),(('alice','enabled'),True)]]:
+            with self.subTest(changes=changes), self.assertRaises(AssertionError):
+                observer.freeze_policy_changes(policy,changes)
+
+    def test_mutating_post_only_runs_after_the_actual_inflight_check(self):
+        for kind in ('map','save','importCommit'):
+            events=[]
+            observation=SimpleNamespace(assert_inflight=lambda pending:events.append('inflight'))
+            acknowledgment={'kind':kind,'operationId':'original'}
+            def post():
+                self.assertEqual(events,['inflight']);events.append('post');return acknowledgment
+            with patch.object(observer.time,'monotonic',side_effect=[1,2]), \
+                 patch.object(observer,'event_time_ns',side_effect=[30,50]):
+                actual,interval=observer.apply_inflight_mutation(observation,Pending(),post,40)
+            self.assertIs(actual,acknowledgment)
+            trace={**interval,'submittedMonotonicNs':10,'worker':{'observedMonotonicNs':20},'requestCompletedMonotonicNs':40}
+            observer.verify_inflight_change(trace)
+            for completed in (29,30):
+                with self.assertRaises(AssertionError):
+                    observer.verify_inflight_change({**trace,'requestCompletedMonotonicNs':completed})
+        rejected=SimpleNamespace(assert_inflight=Mock(side_effect=AssertionError('worker ended')))
+        post=Mock()
+        with patch.object(observer.time,'monotonic',return_value=1), self.assertRaisesRegex(AssertionError,'worker ended'):
+            observer.apply_inflight_mutation(rejected,Pending(),post,40)
+        post.assert_not_called()
 
 
 class EventClockTests(unittest.TestCase):

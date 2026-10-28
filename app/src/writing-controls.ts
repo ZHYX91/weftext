@@ -390,18 +390,24 @@ export async function insertClipboardTable(controller: WritingController): Promi
         });
     });
 }
-export function createWritingToolbar(controller: WritingController, options: WritingControlOptions = {}): HTMLElement {
-    const toolbar = element("div", "writing-toolbar");
-    toolbar.setAttribute("role", "toolbar");
-    setUiAttr(toolbar, "aria-label", uiMessage("writing.toolbar"));
+export interface WritingCommandGroups {
+    format: HTMLElement;
+    insert: HTMLElement;
+    history: HTMLElement;
+}
+/** Shared ribbon commands retain the original writer, composition deferral and
+ * selection-preserving action nodes. The shell only chooses their placement. */
+export function createWritingCommandGroups(controller: WritingController, options: WritingControlOptions = {}): WritingCommandGroups {
+    const format = element("div", "writing-command-group"), insert = element("div", "writing-command-group"), history = element("div", "writing-command-group");
     const tool = (label: UiText, run: () => Promise<void>) => action(label, () => controller.deferUntilCompositionEnds(run), options);
-    for (const [label, format] of [[uiMessage("writing.bold"), "strong"], [uiMessage("writing.italic"), "emph"], [uiMessage("writing.strikethrough"), "strike"]] as const)
-        toolbar.append(tool(label, () => controller.execute(() => ({ kind: "setInline", range: controller.selectionRange(), format }))));
-    toolbar.append(tool(uiMessage("writing.title"), () => editDocumentRole(controller, "title")), tool(uiMessage("writing.subtitle"), () => editDocumentRole(controller, "subtitle")), tool(uiMessage("writing.section"), () => editHeading(controller)), tool(uiMessage("writing.list"), () => insertWritingBlock(controller, "bulletList")), tool(uiMessage("writing.table"), () => editTable(controller)), tool(uiMessage("writing.equation"), () => editMath(controller)), tool(uiMessage("writing.code"), () => editRaw(controller)));
+    for (const [label, kind] of [[uiMessage("writing.bold"), "strong"], [uiMessage("writing.italic"), "emph"], [uiMessage("writing.strikethrough"), "strike"]] as const)
+        format.append(tool(label, () => controller.execute(() => ({ kind: "setInline", range: controller.selectionRange(), format: kind }))));
+    insert.append(tool(uiMessage("writing.title"), () => editDocumentRole(controller, "title")), tool(uiMessage("writing.subtitle"), () => editDocumentRole(controller, "subtitle")), tool(uiMessage("writing.section"), () => editHeading(controller)), tool(uiMessage("writing.list"), () => insertWritingBlock(controller, "bulletList")), tool(uiMessage("writing.table"), () => editTable(controller)), tool(uiMessage("writing.equation"), () => editMath(controller)), tool(uiMessage("writing.code"), () => editRaw(controller)));
     if (options.insertLink)
-        toolbar.append(tool(uiMessage("writing.link"), options.insertLink));
-    toolbar.append(tool(uiMessage("writing.addContent"), () => insertWritingBlock(controller)), tool(uiMessage("writing.insertClipboardTable"), () => insertClipboardTable(controller)), tool(uiMessage("writing.undo"), () => controller.undo()), tool(uiMessage("writing.redo"), () => controller.redo()));
-    return toolbar;
+        insert.append(tool(uiMessage("writing.link"), options.insertLink));
+    insert.append(tool(uiMessage("writing.addContent"), () => insertWritingBlock(controller)), tool(uiMessage("writing.insertClipboardTable"), () => insertClipboardTable(controller)));
+    history.append(tool(uiMessage("writing.undo"), () => controller.undo()), tool(uiMessage("writing.redo"), () => controller.redo()));
+    return { format, insert, history };
 }
 export function createStructureControls(controller: WritingController, structure: WritingStructure, options: WritingControlOptions = {}): HTMLElement | null {
     const snapshot = controller.snapshot;

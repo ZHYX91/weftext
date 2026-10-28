@@ -1,4 +1,6 @@
 import { replaceUiChildren, disposeUiTree } from "./ui-locale";
+import { workActivity } from "./work-activity";
+import type { WorkTaskStatus } from "./work-panel";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { officeLossUiText } from "./office-wire";
 import { joinUiText } from "./ui-locale";
@@ -123,6 +125,39 @@ export class RecognitionPanel {
     readonly element = ui("dialog", "modal recognition-panel");
     private readonly controller: RecognitionController;
     private identity = "";
+    private showActivityOriginal(id: string, kind: "job" | "import", identity: string): void {
+        this.closeGuard.assertMutable();
+        if (identity !== this.identity || identity !== this.host.identity() ||
+            (kind === "job" ? this.controller.pendingJobId !== id && this.controller.job?.jobId !== id : this.controller.locator?.operationId !== id))
+            throw new UiError(uiMessage("workActivity.originalUnavailable"));
+        if (!this.element.open) this.element.showModal();
+    }
+    private publishActivity(): void {
+        if (!this.identity || this.identity !== this.host.identity()) return;
+        const identity = this.identity, job = this.controller.job, jobId = job?.jobId ?? this.controller.pendingJobId;
+        if (jobId) {
+            const status: WorkTaskStatus = job?.status === "pending" || job?.status === "running" || !job && this.controller.busy ? "running"
+                : job?.status === "complete" ? "succeeded" : job?.status === "cancelled" ? "cancelled"
+                : job?.status === "failed" || job?.status === "interrupted" ? "failed" : "waiting";
+            const detail = job ? statuses[job.status] : uiMessage("recognition.notInspectedYet"),
+                actions = [{ id: "details", label: uiMessage("workActivity.details"), run: () => this.showActivityOriginal(jobId, "job", identity) }];
+            workActivity.task({ id: jobId, title: uiMessage("recognition.title"), detail, status, actions });
+            if (job?.result && ["complete", "partial"].includes(job.status))
+                workActivity.result({ id: jobId, title: this.file?.name ?? uiMessage("recognition.title"), detail, actions });
+        }
+        const locator = this.controller.locator, receipt = this.controller.receipt;
+        if (locator) {
+            const id = locator.operationId;
+            const actions = [{ id: "details", label: uiMessage("workActivity.details"), run: () => this.showActivityOriginal(id, "import", identity) }];
+            const status: WorkTaskStatus = this.controller.busy ? "running" : this.controller.uncertain ? "waiting"
+                : receipt?.status === "committed" || receipt?.status === "resolved" ? "succeeded"
+                : receipt?.status === "cancelled" ? "cancelled" : "waiting";
+            const detail = this.controller.uncertain ? uiMessage("recognition.unknownInspectOriginalFirst") : statuses[receipt?.status ?? ""] ?? uiMessage("recognition.notInspectedYet");
+            workActivity.task({ id, title: uiMessage("recognition.originalImportTitle"), detail, status, actions });
+            if (receipt?.status === "committed")
+                workActivity.result({ id, title: uiMessage("recognition.importCommittedHelp"), detail: receipt.preview.summary, actions });
+        }
+    }
     private cacheKey = "";
     private epoch = 0;
     private poll?: ReturnType<typeof setTimeout>;
@@ -1016,9 +1051,17 @@ export class RecognitionPanel {
             anchor.download = artifact.fileName.replace(/[/\\]/g, "_");
             anchor.click();
             setTimeout(() => { URL.revokeObjectURL(url); this.downloadUrls.delete(url); }, 1000);
+            const identity = this.identity;
+            workActivity.result({ id: `${job.jobId}:${artifact.sha256}`, title: artifact.fileName,
+                detail: `SHA-256 ${artifact.sha256}`,
+                actions: [{ id: "download", label: provenance ? uiMessage("recognition.downloadProvenanceAndLosses") : uiMessage("recognition.downloadExtractedText"), run: async () => {
+                    this.showActivityOriginal(job.jobId, "job", identity);
+                    await this.download(provenance);
+                } }] });
         } finally { endCloseWork(); }
     }
     private draw(): void {
+        this.publishActivity();
         const job = this.controller.job, locked = !!this.controller.locator || this.controller.busy || this.reading || this.unreadable;
         for (const section of [this.controls, this.regionEditor])
             for (const control of section.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLButtonElement>("input,select,button"))

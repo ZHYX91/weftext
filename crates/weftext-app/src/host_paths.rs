@@ -1,5 +1,5 @@
-//! Windows durable and disposable paths have separate owners. WebView/cache
-//! never lives inside the retained Core recovery namespace.
+//! Core, host-state and persistent browser data have separate owners.
+//! The WebView UDF may hold the only unsent author input; it is not disposable cache.
 use std::{
     io,
     path::{Component, Path, PathBuf},
@@ -50,15 +50,16 @@ pub(crate) fn host_state_dir() -> io::Result<PathBuf> {
         .join(relative(&paths.host_state_relative_path)?))
 }
 
-fn cache_dir() -> io::Result<PathBuf> {
+fn browser_data_dir() -> io::Result<PathBuf> {
     Ok(local_app_data()?.join(relative(
-        &crate::host_contract::get()?.paths.cache_relative_root,
+        &crate::host_contract::get()?
+            .paths
+            .browser_data_relative_root,
     )?))
 }
 
-pub(crate) fn user_data_path(profile: &weftext_core::QualifiedProfile) -> io::Result<PathBuf> {
-    let key = profile
-        .physical_identity()
+fn user_data_path_at(browser_data: &Path, physical_identity: &str) -> io::Result<PathBuf> {
+    let key = physical_identity
         .rsplit(':')
         .next()
         .filter(|key| {
@@ -68,7 +69,11 @@ pub(crate) fn user_data_path(profile: &weftext_core::QualifiedProfile) -> io::Re
                     .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
         })
         .ok_or_else(|| io::Error::other("Profile identity is not canonical"))?;
-    Ok(cache_dir()?.join(key).join("webview2"))
+    Ok(browser_data.join(key).join("webview2"))
+}
+
+pub(crate) fn user_data_path(profile: &weftext_core::QualifiedProfile) -> io::Result<PathBuf> {
+    user_data_path_at(&browser_data_dir()?, profile.physical_identity())
 }
 
 /// Qualify the reserved sibling namespaces before creating the requested Core.
@@ -76,7 +81,8 @@ pub(crate) fn user_data_path(profile: &weftext_core::QualifiedProfile) -> io::Re
 /// inherited-ACL directory that poisons the catalog's later private creation.
 pub(crate) fn qualify_core(data: &Path) -> io::Result<weftext_core::QualifiedProfile> {
     let host = crate::host_state::Root::qualify(true)?;
-    let cache = weftext_core::qualify_profile(cache_dir()?).map_err(io::Error::other)?;
+    let browser_data =
+        weftext_core::qualify_profile(browser_data_dir()?).map_err(io::Error::other)?;
     let absolute = std::path::absolute(data)?;
     let mut ancestor = absolute.as_path();
     loop {
@@ -86,16 +92,20 @@ pub(crate) fn qualify_core(data: &Path) -> io::Result<weftext_core::QualifiedPro
                     .profile
                     .contains_profile(&actual)
                     .map_err(io::Error::other)?
-                    || cache.contains_profile(&actual).map_err(io::Error::other)?
+                    || browser_data
+                        .contains_profile(&actual)
+                        .map_err(io::Error::other)?
                     || ancestor == absolute
                         && (actual
                             .contains_profile(&host.profile)
                             .map_err(io::Error::other)?
-                            || actual.contains_profile(&cache).map_err(io::Error::other)?)
+                            || actual
+                                .contains_profile(&browser_data)
+                                .map_err(io::Error::other)?)
                 {
                     return Err(io::Error::new(
                         io::ErrorKind::InvalidInput,
-                        "The requested Core data-dir overlaps a reserved host-state or disposable cache tree",
+                        "The requested Core data-dir overlaps reserved host-state or persistent browser data",
                     ));
                 }
                 break;
@@ -115,26 +125,89 @@ pub(crate) fn qualify_core(data: &Path) -> io::Result<weftext_core::QualifiedPro
 
 pub(crate) struct NativePaths {
     pub user_data: PathBuf,
-    _cache_guard: weftext_core::QualifiedProfile,
+    _user_data_guard: weftext_core::QualifiedProfile,
 }
 
 impl NativePaths {
     pub(crate) fn qualify(profile: &weftext_core::QualifiedProfile) -> io::Result<Self> {
-        let cache = cache_dir()?;
-        let cache = weftext_core::qualify_profile(&cache).map_err(io::Error::other)?;
-        if profile.contains_profile(&cache).map_err(io::Error::other)?
-            || cache.contains_profile(profile).map_err(io::Error::other)?
+        let browser_data = browser_data_dir()?;
+        let browser_data =
+            weftext_core::qualify_profile(&browser_data).map_err(io::Error::other)?;
+        if profile
+            .contains_profile(&browser_data)
+            .map_err(io::Error::other)?
+            || browser_data
+                .contains_profile(profile)
+                .map_err(io::Error::other)?
         {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "The Core profile and disposable cache must be separate physical namespaces",
+                "The Core profile and persistent browser data must be separate physical namespaces",
             ));
         }
         let user_data = user_data_path(profile)?;
-        let cache_guard = weftext_core::qualify_profile(&user_data).map_err(io::Error::other)?;
+        let user_data_guard =
+            weftext_core::qualify_profile(&user_data).map_err(io::Error::other)?;
         Ok(Self {
             user_data,
-            _cache_guard: cache_guard,
+            _user_data_guard: user_data_guard,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn browser_data_preserves_the_original_profile_udf_path() {
+        let paths = &crate::host_contract::get().unwrap().paths;
+        assert_eq!(paths.browser_data_known_folder, "LocalAppData");
+        let local_app_data = Path::new(r"C:\Users\Example\AppData\Local");
+        let browser_data =
+            local_app_data.join(relative(&paths.browser_data_relative_root).unwrap());
+        let key = "a".repeat(64);
+        assert_eq!(
+            user_data_path_at(&browser_data, &format!("windows:original:{key}")).unwrap(),
+            local_app_data
+                .join("Weftext")
+                .join("Cache")
+                .join(key)
+                .join("webview2")
+        );
+    }
+
+    #[test]
+    fn browser_data_rejects_noncanonical_profile_keys() {
+        let root = Path::new(r"C:\Users\Example\AppData\Local\Weftext\Cache");
+        for key in [
+            "".into(),
+            "a".repeat(63),
+            "a".repeat(65),
+            "A".repeat(64),
+            "g".repeat(64),
+        ] {
+            assert!(user_data_path_at(root, &format!("windows:original:{key}")).is_err());
+        }
+    }
+
+    #[test]
+    fn host_relative_paths_reject_namespace_escapes() {
+        for path in [
+            "",
+            ".",
+            "..",
+            "../Weftext",
+            "Weftext/../Cache",
+            "/Weftext",
+            r"C:\Weftext",
+            r"\\server\share",
+        ] {
+            assert!(relative(path).is_err(), "{path}");
+        }
+        assert_eq!(
+            relative("Weftext/Cache").unwrap(),
+            Path::new("Weftext/Cache")
+        );
     }
 }

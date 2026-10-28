@@ -70,9 +70,10 @@ export class InterfaceLocaleControl {
   private unbindStatus?: () => void;
   private queue: Promise<void> = Promise.resolve();
   private readonly unsubscribe: () => void;
+  private confirmedCut?: string;
   private readonly timer: ReturnType<typeof setInterval>;
 
-  constructor(private readonly adapter: LocalePreferenceAdapter) {
+  constructor(private readonly adapter: LocalePreferenceAdapter, private readonly confirmed?: () => void) {
     this.element.className = "interface-locale";
     const label = document.createElement("label"), title = document.createElement("span");
     this.scope.bindText(title, message("locale.label")); label.append(title, this.select);
@@ -90,6 +91,13 @@ export class InterfaceLocaleControl {
     this.timer = setInterval(() => { if (!this.disposed && !this.pending && !this.unconfirmed && document.visibilityState === "visible") void this.refresh(); }, 2500);
   }
 
+  private confirm(actual: ClientPreferenceSnapshot): void {
+    const cut = JSON.stringify([actual.revision, actual.preferences.uiLocale]);
+    if (cut === this.confirmedCut) return;
+    this.confirmed?.();
+    this.confirmedCut = cut;
+  }
+
   private display(): void {
     if (this.disposed) return;
     this.unbindStatus?.(); this.unbindStatus = undefined; this.status.replaceChildren();
@@ -104,7 +112,7 @@ export class InterfaceLocaleControl {
       const actual = await this.adapter.read();
       if (this.disposed || version !== this.version || this.pending) return;
       this.snapshot = actual;
-      if (!this.unconfirmed || explicit) { this.unconfirmed = false; locale.set(actual.preferences.uiLocale); }
+      if (!this.unconfirmed || explicit) { this.unconfirmed = false; locale.set(actual.preferences.uiLocale); this.confirm(actual); }
     } catch { if (!this.disposed && version === this.version) this.unconfirmed = true; }
     this.display();
   }
@@ -117,10 +125,10 @@ export class InterfaceLocaleControl {
       const actual = await this.adapter.write(basis.revision, chosen);
       if (this.disposed) return;
       this.snapshot = actual;
-      if (version === this.version) this.unconfirmed = actual.preferences.uiLocale !== chosen;
+      if (version === this.version) { this.unconfirmed = actual.preferences.uiLocale !== chosen; if (!this.unconfirmed) this.confirm(actual); }
     } catch {
       // A failed readback does not prove the write failed. Inspect the actual setting first.
-      try { const actual = await this.adapter.read(); if (!this.disposed) { this.snapshot = actual; if (version === this.version) this.unconfirmed = actual.preferences.uiLocale !== chosen; } }
+      try { const actual = await this.adapter.read(); if (!this.disposed) { this.snapshot = actual; if (version === this.version) { this.unconfirmed = actual.preferences.uiLocale !== chosen; if (!this.unconfirmed) this.confirm(actual); } } }
       catch { if (!this.disposed && version === this.version) this.unconfirmed = true; }
     }
   }

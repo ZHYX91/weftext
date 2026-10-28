@@ -1,0 +1,25 @@
+.timeline-view {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    gap: 8px;
+    padding: 10px;
+    overflow: hidden;
+    font-size: 13px;
+}
+.timeline-scope, .timeline-path, .timeline-status { margin: 0; }
+.timeline-scope, .timeline-help, .timeline-version-meta { color: var(--muted, #6f7b72); }
+.timeline-path { overflow-wrap: anywhere; font-size: 12px; }
+.timeline-toolbar { display: flex; gap: 6px; flex-wrap: wrap; }
+.timeline-toolbar button { text-align: start; }
+.timeline-notices { flex: 0 1 auto; max-height: 30%; overflow: auto; }
+.timeline-help, .timeline-warning, .timeline-version-id { margin: 4px 0; overflow-wrap: anywhere; }
+.timeline-error, .timeline-warning { color: var(--danger, #a33b32); }
+.timeline-versions { margin: 0; padding: 0; list-style: none; flex: 1 1 auto; min-height: 0; overflow: auto; }
+.timeline-version { padding: 8px 0; border-bottom: 1px solid var(--border, #dce2d9); }
+.timeline-version-summary { cursor: pointer; padding: 3px; line-height: 1.6; }
+.timeline-version-meta { display: block; font-size: 12px; }
+.timeline-version-id { font-family: monospace; font-size: 11px; user-select: text; }
+.timeline-view summary:focus-visible { outline: 2px solid var(--accent, #477e6d); outline-offset: 1px; }

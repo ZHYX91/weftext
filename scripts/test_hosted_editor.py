@@ -1,32 +1,49 @@
 """Hosted native draft consumers using the actual executable and owned roots."""
 import json
+import copy
 import sys
+import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from test_hosted import Hosted
-from owned_worker_observer import SUPPORTED, OwnedWorkerObservation, event_time_ns, timed_call
+from test_hosted import Hosted, uid, digest
+from owned_worker_observer import (SUPPORTED, OwnedWorkerObservation, event_time_ns, timed_call,
+    apply_inflight_mutation, verify_inflight_change, freeze_policy_changes,
+    apply_inflight_revocation, verify_policy_changes)
 
 PURE_COMPUTE = '#let checksum = range(500000).fold(0, (acc, i) => acc + i)\nFinal #checksum'
 
 class HostedEditor(Hosted):
-    def assert_inflight_projection_change(self, basis, change, expected, evidence_name, error_code=None):
+    def assert_inflight_projection_change(self, basis, change, expected, evidence_name, error_code=None,
+                                         *, verify_change=None, policy_request=None, policy_paths=None, deadline=None):
         if not SUPPORTED:
             self.skipTest('In-flight compiler race is unverified without the Windows owned-worker boundary')
+        deadline = deadline if deadline is not None else time.monotonic() + 40
         with ThreadPoolExecutor(max_workers=1) as pool:
             with OwnedWorkerObservation(self.server.owner) as observation:
                 submitted = event_time_ns()
                 pending = pool.submit(timed_call, self.server.call, '/api/hosted/editor/render', basis, self.tokens['alice'])
-                worker = observation.wait(pending)
+                worker = observation.wait(pending, deadline=deadline)
                 self.assertFalse(pending.done())
                 observation.assert_inflight(pending)
-                change()
-                changed = event_time_ns()
-                (code, result, _), completed = pending.result(timeout=40)
+                if policy_request is not None:
+                    mutation = apply_inflight_revocation(observation, pending, policy_request,
+                        lambda update: self.call('admin/policy', update, 'admin'), deadline)
+                    acknowledgment = None
+                else:
+                    acknowledgment, mutation = apply_inflight_mutation(observation, pending, change, deadline)
+                (code, result, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
         trace = {'submittedMonotonicNs':submitted, 'worker':worker,
-                 'changeCompletedMonotonicNs':changed, 'renderCompletedMonotonicNs':completed,
+                 **mutation, 'requestCompletedMonotonicNs':completed,
                  'status':code, 'errorCode':result.get('error',{}).get('code')}
         (self.folder/(evidence_name+'.json')).write_text(json.dumps(trace,ensure_ascii=False,indent=2),'utf-8')
-        self.assertLess(changed,completed,'Concurrent change must finish before render delivery')
+        verify_inflight_change(trace)
+        self.assertLess(time.monotonic(), deadline, 'Original mutation/readback budget exhausted')
+        if policy_request is not None:
+            readback = self.call('admin/policy', actor='admin')
+            verify_policy_changes(policy_request, policy_paths, readback, trace)
+        elif verify_change is not None:
+            verify_change(acknowledgment)
+        self.assertLess(time.monotonic(), deadline, 'Original mutation/readback budget exhausted')
         self.assertEqual(code,expected,result)
         if error_code is not None:self.assertEqual(result['error']['code'],error_code)
 
@@ -83,7 +100,21 @@ class HostedEditor(Hosted):
             # Reading the authorized note avoids executing its document set rules
             # inside a content container. Pure computation keeps output small.
             basis={'sessionId':a['sessionId'],'source':'#read("../Secret/Secret.typ")\n'+PURE_COMPUTE,'serial':2}
-            self.assert_inflight_projection_change(basis,lambda:self.save(dependency,dependency['source']+'\n新的依赖正文'),409,'projection-dependency-race','staleEnvironment')
+            source = dependency['source']+'\n新的依赖正文'; operation = uid()
+            deadline=time.monotonic()+40
+            acknowledged=self.call('draft',{'sessionId':dependency['sessionId'],'baseId':dependency['baseId'],
+                'source':source,'inputId':uid(),'inputRevision':1})
+            self.assertEqual(acknowledged['status'],'inputAcknowledged')
+            request={'sessionId':dependency['sessionId'],'baseId':dependency['baseId'],'source':source,
+                     'operationId':operation,'inputRevision':acknowledged['inputRevision']}
+            frozen=copy.deepcopy(request)
+            def verify_save(status):
+                self.assertEqual(request,frozen)
+                self.committed_document(dependency, source, status, request)
+            # Supplying the actual ACK revision avoids call('save') preparing a
+            # hidden Draft POST inside the measured mutation interval.
+            self.assert_inflight_projection_change(basis,lambda:self.call('save',request),409,
+                'projection-dependency-race','staleEnvironment',verify_change=verify_save,deadline=deadline)
         b=self.call('open',{'resource':'Shared'},'bob')
         self.call('editor/render',{'sessionId':b['sessionId'],'source':'普通文字','serial':1},'bob',404)
 
@@ -91,11 +122,19 @@ class HostedEditor(Hosted):
         a=self.call('open',{'resource':'Shared'})
         slow={'sessionId':a['sessionId'],'source':PURE_COMPUTE,'serial':1}
         with self.subTest(race='newer-serial'):
-            self.assert_inflight_projection_change(slow,lambda:self.call('editor/map',{**slow,'source':'更新后的草稿','serial':2}),409,'projection-serial-race')
-        def revoke():
-            policy=self.call('admin/policy',actor='admin');policy['users']['alice']['grants']['Shared']['write']=False
-            self.call('admin/policy',{'expectedGeneration':policy['generation'],'users':policy['users']},actor='admin')
+            newer = {**slow,'source':'更新后的草稿','serial':2}
+            def verify_map(result):
+                self.assertEqual(result['serial'],newer['serial']); self.assertEqual(result['sourceHash'],digest(newer['source']))
+                self.call('editor/map',slow,status=409)
+                actual = self.call('editor/map',newer)
+                self.assertEqual(actual['serial'],2); self.assertEqual(actual['sourceHash'],digest(newer['source']))
+            self.assert_inflight_projection_change(slow,lambda:self.call('editor/map',newer),409,
+                'projection-serial-race',verify_change=verify_map)
         with self.subTest(race='revoked-session'):
-            self.assert_inflight_projection_change({**slow,'serial':3},revoke,410,'projection-revoked-race')
+            deadline=time.monotonic()+40
+            target=('alice','grants','Shared','write')
+            request=freeze_policy_changes(self.call('admin/policy',actor='admin'),[(target,False)])
+            self.assert_inflight_projection_change({**slow,'serial':3},None,410,'projection-revoked-race',
+                policy_request=request,policy_paths=[target],deadline=deadline)
 
 if __name__=='__main__': unittest.main(argv=[sys.argv[0]],defaultTest='HostedEditor',verbosity=2)

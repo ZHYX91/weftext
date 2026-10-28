@@ -75,3 +75,19 @@ test("Capture cannot admit a late result-opening request after its producer was 
     assert.equal(f.sent.length, before);
   } finally { f.bridge.participant.thaw(); }
 });
+
+
+test("Capture close preparation synchronously excludes handoff, cancellation invalidates its late proof", async () => {
+  thawNativeApi();
+  let resolve!: (value: unknown) => void;
+  const held = new Promise<unknown>(accept => { resolve=accept; });
+  const proof = { draftId:crypto.randomUUID(), ownerGeneration:crypto.randomUUID(), recordRevision:1,inputRevision:1,inputCut:"full",lastMutationId:crypto.randomUUID(),recordDigest:"a".repeat(64),pendingOperationId:null,editRevision:0 };
+  const surface={listen(){return()=>{};},post(){}} as unknown as NativeSurface;
+  const mounted={assertCloseReady(){},form:{showError(){}},guard:{prepare:()=>held,freeze:()=>true,thaw(){}}} as unknown as MountedLocalCapture;
+  const native=new NativeCapture(surface,mounted);
+  const preparing=native.participant.prepare(request);
+  assert.throws(()=>native.assertHandoffReady());
+  native.participant.thaw();resolve(proof);
+  await assert.rejects(preparing);assert.equal(native.participant.freeze(request),false);
+  native.assertHandoffReady();native.dispose();assert.throws(()=>native.assertHandoffReady());
+});

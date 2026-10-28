@@ -337,13 +337,25 @@ async fn run_server(args: &Args, serve: &crate::launch::ServeArgs) -> Result<u8,
         .await
         .map(|()| 0)
         .map_err(|error| {
-            // ServeError exposes approved static diagnostics only. Arbitrary
-            // config, URL, credential and Debug text never cross this boundary.
-            json_diagnostic(json!({"schemaVersion":1,"diagnostic":{
-                "code":error.code,"message":error.diagnostic
-            }}));
+            // Only approved static text and the closed local-origin projection
+            // cross this boundary, never arbitrary error or source-chain text.
+            json_diagnostic(serve_diagnostic(&error));
             Failure::new(error.code, UNAVAILABLE)
         })
+}
+fn serve_diagnostic(error: &crate::launch::ServeError) -> Value {
+    #[derive(Serialize)]
+    struct Diagnostic<'a> {
+        code: &'static str,
+        message: &'static str,
+        #[serde(flatten)]
+        local_origin: Option<&'a crate::launch::LocalOriginDiagnostic>,
+    }
+    json!({"schemaVersion":1,"diagnostic":Diagnostic {
+        code: error.code,
+        message: error.diagnostic,
+        local_origin: error.local_origin.as_ref(),
+    }})
 }
 fn early_output_format(arguments: &[OsString]) -> OutputFormat {
     let value = arguments
@@ -1291,6 +1303,132 @@ async fn download(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn serve_failure_without_origin_details_keeps_the_original_records() {
+        let error = crate::launch::ServeError {
+            code: "profileQualification",
+            diagnostic: "The exact persistent profile could not be qualified",
+            local_origin: None,
+        };
+        assert_eq!(
+            serve_diagnostic(&error),
+            json!({"schemaVersion":1,"diagnostic":{
+                "code":"profileQualification",
+                "message":"The exact persistent profile could not be qualified"
+            }})
+        );
+        assert_eq!(
+            failure_document(&Failure::new(error.code, UNAVAILABLE)),
+            json!({"schemaVersion":1,"error":{"code":"profileQualification","exitCode":3}})
+        );
+    }
+
+    #[test]
+    fn serve_origin_projection_never_serializes_error_text_or_its_source_chain() {
+        struct SensitiveError {
+            display: &'static str,
+            debug: &'static str,
+            source: Option<Box<SensitiveError>>,
+        }
+        impl std::fmt::Display for SensitiveError {
+            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str(self.display)
+            }
+        }
+        impl std::fmt::Debug for SensitiveError {
+            fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str(self.debug)
+            }
+        }
+        impl std::error::Error for SensitiveError {
+            fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+                self.source
+                    .as_deref()
+                    .map(|source| source as &(dyn std::error::Error + 'static))
+            }
+        }
+        let sensitive = SensitiveError {
+            display: "DISPLAY_SENTINEL C:\\private-author\\catalog.json",
+            debug: "DEBUG_SENTINEL credential=private-token",
+            source: Some(Box::new(SensitiveError {
+                display: "SOURCE_DISPLAY_SENTINEL bearer=private-source-token",
+                debug: "SOURCE_DEBUG_SENTINEL https://private.example/",
+                source: None,
+            })),
+        };
+        assert!(sensitive.to_string().contains("DISPLAY_SENTINEL"));
+        assert!(format!("{sensitive:?}").contains("DEBUG_SENTINEL"));
+        assert!(
+            std::error::Error::source(&sensitive)
+                .unwrap()
+                .to_string()
+                .contains("SOURCE_DISPLAY_SENTINEL")
+        );
+        let cause = io::Error::new(io::ErrorKind::AddrInUse, sensitive);
+        let error = crate::launch::ServeError {
+            code: "localOriginUnavailable",
+            diagnostic: "The retained local origin is unavailable; no changed-origin fallback was used",
+            local_origin: Some(crate::launch::LocalOriginDiagnostic::from_io(
+                crate::launch::LocalOriginPhase::RetainedBind,
+                &cause,
+            )),
+        };
+        let document = serve_diagnostic(&error);
+        let diagnostic = &document["diagnostic"];
+        assert_eq!(diagnostic["code"], "localOriginUnavailable");
+        assert_eq!(diagnostic["message"], error.diagnostic);
+        assert_eq!(diagnostic["phase"], "retainedBind");
+        assert_eq!(diagnostic["ioKind"], "AddrInUse");
+        assert_eq!(diagnostic["osCode"], Value::Null);
+        assert_eq!(diagnostic.as_object().unwrap().len(), 5);
+        assert!(diagnostic.get("localOrigin").is_none());
+        let serialized = serde_json::to_string(&document).unwrap();
+        for forbidden in [
+            "SENTINEL",
+            "private-author",
+            "catalog.json",
+            "credential",
+            "bearer",
+            "private-token",
+            "private-source-token",
+            "private.example",
+        ] {
+            assert!(!serialized.contains(forbidden));
+        }
+        assert_eq!(
+            failure_document(&Failure::new(error.code, UNAVAILABLE)),
+            json!({"schemaVersion":1,"error":{"code":"localOriginUnavailable","exitCode":3}})
+        );
+    }
+
+    #[test]
+    fn serve_origin_projection_preserves_numeric_os_code_and_typed_kind() {
+        let cause = io::Error::from_raw_os_error(5);
+        let expected_kind = format!("{:?}", cause.kind());
+        let error = crate::launch::ServeError {
+            code: "localOriginUnavailable",
+            diagnostic: "The retained local origin is unavailable; no changed-origin fallback was used",
+            local_origin: Some(crate::launch::LocalOriginDiagnostic::from_io(
+                crate::launch::LocalOriginPhase::CandidateBind,
+                &cause,
+            )),
+        };
+        assert_eq!(
+            serve_diagnostic(&error),
+            json!({"schemaVersion":1,"diagnostic":{
+                "code":"localOriginUnavailable",
+                "message":error.diagnostic,
+                "phase":"candidateBind",
+                "ioKind":expected_kind,
+                "osCode":5
+            }})
+        );
+        assert_eq!(
+            failure_document(&Failure::new(error.code, UNAVAILABLE)),
+            json!({"schemaVersion":1,"error":{"code":"localOriginUnavailable","exitCode":3}})
+        );
+    }
+
     #[test]
     fn machine_diagnostics_keep_stable_codes_and_original_input_locators() {
         let mut failure = Failure::new("timeout", UNKNOWN);

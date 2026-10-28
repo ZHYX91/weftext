@@ -9,7 +9,7 @@ import sys
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
+from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call, freeze_policy_changes, apply_inflight_revocation, verify_policy_changes
 from test_hosted import uid
 from test_hosted_definition import HostedDefinition
 from test_hosted_query import HostedQuery
@@ -298,6 +298,8 @@ class HostedProviders(HostedQuery):
         self.assertTrue(self.call('editor/render', basis)['ok'])
         occurrence = next(item for item in found['occurrences'] if item['key'] == definition['definition']['key'])
         deadline = time.monotonic() + 40
+        changes = [(('alice', 'queryProviders'), {'providers': [], 'seriesPolicies': []})]
+        policy_request = freeze_policy_changes(self.call('admin/policy', actor='admin'), changes)
         with ThreadPoolExecutor(max_workers=1) as pool:
             with OwnedWorkerObservation(self.server.owner) as observation:
                 self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted')
@@ -308,18 +310,20 @@ class HostedProviders(HostedQuery):
                 worker = observation.wait(pending, deadline=deadline)
                 observation.assert_inflight(pending)
                 self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
-                self.grant_providers([], actor='alice')
-                changed = event_time_ns()
+                mutation = apply_inflight_revocation(observation, pending, policy_request,
+                    lambda update: self.call('admin/policy', update, 'admin'), deadline)
                 (code, result, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        self.assertLess(time.monotonic(), deadline, 'Original budget exhausted before policy readback')
+        readback = self.call('admin/policy', actor='admin')
+        self.assertLess(time.monotonic(), deadline, 'Original budget exhausted during policy readback')
         trace = {'submittedMonotonicNs': submitted, 'worker': worker,
-                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 **mutation, 'requestCompletedMonotonicNs': completed,
+                 'policyReadbackGeneration': readback['generation'],
                  'status': code, 'errorCode': result.get('error', {}).get('code'),
                  'explanationKey': result.get('error', {}).get('explanation', {}).get('key')}
         with (self.folder/'provider-revocation-inflight.json').open('x', encoding='utf-8') as evidence:
             evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
-        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
-        self.assertLess(worker['observedMonotonicNs'], changed)
-        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
+        verify_policy_changes(policy_request, [path for path, _ in changes], readback, trace)
         self.assertEqual(code, 401, result)
         self.assertEqual(result['error']['code'], 'authentication')
         self.assertEqual(result['error']['explanation']['key'],

@@ -66,6 +66,98 @@ fn official_native_decoder_preserves_order_duplicates_and_exact_values() {
     assert!(decode_native_expression("datetime(year: 2023, month: 2, day: 29)").is_err());
 }
 #[test]
+fn union_native_domain_task_due_rejects_local_datetime_and_retains_original() {
+    let s = schema();
+    let raw = "datetime(year: 2026, month: 10, day: 27, hour: 17, minute: 0, second: 37)";
+    let original = source(&format!(", due: {raw}"));
+    let p = project(&original, &s);
+    let due = p.fields.iter().find(|f| f.field_id == "tasks/due").unwrap();
+    assert_eq!(due.raw.as_deref(), Some(raw));
+    let range = due.source_range.as_ref().unwrap();
+    assert_eq!(&original[range.from..range.to], raw);
+    assert_eq!(
+        due.cell,
+        Cell::Invalid {
+            diagnostics: vec![
+                UiMessage::error_data_schema_union_value_invalid_at_path(
+                    weftext_messages::params::ErrorDataSchemaUnionValueInvalidAtPath {
+                        path: "$".into(),
+                    },
+                )
+                .into(),
+                UiMessage::error_data_schema_union_native_domain_no_match().into(),
+            ],
+            value: Some(NativeValue::LocalDatetime("2026-10-27T17:00:37".into())),
+        }
+    );
+    assert_eq!(
+        p.fields.iter().find(|f| f.key == "status").unwrap().cell,
+        Cell::value(NativeValue::Text("open".into()))
+    );
+
+    for allowed in [
+        "datetime(year: 2026, month: 10, day: 27)",
+        "\"2026-10-27T17:00:37.123456789123+08:00\"",
+        "(calendar: \"gregorian\", version: \"proleptic-gregorian.v1\", precision: \"month\", year: 2026, month: 10)",
+    ] {
+        let p = project(&source(&format!(", due: {allowed}")), &s);
+        let due = p.fields.iter().find(|f| f.field_id == "tasks/due").unwrap();
+        assert_eq!(due.raw.as_deref(), Some(allowed));
+        assert_eq!(
+            due.cell,
+            Cell::value(decode_native_expression(allowed).unwrap())
+        );
+    }
+}
+
+#[test]
+fn union_native_domain_distinguishes_overlap_from_selected_branch_validation() {
+    let s = schema();
+    let overlap = Shape::Union {
+        variants: vec![
+            Shape::Scalar {
+                semantic: "text".into(),
+            },
+            Shape::Scalar {
+                semantic: "instant".into(),
+            },
+        ],
+        discriminator: None,
+    };
+    // Installation rejects overlap. Direct validation still diagnoses it accurately.
+    assert!(s.check_query_shape(&overlap).is_err());
+    let result = s.validate(&overlap, &NativeValue::Text("2026-10-27T17:00:37Z".into()));
+    assert_eq!(
+        result.diagnostics,
+        vec![
+            UiMessage::error_data_schema_union_value_invalid_at_path(
+                weftext_messages::params::ErrorDataSchemaUnionValueInvalidAtPath {
+                    path: "$".into(),
+                },
+            )
+            .into(),
+            UiMessage::error_data_schema_union_native_domain_ambiguous().into(),
+        ]
+    );
+    assert!(result.unavailable.is_empty());
+
+    let due = s.fields.iter().find(|f| f.id == "tasks/due").unwrap();
+    let malformed_instant = NativeValue::Text("2026-10-27T17:00:37".into());
+    let result = s.validate(&due.shape, &malformed_instant);
+    assert_eq!(
+        result,
+        s.validate(
+            &Shape::Scalar {
+                semantic: "instant".into()
+            },
+            &malformed_instant
+        )
+    );
+    assert!(!result.is_valid());
+    assert!(result.unavailable.is_empty());
+}
+
+#[test]
 fn native_budget_keeps_deep_static_source_unavailable_and_writer_bounded() {
     let expression = format!("{}1{}", "(".repeat(70), ")".repeat(70));
     assert_data_error(

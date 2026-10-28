@@ -10,7 +10,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from _cli_serve import OwnedServe, _creation_time, parse_ready, parse_shutdown, serve_command
+from _cli_serve import OwnedServe, _creation_time, _io_path, parse_ready, parse_shutdown, serve_command
 
 CREATED = 134055000000000001  # Deliberately larger than JavaScript Number precision.
 IDENTITY = {'pid': 41, 'created': CREATED, 'incarnation': 'opaque-incarnation',
@@ -50,6 +50,7 @@ class ServeFixture:
     def __init__(self, initial):
         self.stdout, self.stderr = Pipe(initial), Pipe()
         self.returncode = None
+        self.wait_timeouts = []
 
     def poll(self):
         return self.returncode
@@ -61,8 +62,9 @@ class ServeFixture:
             self.stderr.chunks.put(b'')
 
     def wait(self, timeout=None):
+        self.wait_timeouts.append(timeout)
         if self.returncode is None:
-            raise AssertionError('Fixture only exits after the control action')
+            raise subprocess.TimeoutExpired('fake owned serve', timeout)
         return self.returncode
 
 
@@ -100,17 +102,32 @@ class Fixture:
             return ControlFixture(result)
         raise AssertionError('No other process command is allowed')
 
-    def launch(self, root, *, expected_default_data_dir=None):
+    def launch(self, root, *, expected_default_data_dir=None, log_prefix=None):
         with patch('_cli_serve.subprocess.Popen', side_effect=self.popen), patch('_cli_serve._creation_time', return_value=CREATED):
             arguments = [] if expected_default_data_dir is not None else ['--data-dir', str(root / 'state')]
             self.owner = OwnedServe(root / 'weftext-cli.exe', arguments, expected_default_data_dir=expected_default_data_dir,
-                                    evidence_parent=root if expected_default_data_dir is not None else None)
+                                    evidence_parent=root if expected_default_data_dir is not None else None, log_prefix=log_prefix)
         return self.owner
 
     def close_fixture(self):
         self.service.finish(3)
         if self.owner:
             self.owner._join()
+
+
+def long_evidence_root(directory):
+    # TemporaryDirectory retains the extended cleanup root. The controller gets
+    # its ordinary spelling, matching real --artifacts-dir callers/protocols.
+    ordinary = str(directory)
+    if ordinary.startswith('\\\\?\\UNC\\'):
+        ordinary = '\\\\' + ordinary[8:]
+    else:
+        ordinary = ordinary.removeprefix('\\\\?\\')
+    root = Path(ordinary)
+    for index in range(4):
+        root /= f'TEST-long-evidence-{index}-' + 'x' * 60
+    _io_path(root).mkdir(parents=True)
+    return root
 
 
 class ReadyAndReceipt(unittest.TestCase):
@@ -166,7 +183,96 @@ class ReadyAndReceipt(unittest.TestCase):
         self.assertGreater(_creation_time(process), 2 ** 53)
 
 
+class IOPaths(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'nt', 'Windows namespace spelling')
+    def test_windows_io_encoding_handles_drive_unc_relative_and_explicit_namespaces(self):
+        self.assertEqual(str(_io_path(Path('C:/TEST/evidence'))), '\\\\?\\C:\\TEST\\evidence')
+        self.assertEqual(str(_io_path(Path('\\\\server\\share\\TEST\\evidence'))), '\\\\?\\UNC\\server\\share\\TEST\\evidence')
+        for spelling in ('\\\\?\\C:\\TEST\\evidence', '\\\\?\\UNC\\server\\share\\TEST\\evidence', '\\\\.\\C:\\TEST\\evidence'):
+            with self.subTest(spelling=spelling):
+                self.assertEqual(str(_io_path(Path(spelling))), spelling)
+        relative = Path('TEST-relative') / '..' / 'TEST-evidence'
+        self.assertEqual(str(_io_path(relative)), '\\\\?\\' + os.path.abspath(relative))
+
+    @unittest.skipIf(os.name == 'nt', 'Non-Windows path spelling')
+    def test_non_windows_io_keeps_relative_spelling(self):
+        original = Path('TEST-relative') / 'evidence'
+        self.assertEqual(_io_path(original), original)
+        self.assertFalse(_io_path(original).is_absolute())
+
+
 class Controller(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'nt', 'Real Windows long evidence paths')
+    def test_long_evidence_paths_keep_all_originals_and_exact_control_arguments(self):
+        fixture = Fixture()
+        stderr = ('TEST stderr ' + TOKEN).encode()
+        fixture.service.stderr.chunks.put(stderr)
+        # The context's original extended root also keeps its own normal
+        # TemporaryDirectory cleanup working on systems with MAX_PATH limits.
+        with tempfile.TemporaryDirectory(dir=_io_path(tempfile.gettempdir())) as directory:
+            try:
+                root = long_evidence_root(directory)
+                self.assertGreater(len(str(root)), 300)
+                data = root / 'Weftext-MVP/core'
+                log_prefix = root / 'TEST-existing-log'
+                _io_path(Path(str(log_prefix) + '.stdout.log')).write_text('original log\n', encoding='utf-8')
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen):
+                    owner = fixture.launch(root, expected_default_data_dir=data, log_prefix=log_prefix).wait_ready(.5)
+                    self.assertEqual(owner.stop(), ('', stderr.decode()))
+                    self.assertEqual(owner.stop(), ('', stderr.decode()))
+                self.assertEqual([call[1] for call in fixture.calls], ['serve', 'owner-status', 'owner-stop'])
+                self.assertEqual(owner.data_dir, data)
+                self.assertEqual(owner.directory.parent, root)
+                self.assertEqual(owner.log_prefix, log_prefix)
+                self.assertFalse(str(owner.directory).startswith('\\\\?\\'))
+                self.assertFalse(_io_path(data.parent).exists(), 'Evidence I/O must not create product state')
+                status, stop = fixture.calls[1:]
+                self.assertEqual(status[status.index('--data-dir') + 1], str(data))
+                self.assertEqual(stop[stop.index('--data-dir') + 1], str(data))
+                identity_file = owner.directory / 'owner-identity.json'
+                self.assertEqual(stop[stop.index('--owner-identity') + 1], str(identity_file))
+                self.assertEqual(json.loads(_io_path(identity_file).read_bytes()), IDENTITY)
+                self.assertEqual(_io_path(owner.directory / 'serve.stdout.bin').read_bytes(), ready())
+                self.assertEqual(_io_path(owner.directory / 'serve.stderr.bin').read_bytes(), stderr)
+                for name in ('owner-status', 'owner-stop'):
+                    for stream in ('stdout', 'stderr'):
+                        self.assertTrue(_io_path(owner.directory / f'{name}.{stream}.bin').is_file())
+                record = json.loads(_io_path(owner.directory / 'lifecycle.json').read_bytes())
+                self.assertTrue(record['shutdownVerified'])
+                self.assertEqual(record['command'], fixture.calls[0])
+                self.assertEqual(record['shutdownReceipt']['owner'], IDENTITY)
+                self.assertEqual(set(record['controls']), {'owner-status', 'owner-stop'})
+                stdout_log = _io_path(Path(str(log_prefix) + '.stdout.log')).read_text(encoding='utf-8')
+                stderr_log = _io_path(Path(str(log_prefix) + '.stderr.log')).read_text(encoding='utf-8')
+                self.assertTrue(stdout_log.startswith('original log\n'))
+                self.assertIn('<redacted>', stdout_log)
+                self.assertNotIn(TOKEN, stdout_log + stderr_log)
+            finally:
+                fixture.close_fixture()
+
+    @unittest.skipUnless(os.name == 'nt', 'Real Windows long evidence paths')
+    def test_long_evidence_path_unknown_stop_remains_one_attempt_without_kill(self):
+        fixture = Fixture(stop_code=3)
+        with tempfile.TemporaryDirectory(dir=_io_path(tempfile.gettempdir())) as directory:
+            try:
+                root = long_evidence_root(directory)
+                owner = fixture.launch(root).wait_ready(.5)
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen):
+                    with self.assertRaisesRegex(RuntimeError, 'no retry/kill') as first:
+                        owner.stop(exit_timeout=0)
+                    with self.assertRaises(RuntimeError) as second:
+                        owner.stop(exit_timeout=0)
+                self.assertIs(first.exception, second.exception)
+                self.assertEqual([call[1] for call in fixture.calls], ['serve', 'owner-stop'])
+                self.assertIsNone(fixture.service.poll())
+                record = json.loads(_io_path(owner.directory / 'lifecycle.json').read_bytes())
+                self.assertEqual(record['shutdownOutcome'], 'unknown')
+                self.assertFalse(record['shutdownVerified'])
+                self.assertEqual(record['controls']['owner-stop']['exitCode'], 3)
+                self.assertEqual(json.loads(_io_path(owner.directory / 'owner-identity.json').read_bytes()), IDENTITY)
+            finally:
+                fixture.close_fixture()
+
     def test_default_resolver_stays_in_child_and_control_uses_exact_expected_test_root(self):
         fixture = Fixture()
         with tempfile.TemporaryDirectory() as directory:
@@ -233,7 +339,10 @@ class Controller(unittest.TestCase):
                 self.assertEqual((owner.directory / 'serve.stdout.bin').read_bytes(), ready())
                 record = json.loads((owner.directory / 'lifecycle.json').read_bytes())
                 self.assertTrue(record['stopped'])
+                self.assertTrue(record['shutdownVerified'])
                 self.assertEqual(record['shutdownReceipt']['owner']['created'], CREATED)
+                self.assertNotIn('exitObservation', record)
+                self.assertEqual(fixture.service.wait_timeouts, [15])
             finally:
                 fixture.close_fixture()
 
@@ -248,7 +357,158 @@ class Controller(unittest.TestCase):
                             owner.stop()
                 self.assertEqual([call[1] for call in fixture.calls], ['serve', 'owner-stop'])
                 self.assertIsNone(fixture.service.poll())
-                self.assertFalse(json.loads((owner.directory / 'lifecycle.json').read_bytes())['stopped'])
+                record = json.loads((owner.directory / 'lifecycle.json').read_bytes())
+                self.assertFalse(record['stopped'])
+                self.assertFalse(record['shutdownVerified'])
+                self.assertEqual(record['shutdownOutcome'], 'unknown')
+                self.assertEqual(record['exitObservation'], {'source': 'original Popen',
+                                 'timeoutSeconds': 15, 'outcome': 'timeout'})
+                self.assertEqual(fixture.service.wait_timeouts, [15])
+            finally:
+                fixture.close_fixture()
+
+    def test_unknown_stop_observes_natural_exit_without_promoting_it_to_acknowledgement(self):
+        for exit_code in (0, 3):
+            fixture = Fixture(stop_code=6)
+            with self.subTest(exit_code=exit_code), tempfile.TemporaryDirectory() as directory:
+                try:
+                    root = Path(directory)
+                    owner = fixture.launch(root).wait_ready(.5)
+                    owner.log_prefix = root / 'existing'
+                    log = root / 'existing.stderr.log'
+                    log.write_text('original log\n', encoding='utf-8')
+                    def natural_exit(timeout):
+                        fixture.service.stderr.chunks.put(b'final output ' + TOKEN.encode() + b'\n')
+                        fixture.service.finish(exit_code)
+                        return exit_code
+                    with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen), \
+                            patch.object(fixture.service, 'wait', side_effect=natural_exit) as wait:
+                        with self.assertRaisesRegex(RuntimeError, 'no retry/kill') as raised:
+                            owner.stop(exit_timeout=.25)
+                        with self.assertRaises(RuntimeError) as repeated:
+                            owner.stop(exit_timeout=99)
+                    self.assertIs(raised.exception, repeated.exception)
+                    self.assertIn('owner-stop exit 6', str(raised.exception.__cause__))
+                    wait.assert_called_once_with(timeout=.25)
+                    self.assertEqual([call[1] for call in fixture.calls], ['serve', 'owner-stop'])
+                    record = json.loads((owner.directory / 'lifecycle.json').read_bytes())
+                    self.assertTrue(record['stopped'])
+                    self.assertFalse(record['shutdownVerified'])
+                    self.assertEqual(record['shutdownOutcome'], 'unknown')
+                    self.assertEqual(record['observedExitCode'], exit_code)
+                    self.assertEqual(record['exitObservation']['outcome'], 'exited')
+                    self.assertNotIn('shutdownReceipt', record)
+                    self.assertNotIn('exitCode', record)
+                    self.assertEqual((owner.directory / 'serve.stderr.bin').read_bytes(),
+                                     b'final output ' + TOKEN.encode() + b'\n')
+                    self.assertEqual(log.read_text(encoding='utf-8'), 'original log\nfinal output <redacted>\n')
+                finally:
+                    fixture.close_fixture()
+
+    def test_failed_observation_and_log_capture_keep_the_original_shutdown_exception(self):
+        fixture = Fixture(stop_code=6)
+        with tempfile.TemporaryDirectory() as directory:
+            try:
+                owner = fixture.launch(Path(directory)).wait_ready(.5)
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen), \
+                        patch.object(fixture.service, 'wait', side_effect=KeyboardInterrupt('observation interrupted')), \
+                        patch.object(owner, '_write_logs', side_effect=OSError('log unavailable')):
+                    with self.assertRaisesRegex(RuntimeError, 'Typed shutdown failed') as raised:
+                        owner.stop(exit_timeout=.25)
+                self.assertIn('owner-stop exit 6', str(raised.exception.__cause__))
+                record = json.loads((owner.directory / 'lifecycle.json').read_bytes())
+                self.assertIn('owner-stop exit 6', record['shutdownError'])
+                self.assertEqual(record['exitObservation']['outcome'], 'error')
+                self.assertIn('observation interrupted', record['exitObservation']['error'])
+                self.assertIn('log unavailable', record['evidenceErrors'][0])
+                self.assertFalse(record['shutdownVerified'])
+                self.assertEqual([call[1] for call in fixture.calls], ['serve', 'owner-stop'])
+            finally:
+                fixture.close_fixture()
+
+    def test_invalid_receipt_preserves_natural_exit_as_separate_evidence(self):
+        fixture = Fixture(stopped_identity={**IDENTITY, 'incarnation': 'another'})
+        with tempfile.TemporaryDirectory() as directory:
+            try:
+                owner = fixture.launch(Path(directory)).wait_ready(.5)
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen):
+                    with self.assertRaisesRegex(RuntimeError, 'Typed shutdown failed'):
+                        owner.stop(exit_timeout=.25)
+                record = json.loads((owner.directory / 'lifecycle.json').read_bytes())
+                self.assertTrue(record['stopped'])
+                self.assertEqual(record['observedExitCode'], 0)
+                self.assertFalse(record['shutdownVerified'])
+                self.assertNotIn('shutdownReceipt', record)
+                self.assertIn('another owner', record['shutdownError'])
+            finally:
+                fixture.close_fixture()
+
+    def test_control_timeout_observes_only_original_child_and_retains_unknown(self):
+        fixture = Fixture(stop_code=6)
+        with tempfile.TemporaryDirectory() as directory:
+            try:
+                owner = fixture.launch(Path(directory)).wait_ready(.5)
+                def natural_exit(timeout):
+                    fixture.service.finish(0)
+                    return 0
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen), \
+                        patch.object(ControlFixture, 'wait', side_effect=subprocess.TimeoutExpired('fake control', .5)), \
+                        patch.object(fixture.service, 'wait', side_effect=natural_exit) as wait:
+                    with self.assertRaisesRegex(RuntimeError, 'Typed shutdown failed') as raised:
+                        owner.stop(control_timeout=.5, exit_timeout=.25)
+                self.assertIsInstance(raised.exception.__cause__, subprocess.TimeoutExpired)
+                wait.assert_called_once_with(timeout=.25)
+                record = json.loads((owner.directory / 'lifecycle.json').read_bytes())
+                self.assertEqual(record['controls']['owner-stop']['outcome'], 'unknown; no retry or kill')
+                self.assertEqual(record['observedExitCode'], 0)
+                self.assertFalse(record['shutdownVerified'])
+                self.assertEqual(record['shutdownOutcome'], 'unknown')
+                self.assertNotIn('shutdownReceipt', record)
+                self.assertEqual([call[1] for call in fixture.calls], ['serve', 'owner-stop'])
+            finally:
+                fixture.close_fixture()
+
+    def test_drain_and_lifecycle_errors_cannot_replace_the_original_stop_error(self):
+        fixture = Fixture(stop_code=6)
+        with tempfile.TemporaryDirectory() as directory:
+            try:
+                owner = fixture.launch(Path(directory)).wait_ready(.5)
+                def natural_exit(timeout):
+                    fixture.service.finish(0)
+                    return 0
+                original_save = owner._save
+                def fail_final_save():
+                    if owner._stop_error is not None:
+                        raise OSError('lifecycle unavailable')
+                    original_save()
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen), \
+                        patch.object(fixture.service, 'wait', side_effect=natural_exit), \
+                        patch.object(owner, '_join', side_effect=RuntimeError('streams not drained')), \
+                        patch.object(owner, '_save', side_effect=fail_final_save):
+                    with self.assertRaisesRegex(RuntimeError, 'Typed shutdown failed') as raised:
+                        owner.stop(exit_timeout=.25)
+                self.assertIn('owner-stop exit 6', str(raised.exception.__cause__))
+                self.assertEqual(owner.record['observedExitCode'], 0)
+                self.assertIn('streams not drained', owner.record['exitObservation']['captureError'])
+                self.assertIn('lifecycle unavailable', owner.record['evidenceErrors'][0])
+                self.assertIn('lifecycle unavailable', raised.exception.__notes__[0])
+                self.assertFalse(owner.record['shutdownVerified'])
+            finally:
+                fixture.close_fixture()
+
+    def test_failed_exit_wait_does_not_receive_another_observation_budget(self):
+        fixture = Fixture()
+        with tempfile.TemporaryDirectory() as directory:
+            try:
+                owner = fixture.launch(Path(directory)).wait_ready(.5)
+                with patch('_cli_serve.subprocess.Popen', side_effect=fixture.popen), \
+                        patch.object(fixture.service, 'wait', side_effect=subprocess.TimeoutExpired('fake serve', .25)) as wait:
+                    with self.assertRaisesRegex(RuntimeError, 'Typed shutdown failed'):
+                        owner.stop(exit_timeout=.25)
+                wait.assert_called_once_with(timeout=.25)
+                record = json.loads((owner.directory / 'lifecycle.json').read_bytes())
+                self.assertEqual(record['exitObservation']['timeoutSeconds'], 0)
+                self.assertFalse(record['shutdownVerified'])
             finally:
                 fixture.close_fixture()
 

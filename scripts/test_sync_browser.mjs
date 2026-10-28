@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Headless, owned fixtures, two independent actual programs. No desktop input.
@@ -29,7 +30,7 @@ async function api(server, route, data) {
   const response = await fetch(server.base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': server.token }, body: JSON.stringify(data) });
   const body = await response.json(); assert.ok(response.ok, JSON.stringify(body)); return body;
 }
-async function sync(page) { await page.getByRole('button', { name: '同步', exact: true }).click(); const panel = page.getByRole('dialog', { name: '资料库同步' }); await panel.waitFor(); await panel.getByRole('button', { name: '读取本机状态', exact: true }).waitFor(); return panel; }
+async function sync(page) { await workspaceCommand(page, 'knowledge', '同步'); const panel = page.getByRole('dialog', { name: '资料库同步' }); await panel.waitFor(); await panel.getByRole('button', { name: '读取本机状态', exact: true }).waitFor(); return panel; }
 async function click(panel, name) {
   const button = panel.getByRole('button', { name, exact: true });
   await button.click(); await panel.getByRole('status').filter({ hasText: '操作已完成' }).waitFor();
@@ -78,7 +79,7 @@ try {
     await api(server, '/api/save', { sessionId: opened.sessionId, baseId: opened.baseId, source, operationId: randomUUID() }); return source;
   }
   const sourceA = await save(a, ra, '甲中文分支😀'), sourceB = await save(b, rb, '乙离线分支');
-  await pageA.getByRole('button', { name: '源码', exact: true }).click();
+  await workspaceMode(pageA, '源码');
   const editor = pageA.locator('.cm-content[contenteditable=true]');
   const unsaved = sourceA + '\n浏览器未保存草稿'; await editor.fill(unsaved);
   // Open the cloned library through its normal UI so the sync entry has a root.

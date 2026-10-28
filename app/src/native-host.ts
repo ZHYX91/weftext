@@ -32,7 +32,9 @@ function bridge(): WebView | undefined { return window.chrome?.webview; }
 function isRequest(value: unknown): value is CloseRequest {
   if (!value || typeof value !== "object") return false;
   const request = value as Partial<CloseRequest>;
-  return [request.surfaceId, request.surfaceEpoch, request.closeAttemptId].every(item => typeof item === "string" && item.length > 0 && item.length <= 128);
+  const keys = Object.keys(value);
+  return keys.length === 4 && keys.every(key => ["type", "surfaceId", "surfaceEpoch", "closeAttemptId"].includes(key))
+    && [request.surfaceId, request.surfaceEpoch, request.closeAttemptId].every(item => typeof item === "string" && item.length > 0 && item.length <= 128);
 }
 
 /** One instance for the real library or Capture controller, installed before
@@ -48,6 +50,8 @@ export class NativeSurface {
   private frozen = false;
   private readonly participants = new Map<string, CloseParticipant>();
   private ready = false;
+  private retired = false;
+  private localeConfirmed = false;
   private readonly listeners = new Set<(message: Record<string, unknown>) => void>();
 
   constructor(readonly kind: SurfaceKind) {
@@ -62,6 +66,15 @@ export class NativeSurface {
     document.addEventListener("compositionstart", () => { this.composing = true; changed(); }, true);
     document.addEventListener("compositionend", () => { this.composing = false; changed(); }, true);
     bridge()?.addEventListener("message", event => { void this.receive(event.data); });
+    window.addEventListener?.("pagehide", event => { if (!event.persisted) { this.retired = true; this.localeConfirmed = false; } });
+  }
+
+  /** Only a confirmed personal preference cut may notify the original owner.
+   * Before binding retain the signal on this surface instance, never globally. */
+  confirmLocale(): void {
+    if (this.retired || !bridge()) return;
+    this.localeConfirmed = true;
+    if (this.binding) { this.send({ type: "locale-changed" }); this.localeConfirmed = false; }
   }
 
   get isNative(): boolean { return bridge() !== undefined; }
@@ -105,6 +118,7 @@ export class NativeSurface {
   }
 
   private async receive(value: unknown): Promise<void> {
+    if (this.retired) return;
     if (!value || typeof value !== "object") return;
     const message = value as Record<string, unknown>;
     if (message.type === "surface-bound") {
@@ -117,6 +131,7 @@ export class NativeSurface {
       try { bindNativeDraftSurface(binding); }
       catch { this.reportFailed(); return; }
       this.binding = binding;
+      if (this.localeConfirmed) this.confirmLocale();
       this.send({ type: "surface-edited", surfaceEditRevision: this.editRevision });
       return;
     }
@@ -131,7 +146,10 @@ export class NativeSurface {
       return;
     }
     if (!isRequest(value) || !this.binding || value.surfaceId !== this.binding.surfaceId || value.surfaceEpoch !== this.binding.surfaceEpoch) return;
-    const request = value;
+    // The prepare and commit envelopes have different message types. Owners
+    // freeze the same close identity, never an action-specific wire envelope.
+    // Validate the complete envelope before selecting its identity fields.
+    const request: CloseRequest = { surfaceId: value.surfaceId, surfaceEpoch: value.surfaceEpoch, closeAttemptId: value.closeAttemptId };
     if (message.type === "prepare-close") {
       // Repeated control messages do not restart the original asynchronous
       // owner or replace the identity needed to thaw an already frozen cut.

@@ -1,16 +1,18 @@
 //! Mutable private activation routing, separate from immutable build artifacts
 //! and from every Core profile. It carries locators/identity metadata, never
 //! author input, bearer credentials, delivery outcomes or a second Core journal.
+use crate::launch::{LocalOriginDiagnostic, LocalOriginPhase};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeSet,
-    fs::{File, OpenOptions},
+    fs::{File, OpenOptions, TryLockError},
     io::{self, Read, Write},
     os::windows::{
         fs::{MetadataExt, OpenOptionsExt},
         io::AsRawHandle,
     },
     path::{Path, PathBuf},
+    time::{Duration, Instant},
 };
 use windows::{
     Win32::{
@@ -35,11 +37,54 @@ use windows::{
 
 const LIMIT: usize = 16 * 1024 * 1024;
 const LEAF: &str = "host-routing.json";
+const LOCK_WAIT: Duration = Duration::from_secs(5);
+const MAX_ORIGINS: usize = 4096;
 fn invalid() -> io::Error {
     io::Error::new(
         io::ErrorKind::PermissionDenied,
         "The private activation routing evidence is not qualified",
     )
+}
+
+fn select_new_origin<T>(
+    reserved: &BTreeSet<u16>,
+    requested: u16,
+    mut bind: impl FnMut(u16) -> io::Result<T>,
+    mut address: impl FnMut(&T) -> io::Result<u16>,
+) -> Result<T, LocalOriginDiagnostic> {
+    use LocalOriginPhase as Phase;
+    if requested != 0 && reserved.contains(&requested) {
+        return Err(LocalOriginDiagnostic::from_io(
+            Phase::RequestedPortReserved,
+            &invalid(),
+        ));
+    }
+    if reserved.len() >= MAX_ORIGINS {
+        return Err(LocalOriginDiagnostic::from_io(
+            Phase::OriginCapacity,
+            &io::Error::other("The retained local-origin catalog is at capacity"),
+        ));
+    }
+    // Windows may allocate consecutive ephemeral ports. A fixed retry count
+    // can end inside a contiguous retained range despite other free ports.
+    // Keep collisions bound so the kernel cannot offer them again: with N
+    // reserved ports, N+1 distinct successful binds must include a new port.
+    // These temporary listeners retire on every return, before publication.
+    let mut collisions = Vec::new();
+    for _ in 0..=reserved.len() {
+        let candidate = bind(requested)
+            .map_err(|error| LocalOriginDiagnostic::from_io(Phase::CandidateBind, &error))?;
+        let port = address(&candidate)
+            .map_err(|error| LocalOriginDiagnostic::from_io(Phase::CandidateAddress, &error))?;
+        if !reserved.contains(&port) {
+            return Ok(candidate);
+        }
+        collisions.push(candidate);
+    }
+    Err(LocalOriginDiagnostic::from_io(
+        Phase::CandidateExhausted,
+        &invalid(),
+    ))
 }
 struct Descriptor(PSECURITY_DESCRIPTOR);
 impl Drop for Descriptor {
@@ -135,8 +180,21 @@ impl Root {
         if sddl(actual.0)? != sddl(expected.0)? {
             return Err(invalid());
         }
+        let root = Self {
+            profile,
+            _directory: directory,
+        };
+        // A publisher may rename its staged file between read_dir and metadata.
+        // Qualification must inspect members under the same physical lock as
+        // publication, not interpret that live transition as corrupt evidence.
+        drop(root.locked().map_err(|error| {
+            LocalOriginDiagnostic::from_io(LocalOriginPhase::CatalogLock, &error).into_io()
+        })?);
+        Ok(root)
+    }
+    fn inspect_members(&self) -> io::Result<()> {
         let mut members = 0;
-        for member in std::fs::read_dir(profile.path())? {
+        for member in std::fs::read_dir(self.profile.path())? {
             members += 1;
             if members > 256 {
                 return Err(invalid());
@@ -158,11 +216,14 @@ impl Root {
             {
                 return Err(invalid());
             }
+            if staged {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "An original host routing publication remains unresolved; its bytes were retained",
+                ));
+            }
         }
-        Ok(Self {
-            profile,
-            _directory: directory,
-        })
+        Ok(())
     }
     pub fn separate(&self, profile: &weftext_core::QualifiedProfile) -> io::Result<()> {
         if self
@@ -182,6 +243,9 @@ impl Root {
         }
     }
     fn locked(&self) -> io::Result<Locked<'_>> {
+        self.locked_with_limit(LOCK_WAIT)
+    }
+    fn locked_with_limit(&self, limit: Duration) -> io::Result<Locked<'_>> {
         let path = self.profile.path().join(".host-routing.lock");
         let file = match file_options()
             .read(true)
@@ -199,18 +263,27 @@ impl Root {
         if file.metadata()?.len() != 0 {
             return Err(invalid());
         }
-        file.try_lock().map_err(io::Error::other)?;
-        for member in std::fs::read_dir(self.profile.path())? {
-            let member = member?;
-            if member.file_name().to_str().is_some_and(|name| {
-                name.starts_with(".host-routing.") && name.ends_with(".pending")
-            }) {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "An original host routing publication remains unresolved; its bytes were retained",
-                ));
+        let started = Instant::now();
+        loop {
+            match file.try_lock() {
+                Ok(()) => break,
+                Err(TryLockError::Error(error)) => return Err(error),
+                Err(TryLockError::WouldBlock) => {
+                    let remaining = limit.saturating_sub(started.elapsed());
+                    if remaining.is_zero() {
+                        return Err(io::Error::new(
+                            io::ErrorKind::WouldBlock,
+                            "The private activation routing catalog is busy; no routing or OS effect was attempted",
+                        ));
+                    }
+                    // This waits only for another original catalog operation.
+                    // It never retries publication, an OS request or a failed
+                    // qualification, and does not acquire another Core owner.
+                    std::thread::sleep(remaining.min(Duration::from_millis(10)));
+                }
             }
         }
+        self.inspect_members()?;
         Ok(Locked {
             root: self,
             _lock: file,
@@ -374,11 +447,13 @@ impl Root {
         &self,
         profile: &weftext_core::QualifiedProfile,
         requested: u16,
-    ) -> io::Result<std::net::TcpListener> {
+    ) -> Result<std::net::TcpListener, LocalOriginDiagnostic> {
         self.bind_local_at(
             profile,
             requested,
-            &crate::host_paths::user_data_path(profile)?,
+            &crate::host_paths::user_data_path(profile).map_err(|error| {
+                LocalOriginDiagnostic::from_io(LocalOriginPhase::UserDataPath, &error)
+            })?,
         )
     }
     fn bind_local_at(
@@ -386,14 +461,23 @@ impl Root {
         profile: &weftext_core::QualifiedProfile,
         requested: u16,
         user_data: &Path,
-    ) -> io::Result<std::net::TcpListener> {
-        self.separate(profile)?;
-        let locator = std::fs::canonicalize(profile.path())?
+    ) -> Result<std::net::TcpListener, LocalOriginDiagnostic> {
+        use LocalOriginPhase as Phase;
+        let diagnostic = LocalOriginDiagnostic::from_io;
+        self.separate(profile)
+            .map_err(|error| diagnostic(Phase::ProfileSeparation, &error))?;
+        let locator = std::fs::canonicalize(profile.path())
+            .map_err(|error| diagnostic(Phase::ProfileCanonicalize, &error))?
             .to_str()
-            .ok_or_else(invalid)?
+            .ok_or_else(|| diagnostic(Phase::ProfileCanonicalize, &invalid()))?
             .to_owned();
-        let mut locked = self.locked()?;
-        let mut catalog = locked.read()?.unwrap_or_else(Catalog::empty);
+        let mut locked = self
+            .locked()
+            .map_err(|error| diagnostic(Phase::CatalogLock, &error))?;
+        let mut catalog = locked
+            .read()
+            .map_err(|error| diagnostic(Phase::CatalogRead, &error))?
+            .unwrap_or_else(Catalog::empty);
         let identity = profile.physical_identity();
         let found = catalog
             .origins
@@ -404,53 +488,54 @@ impl Root {
         let retained_user_data = match weftext_core::qualify_existing_profile(user_data) {
             Ok(qualified) => Some(qualified),
             Err(error) if error.code == "missing" => None,
-            Err(error) => return Err(io::Error::other(error)),
+            Err(error) => {
+                return Err(diagnostic(
+                    Phase::BrowserDataQualification,
+                    &io::Error::other(error),
+                ));
+            }
         };
         if found.is_none() && retained_user_data.is_some() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "The original browser data remains but its retained local origin is missing",
+            return Err(diagnostic(
+                Phase::OriginMetadataMissing,
+                &io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "The original browser data remains but its retained local origin is missing",
+                ),
             ));
         }
         if catalog.origins.iter().any(|origin| {
             origin.physical_identity != identity && same_locator(&origin.locator, &locator)
         }) {
-            return Err(invalid());
+            return Err(diagnostic(Phase::LocatorConflict, &invalid()));
         }
         let listener = if let Some(index) = found {
             let origin = &catalog.origins[index];
             if requested != 0 && requested != origin.port {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    "This physical profile already has a different retained local origin",
+                return Err(diagnostic(
+                    Phase::RetainedPortMismatch,
+                    &io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "This physical profile already has a different retained local origin",
+                    ),
                 ));
             }
             // Occupied/unknown does not change origin or discover an owner.
-            std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, origin.port))?
+            std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, origin.port))
+                .map_err(|error| diagnostic(Phase::RetainedBind, &error))?
         } else {
-            if requested != 0
-                && catalog
-                    .origins
-                    .iter()
-                    .any(|origin| origin.port == requested)
-            {
-                return Err(invalid());
-            }
-            let mut selected = None;
-            for _ in 0..32 {
-                let candidate =
-                    std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, requested))?;
-                let port = candidate.local_addr()?.port();
-                if !catalog.origins.iter().any(|origin| origin.port == port) {
-                    selected = Some(candidate);
-                    break;
-                }
-                // First-start ephemeral collision, before router/author use.
-                drop(candidate);
-            }
-            selected.ok_or_else(invalid)?
+            let reserved = catalog.origins.iter().map(|origin| origin.port).collect();
+            select_new_origin(
+                &reserved,
+                requested,
+                |port| std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, port)),
+                |listener| listener.local_addr().map(|address| address.port()),
+            )?
         };
-        let port = listener.local_addr()?.port();
+        let port = listener
+            .local_addr()
+            .map_err(|error| diagnostic(Phase::ListenerAddress, &error))?
+            .port();
         let changed = if let Some(index) = found {
             let old = &mut catalog.origins[index];
             if old.locator == locator {
@@ -468,10 +553,17 @@ impl Root {
             true
         };
         if changed {
-            catalog.revision = catalog.revision.checked_add(1).ok_or_else(invalid)?;
-            locked.publish(&catalog)?;
+            catalog.revision = catalog
+                .revision
+                .checked_add(1)
+                .ok_or_else(|| diagnostic(Phase::CatalogRevision, &invalid()))?;
+            locked
+                .publish(&catalog)
+                .map_err(|error| diagnostic(Phase::CatalogPublish, &error))?;
         }
-        listener.set_nonblocking(true)?;
+        listener
+            .set_nonblocking(true)
+            .map_err(|error| diagnostic(Phase::ListenerNonblocking, &error))?;
         Ok(listener)
     }
 }
@@ -581,7 +673,7 @@ impl Catalog {
             || self.revision == 0
             || self.profiles.len() > 128
             || self.activations.len() > 32768
-            || self.origins.len() > 4096
+            || self.origins.len() > MAX_ORIGINS
         {
             return Err(invalid());
         }
@@ -739,7 +831,7 @@ mod tests {
         root: &Root,
         profile: &weftext_core::QualifiedProfile,
         port: u16,
-    ) -> io::Result<std::net::TcpListener> {
+    ) -> Result<std::net::TcpListener, LocalOriginDiagnostic> {
         root.bind_local_at(
             profile,
             port,
@@ -749,6 +841,193 @@ mod tests {
 
     fn bytes(root: &Root) -> Vec<u8> {
         std::fs::read(root.profile.path().join(LEAF)).unwrap()
+    }
+
+    #[derive(Debug)]
+    struct Candidate {
+        port: u16,
+        retired: std::rc::Rc<std::cell::RefCell<Vec<u16>>>,
+    }
+    impl Drop for Candidate {
+        fn drop(&mut self) {
+            self.retired.borrow_mut().push(self.port);
+        }
+    }
+
+    #[test]
+    fn new_origin_crosses_long_retained_ranges_and_retires_collisions_before_return() {
+        let reserved = (50000..50041).collect();
+        let retired = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let calls = std::cell::Cell::new(0_u16);
+        let selected = select_new_origin(
+            &reserved,
+            0,
+            |requested| {
+                assert_eq!(requested, 0);
+                assert!(
+                    retired.borrow().is_empty(),
+                    "a prior candidate was released too soon"
+                );
+                let port = 50000 + calls.get();
+                calls.set(calls.get() + 1);
+                Ok(Candidate {
+                    port,
+                    retired: retired.clone(),
+                })
+            },
+            |candidate| Ok(candidate.port),
+        )
+        .unwrap();
+        assert_eq!(calls.get(), 42);
+        assert_eq!(selected.port, 50041);
+        let mut actual = retired.borrow().clone();
+        actual.sort_unstable();
+        assert_eq!(actual, (50000..50041).collect::<Vec<_>>());
+        drop(selected);
+        assert_eq!(retired.borrow().len(), 42);
+    }
+
+    #[test]
+    fn new_origin_preserves_os_failures_and_retires_all_held_candidates() {
+        for address_fails in [false, true] {
+            let retired = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+            let calls = std::cell::Cell::new(0_u16);
+            let os_code = if address_fails { 87 } else { 10055 };
+            let error = select_new_origin(
+                &[50000].into_iter().collect(),
+                0,
+                |_| {
+                    assert!(retired.borrow().is_empty());
+                    let index = calls.get();
+                    calls.set(index + 1);
+                    if index == 1 && !address_fails {
+                        return Err(io::Error::from_raw_os_error(os_code));
+                    }
+                    Ok(Candidate {
+                        port: 50000 + index,
+                        retired: retired.clone(),
+                    })
+                },
+                |candidate| {
+                    if address_fails && candidate.port == 50001 {
+                        Err(io::Error::from_raw_os_error(os_code))
+                    } else {
+                        Ok(candidate.port)
+                    }
+                },
+            )
+            .unwrap_err();
+            assert_eq!(calls.get(), 2);
+            assert_eq!(retired.borrow().len(), if address_fails { 2 } else { 1 });
+            assert_eq!(
+                serde_json::to_value(error).unwrap(),
+                serde_json::json!({
+                    "phase": if address_fails { "candidateAddress" } else { "candidateBind" },
+                    "ioKind": format!("{:?}", io::Error::from_raw_os_error(os_code).kind()),
+                    "osCode": os_code,
+                })
+            );
+        }
+    }
+
+    #[test]
+    fn new_origin_exhaustion_is_bounded_even_for_a_repeating_binder() {
+        let retired = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let calls = std::cell::Cell::new(0);
+        let error = select_new_origin(
+            &[50000, 50001].into_iter().collect(),
+            0,
+            |_| {
+                assert!(retired.borrow().is_empty());
+                calls.set(calls.get() + 1);
+                Ok(Candidate {
+                    port: 50000,
+                    retired: retired.clone(),
+                })
+            },
+            |candidate| Ok(candidate.port),
+        )
+        .unwrap_err();
+        assert_eq!(calls.get(), 3);
+        assert_eq!(retired.borrow().len(), 3);
+        assert_eq!(
+            serde_json::to_value(error).unwrap(),
+            serde_json::json!({
+                "phase": "candidateExhausted", "ioKind": "PermissionDenied", "osCode": null,
+            })
+        );
+    }
+
+    #[test]
+    fn new_origin_capacity_and_reserved_requests_never_bind_a_candidate() {
+        let full = (1..=MAX_ORIGINS as u16).collect();
+        let capacity = select_new_origin(
+            &full,
+            0,
+            |_| -> io::Result<u16> { panic!("capacity must be checked before bind") },
+            |port| Ok(*port),
+        )
+        .unwrap_err();
+        assert_eq!(
+            serde_json::to_value(capacity).unwrap(),
+            serde_json::json!({
+                "phase": "originCapacity", "ioKind": "Other", "osCode": null,
+            })
+        );
+        let reserved = select_new_origin(
+            &[50000].into_iter().collect(),
+            50000,
+            |_| -> io::Result<u16> {
+                panic!("a retained port must not be allocated to a new origin")
+            },
+            |port| Ok(*port),
+        )
+        .unwrap_err();
+        assert_eq!(
+            serde_json::to_value(reserved).unwrap(),
+            serde_json::json!({
+                "phase": "requestedPortReserved", "ioKind": "PermissionDenied", "osCode": null,
+            })
+        );
+    }
+
+    #[test]
+    fn full_catalog_refuses_new_profiles_but_preserves_existing_origins() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("existing")).unwrap();
+        let listener = bind(&root, &profile, 0).unwrap();
+        let retained = listener.local_addr().unwrap().port();
+        drop(listener);
+        let mut locked = root.locked().unwrap();
+        let mut catalog = locked.read().unwrap().unwrap();
+        for port in (1..=u16::MAX)
+            .filter(|port| *port != retained)
+            .take(MAX_ORIGINS - 1)
+        {
+            catalog.origins.push(Origin {
+                physical_identity: format!("fixture-{port}"),
+                locator: temp
+                    .path()
+                    .join(format!("unused-{port}"))
+                    .to_string_lossy()
+                    .into_owned(),
+                port,
+            });
+        }
+        catalog.revision += 1;
+        locked.publish(&catalog).unwrap();
+        drop(locked);
+        let original = bytes(&root);
+        let new_profile = weftext_core::qualify_profile(temp.path().join("new")).unwrap();
+        assert_eq!(
+            serde_json::to_value(bind(&root, &new_profile, 0).unwrap_err()).unwrap(),
+            serde_json::json!({ "phase": "originCapacity", "ioKind": "Other", "osCode": null })
+        );
+        assert_eq!(bytes(&root), original);
+        let reopened = bind(&root, &profile, 0).unwrap();
+        assert_eq!(reopened.local_addr().unwrap().port(), retained);
+        assert_eq!(bytes(&root), original);
     }
 
     #[test]
@@ -780,13 +1059,25 @@ mod tests {
         let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
         let listener = bind(&root, &profile, 0).unwrap();
         let original = bytes(&root);
-        assert!(bind(&root, &profile, 0).is_err());
+        let occupied = serde_json::to_value(bind(&root, &profile, 0).unwrap_err()).unwrap();
+        assert_eq!(occupied["phase"], "retainedBind");
+        let os_code = i32::try_from(occupied["osCode"].as_i64().unwrap()).unwrap();
+        assert_eq!(
+            occupied["ioKind"],
+            format!("{:?}", io::Error::from_raw_os_error(os_code).kind())
+        );
+        assert_eq!(bytes(&root), original);
         let different = if listener.local_addr().unwrap().port() == 1 {
             2
         } else {
             1
         };
-        assert!(bind(&root, &profile, different).is_err());
+        assert_eq!(
+            serde_json::to_value(bind(&root, &profile, different).unwrap_err()).unwrap(),
+            serde_json::json!({
+                "phase": "retainedPortMismatch", "ioKind": "InvalidInput", "osCode": null
+            })
+        );
         assert_eq!(bytes(&root), original);
     }
 
@@ -830,7 +1121,10 @@ mod tests {
         drop(bind(&root, &profile, 0).unwrap());
         let bad = b"{\"schemaVersion\":1,\"revision\":1,\"origins\":[],\"unexpected\":true}";
         std::fs::write(root.profile.path().join(LEAF), bad).unwrap();
-        assert!(bind(&root, &profile, 0).is_err());
+        assert_eq!(
+            serde_json::to_value(bind(&root, &profile, 0).unwrap_err()).unwrap()["phase"],
+            "catalogRead"
+        );
         assert_eq!(bytes(&root), bad);
     }
 
@@ -858,7 +1152,12 @@ mod tests {
         let user_data = profile.path().with_extension("test-webview2");
         std::fs::create_dir(&user_data).unwrap();
         std::fs::write(user_data.join("retained-input"), b"original input").unwrap();
-        assert!(bind(&root, &profile, 0).is_err());
+        assert_eq!(
+            serde_json::to_value(bind(&root, &profile, 0).unwrap_err()).unwrap(),
+            serde_json::json!({
+                "phase": "originMetadataMissing", "ioKind": "InvalidData", "osCode": null
+            })
+        );
         assert!(!root.profile.path().join(LEAF).exists());
         assert_eq!(
             std::fs::read(user_data.join("retained-input")).unwrap(),
@@ -879,7 +1178,136 @@ mod tests {
             .join(format!(".host-routing.{}.pending", uuid::Uuid::new_v4()));
         let partial = b"retained incomplete publication";
         std::fs::write(&pending, partial).unwrap();
-        assert!(bind(&root, &profile, 0).is_err());
+        assert_eq!(
+            serde_json::to_value(bind(&root, &profile, 0).unwrap_err()).unwrap()["phase"],
+            "catalogLock"
+        );
+        assert_eq!(bytes(&root), original);
+        assert_eq!(std::fs::read(pending).unwrap(), partial);
+    }
+
+    #[test]
+    fn simultaneous_first_origins_are_serialized_and_remain_stable() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("host-state");
+        let root = Root::at(path.clone(), true).unwrap();
+        let other = Root::at(path, false).unwrap();
+        let first = weftext_core::qualify_profile(temp.path().join("first")).unwrap();
+        let second = weftext_core::qualify_profile(temp.path().join("second")).unwrap();
+        let start = std::sync::Barrier::new(2);
+        let (first_listener, second_listener) = std::thread::scope(|scope| {
+            let worker = scope.spawn(|| {
+                start.wait();
+                bind(&other, &second, 0).unwrap()
+            });
+            start.wait();
+            let first_listener = bind(&root, &first, 0).unwrap();
+            (first_listener, worker.join().unwrap())
+        });
+        let first_port = first_listener.local_addr().unwrap().port();
+        let second_port = second_listener.local_addr().unwrap().port();
+        assert_ne!(first_port, second_port);
+        let original = bytes(&root);
+        let catalog: Catalog = serde_json::from_slice(&original).unwrap();
+        assert_eq!(catalog.revision, 2);
+        assert_eq!(catalog.origins.len(), 2);
+        assert!(catalog.profiles.is_empty());
+        assert!(catalog.activations.is_empty());
+        drop((first_listener, second_listener));
+        assert_eq!(
+            bind(&root, &first, 0).unwrap().local_addr().unwrap().port(),
+            first_port
+        );
+        assert_eq!(
+            bind(&other, &second, 0)
+                .unwrap()
+                .local_addr()
+                .unwrap()
+                .port(),
+            second_port
+        );
+        assert_eq!(bytes(&root), original);
+    }
+
+    #[test]
+    fn qualification_waits_for_the_original_publication_before_inspecting_members() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("host-state");
+        let root = Root::at(path.clone(), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
+        drop(bind(&root, &profile, 0).unwrap());
+        let mut locked = root.locked().unwrap();
+        let mut catalog = locked.read().unwrap().unwrap();
+        let (started_tx, started_rx) = std::sync::mpsc::channel();
+        let (completed_tx, completed_rx) = std::sync::mpsc::channel();
+        std::thread::scope(|scope| {
+            let worker = scope.spawn(|| {
+                started_tx.send(()).unwrap();
+                let reopened = Root::at(path, false).unwrap();
+                completed_tx.send(bytes(&reopened)).unwrap();
+            });
+            started_rx.recv().unwrap();
+            assert!(matches!(
+                completed_rx.recv_timeout(Duration::from_millis(50)),
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout)
+            ));
+            // Use the real publisher while the other qualifier is waiting.
+            // It must observe the completed revision, not the live staged path.
+            catalog.revision += 1;
+            locked.publish(&catalog).unwrap();
+            let original = bytes(&root);
+            drop(locked);
+            assert_eq!(completed_rx.recv_timeout(LOCK_WAIT).unwrap(), original);
+            worker.join().unwrap();
+        });
+    }
+
+    #[test]
+    fn busy_routing_lock_is_bounded_without_changing_original_evidence() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("host-state");
+        let root = Root::at(path.clone(), true).unwrap();
+        let other = Root::at(path, false).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
+        drop(bind(&root, &profile, 0).unwrap());
+        let original = bytes(&root);
+        let locked = root.locked().unwrap();
+        let failure = other
+            .locked_with_limit(Duration::from_millis(20))
+            .err()
+            .expect("the original operation must retain its lock");
+        assert_eq!(failure.kind(), io::ErrorKind::WouldBlock);
+        assert_eq!(bytes(&root), original);
+        drop(locked);
+        assert!(other.locked_with_limit(Duration::ZERO).is_ok());
+        assert_eq!(bytes(&root), original);
+    }
+
+    #[test]
+    fn released_lock_does_not_adopt_an_unresolved_publication() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("host-state");
+        let root = Root::at(path.clone(), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("core")).unwrap();
+        drop(bind(&root, &profile, 0).unwrap());
+        let original = bytes(&root);
+        let locked = root.locked().unwrap();
+        let pending = path.join(format!(".host-routing.{}.pending", uuid::Uuid::new_v4()));
+        let partial = b"original unconfirmed publication";
+        std::fs::write(&pending, partial).unwrap();
+        drop(locked);
+        let failure = Root::at(path, false).err().unwrap();
+        assert_eq!(failure.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            serde_json::to_value(LocalOriginDiagnostic::from_io(
+                LocalOriginPhase::RootQualification,
+                &failure,
+            ))
+            .unwrap(),
+            serde_json::json!({
+                "phase": "catalogLock", "ioKind": "InvalidData", "osCode": null
+            })
+        );
         assert_eq!(bytes(&root), original);
         assert_eq!(std::fs::read(pending).unwrap(), partial);
     }
@@ -894,9 +1322,16 @@ mod tests {
         let profile = weftext_core::qualify_existing_profile(temp.path().join("core")).unwrap();
         let value = root
             .change_startup(&profile, &device, true, || {
-                // A concurrent route request fails qualification while the
-                // exact accepted request owns the application-wide OS effect.
-                assert!(other.locked().is_err());
+                // No contender may pass the original application's OS effect.
+                // An immediate probe avoids waiting for this same-thread owner.
+                assert_eq!(
+                    other
+                        .locked_with_limit(Duration::ZERO)
+                        .err()
+                        .unwrap()
+                        .kind(),
+                    io::ErrorKind::WouldBlock
+                );
                 let catalog: Catalog = serde_json::from_slice(&bytes(&root)).unwrap();
                 assert_eq!(
                     catalog.startup.as_ref().unwrap().physical_identity,

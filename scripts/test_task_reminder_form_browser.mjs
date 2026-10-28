@@ -56,6 +56,8 @@ try {
     await control(['kind'], 'select-kind').selectOption('due_day'); assert.equal((await current()).value.find(member => member.key === 'zone').value.value, '');
     await control(['clock', 'time'], 'exact-clock').fill('09:00:12'); await control(['clock', 'fraction'], 'exact-fraction').fill('0.123456789123'); await control(['clock', 'time'], 'minute-helper').fill('08:45'); await control(['zone'], 'installed-zone-version').selectOption(JSON.stringify(['UTC', 'fixed-utc.v1']));
     const value = await current(), clock = value.value.find(member => member.key === 'clock').value; assert.equal(clock.value.find(member => member.key === 'time').value.value, '08:45:12'); assert.equal(clock.value.find(member => member.key === 'fraction').value.value, '0.123456789123'); assert.equal(value.value.find(member => member.key === 'id').value.value, originalId);
+    assert.deepEqual(value.value.map(member => member.key), ['id', 'kind', 'clock', 'zone', 'zone_version']);
+    assert.deepEqual(clock.value.map(member => member.key), ['time', 'fraction']);
     await page.evaluate(async () => { (await import('/src/ui-locale.ts')).locale.set('zh-CN'); }); assert.deepEqual(await current(), value);
     await page.locator('#test').screenshot({ path: path.join(out, 'civil-day-precise.png') });
   });

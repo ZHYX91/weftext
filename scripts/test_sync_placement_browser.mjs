@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 // Actual swap consumer: same active Node, editor, Draft/Undo and explicit rebind.
 // The Python fixture supplies real public producers and owns both HTTP programs.
 import { createRequire } from 'node:module';
@@ -54,10 +55,10 @@ try {
   const launched = page.waitForResponse(response => response.url().endsWith('/api/bootstrap'));
   await page.goto(`${fixture.url}/#token=${fixture.token}`); const initial = (await (await launched).json()).initialDocument;
   assert.equal(initial.nodeId, fixture.nodeId); assert.equal(initial.source, fixture.baseSource);
-  await page.getByRole('button', { name: '源码', exact: true }).click(); const editor = page.locator('.cm-content[contenteditable=true]'); await editor.waitFor(); assert.equal(await sourceText(), fixture.initialDraft);
+  await workspaceMode(page, '源码'); const editor = page.locator('.cm-content[contenteditable=true]'); await editor.waitFor(); assert.equal(await sourceText(), fixture.initialDraft);
   const draft = fixture.initialDraft + '\nBROWSER LATER PRIVATE SWAP INPUT 中文😀';
   await waitDraft(draft, async () => { await editor.press('ControlOrMeta+a'); await page.keyboard.insertText(draft); }); await editor.evaluate(element => { window.__placementOriginalEditor = element; });
-  await page.getByRole('button', { name: '同步', exact: true }).click(); const panel = page.getByRole('dialog', { name: '资料库同步' }); await panel.waitFor(); await panel.getByRole('status').filter({ hasText: /^操作已完成。$/ }).waitFor();
+  await workspaceCommand(page, 'knowledge', '同步'); const panel = page.getByRole('dialog', { name: '资料库同步' }); await panel.waitFor(); await panel.getByRole('status').filter({ hasText: /^操作已完成。$/ }).waitFor();
   const rows = panel.locator('.sync-object'); for (let i = 0; i < await rows.count(); i++) await rows.nth(i).locator('input[type=checkbox]').uncheck();
   for (const name of fixture.selectedNames) await rows.filter({ hasText: fixture.keys[name].id }).locator('input[type=checkbox]').check();
   await page.route('**/api/operations/prepare', async intercepted => {

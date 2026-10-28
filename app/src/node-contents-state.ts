@@ -1,19 +1,58 @@
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
+import type { InventoryEntry } from "./types";
+import { canonicalNodeSources } from "./file-tree";
 export type ContentSort = "name" | "path" | "authored";
+export type ContentsSection = "nodes" | "album" | "files";
+export interface ContentsSectionPreference { collapsed: boolean; limit: number; scroll: number }
 export interface ContentsPreference {
     sort: ContentSort;
     thumbnails: boolean;
     summaries: boolean;
     density: "compact" | "comfortable";
+    sections: Record<ContentsSection, ContentsSectionPreference>;
 }
-export const defaultContentsPreference = (): ContentsPreference => ({ sort: "name", thumbnails: false, summaries: false, density: "compact" });
+const defaultSection = (): ContentsSectionPreference => ({ collapsed: false, limit: 24, scroll: 0 });
+export const defaultContentsPreference = (): ContentsPreference => ({ sort: "name", thumbnails: true, summaries: false, density: "compact", sections: { nodes: defaultSection(), album: defaultSection(), files: defaultSection() } });
 export function decodeContentsPreference(value: unknown): ContentsPreference {
     const item = value as Partial<ContentsPreference> | null, defaults = defaultContentsPreference();
+    const section = (name: ContentsSection): ContentsSectionPreference => {
+        const saved = item?.sections?.[name];
+        return {
+            collapsed: typeof saved?.collapsed === "boolean" ? saved.collapsed : false,
+            limit: Number.isSafeInteger(saved?.limit) && saved!.limit >= 24 && saved!.limit <= 5000 ? saved!.limit : 24,
+            scroll: typeof saved?.scroll === "number" && Number.isFinite(saved.scroll) && saved.scroll >= 0 && saved.scroll <= 10000000 ? saved.scroll : 0,
+        };
+    };
     return { sort: item && ["name", "path", "authored"].includes(item.sort ?? "") ? item.sort! : defaults.sort,
         thumbnails: typeof item?.thumbnails === "boolean" ? item.thumbnails : defaults.thumbnails,
         summaries: typeof item?.summaries === "boolean" ? item.summaries : defaults.summaries,
-        density: item?.density === "comfortable" ? "comfortable" : "compact" };
+        density: item?.density === "comfortable" ? "comfortable" : "compact",
+        sections: { nodes: section("nodes"), album: section("album"), files: section("files") } };
+}
+/** Display grouping never grants a media read or changes the inventory identity. */
+export function contentsSection(entry: Pick<InventoryEntry, "kind" | "path">): ContentsSection {
+    if (entry.kind === "directory" || entry.kind === "node") return "nodes";
+    return entry.kind !== "blocked" && /\.(?:png|jpe?g|gif|webp|bmp|tiff?|avif|heic|heif|pdf)$/i.test(entry.path) ? "album" : "files";
+}
+const normalizeContentsPath = (path: string) => path.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
+const canonicalContentsPath = (directory: string) => `${directory}/${directory.split("/").at(-1)}.typ`;
+export function directContentsEntries(entries: readonly InventoryEntry[], folder: string): InventoryEntry[] {
+    const selected = normalizeContentsPath(folder);
+    // A known birth retains kind=node after an external move or identity
+    // conflict. Only the exact canonical coordinate represents this folder;
+    // those other visible entries must remain available for investigation.
+    const canonical = canonicalNodeSources(entries);
+    return entries.filter(entry => normalizeContentsPath(entry.parentPath) === selected && normalizeContentsPath(entry.path) !== selected
+        && !(entry.kind === "node" && normalizeContentsPath(entry.path) === canonicalContentsPath(selected))).map(entry => {
+        if (entry.kind !== "directory") return entry;
+        const source = canonical.get(normalizeContentsPath(entry.path));
+        return source?.title ? { ...entry, title: source.title } : entry;
+    });
+}
+/** Preferences belong to an exact library and browsing folder, including ordinary folders. */
+export function contentsPreferenceKey(root: string, workspaceId: string | undefined, folder: string): string {
+    return `weftext-node-contents:v2:${encodeURIComponent(JSON.stringify([workspaceId ?? normalizeContentsPath(root), normalizeContentsPath(folder)]))}`;
 }
 export interface AuthoredMember {
     targetRef: string;

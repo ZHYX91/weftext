@@ -129,6 +129,8 @@ Shapes保留 scalar/enum/list/record/union/use。Scalar闭合codec为 `text,none
 
 Union discriminator闭合为null、member(keys)、tag(key)、record_presence(key,present,absent)。null必须原生域不相交；member恰一个指定分支成员出现；tag精确命中唯一分支enum。record_presence仅选择记录分支，present/absent是variants的准确索引，其余非record分支先按原生域区分。EventTime是date、instant、CalendarDate、MonthDay：record有calendar选CalendarDate，否则选MonthDay，避免unknown-preserve令完整年月日同时匹配月日分支。选中分支仍完整校验，不first-match；非法额外calendar不能被当作普通MonthDay忽略。
 
+按原生域选择分支时，零匹配报告值的类型不符合任何分支，多匹配报告分支不唯一；两者均为invalid，不能互相误报或降成unavailable。恰好一个匹配仍须完整校验所选分支。Task.due中的无时区`local_datetime`因此保原值并报告无匹配分支，不能补设备时区或扩成instant；显式偏移缺失的string则属于已选instant分支的值校验失败。
+
 输入路径由官方已投影的值树定位，非代码：Path是有序 `{kind:"member",key}` 或 `{kind:"each"}` 数组。Constraint恰 `{validator,inputs,parameters}`；input selector恰 local(path)、field(id,path)或context(name)，分别表示当前record值、Type拥有的已知Field或Core固定owner。context只允许owner和resource_metadata；后者是Core对本次显式resource输入产生的获权资源元信息Cell快照，不是任意workspace读取。Validator恰 `{id,provider,operation,inputs,parameters,result}`：inputs逐slot有闭合签名，parameters是unknown=reject的record Shape，result固定valid-invalid-unavailable。安装时slot集合精确、selector路径类型吻合、参数精确匹配；unknown规则/operation不得运行。这里没有作者函数、表达式、分支脚本或任意读路径。
 
 局部validator的读取闭包仅本record/Field；Type validator显式列出跨Field。读取/动作/窄写按闭包获权；不能只检查目标Field再偷偷读另一个隐藏Field。本次操作必要类型/shape/use/constraint依赖不完整就unavailable，不当空成功。字节保存与typed操作状态仍分离。

@@ -4,15 +4,19 @@ use super::{ApiError, ApiResult, AppState, core_call, location, remember, value}
 #[cfg(test)]
 use crate::CoreTestFixture;
 use crate::RequestJson;
+use crate::readonly_evidence::{ReadonlyEvidence, capture_readonly};
 use crate::writing_api::{check_snapshot, observe_snapshot};
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use std::sync::Arc;
+#[cfg(all(test, windows))]
+use std::sync::Mutex;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
 };
-use weftext_core::{FileChange, OperationIntent, OperationRequest, SnapshotFile};
+use weftext_core::{FileChange, ManagedResource, OperationIntent, OperationRequest, SnapshotFile};
 use weftext_knowledge as knowledge;
 use weftext_messages::UiMessage;
 
@@ -57,24 +61,20 @@ pub(crate) async fn resolve_address(state: &AppState, session_id: &str, target: 
         ));
     }
     let root = loc.root.clone();
-    let (cut, resources, complete) = core_call(state, move |core| {
-        let cut = core.admitted_snapshot(&root)?;
+    let ((cut, resources, complete), _evidence) = capture_readonly(state, move |capture| {
+        let cut = capture.admitted_snapshot(&root)?;
         let mut resources = Vec::new();
         let mut complete = cut.complete;
-        let mut total = 0usize;
-        for file in &cut.files {
-            match core.managed_resource_snapshot(&root, &file.path) {
-                Ok(items) => {
-                    let bytes = items.iter().map(|item| item.bytes.len()).sum::<usize>();
-                    if total.saturating_add(bytes) > 64 * 1024 * 1024
-                        || resources.len() + items.len() > 5000
-                    {
-                        complete = false;
-                        break;
-                    }
-                    total += bytes;
-                    resources.extend(items);
-                }
+        let paths = cut
+            .files
+            .iter()
+            .map(|file| file.path.clone())
+            .collect::<Vec<_>>();
+        let batch = capture.managed_resources(&root, &paths)?;
+        complete &= !batch.budget_exhausted;
+        for (_, items) in batch.entries {
+            match items {
+                Ok(items) => resources.extend(items),
                 Err(_) => complete = false,
             }
         }
@@ -507,11 +507,13 @@ struct KnowledgeReadError {
 }
 
 struct Bundle {
+    evidence: Arc<ReadonlyEvidence>,
     mention_candidates: Vec<knowledge::MentionCandidate>,
     inventory: knowledge::InventorySnapshot,
     selected: knowledge::NodeSnapshot,
     committed: knowledge::NodeSnapshot,
     source_file: SnapshotFile,
+    selected_resources: Result<Vec<ManagedResource>, ApiError>,
     annotations_file: SnapshotFile,
     warnings: Vec<weftext_core::CoreDescription>,
     errors: Vec<KnowledgeReadError>,
@@ -531,22 +533,26 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
     let annotation_path = annotations_path(&loc.path)?;
     let root = loc.root.clone();
     let annotation_for_cut = annotation_path.clone();
+    let selected_path = source_path.clone();
     let (
-        cut,
-        annotations_file,
-        settings,
-        resources,
-        resource_warnings,
-        resource_errors,
-        trash,
-        tag_document,
-    ) = core_call(state, move |core| {
-        let cut = core.admitted_snapshot(&root)?;
-        let annotations = core
+        (
+            cut,
+            annotations_file,
+            settings,
+            resources,
+            resource_warnings,
+            resource_errors,
+            trash,
+            tag_document,
+        ),
+        evidence,
+    ) = capture_readonly(state, move |capture| {
+        let cut = capture.admitted_snapshot(&root)?;
+        let annotations = capture
             .read_snapshot(&root, &[annotation_for_cut])?
             .files
             .remove(0);
-        let settings = core
+        let settings = capture
             .read_snapshot(
                 &root,
                 &[root
@@ -559,27 +565,32 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
         let mut resources = Vec::new();
         let mut warnings: Vec<weftext_core::CoreDescription> = Vec::new();
         let mut errors = Vec::new();
-        let mut bytes = 0usize;
-        for file in &cut.files {
-            match core.managed_resource_snapshot(&root, &file.path) {
-                Ok(items) => {
-                    let size = items.iter().map(|item| item.bytes.len()).sum::<usize>();
-                    if bytes.saturating_add(size) > 64 * 1024 * 1024
-                        || resources.len() + items.len() > 5000
-                    {
-                        warnings
-                            .push(UiMessage::error_api_knowledge_resource_index_budget().into());
-                        break;
-                    }
-                    bytes += size;
-                    resources.extend(items);
-                }
-                Err(error) => errors.push((file.path.clone(), error)),
+        let mut paths = cut
+            .files
+            .iter()
+            .map(|file| file.path.clone())
+            .collect::<Vec<_>>();
+        // The selected note's exact annotation metadata uses this same bounded
+        // capture; it must not silently disappear behind the library index budget.
+        if let Some(index) = paths.iter().position(|path| path == &selected_path) {
+            let selected = paths.remove(index);
+            paths.insert(0, selected);
+        }
+        let batch = capture.managed_resources(&root, &paths)?;
+        if batch.budget_exhausted {
+            warnings.push(UiMessage::error_api_knowledge_resource_index_budget().into());
+        }
+        for (path, items) in batch.entries {
+            match items {
+                Ok(items) => resources.extend(items),
+                Err(error) => errors.push((path, error)),
             }
         }
-        let trash = core.trash_entries(&root)?;
+        let trash = capture.core.trash_entries(&root)?;
         let tag_document = cut.tags.as_ref().and_then(|snapshot| {
-            core.qualified_tag_document_from_snapshot(&root, snapshot)
+            capture
+                .core
+                .qualified_tag_document_from_snapshot(&root, snapshot)
                 .ok()
         });
         Ok((
@@ -725,6 +736,17 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
     if let Some(tags) = cut.tags {
         files.push(tags);
     }
+    let selected_resources = match resource_errors
+        .iter()
+        .find(|(path, _)| path == &source_path)
+    {
+        Some((_, error)) => Err(ApiError::from(error.clone())),
+        None => Ok(resources
+            .iter()
+            .filter(|resource| resource.node_id == selected.owner.node_id)
+            .cloned()
+            .collect()),
+    };
     let mut resource_index = Vec::new();
     for resource in resources
         .into_iter()
@@ -769,11 +791,13 @@ async fn bundle(state: &AppState, context: &Context) -> Result<Bundle, ApiError>
     };
     exact(state, context)?;
     Ok(Bundle {
+        evidence,
         mention_candidates: vec![],
         inventory,
         selected,
         committed,
         source_file,
+        selected_resources,
         annotations_file,
         warnings,
         errors: resource_errors
@@ -1154,7 +1178,11 @@ async fn read(
             }
         }
     }
-    let resources = crate::media_api::resource_set(&state, &request.context.session_id).await?;
+    let resources = crate::media_api::analyze_resources(std::mem::replace(
+        &mut bundle.selected_resources,
+        Ok(vec![]),
+    )?)
+    .await?;
     let (annotations, annotation_status, diagnostics) = match annotation_document(
         &bundle.annotations_file,
     ) {
@@ -1723,13 +1751,11 @@ async fn citation_products(
         .map(|file| (file.path.clone(), file.base_id.clone()))
         .collect::<Vec<_>>();
     let root = loc.root.clone();
-    let path = loc.path.clone();
-    let source = context.source.clone();
-    let captured = core_call(state, move |core| {
+    let (captured, evidence) = capture_readonly(state, move |capture| {
         for (path, base) in original_bases {
-            core.validate_snapshot(&root, path, &base)?;
+            capture.core.validate_snapshot(&root, path, &base)?;
         }
-        let cut = core.admitted_compile_snapshot(&root, "live")?;
+        let cut = capture.admitted_compile_snapshot(&root)?;
         for file in cut.snapshot.files.iter().chain(cut.snapshot.schema.iter()) {
             if expected.get(&file.path) != Some(&(file.bytes.clone(), file.node_id.clone())) {
                 return Err(weftext_core::CoreError::new(
@@ -1738,14 +1764,21 @@ async fn citation_products(
                 ));
             }
         }
-        // Citation generation may use a self-Work's Draft, but the physical cut
-        // and its original snapshot bytes remain the final recheck evidence.
-        let mut citation_view = cut.clone();
-        let citation = crate::citation_api::freeze_citations(&mut citation_view, &source, &path);
-        Ok((cut, citation))
+        Ok(cut)
     })
     .await?;
-    let (captured, citation) = captured;
+    let path = loc.path.clone();
+    let source = context.source.clone();
+    let (captured, citation, _evidence) = crate::work::spawn_blocking(move || {
+        // Citation generation is pure computation over frozen input. It may
+        // use a self-Work's Draft; retain the original physical cut unchanged
+        // through all final checks, including when this worker is retired.
+        let mut citation_view = captured.clone();
+        let citation = crate::citation_api::freeze_citations(&mut citation_view, &source, &path);
+        (captured, citation, evidence)
+    })
+    .await
+    .map_err(|_| ApiError::internal(UiMessage::error_file_service_incomplete()))?;
     let citation = match citation {
         Ok(value) => value,
         Err(_) => return Ok((None, vec![])),
@@ -1829,9 +1862,9 @@ async fn citation_products(
         .chain(captured.snapshot.schema.iter())
         .map(|file| (file.path.clone(), file.base_id.clone()))
         .collect::<Vec<_>>();
-    core_call(state, move |core| {
+    let (_checked, _recheck_evidence) = capture_readonly(state, move |capture| {
         for (path, base) in bases {
-            core.validate_snapshot(&root, path, &base)?;
+            capture.core.validate_snapshot(&root, path, &base)?;
         }
         let checks = checks
             .into_iter()
@@ -1843,7 +1876,7 @@ async fn citation_products(
                 .iter()
                 .map(|(path, _)| path.clone())
                 .collect::<Vec<_>>();
-            let current = core.read_snapshot(&root, &paths)?;
+            let current = capture.read_snapshot(&root, &paths)?;
             for (path, expected) in chunk {
                 if current
                     .files
@@ -2681,7 +2714,9 @@ async fn prepare_annotation(
         let operation_id = request.operation_id.clone();
         let session_id = request.context.session_id.clone();
         let session_base = request.context.base_id.clone();
+        let evidence = bundle.evidence.clone();
         bundle.committed.revision_id = core_call(state, move |core| {
+            let _evidence = evidence;
             core.check_session_base(&session_id, &session_base)?;
             core.reserve_source_revision(loc.root, path, &base_id, &operation_id)
         })
@@ -2939,7 +2974,9 @@ async fn prepare_annotation(
         intent: OperationIntent::UpdateFiles { changes },
     };
     exact(state, &request.context)?;
+    let evidence = bundle.evidence.clone();
     let plan = core_call(state, move |core| {
+        let _evidence = evidence;
         core.prepare_feature_operation(operation, &canonical)
     })
     .await?;
@@ -3759,7 +3796,9 @@ async fn register_template(
     let path = bundle.source_file.path.clone();
     let source_base = bundle.source_file.base_id.clone();
     let operation_id = request.operation_id.clone();
+    let evidence = bundle.evidence.clone();
     let revision = core_call(state, move |core| {
+        let _evidence = evidence;
         core.check_session_base(&session, &base)?;
         core.reserve_source_revision(root, path, &source_base, &operation_id)
     })
@@ -3874,7 +3913,9 @@ async fn register_template(
         },
     };
     exact(state, &request.context)?;
+    let evidence = bundle.evidence.clone();
     let plan = core_call(state, move |core| {
+        let _evidence = evidence;
         core.prepare_feature_operation(operation, &canonical)
     })
     .await?;
@@ -4035,7 +4076,9 @@ async fn prepare_template(
         .iter()
         .map(|file| file.base_id.clone())
         .collect();
+    let evidence = bundle.evidence.clone();
     let plan = core_call(state, move |core| {
+        let _evidence = evidence;
         core.prepare_dependent_feature_operation(op, &canonical, &dependencies)
     })
     .await?;
@@ -4474,6 +4517,215 @@ mod tests {
         };
         (state, context)
     }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn readonly_evidence_owns_only_its_cut_and_independent_capture_tokens() {
+        let (state, context) = local_state();
+        let loc = location(&state, &context.session_id).unwrap();
+        let root = loc.root.clone();
+        let ((cut, settings), evidence) = capture_readonly(&state, move |capture| {
+            let cut = capture.admitted_snapshot(&root)?;
+            let settings = capture
+                .read_snapshot(
+                    &root,
+                    &[root
+                        .join(".weftext-settings.json")
+                        .to_string_lossy()
+                        .into_owned()],
+                )?
+                .files
+                .remove(0);
+            Ok((cut, settings))
+        })
+        .await
+        .unwrap();
+        let source = cut.files.first().unwrap().clone();
+        let independent = {
+            let mut core = state.core.lock().unwrap();
+            core.read_snapshot(&loc.root, std::slice::from_ref(&source.path))
+                .unwrap()
+                .files
+                .remove(0)
+        };
+        let witness = {
+            let core = state.core.lock().unwrap();
+            core.validate_snapshot(&loc.root, &source.path, &source.base_id)
+                .unwrap();
+            core.validate_snapshot(&loc.root, &settings.path, &settings.base_id)
+                .unwrap();
+            core.snapshot_witness(&source.base_id).unwrap()
+        };
+        let retained = evidence.clone();
+        drop(evidence);
+        state
+            .core
+            .lock()
+            .unwrap()
+            .validate_snapshot(&loc.root, &source.path, &source.base_id)
+            .unwrap();
+        drop(retained);
+        let core = state.core.lock().unwrap();
+        for file in cut
+            .files
+            .iter()
+            .chain(cut.schema.iter())
+            .chain(cut.tags.iter())
+            .chain(std::iter::once(&settings))
+        {
+            assert_eq!(
+                core.validate_snapshot(&loc.root, &file.path, &file.base_id)
+                    .unwrap_err()
+                    .code,
+                "basisRequired"
+            );
+        }
+        core.validate_snapshot(&loc.root, &independent.path, &independent.base_id)
+            .unwrap();
+        core.validate_snapshot_witness(&loc.root, &source.path, &witness)
+            .unwrap();
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn readonly_capture_failure_releases_already_captured_evidence() {
+        let (state, context) = local_state();
+        let root = location(&state, &context.session_id).unwrap().root;
+        let captured = Arc::new(Mutex::new(Vec::new()));
+        let captured_worker = captured.clone();
+        let style_base = Arc::new(Mutex::new(None));
+        let worker_style_base = style_base.clone();
+        let read_root = root.clone();
+        let result = capture_readonly(&state, move |capture| {
+            let cut = capture.admitted_snapshot(&read_root)?;
+            let settings = capture
+                .read_snapshot(
+                    &read_root,
+                    &[read_root
+                        .join(".weftext-settings.json")
+                        .to_string_lossy()
+                        .into_owned()],
+                )?
+                .files
+                .remove(0);
+            let style = capture.read_library_style(&read_root)?;
+            *worker_style_base.lock().unwrap() = Some(style.base_id);
+            let mut captured = captured_worker.lock().unwrap();
+            captured.extend(cut.files);
+            captured.extend(cut.schema);
+            captured.extend(cut.tags);
+            captured.push(settings);
+            Err::<(), _>(weftext_core::CoreError::new(
+                "fixtureCaptureFailure",
+                UiMessage::error_api_knowledge_body_snapshot_missing(),
+            ))
+        })
+        .await;
+        assert_eq!(result.err().unwrap().code, "fixtureCaptureFailure");
+        let core = state.core.lock().unwrap();
+        assert_eq!(
+            core.library_style_basis_retained_bytes(style_base.lock().unwrap().as_ref().unwrap())
+                .unwrap_err()
+                .code,
+            "basisRequired"
+        );
+        for file in captured.lock().unwrap().iter() {
+            assert_eq!(
+                core.validate_snapshot(&root, &file.path, &file.base_id)
+                    .unwrap_err()
+                    .code,
+                "basisRequired"
+            );
+        }
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn retired_read_capture_releases_the_unpublished_worker_result() {
+        let (state, context) = local_state();
+        let root = location(&state, &context.session_id).unwrap().root;
+        let worker_state = state.clone();
+        let worker_root = root.clone();
+        let (started, did_start) = tokio::sync::oneshot::channel();
+        let (release, released) = std::sync::mpsc::channel();
+        let task = tokio::spawn(async move {
+            capture_readonly(&worker_state, move |capture| {
+                let cut = capture.admitted_snapshot(&worker_root)?;
+                started.send(cut.files.first().unwrap().clone()).ok();
+                released.recv().unwrap();
+                Ok(cut)
+            })
+            .await
+        });
+        let file = did_start.await.unwrap();
+        task.abort();
+        assert!(matches!(task.await, Err(error) if error.is_cancelled()));
+        release.send(()).unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let base = file.base_id.clone();
+                if core_call(&state, move |core| core.snapshot_witness(&base))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn retired_author_prepare_keeps_read_evidence_until_the_accepted_worker_finishes() {
+        let (state, context) = local_state();
+        let loc = location(&state, &context.session_id).unwrap();
+        let root = loc.root.clone();
+        let ((file, cut), evidence) = capture_readonly(&state, move |capture| {
+            let cut = capture.admitted_snapshot(&root)?;
+            Ok((cut.files.first().unwrap().clone(), cut))
+        })
+        .await
+        .unwrap();
+        let operation_id = uuid::Uuid::new_v4().to_string();
+        let operation = OperationRequest {
+            operation_id: operation_id.clone(),
+            root: loc.root.to_string_lossy().into_owned(),
+            intent: OperationIntent::UpdateFiles {
+                changes: vec![FileChange {
+                    path: file.path.clone(),
+                    base_id: Some(file.base_id.clone()),
+                    before: file.bytes.clone(),
+                    after: format!("{}\nAccepted author task\n", context.source).into_bytes(),
+                }],
+            },
+        };
+        let worker_state = state.clone();
+        let worker_evidence = evidence.clone();
+        let (started, did_start) = tokio::sync::oneshot::channel();
+        let (release, released) = std::sync::mpsc::channel();
+        let task = tokio::spawn(async move {
+            core_call(&worker_state, move |core| {
+                let _evidence = worker_evidence;
+                started.send(()).ok();
+                released.recv().unwrap();
+                core.prepare_feature_operation(operation, &json!({"fixture":"retiredAuthor"}))
+            })
+            .await
+        });
+        did_start.await.unwrap();
+        task.abort();
+        assert!(matches!(task.await, Err(error) if error.is_cancelled()));
+        drop(evidence);
+        drop(cut);
+        release.send(()).unwrap();
+        let plan = core_call(&state, move |core| core.operation_details(&operation_id))
+            .await
+            .unwrap();
+        assert_eq!(plan.status, "prepared");
+    }
+
     #[cfg(windows)]
     #[tokio::test]
     async fn adopted_shared_processing_origin_revalidates_exact_version_without_overwriting_options()

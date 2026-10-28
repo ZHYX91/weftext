@@ -1,5 +1,7 @@
+import { type WorkspaceRibbon, type RibbonTab } from "./workspace-chrome";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { openReminderOverview } from "./reminder-overview";
+import { activateReminderNotification } from "./reminder-activation";
 import { joinUiText } from "./ui-locale";
 import { apiErrorUiText } from "./api-error";
 import { decodeProcessingRead } from "./style-wire";
@@ -28,6 +30,7 @@ import { openProcessingSettingsPanel, decodeProcessingDocument, type ProcessingR
 import type { OpenedDocument } from "./types";
 import type { FrozenQuery, EmbeddedQuerySelection } from "./export-state";
 import type { StructureHeading } from "./heading-structure-state";
+import { DocumentOutlineView, type OutlineSnapshot } from "./document-outline";
 export interface WorkspaceToolsHost {
     embeddedQueries?(): EmbeddedQuerySelection[];
     getDocument(): (DocumentBasis & {
@@ -35,9 +38,11 @@ export interface WorkspaceToolsHost {
         workspaceId?: string;
     }) | null;
     selection(): KnowledgeContext["selection"];
+    getOutlineSnapshot(): OutlineSnapshot | null;
     applyPatch(patch: SourcePatch, basis: DocumentBasis): Promise<void>;
     openDocument(path: string, root?: string): Promise<void>;
     openResolved(document: OpenedDocument): Promise<void>;
+    openResolvedConfirmed(document: OpenedDocument): Promise<boolean>;
     releaseOpenedSession(sessionId: string): Promise<void>;
     created(document: OpenedDocument, operationId: string | undefined): Promise<void>;
     applyReceipt(receipt: KnowledgeReceipt, context: KnowledgeContext): Promise<void>;
@@ -52,7 +57,12 @@ export interface WorkspaceToolsHost {
     refreshLibrary?(root: string): Promise<void>;
     syncApplied(root: string): Promise<void>;
 }
-type WorkspacePanelKind = "data" | "knowledge" | "query";
+export type WorkspaceViewKind = "data" | "knowledge" | "query" | "outline";
+export interface WorkspaceToolsPresentation {
+    reveal(kind: WorkspaceViewKind): void;
+    hide(kind: WorkspaceViewKind): void;
+    visible(kind: WorkspaceViewKind): boolean;
+}
 /** UI composition only: every action uses the document's existing Draft or Core. */
 export class WorkspaceTools {
     private readonly closeGuard = new ProposalCloseGuard();
@@ -81,21 +91,22 @@ export class WorkspaceTools {
     }
     thawAfterClose(): void { this.closeGuard.thaw(); for (const owner of this.closeOwners()) owner.thawAfterClose(); }
     openReminders(): void { this.closeGuard.assertMutable(); openReminderOverview(this.dataHost); }
-    readonly bar = document.createElement("nav");
-    readonly inspector = document.createElement("aside");
+    activateReminder(activationKey: string): Promise<void> { return this.closeGuard.run(() => activateReminderNotification(this.dataHost, activationKey)); }
+    private readonly commandGroups: { tab: RibbonTab; id: string; label: UiText; nodes: HTMLElement[] }[] = [];
+    /** Stable content owners. Dock layout only moves these elements. */
+    readonly views: Readonly<Record<WorkspaceViewKind, HTMLElement>>;
     private readonly propertyPanel: DataPanel;
     private readonly queryPanel: QueryPanel;
     private readonly outputPanel: OutputPanel;
     private readonly knowledgeContainer = document.createElement("div");
     private readonly knowledgePanel;
+    private readonly outlinePanel: DocumentOutlineView;
     private readonly libraryTrash;
-    private readonly header = document.createElement("header");
-    private readonly panelBody = document.createElement("div");
     private library: {
         root: string;
         workspaceId?: string;
     } | null = null;
-    private active: WorkspacePanelKind | null = null;
+    private presentation: WorkspaceToolsPresentation | null = null;
     private readonly styles = new Map<string, NativeStyleController>();
     private refreshTimer?: ReturnType<typeof setTimeout>;
     private pendingImport: {
@@ -104,21 +115,12 @@ export class WorkspaceTools {
         receipt?: KnowledgeReceipt;
     } | null = null;
     constructor(private readonly host: WorkspaceToolsHost) {
-        this.closeGuard.bind(this.bar);
-        this.closeGuard.bind(this.inspector);
-        this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify, environmentChanged: root => this.invalidateQueryEnvironment(root) });
-        this.bar.className = "workspace-tools";
-        setUiAttr(this.bar, "aria-label", uiMessage("workspaceTools.toolbar"));
-        this.inspector.className = "workspace-inspector";
-        this.inspector.hidden = true;
-        this.header.className = "inspector-header";
-        this.panelBody.className = "inspector-body";
-        this.inspector.append(this.header, this.panelBody);
+        this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify, environmentChanged: root => this.invalidateLibraryEnvironment(root) });
         const dataHost: PanelHost = {
             canEdit: host.canEditSource,
             request: api, requestBlob: apiBlob, getDocument: host.getDocument, applyPatch: host.applyPatch,
-            openDocument: host.openDocument, openResolved: host.openResolved, releaseOpenedSession: host.releaseOpenedSession, notify: host.notify,
-            environmentChanged: root => this.invalidateQueryEnvironment(root),
+            openDocument: host.openDocument, openResolved: host.openResolved, openResolvedConfirmed: host.openResolvedConfirmed, releaseOpenedSession: host.releaseOpenedSession, notify: host.notify,
+            environmentChanged: root => this.invalidateLibraryEnvironment(root),
             savedDefinition: host.savedDefinition,
             applyOperationReceipt: (receipt, basis) => host.applyReceipt(receipt as KnowledgeReceipt, { ...basis, dirty: basis.dirty ?? false }),
             prepareAction: host.beforeAction,
@@ -170,10 +172,13 @@ export class WorkspaceTools {
             prepare: (intent, context, id) => api("/api/knowledge/prepare", { operationId: id, context, intent }),
             commit: (plan, context) => this.commit(plan, context),
             navigate: host.navigate, notify: host.notify, beforeAction: host.beforeAction, canEditSource: host.canEditSource,
-            inspectOperation: async (id, context) => { const receipt = decodeKnowledgeDelivery(await api<KnowledgeReceipt>("/api/operations/status", { operationId: id, context })); if (receipt.operationId !== id)
-                throw new UiError(uiMessage("error.invalidResponse")); return deliverCommitted(receipt, value => host.applyReceipt(value, context)); },
+            inspectOperation: async (id, context) => {
+                const receipt = decodeKnowledgeDelivery(await api<KnowledgeReceipt>("/api/operations/status", { operationId: id, context }));
+                if (receipt.operationId !== id) throw new UiError(uiMessage("error.invalidResponse"));
+                if (originalCommitted(receipt) && !committedDeliveryComplete(receipt)) this.invalidateLibraryEnvironment(context.root);
+                return deliverCommitted(receipt, value => host.applyReceipt(value, context));
+            },
             selectSource: host.selectSource,
-            revealHeading: host.revealHeading,
             previewTemplate: (id, parameters, context) => api("/api/knowledge/template-preview", { templateId: id, parameters, context }),
             linkCopy: (link, form, context) => api("/api/knowledge/link-copy", { occurrence: link.occurrence, form, context }),
             mountMedia: (container, selected, initial) => mountMediaViewer(container, {
@@ -182,15 +187,56 @@ export class WorkspaceTools {
                 importResource: (file, sessionId) => this.importResource(file, sessionId), notify: host.notify,
             }, selected, initial),
         });
-        this.bar.append(this.button(uiMessage("dataPanel.title"), () => this.toggle("data")), this.button(uiMessage("workspaceTools.linksAnnotations"), () => this.toggle("knowledge")), this.button(uiMessage("workspaceTools.queriesViews"), () => this.toggle("query")), this.button(uiMessage("export.title"), () => this.outputPanel.open()), this.button(uiMessage("error.api.hostedLibrary.styleRoleTitle"), () => this.showStyles()), this.button(uiMessage("knowledge.recycleBin"), async () => {
-            if (!this.library?.workspaceId)
-                throw new UiError(uiMessage("workspaceTools.openLibraryFirst"));
-            await this.host.beforeAction();
-            await this.libraryTrash.open(this.library.root);
-        }));
-        this.bar.append(this.button(uiMessage("workspaceTools.sync"), async () => { await this.host.beforeAction(); await openSyncPanel(this.library?.root ?? "", { beforeAction: this.host.beforeAction, applied: this.host.syncApplied }); }));
-        this.bar.append(this.button(uiMessage("hostedShell.latexEquation"), () => latex.open()), this.button(uiMessage("hostedShell.mermaidDiagram"), () => diagrams.open()), this.button(uiMessage("workspaceTools.processingDefaultsVocabulary"), () => this.showProcessingSettings()));
+        const outline = document.createElement("section");
+        this.outlinePanel = new DocumentOutlineView(outline, {
+            getDocument: host.getDocument, getOutlineSnapshot: host.getOutlineSnapshot,
+            selectSource: host.selectSource, revealHeading: host.revealHeading, notify: host.notify,
+            canNavigate: () => !this.closeGuard.frozen,
+        });
+        this.views = Object.freeze({ data: this.propertyPanel.element, knowledge: this.knowledgeContainer, query: this.queryPanel.element, outline });
+        for (const [kind, view] of Object.entries(this.views)) {
+            view.classList.add("workspace-tool-view");
+            view.dataset.workspaceTool = kind;
+            this.closeGuard.bind(view);
+        }
+        const add = (tab: RibbonTab, id: string, label: UiText, nodes: HTMLElement[]) => this.commandGroups.push({ tab, id, label, nodes });
+        add("knowledge", "note", uiMessage("localChrome.note"), [
+            this.button(uiMessage("dataPanel.title"), () => this.toggle("data")),
+            this.button(uiMessage("workspaceTools.linksAnnotations"), () => this.toggle("knowledge")),
+            this.button(uiMessage("workspaceTools.queriesViews"), () => this.toggle("query")),
+        ]);
+        add("file", "exchange", uiMessage("localChrome.exchange"), [this.button(uiMessage("export.title"), () => this.outputPanel.open())]);
+        add("knowledge", "library", uiMessage("localChrome.library"), [
+            this.button(uiMessage("error.api.hostedLibrary.styleRoleTitle"), () => this.showStyles()),
+            this.button(uiMessage("knowledge.recycleBin"), async () => {
+                if (!this.library?.workspaceId) throw new UiError(uiMessage("workspaceTools.openLibraryFirst"));
+                await this.host.beforeAction();
+                await this.libraryTrash.open(this.library.root);
+            }),
+            this.button(uiMessage("workspaceTools.sync"), async () => { await this.host.beforeAction(); await openSyncPanel(this.library?.root ?? "", { beforeAction: this.host.beforeAction, applied: this.host.syncApplied }); }),
+            this.button(uiMessage("workspaceTools.processingDefaultsVocabulary"), () => this.showProcessingSettings()),
+        ]);
+        add("insert", "objects", uiMessage("localChrome.objects"), [
+            this.button(uiMessage("hostedShell.latexEquation"), () => latex.open()),
+            this.button(uiMessage("hostedShell.mermaidDiagram"), () => diagrams.open()),
+        ]);
+        add("review", "review", uiMessage("localChrome.review"), [
+            this.button(uiMessage("localChrome.annotations"), async () => { await this.show("knowledge"); this.selectKnowledgeTab("annotations"); }),
+            this.button(uiMessage("knowledge.proofreading"), async () => { await this.show("knowledge"); this.selectKnowledgeTab("proofreading"); }),
+        ]);
     }
+    /** Ribbon switches retain these same command nodes and every proposal owner. */
+    mountRibbon(ribbon: WorkspaceRibbon): void {
+        this.closeGuard.bind(ribbon.element);
+        for (const group of this.commandGroups) ribbon.setGroup(group.tab, group.id, group.label, group.nodes);
+    }
+
+    attachDock(presentation: WorkspaceToolsPresentation): void {
+        this.closeGuard.assertMutable();
+        this.presentation = presentation;
+    }
+    private viewVisible(kind: WorkspaceViewKind): boolean { return this.presentation?.visible(kind) ?? false; }
+
     private async showProcessingSettings(): Promise<void> {
         return this.closeGuard.run(async () => {
             await this.host.beforeAction();
@@ -204,7 +250,7 @@ export class WorkspaceTools {
                 status: request => api("/api/processing/status", { root, ...request }),
                 settle: request => api("/api/processing/settle", { root, ...request }),
                 apply: request => api("/api/processing/apply", { request: { root, ...request.request }, planId: request.planId }),
-                committed: () => this.invalidateQueryEnvironment(root),
+                committed: () => this.invalidateLibraryEnvironment(root),
                 onApplied: () => { this.host.notify(uiMessage("workspaceTools.sharedDefaultsCommitted")); },
             });
         });
@@ -236,9 +282,11 @@ export class WorkspaceTools {
         this.queryPanel.setScope(scope);
         this.library = library;
     }
-    invalidateQueryEnvironment(root = this.library?.root): void { if (this.closeGuard.frozen) return;
-        if (root)
+    invalidateLibraryEnvironment(root = this.library?.root): void { if (this.closeGuard.frozen) return;
+        if (root) {
+            this.knowledgePanel.environmentChanged(root);
             this.queryPanel.environmentChanged(root);
+        }
     }
     async search(text: string, includeBody: boolean): Promise<void> {
         return this.closeGuard.run(async () => {
@@ -268,36 +316,39 @@ export class WorkspaceTools {
         document.body.append(dialog);
         dialog.showModal();
     }
-    /** Opening is idempotent; a retained active panel must never turn this into
-     * closing after navigation or a repeated command. */
-    async show(kind: WorkspacePanelKind): Promise<void> {
+    /** Opening a view never replaces another view or its proposal owner. */
+    async show(kind: WorkspaceViewKind): Promise<void> {
         return this.closeGuard.run(async () => {
-            await this.host.beforeAction();
-            await this.showPanel(kind);
+            if (kind !== "outline") await this.host.beforeAction();
+            if (!this.presentation) throw new Error("Workspace dock is not attached");
+            this.presentation.reveal(kind);
+            await this.refreshView(kind);
         });
     }
     /** Only toolbar switches use toggle; explicit open actions always use show. */
-    private async toggle(kind: WorkspacePanelKind): Promise<void> {
+    private async toggle(kind: WorkspaceViewKind): Promise<void> {
         return this.closeGuard.run(async () => {
-            await this.host.beforeAction();
-            if (this.active === kind) {
-                this.active = null;
-                this.inspector.hidden = true;
+            if (kind !== "outline") await this.host.beforeAction();
+            if (!this.presentation) throw new Error("Workspace dock is not attached");
+            if (this.presentation.visible(kind)) {
+                this.presentation.hide(kind);
                 return;
             }
-            await this.showPanel(kind);
+            this.presentation.reveal(kind);
+            await this.refreshView(kind);
         });
     }
-    private async showPanel(kind: WorkspacePanelKind): Promise<void> {
+    /** Accepted native projections can refresh navigation without a preview surface. */
+    refreshOutline(): void {
+        if (this.closeGuard.frozen) return;
+        this.outlinePanel.refresh();
+    }
+    /** Dock-tab activation reads the current context without settling author input. */
+    async refreshView(kind: WorkspaceViewKind): Promise<void> {
         return this.closeGuard.run(async () => {
-            this.active = kind;
-            this.inspector.hidden = false;
-            this.inspector.classList.toggle("wide", kind === "query");
-            const title = document.createElement("strong");
-            setUiText(title, { data: uiMessage("dataPanel.regionLabel"), knowledge: uiMessage("workspaceTools.linksAnnotations"), query: uiMessage("workspaceTools.queriesViews") }[kind]);
-            this.header.replaceChildren(title, this.button(uiMessage("common.close"), () => { this.active = null; this.inspector.hidden = true; }));
-            this.panelBody.replaceChildren(kind === "data" ? this.propertyPanel.element : kind === "query" ? this.queryPanel.element : this.knowledgeContainer);
-            if (kind === "data")
+            if (kind === "outline")
+                this.outlinePanel.refresh();
+            else if (kind === "data")
                 await this.propertyPanel.refresh();
             else if (kind === "query")
                 await this.queryPanel.refresh();
@@ -305,9 +356,33 @@ export class WorkspaceTools {
                 await this.knowledgePanel.refresh();
         });
     }
-    selectKnowledgeTab(tab: import("./knowledge-panel").KnowledgePanelTab): void { if (this.closeGuard.frozen) return; this.knowledgePanel.selectTab(tab); }
+    selectKnowledgeTab(tab: import("./knowledge-panel").KnowledgePanelTab): void {
+        if (this.closeGuard.frozen) return;
+        const visible = this.viewVisible("knowledge");
+        this.presentation?.reveal("knowledge");
+        this.knowledgePanel.selectTab(tab);
+        if (!visible)
+            void this.refreshView("knowledge").catch(error => this.host.notify(errorUiText(error), true));
+    }
+    /** Selection/adoption must renew an open property consumer even when its
+     * empty or previous form owns focus. Body edits keep their debounce below. */
+    async selectedDocumentChanged(): Promise<void> {
+        if (this.closeGuard.frozen) return;
+        return this.closeGuard.run(async () => {
+            this.knowledgePanel.contextChanged();
+            this.outlinePanel.refresh();
+            if (this.viewVisible("data")) {
+                clearTimeout(this.refreshTimer);
+                await this.propertyPanel.refresh();
+            }
+            if (this.viewVisible("knowledge") || this.knowledgePanel.backgroundEnabled() || !this.host.getDocument())
+                await this.knowledgePanel.refresh();
+        });
+    }
     documentChanged(): void { if (this.closeGuard.frozen) return;
+        this.knowledgePanel.contextChanged();
         clearTimeout(this.refreshTimer);
+        this.outlinePanel.invalidate();
         this.knowledgePanel.attachSurface(null);
         // A known moved writer has no current consumer context until explicit
         // comparison. This retires snapshots/late delivery without reading paths.
@@ -315,42 +390,49 @@ export class WorkspaceTools {
             void this.knowledgePanel.refresh().catch(error => this.host.notify(String(error), true));
         this.refreshTimer = setTimeout(() => {
             if (this.closeGuard.frozen) return;
-            if (this.active === "data" && !this.inspector.contains(document.activeElement))
+            if (this.viewVisible("data") && !this.views.data.contains(document.activeElement))
                 void this.propertyPanel.refresh().catch(error => this.host.notify(String(error), true));
-            if (this.active === "query" && !this.inspector.contains(document.activeElement))
+            if (this.viewVisible("query") && !this.views.query.contains(document.activeElement))
                 this.queryPanel.documentChanged();
+            if (this.viewVisible("knowledge") || this.knowledgePanel.backgroundEnabled())
+                void this.knowledgePanel.refresh().catch(error => this.host.notify(errorUiText(error), true));
         }, 450);
     }
     async refreshAfterSync(root: string): Promise<void> {
         return this.closeGuard.run(async () => {
             clearTimeout(this.refreshTimer);
+            // Retire pre-sync knowledge before any other consumer can await.
+            this.knowledgePanel.environmentChanged(root);
+            this.outlinePanel.refresh();
             const sameRoot = (value?: string): boolean => value?.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase() === root.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
             // Query results depend on the library, even without an open source. The
             // panel retains its current plan/parameters; frozen outputs stay frozen.
             if (sameRoot(this.library?.root))
                 await this.queryPanel.refresh();
             if (!this.host.getDocument()) {
-                if (this.active === "data")
+                if (this.viewVisible("data"))
                     await this.propertyPanel.refresh();
                 await this.knowledgePanel.refresh();
                 return;
             }
             if (!sameRoot(this.host.getDocument()?.root))
                 return;
-            if (this.active === "data")
+            if (this.viewVisible("data"))
                 await this.propertyPanel.refresh();
             // Knowledge refresh also renews the selected media/annotation catalog.
             // Its own input guard retains an actively edited review form.
-            await this.knowledgePanel.refresh();
+            if (this.viewVisible("knowledge") || this.knowledgePanel.backgroundEnabled())
+                await this.knowledgePanel.refresh();
         });
     }
     async projectionChanged(surface: HTMLElement | null, mappings: KnowledgeTextMapping[]): Promise<void> {
         return this.closeGuard.run(async () => {
+            this.outlinePanel.refresh();
             this.knowledgePanel.attachSurface(surface, mappings);
             // Knowledge discovery observes the projection; it must never delay body
             // installation or an unrelated property/navigation action. Default-off
             // hints also avoid compiling other notes while this panel is closed.
-            if (this.host.getDocument()?.nodeId && (this.active === "knowledge" || this.knowledgePanel.backgroundEnabled()))
+            if (this.host.getDocument()?.nodeId && (this.viewVisible("knowledge") || this.knowledgePanel.backgroundEnabled()))
                 void this.knowledgePanel.refresh().catch(error => this.host.notify(String(error), true));
         });
     }
@@ -366,6 +448,7 @@ export class WorkspaceTools {
                     throw new UiError(uiMessage("workspaceTools.importCommittedStatusMismatch"));
                 pending.receipt = status;
                 if (originalCommitted(status)) {
+                    if (!committedDeliveryComplete(status)) this.invalidateLibraryEnvironment(pending.context.root);
                     const delivered = await deliverCommitted(status, value => this.host.applyReceipt(value, pending.context));
                     pending.receipt = delivered;
                     if (!committedDeliveryComplete(delivered))
@@ -445,6 +528,9 @@ export class WorkspaceTools {
             const receipt = decodeKnowledgeDelivery(await api<KnowledgeReceipt>("/api/operations/commit", { operationId: plan.operationId, planId: plan.planId, context }));
             if (receipt.operationId !== plan.operationId)
                 throw new UiError(uiMessage("error.invalidResponse"));
+            // Delivery errors still describe a known library commit; their early
+            // return in deliverCommitted cannot leave pre-commit reads eligible.
+            if (originalCommitted(receipt) && !committedDeliveryComplete(receipt)) this.invalidateLibraryEnvironment(context.root);
             const delivered = await deliverCommitted(receipt, value => this.host.applyReceipt(value, context));
             if (!committedDeliveryComplete(delivered))
                 this.host.notify(uiMessage("workspaceTools.committedUiUpdateIncomplete"), true);
@@ -462,7 +548,7 @@ export class WorkspaceTools {
                 read: () => api("/api/styles/read", { root }),
                 prepare: request => api("/api/styles/prepare", { root, ...request }),
                 apply: request => api("/api/styles/apply", { root, ...request }),
-                committed: () => this.invalidateQueryEnvironment(root),
+                committed: () => this.invalidateLibraryEnvironment(root),
                 openSource: path => this.host.openDocument(path, root),
                 onApplied: () => this.host.stylesChanged(root), operationId,
             }, this.styles.get(root));

@@ -6,6 +6,471 @@
     "en-US"
   ],
   "messages": {
+    "workspaceViews.currentDocumentGraph": { "zh-CN": "当前文档关系图", "en-US": "Current document graph", "params": {} },
+    "workspaceViews.parentFolder": { "zh-CN": "上级文件夹", "en-US": "Parent folder", "params": {} },
+    "heading.waitForCurrentProjection": { "zh-CN": "等待当前草稿预览完成，大纲会自动更新。", "en-US": "The outline updates automatically when the current draft preview is ready.", "params": {} },
+    "heading.openDocumentForOutline": { "zh-CN": "打开文档以查看大纲。", "en-US": "Open a document to view its outline.", "params": {} },
+    "heading.outlineBasisChanged": { "zh-CN": "大纲已过期，等待当前预览完成后自动更新。", "en-US": "The outline is out of date and updates when the current preview is ready.", "params": {} },
+    "heading.generatedItemSourceUnavailable": { "zh-CN": "此大纲项没有可定位的本篇源码或当前显示位置。", "en-US": "This outline item has no locatable source or current display position.", "params": {} },
+    "heading.outlineMatchCount": { "zh-CN": "{p0} 个大纲项命中", "en-US": "{p0} outline matches", "params": { "p0": "integer" } },
+    "heading.outlineEntrySummary": { "zh-CN": "{p0}：{p1} 个直接子项／{p2} 个后代子项", "en-US": "{p0}: {p1} direct items / {p2} descendant items", "params": { "p0": "text", "p1": "integer", "p2": "integer" } },
+    "heading.searchOutline": { "zh-CN": "搜索标题与题注", "en-US": "Search headings and captions", "params": {} },
+    "heading.outlineSearchPlaceholder": { "zh-CN": "搜索标题或题注", "en-US": "Search heading or caption", "params": {} },
+    "workPanel.cancelled": { "zh-CN": "已取消", "en-US": "Cancelled", "params": {} },
+    "workActivity.details": { "zh-CN": "查看详情", "en-US": "View details", "params": {} },
+    "workActivity.originalUnavailable": { "zh-CN": "当前窗口已不再持有这次原操作的详情，请从原恢复入口查看。", "en-US": "This window no longer holds these original operation details. Use the original recovery entry.", "params": {} },
+    "navigationLayout.restorePaneWidths": { "zh-CN": "恢复侧栏宽度", "en-US": "Reset sidebar widths", "params": {} },
+    "workspaceDock.leftSidebar": {
+      "zh-CN": "左侧栏",
+      "en-US": "Left sidebar",
+      "params": {}
+    },
+    "workspaceDock.rightSidebar": {
+      "zh-CN": "右侧栏",
+      "en-US": "Right sidebar",
+      "params": {}
+    },
+    "workspaceDock.viewActions": {
+      "zh-CN": "视图布局操作",
+      "en-US": "View layout actions",
+      "params": {}
+    },
+    "workspaceDock.collapseGroup": {
+      "zh-CN": "折叠分区",
+      "en-US": "Collapse group",
+      "params": {}
+    },
+    "workspaceDock.expandGroup": {
+      "zh-CN": "展开分区",
+      "en-US": "Expand group",
+      "params": {}
+    },
+    "workspaceDock.maximizeGroup": {
+      "zh-CN": "最大化分区",
+      "en-US": "Maximize group",
+      "params": {}
+    },
+    "workspaceDock.restoreGroups": {
+      "zh-CN": "恢复分区",
+      "en-US": "Restore groups",
+      "params": {}
+    },
+    "workspaceDock.hideView": {
+      "zh-CN": "隐藏视图",
+      "en-US": "Hide view",
+      "params": {}
+    },
+    "workspaceDock.moveLeft": {
+      "zh-CN": "移到左侧栏",
+      "en-US": "Move to left sidebar",
+      "params": {}
+    },
+    "workspaceDock.moveRight": {
+      "zh-CN": "移到右侧栏",
+      "en-US": "Move to right sidebar",
+      "params": {}
+    },
+    "workspaceDock.splitAbove": {
+      "zh-CN": "拆分到上方",
+      "en-US": "Split above",
+      "params": {}
+    },
+    "workspaceDock.splitBelow": {
+      "zh-CN": "拆分到下方",
+      "en-US": "Split below",
+      "params": {}
+    },
+    "workspaceDock.previousGroup": {
+      "zh-CN": "移到上方分区",
+      "en-US": "Move to previous group",
+      "params": {}
+    },
+    "workspaceDock.nextGroup": {
+      "zh-CN": "移到下方分区",
+      "en-US": "Move to next group",
+      "params": {}
+    },
+    "workspaceDock.mergePrevious": {
+      "zh-CN": "合并到上方分区",
+      "en-US": "Merge into previous group",
+      "params": {}
+    },
+    "workspaceDock.mergeNext": {
+      "zh-CN": "合并到下方分区",
+      "en-US": "Merge into next group",
+      "params": {}
+    },
+    "workspaceDock.resetLayout": {
+      "zh-CN": "恢复默认布局",
+      "en-US": "Reset layout",
+      "params": {}
+    },
+    "workspaceDock.waitComposition": {
+      "zh-CN": "请先完成当前输入，再调整布局。",
+      "en-US": "Finish the current input before changing the layout.",
+      "params": {}
+    },
+    "workspaceDock.emptySide": {
+      "zh-CN": "从另一侧拖入视图，或从视图菜单打开。",
+      "en-US": "Drag a view here or open one from the View menu.",
+      "params": {}
+    },
+    "workspaceDock.groupResize": {
+      "zh-CN": "调整分区高度",
+      "en-US": "Resize groups",
+      "params": {}
+    },
+    "workspaceDock.resizeHint": {
+      "zh-CN": "上／下方向键调整分区高度，Shift 加速；Enter 均分。",
+      "en-US": "Use Up/Down to resize groups, Shift for larger steps, and Enter for equal heights.",
+      "params": {}
+    },
+    "workPanel.label": {
+      "zh-CN": "工作面板",
+      "en-US": "Work panel",
+      "params": {}
+    },
+    "workPanel.problems": {
+      "zh-CN": "问题",
+      "en-US": "Problems",
+      "params": {}
+    },
+    "workPanel.tasks": {
+      "zh-CN": "任务",
+      "en-US": "Tasks",
+      "params": {}
+    },
+    "workPanel.results": {
+      "zh-CN": "结果",
+      "en-US": "Results",
+      "params": {}
+    },
+    "workPanel.collapse": {
+      "zh-CN": "收起工作面板",
+      "en-US": "Collapse work panel",
+      "params": {}
+    },
+    "workPanel.expand": {
+      "zh-CN": "展开工作面板",
+      "en-US": "Expand work panel",
+      "params": {}
+    },
+    "workPanel.resize": {
+      "zh-CN": "调整工作面板高度",
+      "en-US": "Resize work panel height",
+      "params": {}
+    },
+    "workPanel.resizeHint": {
+      "zh-CN": "使用上／下方向键调整高度，Shift 加速，Home 最小，End 最大，Enter 恢复默认。",
+      "en-US": "Use Up/Down to resize, Shift for larger steps, Home for minimum, End for maximum, Enter to reset.",
+      "params": {}
+    },
+    "workPanel.height": {
+      "zh-CN": "{p0} 像素高",
+      "en-US": "{p0} pixels high",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "workPanel.status": {
+      "zh-CN": "工作面板：{p0} 个问题，{p1} 个待处理任务，{p2} 个结果",
+      "en-US": "Work panel: {p0} problems, {p1} tasks need attention, {p2} results",
+      "params": {
+        "p0": "integer",
+        "p1": "integer",
+        "p2": "integer"
+      }
+    },
+    "workPanel.tabCount": {
+      "zh-CN": "{p0}（{p1}）",
+      "en-US": "{p0} ({p1})",
+      "params": {
+        "p0": "text",
+        "p1": "integer"
+      }
+    },
+    "workPanel.problemsEmpty": {
+      "zh-CN": "当前文档没有已报告的问题。",
+      "en-US": "No reported problems for the current document.",
+      "params": {}
+    },
+    "workPanel.tasksEmpty": {
+      "zh-CN": "当前没有已报告的任务。",
+      "en-US": "No reported tasks.",
+      "params": {}
+    },
+    "workPanel.resultsEmpty": {
+      "zh-CN": "当前没有已生成的结果。",
+      "en-US": "No generated results.",
+      "params": {}
+    },
+    "workPanel.running": {
+      "zh-CN": "正在进行",
+      "en-US": "Running",
+      "params": {}
+    },
+    "workPanel.waiting": {
+      "zh-CN": "等待处理",
+      "en-US": "Waiting",
+      "params": {}
+    },
+    "workPanel.failed": {
+      "zh-CN": "失败",
+      "en-US": "Failed",
+      "params": {}
+    },
+    "workPanel.succeeded": {
+      "zh-CN": "完成",
+      "en-US": "Complete",
+      "params": {}
+    },
+    "workPanel.error": {
+      "zh-CN": "错误",
+      "en-US": "Error",
+      "params": {}
+    },
+    "workPanel.warning": {
+      "zh-CN": "警告",
+      "en-US": "Warning",
+      "params": {}
+    },
+    "workPanel.info": {
+      "zh-CN": "提示",
+      "en-US": "Information",
+      "params": {}
+    },
+    "workPanel.progress": {
+      "zh-CN": "已完成 {p0}%",
+      "en-US": "{p0}% complete",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "workPanel.preferenceUnavailable": {
+      "zh-CN": "工作面板布局偏好暂时无法保存，本次仍可使用。",
+      "en-US": "Work panel layout preferences could not be saved; this session remains usable.",
+      "params": {}
+    },
+    "heading.outlineList": {
+      "zh-CN": "大纲列表",
+      "en-US": "Outline list",
+      "params": {}
+    },
+    "heading.mindMap": {
+      "zh-CN": "标题导图",
+      "en-US": "Heading mind map",
+      "params": {}
+    },
+    "heading.headingsAndCaptions": {
+      "zh-CN": "标题与题注",
+      "en-US": "Headings and captions",
+      "params": {}
+    },
+    "heading.headingsOnly": {
+      "zh-CN": "仅标题",
+      "en-US": "Headings only",
+      "params": {}
+    },
+    "heading.captionsOnly": {
+      "zh-CN": "仅题注",
+      "en-US": "Captions only",
+      "params": {}
+    },
+    "heading.itemKindHeading": {
+      "zh-CN": "标题",
+      "en-US": "Heading",
+      "params": {}
+    },
+    "heading.itemKindFigure": {
+      "zh-CN": "图",
+      "en-US": "Figure",
+      "params": {}
+    },
+    "heading.itemKindTable": {
+      "zh-CN": "表",
+      "en-US": "Table",
+      "params": {}
+    },
+    "heading.itemKindEquation": {
+      "zh-CN": "公式",
+      "en-US": "Equation",
+      "params": {}
+    },
+    "heading.itemKindCode": {
+      "zh-CN": "代码",
+      "en-US": "Code",
+      "params": {}
+    },
+    "heading.itemKindCaption": {
+      "zh-CN": "题注",
+      "en-US": "Caption",
+      "params": {}
+    },
+    "numberingPanel.effectiveSettings": {
+      "zh-CN": "当前生效设置",
+      "en-US": "Effective settings",
+      "params": {}
+    },
+    "numberingPanel.followNativeDocument": {
+      "zh-CN": "遵循文档原生编号",
+      "en-US": "Follow native document numbering",
+      "params": {}
+    },
+    "numberingPanel.personalDefaultShown": {
+      "zh-CN": "默认显示个人编号",
+      "en-US": "Show personal numbers by default",
+      "params": {}
+    },
+    "numberingPanel.personalDefaultHidden": {
+      "zh-CN": "默认隐藏个人编号",
+      "en-US": "Hide personal numbers by default",
+      "params": {}
+    },
+    "nodeContents.childNodes": {
+      "zh-CN": "子节点",
+      "en-US": "Child nodes",
+      "params": {}
+    },
+    "nodeContents.album": {
+      "zh-CN": "相册",
+      "en-US": "Album",
+      "params": {}
+    },
+    "nodeContents.files": {
+      "zh-CN": "文件",
+      "en-US": "Files",
+      "params": {}
+    },
+    "nodeContents.emptySection": {
+      "zh-CN": "暂无项目",
+      "en-US": "No items",
+      "params": {}
+    },
+    "nodeContents.showMore": {
+      "zh-CN": "显示更多",
+      "en-US": "Show more",
+      "params": {}
+    },
+    "nodeContents.resourceUnavailable": {
+      "zh-CN": "资源当前不可用，请刷新后重试。",
+      "en-US": "This resource is unavailable. Refresh and try again.",
+      "params": {}
+    },
+    "nodeContents.readOnlyResource": {
+      "zh-CN": "只读资源",
+      "en-US": "Read-only resource",
+      "params": {}
+    },
+    "inventory.resourceNotListed": {
+      "zh-CN": "所选文件已不在当前文件夹的可浏览清单中，请刷新节点视图。",
+      "en-US": "The selected file is no longer in this folder’s browsable inventory. Refresh the Nodes view.",
+      "params": {}
+    },
+    "inventory.resourceReadChanged": {
+      "zh-CN": "读取期间文件或所在目录发生变化，请刷新后重试。",
+      "en-US": "The file or its directory changed during reading. Refresh and try again.",
+      "params": {}
+    },
+    "inventory.resourceVersionChanged": {
+      "zh-CN": "文件预览版本已变化，请刷新节点视图。",
+      "en-US": "The file preview version changed. Refresh the Nodes view.",
+      "params": {}
+    },
+    "timeline.details": {
+      "zh-CN": "比较与恢复…",
+      "en-US": "Compare and restore…",
+      "params": {}
+    },
+    "timeline.scope": {
+      "zh-CN": "当前文档的已保存版本",
+      "en-US": "Saved versions of the current document",
+      "params": {}
+    },
+    "timeline.retry": {
+      "zh-CN": "重新读取时间线",
+      "en-US": "Retry timeline",
+      "params": {}
+    },
+    "workspaceViews.files": {
+      "zh-CN": "文件",
+      "en-US": "Files",
+      "params": {}
+    },
+    "workspaceViews.nodes": {
+      "zh-CN": "节点",
+      "en-US": "Nodes",
+      "params": {}
+    },
+    "workspaceViews.outline": {
+      "zh-CN": "大纲",
+      "en-US": "Outline",
+      "params": {}
+    },
+    "workspaceViews.timeline": {
+      "zh-CN": "时间线",
+      "en-US": "Timeline",
+      "params": {}
+    },
+    "workspaceViews.search": {
+      "zh-CN": "搜索",
+      "en-US": "Search",
+      "params": {}
+    },
+    "workspaceViews.calendar": {
+      "zh-CN": "日历",
+      "en-US": "Calendar",
+      "params": {}
+    },
+    "workspaceViews.people": {
+      "zh-CN": "人员",
+      "en-US": "People",
+      "params": {}
+    },
+    "workspaceViews.followDocument": {
+      "zh-CN": "跟随当前文档",
+      "en-US": "Follow current document",
+      "params": {}
+    },
+    "workspaceViews.pinnedFolder": {
+      "zh-CN": "固定浏览位置",
+      "en-US": "Pin browsing position",
+      "params": {}
+    },
+    "workspaceViews.chooseNode": {
+      "zh-CN": "选择节点以浏览内容",
+      "en-US": "Choose a node to browse its contents",
+      "params": {}
+    },
+    "workspaceViews.extensionsPending": {
+      "zh-CN": "此扩展尚未实现。可在视图菜单中隐藏此选项卡。",
+      "en-US": "This extension is not implemented yet. Hide this tab from the View menu.",
+      "params": {}
+    },
+    "workspaceViews.nodeGraph": {
+      "zh-CN": "关系图",
+      "en-US": "Relationship graph",
+      "params": {}
+    },
+    "workspaceViews.refresh": {
+      "zh-CN": "刷新视图",
+      "en-US": "Refresh view",
+      "params": {}
+    },
+    "workspaceViews.openResource": {
+      "zh-CN": "打开资源",
+      "en-US": "Open resource",
+      "params": {}
+    },
+    "workspaceViews.nodeSearch": {
+      "zh-CN": "筛选节点内容",
+      "en-US": "Filter node contents",
+      "params": {}
+    },
+    "workspaceViews.resourceScope": {
+      "zh-CN": "资源属于当前浏览的文件夹，按只读方式打开。",
+      "en-US": "Resources belong to the browsed folder and open read-only.",
+      "params": {}
+    },
     "app.title": {
       "zh-CN": "Weftext · 写作与知识",
       "en-US": "Weftext · Writing and knowledge",
@@ -188,6 +653,120 @@
       "en-US": "Task reminder",
       "params": {}
     },
+    "reminder.activationTitle": {
+      "zh-CN": "通知中的任务",
+      "en-US": "Tasks from this notification",
+      "params": {}
+    },
+    "reminder.activationEmpty": {
+      "zh-CN": "此通知已没有可打开的有效任务。",
+      "en-US": "This notification has no currently available tasks.",
+      "params": {}
+    },
+    "reminder.activationLimited": {
+      "zh-CN": "部分任务当前不可访问，请刷新后重试。",
+      "en-US": "Some tasks are currently unavailable. Refresh and try again.",
+      "params": {}
+    },
+    "reminder.activationTask": {
+      "zh-CN": "打开任务 {p0}",
+      "en-US": "Open task {p0}",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "reminder.hostStatus": {
+      "zh-CN": "本机提醒服务",
+      "en-US": "Reminders on this device",
+      "params": {}
+    },
+    "reminder.hostStatusLoading": {
+      "zh-CN": "正在读取本机提醒服务状态。",
+      "en-US": "Reading the reminder service status on this device.",
+      "params": {}
+    },
+    "reminder.hostStatusUnavailable": {
+      "zh-CN": "本机提醒服务状态读取失败；通知和调度是否可用尚未确认。",
+      "en-US": "The reminder service status could not be read. Notification and scheduling availability is unconfirmed.",
+      "params": {}
+    },
+    "reminder.desktopInactive": {
+      "zh-CN": "本次连接没有活动的桌面提醒服务，不会提交系统通知。",
+      "en-US": "This connection has no active desktop reminder service and will not submit system notifications.",
+      "params": {}
+    },
+    "reminder.notificationUnavailable": {
+      "zh-CN": "当前桌面环境不提供系统通知，提醒记录仍可在应用内查看。",
+      "en-US": "System notifications are unavailable in this desktop environment. Reminder records remain available in the app.",
+      "params": {}
+    },
+    "reminder.notificationUnknown": {
+      "zh-CN": "系统通知是否可用尚未确认。",
+      "en-US": "System notification availability is unconfirmed.",
+      "params": {}
+    },
+    "reminder.notificationEnabled": {
+      "zh-CN": "系统允许此应用提交通知；勿扰、锁屏等系统设置仍决定是否显示。",
+      "en-US": "The system allows this app to submit notifications. Do Not Disturb, lock-screen and other system settings still control their display.",
+      "params": {}
+    },
+    "reminder.notificationDisabledForApplication": {
+      "zh-CN": "系统设置已关闭 Weftext 通知；可在 Windows 通知设置中查看。",
+      "en-US": "System settings have disabled Weftext notifications. Check Windows notification settings.",
+      "params": {}
+    },
+    "reminder.notificationDisabledForUser": {
+      "zh-CN": "当前 Windows 用户已关闭系统通知。",
+      "en-US": "System notifications are disabled for the current Windows user.",
+      "params": {}
+    },
+    "reminder.notificationDisabledByPolicy": {
+      "zh-CN": "系统策略禁止此应用发送通知。",
+      "en-US": "System policy prevents this app from sending notifications.",
+      "params": {}
+    },
+    "reminder.notificationDisabledByManifest": {
+      "zh-CN": "当前安装包没有可用的系统通知配置。",
+      "en-US": "The current package does not have an available system notification configuration.",
+      "params": {}
+    },
+    "reminder.schedulingInactive": {
+      "zh-CN": "提醒调度尚未启动。",
+      "en-US": "Reminder scheduling has not started.",
+      "params": {}
+    },
+    "reminder.schedulingRunning": {
+      "zh-CN": "提醒调度正在运行。",
+      "en-US": "Reminder scheduling is running.",
+      "params": {}
+    },
+    "reminder.schedulingPaused": {
+      "zh-CN": "提醒调度已暂停，暂不提交新的系统通知。",
+      "en-US": "Reminder scheduling is paused. No new system notifications are being submitted.",
+      "params": {}
+    },
+    "reminder.schedulingRestricted": {
+      "zh-CN": "提醒调度受限；请检查通知权限和下方的库或任务问题。",
+      "en-US": "Reminder scheduling is restricted. Check notification permissions and the library or task issues below.",
+      "params": {}
+    },
+    "reminder.schedulingStopping": {
+      "zh-CN": "提醒服务正在退出，不再接收新的通知提交。",
+      "en-US": "The reminder service is stopping and no longer accepts new notification submissions.",
+      "params": {}
+    },
+    "reminder.scanIncomplete": {
+      "zh-CN": "本轮提醒检查尚未完成，不能据此判断没有待办。",
+      "en-US": "This reminder scan is incomplete. It does not establish that there are no pending tasks.",
+      "params": {}
+    },
+    "reminder.scopeIssues": {
+      "zh-CN": "本轮提醒检查发现 {count} 项问题；部分库、任务或原通知结果需要核对。",
+      "en-US": "This reminder scan found {count} issues. Some libraries, tasks or original notification results need checking.",
+      "params": {
+        "count": "integer"
+      }
+    },
     "reminder.absolute": {
       "zh-CN": "独立时刻",
       "en-US": "Independent instant",
@@ -212,6 +791,51 @@
       "zh-CN": "系统已接受提醒；不代表用户已读。",
       "en-US": "The system accepted the reminder. This does not mean it was read.",
       "params": {}
+    },
+    "reminder.submissionStartedAt": {
+      "zh-CN": "系统通知调用开始（UTC）：{at}",
+      "en-US": "Notification call started (UTC): {at}",
+      "params": {
+        "at": "text"
+      }
+    },
+    "reminder.submissionReturnedAt": {
+      "zh-CN": "系统通知调用返回（UTC）：{at}",
+      "en-US": "Notification call returned (UTC): {at}",
+      "params": {
+        "at": "text"
+      }
+    },
+    "reminder.submissionElapsed": {
+      "zh-CN": "调用单调耗时：{nanoseconds} ns",
+      "en-US": "Monotonic call duration: {nanoseconds} ns",
+      "params": {
+        "nanoseconds": "text"
+      }
+    },
+    "reminder.submissionReturnedSuccess": {
+      "zh-CN": "系统通知调用返回成功；不代表用户已看到。",
+      "en-US": "The notification call returned success. This does not mean the user saw it.",
+      "params": {}
+    },
+    "reminder.submissionReturnedFailure": {
+      "zh-CN": "系统通知调用返回失败（HRESULT {hresult}）；此返回本身不能确定系统送达结果。",
+      "en-US": "The notification call returned failure (HRESULT {hresult}). This return alone does not establish the delivery outcome.",
+      "params": {
+        "hresult": "integer"
+      }
+    },
+    "reminder.submissionObservationMissing": {
+      "zh-CN": "没有实际系统通知调用的时间记录；账本确认时间不能替代调用时间。",
+      "en-US": "No actual notification-call timing was recorded. Ledger confirmation time cannot substitute for call time.",
+      "params": {}
+    },
+    "reminder.ledgerConfirmedAt": {
+      "zh-CN": "账本确认时间（UTC；可能来自后续系统历史核查）：{at}",
+      "en-US": "Ledger confirmation time (UTC; may come from a later system-history check): {at}",
+      "params": {
+        "at": "text"
+      }
     },
     "reminder.unknown": {
       "zh-CN": "系统提交结果未知，未盲目重发。",
@@ -6155,6 +6779,11 @@
     "definitionProposal.originalCheckedNotApplied": {
       "zh-CN": "原定义提案已核对。当前依据或会话不同，请明确比较后恢复；未自动贴回正文。",
       "en-US": "The original definition proposal was checked. The current basis or session differs; compare explicitly before recovery. It was not automatically pasted into the body.",
+      "params": {}
+    },
+    "personalInput.unknownOriginalRoute": {
+      "zh-CN": "原保存的目标路由尚无可靠证明；原编号与本人文字保留。核对原请求前，不能查询、核定或再次保存到可能相同的笔记。",
+      "en-US": "Proof of the original save route is missing. Its operation ID and personal text are retained; query, settle, and saving to a possibly identical note remain unavailable until the original request is verified.",
       "params": {}
     },
     "personalInput.title": {
@@ -18260,6 +18889,11 @@
     "knowledge.readingAuthorizedKnowledge": {
       "zh-CN": "正在读取当前获权知识信息…",
       "en-US": "Reading currently authorized knowledge information…",
+      "params": {}
+    },
+    "knowledge.readBasisChanged": {
+      "zh-CN": "知识读取依据或库环境已变化，未采用旧结果；请刷新重试。",
+      "en-US": "The knowledge read basis or library environment changed. The old result was not adopted; refresh and try again.",
       "params": {}
     },
     "knowledge.scanFailedLastResultStale": {
@@ -38868,8 +39502,8 @@
       "params": {}
     },
     "capture.restoreDraft": {
-      "zh-CN": "恢复已有记录",
-      "en-US": "Restore a draft",
+      "zh-CN": "保留当前稿并打开所选原稿",
+      "en-US": "Keep this draft and open the selected original",
       "params": {}
     },
     "capture.newDraft": {
@@ -40783,9 +41417,14 @@
       "en-US": "Ambiguous union tag",
       "params": {}
     },
+    "error.data.schema.unionNativeDomainNoMatch": {
+      "zh-CN": "该值的类型不符合联合类型的任何分支。",
+      "en-US": "The value's type does not match any union branch.",
+      "params": {}
+    },
     "error.data.schema.unionNativeDomainAmbiguous": {
-      "zh-CN": "联合类型的原生值域不唯一。",
-      "en-US": "Ambiguous union native domain",
+      "zh-CN": "该值的类型同时匹配多个联合类型分支。",
+      "en-US": "The value's type matches multiple union branches.",
       "params": {}
     },
     "error.data.schema.invalidUnionDiscriminator": {
@@ -52750,6 +53389,256 @@
     "desktop.residentEnabled": {
       "zh-CN": "已开启“关闭窗口后继续常驻”。关闭资料库或碎片窗口后，Weftext 会继续在托盘运行；本设备已启用且可用的任务提醒会继续调度。要停止后台运行和提醒调度，请从托盘选择“退出 Weftext”。登录时启动、启动时打开界面仍分别设置，本次操作不会更改它们。",
       "en-US": "“Keep running after closing windows” is now enabled. Closing Library or Capture leaves Weftext running in the tray and scheduling task reminders that are enabled and available on this device. Choose “Exit Weftext” from the tray to stop background work and reminder scheduling. Starting at login and opening the interface at startup remain separate settings; this action does not change them.",
+      "params": {}
+    },
+    "capture.savedDrafts": {
+      "zh-CN": "已保留的碎片草稿",
+      "en-US": "Retained Capture drafts",
+      "params": {}
+    },
+    "capture.refreshDrafts": {
+      "zh-CN": "刷新原稿列表",
+      "en-US": "Refresh draft list",
+      "params": {}
+    },
+    "capture.startOtherDraft": {
+      "zh-CN": "保留此稿，开始或恢复空白新稿",
+      "en-US": "Keep this draft; start or resume a blank draft",
+      "params": {}
+    },
+    "capture.newDraftHelp": {
+      "zh-CN": "新稿不携带当前内容，打开后请另选资料库。失败后再次操作会恢复同一新稿，不另建替代稿。可从列表回到原稿。",
+      "en-US": "A new draft does not carry the current content. Choose its library after opening. After a failure, repeat this action to recover the same new draft without creating a replacement. Use the list to return to an original draft.",
+      "params": {}
+    },
+    "capture.retainedDraft": {
+      "zh-CN": "草稿",
+      "en-US": "Draft",
+      "params": {}
+    },
+    "capture.unselectedTarget": {
+      "zh-CN": "未选择目标",
+      "en-US": "No target selected",
+      "params": {}
+    },
+    "workspaceRibbon.label": {
+      "zh-CN": "文档功能区",
+      "en-US": "Document ribbon",
+      "params": {}
+    },
+    "workspaceRibbon.file": {
+      "zh-CN": "文件",
+      "en-US": "File",
+      "params": {}
+    },
+    "workspaceRibbon.home": {
+      "zh-CN": "开始",
+      "en-US": "Home",
+      "params": {}
+    },
+    "workspaceRibbon.insert": {
+      "zh-CN": "插入",
+      "en-US": "Insert",
+      "params": {}
+    },
+    "workspaceRibbon.knowledge": {
+      "zh-CN": "资料",
+      "en-US": "Knowledge",
+      "params": {}
+    },
+    "workspaceRibbon.review": {
+      "zh-CN": "审阅",
+      "en-US": "Review",
+      "params": {}
+    },
+    "workspaceRibbon.view": {
+      "zh-CN": "视图",
+      "en-US": "View",
+      "params": {}
+    },
+    "workspaceRibbon.collapse": {
+      "zh-CN": "收起功能区",
+      "en-US": "Collapse ribbon",
+      "params": {}
+    },
+    "workspaceRibbon.expand": {
+      "zh-CN": "展开功能区",
+      "en-US": "Expand ribbon",
+      "params": {}
+    },
+    "localChrome.files": {
+      "zh-CN": "打开与创建",
+      "en-US": "Open and create",
+      "params": {}
+    },
+    "localChrome.document": {
+      "zh-CN": "当前文档",
+      "en-US": "Current document",
+      "params": {}
+    },
+    "localChrome.preferences": {
+      "zh-CN": "设置",
+      "en-US": "Settings",
+      "params": {}
+    },
+    "localChrome.panes": {
+      "zh-CN": "面板",
+      "en-US": "Panes",
+      "params": {}
+    },
+    "localChrome.blocks": {
+      "zh-CN": "内容块",
+      "en-US": "Content blocks",
+      "params": {}
+    },
+    "localChrome.note": {
+      "zh-CN": "笔记与查询",
+      "en-US": "Notes and queries",
+      "params": {}
+    },
+    "localChrome.exchange": {
+      "zh-CN": "导入与输出",
+      "en-US": "Import and output",
+      "params": {}
+    },
+    "localChrome.library": {
+      "zh-CN": "资料库",
+      "en-US": "Library",
+      "params": {}
+    },
+    "localChrome.objects": {
+      "zh-CN": "公式与图表",
+      "en-US": "Equations and diagrams",
+      "params": {}
+    },
+    "localChrome.review": {
+      "zh-CN": "批注与校对",
+      "en-US": "Annotations and proofreading",
+      "params": {}
+    },
+    "localChrome.navigation": {
+      "zh-CN": "导航",
+      "en-US": "Navigation",
+      "params": {}
+    },
+    "localChrome.history": {
+      "zh-CN": "撤销与重做",
+      "en-US": "Undo and redo",
+      "params": {}
+    },
+    "localChrome.text": {
+      "zh-CN": "文字格式",
+      "en-US": "Text formatting",
+      "params": {}
+    },
+    "localChrome.content": {
+      "zh-CN": "插入内容",
+      "en-US": "Insert content",
+      "params": {}
+    },
+    "localChrome.annotations": {
+      "zh-CN": "批注",
+      "en-US": "Annotations",
+      "params": {}
+    },
+    "hostedChrome.editing": {
+      "zh-CN": "编辑",
+      "en-US": "Editing",
+      "params": {}
+    },
+    "hostedChrome.format": {
+      "zh-CN": "文字",
+      "en-US": "Text",
+      "params": {}
+    },
+    "hostedChrome.content": {
+      "zh-CN": "内容",
+      "en-US": "Content",
+      "params": {}
+    },
+    "hostedChrome.inspector": {
+      "zh-CN": "笔记检查器",
+      "en-US": "Note inspector",
+      "params": {}
+    },
+    "hostedChrome.navigation": {
+      "zh-CN": "资料库导航",
+      "en-US": "Library navigation",
+      "params": {}
+    },
+    "hostedChrome.files": {
+      "zh-CN": "文件",
+      "en-US": "Files",
+      "params": {}
+    },
+    "hostedChrome.library": {
+      "zh-CN": "资料库",
+      "en-US": "Library",
+      "params": {}
+    },
+    "hostedChrome.settings": {
+      "zh-CN": "设置",
+      "en-US": "Settings",
+      "params": {}
+    },
+    "hostedChrome.note": {
+      "zh-CN": "当前笔记",
+      "en-US": "Current note",
+      "params": {}
+    },
+    "hostedChrome.knowledge": {
+      "zh-CN": "知识与资料",
+      "en-US": "Knowledge and resources",
+      "params": {}
+    },
+    "hostedChrome.review": {
+      "zh-CN": "审阅",
+      "en-US": "Review",
+      "params": {}
+    },
+    "hostedChrome.preview": {
+      "zh-CN": "预览",
+      "en-US": "Preview",
+      "params": {}
+    },
+    "personalInput.editCopy": {
+      "zh-CN": "编辑独立本人输入副本",
+      "en-US": "Edit a separate personal input copy",
+      "params": {}
+    },
+    "personalInput.copyEditorTitle": {
+      "zh-CN": "本人输入副本",
+      "en-US": "Personal input copy",
+      "params": {}
+    },
+    "personalInput.copyEditorLabel": {
+      "zh-CN": "可编辑的独立本人输入副本",
+      "en-US": "Editable separate personal input copy",
+      "params": {}
+    },
+    "personalInput.finishCopy": {
+      "zh-CN": "完成副本编辑",
+      "en-US": "Finish editing this copy",
+      "params": {}
+    },
+    "personalInput.copyActiveFinishFirst": {
+      "zh-CN": "请先完成当前本人副本的编辑。",
+      "en-US": "Finish editing the current personal copy first.",
+      "params": {}
+    },
+    "personalInput.copyChanged": {
+      "zh-CN": "本人副本或其输入已变化；当前输入仍保留，请检查后重试。",
+      "en-US": "The personal copy or its input changed. Current input is retained; check it before retrying.",
+      "params": {}
+    },
+    "personalInput.copyOnlyCannotRestore": {
+      "zh-CN": "独立本人副本只能继续编辑或复制，不能作为正文恢复或取得资料写入权限。",
+      "en-US": "A separate personal copy can be edited or copied; it cannot restore an author draft or grant document write access.",
+      "params": {}
+    },
+    "personalInput.copyFinished": {
+      "zh-CN": "本人副本已可靠保留；原输入、原操作和资料正文未改变。",
+      "en-US": "The personal copy is durably retained. The original input, operation and document source are unchanged.",
       "params": {}
     }
   }

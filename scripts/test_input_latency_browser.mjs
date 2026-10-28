@@ -1,3 +1,4 @@
+import { workspaceTab, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Trusted source-editor key events on an explicit embedded candidate.
@@ -88,9 +89,9 @@ async function openPage(token, reload = false) {
     if (!reload) { await page.getByLabel('访问凭据', { exact: true }).fill(token); await click('连接'); }
     await page.getByRole('button', { name: '输入测量', exact: true }).waitFor(); await click('输入测量');
   }
-  if (collapsePreview) { const collapse = page.getByRole('button', { name: '收起预览', exact: true }); if (await collapse.count()) await collapse.click(); }
+  if (collapsePreview) { await workspaceTab(page, 'view'); const collapse = page.getByRole('button', { name: '收起预览', exact: true }); if (await collapse.count()) await collapse.click(); }
   await page.locator(selector + '[contenteditable=true]').waitFor();
-  await click(hosted ? 'V01 源码' : '源码');
+  await workspaceMode(page, hosted ? 'V01 源码' : '源码');
 }
 async function readSource() { return page.locator(selector).evaluate(element => { const view = element.cmTile?.root?.view; assertView(view, element); return view.state.doc.toString(); function assertView(value, target) { if (value?.contentDOM !== target) throw Error('Actual CodeMirror editor missing'); } }); }
 function summary(values) { const sorted = [...values].sort((a, b) => a - b); return { count: sorted.length, p50: sorted[Math.ceil(sorted.length * .5) - 1], p95: sorted[Math.ceil(sorted.length * .95) - 1], maximum: sorted.at(-1) }; }

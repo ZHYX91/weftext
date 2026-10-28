@@ -1,3 +1,4 @@
+import { workspaceTab } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Embedded-product source appearance regression. All libraries/processes belong
@@ -48,6 +49,7 @@ const source = async () => (await content().locator('.cm-line').allTextContents(
 async function waitSource(expected) { await page.waitForFunction(expected => Array.from(document.querySelector('.cm-content')?.querySelectorAll('.cm-line') || []).map(line => line.textContent).join('\n') === expected, expected); }
 const modeName = (hosted, styled) => hosted ? styled ? 'V02 带样式源码' : 'V01 源码' : styled ? '样式源码' : '源码';
 async function mode(hosted, styled) {
+  await workspaceTab(page, 'view');
   const button = page.getByRole('button', { name: modeName(hosted, styled), exact: true }); await button.click(); await button.getAttribute('aria-pressed').then(value => assert.equal(value, 'true'));
 }
 async function current(expected) {

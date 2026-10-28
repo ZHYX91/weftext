@@ -23,7 +23,7 @@ export function decodeHeadingNumberingInspection(value: unknown): HeadingNumberi
         throw new UiError(uiMessage("error.invalidResponse"));
     const item = value as Record<string, unknown>, reason = item.reason === null ? null : decodeErrorDescription(item.reason);
     const settings = item.settings as HeadingNumberingIntent | null;
-    if (!exactKeys(item, ["sourceHash", "settings", "editable", "reason", "frozenEndnotesRequired"]) || typeof item.sourceHash !== "string" || typeof item.editable !== "boolean" || typeof item.frozenEndnotesRequired !== "boolean" || item.editable && item.frozenEndnotesRequired || reason === undefined || settings !== null && (!settings || typeof settings !== "object" || !exactKeys(settings as unknown as Record<string, unknown>, ["scheme", "start", "maxLevel", "excludeLabels"]) || !["none", "decimal", "chinese"].includes(settings.scheme) || !Number.isSafeInteger(settings.start) || !Number.isSafeInteger(settings.maxLevel) || !Array.isArray(settings.excludeLabels) || settings.excludeLabels.some(label => typeof label !== "string")))
+    if (!exactKeys(item, ["sourceHash", "settings", "editable", "reason", "frozenEndnotesRequired"]) || typeof item.sourceHash !== "string" || typeof item.editable !== "boolean" || typeof item.frozenEndnotesRequired !== "boolean" || item.editable && item.frozenEndnotesRequired || reason === undefined || settings !== null && (!settings || typeof settings !== "object" || !exactKeys(settings as unknown as Record<string, unknown>, ["scheme", "start", "maxLevel", "excludeLabels"]) || !["none", "decimal", "chinese"].includes(settings.scheme) || !Number.isSafeInteger(settings.start) || settings.start < 1 || settings.start > 1000000 || !Number.isSafeInteger(settings.maxLevel) || settings.maxLevel < 1 || settings.maxLevel > 4294967295 || !Array.isArray(settings.excludeLabels) || settings.excludeLabels.length > 200 || settings.excludeLabels.some(label => typeof label !== "string")))
         throw new UiError(uiMessage("error.invalidResponse"));
     return { sourceHash: item.sourceHash, editable: item.editable, frozenEndnotesRequired: item.frozenEndnotesRequired, reason, settings };
 }
@@ -60,13 +60,14 @@ export class NumberingController {
     private generation = 0;
     private readonly binding: string;
     constructor(readonly host: NumberingHost, private storage: Pick<Storage, "getItem" | "setItem" | "removeItem"> = localStorage) {
-        this.action = structuredClone(host.inspection().settings ?? { scheme: "decimal", start: 1, maxLevel: 6, excludeLabels: [] });
+        this.action = structuredClone(host.inspection().settings ?? { scheme: "decimal", start: 1, maxLevel: 9, excludeLabels: [] });
         this.binding = host.binding?.() ?? "";
         const value = storage.getItem(host.personalNoteKey);
         if (value === "show" || value === "hide")
             this.personal = value;
     }
     get personalVisible(): boolean { return this.personal === "default" ? this.storage.getItem(this.host.personalDefaultKey) === "show" : this.personal === "show"; }
+    get personalDefaultVisible(): boolean { return this.storage.getItem(this.host.personalDefaultKey) === "show"; }
     get available(): boolean { return this.host.readable?.() !== false && (this.host.binding?.() ?? "") === this.binding; }
     get canPropose(): boolean { const inspection = this.host.inspection(); return this.available && (inspection.editable || inspection.frozenEndnotesRequired); }
     invalidate(): void { this.preview = null; this.valid = false; this.generation++; }
@@ -98,7 +99,7 @@ export class NumberingController {
         this.valid = false;
         if (!this.canPropose)
             throw new UiError(uiMessage("numberingPanel.nativeRuleNotLosslesslyEditable"));
-        if (!Number.isSafeInteger(action.start) || action.start < 1 || action.start > 1000000 || !Number.isSafeInteger(action.maxLevel) || action.maxLevel < 1 || action.maxLevel > 6 || action.excludeLabels.length > 200)
+        if (!Number.isSafeInteger(action.start) || action.start < 1 || action.start > 1000000 || !Number.isSafeInteger(action.maxLevel) || action.maxLevel < 1 || action.maxLevel > 4294967295 || action.excludeLabels.length > 200)
             throw new UiError(uiMessage("numberingPanel.checkStartLevelExclusions"));
         this.action = structuredClone(action);
         this.valid = true;
@@ -145,6 +146,8 @@ export async function openNumberingPanel(host: NumberingHost): Promise<void> {
     dialog.addEventListener("compositionstart", () => { composing = true; controller.invalidate(); draw(); });
     dialog.addEventListener("compositionend", () => { composing = false; changed(); });
     const title = el("h2", uiMessage("numberingPanel.title"));
+    const effective = el("section");
+    effective.className = "numbering-effective-settings";
     const personal = el("select");
     setUiAttr(personal, "aria-label", uiMessage("numberingPanel.personalVisibility"));
     for (const [value, text] of [["default", uiMessage("numberingPanel.followPersonalDefault")], ["show", uiMessage("numberingPanel.showPersonalNumbers")], ["hide", uiMessage("numberingPanel.hidePersonalNumbers")]] as const) {
@@ -156,6 +159,7 @@ export async function openNumberingPanel(host: NumberingHost): Promise<void> {
     personal.onchange = () => {
         try {
             controller.setPersonal(personal.value as "default" | "show" | "hide");
+            draw();
         }
         catch (e) {
             setUiText(message, errorUiText(e));
@@ -167,6 +171,7 @@ export async function openNumberingPanel(host: NumberingHost): Promise<void> {
     ownDefault.onchange = () => {
         try {
             controller.setPersonalDefault(ownDefault.checked);
+            draw();
         }
         catch (e) {
             setUiText(message, errorUiText(e));
@@ -191,7 +196,7 @@ export async function openNumberingPanel(host: NumberingHost): Promise<void> {
     const level = el("input");
     level.type = "number";
     level.min = "1";
-    level.max = "6";
+    level.max = "4294967295";
     level.value = String(controller.action.maxLevel);
     setUiAttr(level, "aria-label", uiMessage("numberingPanel.documentMaxLevel"));
     const exclude = el("input");
@@ -258,6 +263,22 @@ export async function openNumberingPanel(host: NumberingHost): Promise<void> {
         if (!controller.available)
             controller.invalidate();
         const inspection = controller.available ? host.inspection() : { editable: false, frozenEndnotesRequired: false, reason: null, availabilityMessage: uiMessage("numberingPanel.noteOrReadPermissionChanged") }, canPropose = controller.available && controller.canPropose;
+        replaceUiChildren(effective);
+        effective.append(el("h3", uiMessage("numberingPanel.effectiveSettings")));
+        const summary = el("dl");
+        summary.append(el("dt", uiMessage("numberingPanel.followPersonalDefault")), el("dd", controller.personalDefaultVisible ? uiMessage("numberingPanel.personalDefaultShown") : uiMessage("numberingPanel.personalDefaultHidden")),
+            el("dt", uiMessage("numberingPanel.personalVisibility")), el("dd", controller.personal === "default" ? uiMessage("numberingPanel.followPersonalDefault") : controller.personal === "show" ? uiMessage("numberingPanel.showPersonalNumbers") : uiMessage("numberingPanel.hidePersonalNumbers")),
+            el("dt", uiMessage("numberingPanel.effectiveSettings")), el("dd", controller.personalVisible ? uiMessage("numberingPanel.showPersonalNumbers") : uiMessage("numberingPanel.hidePersonalNumbers")));
+        const currentSettings = "settings" in inspection ? inspection.settings : null;
+        summary.append(el("dt", uiMessage("numberingPanel.documentNativeOverride")));
+        if (!controller.available) summary.append(el("dd", uiMessage("numberingPanel.noteOrReadPermissionChanged")));
+        else if (currentSettings) {
+            const schemeLabel = currentSettings.scheme === "none" ? uiMessage("numberingPanel.noNumbering") : currentSettings.scheme === "chinese" ? uiMessage("numberingPanel.chineseHierarchy") : uiMessage("numberingPanel.decimalHierarchy");
+            summary.append(el("dd", schemeLabel), el("dt", uiMessage("numberingPanel.documentStart")), el("dd", String(currentSettings.start)), el("dt", uiMessage("numberingPanel.documentMaxLevel")), el("dd", String(currentSettings.maxLevel)), el("dt", uiMessage("numberingPanel.documentExcludedLabels")), el("dd", currentSettings.excludeLabels.join(", ") || "—"));
+        } else summary.append(el("dd", uiMessage("numberingPanel.followNativeDocument")));
+        effective.append(summary);
+        personal.disabled = !controller.available;
+        ownDefault.disabled = !controller.available;
         for (const input of [scheme, start, level, exclude])
             input.disabled = controller.busy || !canPropose;
         prepare.disabled = controller.busy || composing || !controller.valid || !canPropose;
@@ -277,7 +298,7 @@ export async function openNumberingPanel(host: NumberingHost): Promise<void> {
             preview.append(details);
         }
     }
-    dialog.append(title, el("h3", uiMessage("numberingPanel.personalDisplay")), el("p", uiMessage("numberingPanel.personalDisplayDescription")), personal, defaultLabel, el("h3", uiMessage("numberingPanel.documentNativeOverride")), el("p", uiMessage("numberingPanel.documentNumberingDescription")), scheme, start, level, exclude, preview, message, actions);
+    dialog.append(title, effective, el("h3", uiMessage("numberingPanel.personalDisplay")), el("p", uiMessage("numberingPanel.personalDisplayDescription")), personal, defaultLabel, el("h3", uiMessage("numberingPanel.documentNativeOverride")), el("p", uiMessage("numberingPanel.documentNumberingDescription")), scheme, start, level, exclude, preview, message, actions);
     document.body.append(dialog);
     const stopObserving = controller.observeSurface(dialog, draw);
     draw();

@@ -285,9 +285,18 @@ pub async fn connect_or_start(
     profile: &ProfileLocator,
     limit: Duration,
 ) -> Result<Connection, LocalClientError> {
-    let qualified = crate::host_paths::qualify_core(&profile.data_dir).map_err(|error| {
-        LocalClientError::not_submitted("profileQualification", error.to_string())
-    })?;
+    // Qualification can wait for another profile's original routing publication.
+    // Keep that bounded filesystem work off the pipe/runtime thread, and retain
+    // this exact requested path before any owner lookup or launch is admitted.
+    let data = profile.data_dir.clone();
+    let qualified = crate::work::spawn_blocking(move || crate::host_paths::qualify_core(&data))
+        .await
+        .map_err(|error| {
+            LocalClientError::not_submitted("profileQualification", error.to_string())
+        })?
+        .map_err(|error| {
+            LocalClientError::not_submitted("profileQualification", error.to_string())
+        })?;
     connect_qualified(qualified, limit, Start::Service).await
 }
 

@@ -1,7 +1,8 @@
 import { message as uiMessage } from "./ui-locale";
-import { decodeApiErrorBody, type ApiErrorBody } from "./api-error";
+import { ApiError, decodeApiErrorBody, type ApiErrorBody } from "./api-error";
 import { decodeCoreError, type CoreError } from "./ui-diagnostics";
-import { UiError } from "./ui-locale";
+import { UiError, errorUiText, displayMessage, uiDisplayParameter, type UiText } from "./ui-locale";
+import { TerminatedAttempt } from "./original-operation";
 import type { OpenedDocument, Receipt } from "./types";
 
 export interface FileSaveReceipt extends Receipt {
@@ -11,6 +12,14 @@ export interface FileSaveReceipt extends Receipt {
   documentSourceMatchesCommit?: boolean;
 }
 export interface FrozenFileSave { operationId: string; source: string; sourcePath: string; path?: string }
+/** Present an already established save outcome; never infer effects from an error. */
+export function fileSaveFailure(error: unknown, receiptReceived: boolean, hasAttempt: boolean): { clearAttempt: boolean; error: UiText } {
+  const original = error instanceof Error ? errorUiText(error) : String(error);
+  const clearAttempt = !receiptReceived && error instanceof TerminatedAttempt;
+  if (error instanceof ApiError && error.code === "saveAsTargetChanged") return { clearAttempt, error: original };
+  if (receiptReceived) return { clearAttempt, error: hasAttempt ? uiMessage("shell.committedDeliveryIncomplete") : displayMessage("shell.savedRecoveryInformationFailed", { p0: uiDisplayParameter(original) }) };
+  return { clearAttempt, error: error instanceof ApiError || error instanceof TerminatedAttempt ? original : uiMessage("shell.saveUnknownConfirmSameOperation") };
+}
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const text = (value: unknown): value is string => typeof value === "string" && value.length > 0;
 const coordinate = (path: string): string => {

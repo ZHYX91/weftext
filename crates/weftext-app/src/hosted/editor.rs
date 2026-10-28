@@ -72,7 +72,7 @@ async fn preview_proposal(
             ErrorDescription::new(UiMessage::error_api_hosted_editor_proposal_preview_failed())
         });
         Ok(Json(
-            json!({"ok":output["ok"],"tree":output["tree"],"source":compiled_source,
+            json!({"ok":output["ok"],"tree":output["tree"],"headingStructure":output["headingStructure"],"source":compiled_source,
             "serial":original.serial,
             "failure":failure}),
         ))
@@ -310,7 +310,7 @@ async fn render(
         let mut info = json!({"syntaxTokens":output["sourceInfo"]["syntaxTokens"],"syntaxValid":output["sourceInfo"]["syntaxValid"],"bodyInsertion":output["sourceInfo"]["bodyInsertion"],"notes":output["sourceInfo"]["notes"]});
         if !rights.write { readonly(&mut info); }
         let failure = (output["ok"] != true).then(|| ErrorDescription::new(UiMessage::error_api_hosted_editor_authorized_compilation_failed()));
-        Ok(Json(json!({"ok":output["ok"],"tree":output["tree"],"sourceInfo":info,
+        Ok(Json(json!({"ok":output["ok"],"tree":output["tree"],"headingStructure":output["headingStructure"],"sourceInfo":info,
             "compilerVersion":output["compilerVersion"],"source":req.source,"serial":req.serial,
             "failure":failure})))
     }).await
@@ -451,6 +451,90 @@ pub(super) async fn compile_frozen(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn render_heading_structure_hosted_reader_has_navigation_without_host_paths() {
+        let (_temp, state, auth, document, _, _) = history_api::test_fixture();
+        let mut inner = state.inner.lock().unwrap();
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .grants
+            .get_mut("Shared")
+            .unwrap()
+            .write = false;
+        let source = format!(
+            "{}\n= Unsaved outline 😀\n",
+            document["source"].as_str().unwrap()
+        );
+        let basis = Snapshot {
+            session_id: document["sessionId"].as_str().unwrap().into(),
+            source: source.clone(),
+            serial: 2,
+            source_hash: None,
+        };
+        let (actor, session, rights) = qualify(&mut inner, &auth, &basis, true, false).unwrap();
+        assert!(!rights.write);
+        let (input, dependencies, environment) =
+            freeze(&mut inner, &actor, &session.resource, &source).unwrap();
+        let request = weftext_engine::FrozenRenderRequest {
+            source: input.source,
+            path: input.path,
+            root: input.root,
+            style: input.style,
+            files: input
+                .frozen_files
+                .into_iter()
+                .map(|(path, bytes)| {
+                    (
+                        path,
+                        base64::engine::general_purpose::STANDARD
+                            .decode(bytes)
+                            .unwrap(),
+                    )
+                })
+                .collect(),
+        };
+        let native = weftext_engine::Engine::new_with_system_fonts(false)
+            .unwrap()
+            .render_frozen(&request)
+            .unwrap();
+        assert!(native.ok, "{:?}", native.diagnostics);
+        let mut output = flow_render_response(&native, &request.source).unwrap();
+        scrub_tree(&mut output["tree"], &session.resource, rights.write);
+        let structure = &output["headingStructure"];
+        assert_eq!(structure["items"][0]["text"], "Unsaved outline 😀");
+        assert!(!structure["items"][0]["range"].is_null());
+        fn has_host_or_write_field(value: &Value) -> bool {
+            match value {
+                Value::Object(fields) => fields.iter().any(|(key, value)| {
+                    matches!(key.as_str(), "path" | "origin" | "writable" | "editable")
+                        || has_host_or_write_field(value)
+                }),
+                Value::Array(values) => values.iter().any(has_host_or_write_field),
+                _ => false,
+            }
+        }
+        assert!(!has_host_or_write_field(structure));
+        // The new response product remains behind the same final permission,
+        // dependency and environment checks as every other hosted render field.
+        qualify(&mut inner, &auth, &basis, false, false).unwrap();
+        validate_inputs(&inner, &actor, &session.resource, &dependencies).unwrap();
+        environment.recheck(&inner, &actor).unwrap();
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .grants
+            .get_mut("Shared")
+            .unwrap()
+            .read = false;
+        assert!(qualify(&mut inner, &auth, &basis, false, false).is_err());
+    }
 
     #[cfg(windows)]
     #[test]

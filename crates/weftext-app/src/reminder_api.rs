@@ -18,6 +18,8 @@ pub(super) fn router() -> Router<AppState> {
         .route("/api/reminders/records", post(records))
         .route("/api/reminders/schedule", post(schedule))
         .route("/api/reminders/open", post(open))
+        .route("/api/reminders/activation", post(activation))
+        .route("/api/reminders/activation/open", post(open_activation))
         .route("/api/reminders/handle", post(handle))
 }
 #[derive(Deserialize)]
@@ -58,6 +60,17 @@ struct SubscriptionRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct KeyRequest {
     execution_key: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ActivationRequest {
+    activation_key: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OpenActivationRequest {
+    activation_key: String,
+    owner: NodeRef,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -228,6 +241,75 @@ async fn open(
     remember(&state, &document)?;
     Ok(Json(document))
 }
+async fn activation(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<ActivationRequest>,
+) -> ApiResult {
+    Ok(Json(value(
+        core_call(&state, move |core| {
+            core.resolve_reminder_activation(&request.activation_key)
+        })
+        .await?,
+    )?))
+}
+
+/// The original opaque notification selects the permitted members. A browser
+/// never supplies a path, replacement effect or cached authorization to open.
+fn open_activation_member(
+    core: &mut weftext_core::Core,
+    activation_key: &str,
+    owner: &NodeRef,
+) -> weftext_core::Result<weftext_core::OpenedDocument> {
+    let unavailable = || {
+        CoreError::new(
+            "reminderUnavailable",
+            weftext_messages::UiMessage::error_reminder_activation_unavailable(),
+        )
+    };
+    let members = core.resolve_reminder_activation(activation_key)?;
+    let member = members
+        .candidates
+        .iter()
+        .find(|candidate| &candidate.owner == owner)
+        .ok_or_else(unavailable)?;
+    let record = core
+        .reminder_delivery_for_saved_task(member)?
+        .ok_or_else(unavailable)?;
+    let opened = core.open_reminder_record(&record.execution_key)?;
+    let qualified = (|| {
+        let current = core.resolve_reminder_activation(activation_key)?;
+        let member = current
+            .candidates
+            .iter()
+            .find(|candidate| &candidate.owner == owner)
+            .ok_or_else(unavailable)?;
+        let current = core
+            .reminder_delivery_for_saved_task(member)?
+            .ok_or_else(unavailable)?;
+        if current.execution_key != record.execution_key {
+            return Err(unavailable());
+        }
+        Ok(())
+    })();
+    if let Err(error) = qualified {
+        core.close_session(&opened.session_id)?;
+        return Err(error);
+    }
+    Ok(opened)
+}
+async fn open_activation(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<OpenActivationRequest>,
+) -> ApiResult {
+    let document = value(
+        core_call(&state, move |core| {
+            open_activation_member(core, &request.activation_key, &request.owner)
+        })
+        .await?,
+    )?;
+    remember(&state, &document)?;
+    Ok(Json(document))
+}
 async fn handle(
     State(state): State<AppState>,
     RequestJson(request): RequestJson<KeyRequest>,
@@ -244,6 +326,94 @@ async fn handle(
 mod tests {
     use super::*;
     use crate::local_service::{LocalService, LocalServiceOptions};
+
+    #[test]
+    fn notification_open_is_bound_to_the_original_current_member_and_disabled_library_is_rejected()
+    {
+        use weftext_core::reminder_device_state::{
+            ReminderNotificationOptions, ReminderSummaryPreparation,
+        };
+        use weftext_core::{Core, OperationIntent, OperationRequest};
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("library");
+        let mut core = Core::new(directory.path().join("profile")).unwrap();
+        let library = core.create_library(&root).unwrap();
+        let mut owners = Vec::new();
+        let mut revision = core
+            .set_reminder_library(&root, true, 0, &uuid::Uuid::new_v4().to_string())
+            .unwrap()
+            .settings_revision;
+        for name in ["First", "Second"] {
+            let intent = uuid::Uuid::new_v4().to_string();
+            let operation_id = uuid::Uuid::new_v4().to_string();
+            let preview = core.prepare_operation(OperationRequest {
+                operation_id: operation_id.clone(), root: root.to_string_lossy().into_owned(),
+                intent: OperationIntent::NewNode { parent: root.to_string_lossy().into_owned(), name: name.into(), source: Some(format!("#metadata((types: (\"task\",), status: \"open\", reminder: (id: \"{intent}\", kind: \"absolute\", at: \"2000-01-01T09:00:00Z\"))) <weftext>\n= {name}\n原任务")) },
+            }).unwrap();
+            let owner = NodeRef {
+                workspace_id: library.workspace_id.clone(),
+                node_id: preview.new_node_id.clone().unwrap(),
+            };
+            core.execute_operation(&operation_id, &preview.plan_id)
+                .unwrap();
+            revision = core
+                .set_reminder_subscription(
+                    &root,
+                    &owner,
+                    &intent,
+                    true,
+                    revision,
+                    &uuid::Uuid::new_v4().to_string(),
+                )
+                .unwrap()
+                .settings_revision;
+            owners.push(owner);
+        }
+        // A real durable original summary, without any simulated OS acceptance.
+        let ReminderSummaryPreparation::Started { permit, .. } = core
+            .prepare_reminder_summary(ReminderNotificationOptions {
+                app_id: "Weftext.Activation.Tests".into(),
+                title: "Reminder".into(),
+                body: "Open tasks".into(),
+            })
+            .unwrap()
+        else {
+            panic!("expected original missed-summary permit");
+        };
+        let activation = permit.request().activation_key.clone();
+        let other = NodeRef {
+            workspace_id: library.workspace_id.clone(),
+            node_id: uuid::Uuid::new_v4().to_string(),
+        };
+        assert!(open_activation_member(&mut core, &activation, &other).is_err());
+        assert!(
+            open_activation_member(&mut core, &uuid::Uuid::new_v4().to_string(), &owners[0])
+                .is_err()
+        );
+        for owner in &owners {
+            let opened = open_activation_member(&mut core, &activation, owner).unwrap();
+            assert_eq!(opened.node_id.as_deref(), Some(owner.node_id.as_str()));
+            assert_eq!(
+                opened.workspace_id.as_deref(),
+                Some(owner.workspace_id.as_str())
+            );
+            core.close_session(&opened.session_id).unwrap();
+        }
+        let records = core.reminder_records_page(None).unwrap().records;
+        core.handle_reminder(&records[0].status.execution_key)
+            .unwrap();
+        assert!(open_activation_member(&mut core, &activation, &records[0].owner).is_err());
+        core.disable_reminder_library(
+            &library.workspace_id,
+            revision,
+            &uuid::Uuid::new_v4().to_string(),
+        )
+        .unwrap();
+        for owner in &owners {
+            assert!(open_activation_member(&mut core, &activation, owner).is_err());
+        }
+        assert_eq!(core.reminder_records_page(None).unwrap().records.len(), 2);
+    }
 
     #[tokio::test]
     async fn reminder_http_credentials_precede_device_identity_allocation() {

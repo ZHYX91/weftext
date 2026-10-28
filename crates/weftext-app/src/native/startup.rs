@@ -80,15 +80,18 @@ pub(super) async fn observe(
     profile: &weftext_core::QualifiedProfile,
     device: &weftext_core::DeviceIdentity,
 ) -> Observation {
-    let selected = crate::host_state::Root::qualify(false).and_then(|root| root.startup_profile());
+    let selected = crate::work::spawn_blocking(|| {
+        crate::host_state::Root::qualify(false).and_then(|root| root.startup_profile())
+    })
+    .await;
     let selected = match selected {
-        Ok(Some(original)) => {
+        Ok(Ok(Some(original))) => {
             original.profile.physical_identity() == profile.physical_identity()
                 && device.is_current
                 && original.device_id == device.id
         }
-        Ok(None) => false,
-        Err(_) => {
+        Ok(Ok(None)) => false,
+        Ok(Err(_)) | Err(_) => {
             return Observation {
                 state: State::Unknown,
                 selected: false,

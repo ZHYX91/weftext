@@ -81,32 +81,41 @@ impl LocalService {
                 );
                 io::Error::new(kind, error)
             })?;
-        Self::bind_with_listener(options, listener).await
+        Self::bind_with_listener(options, listener, ()).await
     }
 
     /// A native-attachable owner supplies its already reserved stable-origin
     /// listener after acquiring the sole physical-profile owner lease.
-    pub(crate) async fn bind_with_listener(
+    pub(crate) async fn bind_with_listener<G: Send + 'static>(
         options: LocalServiceOptions,
         listener: tokio::net::TcpListener,
+        opening_guard: G,
     ) -> io::Result<Self> {
-        Self::bind_core(options, listener, None).await
+        Self::bind_core(options, listener, None, opening_guard).await
     }
 
     #[cfg(windows)]
-    pub(crate) async fn bind_existing_with_listener(
+    pub(crate) async fn bind_existing_with_listener<G: Send + 'static>(
         options: LocalServiceOptions,
         listener: tokio::net::TcpListener,
         physical_identity: &str,
         device_id: &str,
+        opening_guard: G,
     ) -> io::Result<Self> {
-        Self::bind_core(options, listener, Some((physical_identity, device_id))).await
+        Self::bind_core(
+            options,
+            listener,
+            Some((physical_identity, device_id)),
+            opening_guard,
+        )
+        .await
     }
 
-    async fn bind_core(
+    async fn bind_core<G: Send + 'static>(
         options: LocalServiceOptions,
         listener: tokio::net::TcpListener,
         existing: Option<(&str, &str)>,
+        opening_guard: G,
     ) -> io::Result<Self> {
         let bound = listener.local_addr()?;
         if bound.ip() != std::net::IpAddr::V4(Ipv4Addr::LOCALHOST)
@@ -118,20 +127,26 @@ impl LocalService {
                 "The owned listener does not match the exact local bind contract",
             ));
         }
-        let (mut core, data) = match existing {
-            #[cfg(windows)]
-            Some((physical, device)) => {
-                api::host_environment::open_existing_core(options.data_dir, physical, device)?
-            }
-            #[cfg(not(windows))]
-            Some(_) => {
-                return Err(io::Error::new(
+        // Freeze the original locator and optional existing-owner evidence before
+        // waiting for host routing/Core qualification. The actual worker retains
+        // the listener and the caller's original owner-name guard through that
+        // operation, including when its waiting future is cancelled.
+        let data_dir = options.data_dir;
+        let existing = existing.map(|(physical, device)| (physical.to_owned(), device.to_owned()));
+        let (mut core, data, listener) =
+            open_core_with_listener(listener, opening_guard, move || match existing {
+                #[cfg(windows)]
+                Some((physical, device)) => {
+                    api::host_environment::open_existing_core(data_dir, &physical, &device)
+                }
+                #[cfg(not(windows))]
+                Some(_) => Err(io::Error::new(
                     io::ErrorKind::Unsupported,
                     "This local owner authority is unavailable",
-                ));
-            }
-            None => api::host_environment::open_core(options.data_dir)?,
-        };
+                )),
+                None => api::host_environment::open_core(data_dir),
+            })
+            .await?;
         let initial = options
             .initial_document
             .map(|document| {
@@ -235,6 +250,26 @@ impl LocalService {
             outcome: result.and(http_drained).and(drained),
         }
     }
+}
+
+async fn open_core_with_listener<G, F>(
+    listener: tokio::net::TcpListener,
+    opening_guard: G,
+    open: F,
+) -> io::Result<(weftext_core::Core, PathBuf, tokio::net::TcpListener)>
+where
+    G: Send + 'static,
+    F: FnOnce() -> io::Result<(weftext_core::Core, PathBuf)> + Send + 'static,
+{
+    // The completed result owns these in drop order: Core, listener, then the
+    // elected-name guard. Dropping the waiter/JoinHandle cannot release the
+    // inputs early while the original blocking operation continues.
+    let (opened, listener, _opening_guard) =
+        api::work::spawn_blocking(move || (open(), listener, opening_guard))
+            .await
+            .map_err(io::Error::other)?;
+    let (core, data) = opened?;
+    Ok((core, data, listener))
 }
 
 fn close_jobs(state: &api::AppState) {
@@ -571,5 +606,164 @@ mod tests {
             .await
             .unwrap();
         drop(retry);
+    }
+
+    #[tokio::test]
+    async fn background_existing_open_keeps_original_identity_and_releases_failed_leases() {
+        let directory = tempfile::tempdir().unwrap();
+        let data = directory.path().join("state");
+        let service = LocalService::bind(LocalServiceOptions::new(data.clone()))
+            .await
+            .unwrap();
+        let device = service
+            .authority()
+            .core
+            .lock()
+            .unwrap()
+            .device_identity()
+            .unwrap();
+        let profile = weftext_core::qualify_existing_profile(&data).unwrap();
+        let physical = profile.physical_identity().to_owned();
+        drop(service);
+        for (expected_physical, expected_device, expected_kind) in [
+            (
+                format!("{physical}-different"),
+                device.id.clone(),
+                io::ErrorKind::PermissionDenied,
+            ),
+            (
+                physical.clone(),
+                uuid::Uuid::new_v4().to_string(),
+                io::ErrorKind::Other,
+            ),
+        ] {
+            let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+                .await
+                .unwrap();
+            let address = listener.local_addr().unwrap();
+            let error = LocalService::bind_existing_with_listener(
+                LocalServiceOptions::new(data.clone()),
+                listener,
+                &expected_physical,
+                &expected_device,
+                (),
+            )
+            .await
+            .err()
+            .expect("changed existing-owner evidence must be rejected");
+            assert_eq!(error.kind(), expected_kind);
+            if expected_kind == io::ErrorKind::Other {
+                assert_eq!(
+                    error
+                        .get_ref()
+                        .and_then(|cause| cause.downcast_ref::<weftext_core::CoreError>())
+                        .unwrap()
+                        .code,
+                    "scopeChanged"
+                );
+            }
+            let listener = tokio::net::TcpListener::bind(address).await.unwrap();
+            let reopened = LocalService::bind_existing_with_listener(
+                LocalServiceOptions::new(data.clone()),
+                listener,
+                &physical,
+                &device.id,
+                (),
+            )
+            .await
+            .unwrap();
+            assert_eq!(
+                reopened
+                    .authority()
+                    .core
+                    .lock()
+                    .unwrap()
+                    .existing_device_identity()
+                    .unwrap(),
+                device
+            );
+            drop(reopened);
+        }
+    }
+
+    #[tokio::test]
+    async fn cancelled_background_open_retains_original_listener_and_owner_until_actual_finish() {
+        struct OpeningGuard {
+            name: Option<std::os::windows::io::OwnedHandle>,
+            profile: Option<weftext_core::QualifiedProfile>,
+            released: Option<tokio::sync::oneshot::Sender<()>>,
+        }
+        impl Drop for OpeningGuard {
+            fn drop(&mut self) {
+                drop(self.profile.take());
+                drop(self.name.take());
+                if let Some(released) = self.released.take() {
+                    let _ = released.send(());
+                }
+            }
+        }
+        let directory = tempfile::tempdir().unwrap();
+        let data = directory.path().join("state");
+        let profile = weftext_core::qualify_profile(&data).unwrap();
+        let owner = crate::broker::windows::OwnerPipe::acquire(
+            profile,
+            crate::local_client::OwnerRole::Local,
+        )
+        .unwrap();
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .await
+            .unwrap();
+        let address = listener.local_addr().unwrap();
+        let (finished, complete) = tokio::sync::oneshot::channel();
+        let guard = OpeningGuard {
+            name: Some(owner.retain_name().unwrap()),
+            profile: Some(weftext_core::qualify_existing_profile(&data).unwrap()),
+            released: Some(finished),
+        };
+        let (started, entered) = tokio::sync::oneshot::channel();
+        let (release, released) = std::sync::mpsc::channel();
+        let original_data = data.clone();
+        let opened = Arc::new(AtomicBool::new(false));
+        let worker_opened = opened.clone();
+        let waiter = tokio::spawn(open_core_with_listener(listener, guard, move || {
+            let _ = started.send(());
+            released.recv().map_err(io::Error::other)?;
+            let result = api::host_environment::open_core(original_data);
+            worker_opened.store(result.is_ok(), Ordering::Release);
+            result
+        }));
+        tokio::time::timeout(std::time::Duration::from_secs(5), entered)
+            .await
+            .unwrap()
+            .unwrap();
+        waiter.abort();
+        assert!(waiter.await.err().unwrap().is_cancelled());
+        drop(owner);
+        assert!(std::net::TcpListener::bind(address).is_err());
+        let moved = directory.path().join("moved-original");
+        assert!(std::fs::rename(&data, &moved).is_err());
+        assert!(
+            crate::broker::windows::OwnerPipe::acquire(
+                weftext_core::qualify_existing_profile(&data).unwrap(),
+                crate::local_client::OwnerRole::Local,
+            )
+            .is_err()
+        );
+        release.send(()).unwrap();
+        tokio::time::timeout(std::time::Duration::from_secs(10), complete)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(opened.load(Ordering::Acquire));
+        std::fs::rename(&data, &moved).unwrap();
+        std::fs::rename(&moved, &data).unwrap();
+        let listener = std::net::TcpListener::bind(address).unwrap();
+        let owner = crate::broker::windows::OwnerPipe::acquire(
+            weftext_core::qualify_existing_profile(&data).unwrap(),
+            crate::local_client::OwnerRole::Local,
+        )
+        .unwrap();
+        let core = weftext_core::Core::new(data).unwrap();
+        drop((core, listener, owner));
     }
 }

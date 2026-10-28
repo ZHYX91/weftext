@@ -1,7 +1,7 @@
-import { UiError, message } from "./ui-locale";
+import { UiError, message, locale } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
-import { decodeClientPreferences, hostedLocalePreferences, publicLocalePreferences, localLocalePreferences } from "./ui-locale-settings";
+import { InterfaceLocaleControl, decodeClientPreferences, hostedLocalePreferences, publicLocalePreferences, localLocalePreferences } from "./ui-locale-settings";
 import type { UiLocale } from "./ui-locale";
 class MemoryStorage implements Storage {
   readonly values = new Map<string, string>();
@@ -54,4 +54,68 @@ test("local preferences send only display choice and CAS revision to the authent
   await adapter.read(); await adapter.write(1, "en-US");
   assert.deepEqual(calls, [{ path: "/api/client-preferences/read", body: {} }, { path: "/api/client-preferences/update", body: { expectedRevision: 1, preferences: { uiLocale: "en-US" } } }]);
   for (const value of [{ revision: 1.5, preferences: { uiLocale: "en-US" } }, { revision: 1, preferences: { uiLocale: "en-US" }, source: "private" }, { revision: 1, preferences: { uiLocale: "en" } }]) assert.throws(() => decodeClientPreferences(value));
+});
+
+// Minimal nodes keep the real control's confirmation/version lifecycle in play.
+class PreferenceNode {
+  childNodes: PreferenceNode[] = [];
+  dataset: Record<string, string> = {};
+  value = ""; textContent = ""; hidden = false;
+  onchange?: () => void;
+  append(...nodes: PreferenceNode[]) { this.childNodes.push(...nodes); }
+  replaceChildren(...nodes: PreferenceNode[]) { this.childNodes = nodes; }
+  setAttribute() {}
+  remove() {}
+}
+function held<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(accept => { resolve = accept; }); return { promise, resolve }; }
+const preference = (uiLocale: UiLocale, revision = 1) => ({ revision, preferences: { uiLocale } });
+async function preferenceControl(adapter: import("./ui-locale-settings").LocalePreferenceAdapter, run: (control: InterfaceLocaleControl, choose: (value: UiLocale) => void, confirmations: UiLocale[], tick: () => Promise<void>) => Promise<void>) {
+  const original = Object.getOwnPropertyDescriptor(globalThis, "document");
+  Object.defineProperty(globalThis, "document", { configurable: true, value: { createElement: () => new PreferenceNode() } });
+  const confirmations: UiLocale[] = [];
+  const control = new InterfaceLocaleControl(adapter, () => confirmations.push(locale.current));
+  const select = (control.element as unknown as PreferenceNode).childNodes[0].childNodes[1];
+  try { await run(control, value => { select.value = value; select.onchange!(); }, confirmations, async () => { await new Promise(resolve => setImmediate(resolve)); }); }
+  finally { control.dispose(); locale.set("zh-CN"); if (original) Object.defineProperty(globalThis, "document", original); else Reflect.deleteProperty(globalThis, "document"); }
+}
+
+test("personal locale only confirms settled reads/writes, never the optimistic choice", () => {
+  const write = held<ReturnType<typeof preference>>();
+  return preferenceControl({ read: async () => preference("zh-CN"), write: () => write.promise }, async (_control, choose, confirmations, tick) => {
+    await tick(); assert.deepEqual(confirmations, ["zh-CN"]); confirmations.length = 0;
+    choose("en-US"); await tick(); assert.equal(locale.current, "en-US"); assert.deepEqual(confirmations, []);
+    write.resolve(preference("en-US", 2)); await tick(); assert.deepEqual(confirmations, ["en-US"]);
+  });
+});
+
+test("failed or unknown preference writes do not notify; confirmed readback may notify", async () => {
+  for (const readback of ["zh-CN", "unknown", "en-US"] as const) {
+    let reads = 0;
+    await preferenceControl({ read: async () => { if (++reads === 1) return preference("zh-CN"); if (readback === "unknown") throw new Error("unknown"); return preference(readback); }, write: async () => { throw new Error("reply lost"); } }, async (_control, choose, confirmations, tick) => {
+      await tick(); confirmations.length = 0; choose("en-US"); await tick();
+      assert.deepEqual(confirmations, readback === "en-US" ? ["en-US"] : []);
+    });
+  }
+});
+
+test("superseded and disposed personal contexts cannot notify a late preference result", async () => {
+  for (const disposed of [false, true]) {
+    const write = held<ReturnType<typeof preference>>(); let writes = 0;
+    await preferenceControl({ read: async () => preference("zh-CN"), write: () => ++writes === 1 ? write.promise : Promise.resolve(preference("zh-CN", 3)) }, async (control, choose, confirmations, tick) => {
+      await tick(); confirmations.length = 0; choose("en-US"); await tick();
+      if (disposed) control.dispose(); else choose("zh-CN");
+      write.resolve(preference("en-US", 2)); await tick();
+      assert.deepEqual(confirmations, disposed ? [] : ["zh-CN"]);
+    });
+  }
+});
+
+test("late initial reads cannot confirm a retired control and unchanged polls are coalesced", async () => {
+  const initial = held<ReturnType<typeof preference>>();
+  await preferenceControl({ read: () => initial.promise, write: async () => preference("en-US") }, async (control, _choose, confirmations, tick) => {
+    control.dispose(); initial.resolve(preference("en-US")); await tick(); assert.deepEqual(confirmations, []);
+  });
+  await preferenceControl({ read: async () => preference("zh-CN"), write: async () => preference("en-US") }, async (control, _choose, confirmations, tick) => {
+    await tick(); await control.refresh(); await control.refresh(); assert.deepEqual(confirmations, ["zh-CN"]);
+  });
 });

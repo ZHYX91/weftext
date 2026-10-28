@@ -6,11 +6,11 @@ import ts from "typescript";
 import { QueryPanel } from "./query-panel";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { LibraryCloseActivity } from "./library-native-close";
-import { message, UiError, errorUiText, uiTextValue, displayMessage, uiDisplayParameter } from "./ui-locale";
+import { message, UiError, errorUiText, uiTextValue, displayMessage, uiDisplayParameter, joinUiText } from "./ui-locale";
 import { ApiError } from "./api-error";
 import { DocumentSession, rebindCommittedSave, canRebindSaveAs, uniqueRetainedDrafts } from "./session";
 import { restoreBufferDisposition } from "./history-state";
-import { fileSaveReceipt, type FileSaveReceipt } from "./file-save-result";
+import { fileSaveReceipt, fileSaveFailure, type FileSaveReceipt } from "./file-save-result";
 import { originalCommitted, submitOriginal, TerminatedAttempt } from "./original-operation";
 
 // Exercise the actual main consumers and WorkspaceTools methods. Substitute
@@ -67,11 +67,12 @@ function fixture() {
     pathDialog: async () => next.root, flushLiteral: async () => {}, prepareSwitch: async () => {},
     api: async () => next,
     normalize: (path: string) => path.replaceAll("\\", "/").toLowerCase(),
-    readOnlySource: () => false, flowScroll: null, flowHasProjection: false,
+    readOnlySource: () => false, fileSaveFailure, flowScroll: null, flowHasProjection: false,
     persistDraft: async () => { effects.push("persist-draft"); },
     releaseOpenedSession: async (id: string) => { released.push(id); },
     renderContent: () => { effects.push("content"); }, scheduleRender: () => { effects.push("schedule"); },
     toast: () => { effects.push("toast"); }, pendingCreation: null,
+    showError: (error: unknown) => { throw error; },
     acceptCreatedDocument: async () => { effects.push("adopt-created"); },
     refreshInventory: async () => { effects.push("refresh-inventory"); },
     nodeContents: { dispose() { effects.push("dispose-node-contents"); } },
@@ -86,11 +87,12 @@ function fixture() {
   const workspace: any = new context.WorkspaceScopePort();
   Object.assign(workspace, {
     closeGuard: new ProposalCloseGuard(), queryPanel: query, library: original,
-    invalidateQueryEnvironment() { effects.push("invalidate-environment"); },
+    invalidateLibraryEnvironment() { effects.push("invalidate-environment"); },
+    selectedDocumentChanged: async () => {},
   });
   context.workspaceTools = workspace;
   const actualRenderSidebar = context.renderSidebar;
-  context.renderSidebar = () => { workspace.setLibrary(context.inventory, context.selectedFolder); effects.push("sidebar"); };
+  context.renderSidebar = () => { workspace.setLibrary(context.inventory); effects.push("sidebar"); };
   const savedMain = () => ({
     inventory: context.inventory, current: context.current, query: context.query, folder: context.selectedFolder,
     collapsed: [...context.collapsed], selection: [...context.contentSelections], origin: context.activeSourceOrigin,
@@ -110,7 +112,7 @@ function fixture() {
       editor: { clearTokens() { effects.push("clear-tokens"); } }, queries: { invalidate() { effects.push("invalidate-document"); } },
       mode: "source", scroll: {}, sourceTrashed: false,
     };
-    const saved = { inventory: next, query: "target-filter", folder: null, collapsed: ["target-collapsed"], scroll: 9, contentScroll: 7, selection: ["target-selection"] };
+    const saved = { inventory: next, query: "target-filter", collapsed: ["target-collapsed"], scroll: 9 };
     context.documents.push(doc); context.navigationContexts.set(doc, saved);
     return { doc, saved, prior };
   };
@@ -304,8 +306,38 @@ test("saveDocument retains its exact committed receipt and adopted Session when 
   assert.equal(f.effects.includes("sidebar"), false);
 });
 
-test("activateDocument publishes an admitted context without inventing another writer producer", async () => {
+test("saveDocument clears a resolved original attempt while retaining its typed rejection and exact author input", async () => {
+  const f = fixture();
+  const prior = { sessionId: "save-writer", root: f.original.root, workspaceId: f.original.workspaceId, nodeId: "node", source: "before", baseId: "old-base", path: `${f.original.root}/note.typ`, kind: "managed" };
+  const session = new DocumentSession(prior); session.edit("retained author input\r\n😀");
+  const source = session.source, inputId = session.inputId;
+  const doc: any = { session, writing: { state: { composing: false } }, sourceTrashed: false };
+  const rejection = new ApiError("invalidAuthorSource", message("error.invalidResponse"));
+  const routes: string[] = [];
+  f.context.current = doc; f.context.documents = [doc];
+  Object.assign(f.context, {
+    historyPanel: { hasPending: () => false }, historyContext: () => ({}), refreshChrome() {},
+    operationId: () => "resolved-save", originalCommitted, submitOriginal, TerminatedAttempt, ApiError, errorUiText, fileSaveReceipt,
+    persistDraft: async () => { const revision = session.issueDraftRevision(); session.acknowledgeDraft(session.source, session.serial, revision); },
+    api: async (route: string, payload: any) => {
+      routes.push(route); assert.equal(payload.operationId, "resolved-save");
+      if (route === "/api/save") { assert.equal(payload.source, source); throw rejection; }
+      if (route === "/api/operations/status") return { operationId: "resolved-save", status: "unknown" };
+      assert.equal(route, "/api/operations/settle"); return { operationId: "resolved-save", status: "resolved" };
+    },
+  });
+  await assert.rejects(f.context.saveDocument(doc), error => error instanceof TerminatedAttempt);
+  assert.deepEqual(routes, ["/api/save", "/api/operations/status", "/api/operations/settle"]);
+  assert.equal(doc.lastSave, undefined); assert.equal(session.savePending, false);
+  assert.equal(uiTextValue(session.error!), uiTextValue(errorUiText(rejection)));
+  assert.notEqual(uiTextValue(session.error!), uiTextValue(message("shell.saveUnknownConfirmSameOperation")));
+  assert.equal(session.source, source); assert.equal(session.inputId, inputId); assert.equal(session.baseId, prior.baseId);
+  assert.equal(session.opened, prior); assert.deepEqual(f.released, []);
+});
+
+test("activateDocument publishes an admitted file context without another writer or replacing independent node browsing", async () => {
   const f = fixture(), { doc, saved, prior } = f.target(), serialized = JSON.stringify(saved);
+  const nodeFolder = f.context.selectedFolder, nodeSelection = [...f.context.contentSelections];
   const fresh = { ...prior, baseId: "fresh-base" };
   const latest = { ...f.next, entries: [] };
   f.context.api = async (route: string) => route === "/api/open" ? fresh : latest;
@@ -314,7 +346,8 @@ test("activateDocument publishes an admitted context without inventing another w
   await f.context.activateDocument(doc);
   assert.equal(f.context.current, doc); assert.equal(f.context.inventory, latest);
   assert.equal(f.workspace.library, latest); assert.equal(f.query.root, latest.root);
-  assert.equal(f.context.query, saved.query); assert.equal(f.context.selectedFolder, saved.folder);
+  assert.equal(f.context.query, saved.query); assert.equal(f.context.selectedFolder, nodeFolder);
+  assert.deepEqual([...f.context.contentSelections], nodeSelection);
   assert.notEqual(f.context.navigationContexts.get(doc), saved); assert.equal(JSON.stringify(saved), serialized);
   assert.equal(f.context.navigationContexts.get(doc).inventory, latest);
   assert.equal(doc.session.opened, fresh); assert.equal(f.context.ownsOpenedSession(fresh.sessionId), true);
@@ -439,6 +472,23 @@ test("an already flying library switch cannot redirect the new-note dialog targe
   assert.equal(authors, 0); assert.equal(f.context.inventory, f.next);
 });
 
+test("a confirmed new-note commit retires library reads before missing document delivery rejects adoption", async () => {
+  for (const status of ["committed", "resolved"]) {
+    const f = fixture(); f.creationConsumers();
+    Object.assign(f.context, {
+      joinUiText, pendingCreation: { route: "/api/note/create", payload: { name: "Born" } },
+      creation: async (route: string, payload: any, deliver: (receipt: any) => Promise<void>) => {
+        assert.equal(route, "/api/note/create"); assert.equal(payload.root, f.original.root);
+        await deliver({ status, operationId: "original-birth" });
+      },
+    });
+    await assert.rejects(f.context.createNote(), (error: unknown) => error instanceof UiError);
+    assert.equal(f.effects.filter(effect => effect === "invalidate-environment").length, status === "committed" ? 1 : 0);
+    assert.equal(f.context.current.session.opened.sessionId, "current-original");
+    assert.deepEqual(f.released, []);
+  }
+});
+
 function deliveryFixture() {
   const f = fixture(); f.deliveryConsumers();
   const prior = { sessionId: "writer", root: f.original.root, workspaceId: f.original.workspaceId, nodeId: "node", kind: "managed", path: `${f.original.root}/Note/Note.typ`, source: "S", baseId: "old-base" };
@@ -458,6 +508,16 @@ function deliveryFixture() {
   const fact = { ...result.receipt, status: "committed", committedSource: "X", documentSourceMatchesCommit: true, document: comparison };
   return { ...f, doc, prior, session, basis, comparison, result, fact };
 }
+
+test("confirmed Query-definition commits retire library reads before missing delivery while unresolved facts do not", async () => {
+  for (const status of ["committed", "saved", "resolved"]) {
+    const f = deliveryFixture();
+    await assert.rejects(f.context.queryDelivery({ status, operationId: "original-definition" }, f.basis), (error: unknown) => error instanceof UiError);
+    assert.equal(f.effects.filter(effect => effect === "invalidate-environment").length, status === "resolved" ? 0 : 1);
+    assert.equal(f.session.opened, f.prior); assert.equal(f.session.source, "S");
+    assert.equal(f.session.baseId, "old-base"); assert.deepEqual(f.released, []);
+  }
+});
 
 test("history delivery keeps later Y on its original writer and Base without automatic merge", async () => {
   const f = deliveryFixture(), routes: string[] = [];

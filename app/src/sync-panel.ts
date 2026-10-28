@@ -1,4 +1,5 @@
 import { registerNativeProposalOwner } from "./native-proposal-owners";
+import { workActivity } from "./work-activity";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { disposeUiTree, joinUiText, replaceUiChildren, uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
@@ -34,6 +35,7 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
                 localStorage.setItem(savedKey, JSON.stringify(p));
             else
                 localStorage.removeItem(savedKey);
+            if (p) publishPending(p);
         } }, restored);
     const closeGuard = new ProposalCloseGuard();
     const dialog = el("dialog");
@@ -53,8 +55,36 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
     const info = el("p"), objectsHost = el("section"), pendingHost = el("section"), controls = el("div"), historyHost = el("section"), inspectHost = el("section"), revalidationHost = el("section");
     setUiAttr(historyHost, "aria-label", uiMessage("syncPanel.receivedHistoryLabel"));
     let binding: SyncBinding | null = null, status: SyncStatus | null = null, busy = false, closed = false, draftEdited = false;
+    let activityError: UiText | undefined;
+    const deliveredSync = new Set<string>();
+    const cancelledSync = new Set<string>();
     const retainedEnable = localStorage.getItem(`weftext-sync-enable:${rootField.input.value}`);
     let enablePending: { root: string; operationId: string } | null = retainedEnable ? { root: rootField.input.value, operationId: retainedEnable } : null;
+    function showOriginal(id: string): void {
+        closeGuard.assertMutable();
+        if (closed || flow.pending?.request.operationId !== id && enablePending?.operationId !== id)
+            throw new UiError(uiMessage("workActivity.originalUnavailable"));
+        if (!dialog.open) dialog.showModal();
+    }
+    function publishPending(p: SyncPending): void {
+        const id = p.request.operationId;
+        workActivity.task({ id, title: uiMessage("syncPanel.title"),
+            detail: activityError ?? displayMessage("syncPanel.originalOperationTitle", { p0: uiDisplayParameter(p.status) }),
+            status: activityError ? "waiting" : cancelledSync.has(id) ? "cancelled" : p.status === "committed" ? deliveredSync.has(id) ? "succeeded" : "waiting"
+                : p.status === "resolved" ? "succeeded" : busy ? "running" : "waiting",
+            actions: [{ id: "details", label: uiMessage("workActivity.details"), run: () => showOriginal(id) }] });
+        if (p.status === "committed" && p.receipt?.path)
+            workActivity.result({ id, title: p.receipt.path,
+                detail: displayMessage("syncPanel.targetSummary", { p0: uiDisplayParameter(p.request.root), p1: uiDisplayParameter(p.request.intent.kind) }),
+                actions: [{ id: "details", label: uiMessage("workActivity.details"), run: () => showOriginal(id) }] });
+    }
+    function publishEnable(): void {
+        if (!enablePending) return;
+        const id = enablePending.operationId;
+        workActivity.task({ id, title: uiMessage("syncPanel.enable"), detail: activityError ?? enablePending.root,
+            status: busy ? "running" : "waiting",
+            actions: [{ id: "details", label: uiMessage("workActivity.details"), run: () => showOriginal(id) }] });
+    }
     const selected = new Set<string>();
     let selectedInitialized = false;
     let remoteControls: ReturnType<typeof mountRemoteSync> | undefined;
@@ -85,13 +115,18 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
             if (busy)
                 return;
             busy = true;
+            activityError = undefined;
             lock();
             setUiText(statusLine, uiMessage("syncPanel.working"));
             try {
-                await action();
+                const promise = action();
+                if (flow.pending) publishPending(flow.pending);
+                publishEnable();
+                await promise;
                 setUiText(statusLine, uiMessage("syncPanel.actionComplete"));
             }
             catch (error) {
+                activityError = errorUiText(error);
                 setUiText(statusLine, joinUiText([errorUiText(error), flow.pending ? uiMessage("syncPanel.originalRetainedSuffix") : ""]));
             }
             finally {
@@ -125,7 +160,9 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
     }
     async function refreshCommitted(): Promise<void> {
         if (flow.pending?.status === "committed") {
-            await host.applied(flow.pending.request.root);
+            const current = flow.pending;
+            await host.applied(current.request.root);
+            deliveredSync.add(current.request.operationId);
             await load();
             replaceUiChildren(inspectHost);
         }
@@ -220,11 +257,13 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
             const id = enablePending?.operationId ?? localStorage.getItem(key) ?? operationId();
             localStorage.setItem(key, id);
             enablePending = { root: path, operationId: id };
+            publishEnable();
             binding = decodeSyncBinding(await api<unknown>("/api/sync/enable", { root: path, operationId: id }));
             pair.value = JSON.stringify(binding.identity);
             await published();
             localStorage.removeItem(key);
             enablePending = null;
+            workActivity.task({ id, title: uiMessage("syncPanel.enable"), detail: uiMessage("syncPanel.actionComplete"), status: "succeeded" });
         }), button(uiMessage("syncPanel.refreshSavedVersions"), published), button(uiMessage("syncPanel.receiveDirectory"), async () => {
             clearReview();
             status = decodeSyncStatus(await api<unknown>("/api/sync/receive", { identity: identity(), directory: transport.input.value }));
@@ -343,11 +382,21 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
             if (p.status === "prepared")
                 pendingHost.append(button(uiMessage("syncPanel.confirmPreview"), async () => { await host.beforeAction(); await flow.commit(); await refreshCommitted(); }));
             if (["committed", "resolved"].includes(p.status) || !p.attempted)
-                pendingHost.append(button(["committed", "resolved"].includes(p.status) ? uiMessage("syncPanel.finishConfirmed") : uiMessage("syncPanel.discardLocalPreview"), () => { flow.forget(); replaceUiChildren(inspectHost); }));
+                pendingHost.append(button(["committed", "resolved"].includes(p.status) ? uiMessage("syncPanel.finishConfirmed") : uiMessage("syncPanel.discardLocalPreview"), () => {
+                    flow.forget();
+                    workActivity.task({ id: p.request.operationId, title: uiMessage("syncPanel.title"),
+                        status: !["committed", "resolved"].includes(p.status) || cancelledSync.has(p.request.operationId) ? "cancelled" : "succeeded",
+                        detail: ["committed", "resolved"].includes(p.status) ? uiMessage("syncPanel.finishConfirmed") : uiMessage("syncPanel.discardLocalPreview") });
+                    replaceUiChildren(inspectHost);
+                }));
             if (!p.attempted && !["committed", "resolved"].includes(p.status))
                 pendingHost.append(el("p", uiMessage("syncPanel.discardPreviewHelp")));
             if (p.status === "prepared")
-                pendingHost.append(button(uiMessage("syncPanel.cancelUnstartedProposal"), async () => { await flow.cancelPrepared(); await refreshCommitted(); }));
+                pendingHost.append(button(uiMessage("syncPanel.cancelUnstartedProposal"), async () => {
+                    await flow.cancelPrepared();
+                    if (flow.pending?.status === "resolved") cancelledSync.add(p.request.operationId);
+                    await refreshCommitted();
+                }));
             if (["unknown", "recoveryPending"].includes(p.status))
                 pendingHost.append(el("p", uiMessage("syncPanel.partialRecoveryHelp")));
         }
@@ -360,6 +409,8 @@ export async function openSyncPanel(root: string, host: SyncHost): Promise<void>
         if (busy)
             lock();
         remoteControls?.render();
+        if (flow.pending) publishPending(flow.pending);
+        publishEnable();
     }
     const close = el("button", uiMessage("syncPanel.close"));
     close.type = "button";

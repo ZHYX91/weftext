@@ -4,10 +4,12 @@ import hashlib
 import io
 import json
 import os
+import re
 from pathlib import Path, PurePosixPath
 import stat
 import subprocess
 import sys
+from urllib.parse import quote
 import zipfile
 
 IGNORED = {'.git', 'node_modules', 'target', 'dist', '.workspace', '__pycache__'}
@@ -157,7 +159,9 @@ def walk_files(root, excluded=()):
     if is_reparse(root.lstat()):
         raise ValueError(f'Packaging refuses a reparse root: {root}')
     excluded = {Path(path).absolute() for path in excluded}
-    for directory, children, names in os.walk(root, followlinks=False):
+    def onerror(error):
+        raise error
+    for directory, children, names in os.walk(root, followlinks=False, onerror=onerror):
         allowed = []
         for name in sorted(children):
             path = Path(directory) / name
@@ -205,6 +209,62 @@ def zip_bytes(files):
             entry.external_attr = 0o100644 << 16
             archive.writestr(entry, data)
     return output.getvalue()
+
+
+
+def container_logical_name(name):
+    """Validate a file path without normalizing aliases into the inventory."""
+    if not isinstance(name, str) or not name:
+        raise ValueError('Invalid logical container path')
+    name.encode('utf-8', errors='strict')
+    parts = name.split('/')
+    if (any(ord(char) < 32 or ord(char) == 127 or char in '\\:*?"<>|' for char in name)
+            or any(not part or part in {'.', '..'} or part.endswith((' ', '.'))
+                   or re.match(r'(?i)^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)', part)
+                   for part in parts)):
+        raise ValueError(f'Invalid logical container path: {name!r}')
+    return name
+
+
+def msix_part_name(name):
+    """MSIX EncodeFileName, not form encoding; content types is a footprint.
+
+    Microsoft msix-packaging Encoding.cpp and AppxPackageWriter.cpp encode
+    valid Windows names as UTF-8 percent octets, except [Content_Types].xml.
+    """
+    container_logical_name(name)
+    return name if name == '[Content_Types].xml' else quote(name, safe='/-._~', encoding='utf-8', errors='strict')
+
+
+def container_members(archive, expected, *, msix=False):
+    """Map trusted logical names to exact ZIP entries; never decode raw aliases."""
+    raw_to_logical = {}
+    folded = set()
+    for name in expected:
+        container_logical_name(name)
+        raw = msix_part_name(name) if msix else name
+        if raw in raw_to_logical or name.casefold() in folded:
+            raise ValueError('Duplicate/case-aliased logical container path')
+        raw_to_logical[raw] = name
+        folded.add(name.casefold())
+    for name in raw_to_logical.values():
+        parts = name.casefold().split('/')
+        if any('/'.join(parts[:index]) in folded for index in range(1, len(parts))):
+            raise ValueError('File/directory collision in logical container paths')
+    result = {}
+    for entry in archive.infolist():
+        raw = entry.filename
+        name = raw_to_logical.get(raw)
+        mode = stat.S_IFMT(entry.external_attr >> 16)
+        if (name is None or name in result or entry.orig_filename != raw
+                or entry.is_dir() or entry.external_attr & 0x10
+                or mode not in (0, stat.S_IFREG)
+                or (not entry.flag_bits & 0x800 and not raw.isascii())):
+            raise ValueError('Unqualified, duplicate or non-file container member')
+        result[name] = entry
+    if len(result) != len(raw_to_logical):
+        raise ValueError('Container is missing expected members')
+    return result
 
 
 def validate_target(root, target):
@@ -260,11 +320,46 @@ def dependency_licenses(root, metadata, built_package_ids):
     """Freeze exact published license texts; missing originals are not a pass."""
     files, packages = {}, []
     overrides_path = root / 'packaging/windows/licenses/provenance.json'
-    overrides = parse_json(read_checked(overrides_path, root)) if overrides_path.exists() else {'rust': {}}
+    overrides = parse_json(read_checked(overrides_path, root)) if overrides_path.exists() else {'schemaVersion': 2}
+    if not isinstance(overrides, dict) or type(overrides.get('schemaVersion')) is not int or overrides['schemaVersion'] != 2:
+        raise ValueError('Unsupported dependency license provenance schema')
+    for section in ('rust', 'npm'):
+        entries = overrides.get(section, {})
+        if not isinstance(entries, dict):
+            raise ValueError(f'Invalid {section} license provenance section')
+        for key, item in entries.items():
+            if (not isinstance(key, str) or not isinstance(item, dict) or 'files' not in item
+                    or {'file', 'sha256', 'size'}.intersection(item)):
+                raise ValueError(f'Invalid upstream license files record: {section} {key}')
+            if not isinstance(item['files'], list) or not item['files']:
+                raise ValueError(f'Empty upstream license files: {section} {key}')
+            if 'selectedLicense' in item and (not isinstance(item['selectedLicense'], str) or not item['selectedLicense'].strip()):
+                raise ValueError(f'Invalid selected upstream license: {section} {key}')
+            basenames = set()
+            for record in item['files']:
+                if not isinstance(record, dict):
+                    raise ValueError(f'Invalid upstream license file: {section} {key}')
+                name = record.get('file')
+                if not isinstance(name, str) or not name:
+                    raise ValueError(f'Invalid upstream original path: {section} {key}')
+                relative = PurePosixPath(name)
+                if (relative.is_absolute() or relative.as_posix() != name or '..' in relative.parts
+                        or '\\' in name or ':' in name or not relative.parts):
+                    raise ValueError(f'Invalid upstream original path: {section} {key}')
+                if type(record.get('size')) is not int or record['size'] <= 0:
+                    raise ValueError(f'Invalid upstream original size: {section} {key}')
+                digest = record.get('sha256')
+                if not isinstance(digest, str) or len(digest) != 64 or any(value not in '0123456789abcdef' for value in digest):
+                    raise ValueError(f'Invalid upstream original SHA256: {section} {key}')
+                basename = relative.name.casefold()
+                if basename in basenames:
+                    raise ValueError(f'Duplicate upstream license payload basename: {section} {key}')
+                basenames.add(basename)
 
     def collect(name, version, folder, license_id, repository, ecosystem):
         label = f'{ecosystem}-{name.replace("/", "-").replace("@", "")}-{version}'
         copies = []
+        selected_license = None
         for path in walk_files(folder):
             if path.name.lower().startswith(('license', 'licence', 'copying', 'notice', 'ofl')):
                 target = f'third-party/{label}/{path.relative_to(folder).as_posix()}'
@@ -273,18 +368,26 @@ def dependency_licenses(root, metadata, built_package_ids):
                     raise ValueError(f'Empty original license text: {path}')
                 files[target] = original
                 copies.append(target)
-        if not copies and ecosystem == 'cargo':
-            item = overrides.get('rust', {}).get(f'{name}-{version}')
-            if item:
-                data = read_checked(root / item['file'], root)
-                if sha256(data) != item['sha256'] or len(data) != item['size'] or not data.strip():
-                    raise ValueError(f'Changed upstream license original: {name}')
-                target = f'third-party/{label}/LICENSE.upstream'
-                files[target] = data
-                copies.append(target)
+        if not copies and ecosystem in ('cargo', 'npm'):
+            section = 'rust' if ecosystem == 'cargo' else 'npm'
+            item = overrides.get(section, {}).get(f'{name}-{version}')
+            if item is not None:
+                selected_license = item.get('selectedLicense')
+                for record in item['files']:
+                    data = read_checked(root / record['file'], root)
+                    if sha256(data) != record['sha256'] or len(data) != record['size'] or not data.strip():
+                        raise ValueError(f'Changed upstream license original: {ecosystem} {name} {version}')
+                    target = f'third-party/{label}/{PurePosixPath(record["file"]).name}'
+                    if target in files:
+                        raise ValueError(f'Duplicate upstream license payload target: {target}')
+                    files[target] = data
+                    copies.append(target)
         if not copies:
             raise ValueError(f'Missing original license text: {ecosystem} {name} {version}')
-        packages.append({'ecosystem': ecosystem, 'name': name, 'version': version, 'license': license_id, 'repository': repository, 'licenseFiles': copies})
+        package = {'ecosystem': ecosystem, 'name': name, 'version': version, 'license': license_id, 'repository': repository, 'licenseFiles': copies}
+        if selected_license is not None:
+            package['selectedLicense'] = selected_license
+        packages.append(package)
 
     for item in metadata['packages']:
         if item['id'] not in built_package_ids:

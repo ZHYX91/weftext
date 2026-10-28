@@ -5,6 +5,8 @@ spawning its compiler. This observes that existing boundary, without changing
 worker execution. Other platforms remain unverified for dependent race cases.
 """
 import os
+import copy
+import json
 from pathlib import Path
 import sys
 import time
@@ -273,3 +275,94 @@ def event_time_ns():
 def timed_call(function, *args):
     result = function(*args)
     return result, event_time_ns()
+
+
+def _policy_value(users, path):
+    value = users
+    for key in path:
+        _require(isinstance(value, dict) and key in value, 'Missing exact policy authorization target')
+        value = value[key]
+    return value
+
+
+def freeze_policy_revocation(policy, path):
+    _require(path and _policy_value(policy.get('users'), path) is True, 'Original grant must be true')
+    return freeze_policy_changes(policy, [(path, False)])
+
+
+def freeze_policy_changes(policy, changes):
+    """Freeze exact boolean, list or structured policy targets before the worker.
+
+    This is only a policy POST payload; it cannot identify a publication instant.
+    """
+    generation = policy.get('generation')
+    _require(type(generation) is int and generation >= 0, 'Invalid original policy generation')
+    _require(changes, 'Missing exact policy changes')
+    users = copy.deepcopy(policy['users'])
+    seen = set()
+    for path, replacement in changes:
+        _require(path and tuple(path) not in seen, 'Missing or duplicate exact policy target')
+        seen.add(tuple(path))
+        old = _policy_value(users, path)
+        _require(type(old) is not type(replacement) or old != replacement, 'Policy target must actually change')
+        parent = users
+        for key in path[:-1]:
+            parent = parent[key]
+        parent[path[-1]] = copy.deepcopy(replacement)
+    return {'expectedGeneration': generation, 'users': users}
+
+
+def apply_inflight_mutation(observation, pending, post, deadline):
+    """Call only the actual mutating POST here, never prepare/GET/readback."""
+    _require(time.monotonic() < deadline, 'Original request/mutation budget exhausted before change')
+    observation.assert_inflight(pending)
+    started = event_time_ns()
+    acknowledgment = post()
+    acknowledged = event_time_ns()
+    _require(time.monotonic() < deadline, 'Original request/mutation budget exhausted during change')
+    return acknowledgment, {'changeStartedMonotonicNs': started, 'changeAcknowledgedMonotonicNs': acknowledged}
+
+
+def apply_inflight_revocation(observation, pending, request, post, deadline):
+    acknowledgment, interval = apply_inflight_mutation(observation, pending, lambda: post(request), deadline)
+    _require(acknowledgment.get('status') == 'applied'
+             and type(acknowledgment.get('generation')) is int
+             and acknowledgment['generation'] == request['expectedGeneration'] + 1,
+             'Exact policy update was not acknowledged as applied')
+    # The server publishes under its shared policy/delivery mutex before either
+    # response is sent. Client ACK receipt is an interval endpoint, not that
+    # publication instant; an authorized denial may reach its client first.
+    return {**interval, 'policyGeneration': acknowledgment['generation']}
+
+
+def verify_inflight_change(trace):
+    _require(trace['submittedMonotonicNs'] <= trace['worker']['observedMonotonicNs']
+             < trace['changeStartedMonotonicNs'] < trace['requestCompletedMonotonicNs'],
+             'Request must remain in flight when the mutating POST starts')
+    _require(trace['changeStartedMonotonicNs'] <= trace['changeAcknowledgedMonotonicNs'],
+             'Mutation acknowledgment precedes its request')
+
+
+def verify_policy_changes(request, paths, readback, trace):
+    _require(paths, 'Missing exact policy readback targets')
+    _require(type(readback.get('generation')) is int
+             and readback['generation'] == trace['policyGeneration'] == request['expectedGeneration'] + 1,
+             'Policy readback differs from the exact acknowledged generation')
+    for path in paths:
+        expected = _policy_value(request['users'], path)
+        actual = _policy_value(readback.get('users'), path)
+        _require(json.dumps(actual, sort_keys=True) == json.dumps(expected, sort_keys=True),
+                 'Exact policy target differs on readback')
+    verify_inflight_change(trace)
+
+
+def verify_revocation_delivery(request, path, readback, trace, body, denial):
+    verify_policy_changes(request, [path], readback, trace)
+    _require(_policy_value(request['users'], path) is False
+             and _policy_value(readback.get('users'), path) is False,
+             'Exact target authorization was not revoked')
+    status, code, key, forbidden = denial
+    error = body.get('error', {})
+    _require(trace['status'] == status and error.get('code') == code
+             and error.get('explanation', {}).get('key') == key and forbidden not in body,
+             'Original request did not return the exact authorization denial without content')

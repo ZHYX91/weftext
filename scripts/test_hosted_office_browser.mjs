@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Optional real-browser acceptance. Supply EXE, a new owned evidence directory,
@@ -35,7 +36,7 @@ async function api(route, data, actor) {
 async function click(name) { await page.getByRole('button', { name, exact: true }).click(); }
 async function idle(name) { await page.waitForFunction(label => [...document.querySelectorAll('#office button')].some(button => button.textContent === label && !button.disabled), name); }
 async function cache() { return page.evaluate(() => JSON.parse(sessionStorage[Object.keys(sessionStorage).find(key => key.startsWith('weftext-hosted-office:'))])); }
-async function reload() { await page.reload(); await page.getByLabel('Office 输出格式', { exact: true }).waitFor(); await page.waitForFunction(() => document.querySelector('#office [aria-label="Word 导入目标"] option[value="imported"]')); }
+async function reload() { await page.reload(); await workspaceCommand(page, 'file', '办公输出与导入'); await page.getByLabel('Office 输出格式', { exact: true }).waitFor(); await page.waitForFunction(() => document.querySelector('#office [aria-label="Word 导入目标"] option[value="imported"]')); }
 async function changePolicy(edit) { const current = await api('/api/hosted/admin/policy', undefined, 'admin'); edit(current.users); return api('/api/hosted/admin/policy', { expectedGeneration: current.generation, users: current.users }, 'admin'); }
 async function prepareOutput() {
   const response = page.waitForResponse(response => response.url().endsWith('/api/hosted/office/export/prepare'));
@@ -92,8 +93,8 @@ try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, acceptDownloads: true }); page = await context.newPage();
   page.on('pageerror', error => result.pageErrors.push(String(error))); page.on('console', message => { if (message.type() === 'error') result.consoleErrors.push(message.text()); }); page.on('dialog', dialog => dialog.accept());
   let outputCalls = 0, importCalls = 0; page.on('request', request => { if (request.url().endsWith('/api/hosted/office/export/prepare')) outputCalls++; if (request.url().endsWith('/api/hosted/office/import/prepare')) importCalls++; });
-  await page.goto(base); await page.getByLabel('访问凭据', { exact: true }).fill(token.alice); await click('连接'); await page.getByLabel('Office 输出格式', { exact: true }).waitFor(); await page.getByLabel('Word 导入目标', { exact: true }).waitFor();
-  await click('共同文档'); await page.locator('#source .cm-content[contenteditable=true]').waitFor(); await click('V01 源码');
+  await page.goto(base); await page.getByLabel('访问凭据', { exact: true }).fill(token.alice); await click('连接'); await workspaceCommand(page, 'file', '办公输出与导入'); await page.getByLabel('Office 输出格式', { exact: true }).waitFor(); await page.getByLabel('Word 导入目标', { exact: true }).waitFor();
+  await click('共同文档'); await page.locator('#source .cm-content[contenteditable=true]').waitFor(); await workspaceMode(page, 'V01 源码');
   const source = page.locator('#source .cm-content[contenteditable=true]'); await source.click(); await source.press('ControlOrMeta+End'); await source.press('Enter'); await source.pressSequentially('UNSAVEDWORDBODY987 中文😀草稿');
   await page.locator('#source [role=status]').filter({ hasText: '预览对应当前草稿' }).waitFor({ timeout: 30000 });
   await page.getByLabel('Word 审阅输出', { exact: true }).selectOption('comments'); await click('准备 Office 输出');
@@ -111,9 +112,9 @@ try {
   assert.match(parts(originalDocx)['word/document.xml'], /UNSAVEDWORDBODY987/); assert.equal(await readFile(path.join(root, 'Shared/Shared.typ'), 'utf8'), initial);
   result.cases.push('explicit loss consent survives redraw/reload; actual DOCX download matches the original digest and contains unsaved captured text without saving source');
   await click('明确准备一份新 Office 输出');
-  await page.getByLabel('查询字段', { exact: true }).selectOption('tasks/status'); await page.getByLabel('CEL 筛选条件', { exact: true }).fill('status == "open"');
+  await workspaceCommand(page, 'home', '属性'); await page.getByLabel('查询字段', { exact: true }).selectOption('tasks/status'); await page.getByLabel('CEL 筛选条件', { exact: true }).fill('status == "open"');
   const queryResponse = page.waitForResponse(response => response.url().endsWith('/api/hosted/query')); await click('运行查询'); const query = await (await queryResponse).json();
-  await page.getByRole('table', { name: '获权字段查询结果' }).waitFor(); assert.equal(await page.getByLabel('Office 输出格式', { exact: true }).inputValue(), 'xlsx');
+  await page.locator('#office').waitFor({ state: 'visible' }); await workspaceCommand(page, 'home', '属性'); await page.getByRole('table', { name: '获权字段查询结果' }).waitFor(); await workspaceCommand(page, 'file', '办公输出与导入'); assert.equal(await page.getByLabel('Office 输出格式', { exact: true }).inputValue(), 'xlsx');
   const current = await api('/api/hosted/open', { resource: 'shared' }, 'writer'); await api('/api/hosted/save', { sessionId: current.sessionId, baseId: current.baseId, source: current.source.replace('status: "open"', 'status: "done"'), operationId: randomUUID() }, 'writer');
   await page.getByLabel('Office 输出格式', { exact: true }).selectOption('docx'); await page.getByLabel('Word 审阅输出', { exact: true }).selectOption('changes'); await page.getByLabel('包含已解决批注', { exact: true }).check(); await page.getByLabel('Office 输出格式', { exact: true }).selectOption('xlsx');
   const xlsx = await prepareOutput(), xlsxRequest = (await cache()).output.request; assert.equal(xlsxRequest.queryId, query.queryId); assert.equal(xlsxRequest.reviewMode, 'none'); assert.equal(xlsxRequest.includeResolved, false); assert.ok(!('source' in xlsxRequest)); assert.ok(!('resource' in xlsxRequest));
@@ -156,7 +157,7 @@ try {
   let release, observed; const held = new Promise(resolve => observed = resolve), resume = new Promise(resolve => release = resolve); let lateDownloads = 0; page.on('download', () => lateDownloads++);
   await page.route('**/api/hosted/office/export/chunk', async route => { const response = await route.fetch(); assert.equal(response.status(), 200); observed(); await resume; await route.fulfill({ response }); });
   await click('下载已确认 Office 文件'); await held; await changePolicy(users => users.alice.grants = {}); await page.locator('#status').filter({ hasText: '缓存已清除' }).waitFor({ timeout: 12000 }); release(); await pause(500);
-  assert.equal(lateDownloads, 0); assert.equal(await page.locator('#office').isHidden(), true); assert.deepEqual(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('weftext-hosted-office:'))), []);
+  assert.equal(lateDownloads, 0); assert.equal(await page.locator('#office').isHidden(), true); assert.equal(await page.locator('#office').evaluate(element => element.hidden), true); assert.deepEqual(await page.evaluate(() => Object.keys(sessionStorage).filter(key => key.startsWith('weftext-hosted-office:'))), []);
   assert.equal((await api('/api/hosted/fields/read', { resource: 'shared', fieldId: 'tasks/status' }, 'bob')).field.cell.value.value, 'done');
   result.cases.push('revocation clears output/import recovery data and rejects held late artifact delivery while the other actor remains authorized');
   assert.deepEqual(result.pageErrors, []); result.completed = true;

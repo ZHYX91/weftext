@@ -29,6 +29,8 @@ Weftext 原生 Rust Core 供 Desktop、CLI、Server、WebUI 和未来 Mobile 使
 
 每次完整库存扫描在根、Workspace 与规则资格成立后，只读取一次全部已提交 Plan 的原 Birth 证据，按原顺序保留本次调用内的物理绑定观察；逐文件仍核当前受保护句柄、身份、源码声明和相关 pending。坏的后续 Birth 不能被较早的有效绑定遮蔽。此观察不跨扫描复用，不授予提交权限；下一次扫描重新读取原证据。无关 Plan 不触发目标路径的 install／commit／resolution 查询，相关 Plan 的原资格顺序与别名边界保持。
 
+单次同步节点资格核验也共享一次已提交 Plan 与全部原 Birth 的读取，用于同一次绑定、位置重放、修订及原 Session 身份核对。标准读取、原 Session 读取和 Query 资格均遵守此边界；当前文件句柄、源码声明、相关 pending、权限及交付前最终重验继续独立成立。观察只活在该次调用栈内，不进入返回见证或 worker，也不构成原子 journal 快照；后续调用重新读取原件，损坏原件不能因先前成功而被遮蔽。
+
 一次已接纳修订查询只枚举一次观察记录名称，并始终持有原 journal 目录 guard；每个已提交 Plan 仍通过同一受保护 reader 按观察顺序读取原记录。必需记录缺失或损坏仍拒绝，准确 stamp 与字节 hash、每 Plan 首个匹配事实、耐久提交序号及最大序号歧义规则不变。在确认修订号或确认没有修订号之前，再完整枚举一次并核对相关记录名称集合；名称变化直接拒绝，不接纳新记录替换原结论。名称与修订结果均不跨查询缓存。
 
 证明某个物理 owner 的资源集合从未初始化时，同一次调用共享一份完整观察记录名称枚举，逐个读取同 Workspace 已提交 Plan 的全部原观察／恢复记录；不能只按 Plan 声明的目标过滤原事实。原提交序号、owner 位置重放和声明写入的兜底证据仍分别核实，其他 owner 的初始化不转移资格。成功返回前再次完整枚举并核对相关名称集合，变化以资源清单不可用拒绝；原名称与结论不跨调用保留。这只消除重复目录枚举，不省略正文、位置证明或最终 collection witness 重验。
@@ -125,7 +127,7 @@ Windows Compound 在取得完整命名空间保护时，一次捕获各保留目
 
 正常获权编辑用一次完整 input 原子持久化其本人证据。唯一原记录持久标明 inputCut 为 full 或 authorOnly，既有 lastMutation 明确封闭命令种类。显式本人检查点不能确认完整表单、冻结或发起新作者效果，也不能给完整表单关闭证明；目标选择和中性检查点保留原 cut。重启时若无 full cut，仅本人片段可取回为 copyOnly，不以 RAM 标记或旧私有候选恢复 formReady。完整请求响应未知时先按同一原 mutation／expectedRevision／规范完整 digest 查询，浏览器 transport 不存该候选，绝不另写 pure mutation 覆盖可能成功的结果。只有重新获权的完整输入 mutation 才建立 full。digest-only reader 必须核原命令确为 Input，其他真实命令的 digest 也不能冒充完整输入 ACK。新修订中的空本人文字仍是明确删除证据。
 
-前端只使用一份 Records v3 纯输入恢复存储与单一 IndexedDB transaction-CAS。捕获项按 deployment／本人 actor／真实 draftId／producer 隔离，同一项分别保 current 本人 UTF-16 输入和待确认 mutation 的冻结本人 cut／expectedRevision／原号／指纹；旧 A 丢响应时的新 B 不能被 A 的 ACK 删除。它不保存 Schema、default、template、target、typed candidate、私有完整 raw 或 frozen 作者效果 wire，不另建 Capture raw ledger。浏览器 stage/flush/ACK 仅证明 transport proposal，不能冒充 Core ACK、完整表单持久化或关闭许可。真实结构选择及 typed candidate 未得到 Core ACK 时仍阻止提交／关闭。IndexedDB 故障保内存与原磁盘项；同 origin 的正常浏览器进程恢复不能自动外推不同随机端口或 Core 进程的恢复。
+前端只使用一份 Records v4 纯输入恢复存储与单一 IndexedDB transaction-CAS。捕获项按 deployment／本人 actor／真实 draftId／producer 隔离，同一项分别保 current 本人 UTF-16 输入和待确认 mutation 的冻结本人 cut／expectedRevision／原号／指纹；旧 A 丢响应时的新 B 不能被 A 的 ACK 删除。它不保存 Schema、default、template、target、typed candidate、私有完整 raw 或 frozen 作者效果 wire，不另建 Capture raw ledger。浏览器 stage/flush/ACK 仅证明 transport proposal，不能冒充 Core ACK、完整表单持久化或关闭许可。真实结构选择及 typed candidate 未得到 Core ACK 时仍阻止提交／关闭。IndexedDB 故障保内存与原磁盘项；同 origin 的正常浏览器进程恢复不能自动外推不同随机端口或 Core 进程的恢复。v3 的一次性转换先保留原 metadata、UTF-16 文字及 commit；原件备份不参与活跃提案合并或授权，移除已取回恢复项不等于擦除这份迁移原件。正文 owner 和原保存路由的独立事实及缺证处理见 EDITOR §2。
 
 明确处置未知 private input mutation 必须先查原 mutation。只有同一记录 revision 仍等于其原 expectedRevision，才可用独立稳定原号做 `checkpoint_capture_input`：只 CAS 前进记录修订并耐久发布，不改 currentInput、inputRevision 或真正 frozen 创建 pending。旧 input 先提交则 checkpoint 冲突并查询真实原结果；checkpoint 先提交则迟到旧 expectedRevision 永久拒绝。checkpoint 自身丢 ACK 仍查原号，不盲换号／rebase 旧请求；浏览器项只在确认原 mutation 或 checkpoint 原记录后明确处置。该 fence 不是作者操作终结或完整 Form ACK。
 
@@ -233,6 +235,8 @@ Compound root 已到达原计划最终位置，且将作为另一参与者的目
 托管 copy/template 的完整子树读取与导出由 Server 在捕获前分别授权。Core 的不透明 FeatureTreeWitness 固定准确所有者、源树文件／目录成员、物理身份、父对象、字节和原 Schema／根控制文件；成员和保留字节有界。传输 inventory 仅从该已获权 cut 和显式 inputs 的原获权上下文建立，不调用全库 inventory 读取其他正文，也不将目标父对象的命名空间证据当成引用读取授权。没有证明的普通外部路径链接保原值并报告复制损失；需要目标证明的 typed ref 缺少该上下文时拒绝 copyRef，不能仅凭稳定引用读取目标。原 Plan 仍承担保存、提交和恢复，见证本身不授予新权限。
 
 托管目的能力由原 FeatureOperation 和 FrozenOperation 的同一个闭合 `HostedDestination` 绑定：Fixed 固定槽 ID；UniqueChild 另固定真实父目录 FileIdentity／WorkspaceId、prefix、maxMembers 和原外部 operationId。固定槽的新建／复制／模板 Birth 或改名／移动／恢复 Relocate 身份继续确认准确预留位置。UniqueChild 只接 NewNode／TemplateNode，以 prefix＋原号 no-replace 命名，不把 receive 扩给其他结构动作。其成员从同一原 Plan/Birth 派生；准备和提交都核包含 unavailable 及旧 prefix 的保留成员额度，读取另核原 Birth 的 FileIdentity。所选原 commit／Birth 证据损坏、读失败或超预算须 unavailable，不能当空集合或零成员；不建立额外成员账本、不按目录同名收养。本地 producer 没有 hosted destination，不能取得预授权；读取所有结果仍须 Server 当前独立读取授权。
+
+托管导入槽的候选枚举先按内存中的原 Plan 核 Workspace、导入意图及固定槽，再读取这些候选的原 commit／Birth；不为每个槽反复读取所有无关操作的 commit。命中槽的已提交异常 mutation 仍拒绝，相关证据每次重新读取，不建立持久或跨请求缓存。该枚举不是全日志健康检查；最终实体、位置和 Query 资格仍沿原独立路径核验，不能据此绕过损坏事实。
 
 安装算法：
 
@@ -444,6 +448,8 @@ v0.6.2 识别执行资料只保存在执行端独立 private state；它不是�
 
 submittedToSystem、可证明未调用的 failedBeforeCall 和 unknown 分开；重启后的 submitting 对外也是 unknown，成功不是已读。只有完整原 app/tag/group/activation/request 在系统历史出现才能确认 unknown；缺席、用户清除或系统限制不解锁重试。明确取消原因（库／提醒关闭、Task 关闭、定义变更）与个人 handled、外部结果正交；处理不写 Task.status。撤回使用原地址，opaque activation key 回跳逐成员重新授权，不能恢复旧读取权。
 
+同一 v2 Attempt 可保留原生适配器对实际 `Show` 的 `submissionObservation`：调用开始／返回的 UTC、准确十进制字符串 `elapsedNanoseconds` 单调耗时，以及 `returnedSuccess` 或带原 HRESULT 的 `returnedFailure`。观察在调用后随原结果一次持久化，不参与资格或重复投递决定；调用返回失败仍为 unknown。`submittedToSystem.at` 是账本确认时刻，可能来自后续系统历史核查，不能代替实际调用时刻。旧原件缺观察成员时保持缺失，读取不转换或改写，状态 DTO 明确返回 null；无时钟观察或存盘前中断也不补造。原观察的重复回执不得覆盖或清除它；历史确认可以改变送达结论但保留当时调用返回事实。墙钟可能回拨，耗时只取独立单调时钟。没有 OS Attempt 的 `inAppOnly` 不附调用观察，不另建 XML、日志或验收账本。
+
 宿主可按真实单条／汇总投递键有界读取完整原通知，核对激活目录保存的 opaque key。此读取仅验证当前设备账本，不要求作者库在线，也不改投递结果；汇总内的任务成员键不是独立 OS 通知地址。后续打开仍通过实际 Core 回跳重新授权，原记录存在不授予当前作者读取权。
 
 恢复汇总由 Core 可信扫描当前全部已启用且同意投递的订阅，调用方不能挑选前 64 项。受限或未知 scope 仅产生保留完整原因的类型化问题，不消费该范围。问题样本最多 32 项，`issue_count` 保留总数、`issues_complete` 明示样本是否完整；任何问题都不能被解释为完整可资格集合。完成、失效和已处理项排除。
@@ -453,6 +459,10 @@ submittedToSystem、可证明未调用的 failedBeforeCall 和 unknown 分开；
 仅原 Individual 的确定 `failedBeforeCall` 可以首次进入该错过阶段，并保留 prior Attempt。既有 SummaryMember／Overflow 或任何可能已有 OS 效果者不得进入新批。原汇总的确定调用前失败仅能按原 key、原 request 和原成员显式重试，cutoff、overflow 和 cooldown 均不变；不重组为另一个汇总。
 
 最终决定前后保持正向输入共享只读 guard、核对原 parent／准确字节／身份／Pending；缺失配置保原见证并前后复验，使用唯一 bundled schema，无用户安装前置。缺失槽是观察而非未来创建锁；后验变化不给 permit，已持久 submitting／unknown 不抹去。最后检查与 OS 效果不声称对之后任意作者编辑全局原子。已有无效配置不回退。单独数据／账本测试不等于真实桌面 DSK03–08 验收。
+
+
+
+原生调度可消费同次 eligibility 资格读取产生的进程内单调重查期限；它不进入 HTTP DTO 或设备记录，也不是外部调用许可。Core 复用精确 trigger 与本次时钟观察，按精确十进制差向上取整至纳秒生成 hint；到点仍重新进行 eligibility、begin 和最终一次性许可检查，目标分钟和原五秒 permit 不变。
 
 ## 10. 最小消费接口
 

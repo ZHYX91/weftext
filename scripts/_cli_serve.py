@@ -15,6 +15,27 @@ MAX_MESSAGE = 16 * 1024
 MAX_CAPTURE = 16 * 1024 * 1024
 
 
+def _io_path(path):
+    """Encode only Python filesystem access; retain the caller's path spelling.
+
+    Lexical absolutization supports relative log destinations without resolving
+    links. Existing Windows namespaces are already explicit and stay unchanged.
+    This is neither a product-path qualifier nor an owner/control argument.
+    """
+    path = Path(path)
+    if os.name != 'nt':
+        return path
+    value = os.fspath(path)
+    if value.startswith(('\\\\?\\', '\\\\.\\')):
+        return path
+    value = os.path.abspath(value)
+    if value.startswith(('\\\\?\\', '\\\\.\\')):
+        return Path(value)
+    if value.startswith('\\\\'):
+        return Path('\\\\?\\UNC\\' + value[2:])
+    return Path('\\\\?\\' + value)
+
+
 def serve_command(executable, arguments):
     if not Path(executable).is_absolute():
         raise ValueError('The actual CLI executable must be an absolute path')
@@ -154,14 +175,14 @@ class OwnedServe:
                 raise ValueError('Default-resolver evidence requires its explicit owned TEST parent')
             parent = Path(evidence_parent)
             if (not parent.is_absolute() or '..' in parent.parts or '..' in self.data_dir.parts or self.data_dir == parent
-                    or not self.data_dir.is_relative_to(parent) or not parent.is_dir()):
+                    or not self.data_dir.is_relative_to(parent) or not _io_path(parent).is_dir()):
                 raise ValueError('Expected default data must be inside its existing owned TEST parent')
         else:
             if evidence_parent is not None:
                 raise ValueError('Explicit serve data uses its own evidence parent')
             parent = self.data_dir.parent
         self.directory = parent / f'server-control-{uuid.uuid4()}'
-        self.directory.mkdir(exist_ok=False)
+        _io_path(self.directory).mkdir(exist_ok=False)
         self.log_prefix = None if log_prefix is None else Path(log_prefix)
         self.hosted, self.ready, self._owner_identity = hosted, None, None
         self._lines, self._streams = queue.Queue(), {'stdout': bytearray(), 'stderr': bytearray()}
@@ -170,7 +191,8 @@ class OwnedServe:
         self._status_attempted, self._status_identity = False, None
         self._threads, self._ready_bytes, self._logs_written = [], 0, False
         self._first_stdout, self._extra_stdout = True, False
-        self.record = {'command': self.command, 'hosted': hosted, 'ready': False, 'shutdownAttempted': False}
+        self.record = {'command': self.command, 'hosted': hosted, 'ready': False,
+                       'shutdownAttempted': False, 'shutdownVerified': False}
         if expected_default_data_dir is not None:
             self.record['expectedDefaultDataDir'] = str(self.data_dir)
         self._save()
@@ -190,12 +212,12 @@ class OwnedServe:
             self._threads.append(thread)
 
     def _save(self):
-        (self.directory / 'lifecycle.json').write_text(json.dumps(self.record, indent=2), encoding='utf-8')
+        _io_path(self.directory / 'lifecycle.json').write_text(json.dumps(self.record, indent=2), encoding='utf-8')
 
     def _read(self, name):
         stream = getattr(self.process, name)
         try:
-            with (self.directory / f'serve.{name}.bin').open('xb') as output:
+            with _io_path(self.directory / f'serve.{name}.bin').open('xb') as output:
                 while True:
                     chunk = stream.readline(MAX_MESSAGE + 1) if name == 'stdout' else stream.read1(65536)
                     if not chunk:
@@ -262,7 +284,7 @@ class OwnedServe:
         record = {'command': command}
         self.record.setdefault('controls', {})[name] = record
         self._save()
-        with (self.directory / f'{name}.stdout.bin').open('xb') as out, (self.directory / f'{name}.stderr.bin').open('xb') as err:
+        with _io_path(self.directory / f'{name}.stdout.bin').open('xb') as out, _io_path(self.directory / f'{name}.stderr.bin').open('xb') as err:
             control = subprocess.Popen(command, stdin=subprocess.DEVNULL, stdout=out, stderr=err,
                                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             record['pid'] = control.pid
@@ -275,9 +297,9 @@ class OwnedServe:
                 raise
         self._save()
         path = self.directory / f'{name}.stdout.bin'
-        if path.stat().st_size > MAX_MESSAGE:
+        if _io_path(path).stat().st_size > MAX_MESSAGE:
             raise ValueError(f'{name} output exceeds its bounded message size')
-        return record['exitCode'], path.read_bytes()
+        return record['exitCode'], _io_path(path).read_bytes()
 
     def _existing_identity(self, timeout):
         if self._status_attempted:
@@ -324,17 +346,47 @@ class OwnedServe:
             text = bytes(data).decode('utf-8', errors='replace')
             if self.ready and self.ready['token']:
                 text = text.replace(self.ready['token'], '<redacted>')
-            with Path(str(self.log_prefix) + f'.{name}.log').open('a', encoding='utf-8') as output:
+            with _io_path(Path(str(self.log_prefix) + f'.{name}.log')).open('a', encoding='utf-8') as output:
                 output.write(text)
         self._logs_written = True
 
+    def _observe_failed_shutdown(self, timeout, *, drain=True):
+        # This observes only the original held Popen. A natural exit cannot
+        # repair an absent/invalid typed acknowledgement or authorize a retry.
+        observation = {'source': 'original Popen', 'timeoutSeconds': timeout}
+        self.record['exitObservation'] = observation
+        try:
+            code = self.process.wait(timeout=timeout) if timeout else self.process.poll()
+            observation['outcome'] = 'exited' if code is not None else 'running'
+        except subprocess.TimeoutExpired:
+            observation['outcome'] = 'timeout'
+        except BaseException as error:
+            observation.update({'outcome': 'error', 'error': repr(error)})
+        try:
+            code = self.process.poll()
+            # `stopped` describes the process terminal state, not verified
+            # shutdown. shutdownVerified remains false on every failure path.
+            self.record.update({'observedExitCode': code, 'stopped': code is not None})
+            if code is not None and drain:
+                self._join()
+        except BaseException as error:
+            observation['captureError'] = repr(error)
+        if self._stream_errors:
+            observation['streamErrors'] = list(self._stream_errors)
+
     def stop(self, control_timeout=45, exit_timeout=15):
+        """Send one typed stop; exit_timeout also bounds observation after failure.
+
+        Post-failure observation never changes the unknown shutdown outcome or
+        the CLI control deadline. Repeated calls rethrow the cached failure.
+        """
         if self._stop_attempted:
             if self._stop_error is not None:
                 raise self._stop_error
             return self.output()
         self._stop_attempted = True
         self.record['shutdownAttempted'] = True
+        exit_wait_attempted, streams_join_attempted = False, False
         try:
             if self._owner_identity is None:
                 raise RuntimeError('No verified Ready identity; do not guess an owner to stop')
@@ -344,30 +396,46 @@ class OwnedServe:
             identity_bytes = json.dumps(self._owner_identity, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
             if len(identity_bytes) > MAX_MESSAGE:
                 raise ValueError('Verified owner identity exceeds the CLI input limit')
-            with identity_file.open('xb') as output:
+            with _io_path(identity_file).open('xb') as output:
                 output.write(identity_bytes)
             code, data = self._control('owner-stop', ['owner-stop', '--data-dir', str(self.data_dir),
                                                     '--owner-identity', str(identity_file)], control_timeout)
             if code != 0:
                 raise RuntimeError(f'owner-stop exit {code}; no retry or owner kill, outcome may be unknown')
             self.record['shutdownReceipt'] = parse_shutdown(data, self._owner_identity)
+            exit_wait_attempted = True
             if self.process.wait(timeout=exit_timeout) != 0:
                 raise RuntimeError('Owned serve child did not exit successfully')
+            streams_join_attempted = True
             self._join()
             if self._stream_errors:
                 raise RuntimeError('; '.join(self._stream_errors))
             if self._extra_stdout:
                 raise RuntimeError('Serve emitted additional stdout after its single Ready')
-            self.record.update({'stopped': True, 'exitCode': self.process.returncode})
+            self.record.update({'stopped': True, 'exitCode': self.process.returncode,
+                                'shutdownVerified': True, 'shutdownOutcome': 'verified'})
             return self.output()
         except BaseException as error:
-            self.record.update({'shutdownError': repr(error), 'observedExitCode': self.process.poll(),
-                                'stopped': self.process.poll() is not None})
+            self.record.update({'shutdownError': repr(error), 'shutdownVerified': False,
+                                'shutdownOutcome': 'unknown'})
             self._stop_error = RuntimeError(f'Typed shutdown failed; no retry/kill; owned PID {self.process.pid}, originals: {self.directory}')
+            # The CLI's control deadline is unchanged. A failed issued control
+            # gets the existing, separately recorded exit-observation budget;
+            # a wait already attempted never receives a second budget.
+            issued = 'pid' in self.record.get('controls', {}).get('owner-stop', {})
+            self._observe_failed_shutdown(exit_timeout if issued and not exit_wait_attempted else 0,
+                                          drain=not streams_join_attempted)
             raise self._stop_error from error
         finally:
-            self._save()
-            self._write_logs()
+            for label, capture in (('logs', self._write_logs), ('lifecycle', self._save)):
+                try:
+                    capture()
+                except BaseException as error:
+                    if self._stop_error is None:
+                        raise
+                    detail = f'{label}: {error!r}'
+                    self.record.setdefault('evidenceErrors', []).append(detail)
+                    self._stop_error.add_note(f'Shutdown evidence capture failed: {detail}')
 
 
 def launch_serve(executable, arguments, *, hosted=False, log_prefix=None, ready_timeout=45,

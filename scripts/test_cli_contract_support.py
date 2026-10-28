@@ -3,6 +3,7 @@ import contextlib
 import hashlib
 import io
 import json
+import ntpath
 from pathlib import Path
 import types
 import unittest
@@ -37,6 +38,133 @@ class FixtureTests(unittest.TestCase):
         self.assertEqual(len(paragraphs), 128)
         self.assertEqual([len(p.split(' ')) for p in paragraphs], [16] * 128)
         self.assertFalse(any(hasattr(fixture, key) for key in ('sessionId', 'baseId', 'serial', 'passed')))
+
+
+class RetainedOriginGuardTests(unittest.TestCase):
+    """Only the acceptance guards: sockets, owners and all evidence reads are fake."""
+
+    @contextlib.contextmanager
+    def fixture(self, *, unexpected_ready=False, controls=None,
+                io_kind='PermissionDenied', os_code=10013, error_schema=1,
+                canonical_locator=None, serialized_locator=None, after_port=None):
+        test = Path.cwd() / 'UNCREATED-origin-guard-test'
+        output = Path.cwd() / 'UNCREATED-origin-guard-output'
+        profile = test / 'retained-origin-profile'
+        resolved = profile if canonical_locator is None else canonical_locator
+        harness = contract.Harness(types.SimpleNamespace(
+            test_root=test, output_dir=output, cli_executable=test / 'weftext-cli.exe'))
+        harness.api = types.SimpleNamespace(local_app_data=mock.Mock(return_value=test / 'known-folder'))
+        identity = {'profileIdentity': 'weftext.profile.physical.v2:test'}
+        ready = {'token': 'test-only-token', 'base': 'http://127.0.0.1:12345',
+                 'ownerIdentity': identity}
+        first = types.SimpleNamespace(
+            directory=test / 'first-control', ready=ready,
+            record={'shutdownReceipt': {'owner': identity, 'exitCode': 0}},
+            wait_ready=mock.Mock(), stop=mock.Mock(),
+            process=types.SimpleNamespace(poll=mock.Mock(return_value=0)))
+        blocked = types.SimpleNamespace(
+            directory=test / 'blocked-control', ready=ready if unexpected_ready else None,
+            record={'shutdownAttempted': False, 'controls': controls or {}},
+            wait_ready=mock.Mock(side_effect=None if unexpected_ready else RuntimeError('no Ready')),
+            stop=mock.Mock(), _join=mock.Mock(), _save=mock.Mock(), _write_logs=mock.Mock(),
+            _stream_errors=[], process=types.SimpleNamespace(
+                wait=mock.Mock(return_value=3), poll=mock.Mock(return_value=3)))
+        diagnostic = {'code': 'localOriginUnavailable',
+                      'message': 'The retained local origin is unavailable; no changed-origin fallback was used',
+                      'phase': 'retainedBind', 'ioKind': io_kind, 'osCode': os_code}
+        catalog = {'schemaVersion': 1, 'origins': [{
+            'physicalIdentity': identity['profileIdentity'],
+            'locator': str(resolved) if serialized_locator is None else serialized_locator, 'port': 12345}]}
+        reads = {
+            'host-contract.json': line({'paths': {'persistentKnownFolder': 'LocalAppData',
+                'persistentRelativeRoot': 'Weftext-MVP', 'hostStateRelativePath': 'host-state'}}),
+            'host-routing.json': line(catalog), 'serve.stdout.bin': b'',
+            'serve.stderr.bin': line({'schemaVersion': 1, 'diagnostic': diagnostic}) + b'\n'
+                + line({'schemaVersion': error_schema, 'error': {'code': 'localOriginUnavailable', 'exitCode': 3}}) + b'\n',
+        }
+        catalog_reads = 0
+
+        def read(path):
+            nonlocal catalog_reads
+            if path.name == 'host-routing.json':
+                catalog_reads += 1
+                if after_port is not None and catalog_reads > 1:
+                    return line({**catalog, 'origins': [{**catalog['origins'][0], 'port': after_port}]})
+            return reads[path.name]
+
+        blocker = mock.MagicMock()
+        blocker.__enter__.return_value = blocker
+        blocker.getsockname.return_value = ('127.0.0.1', 12345)
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.object(contract.subprocess, 'Popen',
+                side_effect=AssertionError('Pure guard tests must not start a process')))
+            stack.enter_context(mock.patch.object(contract.socket, 'socket', return_value=blocker))
+            stack.enter_context(mock.patch.object(contract.socket, 'SO_EXCLUSIVEADDRUSE', 4, create=True))
+            launches = stack.enter_context(mock.patch.object(contract.cli_serve, 'OwnedServe',
+                side_effect=(first, blocked)))
+            stack.enter_context(mock.patch.object(contract, 'read_small', side_effect=read))
+            stack.enter_context(mock.patch.object(Path, 'exists', return_value=False))
+            stack.enter_context(mock.patch.object(Path, 'resolve', return_value=resolved))
+            yield harness, first, blocked, launches
+
+    def test_natural_refusal_accepts_only_matching_windows_io_pairs(self):
+        for kind, code in (('PermissionDenied', 10013), ('AddrInUse', 10048)):
+            with self.subTest(kind=kind), self.fixture(io_kind=kind, os_code=code,
+                    controls={'owner-status': {'exitCode': 3}}) as (harness, first, blocked, launches):
+                proof = harness.retained_origin_refusal()
+                self.assertTrue(proof['originalOriginUnchanged'])
+                self.assertEqual(proof['observedExitCode'], 3)
+                self.assertEqual(launches.call_count, 2)
+                first.stop.assert_called_once_with()
+                blocked.stop.assert_not_called()
+        with self.fixture(io_kind='AddrInUse', os_code=10013) as (harness, _, blocked, _):
+            with self.assertRaisesRegex(AssertionError, 'actual Windows refusal'):
+                harness.retained_origin_refusal()
+            blocked.stop.assert_not_called()
+
+    def test_unexpected_ready_is_stopped_once_and_still_fails(self):
+        with self.fixture(unexpected_ready=True) as (harness, first, blocked, launches):
+            with self.assertRaisesRegex(AssertionError, 'unexpectedly emitted Ready'):
+                harness.retained_origin_refusal()
+            first.stop.assert_called_once_with()
+            blocked.stop.assert_called_once_with()
+            self.assertEqual(launches.call_count, 2)
+            blocked._save.assert_called_once_with()
+
+    def test_windows_extended_locators_match_the_same_original(self):
+        for plain, extended in ((r'C:\owned\state', r'\\?\C:\owned\state'),
+                                (r'\\server\share\state', r'\\?\UNC\server\share\state')):
+            with self.subTest(locator=extended), self.fixture(canonical_locator=plain,
+                    serialized_locator=extended) as (harness, _, _, _):
+                with mock.patch.object(contract.os.path, 'normcase', ntpath.normcase), \
+                        mock.patch.object(contract.os.path, 'normpath', ntpath.normpath):
+                    self.assertTrue(harness.retained_origin_refusal()['originalOriginUnchanged'])
+
+    def test_boolean_standard_error_schema_does_not_equal_integer_one(self):
+        with self.fixture(error_schema=True) as (harness, _, blocked, _):
+            with self.assertRaisesRegex(AssertionError, 'standard error contract'):
+                harness.retained_origin_refusal()
+            blocked.stop.assert_not_called()
+
+    def test_refused_start_cannot_change_its_original_origin(self):
+        with self.fixture(after_port=12346) as (harness, _, blocked, _):
+            with self.assertRaisesRegex(AssertionError, 'differs from the actual Ready/profile'):
+                harness.retained_origin_refusal()
+            blocked.stop.assert_not_called()
+            self.assertNotIn('originalOriginUnchanged', harness.report['retainedOriginRefusal'])
+
+    def test_unknown_control_cannot_pass_after_original_child_exits_three(self):
+        for control in ({'outcome': 'unknown; no retry or kill'},
+                        {'exitCode': 3, 'outcome': 'unknown; no retry or kill'}, {}):
+            with self.subTest(control=control), self.fixture(
+                    controls={'owner-status': control}) as (harness, first, blocked, launches):
+                with self.assertRaisesRegex(AssertionError, 'control outcome is unknown'):
+                    harness.retained_origin_refusal()
+                blocked.process.wait.assert_called_once_with(timeout=15)
+                first.stop.assert_called_once_with()
+                blocked.stop.assert_not_called()
+                self.assertEqual(launches.call_count, 2)
+                self.assertEqual(blocked.record['observedExitCode'], 3)
 
 
 class DiagnosticTests(unittest.TestCase):
@@ -175,7 +303,8 @@ class DiagnosticTests(unittest.TestCase):
 
     def test_original_runner_keeps_failure_independent_case_and_final_cleanup(self):
         harness = self.harness()
-        called = ('setup', 'workers', 'owner_start', 'query_and_export', 'bibliography_import',
+        called = ('setup', 'workers', 'retained_origin_refusal', 'owner_start',
+                  'query_and_export', 'bibliography_import',
                   'local_sync', 'conflict', 'fence', 'partial_and_budget', 'cross_profile',
                   'restart_original', 'broken_pipe', 'shells', 'conpty', 'remote')
         with contextlib.ExitStack() as stack:
@@ -193,6 +322,10 @@ class DiagnosticTests(unittest.TestCase):
         self.assertEqual(exit_code, 1)
         self.assertFalse(harness.report['passed'])
         cases = {item['name']: item for item in harness.report['cases']}
+        self.assertEqual(len(cases), 17)
+        self.assertEqual(cases['retained-origin-startup-refusal']['status'], 'PASS')
+        self.assertEqual(cases['retained-origin-startup-refusal']['detail'],
+                         {'observed': 'retained_origin_refusal'})
         self.assertEqual(cases['library-read-literal-save-original']['status'], 'FAIL')
         self.assertIn('original-author-failure', cases['library-read-literal-save-original']['error'])
         self.assertEqual(cases['query-confirmed-artifact-download']['status'], 'NONRUN')

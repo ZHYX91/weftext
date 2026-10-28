@@ -4,3 +4,29 @@
 *.py text eol=lf
 *.json text eol=lf
 *.typ text eol=lf
+
+# Preserve exact third-party originals, including upstream whitespace and newline state.
+packaging/windows/licenses/canvas/LICENSE -text -whitespace
+packaging/windows/licenses/cel/LICENSE -text -whitespace
+packaging/windows/licenses/comemo/LICENSE-APACHE -text -whitespace
+packaging/windows/licenses/comemo/LICENSE-MIT -text -whitespace
+packaging/windows/licenses/esbuild/LICENSE.md -text -whitespace
+packaging/windows/licenses/glidesort/LICENSE-2.0.txt -text -whitespace
+packaging/windows/licenses/glidesort/UPSTREAM-Cargo.toml.orig -text -whitespace
+packaging/windows/licenses/glidesort/UPSTREAM-README.md -text -whitespace
+packaging/windows/licenses/include-dir/LICENSE -text -whitespace
+packaging/windows/licenses/krilla-svg/LICENSE_APACHE -text -whitespace
+packaging/windows/licenses/krilla-svg/LICENSE_MIT -text -whitespace
+packaging/windows/licenses/krilla-svg/NOTICE.md -text -whitespace
+packaging/windows/licenses/rollup/LICENSE.md -text -whitespace
+packaging/windows/licenses/roman-numerals-rs/LICENCE.rst -text -whitespace
+packaging/windows/licenses/typst/LICENSE -text -whitespace
+packaging/windows/licenses/typst/NOTICE -text -whitespace
+packaging/windows/licenses/wasmi/LICENSE-APACHE -text -whitespace
+packaging/windows/licenses/wasmi/LICENSE-MIT -text -whitespace
+packaging/windows/licenses/wasmparser/LICENSE-APACHE -text -whitespace
+packaging/windows/licenses/wasmparser/LICENSE-Apache-2.0_WITH_LLVM-exception -text -whitespace
+packaging/windows/licenses/wasmparser/LICENSE-MIT -text -whitespace
+packaging/windows/licenses/webview2-rust/LICENSE -text -whitespace
+packaging/windows/licenses/webview2-sdk/LICENSE.txt -text -whitespace
+packaging/windows/licenses/webview2-sdk/NOTICE.txt -text -whitespace

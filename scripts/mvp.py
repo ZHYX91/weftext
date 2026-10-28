@@ -11,11 +11,14 @@ import uuid
 from cargo_cache import CargoCache, digest_json
 from build_receipt import (GROUPS, NpmTool, QualifiedArtifacts, RECEIPT, load_receipt,
                            publish_receipt, qualify, selected_node, verify_qualified)
-from package_inputs import BuildArtifacts, collect_artifact, read_checked, require_checkout, sha256, snapshot, validate_target
+from package_inputs import (BuildArtifacts, collect_artifact, dependency_licenses, read_checked,
+                            require_checkout, sha256, snapshot, validate_target)
 from windows_package import artifact_catalog, load_contract, msix_version, package_windows, pe_info, sdk_tools
 from windows_materials import freeze_materials
 
 ROOT = Path(__file__).resolve().parents[1]
+MONOTONIC_PERMIT_TEST = ('reminder_device_state::integration_tests::capacity::'
+                         'reminder_64_member_permit_checks_within_its_real_monotonic_lifetime')
 CHECK_SCRIPTS = [
     'test_mvp.py', 'test_commit_delivery.py', 'test_local_features.py', 'test_outputs.py',
     'test_v05_completion.py', 'test_review_interchange.py', 'test_hosted.py',
@@ -64,7 +67,10 @@ def build(release, *, package_input=False, linker=None, windows_sdk=None):
     if package_input:
         # A before/after comparison of an edited checkout alone is not an atomic
         # source snapshot. Package builds use an owned, fixed public-source copy.
-        source_root = target / 'weftext-package-inputs' / str(uuid.uuid4()) / 'source'
+        # npm config get treats values containing a hyphenated UUID as secrets;
+        # --prefix makes its default globalconfig inherit this owned path. Keep
+        # UUID uniqueness without triggering redaction of nonsecret path values.
+        source_root = target / 'weftext-package-inputs' / uuid.uuid4().hex / 'source'
         source_root.mkdir(parents=True, exist_ok=False)
         for name, data in frozen.items():
             path = source_root / name
@@ -195,6 +201,8 @@ def check(artifacts=None, groups=None):
     def scripts():
         checked(sys.executable, 'scripts/test_cargo_cache.py', '--fixture-root', check_root / 'cargo-inputs')
         checked(sys.executable, 'scripts/test_windows_package.py')
+        checked(sys.executable, 'scripts/test_prepare_windows_package.py')
+        checked(sys.executable, 'scripts/test_ci_windows_package.py')
         checked(sys.executable, 'scripts/test_build_receipt.py')
         checked(sys.executable, 'scripts/test_mvp_entry.py')
         checked(sys.executable, 'scripts/test_cli_contract_support.py')
@@ -224,7 +232,19 @@ def check(artifacts=None, groups=None):
         with CargoCache(root, artifacts.target_directory, environment) as cache:
             cache.run(['cargo', 'clippy', '--locked', '--workspace', '--all-targets',
                        '--message-format=json-render-diagnostics', '--', '-D', 'warnings'])
-            cache.run(['cargo', 'test', '--locked', '--workspace', '--message-format=json-render-diagnostics'])
+            cache.run(['cargo', 'test', '--locked', '--workspace', '--exclude', 'weftext-app',
+                       '--message-format=json-render-diagnostics', '--', '--exact',
+                       '--skip', MONOTONIC_PERMIT_TEST])
+            # This real five-second permit is an isolated timing baseline;
+            # retain all assertions and run it before App's complete tests.
+            cache.run(['cargo', 'test', '--locked', '-p', 'weftext-core', '--lib',
+                       '--message-format=json-render-diagnostics', '--', MONOTONIC_PERMIT_TEST,
+                       '--exact', '--test-threads=1'])
+            # App fixtures have independent Core/HTTP owners but share the
+            # process-wide producer registry drained by LocalService shutdown.
+            # Serialize fixtures, retaining each test's own runtime concurrency.
+            cache.run(['cargo', 'test', '--locked', '-p', 'weftext-app',
+                       '--message-format=json-render-diagnostics', '--', '--test-threads=1'])
 
     def http():
         for script in CHECK_SCRIPTS:
@@ -266,7 +286,7 @@ def main(argv=None):
     parser.add_argument('action', choices=['build', 'check', 'package'])
     parser.add_argument('--release', action='store_true', help='Use the optimized Rust profile')
     parser.add_argument('--group', action='append', choices=GROUPS, help='Run selected check groups; partial unless all groups run')
-    parser.add_argument('--artifacts', type=Path, help='Absolute receipt for same-checkout frozen artifacts; check only, never reuses PASS')
+    parser.add_argument('--artifacts', type=Path, help='Absolute receipt for frozen artifacts from this exact source root; check only, never reuses PASS')
     parser.add_argument('--windows-sdk', type=Path, help='x64 Windows SDK bin directory; package only')
     parser.add_argument('--offline-materials', type=Path, help='Directory containing exact repository-locked offline installers')
     parser.add_argument('--msvc-linker', type=Path, help='Installed x64 MSVC link.exe used explicitly by the package build')
@@ -287,7 +307,6 @@ def main(argv=None):
     elif any((args.windows_sdk, args.offline_materials, args.msvc_linker)):
         parser.error('Windows packaging inputs are accepted only for package')
     if args.artifacts is not None:
-        require_checkout(ROOT)
         environment = dict(os.environ)
         npm = NpmTool.discover(environment)
         environment = npm.environment(environment)
@@ -301,7 +320,9 @@ def main(argv=None):
     else:
         artifacts = build(args.release, package_input=args.action == 'package', linker=args.msvc_linker,
                           windows_sdk=args.windows_sdk)
-    if args.action in {'check', 'package'}:
+    if args.action == 'package':
+        dependency_licenses(artifacts.source_root, artifacts.metadata, artifacts.built_package_ids)
+    if args.action == 'check':
         check(artifacts, groups)
     if args.action == 'package':
         source = artifacts.source_root
@@ -310,7 +331,8 @@ def main(argv=None):
         if sha256(artifacts.source['packaging/windows/offline-materials.json']) != materials['lockSha256']:
             raise ValueError('Offline material lock changed after package preflight')
         version = tomllib.loads(artifacts.source['crates/weftext-app/Cargo.toml'].decode('utf-8'))['package']['version']
-        package_windows(source, artifacts, version, contract, materials, tools, output_root=ROOT)
+        package_windows(source, artifacts, version, contract, materials, tools, output_root=ROOT,
+                        before_finalize=lambda: check(artifacts, GROUPS))
     return artifacts
 
 

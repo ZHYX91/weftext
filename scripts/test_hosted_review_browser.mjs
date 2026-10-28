@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // Optional real-browser acceptance. Supply a qualified Playwright installation
@@ -43,8 +44,8 @@ try{
  browser=await chromium.launch({channel:'chrome',headless:true});result.browser=browser.version();
  const ctx=await browser.newContext({viewport:{width:1440,height:1100}}), ctxB=await browser.newContext({viewport:{width:1280,height:1000}});page=await ctx.newPage();const bob=await ctxB.newPage();
  for(const p of [page,bob]){p.on('pageerror',e=>result.pageErrors.push(String(e)));p.on('console',m=>{if(m.type()==='error')result.consoleErrors.push(m.text());});}
- async function login(p,actor){await p.goto(base);await p.getByLabel('访问凭据',{exact:true}).fill(token[actor]);await p.getByRole('button',{name:'连接',exact:true}).click();await p.getByLabel('选择批注对象').waitFor();}
- await login(page,'alice');await click('共同文档');await page.locator('#source .cm-content[contenteditable=true]').waitFor();await click('V01 源码');
+ async function login(p,actor){await p.goto(base);await p.getByLabel('访问凭据',{exact:true}).fill(token[actor]);await p.getByRole('button',{name:'连接',exact:true}).click();await workspaceCommand(p,'review','批注');await p.getByLabel('选择批注对象').waitFor();}
+ await login(page,'alice');await click('共同文档');await page.locator('#source .cm-content[contenteditable=true]').waitFor();await workspaceMode(page,'V01 源码');
  await readReview(page,'读取批注');
  const source=page.locator('#source .cm-content');await source.click();await source.press('ControlOrMeta+End');await source.press('Shift+Home');
  await page.getByLabel('批注类型',{exact:true}).selectOption('suggestion');await page.getByLabel('批注内容',{exact:true}).fill('请核对这一处😀');await page.getByLabel('建议替换文字',{exact:true}).fill('准确修改😀');
@@ -56,29 +57,29 @@ try{
  result.cases.push('annotation-only user replies without source access or target excerpts; author sees actual reply');
  await first.getByRole('button',{name:'准备应用建议',exact:true}).click();await page.getByRole('button',{name:'确认提交批注操作',exact:true}).waitFor();assert.equal(await readFile(path.join(root,'Shared/Shared.typ'),'utf8'),initial);
  await commit();assert.equal(await readFile(path.join(root,'Shared/Shared.typ'),'utf8'),initial.replace('批注范围😀','准确修改😀'));
- assert.ok(await page.getByRole('button',{name:'保存',exact:true}).isDisabled());await click('重新读取与核对');await page.locator('#status').filter({hasText:'已读取当前稿'}).waitFor();await readReview();assert.match(await first.innerText(),/已接受/);
+ assert.ok(await page.getByRole('button',{name:'保存',exact:true}).isDisabled());await workspaceCommand(page,'file','重新读取与核对');await page.locator('#status').filter({hasText:'已读取当前稿'}).waitFor();await readReview();assert.match(await first.innerText(),/已接受/);
  await page.locator('#source [role=status]').filter({hasText:'预览对应当前草稿'}).waitFor({timeout:30000});
  await page.getByText(/词典与白名单/).click();await page.getByLabel('查找词语／符号',{exact:true}).fill('错别字');await page.getByLabel('建议替换为',{exact:true}).fill('正确字');await click('添加规则');await click('开始校对');
  await page.locator('#review [role=status]').filter({hasText:'发现'}).waitFor();await click('将所选结果加入批注');await commit();await readReview();assert.ok(await page.locator('#review [data-annotation-id]').count()>=3);
  result.cases.push('accepted suggestion commits source/state together; visible-text proofreading explicitly creates a batch of annotations');
  await page.screenshot({path:path.join(out,'review-proofread.png'),fullPage:true});
- await ctx.setOffline(true);await page.getByLabel('批注内容',{exact:true}).fill('离线讨论草稿😀');await ctx.setOffline(false);await page.reload();await page.getByLabel('选择批注对象').waitFor();await readReview(page,'读取批注');assert.equal(await page.getByLabel('批注内容',{exact:true}).inputValue(),'离线讨论草稿😀');
+ await ctx.setOffline(true);await page.getByLabel('批注内容',{exact:true}).fill('离线讨论草稿😀');await ctx.setOffline(false);await page.reload();await workspaceCommand(page,'review','批注');await page.getByLabel('选择批注对象').waitFor();await readReview(page,'读取批注');assert.equal(await page.getByLabel('批注内容',{exact:true}).inputValue(),'离线讨论草稿😀');
  result.cases.push('offline annotation input survives reload in actor-scoped tab recovery storage');
  const card=page.locator('#review [data-annotation-id]').first();await card.getByRole('textbox').fill('丢响应回复');await card.getByRole('button',{name:'准备回复',exact:true}).click();
  let pending;await page.route('**/api/hosted/review/commit',async route=>{pending=route.request().postDataJSON();const response=await route.fetch();assert.equal(response.status(),200);await route.abort('failed');});
  await click('确认提交批注操作');await page.waitForFunction(()=>Object.keys(sessionStorage).some(k=>k.startsWith('weftext-hosted-review:')&&JSON.parse(sessionStorage[k]).pending));await page.waitForTimeout(500);await page.unroute('**/api/hosted/review/commit');
- await page.reload();await page.getByLabel('选择批注对象').waitFor();await readReview(page,'读取批注');await click('查询原批注操作');await page.locator('#review').getByText('原批注操作已提交。请重新读取批注；正文变更仍须与个人草稿核对。',{exact:true}).waitFor();
+ await page.reload();await workspaceCommand(page,'review','批注');await page.getByLabel('选择批注对象').waitFor();await readReview(page,'读取批注');await click('查询原批注操作');await page.locator('#review').getByText('原批注操作已提交。请重新读取批注；正文变更仍须与个人草稿核对。',{exact:true}).waitFor();
  assert.equal((await api('/api/hosted/review/operation',{resource:'shared',operationId:pending.operationId},'alice')).status,'committed');await readReview();assert.equal((await page.locator('#review').innerText()).split('丢响应回复').length-1,1);
  result.cases.push('lost commit response and reload recover the original operation once, with no duplicate reply');
  let release,observed;const held=new Promise(r=>observed=r),resume=new Promise(r=>release=r);await page.route('**/api/hosted/review/read',async route=>{const response=await route.fetch();assert.equal(response.status(),200);observed();await resume;await route.fulfill({response});});
  await click('重新读取批注');await held;await changePolicy(users=>users.alice.grants.shared.annotations={});await page.locator('#status').filter({hasText:'缓存已清除'}).waitFor({timeout:12000});release();await pause(400);
- assert.equal(await page.locator('#review').isHidden(),true);assert.deepEqual(await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('weftext-hosted-review:'))),[]);
+ assert.equal(await page.locator('#review').isHidden(),true);assert.equal(await page.locator('#review').evaluate(host=>host.hidden),true);assert.deepEqual(await page.evaluate(()=>Object.keys(sessionStorage).filter(k=>k.startsWith('weftext-hosted-review:'))),[]);
  assert.ok((await api('/api/hosted/review/read',{resource:'shared'},'bob')).annotations.length>=3);result.cases.push('revocation clears review drafts/results and rejects held late delivery while the other actor remains authorized');
  await page.unroute('**/api/hosted/review/read');
  let releasePoll, observedPoll, holdPoll=true;const heldPoll=new Promise(r=>observedPoll=r),resumePoll=new Promise(r=>releasePoll=r);
  await page.route('**/api/hosted/me',async route=>{if(!holdPoll){await route.continue();return;}holdPoll=false;const response=await route.fetch();assert.equal(response.status(),200);observedPoll();await resumePoll;await route.fulfill({response});});
  await changePolicy(users=>users.alice.grants.shared.history=true);await Promise.race([heldPoll,pause(12000).then(()=>{throw new Error('authorization poll was not observed');})]);
- await click('退出并清除本页缓存');await page.getByLabel('访问凭据',{exact:true}).fill(token.bob);await click('连接');await page.getByLabel('选择批注对象').waitFor();await readReview(page,'读取批注');
+ await workspaceCommand(page,'file','退出并清除本页缓存');await page.getByLabel('访问凭据',{exact:true}).fill(token.bob);await click('连接');await workspaceCommand(page,'review','批注');await page.getByLabel('选择批注对象').waitFor();await readReview(page,'读取批注');
  const currentReply=page.locator('#review [data-annotation-id]').first().getByRole('textbox');await currentReply.fill('新用户当前未提交回复');releasePoll();await pause(500);
  assert.equal(await currentReply.inputValue(),'新用户当前未提交回复');assert.match(await page.locator('#status').innerText(),/bob/);
  assert.equal(await page.evaluate(()=>JSON.parse(sessionStorage.getItem('weftext-hosted-identity')).actor),'bob');

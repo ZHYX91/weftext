@@ -1,3 +1,4 @@
+import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 // Real embedded-client Mermaid acceptance over an owned ordinary document.
 // No mocked host, injected application state, Vite server or native Office.
@@ -311,14 +312,14 @@ try {
   })().catch(error => { (result.responseObserverErrors ??= []).push(String(error)); })); });
   step('open-original');
   await page.goto(base + '/#token=' + token);
-  await click('源码'); await surface().waitFor();
+  await workspaceMode(page, '源码'); await surface().waitFor();
   await page.waitForFunction(expected => [...document.querySelectorAll('.source-host .cm-line')].map(line => line.textContent).join('\n') === expected, initialSource);
   await page.getByText('草稿预览已更新', { exact: true }).waitFor();
   await unchangedOriginal();
   await passed('Actual embedded app opens an owned ordinary Typst document with its original source and live toolbar.');
 
   step('cancel-preview-render');
-  await click('Mermaid 图表'); await dialog().waitFor();
+  await workspaceCommand(page, 'insert', 'Mermaid 图表'); await dialog().waitFor();
   await dialog().getByLabel('Mermaid 源码', { exact: true }).fill(mermaidSource);
   await dialog().getByLabel('PNG 图片宽度（像素）', { exact: true }).fill('960');
   const cancelledPreview = await renderCurrent();
@@ -331,7 +332,7 @@ try {
   assert.equal(draftWrites.every(write => write.source === initialSource), true, 'Preview/cancel must not change the real app Draft');
   await unchangedOriginal();
   step('reopen-cancelled-input');
-  await click('Mermaid 图表');
+  await workspaceCommand(page, 'insert', 'Mermaid 图表');
   await dialog().waitFor();
   assert.equal(await dialog().getByLabel('Mermaid 源码', { exact: true }).inputValue(), mermaidSource);
   assert.equal(await dialog().locator('.diagram-preview img').count(), 0);
@@ -389,10 +390,10 @@ try {
   await writeFile(path.join(output, 'saved-native.typ'), await readOwnedFile());
   const opensBefore = openReads.length;
   step('reload-saved-file');
-  await page.reload(); await click('源码'); await surface().waitFor();
+  await page.reload(); await workspaceMode(page, '源码'); await surface().waitFor();
   await page.getByText('草稿预览已更新', { exact: true }).waitFor();
   step('reopen-saved-editable-source');
-  await click('Mermaid 图表');
+  await workspaceCommand(page, 'insert', 'Mermaid 图表');
   await dialog().waitFor();
   const choose = dialog().getByLabel('图表位置', { exact: true });
   assert.equal(await choose.locator('option').count(), 2);

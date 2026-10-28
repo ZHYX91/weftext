@@ -3,12 +3,13 @@
 The product lock is acquired before invoking Cargo (which owns its own lock).
 This is a cache hint, not acceptance evidence or a replacement for Cargo's
 feature/profile/unit fingerprints. Missing, interrupted or changed hints force
-only local/path package entry points; registry dependencies remain Cargo-owned.
+local/path entries and affected registry parents; unrelated registry units stay warm.
 """
 from contextlib import contextmanager
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -288,6 +289,128 @@ class CargoCache:
         except (OSError, ValueError, TypeError, KeyError):
             return False
 
+    def _invalidate_local_fingerprints(self, inputs, forced, metadata, command):
+        # Cargo can retain target-relative dep-info paths into a previous frozen
+        # source copy. Touching the new entry then cannot dirty that old unit.
+        # Cargo explicitly supports an empty short fingerprint after a failed
+        # rebuild: it compares unequal and requires compilation. Invalidate only
+        # generated short hashes for unqualified locals and affected parents, never
+        # source copies, dependency outputs or the whole shared target.
+        affected = {inputs[key]['id'] for key in forced}
+        # Cargo computes filesystem freshness before running jobs. Forcing a
+        # local rebuild without changing its structural fingerprint can leave
+        # an already-fresh registry parent referring to replaced Rust metadata.
+        # Rebuild precisely the reverse dependency closure, not all registry
+        # dependencies. Unrelated registry packages keep Cargo's warm outputs.
+        nodes = metadata.get('resolve', {}).get('nodes', [])
+        while True:
+            parents = {node['id'] for node in nodes if affected.intersection(node['dependencies'])}
+            if parents.issubset(affected):
+                break
+            affected.update(parents)
+        names = {package['name'] for package in metadata['packages'] if package['id'] in affected}
+        for name in names:
+            if len({package['id'] for package in metadata['packages'] if package['name'] == name}) != 1:
+                raise ValueError('Cannot invalidate ambiguous local/registry package fingerprints')
+        policy = re.compile(r'(?:' + '|'.join(re.escape(name) for name in sorted(names)) + r')-[0-9a-f]{16}')
+        if not names:
+            return affected
+        if '..' in self.target.parts or is_reparse(self.target.lstat()):
+            raise ValueError('Cargo fingerprint target is not a qualified ordinary directory')
+        markers = []
+        # Do not glob the target: it also owns frozen public source copies.
+        # Only Cargo's selected host/target profile locations are writable.
+        profile = 'debug'
+        targets = []
+        configured = self.environment.get('CARGO_BUILD_TARGET')
+        if configured:
+            targets.append(configured)
+        iterator = iter(command[2:])
+        explicit_target = False
+        for argument in iterator:
+            if argument == '--':
+                break
+            if argument == '--release':
+                profile = 'release'
+            elif argument == '--profile' or argument.startswith('--profile='):
+                profile = next(iterator) if argument == '--profile' else argument.partition('=')[2]
+                profile = {'dev': 'debug', 'test': 'debug', 'bench': 'release'}.get(profile, profile)
+            elif argument == '--target' or argument.startswith('--target='):
+                if not explicit_target:
+                    targets = []
+                    explicit_target = True
+                targets.append(next(iterator) if argument == '--target' else argument.partition('=')[2])
+        folders = [Path(profile)]
+        for target in targets:
+            if target.endswith('.json'):
+                target = Path(target).stem
+            folders.append(Path(target) / profile)
+        if any(not re.fullmatch(r'[A-Za-z0-9_-]+', part) for folder in folders for part in folder.parts):
+            raise ValueError('Unsupported Cargo fingerprint target/profile layout')
+        roots = sorted({self.target / folder / '.fingerprint' for folder in folders})
+        for root in roots:
+            if not root.exists():
+                continue
+            current = self.target
+            for part in root.relative_to(self.target).parts:
+                current /= part
+                if is_reparse(current.lstat()):
+                    raise ValueError('Cargo fingerprint path is a reparse point')
+            for directory in root.iterdir():
+                if not policy.fullmatch(directory.name):
+                    continue
+                if is_reparse(directory.lstat()) or not directory.is_dir():
+                    raise ValueError('Cargo local fingerprint directory is not an ordinary directory')
+                for marker in directory.iterdir():
+                    if marker.suffix or not marker.with_name(marker.name + '.json').is_file():
+                        continue
+                    data = read_checked(marker, self.target, max_bytes=16)
+                    if data and not re.fullmatch(b'[0-9a-f]{16}', data):
+                        raise ValueError('Unsupported Cargo local short fingerprint')
+                    sidecar = parse_json(read_checked(marker.with_name(marker.name + '.json'), self.target,
+                                                      max_bytes=1024**2))
+                    if not isinstance(sidecar, dict):
+                        raise ValueError('Unsupported Cargo local fingerprint sidecar')
+                    info = marker.stat()
+                    if info.st_nlink != 1:
+                        raise ValueError('Cargo local fingerprint has multiple hard links')
+                    markers.append((marker, info.st_dev, info.st_ino, data))
+        # Validate every selected marker before writing any of them. Recheck the
+        # exact opened file so a substituted hard link cannot truncate source.
+        for marker, device, inode, data in markers:
+            if read_checked(marker, self.target, max_bytes=16) != data:
+                raise ValueError('Cargo local fingerprint changed before invalidation')
+            with marker.open('r+b') as stream:
+                opened = os.fstat(stream.fileno())
+                if (opened.st_dev, opened.st_ino, opened.st_nlink) != (device, inode, 1):
+                    raise ValueError('Cargo local fingerprint identity changed before invalidation')
+                if os.name == 'nt':
+                    import ctypes
+                    import msvcrt
+                    from ctypes import wintypes
+                    function = ctypes.WinDLL('kernel32', use_last_error=True).GetFinalPathNameByHandleW
+                    function.argtypes = [wintypes.HANDLE, wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD]
+                    function.restype = wintypes.DWORD
+                    buffer = ctypes.create_unicode_buffer(32768)
+                    length = function(msvcrt.get_osfhandle(stream.fileno()), buffer, len(buffer), 0)
+                    if not length or length >= len(buffer):
+                        raise OSError(ctypes.get_last_error(), 'Cannot qualify Cargo fingerprint write handle')
+                    actual = buffer.value
+                    if actual.startswith('\\\\?\\UNC\\'):
+                        actual = '\\\\' + actual[8:]
+                    elif actual.startswith('\\\\?\\'):
+                        actual = actual[4:]
+                    if Path(actual) != marker:
+                        raise ValueError('Cargo fingerprint write handle escaped its qualified path')
+                current = self.target
+                for part in (None, *marker.relative_to(self.target).parts):
+                    if part is not None:
+                        current /= part
+                    if is_reparse(current.lstat()):
+                        raise ValueError('Cargo fingerprint changed to a reparse path')
+                stream.truncate(0)
+        return affected
+
     def run(self, command, *, on_message=None, output=None):
         if self.lock is None or len(command) < 2 or command[1] not in ('build', 'test', 'check', 'clippy'):
             raise ValueError('A supported compile command requires the held product target lock')
@@ -312,7 +435,10 @@ class CargoCache:
                  for tool in (command[0], self.environment.get('RUSTC', 'rustc'))]
         environment = {key: value for key, value in self.environment.items()
                        if key.startswith(('RUST', 'CARGO_BUILD_', 'CARGO_TARGET_')) and key != 'CARGO_TARGET_DIR'}
-        mode = digest_json({'command': command, 'tools': tools, 'environment': environment,
+        mode_command = command
+        if command[1] == 'test' and '--' in command[2:]:
+            mode_command = command[:command.index('--', 2)]
+        mode = digest_json({'command': mode_command, 'tools': tools, 'environment': environment,
                             'sourceRoot': str(self.root.resolve(strict=True))})
         state = self._state()
         previous = state['modes'].get(mode, {})
@@ -328,6 +454,7 @@ class CargoCache:
         # A failed or interrupted command leaves pending, never old A-qualified
         # state after partially compiling B. The next attempt is conservative.
         self._write({'schemaVersion': 1, 'pending': True, 'modes': {}})
+        affected = self._invalidate_local_fingerprints(inputs, forced, metadata, command) or set()
         for key in forced:
             for entry in inputs[key]['entries']:
                 before = read_checked(entry, self.root)
@@ -364,6 +491,11 @@ class CargoCache:
             if {key: item['sha256'] for key, item in current.items()} != {key: item['sha256'] for key, item in inputs.items()}:
                 raise ValueError('Compiler inputs changed during Cargo; source hint remains pending')
             successful = {}
+            local_ids = {item['id'] for item in inputs.values()}
+            for message in artifacts:
+                if (message['package_id'] in affected - local_ids
+                        and message.get('fresh') is not False):
+                    raise ValueError('Cargo reused an unqualified reverse dependency unit: ' + message['package_id'])
             for key, item in inputs.items():
                 messages = [message for message in artifacts if message['package_id'] == item['id']]
                 if not messages:
@@ -385,7 +517,8 @@ class CargoCache:
             while len(modes) > 16:
                 del modes[next(iter(modes))]
             self._write({'schemaVersion': 1, 'pending': False, 'modes': modes})
-            return {'artifacts': artifacts, 'forced': sorted(forced), 'mode': mode}
+            return {'artifacts': artifacts, 'forced': sorted(forced), 'mode': mode,
+                    'rebuildPackages': sorted(affected)}
         finally:
             if log:
                 log.close()

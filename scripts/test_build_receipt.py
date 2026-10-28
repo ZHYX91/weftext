@@ -3,6 +3,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import shutil
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -62,6 +63,7 @@ class ReceiptBoundary(unittest.TestCase):
     def test_roundtrip_actual_pe_roles_no_passes_and_mtime_is_not_identity(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(directory)
+            self.assertFalse((fixture.root / '.git').exists())
             original = fixture.path.read_bytes()
             os.utime(fixture.root / 'README.md', (1, 1))
             result = fixture.load()
@@ -69,7 +71,23 @@ class ReceiptBoundary(unittest.TestCase):
             self.assertEqual(result.binaries, fixture.artifacts.binaries)
             self.assertEqual(result.receipt_path, fixture.path)
             self.assertEqual(original, fixture.path.read_bytes())
+            self.assertFalse((fixture.root / '.git').exists())
             self.assertFalse(any('pass' in key.lower() for key in json.loads(original)))
+
+    def test_identical_gitless_copy_cannot_load_another_source_roots_receipt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fixture = Fixture(directory)
+            other = Path(directory) / 'another-source'
+            shutil.copytree(fixture.root, other)
+            self.assertFalse((other / '.git').exists())
+            self.assertEqual(snapshot(other, [fixture.target]), fixture.artifacts.source)
+            self.assertEqual(snapshot(other / 'app/dist'), fixture.artifacts.frontend)
+            original = fixture.path.read_bytes()
+            with patch.object(receipt, 'qualify', return_value=fixture.qualification) as qualify:
+                with self.assertRaisesRegex(ValueError, 'Receipt version, checkout, target, batch or profile does not match'):
+                    receipt.load_receipt(fixture.path, other, fixture.metadata, 'debug', {}, None)
+            qualify.assert_not_called()
+            self.assertEqual(fixture.path.read_bytes(), original)
 
     def test_every_source_and_frontend_change_requires_new_batch(self):
         mutations = (

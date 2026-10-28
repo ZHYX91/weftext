@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::BTreeSet;
 use std::os::windows::fs::OpenOptionsExt;
 
 const ACTOR: &str = "deployment:alice:content-import";
@@ -134,34 +135,56 @@ impl Fixture {
         }
     }
     fn bibliography(&mut self, operation: &str) -> ActorFeatureStatus {
-        let request = OperationRequest { operation_id: fresh(), root: display(&self.root),
-            intent: OperationIntent::ImportBibliography { parent: display(&self.root), name: "Papers".into(), format: "cslJson".into(),
+        self.bibliography_at(&self.root.clone(), operation, "Papers")
+    }
+    fn bibliography_at(&mut self, root: &Path, operation: &str, slot: &str) -> ActorFeatureStatus {
+        let request = OperationRequest { operation_id: fresh(), root: display(root),
+            intent: OperationIntent::ImportBibliography { parent: display(root), name: slot.into(), format: "cslJson".into(),
                 bytes: br#"[{"type":"article-journal","id":"same","title":"One"},{"type":"article-journal","id":"same","title":"Two"}]"#.to_vec(), allow_losses: false } };
         self.core
-            .with_actor_for_root(ACTOR, &self.root, |core| {
+            .with_actor_for_root(ACTOR, root, |core| {
                 core.actor_feature_prepare_content_import(
-                    "Papers",
+                    slot,
                     operation,
                     FP,
                     request,
                     serde_json::json!({"kind":"bibliographyImport"}),
                     &[],
-                    "Papers",
+                    slot,
                 )
             })
             .unwrap()
     }
     fn commit(&mut self, operation: &str, prepared: &ActorFeatureStatus) {
+        self.commit_at(&self.root.clone(), "Papers", operation, prepared);
+    }
+    fn commit_at(
+        &mut self,
+        root: &Path,
+        slot: &str,
+        operation: &str,
+        prepared: &ActorFeatureStatus,
+    ) {
         self.core
-            .with_actor_for_root(ACTOR, &self.root, |core| {
+            .with_actor_for_root(ACTOR, root, |core| {
                 core.actor_feature_commit_with_losses(
-                    "Papers",
+                    slot,
                     operation,
                     prepared.plan_id.as_ref().unwrap(),
                     true,
                 )
             })
             .unwrap();
+    }
+    fn producer(&mut self, root: &Path, slot: &str, operation: &str) -> String {
+        self.core
+            .with_actor_for_root(ACTOR, root, |core| {
+                Ok(core
+                    .actor_feature_record(slot, operation)?
+                    .unwrap()
+                    .core_operation_id)
+            })
+            .unwrap()
     }
     fn restart(&mut self) {
         let replacement = Core::new(self.temp.path().join(fresh())).unwrap();
@@ -374,6 +397,216 @@ fn content_import_native_keeps_original_plan_identity_losses_and_future_slot_bin
                 .unwrap()
                 .owner,
             member.owner
+        );
+    }
+}
+
+#[test]
+fn content_import_slot_listing_does_not_read_unrelated_original_commits() {
+    let mut f = Fixture::new();
+    let root = f.root.clone();
+    let operation = fresh();
+    let prepared = f.bibliography(&operation);
+    f.commit(&operation, &prepared);
+    let members = f
+        .core
+        .content_import_slot_members_at(&root, &root.join("Papers"), "Papers")
+        .unwrap();
+    let before = f.core.operations.keys().cloned().collect::<BTreeSet<_>>();
+    f.core
+        .create_note_fixture(&root, &root, "Ordinary")
+        .unwrap();
+    let mut unrelated = f
+        .core
+        .operations
+        .keys()
+        .filter(|id| !before.contains(*id))
+        .cloned()
+        .collect::<Vec<_>>();
+    assert!(!unrelated.is_empty());
+    let other_operation = fresh();
+    let other = f.bibliography_at(&root, &other_operation, "OtherSlot");
+    f.commit_at(&root, "OtherSlot", &other_operation, &other);
+    unrelated.push(f.producer(&root, "OtherSlot", &other_operation));
+    let foreign_root = f.temp.path().join("ForeignLibrary");
+    f.core.create_library(&foreign_root).unwrap();
+    let foreign_operation = fresh();
+    let foreign = f.bibliography_at(&foreign_root, &foreign_operation, "Papers");
+    f.commit_at(&foreign_root, "Papers", &foreign_operation, &foreign);
+    unrelated.push(f.producer(&foreign_root, "Papers", &foreign_operation));
+    // Real committed non-import, other-slot and foreign-workspace records are
+    // unreadable. The selected slot's symbols remain independently available.
+    let locks = unrelated
+        .iter()
+        .map(|id| {
+            OpenOptions::new()
+                .read(true)
+                .share_mode(0)
+                .open(f.core.journal_path(id, "commit"))
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        f.core
+            .content_import_slot_members_at(&root, &root.join("Papers"), "Papers")
+            .unwrap()
+            .len(),
+        members.len()
+    );
+    assert!(
+        f.core
+            .content_import_slot_members_at(&root, &root.join("AbsentSlot"), "AbsentSlot")
+            .unwrap()
+            .is_empty()
+    );
+    let path = root.join("Papers").join(&members[0].relative_path);
+    // No matching producer must remain an ownership failure, rather than an
+    // I/O failure from another slot. This stops before general node admission.
+    assert_eq!(
+        f.core
+            .qualified_content_import_node_at(&root, &path, "AbsentSlot", &members[0].owner.node_id)
+            .err()
+            .unwrap()
+            .code,
+        "identityPending"
+    );
+    drop(locks);
+    assert_eq!(
+        f.core
+            .qualified_content_import_node_at(&root, &path, "Papers", &members[0].owner.node_id)
+            .unwrap()
+            .owner,
+        members[0].owner
+    );
+}
+
+#[test]
+fn content_import_selected_commit_and_births_are_rechecked_after_success() {
+    let mut f = Fixture::new();
+    let operation = fresh();
+    let prepared = f.bibliography(&operation);
+    f.commit(&operation, &prepared);
+    let root = f.root.clone();
+    let producer = f.producer(&root, "Papers", &operation);
+    let member = f
+        .core
+        .content_import_slot_members_at(&root, &root.join("Papers"), "Papers")
+        .unwrap()
+        .remove(0);
+    let path = root.join("Papers").join(&member.relative_path);
+    for (suffix, damaged) in [
+        ("commit", b"{broken original commit".as_slice()),
+        ("births", b"[]".as_slice()),
+    ] {
+        let evidence = f.core.journal_path(&producer, suffix);
+        let original = fs::read(&evidence).unwrap();
+        fs::write(&evidence, damaged).unwrap();
+        assert!(
+            f.core
+                .content_import_slot_members_at(&root, &root.join("Papers"), "Papers")
+                .is_err()
+        );
+        assert!(
+            f.core
+                .qualified_content_import_node_at(&root, &path, "Papers", &member.owner.node_id)
+                .is_err()
+        );
+        assert_eq!(fs::read(&evidence).unwrap(), damaged);
+        fs::write(&evidence, original).unwrap();
+        assert_eq!(
+            f.core
+                .content_import_slot_members_at(&root, &root.join("Papers"), "Papers")
+                .unwrap()
+                .len(),
+            2
+        );
+        assert_eq!(
+            f.core
+                .qualified_content_import_node_at(&root, &path, "Papers", &member.owner.node_id)
+                .unwrap()
+                .owner,
+            member.owner
+        );
+    }
+}
+
+#[test]
+fn content_import_selected_malformed_mutations_are_not_filtered_as_absent() {
+    let mut f = Fixture::new();
+    let root = f.root.clone();
+    let operation = fresh();
+    let prepared = f.bibliography(&operation);
+    let producer = f.producer(&root, "Papers", &operation);
+    let original = f.core.operations[&producer]
+        .transaction
+        .as_ref()
+        .unwrap()
+        .mutation
+        .clone();
+    let mut existing_target = original.clone();
+    let Mutation::CreateTree {
+        existing_target: existing,
+        ..
+    } = &mut existing_target
+    else {
+        panic!("fixture is not a native CreateTree producer");
+    };
+    *existing = true;
+    let malformed = [Mutation::Update { files: vec![] }, existing_target];
+    for mutation in &malformed {
+        f.core
+            .operations
+            .get_mut(&producer)
+            .unwrap()
+            .transaction
+            .as_mut()
+            .unwrap()
+            .mutation = mutation.clone();
+        assert!(
+            f.core
+                .content_import_slot_members_at(&root, &root.join("Papers"), "Papers")
+                .unwrap()
+                .is_empty()
+        );
+    }
+    f.core
+        .operations
+        .get_mut(&producer)
+        .unwrap()
+        .transaction
+        .as_mut()
+        .unwrap()
+        .mutation = original;
+    f.commit(&operation, &prepared);
+    let member = f
+        .core
+        .content_import_slot_members_at(&root, &root.join("Papers"), "Papers")
+        .unwrap()
+        .remove(0);
+    let path = root.join("Papers").join(&member.relative_path);
+    for mutation in malformed {
+        f.core
+            .operations
+            .get_mut(&producer)
+            .unwrap()
+            .transaction
+            .as_mut()
+            .unwrap()
+            .mutation = mutation;
+        assert_eq!(
+            f.core
+                .content_import_slot_members_at(&root, &root.join("Papers"), "Papers")
+                .unwrap_err()
+                .code,
+            "operationConflict"
+        );
+        assert_eq!(
+            f.core
+                .qualified_content_import_node_at(&root, &path, "Papers", &member.owner.node_id)
+                .err()
+                .unwrap()
+                .code,
+            "operationConflict"
         );
     }
 }

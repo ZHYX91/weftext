@@ -1,3 +1,4 @@
+import { PERSONAL_COPY_ONLY_SLOT, readPersonalCopySeed } from "./personal-input-recovery";
 import { DocumentNotesInputTracker } from "./personal-input-text";
 import { personalInputId } from "./source-input-origin";
 import { registerAuthorInputLease, type AuthorInputContext, type AuthorInputLease, type AuthorInputOwner, type AuthorInputSession, type AuthorInputSink, type AuthorProducerCheckpoint, type AuthorProducerSnapshot, type AuthorProducerState, type ValuePath } from "./author-input";
@@ -144,16 +145,23 @@ export class PersonalControlInput {
       for (const type of ["beforeinput", "input", "compositionstart", "compositionupdate", "compositionend", "change"]) control.addEventListener(type, handler, true);
     };
     return {
-      bind: (control, slotName, path = []) => {
+      bind: (control, slotName, path = [], options) => {
         if (!live()) throw new Error("作者输入目标已退休或冻结，不能把旧控件绑到新目标。");
+        const copy = options?.personalCopy ? readPersonalCopySeed(options.personalCopy, {
+          audience, owner: capturedOwner, slot: slotName, path, value: control.value,
+        }) : undefined;
+        if ((slotName === PERSONAL_COPY_ONLY_SLOT) !== !!copy || copy && (!suppliedSink || owner.kind === "capture")) throw new Error("本人副本绑定缺少准确的副本 owner。");
         const previousControl = this.tracked.get(control);
         if (previousControl?.composition || previousControl?.edit) { retireState(previousControl); throw new Error("原生输入尚未落定，请使用新控件承接新的作者目标。"); }
         const key = JSON.stringify([slotName, path]); let slot = slots.get(key);
-        if (!slot) { if (slots.size + producer.choices.size >= 1024) throw new Error("作者控件超过预算。"); slot = { id: personalInputId(), revision: 0, slot: slotName, path: immutable(structuredClone(path)) }; slots.set(key, slot); }
+        if (copy && (previousControl || slot)) throw new Error("本人副本初始绑定需要新的控件与 producer slot。");
+        if (!slot) { if (slots.size + producer.choices.size >= 1024) throw new Error("作者控件超过预算。"); slot = { id: copy?.id ?? personalInputId(), revision: copy?.revision ?? 0, slot: slotName, path: immutable(structuredClone(path)) }; slots.set(key, slot); }
         assertBinding(control, slot.id);
         const old = slot.state; if (previousControl && previousControl !== old) retireState(previousControl); if (old) retireState(old);
         const sameValue = old?.lastValue === control.value;
-        const state: Tracked = { producer, token: {}, control, context: immutable({ audience, epoch, owner: capturedOwner, slot: slotName, path: slot.path }), slot, tracker: sameValue ? old!.tracker.copy() : new DocumentNotesInputTracker(control.value), lastValue: control.value, inputObserved: false, fallback: old ? [...old.fallback, ...(!sameValue && old.tracker.recoveryInput() ? [old.tracker.recoveryInput()] : [])] : [], current: live, leaseRevision, sink, unregister() {} };
+        const initial = copy ? new DocumentNotesInputTracker("") : undefined;
+        if (initial) initial.input(copy!.text, { from: 0, to: 0, inputType: "insertText" });
+        const state: Tracked = { producer, token: {}, control, context: immutable({ audience, epoch, owner: capturedOwner, slot: slotName, path: slot.path }), slot, tracker: initial ?? (sameValue ? old!.tracker.copy() : new DocumentNotesInputTracker(control.value)), lastValue: control.value, inputObserved: false, fallback: old ? [...old.fallback, ...(!sameValue && old.tracker.recoveryInput() ? [old.tracker.recoveryInput()] : [])] : [], current: live, leaseRevision, sink, unregister() {} };
         slot.state = state; this.tracked.set(control, state); state.unregister = registerAuthorInputLease(control, () => this.capture(state)); guard(control); this.revision++;
         return () => { if (this.tracked.get(control) === state) retireState(state); };
       },

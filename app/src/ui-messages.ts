@@ -1,5 +1,107 @@
 // Generated from assets/ui-messages.json. Run node scripts/generate_ui_messages.mjs.
 export const zhCN = {
+  "workspaceViews.currentDocumentGraph": "当前文档关系图",
+  "workspaceViews.parentFolder": "上级文件夹",
+  "heading.waitForCurrentProjection": "等待当前草稿预览完成，大纲会自动更新。",
+  "heading.openDocumentForOutline": "打开文档以查看大纲。",
+  "heading.outlineBasisChanged": "大纲已过期，等待当前预览完成后自动更新。",
+  "heading.generatedItemSourceUnavailable": "此大纲项没有可定位的本篇源码或当前显示位置。",
+  "heading.outlineMatchCount": "{p0} 个大纲项命中",
+  "heading.outlineEntrySummary": "{p0}：{p1} 个直接子项／{p2} 个后代子项",
+  "heading.searchOutline": "搜索标题与题注",
+  "heading.outlineSearchPlaceholder": "搜索标题或题注",
+  "workPanel.cancelled": "已取消",
+  "workActivity.details": "查看详情",
+  "workActivity.originalUnavailable": "当前窗口已不再持有这次原操作的详情，请从原恢复入口查看。",
+  "navigationLayout.restorePaneWidths": "恢复侧栏宽度",
+  "workspaceDock.leftSidebar": "左侧栏",
+  "workspaceDock.rightSidebar": "右侧栏",
+  "workspaceDock.viewActions": "视图布局操作",
+  "workspaceDock.collapseGroup": "折叠分区",
+  "workspaceDock.expandGroup": "展开分区",
+  "workspaceDock.maximizeGroup": "最大化分区",
+  "workspaceDock.restoreGroups": "恢复分区",
+  "workspaceDock.hideView": "隐藏视图",
+  "workspaceDock.moveLeft": "移到左侧栏",
+  "workspaceDock.moveRight": "移到右侧栏",
+  "workspaceDock.splitAbove": "拆分到上方",
+  "workspaceDock.splitBelow": "拆分到下方",
+  "workspaceDock.previousGroup": "移到上方分区",
+  "workspaceDock.nextGroup": "移到下方分区",
+  "workspaceDock.mergePrevious": "合并到上方分区",
+  "workspaceDock.mergeNext": "合并到下方分区",
+  "workspaceDock.resetLayout": "恢复默认布局",
+  "workspaceDock.waitComposition": "请先完成当前输入，再调整布局。",
+  "workspaceDock.emptySide": "从另一侧拖入视图，或从视图菜单打开。",
+  "workspaceDock.groupResize": "调整分区高度",
+  "workspaceDock.resizeHint": "上／下方向键调整分区高度，Shift 加速；Enter 均分。",
+  "workPanel.label": "工作面板",
+  "workPanel.problems": "问题",
+  "workPanel.tasks": "任务",
+  "workPanel.results": "结果",
+  "workPanel.collapse": "收起工作面板",
+  "workPanel.expand": "展开工作面板",
+  "workPanel.resize": "调整工作面板高度",
+  "workPanel.resizeHint": "使用上／下方向键调整高度，Shift 加速，Home 最小，End 最大，Enter 恢复默认。",
+  "workPanel.height": "{p0} 像素高",
+  "workPanel.status": "工作面板：{p0} 个问题，{p1} 个待处理任务，{p2} 个结果",
+  "workPanel.tabCount": "{p0}（{p1}）",
+  "workPanel.problemsEmpty": "当前文档没有已报告的问题。",
+  "workPanel.tasksEmpty": "当前没有已报告的任务。",
+  "workPanel.resultsEmpty": "当前没有已生成的结果。",
+  "workPanel.running": "正在进行",
+  "workPanel.waiting": "等待处理",
+  "workPanel.failed": "失败",
+  "workPanel.succeeded": "完成",
+  "workPanel.error": "错误",
+  "workPanel.warning": "警告",
+  "workPanel.info": "提示",
+  "workPanel.progress": "已完成 {p0}%",
+  "workPanel.preferenceUnavailable": "工作面板布局偏好暂时无法保存，本次仍可使用。",
+  "heading.outlineList": "大纲列表",
+  "heading.mindMap": "标题导图",
+  "heading.headingsAndCaptions": "标题与题注",
+  "heading.headingsOnly": "仅标题",
+  "heading.captionsOnly": "仅题注",
+  "heading.itemKindHeading": "标题",
+  "heading.itemKindFigure": "图",
+  "heading.itemKindTable": "表",
+  "heading.itemKindEquation": "公式",
+  "heading.itemKindCode": "代码",
+  "heading.itemKindCaption": "题注",
+  "numberingPanel.effectiveSettings": "当前生效设置",
+  "numberingPanel.followNativeDocument": "遵循文档原生编号",
+  "numberingPanel.personalDefaultShown": "默认显示个人编号",
+  "numberingPanel.personalDefaultHidden": "默认隐藏个人编号",
+  "nodeContents.childNodes": "子节点",
+  "nodeContents.album": "相册",
+  "nodeContents.files": "文件",
+  "nodeContents.emptySection": "暂无项目",
+  "nodeContents.showMore": "显示更多",
+  "nodeContents.resourceUnavailable": "资源当前不可用，请刷新后重试。",
+  "nodeContents.readOnlyResource": "只读资源",
+  "inventory.resourceNotListed": "所选文件已不在当前文件夹的可浏览清单中，请刷新节点视图。",
+  "inventory.resourceReadChanged": "读取期间文件或所在目录发生变化，请刷新后重试。",
+  "inventory.resourceVersionChanged": "文件预览版本已变化，请刷新节点视图。",
+  "timeline.details": "比较与恢复…",
+  "timeline.scope": "当前文档的已保存版本",
+  "timeline.retry": "重新读取时间线",
+  "workspaceViews.files": "文件",
+  "workspaceViews.nodes": "节点",
+  "workspaceViews.outline": "大纲",
+  "workspaceViews.timeline": "时间线",
+  "workspaceViews.search": "搜索",
+  "workspaceViews.calendar": "日历",
+  "workspaceViews.people": "人员",
+  "workspaceViews.followDocument": "跟随当前文档",
+  "workspaceViews.pinnedFolder": "固定浏览位置",
+  "workspaceViews.chooseNode": "选择节点以浏览内容",
+  "workspaceViews.extensionsPending": "此扩展尚未实现。可在视图菜单中隐藏此选项卡。",
+  "workspaceViews.nodeGraph": "关系图",
+  "workspaceViews.refresh": "刷新视图",
+  "workspaceViews.openResource": "打开资源",
+  "workspaceViews.nodeSearch": "筛选节点内容",
+  "workspaceViews.resourceScope": "资源属于当前浏览的文件夹，按只读方式打开。",
   "app.title": "Weftext · 写作与知识",
   "app.hostedTitle": "Weftext · 远端写作",
   "locale.label": "界面语言",
@@ -36,11 +138,40 @@ export const zhCN = {
   "capture.persisting": "正在可靠保存恢复稿。",
   "capture.pending": "原操作结果尚未确认；恢复稿和原编号已保留。",
   "reminder.label": "任务提醒",
+  "reminder.activationTitle": "通知中的任务",
+  "reminder.activationEmpty": "此通知已没有可打开的有效任务。",
+  "reminder.activationLimited": "部分任务当前不可访问，请刷新后重试。",
+  "reminder.activationTask": "打开任务 {p0}",
+  "reminder.hostStatus": "本机提醒服务",
+  "reminder.hostStatusLoading": "正在读取本机提醒服务状态。",
+  "reminder.hostStatusUnavailable": "本机提醒服务状态读取失败；通知和调度是否可用尚未确认。",
+  "reminder.desktopInactive": "本次连接没有活动的桌面提醒服务，不会提交系统通知。",
+  "reminder.notificationUnavailable": "当前桌面环境不提供系统通知，提醒记录仍可在应用内查看。",
+  "reminder.notificationUnknown": "系统通知是否可用尚未确认。",
+  "reminder.notificationEnabled": "系统允许此应用提交通知；勿扰、锁屏等系统设置仍决定是否显示。",
+  "reminder.notificationDisabledForApplication": "系统设置已关闭 Weftext 通知；可在 Windows 通知设置中查看。",
+  "reminder.notificationDisabledForUser": "当前 Windows 用户已关闭系统通知。",
+  "reminder.notificationDisabledByPolicy": "系统策略禁止此应用发送通知。",
+  "reminder.notificationDisabledByManifest": "当前安装包没有可用的系统通知配置。",
+  "reminder.schedulingInactive": "提醒调度尚未启动。",
+  "reminder.schedulingRunning": "提醒调度正在运行。",
+  "reminder.schedulingPaused": "提醒调度已暂停，暂不提交新的系统通知。",
+  "reminder.schedulingRestricted": "提醒调度受限；请检查通知权限和下方的库或任务问题。",
+  "reminder.schedulingStopping": "提醒服务正在退出，不再接收新的通知提交。",
+  "reminder.scanIncomplete": "本轮提醒检查尚未完成，不能据此判断没有待办。",
+  "reminder.scopeIssues": "本轮提醒检查发现 {count} 项问题；部分库、任务或原通知结果需要核对。",
   "reminder.absolute": "独立时刻",
   "reminder.beforeDue": "截止前提醒",
   "reminder.dueDay": "截止日指定时间",
   "reminder.enabledDevice": "在本设备启用此提醒",
   "reminder.submitted": "系统已接受提醒；不代表用户已读。",
+  "reminder.submissionStartedAt": "系统通知调用开始（UTC）：{at}",
+  "reminder.submissionReturnedAt": "系统通知调用返回（UTC）：{at}",
+  "reminder.submissionElapsed": "调用单调耗时：{nanoseconds} ns",
+  "reminder.submissionReturnedSuccess": "系统通知调用返回成功；不代表用户已看到。",
+  "reminder.submissionReturnedFailure": "系统通知调用返回失败（HRESULT {hresult}）；此返回本身不能确定系统送达结果。",
+  "reminder.submissionObservationMissing": "没有实际系统通知调用的时间记录；账本确认时间不能替代调用时间。",
+  "reminder.ledgerConfirmedAt": "账本确认时间（UTC；可能来自后续系统历史核查）：{at}",
   "reminder.unknown": "系统提交结果未知，未盲目重发。",
   "reminder.unavailable": "当前条件不允许提交系统通知。",
   "reminder.missed": "有 {count} 项有效的错过提醒。",
@@ -1159,6 +1290,7 @@ export const zhCN = {
   "definitionProposal.originalRequestMissing": "没有原请求，只能查询原编号，不能制造新的重试输入。",
   "definitionProposal.insertedUnsaved": "新定义提案已插入当前正文草稿，共用 Undo；尚未保存，原 key 只分配一次。",
   "definitionProposal.originalCheckedNotApplied": "原定义提案已核对。当前依据或会话不同，请明确比较后恢复；未自动贴回正文。",
+  "personalInput.unknownOriginalRoute": "原保存的目标路由尚无可靠证明；原编号与本人文字保留。核对原请求前，不能查询、核定或再次保存到可能相同的笔记。",
   "personalInput.title": "本人未上传输入与原操作",
   "personalInput.help": "这里只保存本人新增文字、原基线位置与原操作编号，不含旧正文、预览或凭据。先打开获权的原笔记；仅在原身份与准确基线一致时可恢复为草稿。表单等无法映射的文字只供单独取回，可能已经应用或撤销，不代表当前正文。",
   "personalInput.textLabel": "本人新增输入",
@@ -3452,6 +3584,7 @@ export const zhCN = {
   "knowledge.openCurrentNoteLocalGraph": "打开当前笔记局部图",
   "knowledge.citationBasisChanged": "引用依据已变化，请刷新后重试。",
   "knowledge.readingAuthorizedKnowledge": "正在读取当前获权知识信息…",
+  "knowledge.readBasisChanged": "知识读取依据或库环境已变化，未采用旧结果；请刷新重试。",
   "knowledge.scanFailedLastResultStale": "扫描失败，最近结果已过期。{p0} 搜索与个人规则保留，请刷新重试。",
   "export.formatDoc": "旧版 Word 文档（.doc，外部转换）",
   "export.formatWps": "金山文字（.wps，外部转换）",
@@ -7491,7 +7624,7 @@ export const zhCN = {
   "capture.selectTarget": "使用此目标",
   "capture.keepClose": "关闭并保留恢复稿",
   "capture.advanced": "类型、属性与模板",
-  "capture.restoreDraft": "恢复已有记录",
+  "capture.restoreDraft": "保留当前稿并打开所选原稿",
   "capture.newDraft": "另记一条",
   "capture.rawRetained": "原文已保留，尚未绑定到新字段",
   "capture.targetRequired": "先选择现有资料库，正文输入会保留",
@@ -7864,7 +7997,8 @@ export const zhCN = {
   "error.data.schema.unionRequiresExactlyOneBranchMember": "联合类型要求恰好一个分支成员。",
   "error.data.schema.unionTagMissing": "联合类型标签缺失。",
   "error.data.schema.unionTagAmbiguous": "联合类型标签不唯一。",
-  "error.data.schema.unionNativeDomainAmbiguous": "联合类型的原生值域不唯一。",
+  "error.data.schema.unionNativeDomainNoMatch": "该值的类型不符合联合类型的任何分支。",
+  "error.data.schema.unionNativeDomainAmbiguous": "该值的类型同时匹配多个联合类型分支。",
   "error.data.schema.invalidUnionDiscriminator": "联合类型判别器无效。",
   "error.data.schema.unsupportedSchemaVersion": "不支持此 Schema 版本。",
   "error.data.schema.typeAliasUnresolved": "类型别名尚未解析。",
@@ -10181,11 +10315,163 @@ export const zhCN = {
   "error.core.posix.ordinaryEntryRequired": "不支持符号链接和特殊文件系统条目。",
   "dataPanel.discardAllFormChanges": "放弃所有笔记及资料库的表单修改",
   "queryEdit.discardAllFieldInputs": "放弃所有结果行的字段修改",
-  "desktop.residentEnabled": "已开启“关闭窗口后继续常驻”。关闭资料库或碎片窗口后，Weftext 会继续在托盘运行；本设备已启用且可用的任务提醒会继续调度。要停止后台运行和提醒调度，请从托盘选择“退出 Weftext”。登录时启动、启动时打开界面仍分别设置，本次操作不会更改它们。"
+  "desktop.residentEnabled": "已开启“关闭窗口后继续常驻”。关闭资料库或碎片窗口后，Weftext 会继续在托盘运行；本设备已启用且可用的任务提醒会继续调度。要停止后台运行和提醒调度，请从托盘选择“退出 Weftext”。登录时启动、启动时打开界面仍分别设置，本次操作不会更改它们。",
+  "capture.savedDrafts": "已保留的碎片草稿",
+  "capture.refreshDrafts": "刷新原稿列表",
+  "capture.startOtherDraft": "保留此稿，开始或恢复空白新稿",
+  "capture.newDraftHelp": "新稿不携带当前内容，打开后请另选资料库。失败后再次操作会恢复同一新稿，不另建替代稿。可从列表回到原稿。",
+  "capture.retainedDraft": "草稿",
+  "capture.unselectedTarget": "未选择目标",
+  "workspaceRibbon.label": "文档功能区",
+  "workspaceRibbon.file": "文件",
+  "workspaceRibbon.home": "开始",
+  "workspaceRibbon.insert": "插入",
+  "workspaceRibbon.knowledge": "资料",
+  "workspaceRibbon.review": "审阅",
+  "workspaceRibbon.view": "视图",
+  "workspaceRibbon.collapse": "收起功能区",
+  "workspaceRibbon.expand": "展开功能区",
+  "localChrome.files": "打开与创建",
+  "localChrome.document": "当前文档",
+  "localChrome.preferences": "设置",
+  "localChrome.panes": "面板",
+  "localChrome.blocks": "内容块",
+  "localChrome.note": "笔记与查询",
+  "localChrome.exchange": "导入与输出",
+  "localChrome.library": "资料库",
+  "localChrome.objects": "公式与图表",
+  "localChrome.review": "批注与校对",
+  "localChrome.navigation": "导航",
+  "localChrome.history": "撤销与重做",
+  "localChrome.text": "文字格式",
+  "localChrome.content": "插入内容",
+  "localChrome.annotations": "批注",
+  "hostedChrome.editing": "编辑",
+  "hostedChrome.format": "文字",
+  "hostedChrome.content": "内容",
+  "hostedChrome.inspector": "笔记检查器",
+  "hostedChrome.navigation": "资料库导航",
+  "hostedChrome.files": "文件",
+  "hostedChrome.library": "资料库",
+  "hostedChrome.settings": "设置",
+  "hostedChrome.note": "当前笔记",
+  "hostedChrome.knowledge": "知识与资料",
+  "hostedChrome.review": "审阅",
+  "hostedChrome.preview": "预览",
+  "personalInput.editCopy": "编辑独立本人输入副本",
+  "personalInput.copyEditorTitle": "本人输入副本",
+  "personalInput.copyEditorLabel": "可编辑的独立本人输入副本",
+  "personalInput.finishCopy": "完成副本编辑",
+  "personalInput.copyActiveFinishFirst": "请先完成当前本人副本的编辑。",
+  "personalInput.copyChanged": "本人副本或其输入已变化；当前输入仍保留，请检查后重试。",
+  "personalInput.copyOnlyCannotRestore": "独立本人副本只能继续编辑或复制，不能作为正文恢复或取得资料写入权限。",
+  "personalInput.copyFinished": "本人副本已可靠保留；原输入、原操作和资料正文未改变。"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
 export interface MessageParamsMap {
+  "workspaceViews.currentDocumentGraph": {  };
+  "workspaceViews.parentFolder": {  };
+  "heading.waitForCurrentProjection": {  };
+  "heading.openDocumentForOutline": {  };
+  "heading.outlineBasisChanged": {  };
+  "heading.generatedItemSourceUnavailable": {  };
+  "heading.outlineMatchCount": { p0: number };
+  "heading.outlineEntrySummary": { p0: string; p1: number; p2: number };
+  "heading.searchOutline": {  };
+  "heading.outlineSearchPlaceholder": {  };
+  "workPanel.cancelled": {  };
+  "workActivity.details": {  };
+  "workActivity.originalUnavailable": {  };
+  "navigationLayout.restorePaneWidths": {  };
+  "workspaceDock.leftSidebar": {  };
+  "workspaceDock.rightSidebar": {  };
+  "workspaceDock.viewActions": {  };
+  "workspaceDock.collapseGroup": {  };
+  "workspaceDock.expandGroup": {  };
+  "workspaceDock.maximizeGroup": {  };
+  "workspaceDock.restoreGroups": {  };
+  "workspaceDock.hideView": {  };
+  "workspaceDock.moveLeft": {  };
+  "workspaceDock.moveRight": {  };
+  "workspaceDock.splitAbove": {  };
+  "workspaceDock.splitBelow": {  };
+  "workspaceDock.previousGroup": {  };
+  "workspaceDock.nextGroup": {  };
+  "workspaceDock.mergePrevious": {  };
+  "workspaceDock.mergeNext": {  };
+  "workspaceDock.resetLayout": {  };
+  "workspaceDock.waitComposition": {  };
+  "workspaceDock.emptySide": {  };
+  "workspaceDock.groupResize": {  };
+  "workspaceDock.resizeHint": {  };
+  "workPanel.label": {  };
+  "workPanel.problems": {  };
+  "workPanel.tasks": {  };
+  "workPanel.results": {  };
+  "workPanel.collapse": {  };
+  "workPanel.expand": {  };
+  "workPanel.resize": {  };
+  "workPanel.resizeHint": {  };
+  "workPanel.height": { p0: number };
+  "workPanel.status": { p0: number; p1: number; p2: number };
+  "workPanel.tabCount": { p0: string; p1: number };
+  "workPanel.problemsEmpty": {  };
+  "workPanel.tasksEmpty": {  };
+  "workPanel.resultsEmpty": {  };
+  "workPanel.running": {  };
+  "workPanel.waiting": {  };
+  "workPanel.failed": {  };
+  "workPanel.succeeded": {  };
+  "workPanel.error": {  };
+  "workPanel.warning": {  };
+  "workPanel.info": {  };
+  "workPanel.progress": { p0: number };
+  "workPanel.preferenceUnavailable": {  };
+  "heading.outlineList": {  };
+  "heading.mindMap": {  };
+  "heading.headingsAndCaptions": {  };
+  "heading.headingsOnly": {  };
+  "heading.captionsOnly": {  };
+  "heading.itemKindHeading": {  };
+  "heading.itemKindFigure": {  };
+  "heading.itemKindTable": {  };
+  "heading.itemKindEquation": {  };
+  "heading.itemKindCode": {  };
+  "heading.itemKindCaption": {  };
+  "numberingPanel.effectiveSettings": {  };
+  "numberingPanel.followNativeDocument": {  };
+  "numberingPanel.personalDefaultShown": {  };
+  "numberingPanel.personalDefaultHidden": {  };
+  "nodeContents.childNodes": {  };
+  "nodeContents.album": {  };
+  "nodeContents.files": {  };
+  "nodeContents.emptySection": {  };
+  "nodeContents.showMore": {  };
+  "nodeContents.resourceUnavailable": {  };
+  "nodeContents.readOnlyResource": {  };
+  "inventory.resourceNotListed": {  };
+  "inventory.resourceReadChanged": {  };
+  "inventory.resourceVersionChanged": {  };
+  "timeline.details": {  };
+  "timeline.scope": {  };
+  "timeline.retry": {  };
+  "workspaceViews.files": {  };
+  "workspaceViews.nodes": {  };
+  "workspaceViews.outline": {  };
+  "workspaceViews.timeline": {  };
+  "workspaceViews.search": {  };
+  "workspaceViews.calendar": {  };
+  "workspaceViews.people": {  };
+  "workspaceViews.followDocument": {  };
+  "workspaceViews.pinnedFolder": {  };
+  "workspaceViews.chooseNode": {  };
+  "workspaceViews.extensionsPending": {  };
+  "workspaceViews.nodeGraph": {  };
+  "workspaceViews.refresh": {  };
+  "workspaceViews.openResource": {  };
+  "workspaceViews.nodeSearch": {  };
+  "workspaceViews.resourceScope": {  };
   "app.title": {  };
   "app.hostedTitle": {  };
   "locale.label": {  };
@@ -10222,11 +10508,40 @@ export interface MessageParamsMap {
   "capture.persisting": {  };
   "capture.pending": {  };
   "reminder.label": {  };
+  "reminder.activationTitle": {  };
+  "reminder.activationEmpty": {  };
+  "reminder.activationLimited": {  };
+  "reminder.activationTask": { p0: number };
+  "reminder.hostStatus": {  };
+  "reminder.hostStatusLoading": {  };
+  "reminder.hostStatusUnavailable": {  };
+  "reminder.desktopInactive": {  };
+  "reminder.notificationUnavailable": {  };
+  "reminder.notificationUnknown": {  };
+  "reminder.notificationEnabled": {  };
+  "reminder.notificationDisabledForApplication": {  };
+  "reminder.notificationDisabledForUser": {  };
+  "reminder.notificationDisabledByPolicy": {  };
+  "reminder.notificationDisabledByManifest": {  };
+  "reminder.schedulingInactive": {  };
+  "reminder.schedulingRunning": {  };
+  "reminder.schedulingPaused": {  };
+  "reminder.schedulingRestricted": {  };
+  "reminder.schedulingStopping": {  };
+  "reminder.scanIncomplete": {  };
+  "reminder.scopeIssues": { count: number };
   "reminder.absolute": {  };
   "reminder.beforeDue": {  };
   "reminder.dueDay": {  };
   "reminder.enabledDevice": {  };
   "reminder.submitted": {  };
+  "reminder.submissionStartedAt": { at: string };
+  "reminder.submissionReturnedAt": { at: string };
+  "reminder.submissionElapsed": { nanoseconds: string };
+  "reminder.submissionReturnedSuccess": {  };
+  "reminder.submissionReturnedFailure": { hresult: number };
+  "reminder.submissionObservationMissing": {  };
+  "reminder.ledgerConfirmedAt": { at: string };
   "reminder.unknown": {  };
   "reminder.unavailable": {  };
   "reminder.missed": { count: number };
@@ -11345,6 +11660,7 @@ export interface MessageParamsMap {
   "definitionProposal.originalRequestMissing": {  };
   "definitionProposal.insertedUnsaved": {  };
   "definitionProposal.originalCheckedNotApplied": {  };
+  "personalInput.unknownOriginalRoute": {  };
   "personalInput.title": {  };
   "personalInput.help": {  };
   "personalInput.textLabel": {  };
@@ -13638,6 +13954,7 @@ export interface MessageParamsMap {
   "knowledge.openCurrentNoteLocalGraph": {  };
   "knowledge.citationBasisChanged": {  };
   "knowledge.readingAuthorizedKnowledge": {  };
+  "knowledge.readBasisChanged": {  };
   "knowledge.scanFailedLastResultStale": { p0: string };
   "export.formatDoc": {  };
   "export.formatWps": {  };
@@ -18050,6 +18367,7 @@ export interface MessageParamsMap {
   "error.data.schema.unionRequiresExactlyOneBranchMember": {  };
   "error.data.schema.unionTagMissing": {  };
   "error.data.schema.unionTagAmbiguous": {  };
+  "error.data.schema.unionNativeDomainNoMatch": {  };
   "error.data.schema.unionNativeDomainAmbiguous": {  };
   "error.data.schema.invalidUnionDiscriminator": {  };
   "error.data.schema.unsupportedSchemaVersion": {  };
@@ -20368,8 +20686,177 @@ export interface MessageParamsMap {
   "dataPanel.discardAllFormChanges": {  };
   "queryEdit.discardAllFieldInputs": {  };
   "desktop.residentEnabled": {  };
+  "capture.savedDrafts": {  };
+  "capture.refreshDrafts": {  };
+  "capture.startOtherDraft": {  };
+  "capture.newDraftHelp": {  };
+  "capture.retainedDraft": {  };
+  "capture.unselectedTarget": {  };
+  "workspaceRibbon.label": {  };
+  "workspaceRibbon.file": {  };
+  "workspaceRibbon.home": {  };
+  "workspaceRibbon.insert": {  };
+  "workspaceRibbon.knowledge": {  };
+  "workspaceRibbon.review": {  };
+  "workspaceRibbon.view": {  };
+  "workspaceRibbon.collapse": {  };
+  "workspaceRibbon.expand": {  };
+  "localChrome.files": {  };
+  "localChrome.document": {  };
+  "localChrome.preferences": {  };
+  "localChrome.panes": {  };
+  "localChrome.blocks": {  };
+  "localChrome.note": {  };
+  "localChrome.exchange": {  };
+  "localChrome.library": {  };
+  "localChrome.objects": {  };
+  "localChrome.review": {  };
+  "localChrome.navigation": {  };
+  "localChrome.history": {  };
+  "localChrome.text": {  };
+  "localChrome.content": {  };
+  "localChrome.annotations": {  };
+  "hostedChrome.editing": {  };
+  "hostedChrome.format": {  };
+  "hostedChrome.content": {  };
+  "hostedChrome.inspector": {  };
+  "hostedChrome.navigation": {  };
+  "hostedChrome.files": {  };
+  "hostedChrome.library": {  };
+  "hostedChrome.settings": {  };
+  "hostedChrome.note": {  };
+  "hostedChrome.knowledge": {  };
+  "hostedChrome.review": {  };
+  "hostedChrome.preview": {  };
+  "personalInput.editCopy": {  };
+  "personalInput.copyEditorTitle": {  };
+  "personalInput.copyEditorLabel": {  };
+  "personalInput.finishCopy": {  };
+  "personalInput.copyActiveFinishFirst": {  };
+  "personalInput.copyChanged": {  };
+  "personalInput.copyOnlyCannotRestore": {  };
+  "personalInput.copyFinished": {  };
 }
 export const messageParamTypes = {
+  "workspaceViews.currentDocumentGraph": {},
+  "workspaceViews.parentFolder": {},
+  "heading.waitForCurrentProjection": {},
+  "heading.openDocumentForOutline": {},
+  "heading.outlineBasisChanged": {},
+  "heading.generatedItemSourceUnavailable": {},
+  "heading.outlineMatchCount": {
+    "p0": "integer"
+  },
+  "heading.outlineEntrySummary": {
+    "p0": "text",
+    "p1": "integer",
+    "p2": "integer"
+  },
+  "heading.searchOutline": {},
+  "heading.outlineSearchPlaceholder": {},
+  "workPanel.cancelled": {},
+  "workActivity.details": {},
+  "workActivity.originalUnavailable": {},
+  "navigationLayout.restorePaneWidths": {},
+  "workspaceDock.leftSidebar": {},
+  "workspaceDock.rightSidebar": {},
+  "workspaceDock.viewActions": {},
+  "workspaceDock.collapseGroup": {},
+  "workspaceDock.expandGroup": {},
+  "workspaceDock.maximizeGroup": {},
+  "workspaceDock.restoreGroups": {},
+  "workspaceDock.hideView": {},
+  "workspaceDock.moveLeft": {},
+  "workspaceDock.moveRight": {},
+  "workspaceDock.splitAbove": {},
+  "workspaceDock.splitBelow": {},
+  "workspaceDock.previousGroup": {},
+  "workspaceDock.nextGroup": {},
+  "workspaceDock.mergePrevious": {},
+  "workspaceDock.mergeNext": {},
+  "workspaceDock.resetLayout": {},
+  "workspaceDock.waitComposition": {},
+  "workspaceDock.emptySide": {},
+  "workspaceDock.groupResize": {},
+  "workspaceDock.resizeHint": {},
+  "workPanel.label": {},
+  "workPanel.problems": {},
+  "workPanel.tasks": {},
+  "workPanel.results": {},
+  "workPanel.collapse": {},
+  "workPanel.expand": {},
+  "workPanel.resize": {},
+  "workPanel.resizeHint": {},
+  "workPanel.height": {
+    "p0": "integer"
+  },
+  "workPanel.status": {
+    "p0": "integer",
+    "p1": "integer",
+    "p2": "integer"
+  },
+  "workPanel.tabCount": {
+    "p0": "text",
+    "p1": "integer"
+  },
+  "workPanel.problemsEmpty": {},
+  "workPanel.tasksEmpty": {},
+  "workPanel.resultsEmpty": {},
+  "workPanel.running": {},
+  "workPanel.waiting": {},
+  "workPanel.failed": {},
+  "workPanel.succeeded": {},
+  "workPanel.error": {},
+  "workPanel.warning": {},
+  "workPanel.info": {},
+  "workPanel.progress": {
+    "p0": "integer"
+  },
+  "workPanel.preferenceUnavailable": {},
+  "heading.outlineList": {},
+  "heading.mindMap": {},
+  "heading.headingsAndCaptions": {},
+  "heading.headingsOnly": {},
+  "heading.captionsOnly": {},
+  "heading.itemKindHeading": {},
+  "heading.itemKindFigure": {},
+  "heading.itemKindTable": {},
+  "heading.itemKindEquation": {},
+  "heading.itemKindCode": {},
+  "heading.itemKindCaption": {},
+  "numberingPanel.effectiveSettings": {},
+  "numberingPanel.followNativeDocument": {},
+  "numberingPanel.personalDefaultShown": {},
+  "numberingPanel.personalDefaultHidden": {},
+  "nodeContents.childNodes": {},
+  "nodeContents.album": {},
+  "nodeContents.files": {},
+  "nodeContents.emptySection": {},
+  "nodeContents.showMore": {},
+  "nodeContents.resourceUnavailable": {},
+  "nodeContents.readOnlyResource": {},
+  "inventory.resourceNotListed": {},
+  "inventory.resourceReadChanged": {},
+  "inventory.resourceVersionChanged": {},
+  "timeline.details": {},
+  "timeline.scope": {},
+  "timeline.retry": {},
+  "workspaceViews.files": {},
+  "workspaceViews.nodes": {},
+  "workspaceViews.outline": {},
+  "workspaceViews.timeline": {},
+  "workspaceViews.search": {},
+  "workspaceViews.calendar": {},
+  "workspaceViews.people": {},
+  "workspaceViews.followDocument": {},
+  "workspaceViews.pinnedFolder": {},
+  "workspaceViews.chooseNode": {},
+  "workspaceViews.extensionsPending": {},
+  "workspaceViews.nodeGraph": {},
+  "workspaceViews.refresh": {},
+  "workspaceViews.openResource": {},
+  "workspaceViews.nodeSearch": {},
+  "workspaceViews.resourceScope": {},
   "app.title": {},
   "app.hostedTitle": {},
   "locale.label": {},
@@ -20408,11 +20895,54 @@ export const messageParamTypes = {
   "capture.persisting": {},
   "capture.pending": {},
   "reminder.label": {},
+  "reminder.activationTitle": {},
+  "reminder.activationEmpty": {},
+  "reminder.activationLimited": {},
+  "reminder.activationTask": {
+    "p0": "integer"
+  },
+  "reminder.hostStatus": {},
+  "reminder.hostStatusLoading": {},
+  "reminder.hostStatusUnavailable": {},
+  "reminder.desktopInactive": {},
+  "reminder.notificationUnavailable": {},
+  "reminder.notificationUnknown": {},
+  "reminder.notificationEnabled": {},
+  "reminder.notificationDisabledForApplication": {},
+  "reminder.notificationDisabledForUser": {},
+  "reminder.notificationDisabledByPolicy": {},
+  "reminder.notificationDisabledByManifest": {},
+  "reminder.schedulingInactive": {},
+  "reminder.schedulingRunning": {},
+  "reminder.schedulingPaused": {},
+  "reminder.schedulingRestricted": {},
+  "reminder.schedulingStopping": {},
+  "reminder.scanIncomplete": {},
+  "reminder.scopeIssues": {
+    "count": "integer"
+  },
   "reminder.absolute": {},
   "reminder.beforeDue": {},
   "reminder.dueDay": {},
   "reminder.enabledDevice": {},
   "reminder.submitted": {},
+  "reminder.submissionStartedAt": {
+    "at": "text"
+  },
+  "reminder.submissionReturnedAt": {
+    "at": "text"
+  },
+  "reminder.submissionElapsed": {
+    "nanoseconds": "text"
+  },
+  "reminder.submissionReturnedSuccess": {},
+  "reminder.submissionReturnedFailure": {
+    "hresult": "integer"
+  },
+  "reminder.submissionObservationMissing": {},
+  "reminder.ledgerConfirmedAt": {
+    "at": "text"
+  },
   "reminder.unknown": {},
   "reminder.unavailable": {},
   "reminder.missed": {
@@ -21885,6 +22415,7 @@ export const messageParamTypes = {
   "definitionProposal.originalRequestMissing": {},
   "definitionProposal.insertedUnsaved": {},
   "definitionProposal.originalCheckedNotApplied": {},
+  "personalInput.unknownOriginalRoute": {},
   "personalInput.title": {},
   "personalInput.help": {},
   "personalInput.textLabel": {},
@@ -24818,6 +25349,7 @@ export const messageParamTypes = {
   "knowledge.openCurrentNoteLocalGraph": {},
   "knowledge.citationBasisChanged": {},
   "knowledge.readingAuthorizedKnowledge": {},
+  "knowledge.readBasisChanged": {},
   "knowledge.scanFailedLastResultStale": {
     "p0": "text"
   },
@@ -29691,6 +30223,7 @@ export const messageParamTypes = {
   "error.data.schema.unionRequiresExactlyOneBranchMember": {},
   "error.data.schema.unionTagMissing": {},
   "error.data.schema.unionTagAmbiguous": {},
+  "error.data.schema.unionNativeDomainNoMatch": {},
   "error.data.schema.unionNativeDomainAmbiguous": {},
   "error.data.schema.invalidUnionDiscriminator": {},
   "error.data.schema.unsupportedSchemaVersion": {},
@@ -32387,10 +32920,162 @@ export const messageParamTypes = {
   "error.core.posix.ordinaryEntryRequired": {},
   "dataPanel.discardAllFormChanges": {},
   "queryEdit.discardAllFieldInputs": {},
-  "desktop.residentEnabled": {}
+  "desktop.residentEnabled": {},
+  "capture.savedDrafts": {},
+  "capture.refreshDrafts": {},
+  "capture.startOtherDraft": {},
+  "capture.newDraftHelp": {},
+  "capture.retainedDraft": {},
+  "capture.unselectedTarget": {},
+  "workspaceRibbon.label": {},
+  "workspaceRibbon.file": {},
+  "workspaceRibbon.home": {},
+  "workspaceRibbon.insert": {},
+  "workspaceRibbon.knowledge": {},
+  "workspaceRibbon.review": {},
+  "workspaceRibbon.view": {},
+  "workspaceRibbon.collapse": {},
+  "workspaceRibbon.expand": {},
+  "localChrome.files": {},
+  "localChrome.document": {},
+  "localChrome.preferences": {},
+  "localChrome.panes": {},
+  "localChrome.blocks": {},
+  "localChrome.note": {},
+  "localChrome.exchange": {},
+  "localChrome.library": {},
+  "localChrome.objects": {},
+  "localChrome.review": {},
+  "localChrome.navigation": {},
+  "localChrome.history": {},
+  "localChrome.text": {},
+  "localChrome.content": {},
+  "localChrome.annotations": {},
+  "hostedChrome.editing": {},
+  "hostedChrome.format": {},
+  "hostedChrome.content": {},
+  "hostedChrome.inspector": {},
+  "hostedChrome.navigation": {},
+  "hostedChrome.files": {},
+  "hostedChrome.library": {},
+  "hostedChrome.settings": {},
+  "hostedChrome.note": {},
+  "hostedChrome.knowledge": {},
+  "hostedChrome.review": {},
+  "hostedChrome.preview": {},
+  "personalInput.editCopy": {},
+  "personalInput.copyEditorTitle": {},
+  "personalInput.copyEditorLabel": {},
+  "personalInput.finishCopy": {},
+  "personalInput.copyActiveFinishFirst": {},
+  "personalInput.copyChanged": {},
+  "personalInput.copyOnlyCannotRestore": {},
+  "personalInput.copyFinished": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
+  "workspaceViews.currentDocumentGraph": "Current document graph",
+  "workspaceViews.parentFolder": "Parent folder",
+  "heading.waitForCurrentProjection": "The outline updates automatically when the current draft preview is ready.",
+  "heading.openDocumentForOutline": "Open a document to view its outline.",
+  "heading.outlineBasisChanged": "The outline is out of date and updates when the current preview is ready.",
+  "heading.generatedItemSourceUnavailable": "This outline item has no locatable source or current display position.",
+  "heading.outlineMatchCount": "{p0} outline matches",
+  "heading.outlineEntrySummary": "{p0}: {p1} direct items / {p2} descendant items",
+  "heading.searchOutline": "Search headings and captions",
+  "heading.outlineSearchPlaceholder": "Search heading or caption",
+  "workPanel.cancelled": "Cancelled",
+  "workActivity.details": "View details",
+  "workActivity.originalUnavailable": "This window no longer holds these original operation details. Use the original recovery entry.",
+  "navigationLayout.restorePaneWidths": "Reset sidebar widths",
+  "workspaceDock.leftSidebar": "Left sidebar",
+  "workspaceDock.rightSidebar": "Right sidebar",
+  "workspaceDock.viewActions": "View layout actions",
+  "workspaceDock.collapseGroup": "Collapse group",
+  "workspaceDock.expandGroup": "Expand group",
+  "workspaceDock.maximizeGroup": "Maximize group",
+  "workspaceDock.restoreGroups": "Restore groups",
+  "workspaceDock.hideView": "Hide view",
+  "workspaceDock.moveLeft": "Move to left sidebar",
+  "workspaceDock.moveRight": "Move to right sidebar",
+  "workspaceDock.splitAbove": "Split above",
+  "workspaceDock.splitBelow": "Split below",
+  "workspaceDock.previousGroup": "Move to previous group",
+  "workspaceDock.nextGroup": "Move to next group",
+  "workspaceDock.mergePrevious": "Merge into previous group",
+  "workspaceDock.mergeNext": "Merge into next group",
+  "workspaceDock.resetLayout": "Reset layout",
+  "workspaceDock.waitComposition": "Finish the current input before changing the layout.",
+  "workspaceDock.emptySide": "Drag a view here or open one from the View menu.",
+  "workspaceDock.groupResize": "Resize groups",
+  "workspaceDock.resizeHint": "Use Up/Down to resize groups, Shift for larger steps, and Enter for equal heights.",
+  "workPanel.label": "Work panel",
+  "workPanel.problems": "Problems",
+  "workPanel.tasks": "Tasks",
+  "workPanel.results": "Results",
+  "workPanel.collapse": "Collapse work panel",
+  "workPanel.expand": "Expand work panel",
+  "workPanel.resize": "Resize work panel height",
+  "workPanel.resizeHint": "Use Up/Down to resize, Shift for larger steps, Home for minimum, End for maximum, Enter to reset.",
+  "workPanel.height": "{p0} pixels high",
+  "workPanel.status": "Work panel: {p0} problems, {p1} tasks need attention, {p2} results",
+  "workPanel.tabCount": "{p0} ({p1})",
+  "workPanel.problemsEmpty": "No reported problems for the current document.",
+  "workPanel.tasksEmpty": "No reported tasks.",
+  "workPanel.resultsEmpty": "No generated results.",
+  "workPanel.running": "Running",
+  "workPanel.waiting": "Waiting",
+  "workPanel.failed": "Failed",
+  "workPanel.succeeded": "Complete",
+  "workPanel.error": "Error",
+  "workPanel.warning": "Warning",
+  "workPanel.info": "Information",
+  "workPanel.progress": "{p0}% complete",
+  "workPanel.preferenceUnavailable": "Work panel layout preferences could not be saved; this session remains usable.",
+  "heading.outlineList": "Outline list",
+  "heading.mindMap": "Heading mind map",
+  "heading.headingsAndCaptions": "Headings and captions",
+  "heading.headingsOnly": "Headings only",
+  "heading.captionsOnly": "Captions only",
+  "heading.itemKindHeading": "Heading",
+  "heading.itemKindFigure": "Figure",
+  "heading.itemKindTable": "Table",
+  "heading.itemKindEquation": "Equation",
+  "heading.itemKindCode": "Code",
+  "heading.itemKindCaption": "Caption",
+  "numberingPanel.effectiveSettings": "Effective settings",
+  "numberingPanel.followNativeDocument": "Follow native document numbering",
+  "numberingPanel.personalDefaultShown": "Show personal numbers by default",
+  "numberingPanel.personalDefaultHidden": "Hide personal numbers by default",
+  "nodeContents.childNodes": "Child nodes",
+  "nodeContents.album": "Album",
+  "nodeContents.files": "Files",
+  "nodeContents.emptySection": "No items",
+  "nodeContents.showMore": "Show more",
+  "nodeContents.resourceUnavailable": "This resource is unavailable. Refresh and try again.",
+  "nodeContents.readOnlyResource": "Read-only resource",
+  "inventory.resourceNotListed": "The selected file is no longer in this folder’s browsable inventory. Refresh the Nodes view.",
+  "inventory.resourceReadChanged": "The file or its directory changed during reading. Refresh and try again.",
+  "inventory.resourceVersionChanged": "The file preview version changed. Refresh the Nodes view.",
+  "timeline.details": "Compare and restore…",
+  "timeline.scope": "Saved versions of the current document",
+  "timeline.retry": "Retry timeline",
+  "workspaceViews.files": "Files",
+  "workspaceViews.nodes": "Nodes",
+  "workspaceViews.outline": "Outline",
+  "workspaceViews.timeline": "Timeline",
+  "workspaceViews.search": "Search",
+  "workspaceViews.calendar": "Calendar",
+  "workspaceViews.people": "People",
+  "workspaceViews.followDocument": "Follow current document",
+  "workspaceViews.pinnedFolder": "Pin browsing position",
+  "workspaceViews.chooseNode": "Choose a node to browse its contents",
+  "workspaceViews.extensionsPending": "This extension is not implemented yet. Hide this tab from the View menu.",
+  "workspaceViews.nodeGraph": "Relationship graph",
+  "workspaceViews.refresh": "Refresh view",
+  "workspaceViews.openResource": "Open resource",
+  "workspaceViews.nodeSearch": "Filter node contents",
+  "workspaceViews.resourceScope": "Resources belong to the browsed folder and open read-only.",
   "app.title": "Weftext · Writing and knowledge",
   "app.hostedTitle": "Weftext · Remote writing",
   "locale.label": "Interface language",
@@ -32427,11 +33112,40 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "capture.persisting": "Saving the recovery draft durably.",
   "capture.pending": "The original operation is unconfirmed. Its draft and original ID are retained.",
   "reminder.label": "Task reminder",
+  "reminder.activationTitle": "Tasks from this notification",
+  "reminder.activationEmpty": "This notification has no currently available tasks.",
+  "reminder.activationLimited": "Some tasks are currently unavailable. Refresh and try again.",
+  "reminder.activationTask": "Open task {p0}",
+  "reminder.hostStatus": "Reminders on this device",
+  "reminder.hostStatusLoading": "Reading the reminder service status on this device.",
+  "reminder.hostStatusUnavailable": "The reminder service status could not be read. Notification and scheduling availability is unconfirmed.",
+  "reminder.desktopInactive": "This connection has no active desktop reminder service and will not submit system notifications.",
+  "reminder.notificationUnavailable": "System notifications are unavailable in this desktop environment. Reminder records remain available in the app.",
+  "reminder.notificationUnknown": "System notification availability is unconfirmed.",
+  "reminder.notificationEnabled": "The system allows this app to submit notifications. Do Not Disturb, lock-screen and other system settings still control their display.",
+  "reminder.notificationDisabledForApplication": "System settings have disabled Weftext notifications. Check Windows notification settings.",
+  "reminder.notificationDisabledForUser": "System notifications are disabled for the current Windows user.",
+  "reminder.notificationDisabledByPolicy": "System policy prevents this app from sending notifications.",
+  "reminder.notificationDisabledByManifest": "The current package does not have an available system notification configuration.",
+  "reminder.schedulingInactive": "Reminder scheduling has not started.",
+  "reminder.schedulingRunning": "Reminder scheduling is running.",
+  "reminder.schedulingPaused": "Reminder scheduling is paused. No new system notifications are being submitted.",
+  "reminder.schedulingRestricted": "Reminder scheduling is restricted. Check notification permissions and the library or task issues below.",
+  "reminder.schedulingStopping": "The reminder service is stopping and no longer accepts new notification submissions.",
+  "reminder.scanIncomplete": "This reminder scan is incomplete. It does not establish that there are no pending tasks.",
+  "reminder.scopeIssues": "This reminder scan found {count} issues. Some libraries, tasks or original notification results need checking.",
   "reminder.absolute": "Independent instant",
   "reminder.beforeDue": "Before the due time",
   "reminder.dueDay": "Time on the due day",
   "reminder.enabledDevice": "Enable this reminder on this device",
   "reminder.submitted": "The system accepted the reminder. This does not mean it was read.",
+  "reminder.submissionStartedAt": "Notification call started (UTC): {at}",
+  "reminder.submissionReturnedAt": "Notification call returned (UTC): {at}",
+  "reminder.submissionElapsed": "Monotonic call duration: {nanoseconds} ns",
+  "reminder.submissionReturnedSuccess": "The notification call returned success. This does not mean the user saw it.",
+  "reminder.submissionReturnedFailure": "The notification call returned failure (HRESULT {hresult}). This return alone does not establish the delivery outcome.",
+  "reminder.submissionObservationMissing": "No actual notification-call timing was recorded. Ledger confirmation time cannot substitute for call time.",
+  "reminder.ledgerConfirmedAt": "Ledger confirmation time (UTC; may come from a later system-history check): {at}",
   "reminder.unknown": "The system submission result is unknown. It was not blindly resubmitted.",
   "reminder.unavailable": "System notifications cannot be submitted under the current conditions.",
   "reminder.missed": "Valid missed reminders: {count}.",
@@ -33550,6 +34264,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "definitionProposal.originalRequestMissing": "Without the original request, only the original ID can be queried; new retry input cannot be manufactured.",
   "definitionProposal.insertedUnsaved": "The new definition proposal was inserted into the current body draft with shared Undo. It has not been saved; the original key is allocated only once.",
   "definitionProposal.originalCheckedNotApplied": "The original definition proposal was checked. The current basis or session differs; compare explicitly before recovery. It was not automatically pasted into the body.",
+  "personalInput.unknownOriginalRoute": "Proof of the original save route is missing. Its operation ID and personal text are retained; query, settle, and saving to a possibly identical note remain unavailable until the original request is verified.",
   "personalInput.title": "My unuploaded input and original operations",
   "personalInput.help": "Only my added text, original baseline positions and original operation IDs are stored here, without old body content, previews or credentials. Open the authorized original note first. Restoration as a draft requires the original identity and exact baseline to match. Text that cannot be mapped, such as form input, is available only for separate retrieval; it may already have been applied or undone and does not represent the current body.",
   "personalInput.textLabel": "My added input",
@@ -35843,6 +36558,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "knowledge.openCurrentNoteLocalGraph": "Open current note’s local graph",
   "knowledge.citationBasisChanged": "The citation basis changed. Refresh and try again.",
   "knowledge.readingAuthorizedKnowledge": "Reading currently authorized knowledge information…",
+  "knowledge.readBasisChanged": "The knowledge read basis or library environment changed. The old result was not adopted; refresh and try again.",
   "knowledge.scanFailedLastResultStale": "The scan failed and the most recent result is stale. {p0} Search and personal rules are retained; refresh and try again.",
   "export.formatDoc": "Legacy Word document (.doc, external conversion)",
   "export.formatWps": "WPS Writer document (.wps, external conversion)",
@@ -39882,7 +40598,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "capture.selectTarget": "Use this target",
   "capture.keepClose": "Close and retain draft",
   "capture.advanced": "Types, properties and templates",
-  "capture.restoreDraft": "Restore a draft",
+  "capture.restoreDraft": "Keep this draft and open the selected original",
   "capture.newDraft": "Start another draft",
   "capture.rawRetained": "Raw input retained without binding to a replacement field",
   "capture.targetRequired": "Select an existing library. Body input is retained",
@@ -40255,7 +40971,8 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.data.schema.unionRequiresExactlyOneBranchMember": "Union requires exactly one branch member",
   "error.data.schema.unionTagMissing": "Missing union tag",
   "error.data.schema.unionTagAmbiguous": "Ambiguous union tag",
-  "error.data.schema.unionNativeDomainAmbiguous": "Ambiguous union native domain",
+  "error.data.schema.unionNativeDomainNoMatch": "The value's type does not match any union branch.",
+  "error.data.schema.unionNativeDomainAmbiguous": "The value's type matches multiple union branches.",
   "error.data.schema.invalidUnionDiscriminator": "Invalid union discriminator",
   "error.data.schema.unsupportedSchemaVersion": "Unsupported schema version",
   "error.data.schema.typeAliasUnresolved": "Unresolved type alias",
@@ -42572,5 +43289,55 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.core.posix.ordinaryEntryRequired": "Symbolic links and special filesystem entries are unsupported",
   "dataPanel.discardAllFormChanges": "Discard form changes for all notes and libraries",
   "queryEdit.discardAllFieldInputs": "Discard field changes for all result rows",
-  "desktop.residentEnabled": "“Keep running after closing windows” is now enabled. Closing Library or Capture leaves Weftext running in the tray and scheduling task reminders that are enabled and available on this device. Choose “Exit Weftext” from the tray to stop background work and reminder scheduling. Starting at login and opening the interface at startup remain separate settings; this action does not change them."
+  "desktop.residentEnabled": "“Keep running after closing windows” is now enabled. Closing Library or Capture leaves Weftext running in the tray and scheduling task reminders that are enabled and available on this device. Choose “Exit Weftext” from the tray to stop background work and reminder scheduling. Starting at login and opening the interface at startup remain separate settings; this action does not change them.",
+  "capture.savedDrafts": "Retained Capture drafts",
+  "capture.refreshDrafts": "Refresh draft list",
+  "capture.startOtherDraft": "Keep this draft; start or resume a blank draft",
+  "capture.newDraftHelp": "A new draft does not carry the current content. Choose its library after opening. After a failure, repeat this action to recover the same new draft without creating a replacement. Use the list to return to an original draft.",
+  "capture.retainedDraft": "Draft",
+  "capture.unselectedTarget": "No target selected",
+  "workspaceRibbon.label": "Document ribbon",
+  "workspaceRibbon.file": "File",
+  "workspaceRibbon.home": "Home",
+  "workspaceRibbon.insert": "Insert",
+  "workspaceRibbon.knowledge": "Knowledge",
+  "workspaceRibbon.review": "Review",
+  "workspaceRibbon.view": "View",
+  "workspaceRibbon.collapse": "Collapse ribbon",
+  "workspaceRibbon.expand": "Expand ribbon",
+  "localChrome.files": "Open and create",
+  "localChrome.document": "Current document",
+  "localChrome.preferences": "Settings",
+  "localChrome.panes": "Panes",
+  "localChrome.blocks": "Content blocks",
+  "localChrome.note": "Notes and queries",
+  "localChrome.exchange": "Import and output",
+  "localChrome.library": "Library",
+  "localChrome.objects": "Equations and diagrams",
+  "localChrome.review": "Annotations and proofreading",
+  "localChrome.navigation": "Navigation",
+  "localChrome.history": "Undo and redo",
+  "localChrome.text": "Text formatting",
+  "localChrome.content": "Insert content",
+  "localChrome.annotations": "Annotations",
+  "hostedChrome.editing": "Editing",
+  "hostedChrome.format": "Text",
+  "hostedChrome.content": "Content",
+  "hostedChrome.inspector": "Note inspector",
+  "hostedChrome.navigation": "Library navigation",
+  "hostedChrome.files": "Files",
+  "hostedChrome.library": "Library",
+  "hostedChrome.settings": "Settings",
+  "hostedChrome.note": "Current note",
+  "hostedChrome.knowledge": "Knowledge and resources",
+  "hostedChrome.review": "Review",
+  "hostedChrome.preview": "Preview",
+  "personalInput.editCopy": "Edit a separate personal input copy",
+  "personalInput.copyEditorTitle": "Personal input copy",
+  "personalInput.copyEditorLabel": "Editable separate personal input copy",
+  "personalInput.finishCopy": "Finish editing this copy",
+  "personalInput.copyActiveFinishFirst": "Finish editing the current personal copy first.",
+  "personalInput.copyChanged": "The personal copy or its input changed. Current input is retained; check it before retrying.",
+  "personalInput.copyOnlyCannotRestore": "A separate personal copy can be edited or copied; it cannot restore an author draft or grant document write access.",
+  "personalInput.copyFinished": "The personal copy is durably retained. The original input, operation and document source are unchanged."
 };

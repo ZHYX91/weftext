@@ -5,6 +5,7 @@ use super::{ApiError, ApiErrorDetails, ApiResult, AppState, core_call, location,
 #[cfg(test)]
 use crate::CoreTestFixture;
 use crate::RequestJson;
+use crate::readonly_evidence::{ReadonlyEvidence, capture_readonly};
 use axum::{
     Json, Router,
     body::Body,
@@ -18,6 +19,7 @@ use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 use weftext_core::{ConfigDocument, ConfigRole, LibraryStyleDocument};
 use weftext_messages::UiMessage;
@@ -308,6 +310,7 @@ pub(crate) struct StyleEnvironment {
     pub(crate) key: String,
     root: PathBuf,
     basis: StyleEnvironmentBasis,
+    evidence: Arc<ReadonlyEvidence>,
 }
 
 #[derive(Clone)]
@@ -359,11 +362,11 @@ pub(crate) async fn style_environment(
 ) -> Result<StyleEnvironment, ApiError> {
     let root = location(state, session_id)?.root;
     let read_root = root.clone();
-    let captured = core_call(state, move |core| {
-        if core.has_library(&read_root)? {
-            let settings = core.read_config(&read_root, ConfigRole::WorkspaceSettings)?;
+    let (captured, evidence) = capture_readonly(state, move |capture| {
+        if capture.core.has_library(&read_root)? {
+            let settings = capture.read_config(&read_root, ConfigRole::WorkspaceSettings)?;
             if selected_style_enabled(&settings)? {
-                let document = core.read_library_style(read_root)?;
+                let document = capture.read_library_style(&read_root)?;
                 if !document.installed {
                     return Err(weftext_core::CoreError::new(
                         "styleSelection",
@@ -432,6 +435,7 @@ pub(crate) async fn style_environment(
         key,
         root,
         basis,
+        evidence,
     })
 }
 
@@ -445,7 +449,9 @@ pub(crate) async fn check_style_environment(
         return Err(stale_snapshot().into());
     }
     let basis = environment.basis.clone();
+    let evidence = environment.evidence.clone();
     core_call(state, move |core| {
+        let _evidence = evidence;
         recheck_style_environment(core, &root, &basis)
     })
     .await
@@ -834,7 +840,9 @@ async fn edit(
             // Only the worker's actual current/proposed World reads participate.
             // Core qualifies them against the original cut, including absences.
             // Dependency paths never become part of the browser response.
+            let style_evidence = environment.evidence.clone();
             let mut output = core_call(&state, move |core| {
+                let _style_evidence = style_evidence;
                 let dependencies = receipt
                     .dependencies
                     .iter()
@@ -1248,6 +1256,37 @@ mod tests {
         check_style_environment(&state, &session_id, &disabled)
             .await
             .unwrap();
+        let disabled_base = match &disabled.basis {
+            StyleEnvironmentBasis::Settings { path, base_id } => (path.clone(), base_id.clone()),
+            _ => panic!("the disabled selector must keep its original settings snapshot"),
+        };
+        let module_base = match &v1_environment.basis {
+            StyleEnvironmentBasis::Module { base_id } => base_id.clone(),
+            _ => panic!("the enabled selector must keep its original module basis"),
+        };
+        assert!(
+            state
+                .core
+                .lock()
+                .unwrap()
+                .library_style_basis_retained_bytes(&module_base)
+                .is_ok()
+        );
+        drop(v1_environment);
+        drop(disabled);
+        let core = state.core.lock().unwrap();
+        assert_eq!(
+            core.library_style_basis_retained_bytes(&module_base)
+                .unwrap_err()
+                .code,
+            "basisRequired"
+        );
+        assert_eq!(
+            core.validate_snapshot(&root, &disabled_base.0, &disabled_base.1)
+                .unwrap_err()
+                .code,
+            "basisRequired"
+        );
         assert_eq!(std::fs::read_to_string(&note_path).unwrap(), source);
     }
 }

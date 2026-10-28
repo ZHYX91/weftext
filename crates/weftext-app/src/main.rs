@@ -7,6 +7,14 @@ fn main() -> std::process::ExitCode {
             std::process::ExitCode::FAILURE
         };
     }
+    #[cfg(windows)]
+    let _winrt = match weftext_app::launch::ProcessWinRt::enter() {
+        Ok(lifetime) => lifetime,
+        Err(error) => {
+            weftext_app::launch::report_desktop_error(&error);
+            return std::process::ExitCode::FAILURE;
+        }
+    };
     let runtime = match tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
@@ -16,6 +24,7 @@ fn main() -> std::process::ExitCode {
             weftext_app::launch::report_desktop_error(&weftext_app::launch::ServeError {
                 code: "runtimeStartFailed",
                 diagnostic: "The application runtime could not start",
+                local_origin: None,
             });
             return std::process::ExitCode::FAILURE;
         }

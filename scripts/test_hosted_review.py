@@ -6,7 +6,9 @@ import sys
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
+from owned_worker_observer import (OwnedWorkerObservation, event_time_ns, timed_call,
+                                   freeze_policy_revocation, apply_inflight_revocation,
+                                   verify_revocation_delivery)
 from test_hosted import uid, digest
 from test_hosted_fields import HostedFields
 
@@ -220,6 +222,8 @@ class HostedReview(HostedFields):
                     '#text(str(inflight-paragraphs.len()))\ndelayed paragraph')
         self.save(doc, source+workload)
         profile = self.review()
+        target = ('alice', 'grants', 'Shared', 'annotations', 'proofread')
+        policy_request = freeze_policy_revocation(self.call('admin/policy', actor='admin'), target)
         deadline = time.monotonic() + 40
         with ThreadPoolExecutor(max_workers=1) as pool:
             with OwnedWorkerObservation(self.server.owner) as observation:
@@ -229,24 +233,22 @@ class HostedReview(HostedFields):
                 worker = observation.wait(pending, deadline=deadline)
                 observation.assert_inflight(pending)
                 self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before change')
-                self.policy(lambda users: users['alice']['grants']['Shared']['annotations'].update(proofread=False))
-                changed = event_time_ns()
+                mutation = apply_inflight_revocation(observation, pending, policy_request,
+                    lambda update: self.call('admin/policy', update, 'admin'), deadline)
                 (code, response, _), completed = pending.result(timeout=max(0, deadline-time.monotonic()))
+        self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted before readback')
+        readback = self.call('admin/policy', actor='admin')
+        self.assertLess(time.monotonic(), deadline, 'Original request/mutation budget exhausted during readback')
         trace = {'submittedMonotonicNs': submitted, 'worker': worker,
-                 'changeCompletedMonotonicNs': changed, 'requestCompletedMonotonicNs': completed,
+                 **mutation, 'requestCompletedMonotonicNs': completed,
+                 'policyReadbackGeneration': readback.get('generation'),
+                 'targetAuthorizationAfter': readback['users']['alice']['grants']['Shared']['annotations']['proofread'],
                  'status': code, 'errorCode': response.get('error', {}).get('code'),
                  'explanationKey': response.get('error', {}).get('explanation', {}).get('key')}
         with (self.folder/'proofread-revocation-inflight.json').open('x', encoding='utf-8') as evidence:
             evidence.write(json.dumps(trace, ensure_ascii=False, indent=2))
-        self.assertLessEqual(submitted, worker['observedMonotonicNs'])
-        self.assertLess(worker['observedMonotonicNs'], changed)
-        self.assertLess(changed, completed, 'Concurrent change must finish before request delivery')
-        self.assertIn(code, [404, 409], response)
-        self.assertEqual(code, 404, response)
-        self.assertEqual(response['error']['code'], 'unavailable')
-        self.assertEqual(response['error']['explanation']['key'],
-                         'error.api.hosted.contentUnavailable')
-        self.assertNotIn('findings', response)
+        verify_revocation_delivery(policy_request, target, readback, trace, response,
+                                   (404, 'unavailable', 'error.api.hosted.contentUnavailable', 'findings'))
 
 
 if __name__ == '__main__': unittest.main(argv=[sys.argv[0]], defaultTest='HostedReview', verbosity=2)

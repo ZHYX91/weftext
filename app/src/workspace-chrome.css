@@ -1,0 +1,313 @@
+/* Shared shell candidate. Existing author/panel nodes retain their owners.
+ * TypeScript owns panel.hidden and aria-selected/expanded; CSS never infers
+ * which command panel is active from the document or the current view mode. */
+.workspace-ribbon {
+  --workspace-chrome-line: var(--line, #dce3dd);
+  --workspace-chrome-accent: var(--accent, #487c6e);
+  --workspace-chrome-ink: #303b36;
+  --workspace-chrome-muted: #526358;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 0;
+  gap: 0;
+  border-block-end: 1px solid var(--workspace-chrome-line);
+  background: #f7f9f5;
+  color: var(--workspace-chrome-ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.workspace-ribbon-tabs {
+  grid-column: 1;
+  grid-row: 1;
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: stretch;
+  gap: 2px;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 4px 8px 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.workspace-ribbon-tabs > [role="tab"],
+.workspace-ribbon-toggle {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  min-block-size: 36px;
+  margin: 0;
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-block-end: 3px solid transparent;
+  border-radius: 5px 5px 0 0;
+  background: transparent;
+  color: var(--workspace-chrome-muted);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.workspace-ribbon-tabs > [role="tab"]:hover,
+.workspace-ribbon-toggle:hover {
+  background: #eaf0e9;
+  color: var(--workspace-chrome-ink);
+}
+
+.workspace-ribbon-tabs > [role="tab"][aria-selected="true"] {
+  border-block-end-color: var(--workspace-chrome-accent);
+  background: #fff;
+  color: var(--workspace-chrome-ink);
+  font-weight: 600;
+}
+
+.workspace-ribbon-toggle {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  margin-inline-end: 6px;
+  padding-inline: 10px;
+  border-block-end-width: 1px;
+  border-radius: 5px;
+}
+
+.workspace-ribbon-panel {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: stretch;
+  gap: 0;
+  box-sizing: border-box;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  margin: 0;
+  padding: 8px;
+  border-block-start: 1px solid var(--workspace-chrome-line);
+  background: #fff;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.workspace-ribbon-group {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  box-sizing: border-box;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0 12px;
+  border-inline-end: 1px solid var(--workspace-chrome-line);
+}
+
+.workspace-ribbon-group:first-child { padding-inline-start: 0; }
+.workspace-ribbon-group:last-child { border-inline-end: 0; }
+
+.workspace-ribbon-group-content {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+.workspace-ribbon .writing-command-group {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+}
+
+.workspace-ribbon .workspace-ribbon-group-content :is(button, input, select) {
+  box-sizing: border-box;
+  flex-shrink: 0;
+  min-block-size: 32px;
+  margin: 0;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.workspace-ribbon-group-content > button {
+  padding: 6px 9px;
+  border: 1px solid var(--workspace-chrome-line);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--workspace-chrome-ink);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.workspace-ribbon-group-content > button:hover:not(:disabled) {
+  background: #edf3eb;
+  border-color: var(--workspace-chrome-accent);
+}
+
+.workspace-ribbon-group-content > button[aria-pressed="true"] {
+  border-color: var(--workspace-chrome-accent);
+  background: #e5eee4;
+}
+
+.workspace-ribbon :is(button, input, select):disabled {
+  opacity: .55;
+  cursor: default;
+}
+
+.workspace-ribbon-group-label {
+  display: block;
+  margin: 0;
+  color: var(--workspace-chrome-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Collapsing changes chrome only; each retained panel's hidden flag is set by TS. */
+.workspace-ribbon[data-collapsed="true"] { background: #f7f9f5; }
+
+.workspace-document-header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-sizing: border-box;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  padding: 10px 16px;
+  border-block-end: 1px solid var(--line, #dce3dd);
+  background: #fff;
+  font-size: 13px;
+}
+
+.workspace-document-header > :first-child { min-inline-size: 0; }
+
+.workspace-document-actions,
+.workspace-document-tools,
+.workspace-settings-host {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  font-size: 13px;
+}
+
+.workspace-document-actions { justify-content: flex-end; }
+.workspace-document-tools { padding: 6px 12px; }
+.workspace-settings-host { padding: 8px 12px; }
+
+.workspace-document-actions :is(button, input, select),
+.workspace-document-tools :is(button, input, select),
+.workspace-settings-host :is(button, input, select) {
+  font: inherit;
+  font-size: 13px;
+  min-block-size: 32px;
+}
+
+.workspace-document-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  flex-flow: row nowrap;
+  align-items: stretch;
+  gap: 4px;
+  box-sizing: border-box;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  padding: 4px 8px;
+  border-block-end: 1px solid var(--line, #dce3dd);
+  background: #f1f5ef;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+}
+
+.workspace-document-tabs > button {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  min-block-size: 34px;
+  max-inline-size: 260px;
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: #526358;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  text-align: start;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.workspace-document-tabs > button:is([aria-selected="true"], [aria-current="page"]) {
+  border-color: var(--accent, #487c6e);
+  background: #fff;
+  color: #303b36;
+}
+
+.workspace-ribbon :is(button, a, input, select, summary):focus-visible,
+.workspace-ribbon-panel:focus-visible,
+.workspace-document-tabs :is(button, a):focus-visible,
+.workspace-document-actions :is(button, a, input, select):focus-visible,
+.workspace-document-tools :is(button, a, input, select):focus-visible,
+.workspace-settings-host :is(button, a, input, select):focus-visible {
+  outline: 2px solid var(--accent, #487c6e);
+  outline-offset: 2px;
+}
+
+.workspace-ribbon[hidden],
+.workspace-ribbon-tabs[hidden],
+.workspace-ribbon-toggle[hidden],
+.workspace-ribbon-panel[hidden],
+.workspace-ribbon-group[hidden],
+.workspace-document-header[hidden],
+.workspace-document-actions[hidden],
+.workspace-document-tabs[hidden],
+.workspace-document-tools[hidden],
+.workspace-settings-host[hidden] { display: none; }
+
+@media (max-width: 640px) {
+  .workspace-ribbon-tabs { gap: 0; padding-inline: 4px; }
+  .workspace-ribbon-tabs > [role="tab"] { padding-inline: 10px; }
+  .workspace-ribbon-toggle { margin-inline-end: 4px; padding-inline: 8px; }
+  .workspace-ribbon-panel { padding: 8px 6px; }
+  .workspace-ribbon-group { padding-inline: 9px; }
+  .workspace-document-header { flex-wrap: wrap; padding: 8px 10px; gap: 6px; }
+  .workspace-document-header > :first-child { flex: 1 1 160px; }
+  .workspace-document-actions { justify-content: flex-start; }
+  .workspace-document-tabs { padding-inline: 4px; }
+  .workspace-document-tools,
+  .workspace-settings-host { padding-inline: 8px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-ribbon-tabs > [role="tab"],
+  .workspace-ribbon-toggle { transition: none; }
+  .workspace-ribbon-tabs,
+  .workspace-ribbon-panel,
+  .workspace-document-tabs { scroll-behavior: auto; }
+}

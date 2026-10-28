@@ -25,6 +25,7 @@ import os
 from pathlib import Path
 import re
 import secrets
+import socket
 import struct
 import subprocess
 import threading
@@ -33,6 +34,7 @@ import traceback
 import uuid
 import zipfile
 import xml.etree.ElementTree as ET
+from urllib.parse import urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 
 import _cli_contract_common as contract_common
@@ -60,7 +62,8 @@ CONTRACT_SUPPORT_PATHS = tuple(Path(module.__file__) for module in (
 SOURCE_ROOT = Path(__file__).resolve().parents[1]
 CREATE_NO_WINDOW = 0x08000000
 CASES = (
-    'artifact-roles', 'dual-pe-frozen-workers', 'actual-local-owner',
+    'artifact-roles', 'dual-pe-frozen-workers',
+    'retained-origin-startup-refusal', 'actual-local-owner',
     'library-read-literal-save-original', 'query-confirmed-artifact-download',
     'bibliography-import-original-plan',
     'local-sync-portable-records',
@@ -345,6 +348,176 @@ class Harness:
             results.append({'role': role, 'renderPdfSha256': digest(pdf),
                             'notesSourceSha256': edit['sourceHash'], 'moduleSha256': digest(module)})
         return results
+
+    def retained_origin_refusal(self):
+        profile = self.test / 'retained-origin-profile'
+        require(not profile.exists(), 'Retained-origin TEST profile already exists')
+        proof = {'profile': str(profile)}
+        self.report['retainedOriginRefusal'] = proof
+
+        contract_bytes = read_small(
+            SOURCE_ROOT / 'packaging/windows/host-contract.json')
+        paths = unique_json(contract_bytes)['paths']
+        require(paths['persistentKnownFolder'] == 'LocalAppData',
+                'Unexpected host-state Known Folder')
+        for field in ('persistentRelativeRoot', 'hostStateRelativePath'):
+            relative = Path(paths[field])
+            require(not relative.drive and not relative.root
+                    and not relative.is_absolute() and relative.parts
+                    and '..' not in relative.parts,
+                    'Host-state contract path is not a relative child')
+        catalog_path = (self.api.local_app_data()
+                        / paths['persistentRelativeRoot']
+                        / paths['hostStateRelativePath']
+                        / 'host-routing.json')
+        proof['hostContractSha256'] = digest(contract_bytes)
+
+        first = cli_serve.OwnedServe(
+            self.args.cli_executable, ['--data-dir', str(profile)],
+            log_prefix=self.output / 'retained-origin-initial')
+        proof['initialControlDirectory'] = str(first.directory)
+        ready_confirmed = False
+        try:
+            first.wait_ready()
+            ready_confirmed = True
+            self.redactions.add(first.ready['token'])
+            proof['initialOwner'] = first.ready['ownerIdentity']
+            port = urlsplit(first.ready['base']).port
+        finally:
+            if ready_confirmed:
+                first.stop()
+        require(first.process.poll() == 0,
+                'Initial original owner did not exit zero after typed stop')
+        proof['initialStop'] = first.record['shutdownReceipt']
+        proof['port'] = port
+
+        def locator_key(value):
+            require(isinstance(value, str), 'Origin locator is not text')
+            normalized = os.path.normcase(os.path.normpath(value))
+            if normalized.startswith('\\\\?\\unc\\'):
+                return '\\\\' + normalized[8:]
+            if normalized.startswith('\\\\?\\'):
+                return normalized[4:]
+            return normalized
+
+        actual_locator = locator_key(str(profile.resolve(strict=True)))
+        physical_identity = first.ready['ownerIdentity']['profileIdentity']
+
+        def origin_snapshot():
+            raw = read_small(catalog_path)
+            catalog = unique_json(raw)
+            require(type(catalog.get('schemaVersion')) is int
+                    and catalog['schemaVersion'] == 1
+                    and isinstance(catalog.get('origins'), list)
+                    and len(catalog['origins']) <= 4096,
+                    'Unexpected routing catalog schema')
+            matches = []
+            for row in catalog['origins']:
+                require(isinstance(row, dict), 'Malformed origin row')
+                if (row.get('physicalIdentity') == physical_identity
+                        or locator_key(row.get('locator')) == actual_locator):
+                    matches.append(row)
+            require(len(matches) == 1,
+                    'Original physical identity/locator does not match one origin')
+            row = matches[0]
+            require(set(row) == {'physicalIdentity', 'locator', 'port'}
+                    and row['physicalIdentity'] == physical_identity
+                    and locator_key(row['locator']) == actual_locator
+                    and type(row['port']) is int and row['port'] == port,
+                    'Original origin differs from the actual Ready/profile')
+            # Retain only this TEST row, never unrelated catalog rows.
+            return row, digest(raw)
+
+        original, before_hash = origin_snapshot()
+        proof.update(originalOrigin=original,
+                     catalogBeforeSha256=before_hash)
+
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as blocker:
+            blocker.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            blocker.bind(('127.0.0.1', port))
+            blocker.listen(1)
+            require(blocker.getsockname() == ('127.0.0.1', port),
+                    'Owned blocker did not hold the exact original origin')
+            blocked = cli_serve.OwnedServe(
+                self.args.cli_executable, ['--data-dir', str(profile)],
+                log_prefix=self.output / 'retained-origin-refused')
+            proof['refusedControlDirectory'] = str(blocked.directory)
+            try:
+                try:
+                    blocked.wait_ready()
+                except RuntimeError:
+                    # This exception is only an observation. The original child,
+                    # raw streams and control receipts decide the case below.
+                    pass
+                else:
+                    self.redactions.add(blocked.ready['token'])
+                    proof['unexpectedReadyOwner'] = blocked.ready['ownerIdentity']
+                    blocked.stop()
+                    raise AssertionError(
+                        'Occupied retained origin unexpectedly emitted Ready')
+
+                require(blocked.process.wait(timeout=15) == 3,
+                        'Refused original serve did not naturally exit 3')
+                blocked._join()
+                require(not blocked._stream_errors,
+                        'Refused original streams did not drain completely')
+                require(blocked.record.get('shutdownAttempted') is False,
+                        'Expected refusal instead needed owner shutdown')
+                controls = blocked.record.get('controls', {})
+                require(all(name == 'owner-status'
+                            and control.get('exitCode') == 3
+                            and 'outcome' not in control
+                            for name, control in controls.items()),
+                        'A control outcome is unknown or differs from no owner')
+                proof['controls'] = controls
+
+                stdout = read_small(blocked.directory / 'serve.stdout.bin')
+                stderr = read_small(blocked.directory / 'serve.stderr.bin')
+                require(stdout == b'', 'Refused startup emitted Ready/stdout')
+                records = [unique_json(line)
+                           for line in stderr.splitlines() if line.strip()]
+                require(len(records) == 2
+                        and set(records[0]) == {'schemaVersion', 'diagnostic'}
+                        and type(records[0]['schemaVersion']) is int
+                        and records[0]['schemaVersion'] == 1,
+                        'Refused startup has unexpected diagnostic records')
+                diagnostic = records[0]['diagnostic']
+                require(isinstance(diagnostic, dict)
+                        and set(diagnostic) ==
+                        {'code', 'message', 'phase', 'ioKind', 'osCode'}
+                        and diagnostic['code'] == 'localOriginUnavailable'
+                        and diagnostic['message'] ==
+                        'The retained local origin is unavailable; no changed-origin fallback was used'
+                        and diagnostic['phase'] == 'retainedBind',
+                        'Refused startup lost its approved typed diagnostic')
+                # Exclusive Windows binds can yield WSAEACCES or WSAEADDRINUSE.
+                require(type(diagnostic['osCode']) is int
+                        and (diagnostic['ioKind'], diagnostic['osCode']) in {
+                            ('PermissionDenied', 10013),
+                            ('AddrInUse', 10048)},
+                        'Retained bind did not report the actual Windows refusal')
+                require(isinstance(records[1], dict)
+                        and type(records[1].get('schemaVersion')) is int
+                        and isinstance(records[1].get('error'), dict)
+                        and type(records[1]['error'].get('exitCode')) is int
+                        and records[1] == {
+                    'schemaVersion': 1,
+                    'error': {'code': 'localOriginUnavailable', 'exitCode': 3}},
+                    'Refused startup changed its standard error contract')
+                after, after_hash = origin_snapshot()
+                require(after == original,
+                        'Refused startup changed its original retained origin')
+                proof.update(diagnostic=diagnostic,
+                             catalogAfterSha256=after_hash,
+                             originalOriginUnchanged=True,
+                             observedExitCode=3, stdoutBytes=0)
+            finally:
+                blocked.record.update(
+                    observedExitCode=blocked.process.poll(),
+                    stopped=blocked.process.poll() is not None)
+                blocked._save()
+                blocked._write_logs()
+        return proof
 
     def owner_start(self):
         self.cap = self.capabilities(self.profile, 'owner-capabilities')
@@ -1098,6 +1271,8 @@ class Harness:
         try:
             self.case('artifact-roles', self.setup)
             self.case('dual-pe-frozen-workers', self.workers, ['artifact-roles'])
+            self.case('retained-origin-startup-refusal',
+                      self.retained_origin_refusal, ['artifact-roles'])
             self.case('actual-local-owner', self.owner_start, ['artifact-roles'])
             self.case('library-read-literal-save-original', self.create_and_write, ['actual-local-owner'])
             business = ['library-read-literal-save-original']

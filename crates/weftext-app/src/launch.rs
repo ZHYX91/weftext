@@ -6,6 +6,33 @@ use crate::local_service::{InitialDocument, LocalServiceOptions};
 use clap::Parser;
 use std::{ffi::OsString, io, path::PathBuf};
 
+/// Keep the process MTA alive across idle WinRT workers. The generated Windows
+/// bindings cache agile activation factories for the process; balancing each
+/// worker's RoInitialize alone can tear their apartment down between calls.
+/// Create this before the async runtime and drop it after every worker retires.
+#[cfg(windows)]
+pub struct ProcessWinRt(windows::Win32::System::Com::CO_MTA_USAGE_COOKIE);
+#[cfg(windows)]
+impl ProcessWinRt {
+    pub fn enter() -> Result<Self, ServeError> {
+        unsafe { windows::Win32::System::Com::CoIncrementMTAUsage() }
+            .map(Self)
+            .map_err(|_| ServeError {
+                code: "windowsRuntimeStartFailed",
+                diagnostic: "The process Windows Runtime lifetime could not start",
+                local_origin: None,
+            })
+    }
+}
+#[cfg(windows)]
+impl Drop for ProcessWinRt {
+    fn drop(&mut self) {
+        // This is the final process COM boundary, after the async runtime and
+        // its WinRT work have stopped. Each worker still balances its own init.
+        let _ = unsafe { windows::Win32::System::Com::CoDecrementMTAUsage(self.0) };
+    }
+}
+
 #[derive(Debug, Clone, clap::Args)]
 pub struct ServeArgs {
     #[arg(skip)]
@@ -37,7 +64,77 @@ pub struct ServeReady<'a> {
 pub struct ServeError {
     pub code: &'static str,
     pub diagnostic: &'static str,
+    pub local_origin: Option<LocalOriginDiagnostic>,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LocalOriginPhase {
+    RootQualification,
+    UserDataPath,
+    ProfileSeparation,
+    ProfileCanonicalize,
+    CatalogLock,
+    CatalogRead,
+    BrowserDataQualification,
+    OriginMetadataMissing,
+    LocatorConflict,
+    RetainedPortMismatch,
+    RetainedBind,
+    RequestedPortReserved,
+    OriginCapacity,
+    CandidateBind,
+    CandidateAddress,
+    CandidateExhausted,
+    ListenerAddress,
+    CatalogRevision,
+    CatalogPublish,
+    ListenerNonblocking,
+    ListenerAdopt,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LocalOriginDiagnostic {
+    phase: LocalOriginPhase,
+    #[serde(serialize_with = "serialize_io_kind")]
+    io_kind: io::ErrorKind,
+    os_code: Option<i32>,
+}
+fn serialize_io_kind<S: serde::Serializer>(
+    kind: &io::ErrorKind,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
+    // Only the standard library's typed discriminant, never an error's
+    // Display/Debug, source chain, paths or other runtime text.
+    serializer.collect_str(&format_args!("{kind:?}"))
+}
+impl LocalOriginDiagnostic {
+    #[cfg(any(windows, test))]
+    pub(crate) fn from_io(phase: LocalOriginPhase, error: &io::Error) -> Self {
+        // Root qualification also takes the catalog lock. Preserve that exact
+        // boundary through its io::Result without inspecting arbitrary sources.
+        if let Some(original) = error
+            .get_ref()
+            .and_then(|source| source.downcast_ref::<Self>())
+        {
+            return *original;
+        }
+        Self {
+            phase,
+            io_kind: error.kind(),
+            os_code: error.raw_os_error(),
+        }
+    }
+    #[cfg(windows)]
+    pub(crate) fn into_io(self) -> io::Error {
+        io::Error::new(self.io_kind, self)
+    }
+}
+impl std::fmt::Display for LocalOriginDiagnostic {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("The local origin operation failed")
+    }
+}
+impl std::error::Error for LocalOriginDiagnostic {}
 impl std::fmt::Display for ServeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(self.diagnostic)
@@ -134,6 +231,7 @@ pub async fn desktop() -> Result<(), ServeError> {
             return Err(ServeError {
                 code: "desktopArguments",
                 diagnostic: "The COM embedding token requires the notification server role",
+                local_origin: None,
             });
         }
         raw.retain(|value| {
@@ -145,6 +243,7 @@ pub async fn desktop() -> Result<(), ServeError> {
     let args = DesktopArgs::try_parse_from(raw).map_err(|_| ServeError {
         code: "desktopArguments",
         diagnostic: "Invalid desktop arguments; use weftext-cli for formal console commands",
+        local_origin: None,
     })?;
     #[cfg(windows)]
     {
@@ -163,6 +262,7 @@ pub async fn desktop() -> Result<(), ServeError> {
             .map_err(|_| ServeError {
                 code: "profileUnavailable",
                 diagnostic: "The persistent profile location is unavailable",
+                local_origin: None,
             })?;
         let activation = if args.service_owner {
             crate::native::Activation::Headless
@@ -179,6 +279,7 @@ pub async fn desktop() -> Result<(), ServeError> {
         Err(ServeError {
             code: "desktopUnsupported",
             diagnostic: "This native desktop role requires Windows 11 x64",
+            local_origin: None,
         })
     }
 }
@@ -219,6 +320,7 @@ pub async fn serve(args: ServeArgs) -> Result<(), ServeError> {
         .map_err(|_| ServeError {
             code: "profileUnavailable",
             diagnostic: "The persistent profile location is unavailable",
+            local_origin: None,
         })?;
     #[cfg(windows)]
     {
@@ -226,6 +328,7 @@ pub async fn serve(args: ServeArgs) -> Result<(), ServeError> {
             return Err(ServeError {
                 code: "invalidServiceEnrollment",
                 diagnostic: "The Windows service uses its actual Windows authority, not a Linux enrollment",
+                local_origin: None,
             });
         }
         if let Some(config) = args.server_config {
@@ -255,6 +358,7 @@ pub async fn serve(args: ServeArgs) -> Result<(), ServeError> {
         Err(ServeError {
             code: "serviceAuthorityRequired",
             diagnostic: "This host has no qualified service authority",
+            local_origin: None,
         })
     }
 }
@@ -264,35 +368,39 @@ async fn controlled_hosted(args: ServeArgs, data: PathBuf) -> Result<(), ServeEr
     let enrollment = args.service_enrollment.ok_or(ServeError {
         code: "serviceAuthorityRequired",
         diagnostic: "Controlled Linux serve requires an administrator enrollment",
+        local_origin: None,
     })?;
     let policy = args.worker_broker_policy.ok_or(ServeError {
         code: "workerAuthorityRequired",
         diagnostic: "Controlled Linux serve requires its explicit administrator worker policy",
+        local_origin: None,
     })?;
     let profile = data.clone();
     let (backend, workers) = crate::work::spawn_blocking(move || {
         let backend = weftext_core::BackendContext::controlled_service_for_profile(&enrollment, &profile)
             .map_err(|_| ServeError { code: "serviceAuthorityRejected",
-                diagnostic: "The actual UID, privileges, enrollment and filesystem roots did not qualify" })?;
+                diagnostic: "The actual UID, privileges, enrollment and filesystem roots did not qualify", local_origin: None })?;
         let workers = crate::compiler_worker::Transport::controlled(&backend, &policy)
             .map_err(|_| ServeError { code: "workerAuthorityRejected",
-                diagnostic: "The worker policy did not qualify against the original Core enrollment" })?;
+                diagnostic: "The worker policy did not qualify against the original Core enrollment", local_origin: None })?;
         Ok::<_, ServeError>((backend, workers))
     }).await.map_err(|_| ServeError { code: "workerAuthorityUnavailable",
-        diagnostic: "The original Core and worker authority could not be inspected" })??;
-    let config=args.server_config.ok_or(ServeError{code:"hostedConfigurationRequired",diagnostic:"Controlled Linux serve currently requires the explicit hosted configuration; local owner IPC is unavailable"})?;
+        diagnostic: "The original Core and worker authority could not be inspected", local_origin: None })??;
+    let config=args.server_config.ok_or(ServeError{code:"hostedConfigurationRequired",diagnostic:"Controlled Linux serve currently requires the explicit hosted configuration; local owner IPC is unavailable", local_origin: None })?;
     let mut terminate = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
         .map_err(|_| ServeError {
         code: "shutdownSignalUnavailable",
         diagnostic: "The controlled service termination signal could not be monitored",
+        local_origin: None,
     })?;
     let core = weftext_core::Core::with_backend(&data, backend).map_err(|_| ServeError {
         code: "coreUnavailable",
         diagnostic: "The exact enrolled persistent Core could not be opened",
+        local_origin: None,
     })?;
     let service=crate::hosted::HostedService::bind(core,config,data.join("legacy-office"),workers).await.map_err(|error|{
-        if error.is::<crate::hosted::PairingMismatch>(){ServeError{code:"syncPairingMismatch",diagnostic:"Persisted sync pairing differs from configuration; existing grants cannot silently move to another family"}}
-        else{ServeError{code:"hostedConfiguration",diagnostic:"The controlled hosted configuration could not be bound"}}
+        if error.is::<crate::hosted::PairingMismatch>(){ServeError{code:"syncPairingMismatch",diagnostic:"Persisted sync pairing differs from configuration; existing grants cannot silently move to another family", local_origin: None }}
+        else{ServeError{code:"hostedConfiguration",diagnostic:"The controlled hosted configuration could not be bound", local_origin: None }}
     })?;
     let ready = serde_json::json!({"schemaVersion":1,"kind":"ready","url":service.origin(),"serviceAuthority":{"kind":"linuxControlledService","storageProfile":weftext_core::STORAGE_PROFILE}});
     // No Windows PID/FILETIME/broker identity is invented on this platform.
@@ -304,11 +412,12 @@ async fn controlled_hosted(args: ServeArgs, data: PathBuf) -> Result<(), ServeEr
         stdout.flush()
     })();
     let output_failed = output.is_err();
-    service.serve_until(async move{if !output_failed{tokio::select!{_ = terminate.recv()=>{},_ = tokio::signal::ctrl_c()=>{}}}}).await.map_err(|_|ServeError{code:"shutdownUnknown",diagnostic:"The controlled service did not confirm accepted-work drain and final Core release"})?;
+    service.serve_until(async move{if !output_failed{tokio::select!{_ = terminate.recv()=>{},_ = tokio::signal::ctrl_c()=>{}}}}).await.map_err(|_|ServeError{code:"shutdownUnknown",diagnostic:"The controlled service did not confirm accepted-work drain and final Core release", local_origin: None })?;
     if output_failed {
         Err(ServeError {
             code: "readyOutput",
             diagnostic: "The controlled service Ready output was not confirmed; accepted work was drained",
+            local_origin: None,
         })
     } else {
         Ok(())
@@ -318,6 +427,20 @@ async fn controlled_hosted(args: ServeArgs, data: PathBuf) -> Result<(), ServeEr
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(windows)]
+    #[test]
+    fn origin_qualification_keeps_the_original_catalog_lock_diagnostic() {
+        let original = LocalOriginDiagnostic::from_io(
+            LocalOriginPhase::CatalogLock,
+            &io::Error::from_raw_os_error(5),
+        );
+        let wrapped = original.into_io();
+        assert_eq!(
+            LocalOriginDiagnostic::from_io(LocalOriginPhase::RootQualification, &wrapped),
+            original
+        );
+        assert_eq!(serde_json::to_value(original).unwrap()["osCode"], 5);
+    }
     #[test]
     fn internal_workers_are_exact_earliest_roles() {
         for flag in ["--render-worker", "--notes-edit-worker"] {

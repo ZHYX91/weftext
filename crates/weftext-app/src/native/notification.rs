@@ -1,9 +1,14 @@
 //! Trusted OS adapter. Only the desktop coordinator owns these entry points;
 //! neither HTTP clients nor activation payloads can manufacture a Core permit.
-use std::{io, path::PathBuf};
+use std::{
+    io,
+    path::PathBuf,
+    time::{Instant, SystemTime},
+};
 use weftext_core::reminder_device_state::{
     ReminderDeliveryPermit, ReminderDeliveryStatus, ReminderNotificationRequest,
-    ReminderOriginalNotification, ReminderSubmissionOutcome,
+    ReminderOriginalNotification, ReminderOsCallResult, ReminderSubmissionObservation,
+    ReminderSubmissionOutcome,
 };
 use windows::{
     Data::Xml::Dom::XmlDocument,
@@ -173,6 +178,7 @@ pub(super) async fn submit(
             )?;
             Ok((apartment, prepared, profile))
         })();
+        let mut observation = None;
         let outcome = match prepared {
             Err(error) => ReminderSubmissionOutcome::FailedBeforeCall(weftext_core::CoreDescription::from(weftext_core::CoreError::new("notificationPreparationFailed", weftext_messages::UiMessage::error_notification_preparation_failed()).caused_by(weftext_core::CoreError::from(error)))),
             Ok((_apartment, prepared, _profile)) => {
@@ -185,7 +191,21 @@ pub(super) async fn submit(
                     Ok(()) => {
                         // No await, preparation, catalog write or retained Core
                         // lock occurs between final one-use admission and Show.
-                        match prepared.show() {
+                        let started_at = SystemTime::now();
+                        let started = Instant::now();
+                        let result = prepared.show();
+                        let elapsed = started.elapsed();
+                        let returned_at = SystemTime::now();
+                        let os_result = match &result {
+                            Ok(()) => ReminderOsCallResult::ReturnedSuccess,
+                            Err(error) => ReminderOsCallResult::ReturnedFailure { hresult: error.code().0 },
+                        };
+                        // Convert only after the call. A missing clock observation
+                        // cannot turn an actual OS result into a pre-call failure.
+                        observation = ReminderSubmissionObservation::from_system_times(
+                            started_at, returned_at, elapsed, os_result,
+                        ).ok();
+                        match result {
                             Ok(()) => ReminderSubmissionOutcome::SubmittedToSystem,
                             Err(error) => ReminderSubmissionOutcome::Unknown(weftext_core::CoreDescription::from(weftext_core::CoreError::new("notificationResultUnknown", weftext_messages::UiMessage::error_notification_submission_unknown()).caused_by(weftext_core::CoreError::from(std::io::Error::other(error))))),
                         }
@@ -194,7 +214,7 @@ pub(super) async fn submit(
             }
         };
         core.lock().map_err(|_| io::Error::other("The original notification result could not be stored"))?
-            .finish_reminder_delivery(&permit, outcome).map_err(io::Error::other)
+            .finish_reminder_delivery(&permit, outcome, observation).map_err(io::Error::other)
     }).await.map_err(io::Error::other)?
 }
 

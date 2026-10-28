@@ -1,3 +1,7 @@
+import type { PersonalCopySeed } from "./personal-input-recovery";
+
+export interface AuthorInputBindOptions { readonly personalCopy?: PersonalCopySeed }
+
 /** Native ValuePath identities, shared with field and capture owners. */
 export type ValuePath = { kind: "member"; key: string } | { kind: "index"; index: number };
 export type AuthorInputOwner =
@@ -29,7 +33,7 @@ export interface AuthorProducerState extends AuthorProducerCheckpoint {
 export interface AuthorProducerSnapshot { collectorRevision: number; producers: AuthorProducerState[] }
 export interface AuthorInputLease { apply(text: string, assign?: (text: string) => void): boolean; release(): void }
 export interface AuthorInputSession {
-  bind(control: HTMLInputElement | HTMLTextAreaElement, slot: string, path?: readonly ValuePath[]): () => void;
+  bind(control: HTMLInputElement | HTMLTextAreaElement, slot: string, path?: readonly ValuePath[], options?: AuthorInputBindOptions): () => void;
   /** Positive choice registration tracks unapplied intent without treating an
    * untouched protected option as personally typed text. */
   bindChoice(control: HTMLInputElement | HTMLSelectElement, slot: string, path?: readonly ValuePath[]): () => void;

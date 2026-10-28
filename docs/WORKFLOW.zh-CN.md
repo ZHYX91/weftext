@@ -25,25 +25,39 @@ translation_status: source
 
 纯文档改动运行 `python scripts/check.py`。涉及 schema、类型/时间算法或模型时运行 `python scripts/check.py --models`。实现切片增加自己的格式、静态分析和必要测试；跨平台、文件故障、权限、编辑和 Office 输出按真实影响选场景。失败记录实际原因；不通过删断言或改期望掩盖问题。
 
-`python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 40 个 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由默认 Rust discovery 完整执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。
+`python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 40 个 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由完整 Rust 组逐项执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。
 
-Windows `build`／完整 `check` 在固定双角色批次旁生成 `build-input-receipt.json`。`check --artifacts ABSOLUTE_RECEIPT` 只复用这批产物字节，所选检查每次重新执行，不读取旧 PASS。回执严格绑定同一检出／target／profile、完整公开源码与前端、双角色和原 catalog、实际顶层 Rust／Cargo／Node／npm 与所列明确构建配置；源码中的脚本、文档或 fixture 变化也要求新批次。每组边界及最终重新核输入；源根改变、缺失或未完成回执、非法路径、角色／字节／配置不一致均拒绝。资格观察要求外部 Cargo home、明确工具／SDK 路径及工具搜索目录为绝对路径；Cargo 配置中的自定义工具须以直接环境覆盖明确选择，未解析的 include、条件 linker 与 `[env]` 工具选择均拒绝，不猜测实际工具。它不证明所有隐式 SDK、系统库及传递依赖相同，也不证明可重现构建或整版验收。`package` 拒绝分组和外部回执，继续在固定源码副本执行原完整检查与打包。
+Rust 组保留原 workspace／all-targets Clippy，随后依次运行：
 
-Windows CI 通过同一产品入口构建一次，再以独立进程和该次回执执行完整检查；保留这批双角色、catalog、原回执、实际 checkout commit／tree／run 身份及该次检查限定的控制／CLI 原件。下载后核原件与源码对应关系，再执行所需运行时验收；不得改写 CI 回执的源根或重签成另一检出的本地构建。CI 日志与产物可用于失败诊断，上传成功不等于检查通过。
+```text
+cargo test --locked --workspace --exclude weftext-app --message-format=json-render-diagnostics -- --exact --skip reminder_device_state::integration_tests::capacity::reminder_64_member_permit_checks_within_its_real_monotonic_lifetime
+cargo test --locked -p weftext-core --lib --message-format=json-render-diagnostics -- reminder_device_state::integration_tests::capacity::reminder_64_member_permit_checks_within_its_real_monotonic_lifetime --exact --test-threads=1
+cargo test --locked -p weftext-app --message-format=json-render-diagnostics -- --test-threads=1
+```
+
+首条测试命令保留其他 Core／workspace 用例的默认并行度与全部默认目标，只把完整名称匹配的真实 64 成员许可用例交给第二条独立运行；[固定 Rust 1.99.1 的 libtest 实现](https://github.com/rust-lang/rust/blob/1.99.1/library/test/src/lib.rs#L498-L537)对 `--exact --skip` 采用完整名称相等，不排除名称带此前缀的新增用例。第二条仍使用真实单调时钟、原 5 秒硬期限和全部容量／授权断言，作为隔离时间基准；不缩减 setup、放宽期限或省略用例。第三条运行完整 App 默认目标。三条合计覆盖原 workspace 的全部默认 lib／bin／doctests，并保留当前 manifest 的默认 feature 选择；Core 当前没有可选 feature。独立 App Core／HTTP fixture 共享进程级后台 producer registry，服务退出必须排空该 registry，因此 App 用例之间串行调度。每个用例内部的 Tokio 多线程运行时、并发 HTTP、真实容量、退出排空及原截止时间保持不变。直接运行 App 测试或带名称筛选时也使用 `-- --test-threads=1`，不依赖私有环境变量。隔离时间基准通过不代表并行 I/O 压力下仍满足期限；此前并行压力失败保留为该次实际结果，不能用隔离通过改写。
+
+Windows 构建在固定双角色批次旁生成 `build-input-receipt.json`。`check --artifacts ABSOLUTE_RECEIPT` 在该回执记录的同一源码根执行，可用于实际 Git 检出或规范打包拥有的固定源码副本；它只复用这批产物字节，所选检查每次重新执行，不读取旧 PASS。回执严格绑定准确源码根／target／profile、完整公开源码与前端、双角色和原 catalog、实际顶层 Rust／Cargo／Node／npm 与所列明确构建配置；源码中的脚本、文档或 fixture 变化也要求新批次。每组边界及最终重新核输入；源根改变、缺失或未完成回执、非法路径、角色／字节／配置不一致均拒绝。资格观察要求外部 Cargo home、明确工具／SDK 路径及工具搜索目录为绝对路径；Cargo 配置中的自定义工具须以直接环境覆盖明确选择，未解析的 include、条件 linker 与 `[env]` 工具选择均拒绝，不猜测实际工具。它不证明所有隐式 SDK、系统库及传递依赖相同，也不证明可重现构建或整版验收。普通 `build` 继续支持没有 Git 元数据的解压 `source.zip`；`package` 仍要求实际 Git 产品检出，拒绝分组和外部回执，并在固定源码副本执行原完整检查与打包。
+
+规范 `package` 在真实构建返回后、完整检查之前，用现有 `dependency_licenses` 收集器，依据实际固定源码根、完整 metadata 和实际 built package IDs，核 Cargo 依赖与已安装 npm 包的许可原文；CI 中这一步在独立回执子进程成功后执行。缺少原文立即停止打包并保留原物。随后 `package_windows` 从同批固定输入重新收集许可，只运行一次真实 SDK 资源／MSIX 生成，并生成完整 ZIP；原完整容器与 blockmap 校验通过后，才调用原全部检查。创建产物目录即写入 `INCOMPLETE.json`；此时只有未核定载荷，尚无 `PACKAGE.json` 或 `Unsigned local candidate` 成功标记。全部检查成功后，再核源码／前端／双 PE／catalog、许可原文与声明、SDK 工具、载荷／清单及容器完整字节和原摘要；只有仍相同才新建 `PACKAGE.json`、移除未完成标记并打印成功。SDK、容器、完整检查或最终复核失败都保留本次原物与未完成状态，不重建、不重试、不沿用旧 PASS。普通 `build`、`check` 和回执验证保持不变。
+
+Windows CI 先初始化本轮证据目录，不在这一步构建；随后调用原规范 `package --release`，只构建一次新的固定源码 release 批次。原构建返回准确产物后、原完整检查之前，用已选定的绝对 Python 3.11 从该固定源码根启动独立进程，运行原 `mvp.py check --release --group cli --artifacts ABSOLUTE_RECEIPT`；它继承该批实际构建环境，包括原显式 x64 target、linker 和 SDK，记录命令、工作目录、完整原 stdout／stderr 与退出码。子进程失败立即阻断后续检查与打包；成功后先执行打包许可预检及上述真实完整容器生成／严格校验，再让原产物继续执行全部 source／scripts／frontend／格式／Clippy／Core／App／CLI 与 40 个 HTTP 检查，保留真实容量用例及原五秒期限，不以子进程 PASS 代替任何完整检查。只有完整打包成功，才提供同批对应的 ZIP／MSIX、PACKAGE 和 BUILD；原回执／catalog、checkout／run 身份与控制／CLI 原件均绑定该实际批次及固定源码。失败控制、部分输出、SDK 日志与未打包材料原件继续保留为未核定证据，未签名复核产物按原策略保留 7 天。材料获取见 [PACKAGING](PACKAGING.zh-CN.md)，不签名、改信任、安装或发布；下载后不得改写 CI 回执源根冒本地构建。上传成功不等于检查通过。
 
 CLI 合同入口保留业务用例与唯一报告，Win32／ConPTY、受控 relay、安全失败摘要及纯传输夹具分别放在支持模块。2048 个确定性 token 的 DOCX 夹具仍经过真实转换、多块下载和完整摘要／内容断言，不以模拟产物代替。并发输入测试在真实冻结捕获后确认原宿主的新 worker，再执行原修改并核特定后置拒绝和严格事件先后；不能用初始捕获失败、任意 409 或 worker 失败冒充撤权／依赖重验通过。
 
-校对／Office 的并发交付夹具构造 20,000 份原生段落内容，只投影数量及样本，使它们能在原显示树与 worker 输出预算内到达后置授权检查；整批展开超预算是容量拒绝，不能算撤权成功。真实容量／压力测试继续独立运行原规模与拒绝断言，不用这个有界交付夹具授予容量通过。
+并发修改用例只测量实际变更 POST：策略读取、导入准备和保存所需的 Draft ACK 均在原总预算内先完成。确认 worker 仍运行后记录 POST 开始，要求它早于原请求交付；随后核准确回执与实际回读。客户端收到 ACK 的时点不是服务端发布时点，拒绝回包可先到达。策略核同一 generation 及完整目标值；输入序号、保存和集合成员变更各核其原身份与实际效果，保留原错误码和无泄漏断言。
 
-`scripts/mvp.py` 的共享 Cargo target 使用一份可丢弃的构建输入提示，不能把 Cargo `fresh` 或相对 dep-info 当成当前检出已编译的证明；[Cargo 的文件时间判据](https://doc.rust-lang.org/stable/nightly-rustc/cargo/compiler/fingerprint/index.html)并不替代源码内容身份。提示绑定实际 Rust／Cargo 程序与版本、本地／path／vendor crate 源码、构建脚本及外部嵌入资源，区分具体命令模式与源码根上下文，核原成功产物及本地构建脚本生成目录的内容摘要。未知或变化时只调整相关本地 crate 真实入口的 mtime，字节不改，且必须观察实际 `compiler-artifact` 非 fresh；不 clean target，不让未变的 registry 依赖冷编。本地 vendor 无旧同源资格也需重编当前入口；有有效内容与 unit／产物资格后保持复用，features／profile 仍由 Cargo 管理。
+校对／Office／集合成员变更的并发交付夹具构造 20,000 份原生段落内容，只投影数量及固定代表文字，使它们能在原显示树与 worker 输出预算内到达后置授权检查；整批展开超预算是容量拒绝，不能算撤权成功。真实容量／压力测试继续独立运行原规模与拒绝断言，不用这个有界交付夹具授予容量通过。
 
-入口先取得同 target 的产品锁，再调用 Cargo 自有锁；固定角色副本完成前不释放产品锁。直接 Cargo 调用不受此产品锁约束，须按同 target 构建协调执行，不能据此外推任意未协作并发安全。Python 在读取输出或等待期间被中断时，仍排空自有子进程的输出，确认该确切进程退出后才释放锁，并重抛最初异常；收尾期间再次中断也不提前释放锁。每条编译命令开始前清除可用成功状态，只有命令成功、输入内容稳定及实际产物核对后才更新提示；失败、被中断或源码变化均不记新源码成功。该提示不是验收记录，不能代替源码／前端／程序冻结。现有检查内的 `scripts/test_cargo_cache.py` 使用无第三方的自有小 Cargo 项目核旧 mtime、两个检出、normal／test／feature、失败和锁顺序；另用自有 Python 子进程核受控的仅父进程 SIGINT、输出／等待及重复中断。这些用例不冒实际产品验收或真实终端键盘行为。
+`scripts/mvp.py` 的共享 Cargo target 使用一份可丢弃的构建输入提示，不能把 Cargo `fresh` 或相对 dep-info 当成当前检出已编译的证明；[Cargo 的文件时间判据](https://doc.rust-lang.org/stable/nightly-rustc/cargo/compiler/fingerprint/index.html)并不替代源码内容身份。提示绑定实际 Rust／Cargo 程序与版本、本地／path／vendor crate 源码、构建脚本及外部嵌入资源，区分具体命令模式与源码根上下文，核原成功产物及本地构建脚本生成目录的内容摘要。未知或变化时，先核包名归属、生成记录、路径与写句柄，再精确失效当前命令所选 host／target、profile 下相关本地包及其实际依赖图反向闭包的生成式短 fingerprint，并调整当前本地入口 mtime；源码字节和旧冻结副本保留。这样覆盖 dep-info 仍指向 target 内旧副本的情形，且必须观察本地包及受影响反向依赖的实际 `compiler-artifact` 非 fresh。被本地 patch 影响的 registry 父包随之重编，避免旧 Rust 元数据引用已替换的依赖；不 clean target，无关 registry 依赖继续复用。本地 vendor 无旧同源资格也需重编当前入口；有有效内容与 unit／产物资格后保持复用，features／profile 仍由 Cargo 管理。
 
-宿主启动重构复用同一 `weftext` 程序和原 HTTP 检查；`cargo test --locked -p weftext-app` 同时覆盖库中的既有消费者、持久目录／启动参数／浏览器错误和本机服务关闭回归。库的 `LocalService` 生命周期用真实监听及 Core 租约验证：重复占用拒绝，宿主停止后原端口和私有状态可重新取得；端口冲突不能留下租约。停滞交接测试实际阻塞同一交接 helper 的回调，核对超时返回、宿主运行时销毁，以及浏览器尚未完成时 HTTP 仍可用且停止可完成；它不冒充真实 Shell 扩展或浏览器验收。目录／启动器选择的纯测试只证明选择和错误语义，不作为 macOS／Linux 实机结果。继续按影响矩阵分别验真实桌面、worker 进程、权限、草稿及恢复；本轮不为结构迁移另建验收体系。
+入口先取得同 target 的产品锁，再调用 Cargo 自有锁；固定角色副本完成前不释放产品锁。直接 Cargo 调用不受此产品锁约束，须按同 target 构建协调执行，不能据此外推任意未协作并发安全。Python 在读取输出或等待期间被中断时，仍排空自有子进程的输出，确认该确切进程退出后才释放锁，并重抛最初异常；收尾期间再次中断也不提前释放锁。每条编译命令开始前清除可用成功状态，只有命令成功、输入内容稳定及实际产物核对后才更新提示；失败、被中断或源码变化均不记新源码成功。该提示不是验收记录，不能代替源码／前端／程序冻结。现有检查内的 `scripts/test_cargo_cache.py` 使用无第三方的自有小型离线 Cargo 项目核旧 mtime、两个检出、normal／test／feature、本地 patch 经 registry 父包的重编及无关 registry 复用、失败和锁顺序；另用自有 Python 子进程核受控的仅父进程 SIGINT、输出／等待及重复中断。这些用例不冒实际产品验收或真实终端键盘行为。
 
-受控 Linux 编译传输另须在 Linux 上执行既有 `cargo test --locked -p weftext-worker-broker` 及 `cargo test --locked -p weftext-app compiler_worker`。Windows 执行仅覆盖共用严格帧／回执校验，不覆盖 Linux socket、取消、匿名管道取消或终局状态映射。显式运行的 `scripts/test_linux_worker_broker.py` 要求已独立审查的 root 所有部署，不得替换为无约束进程或省略失败的内核条件。宣称产品集成前，须对 broker 准确批准的产品映像执行托管渲染／编辑／引用授权及原操作回归。
+宿主启动重构复用同一 `weftext` 程序和原 HTTP 检查；`cargo test --locked -p weftext-app -- --test-threads=1` 同时覆盖库中的既有消费者、持久目录／启动参数／浏览器错误和本机服务关闭回归。库的 `LocalService` 生命周期用真实监听及 Core 租约验证：重复占用拒绝，宿主停止后原端口和私有状态可重新取得；端口冲突不能留下租约。停滞交接测试实际阻塞同一交接 helper 的回调，核对超时返回、宿主运行时销毁，以及浏览器尚未完成时 HTTP 仍可用且停止可完成；它不冒充真实 Shell 扩展或浏览器验收。目录／启动器选择的纯测试只证明选择和错误语义，不作为 macOS／Linux 实机结果。继续按影响矩阵分别验真实桌面、worker 进程、权限、草稿及恢复；本轮不为结构迁移另建验收体系。
 
-Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 作业使用 Python 3.11 调用同一入口的 `check --group frontend`，按锁文件安装依赖并运行 TypeScript 测试、类型检查和 Vite 构建；Windows 作业使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，执行现有 `python scripts/mvp.py check`。该入口只构建一次，再检查字体、Rust 格式／Clippy／测试和实际程序的本地、托管与同步 HTTP 场景。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不执行发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
+受控 Linux 编译传输另须在 Linux 上执行既有 `cargo test --locked -p weftext-worker-broker` 及 `cargo test --locked -p weftext-app compiler_worker -- --test-threads=1`。Windows 执行仅覆盖共用严格帧／回执校验，不覆盖 Linux socket、取消、匿名管道取消或终局状态映射。显式运行的 `scripts/test_linux_worker_broker.py` 要求已独立审查的 root 所有部署，不得替换为无约束进程或省略失败的内核条件。宣称产品集成前，须对 broker 准确批准的产品映像执行托管渲染／编辑／引用授权及原操作回归。
+
+Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 使用 Python 3.11 调用同一 `check --group frontend`，按锁执行 TypeScript 测试、类型检查和 Vite 构建；Windows 使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，在一次完整规范 release 打包的同批固定源码产物上执行上述独立进程回执检查。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
 
 Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust 与 40 个 HTTP 脚本。CLI 合同先于较长的 Rust 检查运行；失败时立即输出有界、脱敏的原异常和本用例近期子进程／relay 诊断，并标明本轮新建的结果目录与产物目录，避免把缓存中的旧结果当成当前通过。产品操作和各用例本身的截止时间保持不变。
 
@@ -66,7 +80,7 @@ Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust �
 | --- | --- | --- |
 | 算法、Core、Query、保存协议与接口 | 仓库现有引擎测试、故障注入和实际程序 HTTP 场景；以同批固定 `weftext-cli.exe serve` 启动自有服务 | 证明所跑算法、接口及故障模型；进程中断不冒实际断电，Windows／NTFS 结果不外推其他文件系统。 |
 | 浏览器布局、五档、草稿、导航与资源呈现 | 无头或独立后台浏览器，在相同候选上检查实际渲染及浏览器交互 | 记录真实浏览器与场景；前端单元测试不等于浏览器实测，浏览器模拟输入不建立 OS IME 或完整 AT 通过。 |
-| Windows 安装／更新、系统文件集成、真实 IME 与辅助技术 | 已有实际输入、捕获和正常关闭证据的隔离 Windows Sandbox 或独立 Windows VM | 在客体内完成输入与观察，验证产物回收及宿主焦点隔离。Sandbox 可启动不代表最小化、断开查看器或无人值守可用；涉及重启、持久系统状态等能力时使用具备该能力的 VM。 |
+| Windows 安装／更新、系统文件集成、真实 IME 与辅助技术 | 按实际需要选择具备相应输入、捕获和正常关闭能力的本机桌面、Windows Sandbox 或独立 Windows VM | 本机使用独立测试资料，提前说明前台目的与时长，保护无关窗口；无需先迁移 VM。客体另验输入、产物回收和宿主焦点隔离。Sandbox 可启动不代表最小化、断开查看器或无人值守可用；重启和持久系统状态选择具备相应能力的环境。 |
 | Linux／macOS 桌面及其文件后端 | 对应真实 OS 的独立测试机或合适 VM | 分别验证安装、文件语义、键盘／IME／AT、字体与关闭恢复；Windows、容器或 WSL 的命令行结果不建立该桌面通过。 |
 | Android／iOS Mobile | 各自 Android 模拟器／iOS Simulator；无法由模拟环境证明的项目使用必要真机 | 分别验证系统文件访问、真实软键盘／触屏、生命周期、离线、字体及平台 AT；浏览器视口、模拟器或另一移动 OS 的通过不替代必要真机项目。 |
 
@@ -80,7 +94,7 @@ Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust �
 
 问题复现保留原候选、环境和最小触发步骤，记录实际观察；只复现一个故障不能报整场景通过。修复后用新候选重跑反例和直接受影响的正常路径；实现、依赖与环境没有变化且身份可确认的通过结果可以复用。发布验收另核对目标平台承诺、此前未验证项及候选完整性，不能把复现或执行环境资格当成发布通过。
 
-复用仓库的构建／检查／打包入口，每个平台的一轮候选只构建一次，再让后台、客体与必要人工场景消费同一份产物。默认 `python scripts/mvp.py check` 与 `package` 都会先构建并检查；按是否需要打包选其一。需要分组或跨进程检查时，使用 `build` 打印的新回执，再以 `check --artifacts ABSOLUTE_RECEIPT` 检查该批产物，不串联多个默认入口重复构建。Windows 打包参数、同次构建的 GUI／CLI 角色及严格离线材料前置见 [PACKAGING](PACKAGING.zh-CN.md)：`package` 在固定源码副本检查和生成，材料不全则拒绝完整候选。`package` 后在该打包候选上完成补充实测；源、依赖或打包内容改变则建立新候选并检查受影响范围，不沿用旧产物通过。其他平台尚未交付相应候选入口。
+复用仓库的构建／检查／打包入口，每个平台的一轮候选只构建一次，再让后台、客体与必要人工场景消费同一份产物。默认 `python scripts/mvp.py check` 与 `package` 都会先构建并检查；按是否需要打包选其一。需要分组或跨进程检查时，使用本次构建打印的新回执，从回执绑定的同一源码根以 `check --artifacts ABSOLUTE_RECEIPT` 检查该批产物，不串联多个默认入口重复构建。Windows 打包参数、同次构建的 GUI／CLI 角色及严格离线材料前置见 [PACKAGING](PACKAGING.zh-CN.md)：`package` 在固定源码副本检查和生成，材料不全则拒绝完整候选。`package` 后在该打包候选上完成补充实测；源、依赖或打包内容改变则建立新候选并检查受影响范围，不沿用旧产物通过。其他平台尚未交付相应候选入口。
 
 每个可交付切片只保留一份简短验收记录：提交或候选标识（必要时产物哈希）、目标 OS／浏览器／客体或设备版本、改动影响及场景、实际命令／手动步骤、通过／失败／未验证／工具错误、已知限制与必要证据位置。环境资格与产品结果分清；仅失败或关键操作保必要截图／片段，正常日志保摘要，不新建另一套验收事实库。用户真实输入与输出分开放置，原件不被测试覆盖。文档链接检查和有限模型不计作产品验收。
 
@@ -89,6 +103,14 @@ Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust �
 同一输入脚本可用 `EXE NEW_OUTPUT --hosted --smoke --fixture=100k-lines --recovery-check` 检查大稿恢复：实际阻断服务端草稿交付，刷新后核完整未保存正文，关闭自有后端释放文件租约后核磁盘原件未变。该模式的少量输入只作校准，不替代完整时延矩阵；失败现场与普通退出回执分别保留。
 
 `node scripts/test_hosted_personal_input_browser.mjs EXE NEW_OUTPUT` 在自有 TEST 库和独立无头浏览器验证未上传本人输入：仅注入后台草稿网络失败，实际撤权／401 后重新认证，核纯输入、账号分隔、准确基线恢复、共享 Undo、迟到原生回应、存储失败及原保存编号。程序赋值／IME 负向用例不授予保护文字来源。设置 `WEFTEXT_PLAYWRIGHT_MODULE` 可指定已安装的通用 Playwright 模块；不操作用户浏览器。该定向检查不代替完整候选验收或真实系统 IME。
+
+现有工作区浏览器消费者先通过 `scripts/_workspace_browser.mjs` 选择实际任务选项卡，再进入对应命令；对话框动作仍限定于自身范围。权限负例先确认仍可读的 inspector 已实际呈现，或检查原控制器自己的 hidden 状态。注释编号任务另核独立本人副本的续编、完成与重开，始终比较原恢复记录及原操作全对象，再核另一账号无副本 DOM 或值泄漏。结构任务注入稳定引用缓存写失败时，要求零新 writer 接纳且原稿／缓存不变；解除故障后仍由同一侧栏入口重试。
+
+`node scripts/test_capture_workspace_browser.mjs` 通过明确的 `WEFTEXT_TEST_EXECUTABLE` 消费构建批次的 CLI 及相邻目录中的 catalog／receipt，使用新的绝对 `WEFTEXT_BROWSER_REPORT` 目录、已安装的 Chrome 和 `WEFTEXT_PLAYWRIGHT_MODULE`。它验证真实 Core、Capture 界面和 IndexedDB 之间的独立草稿切换、一次创建回包丢失与重开恢复；可选 `WEFTEXT_TEST_EXECUTABLE_SHA256` 限定程序摘要，`WEFTEXT_BROWSER_FIXTURE_PARENT` 指定独立短夹具父目录，默认使用系统临时目录。实际挂载组件的退役／迟到 schema 用例另由 `scripts/test_capture_mount_browser.mjs` 以受控传输验证。两者均保留自有资料及清理记录；真实 Core 检查另留原 owner 停机回执，不授予真实原生窗口、系统 IME、辅助技术或整包通过。
+
+`node scripts/test_workspace_layout_browser.mjs ABSOLUTE_CLI ABSOLUTE_NEW_OUTPUT [--dev]` 在自有库和独立无头 Chrome 验证单一树展开、折叠保留父节点、功能区与文档标签、实际编辑器／选区／Undo、格式操作及响应式布局。默认消费程序内嵌前端；`--dev` 仅为当前开发前端诊断。CSS 等效缩放、合成组合键和浏览器结果不替代真实缩放、系统 IME 或读屏验收。功能入口按任务选项卡到达，不通过强制点击隐藏控件维持旧测试。
+
+`scripts/test_everyday_browser.mjs` 的本地及托管日常任务通过实际功能区进入相应命令；托管文档返回检查使用中央画布和源码编辑器各自的非零滚动位置，不以页面的 `window.scrollY` 代替画布位置。
 
 ## 发布
 

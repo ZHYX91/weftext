@@ -19,8 +19,8 @@
     "persistentRelativeRoot": "Weftext-MVP",
     "coreRelativePath": "core",
     "hostStateRelativePath": "host-state",
-    "cacheKnownFolder": "LocalAppData",
-    "cacheRelativeRoot": "Weftext/Cache"
+    "browserDataKnownFolder": "LocalAppData",
+    "browserDataRelativeRoot": "Weftext/Cache"
   },
   "activation": {
     "portableAumid": "Weftext.Desktop",

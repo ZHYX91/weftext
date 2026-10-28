@@ -17,10 +17,11 @@ import { PersonalRelationRules, RelationshipDiagnosticsView, visibleCandidate, t
 import { nodeSourceHash } from "./hosted-navigation-state";
 import { RelationshipGraphView } from "./relationship-graph-view";
 import type { GraphSnapshot, GraphEdge, GraphNode } from "./relationship-graph-state";
-import { HeadingStructureView } from "./heading-structure-view";
-import type { HeadingSnapshot, StructureHeading } from "./heading-structure-state";
+import type { HeadingSnapshot } from "./heading-structure-state";
+import { KnowledgeReadQueue, type KnowledgeReadOutcome } from "./knowledge-read-queue";
 export interface KnowledgeContext extends KnowledgeBasis {
     inputId: string;
+    inputRevision?: number;
     root: string;
     nodeId?: string;
     workspaceId?: string;
@@ -235,21 +236,31 @@ export interface KnowledgeHost {
         dispose(): void;
     };
     selectSource?(from: number, to: number): void;
-    revealHeading?(heading: StructureHeading): boolean;
     copy?(text: string): Promise<void>;
     beforeAction?(): Promise<void>;
     canEditSource?(): boolean;
 }
-export type KnowledgePanelTab = "links" | "graph" | "headings" | "citations" | "mentions" | "annotations" | "proofreading" | "files" | "templates";
+export type KnowledgePanelTab = "links" | "graph" | "citations" | "mentions" | "annotations" | "proofreading" | "files" | "templates";
 export interface KnowledgePanel {
     assertCloseReady(): void;
     freezeForClose(): boolean;
     thawAfterClose(): void;
     backgroundEnabled(): boolean;
+    contextChanged(): void;
+    environmentChanged(root: string): void;
     refresh(): Promise<void>;
     selectTab(tab: KnowledgePanelTab): void;
     attachSurface(surface: HTMLElement | null, mappings?: KnowledgeTextMapping[]): void;
     dispose(): void;
+}
+/** Read sharing keeps the exact logical owner; a Draft ACK does not change a Knowledge read. */
+function sameKnowledgeReadContext(a: KnowledgeContext, b: KnowledgeContext | null): boolean {
+    return sameKnowledgeBasis(a, b) && b !== null
+        && a.root === b.root
+        && a.workspaceId === b.workspaceId && a.nodeId === b.nodeId && a.dirty === b.dirty
+        && a.selection?.from === b.selection?.from && a.selection?.to === b.selection?.to
+        && a.selection?.visibleExcerpt === b.selection?.visibleExcerpt
+        && a.selection?.elementRole === b.selection?.elementRole && a.selection?.nodeKey === b.selection?.nodeKey;
 }
 const resolutionLabels: Record<string, UiText> = { exact: uiMessage("hostedReview.exactTarget"), mapped: uiMessage("knowledge.locationMapped"), stale: uiMessage("knowledge.locationNeedsRelocation"), ambiguous: uiMessage("knowledge.locationAmbiguous"), orphaned: uiMessage("knowledge.targetExpired"), unavailable: uiMessage("knowledge.targetUnavailable"), resolved: uiMessage("knowledge.targetValid"), missing: uiMessage("knowledge.targetMissing"), fragmentMissing: uiMessage("knowledge.paragraphLabelMissing"), invalid: uiMessage("knowledge.addressInvalid"), external: uiMessage("knowledge.externalLink") };
 const formLabels: Record<string, UiText> = { id: uiMessage("knowledge.formStableId"), relative: uiMessage("knowledge.formSourceRelative"), workspace: uiMessage("knowledge.formLibraryPath"), file: uiMessage("knowledge.formAbsolutePath") };
@@ -322,7 +333,10 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     container.classList.add("knowledge-panel");
     setUiAttr(container, "aria-label", uiMessage("knowledge.title"));
     const gate = new KnowledgeReadGate();
-    const graph = new RelationshipGraphView(), headings = new HeadingStructureView();
+    type ReadInput = { context: KnowledgeContext; generation: number };
+    const reads = new KnowledgeReadQueue<ReadInput>(read => readSnapshot(read.context, read.generation));
+    function invalidateRead(): void { gate.invalidate(); reads.invalidate(); }
+    const graph = new RelationshipGraphView();
     let graphSession = "";
     const proofreading = new ProofreadingPanel({ resultScope: "local", context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new UiError(uiMessage("knowledge.proofreadingApiUnavailable"))), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults, notify: message => host.notify(message, true) });
     let snapshot: KnowledgeSnapshot | null = null;
@@ -781,6 +795,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             }
             if (!originalCommitted(receipt))
                 throw new UiError(joinUiText([displayMessage("knowledge.operationIncomplete", { p0: receipt.status }), ...knowledgeDeliveryErrors(receipt)], "\n"));
+            invalidateRead();
             if (!committedDeliveryComplete(receipt))
                 throw new UiError(joinUiText([uiMessage("knowledge.committedDeliveryPending"), ...knowledgeDeliveryErrors(receipt), uiMessage("common.confirmOriginalOperation")], "\n"));
             await refresh(true);
@@ -831,6 +846,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             if (pending.receipt && originalCommitted(pending.receipt) && !originalCommitted(receipt))
                 throw new UiError(uiMessage("knowledge.committedStatusMismatch"));
             pending.receipt = receipt;
+            if (originalCommitted(receipt)) invalidateRead();
             if (committedDeliveryComplete(receipt)) {
                 await refresh(true);
                 pendingPlan = null;
@@ -1773,19 +1789,6 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         else
             host.notify(displayMessage("knowledge.authorSourceOpenedEditField", { p0: uiDisplayParameter(edge.fieldId ?? "") }));
     }
-    function openHeading(heading: StructureHeading): void {
-        closeGuard.assertMutable();
-        if (!sameKnowledgeBasis(snapshotBasis, host.context())) {
-            host.notify(uiMessage("knowledge.headingBasisChanged"), true);
-            return;
-        }
-        if (heading.range) {
-            host.selectSource?.(heading.range.utf16From, heading.range.utf16To);
-            return;
-        }
-        if (!host.revealHeading?.(heading))
-            host.notify(uiMessage("knowledge.generatedHeadingSourceUnavailable"), true);
-    }
     function discardAuthorProposals(): void {
         closeGuard.assertReady(busy || pendingPlan !== null || pendingPreparation !== null || composing);
         closeGuard.assertMutable();
@@ -1818,10 +1821,12 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         try { assertCloseReady(); } catch { return false; }
         if (!closeGuard.freeze(false)) return false;
         if (!proofreading.freezeForClose()) { closeGuard.thaw(); return false; }
-        gate.invalidate();
+        invalidateRead();
+        loading = false;
+        setUiText(status, "");
         return true;
     }
-    function thawAfterClose(): void { proofreading.thawAfterClose(); closeGuard.thaw(); }
+    function thawAfterClose(): void { proofreading.thawAfterClose(); closeGuard.thaw(); renderReadState(); }
     function render(): void {
         if (disposed || closeGuard.frozen)
             return;
@@ -1834,7 +1839,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         const heading = element("div", "knowledge-heading");
         heading.append(element("strong", "", uiMessage("knowledge.title")), action(uiMessage("reminder.refresh"), refresh, "knowledge-refresh"));
         if (loading)
-            heading.append(action(uiMessage("knowledge.stopWaiting"), () => { gate.invalidate(); loading = false; clearOverlay(); setUiText(status, uiMessage("knowledge.scanWaitStopped")); render(); }));
+            heading.append(action(uiMessage("knowledge.stopWaiting"), () => { invalidateRead(); loading = false; clearOverlay(); setUiText(status, uiMessage("knowledge.scanWaitStopped")); render(); }));
         if (authorProposal) {
             heading.append(createAction(uiMessage("processingSettings.discardInput"), () => {
                 try { discardAuthorProposals(); } catch (error) { report(error); }
@@ -1844,7 +1849,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         const tabs = element("div", "knowledge-tabs");
         tabs.setAttribute("role", "tablist");
         setUiAttr(tabs, "aria-label", uiMessage("knowledge.knowledgePanel"));
-        for (const [id, label] of [["links", uiMessage("knowledge.relationships")], ["graph", uiMessage("knowledge.graph2d")], ["headings", uiMessage("knowledge.headingStructure")], ["citations", uiMessage("knowledge.insertCitation")], ["mentions", uiMessage("knowledge.potentialLinks")], ["annotations", uiMessage("hostedShell.panelAnnotations")], ["proofreading", uiMessage("knowledge.proofreading")], ["files", uiMessage("knowledge.files")], ["templates", uiMessage("knowledge.templates")]] as const) {
+        for (const [id, label] of [["links", uiMessage("knowledge.relationships")], ["graph", uiMessage("knowledge.graph2d")], ["citations", uiMessage("knowledge.insertCitation")], ["mentions", uiMessage("knowledge.potentialLinks")], ["annotations", uiMessage("hostedShell.panelAnnotations")], ["proofreading", uiMessage("knowledge.proofreading")], ["files", uiMessage("knowledge.files")], ["templates", uiMessage("knowledge.templates")]] as const) {
             const control = action(label, () => { tab = id; render(); }, "knowledge-tab");
             control.setAttribute("role", "tab");
             control.setAttribute("aria-selected", String(tab === id));
@@ -1853,7 +1858,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 if (!["ArrowRight", "ArrowLeft", "Home", "End"].includes(event.key))
                     return;
                 event.preventDefault();
-                const ids = ["links", "graph", "headings", "citations", "mentions", "annotations", "proofreading", "files", "templates"];
+                const ids = ["links", "graph", "citations", "mentions", "annotations", "proofreading", "files", "templates"];
                 const index = ids.indexOf(tab);
                 tab = event.key === "Home" ? ids[0] : event.key === "End" ? ids.at(-1)! : ids[(index + (event.key === "ArrowRight" ? 1 : ids.length - 1)) % ids.length];
                 render();
@@ -1902,8 +1907,6 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         }
         else if (tab === "graph")
             graph.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.graph : undefined, `${host.context()?.workspaceId}/${host.context()?.nodeId}`, { open: node => closeGuard.run(() => Promise.resolve(host.navigate(node.reference))), source: openGraphSource, error: report });
-        else if (tab === "headings")
-            headings.render(body, sameKnowledgeBasis(snapshotBasis, host.context()) ? snapshot?.headingStructure : undefined, openHeading);
         else if (tab === "citations") {
             const context = host.context()!;
             let state = citationInputs.get(context.sessionId);
@@ -1934,18 +1937,26 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     }
     async function refresh(strict = false): Promise<void> {
         if (closeGuard.frozen || disposed) return;
-        const context = host.context();
-        const generation = gate.begin();
+        // Keep the exact captured inputs even if a host later mutates its object.
+        const context = structuredClone(host.context());
+        const desired = reads.current;
+        if (context && desired && gate.accepts(desired.generation, desired.context, context) && sameKnowledgeReadContext(desired.context, context)) {
+            await finishRead(reads.join()!, strict);
+            return;
+        }
+        invalidateRead();
         if ((context?.sessionId ?? "") !== graphSession) {
             graphSession = context?.sessionId ?? "";
             graph.clear();
-            headings.clear();
         }
         if (!context) {
+            loading = false;
+            setUiText(status, "");
             snapshot = null;
             snapshotBasis = null;
             clearOverlay();
             render();
+            if (strict) throw new UiError(uiMessage("knowledge.readBasisChanged"));
             return;
         }
         if (!sameKnowledgeBasis(snapshotBasis, context)) {
@@ -1953,16 +1964,56 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             snapshot = null;
             snapshotBasis = null;
             clearOverlay();
-            render();
+            if (sameKnowledgeBasis(renderedBasis, context) && container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))
+                deferredRender = true;
+            else
+                render();
         }
         setUiText(status, uiMessage("knowledge.readingAuthorizedKnowledge"));
         loading = true;
         if (!(container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select")))
             render();
+        const generation = gate.begin();
+        await finishRead(reads.request({ context, generation }), strict);
+    }
+    /** Every caller waits independently, including strict post-commit readback.
+     * The shared completion installs/reports once and never swallows its error. */
+    async function finishRead(completion: Promise<KnowledgeReadOutcome>, strict: boolean): Promise<void> {
+        const outcome = await completion;
+        if (!strict) return;
+        if (outcome.status === "failed") throw outcome.error;
+        if (outcome.status === "retired") throw new UiError(uiMessage("knowledge.readBasisChanged"));
+    }
+    function renderReadState(): void {
+        if (sameKnowledgeBasis(renderedBasis, host.context()) && container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))
+            deferredRender = true;
+        else
+            render();
+    }
+    function retireUndeliverableRead(generation: number): void {
+        if (reads.current?.generation !== generation) return;
+        invalidateRead();
+        loading = false;
+        snapshot = null;
+        snapshotBasis = null;
+        clearOverlay();
+        setUiText(status, uiMessage("knowledge.readBasisChanged"));
+        renderReadState();
+    }
+    async function readSnapshot(context: KnowledgeContext, generation: number): Promise<boolean> {
         try {
+            // A queued request may lose its owner before the previous transport ends.
+            if (closeGuard.frozen || disposed || !gate.accepts(generation, context, host.context())) {
+                retireUndeliverableRead(generation);
+                return false;
+            }
             const next = await host.load(context);
-            if (closeGuard.frozen || disposed || !gate.accepts(generation, context, host.context()))
-                return;
+            // Sharing compares all inputs; delivery retains the source/owner gate.
+            // Core knowledge reads do not consume caret/selection or Draft ACKs.
+            if (closeGuard.frozen || disposed || !gate.accepts(generation, context, host.context())) {
+                retireUndeliverableRead(generation);
+                return false;
+            }
             snapshot = decodeKnowledgeSnapshot(next);
             snapshotBasis = context;
             loading = false;
@@ -1972,6 +2023,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
             else
                 render();
             drawOverlay();
+            return true;
         }
         catch (error) {
             if (!closeGuard.frozen && !disposed && gate.accepts(generation, context, host.context())) {
@@ -1985,13 +2037,47 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 else
                     render();
             }
-            if (strict) throw error;
+            else retireUndeliverableRead(generation);
+            throw error;
         }
+    }
+    /** Retire the old logical owner before a consumer awaits or debounces. */
+    function contextChanged(): void {
+        if (closeGuard.frozen || disposed) return;
+        const context = host.context(), previous = reads.current?.context ?? snapshotBasis ?? renderedBasis;
+        if (sameKnowledgeBasis(previous, context) || previous === null && context === null) return;
+        invalidateRead();
+        loading = false;
+        snapshot = null;
+        snapshotBasis = null;
+        rules.closePreviews();
+        clearOverlay();
+        setUiText(status, "");
+        renderReadState();
+    }
+    /** Library sidecars, settings and other notes can change with equal Draft bytes. */
+    function environmentChanged(root: string): void {
+        if (closeGuard.frozen || disposed) return;
+        const coordinate = (value: string): string => value.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
+        if (![host.context()?.root, reads.current?.context.root, snapshotBasis?.root].some(value => value !== undefined && coordinate(value) === coordinate(root))) return;
+        invalidateRead();
+        loading = false;
+        snapshot = null;
+        snapshotBasis = null;
+        rules.closePreviews();
+        clearOverlay();
+        setUiText(status, "");
+        if (container.contains(document.activeElement) && document.activeElement?.matches("input,textarea,select"))
+            deferredRender = true;
+        else
+            render();
     }
     render();
     return {
         assertCloseReady, freezeForClose, thawAfterClose,
         backgroundEnabled: () => enabled || problemHints,
+        contextChanged,
+        environmentChanged,
         refresh,
         selectTab(next) { closeGuard.assertMutable(); tab = next; render(); },
         attachSurface(next, nextMappings = []) {
@@ -2003,6 +2089,6 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 surface.classList.add("knowledge-surface");
             drawOverlay();
         },
-        dispose() { assertCloseReady(); disposed = true; gate.invalidate(); graph.clear(); headings.clear(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); snapshot = null; snapshotBasis = null; window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.removeEventListener("input", authoredInput, true); container.removeEventListener("change", authoredInput, true); disposeUiTree(container); container.replaceChildren(); },
+        dispose() { assertCloseReady(); disposed = true; invalidateRead(); graph.clear(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); snapshot = null; snapshotBasis = null; window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.removeEventListener("input", authoredInput, true); container.removeEventListener("change", authoredInput, true); disposeUiTree(container); container.replaceChildren(); },
     };
 }

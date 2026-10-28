@@ -104,13 +104,13 @@ mod recovery_tests;
 pub use backend::BackendContext;
 use backend::{FileIdentity, FileStamp, ParentGuard, stamp};
 pub use inventory::validate_library_rules;
-pub use inventory::{Inventory, InventoryEntry};
+pub use inventory::{Inventory, InventoryEntry, InventoryResource};
 pub use journal::RecoveryInfo;
 pub use operations::{
     AdmittedCompileSnapshot, AdmittedSnapshot, ConfigDocument, ConfigRole, FileChange,
-    LibraryStyleDocument, LibraryStyleWitness, ManagedResource, OperationChange, OperationIntent,
-    OperationPreview, OperationReceipt, OperationRequest, QualifiedNode, SavedOperationSource,
-    SnapshotFile, SnapshotSet, SnapshotWitness, TrashEntry,
+    LibraryStyleDocument, LibraryStyleWitness, ManagedResource, ManagedResourceSnapshotBatch,
+    OperationChange, OperationIntent, OperationPreview, OperationReceipt, OperationRequest,
+    QualifiedNode, SavedOperationSource, SnapshotFile, SnapshotSet, SnapshotWitness, TrashEntry,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

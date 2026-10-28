@@ -1,4 +1,4 @@
-import { message, uiTextValue } from "./ui-locale";
+import { message, uiTextValue, errorUiText } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -6,6 +6,41 @@ import { submitOriginal, committedDeliveryComplete, deliverCommitted, originalDe
 const payload = { operationId: "original", source: "frozen" };
 const digest = (wire: string) => createHash("sha256").update(wire).digest("hex");
 const transport = (run: (path: string, body: unknown) => unknown): OriginalRequest => async <T>(path: string, body: unknown) => await run(path, body) as T;
+
+for (const status of ["resolved", "unknown"] as const) test(`retry ${status} result presents a terminated attempt without inventing an original rejection`, async () => {
+  const calls: string[] = [], frozen = JSON.stringify(payload);
+  await assert.rejects(submitOriginal(transport((path, body) => {
+    calls.push(path);
+    if (path === "/api/operations/status") {
+      assert.deepEqual(body, { operationId: payload.operationId });
+      return { operationId: payload.operationId, status };
+    }
+    assert.equal(path, "/api/operations/settle");
+    assert.deepEqual(body, { operationId: payload.operationId, requestKind: "save", wireDigest: digest(frozen) });
+    return { operationId: payload.operationId, status: "resolved" };
+  }), "/save", payload, "save", true), error => {
+    assert.ok(error instanceof TerminatedAttempt);
+    assert.equal(error.originalError, undefined);
+    assert.equal(uiTextValue(errorUiText(error)), uiTextValue(message("originalOperation.endedInputRetained")));
+    assert.notEqual(uiTextValue(errorUiText(error)), uiTextValue(message("originalOperation.awaitingConfirmation")));
+    return true;
+  });
+  assert.deepEqual(calls, status === "resolved" ? ["/api/operations/status"] : ["/api/operations/status", "/api/operations/settle"]);
+  assert.equal(JSON.stringify(payload), frozen);
+});
+
+test("an unresolved retry still awaits the same original without another author submission", async () => {
+  const calls: string[] = [];
+  await assert.rejects(submitOriginal(transport((path, body) => {
+    calls.push(path); assert.equal((body as { operationId: string }).operationId, payload.operationId);
+    return { operationId: payload.operationId, status: "unknown" };
+  }), "/save", payload, "save", true), error => {
+    assert.ok(!(error instanceof TerminatedAttempt));
+    assert.equal(uiTextValue(errorUiText(error)), uiTextValue(message("originalOperation.awaitingConfirmation")));
+    return true;
+  });
+  assert.deepEqual(calls, ["/api/operations/status", "/api/operations/settle"]);
+});
 test("ordinary postcommit error recovers the original receipt without another author request", async () => {
   const calls: string[]=[];
   const result=await submitOriginal(transport((path,body)=>{calls.push(path);if(path==="/save")throw Object.assign(new Error("draft delivery failed"),{code:"invalidState"});assert.deepEqual(body,{operationId:"original"});return {operationId:"original",status:"committed",baseId:"new"};}),"/save",payload,"save");

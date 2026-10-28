@@ -158,6 +158,9 @@ export interface PanelHost {
     applyPatch(patch: SourcePatch, basis: DocumentBasis): Promise<void>;
     openDocument(path: string, root?: string): Promise<void>;
     openResolved?(document: OpenedDocument): Promise<void>;
+    /** Receipt from this exact navigation attempt, including a retained Draft
+     * comparison; matching a later current node is not an acceptance proof. */
+    openResolvedConfirmed?(document: OpenedDocument): Promise<boolean>;
     /** Only a fresh result never handed to the actual document owner. This
      * releases its disposable Session, not an author/native close proof. */
     releaseOpenedSession?(sessionId: string): Promise<void>;

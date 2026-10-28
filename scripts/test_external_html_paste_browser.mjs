@@ -1,3 +1,4 @@
+import { workspaceMode } from './_workspace_browser.mjs';
 import { spawnServe, serveReady, stopServe, stringifyServeJson } from './_cli_serve.mjs';
 import { createdDocument } from './_creation_result.mjs';
 // External browser HTML producer: native copy and trusted default paste, without
@@ -36,7 +37,7 @@ async function start(args = [], server = false) {
 async function stop() { await stopServe(child); }
 async function api(route, body) { const reply = await fetch(base + route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Weftext-Token': token }, body: JSON.stringify(body) }), value = await reply.json(); assert.equal(reply.status, 200, route + ': ' + JSON.stringify(value)); return value; }
 const click = label => page.getByRole('button', { name: label, exact: true }).click();
-const mode = label => click(hosted ? label === '源码' ? 'V01 源码' : 'V04 可视写作' : label);
+const mode = label => workspaceMode(page, hosted ? label === '源码' ? 'V01 源码' : 'V04 可视写作' : label);
 const sourceSelector = hosted ? '#source .cm-content' : '.source-host .cm-content';
 const surface = () => page.locator('.writing-table-surface').first();
 async function source() { return page.locator(sourceSelector).evaluate(element => { const view = element.cmTile?.root?.view; if (view?.contentDOM !== element) throw new Error('Actual source editor unavailable'); return view.state.doc.toString(); }); }

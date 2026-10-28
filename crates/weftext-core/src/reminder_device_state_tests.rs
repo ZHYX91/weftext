@@ -13,6 +13,14 @@ fn options() -> ReminderNotificationOptions {
         body: "Open your saved task".into(),
     }
 }
+fn submission_observation(result: ReminderOsCallResult) -> ReminderSubmissionObservation {
+    ReminderSubmissionObservation {
+        started_at: "2026-10-23T09:00:01.000000001Z".into(),
+        returned_at: "2026-10-23T09:00:01.000000003Z".into(),
+        elapsed_nanoseconds: "2".into(),
+        result,
+    }
+}
 fn instant(value: &str) -> ExactInstant {
     ExactInstant::parse(value).unwrap()
 }
@@ -36,6 +44,9 @@ struct Fixture {
 }
 impl Fixture {
     fn new(kind: &str) -> Self {
+        Self::with_source(task_source(kind))
+    }
+    fn with_source(source: String) -> Self {
         let temp = tempfile::tempdir().unwrap();
         let data = temp.path().join("state");
         let root = temp.path().join("library");
@@ -49,7 +60,7 @@ impl Fixture {
                 intent: OperationIntent::NewNode {
                     parent: display(&root),
                     name: "Task".into(),
-                    source: Some(task_source(kind)),
+                    source: Some(source),
                 },
             })
             .unwrap();
@@ -346,7 +357,7 @@ fn reminder_body_and_absolute_due_edits_keep_the_original_submitted_effect() {
     let key = permit.execution_key().to_owned();
     let definition = f.candidate().resolution.definition_digest;
     f.core()
-        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem)
+        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem, None)
         .unwrap();
     f.append_body();
     f.edit(
@@ -375,7 +386,7 @@ fn reminder_rename_move_trash_and_restore_use_current_identity_without_replaying
     let permit = f.begin(AT);
     let key = permit.execution_key().to_owned();
     f.core()
-        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem)
+        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem, None)
         .unwrap();
     let root = f.root.clone();
     let _parent = f.add_task("Parent");
@@ -447,7 +458,7 @@ fn reminder_due_edits_invalidate_old_relative_activation_and_a_b_a_does_not_repl
     let key = permit.execution_key().to_owned();
     let activation = permit.request().activation_key.clone();
     f.core()
-        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem)
+        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem, None)
         .unwrap();
     f.edit(
         "tasks/due",
@@ -498,7 +509,7 @@ fn reminder_completion_and_personal_handling_are_orthogonal_to_external_result()
     let permit = f.begin(AT);
     let key = permit.execution_key().to_owned();
     f.core()
-        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem)
+        .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem, None)
         .unwrap();
     f.edit("tasks/status", NativeValue::Text("done".into()));
     let eligibility = f.core().refresh_reminder_notification(&key).unwrap();
@@ -541,6 +552,7 @@ fn reminder_permit_is_single_use_and_normal_admission_cannot_cross_target_minute
             ReminderSubmissionOutcome::FailedBeforeCall(
                 UiMessage::error_reminder_minute_ended_before_call().into(),
             ),
+            None,
         )
         .unwrap();
     let summary = f.summary("2026-10-23T09:01:00Z");
@@ -747,6 +759,7 @@ fn reminder_known_pre_call_summary_retry_keeps_original_members_request_cutoff_a
         .finish_reminder_delivery(
             &original,
             ReminderSubmissionOutcome::FailedBeforeCall(UiMessage::error_core_io_failure().into()),
+            None,
         )
         .unwrap();
     f.reopen();
@@ -847,10 +860,15 @@ fn reminder_finish_publish_faults_preserve_real_original_outcomes_across_restart
         let permit = f.begin(AT);
         let key = permit.execution_key().to_owned();
         let request = permit.request().clone();
+        let observation = submission_observation(ReminderOsCallResult::ReturnedSuccess);
         crate::device_state::set_test_failpoint(point);
         assert_eq!(
             f.core()
-                .finish_reminder_delivery(&permit, ReminderSubmissionOutcome::SubmittedToSystem)
+                .finish_reminder_delivery(
+                    &permit,
+                    ReminderSubmissionOutcome::SubmittedToSystem,
+                    Some(observation.clone())
+                )
                 .unwrap_err()
                 .code,
             "injectedFailure"
@@ -858,11 +876,13 @@ fn reminder_finish_publish_faults_preserve_real_original_outcomes_across_restart
         f.reopen();
         let status = f.core().reminder_delivery_status(&key).unwrap();
         if point == "beforePublish" {
+            assert!(status.submission_observation.is_none());
             assert!(matches!(
                 status.delivery,
                 ReminderRecordedDelivery::Unknown { .. }
             ));
         } else {
+            assert_eq!(status.submission_observation, Some(observation));
             assert!(matches!(
                 status.delivery,
                 ReminderRecordedDelivery::SubmittedToSystem { .. }
@@ -1086,6 +1106,7 @@ fn reminder_history_confirmation_requires_the_complete_original_request_and_neve
             ReminderSubmissionOutcome::Unknown(
                 UiMessage::status_reminder_external_submission_unknown().into(),
             ),
+            None,
         )
         .unwrap();
     let unknown = fs::read(&path).unwrap();
@@ -1095,7 +1116,8 @@ fn reminder_history_confirmation_requires_the_complete_original_request_and_neve
                 &permit,
                 ReminderSubmissionOutcome::FailedBeforeCall(
                     UiMessage::error_reminder_unknown_cannot_become_pre_call_failure().into()
-                )
+                ),
+                None,
             )
             .is_err()
     );
@@ -1116,7 +1138,10 @@ fn reminder_history_confirmation_requires_the_complete_original_request_and_neve
             UiMessage::error_reminder_permit_changed().into(),
         ),
     ] {
-        let status = f.core().finish_reminder_delivery(&permit, outcome).unwrap();
+        let status = f
+            .core()
+            .finish_reminder_delivery(&permit, outcome, None)
+            .unwrap();
         assert!(matches!(
             status.delivery,
             ReminderRecordedDelivery::SubmittedToSystem { .. }
@@ -1220,12 +1245,11 @@ fn reminder_actor_cannot_read_decide_open_or_confirm_a_local_owner_effect() {
             denied(core.prepare_reminder_summary(options()));
             denied(core.retry_reminder_summary(permit.execution_key()));
             denied(core.check_reminder_permit(&permit));
-            denied(
-                core.finish_reminder_delivery(
-                    &permit,
-                    ReminderSubmissionOutcome::SubmittedToSystem,
-                ),
-            );
+            denied(core.finish_reminder_delivery(
+                &permit,
+                ReminderSubmissionOutcome::SubmittedToSystem,
+                None,
+            ));
             denied(core.reminder_delivery_status(permit.execution_key()));
             denied(core.original_reminder_notification(permit.execution_key()));
             denied(core.reminder_original_notifications(None));
@@ -1518,6 +1542,7 @@ fn reminder_normal_pre_call_failure_enters_missed_phase_once_across_restart_and_
             ReminderSubmissionOutcome::FailedBeforeCall(
                 UiMessage::error_reminder_minute_ended_before_call().into(),
             ),
+            None,
         )
         .unwrap();
     f.reopen();
@@ -1606,6 +1631,7 @@ fn reminder_original_summary_retry_also_uses_a_fresh_clock_after_member_capture(
         .finish_reminder_delivery(
             &original,
             ReminderSubmissionOutcome::FailedBeforeCall(UiMessage::error_core_io_failure().into()),
+            None,
         )
         .unwrap();
     let mut reads = 0;
@@ -1633,6 +1659,7 @@ fn reminder_original_summary_retry_also_uses_a_fresh_clock_after_member_capture(
         .finish_reminder_delivery(
             &retry,
             ReminderSubmissionOutcome::FailedBeforeCall(UiMessage::error_core_io_failure().into()),
+            None,
         )
         .unwrap();
     f.reopen();
@@ -1715,3 +1742,351 @@ fn reminder_summary_reports_a_sample_explicitly_without_consuming_unknown_scopes
 
 #[path = "reminder_device_state_capacity_tests.rs"]
 mod capacity;
+
+#[test]
+fn reminder_wake_hint_uses_actual_qualified_seconds_without_changing_http_or_record() {
+    for (trigger, before) in [
+        ("2026-10-23T09:00:59Z", "2026-10-23T09:00:58.25Z"),
+        ("2026-10-23T09:01:00Z", "2026-10-23T09:00:59.25Z"),
+        ("2026-10-23T09:00:37Z", "2026-10-23T09:00:36.25Z"),
+    ] {
+        let mut fixture = Fixture::with_source(task_source("absolute").replace(TRIGGER, trigger));
+        let candidate = fixture.candidate();
+        assert_eq!(
+            candidate.resolution.trigger_instant.as_deref(),
+            Some(trigger)
+        );
+        let record = fixture
+            .core()
+            .device_record_path(DeviceRecordKind::Reminders);
+        let original = fs::read(&record).unwrap();
+        let observed = std::time::Instant::now();
+        let mut reads = 0;
+        let upcoming = fixture
+            .core()
+            .reminder_eligibility_with_clock(&candidate, || {
+                reads += 1;
+                Ok((instant(before), observed))
+            })
+            .unwrap();
+        assert_eq!(reads, 1);
+        assert!(matches!(&upcoming.timing, ReminderTiming::Upcoming));
+        assert_eq!(
+            upcoming.next_recheck_at(),
+            Some(observed + std::time::Duration::from_millis(750))
+        );
+        let wire = serde_json::to_value(&upcoming).unwrap();
+        assert_eq!(
+            wire.as_object()
+                .unwrap()
+                .keys()
+                .map(String::as_str)
+                .collect::<std::collections::BTreeSet<_>>(),
+            ["executionKey", "timing", "retained"].into_iter().collect()
+        );
+        let due = fixture
+            .core()
+            .reminder_eligibility_with_clock(&candidate, || Ok((instant(trigger), observed)))
+            .unwrap();
+        assert!(matches!(&due.timing, ReminderTiming::Due));
+        assert!(due.next_recheck_at().is_none());
+        let end = candidate
+            .resolution
+            .normal_delivery_until
+            .as_deref()
+            .unwrap();
+        let missed = fixture
+            .core()
+            .reminder_eligibility_with_clock(&candidate, || Ok((instant(end), observed)))
+            .unwrap();
+        assert!(matches!(&missed.timing, ReminderTiming::Missed));
+        assert!(missed.next_recheck_at().is_none());
+        assert_eq!(fs::read(&record).unwrap(), original);
+    }
+}
+
+#[test]
+fn reminder_wake_hint_does_not_make_a_late_seconds_59_check_due() {
+    let trigger = "2026-10-23T09:00:59Z";
+    let mut fixture = Fixture::with_source(task_source("absolute").replace(TRIGGER, trigger));
+    let candidate = fixture.candidate();
+    let observed = std::time::Instant::now();
+    let eligibility = fixture
+        .core()
+        .reminder_eligibility_with_clock(&candidate, || {
+            Ok((instant("2026-10-23T09:01:03Z"), observed))
+        })
+        .unwrap();
+    assert!(matches!(&eligibility.timing, ReminderTiming::Missed));
+    assert!(eligibility.next_recheck_at().is_none());
+    assert_eq!(
+        fixture
+            .core()
+            .begin_reminder_delivery_at(&candidate, options(), instant("2026-10-23T09:01:03Z"))
+            .unwrap_err()
+            .code,
+        "reminderMissed"
+    );
+}
+
+#[test]
+fn reminder_recheck_uses_exact_decimal_difference_and_ceil_nanoseconds() {
+    for (at, trigger, delay) in [
+        (
+            "2026-10-23T09:00:58.25Z",
+            "2026-10-23T09:00:59Z",
+            std::time::Duration::from_millis(750),
+        ),
+        (
+            "2026-10-23T09:00:58.999999999999Z",
+            "2026-10-23T09:00:59Z",
+            std::time::Duration::from_nanos(1),
+        ),
+        (
+            "2026-10-23T09:00:58.0000000001Z",
+            "2026-10-23T09:00:58.9999999999Z",
+            std::time::Duration::from_secs(1),
+        ),
+        (
+            "2026-10-23T09:00:59Z",
+            "2026-10-23T09:00:59Z",
+            std::time::Duration::ZERO,
+        ),
+        (
+            "2026-10-23T09:01:03Z",
+            "2026-10-23T09:00:59Z",
+            std::time::Duration::ZERO,
+        ),
+    ] {
+        assert_eq!(
+            reminder_recheck_delay(&instant(at), &instant(trigger)).unwrap(),
+            delay
+        );
+    }
+    let tiny = ExactInstant {
+        utc_seconds: instant(TRIGGER).utc_seconds,
+        fraction: ExactDecimal::parse(&format!("0.{}1", "0".repeat(4093))).unwrap(),
+    };
+    assert_eq!(
+        reminder_recheck_delay(&instant(TRIGGER), &tiny).unwrap(),
+        std::time::Duration::from_nanos(1)
+    );
+    let future = instant("9999-12-31T23:59:59Z");
+    let start = instant(TRIGGER);
+    assert_eq!(
+        reminder_recheck_delay(&start, &future).unwrap(),
+        std::time::Duration::from_secs((future.utc_seconds - start.utc_seconds) as u64)
+    );
+}
+
+#[test]
+fn reminder_actual_call_observation_is_distinct_from_confirmation_and_survives_restart() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let key = permit.execution_key().to_owned();
+    let observation = submission_observation(ReminderOsCallResult::ReturnedSuccess);
+    let status = f
+        .core()
+        .finish_reminder_delivery(
+            &permit,
+            ReminderSubmissionOutcome::SubmittedToSystem,
+            Some(observation.clone()),
+        )
+        .unwrap();
+    let ReminderRecordedDelivery::SubmittedToSystem { at } = &status.delivery else {
+        panic!("expected the separately confirmed system result");
+    };
+    assert_ne!(at, &observation.started_at);
+    assert_eq!(status.submission_observation, Some(observation.clone()));
+    let wire = serde_json::to_value(&status).unwrap();
+    assert_eq!(wire["submissionObservation"]["elapsedNanoseconds"], "2");
+    assert_eq!(
+        wire["submissionObservation"]["result"]["kind"],
+        "returnedSuccess"
+    );
+    f.reopen();
+    let original = fs::read(f.core().device_record_path(DeviceRecordKind::Reminders)).unwrap();
+    assert_eq!(
+        f.core()
+            .reminder_delivery_status(&key)
+            .unwrap()
+            .submission_observation,
+        Some(observation.clone())
+    );
+    let replayed = f
+        .core()
+        .finish_reminder_delivery(
+            &permit,
+            ReminderSubmissionOutcome::Unknown(
+                UiMessage::status_reminder_external_submission_unknown().into(),
+            ),
+            None,
+        )
+        .unwrap();
+    assert_eq!(replayed.submission_observation, Some(observation));
+    assert_eq!(
+        fs::read(f.core().device_record_path(DeviceRecordKind::Reminders)).unwrap(),
+        original
+    );
+}
+
+#[test]
+fn reminder_returned_failure_keeps_unknown_and_original_observation_after_history_confirmation() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let key = permit.execution_key().to_owned();
+    let observation = submission_observation(ReminderOsCallResult::ReturnedFailure {
+        hresult: -2147467259,
+    });
+    let unknown = || {
+        ReminderSubmissionOutcome::Unknown(
+            UiMessage::status_reminder_external_submission_unknown().into(),
+        )
+    };
+    let status = f
+        .core()
+        .finish_reminder_delivery(&permit, unknown(), Some(observation.clone()))
+        .unwrap();
+    assert!(matches!(
+        status.delivery,
+        ReminderRecordedDelivery::Unknown { .. }
+    ));
+    assert_eq!(
+        f.core()
+            .finish_reminder_delivery(&permit, unknown(), None)
+            .unwrap()
+            .submission_observation,
+        Some(observation.clone())
+    );
+    let path = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&path).unwrap();
+    let mut conflicting = observation.clone();
+    conflicting.elapsed_nanoseconds = "3".into();
+    assert_eq!(
+        f.core()
+            .finish_reminder_delivery(&permit, unknown(), Some(conflicting))
+            .unwrap_err()
+            .code,
+        "operationConflict"
+    );
+    assert_eq!(fs::read(&path).unwrap(), original);
+    f.reopen();
+    let confirmed = f
+        .core()
+        .confirm_reminder_in_system_history(&key, permit.request())
+        .unwrap();
+    assert!(matches!(
+        confirmed.delivery,
+        ReminderRecordedDelivery::SubmittedToSystem { .. }
+    ));
+    assert_eq!(confirmed.submission_observation, Some(observation));
+}
+
+#[test]
+fn reminder_old_attempt_and_history_confirmation_do_not_invent_actual_call_times() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let key = permit.execution_key().to_owned();
+    let path = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&path).unwrap();
+    let raw: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    assert!(
+        raw["records"][&key]["delivery"]["attempt"]
+            .get("submissionObservation")
+            .is_none()
+    );
+    f.reopen();
+    let status = f.core().reminder_delivery_status(&key).unwrap();
+    assert!(status.submission_observation.is_none());
+    assert!(serde_json::to_value(status).unwrap()["submissionObservation"].is_null());
+    assert_eq!(fs::read(&path).unwrap(), original);
+    let confirmed = f
+        .core()
+        .confirm_reminder_in_system_history(&key, permit.request())
+        .unwrap();
+    assert!(matches!(
+        confirmed.delivery,
+        ReminderRecordedDelivery::SubmittedToSystem { .. }
+    ));
+    assert!(confirmed.submission_observation.is_none());
+}
+
+#[test]
+fn reminder_invalid_or_contradictory_actual_call_observation_cannot_change_the_original_barrier() {
+    let mut f = Fixture::new("absolute");
+    let permit = f.begin(AT);
+    let path = f.core().device_record_path(DeviceRecordKind::Reminders);
+    let original = fs::read(&path).unwrap();
+    let valid = submission_observation(ReminderOsCallResult::ReturnedSuccess);
+    let mut invalid = Vec::new();
+    for duration in ["-1", "01", "1.5", "340282366920938463463374607431768211456"] {
+        let mut value = valid.clone();
+        value.elapsed_nanoseconds = duration.into();
+        invalid.push(value);
+    }
+    for field in ["started", "returned"] {
+        let mut value = valid.clone();
+        if field == "started" {
+            value.started_at = "not an instant".into();
+        } else {
+            value.returned_at = "not an instant".into();
+        }
+        invalid.push(value);
+    }
+    invalid.push(submission_observation(
+        ReminderOsCallResult::ReturnedFailure { hresult: 0 },
+    ));
+    // An observed failed Show cannot become a successful direct return.
+    invalid.push(submission_observation(
+        ReminderOsCallResult::ReturnedFailure {
+            hresult: -2147467259,
+        },
+    ));
+    for observation in invalid {
+        assert!(
+            f.core()
+                .finish_reminder_delivery(
+                    &permit,
+                    ReminderSubmissionOutcome::SubmittedToSystem,
+                    Some(observation)
+                )
+                .is_err()
+        );
+        assert_eq!(fs::read(&path).unwrap(), original);
+    }
+    assert!(
+        f.core()
+            .finish_reminder_delivery(
+                &permit,
+                ReminderSubmissionOutcome::FailedBeforeCall(
+                    UiMessage::error_core_io_failure().into()
+                ),
+                Some(valid),
+            )
+            .is_err()
+    );
+    assert_eq!(fs::read(&path).unwrap(), original);
+}
+
+#[test]
+fn reminder_actual_call_uses_monotonic_duration_even_if_the_wall_clock_moves_back() {
+    let observation = ReminderSubmissionObservation::from_system_times(
+        UNIX_EPOCH + std::time::Duration::from_secs(2),
+        UNIX_EPOCH + std::time::Duration::from_secs(1),
+        std::time::Duration::from_secs(10_000_000),
+        ReminderOsCallResult::ReturnedSuccess,
+    )
+    .unwrap();
+    assert_eq!(observation.started_at, "1970-01-01T00:00:02Z");
+    assert_eq!(observation.returned_at, "1970-01-01T00:00:01Z");
+    assert_eq!(observation.elapsed_nanoseconds, "10000000000000000");
+    assert!(
+        ReminderSubmissionObservation::from_system_times(
+            UNIX_EPOCH - std::time::Duration::from_secs(1),
+            UNIX_EPOCH,
+            std::time::Duration::from_secs(1),
+            ReminderOsCallResult::ReturnedSuccess,
+        )
+        .is_err()
+    );
+}

@@ -1,6 +1,6 @@
-import { uiDisplayParameter } from "./ui-locale";
-import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 export interface StructureHeading {
+    kind: "heading" | "figure" | "table" | "equation" | "code" | "caption";
+    nativeKind?: string | null;
     key: string;
     text: string;
     number?: string | null;
@@ -38,19 +38,30 @@ export function headingMatchesDisplay(tree: RenderNode | null | undefined, headi
     if (matches.length !== 1)
         return false;
     const node = matches[0];
-    const text = (item: RenderNode): string => item.attrs["data-weftext-role"] === "heading-prefix" ? "" : item.kind === "text" ? item.text ?? "" : item.children.map(text).join("");
-    return node.kind !== "tag" && node.attrs["data-weftext-role"] === "heading" && Number(node.attrs["data-weftext-level"]) === heading.level && text(node).trim() === heading.text;
+    const text = (item: RenderNode): string => ["heading-prefix", "caption-prefix", "equation-prefix"].includes(String(item.attrs["data-weftext-role"])) ? "" : item.kind === "text" ? item.text ?? "" : item.children.map(text).join("");
+    if (node.kind === "tag")
+        return false;
+    if (heading.kind === "heading")
+        return node.attrs["data-weftext-role"] === "heading" && Number(node.attrs["data-weftext-level"]) === heading.level && text(node).trim() === heading.text;
+    if (heading.kind === "equation" && node.attrs["data-weftext-role"] === "equation")
+        return node.attrs["data-weftext-numbered"] === "true" && heading.nativeKind === "equation" && text(node).trim() === heading.text;
+    if (node.attrs["data-weftext-role"] !== "caption" || node.attrs["data-weftext-caption-kind"] !== heading.nativeKind)
+        return false;
+    const body = node.children.flatMap(function find(child): RenderNode[] { return child.attrs["data-weftext-role"] === "caption-body" ? [child] : child.children.flatMap(find); });
+    return body.length <= 1 && text(body[0] ?? node).trim() === heading.text;
 }
 export function headingTree(items: StructureHeading[]): HeadingEntry[] {
-    const root: HeadingEntry = { key: DOCUMENT_ROOT, text: "", level: 0, generated: true, parent: "", children: [], descendants: items.length, depth: 0 };
+    const root: HeadingEntry = { key: DOCUMENT_ROOT, kind: "heading", text: "", level: 0, generated: true, parent: "", children: [], descendants: items.length, depth: 0 };
     const result = [root], stack = [root];
     for (const item of items) {
-        while (stack.length > 1 && stack.at(-1)!.level >= item.level)
-            stack.pop();
+        if (item.kind === "heading")
+            while (stack.length > 1 && stack.at(-1)!.level >= item.level)
+                stack.pop();
         const parent = stack.at(-1)!, entry = { ...item, parent: parent.key, children: [], descendants: 0, depth: parent.depth + 1 };
         parent.children.push(item.key);
         result.push(entry);
-        stack.push(entry);
+        if (item.kind === "heading")
+            stack.push(entry);
     }
     const byKey = new Map(result.map(n => [n.key, n]));
     for (let i = result.length - 1; i > 0; i--) {
