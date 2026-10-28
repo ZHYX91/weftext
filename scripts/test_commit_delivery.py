@@ -168,7 +168,7 @@ def run(executable, evidence):
             assert value['kind'] == 'record', value
             return next(item['value'] for item in value['value'] if item['key'] == key)
         period_lookup = {'root': str(root), 'seriesKey': 'work-log'}
-        for kind, key, start, end in [
+        for kind, key, bounds_start, bounds_end in [
             ('day', '2021-01-01', '2021-01-01', '2021-01-02'),
             ('week', '2020-W53', '2020-12-28', '2021-01-04'),
             ('month', '2021-01', '2021-01-01', '2021-02-01'),
@@ -179,8 +179,8 @@ def run(executable, evidence):
             exact = call('/api/data/period/resolve', {**period_lookup, 'kind': kind, 'key': key})
             assert selected['period'] == exact['period'] and selected['bounds'] == exact['bounds']
             assert member(selected['period'], 'key') == {'kind': 'text', 'value': key}
-            assert member(selected['bounds'], 'start') == {'kind': 'date', 'value': start}
-            assert member(selected['bounds'], 'end_exclusive') == {'kind': 'date', 'value': end}
+            assert member(selected['bounds'], 'start') == {'kind': 'date', 'value': bounds_start}
+            assert member(selected['bounds'], 'end_exclusive') == {'kind': 'date', 'value': bounds_end}
             assert selected['coverage'] == 'complete' and selected['matches'] == [] and selected['canCreate'] is True
         next_week = call('/api/data/period/resolve', {**period_lookup, 'kind': 'week', 'date': '2021-01-01', 'steps': 1})
         assert member(next_week['period'], 'key') == {'kind': 'text', 'value': '2021-W01'}
