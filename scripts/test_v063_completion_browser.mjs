@@ -115,7 +115,11 @@ function observe(target) {
     try {
       if (response.status() >= 400) result.httpErrors.push({ phase: capturedPhase, route, status: response.status(), body: await response.text() });
       if (route === '/api/query/run' && response.ok()) { const value = await response.json(); queryReceipts.push({ phase: capturedPhase, requestId: entry?.id, request: response.request().postDataJSON(), result: value }); if (entry) entry.bodyRecordedAt = new Date().toISOString(); }
-      if (route === '/api/knowledge/read' && response.ok()) knowledgeReceipts.push({ phase: capturedPhase, request: response.request().postDataJSON(), result: await response.json() });
+      if (route === '/api/knowledge/read' && response.ok()) {
+        const value = await response.json();
+        knowledgeReceipts.push({ phase: capturedPhase, client: entry?.client, requestId: entry?.id, request: response.request().postDataJSON(), result: value });
+        if (entry) entry.bodyRecordedAt = new Date().toISOString();
+      }
       if (route === '/api/render' && response.ok()) {
         const value = await response.json();
         renderReceipts.push({ phase: capturedPhase, requestId: entry?.id, request: response.request().postDataJSON(),
@@ -258,8 +262,44 @@ async function holdNextActualQuery() {
 }
 async function refreshKnowledge(expected) {
   await until(async () => (await page.locator('.status-right').innerText()).includes('草稿预览已更新'), 'native render ready');
-  const start = knowledgeReceipts.length; await click('刷新', knowledge());
-  return until(() => knowledgeReceipts.slice(start).find(item => item.request.context?.source === expected), 'actual same-Draft knowledge receipt');
+  const client = pageClients.get(page), startedMs = performance.now();
+  assert.ok(client, 'Knowledge refresh must belong to an observed original browser client');
+  assert.equal(await source(), expected);
+  const currentPath = (await knowledge().locator('.knowledge-current').innerText()).trim();
+  const action = { phase, client, at: new Date().toISOString(), expectedSourceSha256: sha(expected), currentPath,
+    requestCountAtStart: result.requests.length, budgetMs: 30000, completed: false, candidateIdsSeen: [],
+    pendingReadIds: [...observedRequests.values()].filter(entry => entry.client === client && entry.route === '/api/knowledge/read'
+      && !entry.finishedAt && !entry.failedAt).map(entry => entry.id) };
+  (result.knowledgeActions ??= []).push(action);
+  const eligibleRequests = () => result.requests.filter((entry, index) => entry.client === client && entry.route === '/api/knowledge/read'
+    && (index >= action.requestCountAtStart || action.pendingReadIds.includes(entry.id))
+    && entry.body?.context?.source === expected && typeof entry.body.context.path === 'string'
+    && path.normalize(entry.body.context.path) === path.normalize(currentPath));
+  try {
+    // A finished earlier read whose body observer runs late cannot stand in for
+    // this explicit refresh. The one click may share an actually pending read;
+    // any newer eligible request becomes the only candidate for delivery.
+    await click('刷新', knowledge()); action.clickedAt = new Date().toISOString();
+    const receipt = await until(async () => {
+      const candidates = eligibleRequests();
+      for (const entry of candidates) if (!action.candidateIdsSeen.includes(entry.id)) action.candidateIdsSeen.push(entry.id);
+      const latest = candidates.at(-1); action.latestEligibleRequestId = latest?.id;
+      if (!latest) return false;
+      const observed = knowledgeReceipts.find(item => item.client === client && item.requestId === latest.id);
+      if (!observed || !await knowledge().isVisible() || await source() !== expected) return false;
+      if (await knowledge().getByRole('button', { name: '停止等待', exact: true }).count()) return false;
+      if ((await knowledge().locator('.knowledge-status').innerText()).trim() !== '') return false;
+      if (path.normalize((await knowledge().locator('.knowledge-current').innerText()).trim()) !== path.normalize(currentPath)) return false;
+      if (eligibleRequests().at(-1)?.id !== latest.id) return false;
+      return observed;
+    }, 'actual same-Draft knowledge receipt and settled original owner', action.budgetMs);
+    action.matchedRequestId = receipt.requestId; action.matchedGraphGeneration = receipt.result.graph?.generation;
+    action.completed = true; return receipt;
+  } finally {
+    action.elapsedMs = performance.now() - startedMs; action.endedAt = new Date().toISOString();
+    action.originalRequests = eligibleRequests().map(entry => ({ id: entry.id, at: entry.at, status: entry.status,
+      responseElapsedMs: entry.responseElapsedMs, elapsedMs: entry.elapsedMs, bodyRecordedAt: entry.bodyRecordedAt, failure: entry.failure }));
+  }
 }
 async function currentOutline(expected) {
   const readsBefore = result.requests.filter(entry => entry.route === '/api/knowledge/read').length;

@@ -131,8 +131,22 @@ test("a shared knowledge failure is reported once and every strict waiter reject
     assert.equal(f.graphs.at(-1)?.marker, "retry");
 });
 
+test("a repeated Draft ACK shares the same pending knowledge read while the next completed refresh reads again", async () => {
+    const f = fixture(); f.useContext();
+    const first = f.panel.refresh(); f.changeContext({ inputRevision: 2 });
+    const repeated = f.panel.refresh(), strict = f.panel.testStrict();
+    assert.equal(f.loads.length, 1, "an ACK of the same input cannot start another library scan");
+    assert.equal(f.loads[0].context.inputRevision, 1, "sharing does not rewrite the original captured request");
+    f.load.resolve(snapshot("same input")); await Promise.all([first, repeated, strict]);
+    assert.equal(f.graphs.filter(value => value?.marker === "same input").length, 1);
+    const fresh = f.panel.refresh(); assert.equal(f.loads.length, 2);
+    assert.equal(f.loads[1].context.inputRevision, 2);
+    f.loads[1].resolve(snapshot("fresh")); await fresh;
+    assert.equal(f.graphs.at(-1)?.marker, "fresh");
+});
+
 for (const [name, change] of Object.entries({
-    source: { source: "new source" }, serial: { serial: 2 }, inputId: { inputId: "ABA input" }, inputRevision: { inputRevision: 2 },
+    source: { source: "new source" }, serial: { serial: 2 }, inputId: { inputId: "ABA input" },
     session: { sessionId: "new owner" }, base: { baseId: "new base" }, path: { path: "other note" }, root: { root: "other root" },
     workspace: { workspaceId: "other workspace" }, node: { nodeId: "other node" }, dirty: { dirty: true },
     selection: { selection: { from: 0, to: 1 } },

@@ -251,10 +251,10 @@ export interface KnowledgePanel {
     attachSurface(surface: HTMLElement | null, mappings?: KnowledgeTextMapping[]): void;
     dispose(): void;
 }
-/** Read sharing is narrower than the author basis: every request input must match. */
+/** Read sharing keeps the exact logical owner; a Draft ACK does not change a Knowledge read. */
 function sameKnowledgeReadContext(a: KnowledgeContext, b: KnowledgeContext | null): boolean {
     return sameKnowledgeBasis(a, b) && b !== null
-        && a.inputRevision === b.inputRevision && a.root === b.root
+        && a.root === b.root
         && a.workspaceId === b.workspaceId && a.nodeId === b.nodeId && a.dirty === b.dirty
         && a.selection?.from === b.selection?.from && a.selection?.to === b.selection?.to
         && a.selection?.visibleExcerpt === b.selection?.visibleExcerpt
