@@ -160,8 +160,46 @@ def run(executable, evidence):
 
         capture = {'root': str(root), 'parent': str(root), 'name': 'Capture', 'types': ['task'], 'title': None, 'fields': {'tasks/status': {'kind': 'text', 'value': 'open'}}, 'body': 'TEST capture', 'operationId': test_hosted.uid()}
         capture_first = call('/api/data/capture', capture)
+        # Calendar date selection is resolved by the installed Core policy. It
+        # neither creates notes nor guesses a key in the browser's time zone.
+        source_hashes = lambda: {str(path.relative_to(root)): hashlib.sha256(path.read_bytes()).hexdigest() for path in root.rglob('*.typ')}
+        original_period_sources = source_hashes()
+        def member(value, key):
+            assert value['kind'] == 'record', value
+            return next(item['value'] for item in value['value'] if item['key'] == key)
+        period_lookup = {'root': str(root), 'seriesKey': 'work-log'}
+        for kind, key, start, end in [
+            ('day', '2021-01-01', '2021-01-01', '2021-01-02'),
+            ('week', '2020-W53', '2020-12-28', '2021-01-04'),
+            ('month', '2021-01', '2021-01-01', '2021-02-01'),
+            ('quarter', '2021-Q1', '2021-01-01', '2021-04-01'),
+            ('year', '2021', '2021-01-01', '2022-01-01'),
+        ]:
+            selected = call('/api/data/period/resolve', {**period_lookup, 'kind': kind, 'date': '2021-01-01'})
+            exact = call('/api/data/period/resolve', {**period_lookup, 'kind': kind, 'key': key})
+            assert selected['period'] == exact['period'] and selected['bounds'] == exact['bounds']
+            assert member(selected['period'], 'key') == {'kind': 'text', 'value': key}
+            assert member(selected['bounds'], 'start') == {'kind': 'date', 'value': start}
+            assert member(selected['bounds'], 'end_exclusive') == {'kind': 'date', 'value': end}
+            assert selected['coverage'] == 'complete' and selected['matches'] == [] and selected['canCreate'] is True
+        next_week = call('/api/data/period/resolve', {**period_lookup, 'kind': 'week', 'date': '2021-01-01', 'steps': 1})
+        assert member(next_week['period'], 'key') == {'kind': 'text', 'value': '2021-W01'}
+        for invalid in [
+            {'kind': 'week', 'date': '2021-01-01', 'key': '2020-W53'},
+            {'kind': 'week'},
+            {'kind': 'day', 'date': '2021-02-29'},
+            {'kind': 'week', 'key': '2021-W53'},
+        ]:
+            error = call('/api/data/period/resolve', {**period_lookup, **invalid}, 409)
+            assert error['error']['code'] == 'invalidPeriod'
+        assert source_hashes() == original_period_sources
         period = {'root': str(root), 'parent': str(root), 'name': 'Period', 'seriesKey': 'work-log', 'kind': 'week', 'key': '2020-W53', 'title': None, 'body': 'TEST period', 'operationId': test_hosted.uid()}
         period_first = call('/api/data/period/create', period)
+        created_period_sources = source_hashes()
+        found_week = call('/api/data/period/resolve', {**period_lookup, 'kind': 'week', 'date': '2021-01-01'})
+        assert len(found_week['matches']) == 1 and found_week['canCreate'] is False
+        assert source_hashes() == created_period_sources
+        result['periodDateSelection'] = {'fiveKinds': True, 'isoWeekBoundary': True, 'dateKeyExclusive': True, 'noAuthorWrites': True, 'uniqueExistingNote': True}
         schema = root / '.weftext-schema.json'
         previous = schema.read_bytes() if schema.exists() else None
         schema.write_bytes(b'invalid current schema')

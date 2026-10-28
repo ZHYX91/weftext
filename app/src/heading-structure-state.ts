@@ -23,6 +23,35 @@ export interface HeadingEntry extends StructureHeading {
     depth: number;
 }
 export const DOCUMENT_ROOT = "@weftext-document-root";
+/** -1 means no match has been visited yet. Search never opens author content. */
+export function nextHeadingMatch(count: number, current: number, step: -1 | 1): number {
+    if (count === 0) return -1;
+    return current < 0 || current >= count ? step === 1 ? 0 : count - 1 : (current + step + count) % count;
+}
+/** Keep the selected match and its real ancestors inside the existing canvas budget. */
+export function boundedHeadingMap(items: HeadingEntry[], selected: string, limit = 200): HeadingEntry[] {
+    if (items.length <= limit) return items;
+    const byKey = new Map(items.map(item => [item.key, item])), path: string[] = [];
+    let item = byKey.get(selected);
+    while (item && path.length < limit) { path.push(item.key); item = byKey.get(item.parent); }
+    const keep = new Set<string>([items[0].key, ...path.slice(0, Math.max(0, limit - 1))]);
+    for (const item of items) { if (keep.size >= limit) break; keep.add(item.key); }
+    return items.filter(item => keep.has(item.key));
+}
+/** Ordered tree geometry for the heading cards; no source or numbering inference. */
+export function headingMapLayout(items: HeadingEntry[], direction: "horizontal" | "vertical"): Map<string, { x: number; y: number }> {
+    const ids = new Set(items.map(item => item.key)), slots = new Map<string, number>(), levels = new Map<string, number>();
+    let leaves = 0;
+    for (const item of items) levels.set(item.key, (levels.get(item.parent) ?? -1) + 1);
+    for (let index = items.length - 1; index >= 0; index--) {
+        const item = items[index], children = item.children.filter(key => ids.has(key));
+        slots.set(item.key, children.length ? (slots.get(children[0])! + slots.get(children.at(-1)!)!) / 2 : leaves++);
+    }
+    return new Map(items.map(item => {
+        const lane = leaves - 1 - slots.get(item.key)!, depth = levels.get(item.key)!;
+        return [item.key, direction === "horizontal" ? { x: depth * 320 + 150, y: lane * 85 + 55 } : { x: lane * 280 + 150, y: depth * 115 + 55 }];
+    }));
+}
 /** A fresh read's render key alone cannot locate a different older compile.
  * Validate the actual installed native display product before scrolling it. */
 export function headingMatchesDisplay(tree: RenderNode | null | undefined, heading: StructureHeading): boolean {

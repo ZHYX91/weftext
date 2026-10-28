@@ -311,6 +311,22 @@ These are implementation/acceptance gates; distinguish accepted and unverified s
 
 Reuse WORKFLOW's single candidate record, distinguishing existing capability, new implementation, actual passes and remaining limits. Common tasks need discoverable UI/keyboard entry points as well as correctness, without lost drafts, wrong targets, focus/scroll loss or silent truncation. Verify declared performance targets on actual devices with adequate samples. Backend/prototype completion cannot pass the entire usability gate. Reference-version changes do not automatically expand scope; update REQUIREMENTS before adopting new targets.
 
+### Implementation boundaries from the user-owned plugin comparison
+
+The 2026-10-29 source comparison of seven plugins fills existing user tasks without importing the Obsidian runtime or another persistence authority. This table separates the current implementation slices from remaining gaps. Implementation, component/product regression and real-host experience are recorded separately; an implemented slice does not establish parity with a whole plugin.
+
+| Reference | Current implementation slice | Remaining gaps |
+| --- | --- | --- |
+| Folder Nodes | Separate exact main-note opening from content browsing; retain anomalous same-name sources | Range selection, qualified bulk resource insertion and a separate structural tree graph |
+| Number Suite | Keyboard search traversal and viewport reveal; native numbering, direct-child counts and branch folding on heading cards | Legal/official-document presets, per-level templates/start/skip and subtree-exclusion convenience |
+| Link Integrity | Sorting, source-directory grouping and 100-entry paging over the current authorized projection; accurate expected-isolation classification | Path/date/glob rule editing with examples and source-mode issue markers |
+| Property Order | First/last/position moves; local field top/bottom/hidden/name order while protecting unapplied and unknown content | Atomic cross-field moves, value presets, learning after durable save confirmation and field dragging |
+| Chrono Notes | One-owner right-side five-period navigation, actual series, date/Today selection and explicit creation | Month/week/year grids with batched date state, heatmaps, range notes, read-only ICS and full calendar interaction |
+| Structural Tables | Proven click carets, safe end fallback and explicit whole-cell text selection | Multi-row/column group operations, row headers and qualified header transpose, table-image output |
+| DocWen Assistant | Stable incremental proofreading results, bounded annotation selection, actual scan tasks and qualified report access | Actual native save-location and reveal-output-folder delivery |
+
+Existing diagnostics/potential mentions, table Draft recovery, export-loss previews and original-operation recovery remain in use rather than being reported as missing. Remaining work follows the relevant Core, Engine, host or presentation contracts. Parity does not justify copying path identity, Markdown numbering prefixes, plugin cell drafts, Vault/Base or Machine/Bundle protocols. Period navigation is not complete Chrono Notes; improved heading cards do not supply every numbering scheme.
+
 ### Concrete UX01–12 interaction acceptance
 
 Design and fixed-version documentation/interaction-code review were completed on 2026-10-16 under REQUIREMENTS §5.15.2. Later partial host observations used fixed Structural Tables, Number Suite and DocWen Assistant, retaining original coverage, cancellation differences and failures; other reference plugins still have source/design review only. Whole-version UX01–12 same-task comparisons with the new candidate remain incomplete. Partial observations establish neither overall parity nor that all references were never tested. These steps expand existing UX cases without another acceptance ledger or added v0.6.0 scope. Run defined mouse/keyboard paths in product-owned clients and resolve disputed feel through a bounded usable prototype rather than further research deferring clear requirements.

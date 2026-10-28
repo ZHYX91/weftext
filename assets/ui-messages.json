@@ -6,20 +6,82 @@
     "en-US"
   ],
   "messages": {
-    "workspaceViews.currentDocumentGraph": { "zh-CN": "当前文档关系图", "en-US": "Current document graph", "params": {} },
-    "workspaceViews.parentFolder": { "zh-CN": "上级文件夹", "en-US": "Parent folder", "params": {} },
-    "heading.waitForCurrentProjection": { "zh-CN": "等待当前草稿预览完成，大纲会自动更新。", "en-US": "The outline updates automatically when the current draft preview is ready.", "params": {} },
-    "heading.openDocumentForOutline": { "zh-CN": "打开文档以查看大纲。", "en-US": "Open a document to view its outline.", "params": {} },
-    "heading.outlineBasisChanged": { "zh-CN": "大纲已过期，等待当前预览完成后自动更新。", "en-US": "The outline is out of date and updates when the current preview is ready.", "params": {} },
-    "heading.generatedItemSourceUnavailable": { "zh-CN": "此大纲项没有可定位的本篇源码或当前显示位置。", "en-US": "This outline item has no locatable source or current display position.", "params": {} },
-    "heading.outlineMatchCount": { "zh-CN": "{p0} 个大纲项命中", "en-US": "{p0} outline matches", "params": { "p0": "integer" } },
-    "heading.outlineEntrySummary": { "zh-CN": "{p0}：{p1} 个直接子项／{p2} 个后代子项", "en-US": "{p0}: {p1} direct items / {p2} descendant items", "params": { "p0": "text", "p1": "integer", "p2": "integer" } },
-    "heading.searchOutline": { "zh-CN": "搜索标题与题注", "en-US": "Search headings and captions", "params": {} },
-    "heading.outlineSearchPlaceholder": { "zh-CN": "搜索标题或题注", "en-US": "Search heading or caption", "params": {} },
-    "workPanel.cancelled": { "zh-CN": "已取消", "en-US": "Cancelled", "params": {} },
-    "workActivity.details": { "zh-CN": "查看详情", "en-US": "View details", "params": {} },
-    "workActivity.originalUnavailable": { "zh-CN": "当前窗口已不再持有这次原操作的详情，请从原恢复入口查看。", "en-US": "This window no longer holds these original operation details. Use the original recovery entry.", "params": {} },
-    "navigationLayout.restorePaneWidths": { "zh-CN": "恢复侧栏宽度", "en-US": "Reset sidebar widths", "params": {} },
+    "workspaceViews.currentDocumentGraph": {
+      "zh-CN": "当前文档关系图",
+      "en-US": "Current document graph",
+      "params": {}
+    },
+    "workspaceViews.parentFolder": {
+      "zh-CN": "上级文件夹",
+      "en-US": "Parent folder",
+      "params": {}
+    },
+    "heading.waitForCurrentProjection": {
+      "zh-CN": "等待当前草稿预览完成，大纲会自动更新。",
+      "en-US": "The outline updates automatically when the current draft preview is ready.",
+      "params": {}
+    },
+    "heading.openDocumentForOutline": {
+      "zh-CN": "打开文档以查看大纲。",
+      "en-US": "Open a document to view its outline.",
+      "params": {}
+    },
+    "heading.outlineBasisChanged": {
+      "zh-CN": "大纲已过期，等待当前预览完成后自动更新。",
+      "en-US": "The outline is out of date and updates when the current preview is ready.",
+      "params": {}
+    },
+    "heading.generatedItemSourceUnavailable": {
+      "zh-CN": "此大纲项没有可定位的本篇源码或当前显示位置。",
+      "en-US": "This outline item has no locatable source or current display position.",
+      "params": {}
+    },
+    "heading.outlineMatchCount": {
+      "zh-CN": "{p0} 个大纲项命中",
+      "en-US": "{p0} outline matches",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "heading.outlineEntrySummary": {
+      "zh-CN": "{p0}：{p1} 个直接子项／{p2} 个后代子项",
+      "en-US": "{p0}: {p1} direct items / {p2} descendant items",
+      "params": {
+        "p0": "text",
+        "p1": "integer",
+        "p2": "integer"
+      }
+    },
+    "heading.searchOutline": {
+      "zh-CN": "搜索标题与题注",
+      "en-US": "Search headings and captions",
+      "params": {}
+    },
+    "heading.outlineSearchPlaceholder": {
+      "zh-CN": "搜索标题或题注",
+      "en-US": "Search heading or caption",
+      "params": {}
+    },
+    "workPanel.cancelled": {
+      "zh-CN": "已取消",
+      "en-US": "Cancelled",
+      "params": {}
+    },
+    "workActivity.details": {
+      "zh-CN": "查看详情",
+      "en-US": "View details",
+      "params": {}
+    },
+    "workActivity.originalUnavailable": {
+      "zh-CN": "当前窗口已不再持有这次原操作的详情，请从原恢复入口查看。",
+      "en-US": "This window no longer holds these original operation details. Use the original recovery entry.",
+      "params": {}
+    },
+    "navigationLayout.restorePaneWidths": {
+      "zh-CN": "恢复侧栏宽度",
+      "en-US": "Reset sidebar widths",
+      "params": {}
+    },
     "workspaceDock.leftSidebar": {
       "zh-CN": "左侧栏",
       "en-US": "Left sidebar",
@@ -16289,11 +16351,6 @@
     "tableGrid.nativeCellUseSource": {
       "zh-CN": "此格包含格式、公式或生成内容；保留原生内容，可使用编辑此表源码。",
       "en-US": "This cell contains formatting, formulas, or generated content. Its native content is preserved; use Edit this table's source.",
-      "params": {}
-    },
-    "tableGrid.wholeCellSelectionNotice": {
-      "zh-CN": " 点击字符位置尚未映射，已选择本格全部文字；可在输入框内继续放置光标。",
-      "en-US": " The clicked character position is not mapped, so all text in this cell is selected. You can place the cursor within the input.",
       "params": {}
     },
     "tableGrid.selectionLabel": {
@@ -53639,6 +53696,400 @@
     "personalInput.copyFinished": {
       "zh-CN": "本人副本已可靠保留；原输入、原操作和资料正文未改变。",
       "en-US": "The personal copy is durably retained. The original input, operation and document source are unchanged.",
+      "params": {}
+    },
+    "nodeContents.openNote": {
+      "zh-CN": "打开笔记",
+      "en-US": "Open note",
+      "params": {}
+    },
+    "nodeContents.browseContents": {
+      "zh-CN": "浏览内容",
+      "en-US": "Browse contents",
+      "params": {}
+    },
+    "heading.outlineMatchPosition": {
+      "zh-CN": "第 {p0} / {p1} 个命中",
+      "en-US": "Match {p0} of {p1}",
+      "params": {
+        "p0": "integer",
+        "p1": "integer"
+      }
+    },
+    "heading.mapHorizontal": {
+      "zh-CN": "横向标题导图",
+      "en-US": "Horizontal heading map",
+      "params": {}
+    },
+    "heading.mapVertical": {
+      "zh-CN": "纵向标题导图",
+      "en-US": "Vertical heading map",
+      "params": {}
+    },
+    "heading.mapHeadingLevel": {
+      "zh-CN": "标题 {p0}",
+      "en-US": "Heading {p0}",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "heading.mapExpandChildren": {
+      "zh-CN": "展开 {p0} 个直接子标题",
+      "en-US": "Expand {p0} direct child headings",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "heading.mapCollapseChildren": {
+      "zh-CN": "折叠 {p0} 个直接子标题",
+      "en-US": "Collapse {p0} direct child headings",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "heading.mapChildCount": {
+      "zh-CN": "{p0} 个直接子标题",
+      "en-US": "{p0} direct child headings",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "periodCalendar.open": {
+      "zh-CN": "打开日历与周期笔记",
+      "en-US": "Open calendar and periodic notes",
+      "params": {}
+    },
+    "periodCalendar.noLibrary": {
+      "zh-CN": "打开资料库以浏览周期笔记。",
+      "en-US": "Open a library to browse periodic notes.",
+      "params": {}
+    },
+    "periodCalendar.selectDate": {
+      "zh-CN": "选择日期",
+      "en-US": "Choose date",
+      "params": {}
+    },
+    "periodCalendar.today": {
+      "zh-CN": "今天",
+      "en-US": "Today",
+      "params": {}
+    },
+    "periodCalendar.dateLookup": {
+      "zh-CN": "查找所选日期的周期",
+      "en-US": "Find the period for this date",
+      "params": {}
+    },
+    "periodCalendar.dateHelp": {
+      "zh-CN": "日期只用于定位已安装系列中的周期；选择和查找不会创建笔记。",
+      "en-US": "The date locates a period in the installed series. Selecting or looking up a date does not create a note.",
+      "params": {}
+    },
+    "periodCalendar.exactKey": {
+      "zh-CN": "按准确周期 key 查找",
+      "en-US": "Find by exact period key",
+      "params": {}
+    },
+    "periodCalendar.noSeries": {
+      "zh-CN": "当前定义中没有可用周期系列。请先安装系列策略。",
+      "en-US": "No periodic series is available in the current definitions. Install a series policy first.",
+      "params": {}
+    },
+    "periodCalendar.chooseSeries": {
+      "zh-CN": "选择当前资料库的周期系列。",
+      "en-US": "Choose a periodic series from this library.",
+      "params": {}
+    },
+    "periodCalendar.kindUnavailable": {
+      "zh-CN": "此系列当前不支持所选周期种类；原输入已保留，请重新选择。",
+      "en-US": "This series does not currently support the selected period kind. Your input is retained; choose another kind.",
+      "params": {}
+    },
+    "periodCalendar.range": {
+      "zh-CN": "日期范围：{p0} 至 {p1}（不含结束日）",
+      "en-US": "Date range: {p0} to {p1} (end date excluded)",
+      "params": {
+        "p0": "text",
+        "p1": "text"
+      }
+    },
+    "periodCalendar.identity": {
+      "zh-CN": "{p0} · {p1} · {p2}",
+      "en-US": "{p0} · {p1} · {p2}",
+      "params": {
+        "p0": "text",
+        "p1": "text",
+        "p2": "text"
+      }
+    },
+    "periodCalendar.schemaLoading": {
+      "zh-CN": "正在读取周期系列定义…",
+      "en-US": "Reading periodic series definitions…",
+      "params": {}
+    },
+    "periodCalendar.dateRequired": {
+      "zh-CN": "请选择有效日期。",
+      "en-US": "Choose a valid date.",
+      "params": {}
+    },
+    "relationshipDiagnostics.groupBySourceDirectory": {
+      "zh-CN": "按来源目录分组",
+      "en-US": "Group by source folder",
+      "params": {}
+    },
+    "relationshipDiagnostics.resultSort": {
+      "zh-CN": "结果排序",
+      "en-US": "Result order",
+      "params": {}
+    },
+    "relationshipDiagnostics.sortScanOrder": {
+      "zh-CN": "扫描顺序",
+      "en-US": "Scan order",
+      "params": {}
+    },
+    "relationshipDiagnostics.sortName": {
+      "zh-CN": "名称",
+      "en-US": "Name",
+      "params": {}
+    },
+    "relationshipDiagnostics.sortProblemCount": {
+      "zh-CN": "问题数优先",
+      "en-US": "Most problems first",
+      "params": {}
+    },
+    "relationshipDiagnostics.includeExpected": {
+      "zh-CN": "显示已确认的预期孤立",
+      "en-US": "Include confirmed expected isolation",
+      "params": {}
+    },
+    "relationshipDiagnostics.isolationSummary": {
+      "zh-CN": "已确认预期孤立 {p0} · 待复核 {p1} · 扫描不完整 {p2}",
+      "en-US": "Confirmed expected isolation: {p0} · Needs review: {p1} · Incomplete scan: {p2}",
+      "params": {
+        "p0": "integer",
+        "p1": "integer",
+        "p2": "integer"
+      }
+    },
+    "relationshipDiagnostics.expectedMarkRetained": {
+      "zh-CN": "已保存预期标记；本次尚不能判定为孤立。",
+      "en-US": "Expected-isolation preference retained; this scan does not establish isolation.",
+      "params": {}
+    },
+    "relationshipDiagnostics.expectedNeedsIsolated": {
+      "zh-CN": "只有当前完整扫描确认无有效入链、出链的节点，才能标记为预期孤立。",
+      "en-US": "Expected isolation can be marked only when the current complete scan confirms no valid incoming or outgoing connections.",
+      "params": {}
+    },
+    "relationshipDiagnostics.pageRange": {
+      "zh-CN": "第 {p0}–{p1} 项，共 {p2} 项",
+      "en-US": "Items {p0}–{p1} of {p2}",
+      "params": {
+        "p0": "integer",
+        "p1": "integer",
+        "p2": "integer"
+      }
+    },
+    "relationshipDiagnostics.previousPage": {
+      "zh-CN": "上一页",
+      "en-US": "Previous page",
+      "params": {}
+    },
+    "relationshipDiagnostics.nextPage": {
+      "zh-CN": "下一页",
+      "en-US": "Next page",
+      "params": {}
+    },
+    "relationshipDiagnostics.resultPages": {
+      "zh-CN": "关系诊断结果分页",
+      "en-US": "Relationship diagnostic result pages",
+      "params": {}
+    },
+    "nativeEditor.moveFirst": {
+      "zh-CN": "移到首项",
+      "en-US": "Move to first",
+      "params": {}
+    },
+    "nativeEditor.moveLast": {
+      "zh-CN": "移到末项",
+      "en-US": "Move to last",
+      "params": {}
+    },
+    "nativeEditor.movePosition": {
+      "zh-CN": "目标位置",
+      "en-US": "Target position",
+      "params": {}
+    },
+    "nativeEditor.moveToPosition": {
+      "zh-CN": "移到指定位置",
+      "en-US": "Move to position",
+      "params": {}
+    },
+    "nativeEditor.movePositionHelp": {
+      "zh-CN": "输入 1 到 {count} 的完整位置；列表顺序只在应用字段时写入草稿。",
+      "en-US": "Enter a whole position from 1 to {count}; the order enters the Draft only when the field is applied.",
+      "params": {
+        "count": "integer"
+      }
+    },
+    "nativeEditor.movePositionInvalid": {
+      "zh-CN": "位置须为 1 到 {count} 的整数；输入已保留。",
+      "en-US": "The position must be a whole number from 1 to {count}; your input is retained.",
+      "params": {
+        "count": "integer"
+      }
+    },
+    "nativeEditor.finishInvalidBeforeReorder": {
+      "zh-CN": "先完成列表中的无效输入，再调整顺序；原输入已保留。",
+      "en-US": "Complete the invalid list input before reordering; your input is retained.",
+      "params": {}
+    },
+    "fieldPresentation.menu": {
+      "zh-CN": "字段呈现",
+      "en-US": "Field presentation",
+      "params": {}
+    },
+    "fieldPresentation.default": {
+      "zh-CN": "默认位置",
+      "en-US": "Default position",
+      "params": {}
+    },
+    "fieldPresentation.top": {
+      "zh-CN": "置顶",
+      "en-US": "Pin to top",
+      "params": {}
+    },
+    "fieldPresentation.bottom": {
+      "zh-CN": "沉底",
+      "en-US": "Move to bottom",
+      "params": {}
+    },
+    "fieldPresentation.hidden": {
+      "zh-CN": "隐藏",
+      "en-US": "Hide",
+      "params": {}
+    },
+    "fieldPresentation.schemaOrder": {
+      "zh-CN": "按定义顺序",
+      "en-US": "Schema order",
+      "params": {}
+    },
+    "fieldPresentation.nameOrder": {
+      "zh-CN": "按名称排序",
+      "en-US": "Sort by name",
+      "params": {}
+    },
+    "fieldPresentation.showHidden": {
+      "zh-CN": "显示隐藏字段",
+      "en-US": "Show hidden fields",
+      "params": {}
+    },
+    "fieldPresentation.reset": {
+      "zh-CN": "恢复字段呈现默认值",
+      "en-US": "Reset field presentation",
+      "params": {}
+    },
+    "fieldPresentation.localOnly": {
+      "zh-CN": "仅调整本机呈现，不改变作者字段与值的顺序。",
+      "en-US": "Changes local presentation only; author fields and values keep their order.",
+      "params": {}
+    },
+    "fieldPresentation.requiredVisible": {
+      "zh-CN": "必填、无效、含未绑定成员或有未应用修改的字段会保持可见。",
+      "en-US": "Required, invalid, unbound-member or unapplied fields remain visible.",
+      "params": {}
+    },
+    "fieldPresentation.hiddenCount": {
+      "zh-CN": "隐藏字段：{count}",
+      "en-US": "Hidden fields: {count}",
+      "params": {
+        "count": "integer"
+      }
+    },
+    "fieldPresentation.bottomFields": {
+      "zh-CN": "沉底字段",
+      "en-US": "Fields at bottom",
+      "params": {}
+    },
+    "proofreading.resultCount": {
+      "zh-CN": "已显示 {p0} / {p1} 项（本报告共 {p2} 项），已选 {p3} / 200 项。",
+      "en-US": "Showing {p0} of {p1} matching issues ({p2} in this report); {p3} of 200 selected.",
+      "params": {
+        "p0": "integer",
+        "p1": "integer",
+        "p2": "integer",
+        "p3": "integer"
+      }
+    },
+    "proofreading.sortLabel": {
+      "zh-CN": "校对结果排序",
+      "en-US": "Sort proofreading results",
+      "params": {}
+    },
+    "proofreading.sortSource": {
+      "zh-CN": "按来源位置",
+      "en-US": "Source order",
+      "params": {}
+    },
+    "proofreading.sortRule": {
+      "zh-CN": "按校对规则",
+      "en-US": "Rule order",
+      "params": {}
+    },
+    "proofreading.showMore": {
+      "zh-CN": "再显示 {p0} 项",
+      "en-US": "Show {p0} more",
+      "params": {
+        "p0": "integer"
+      }
+    },
+    "proofreading.selectVisible": {
+      "zh-CN": "选择当前显示的可定位项（最多 200 项）",
+      "en-US": "Select visible located issues (up to 200)",
+      "params": {}
+    },
+    "proofreading.selectionLimit": {
+      "zh-CN": "一次最多选择 200 项。请先处理或取消部分已选项。",
+      "en-US": "Select up to 200 issues at a time. Process or clear some selected issues first.",
+      "params": {}
+    },
+    "proofreading.selectionVisibilityHelp": {
+      "zh-CN": "仅处理当前显示并选中的项目；切换分类或排序会取消不再显示的选中项。每次提交最多 200 项，不自动分批写入。",
+      "en-US": "Only visible, selected issues are processed. Changing category or order clears selections that are no longer visible. Each submission contains up to 200 issues; writes are never split automatically.",
+      "params": {}
+    },
+    "proofreading.resultListLabel": {
+      "zh-CN": "校对结果",
+      "en-US": "Proofreading results",
+      "params": {}
+    },
+    "proofreading.reportRetired": {
+      "zh-CN": "本窗口已不再接纳这份校对报告；未取消底层扫描。请在当前文档重新校对。",
+      "en-US": "This window no longer accepts this proofreading report. The underlying scan was not cancelled. Run proofreading on the current document.",
+      "params": {}
+    },
+    "proofreading.viewReport": {
+      "zh-CN": "查看校对报告",
+      "en-US": "View proofreading report",
+      "params": {}
+    },
+    "tableGrid.selectCellText": {
+      "zh-CN": "全选格内文字",
+      "en-US": "Select all cell text",
+      "params": {}
+    },
+    "tableGrid.explicitWholeCellSelectionNotice": {
+      "zh-CN": "已明确选择本格全部文字；输入将替换所选文字。",
+      "en-US": "All text in this cell is explicitly selected; typing replaces the selection.",
+      "params": {}
+    },
+    "tableGrid.caretAtEndNotice": {
+      "zh-CN": "无法确认点击字符位置，光标已放在格内文字末尾；可在输入框内重新定位或使用“全选格内文字”。",
+      "en-US": "The clicked character position could not be verified. The cursor is at the end of this cell; place it in the input or choose Select all cell text.",
+      "params": {}
+    },
+    "error.api.data.periodSelectionRequired": {
+      "zh-CN": "请选择一个有效日期，或提供一个准确周期 key；两者不能同时提交。",
+      "en-US": "Choose one valid date or provide one exact period key; do not submit both.",
       "params": {}
     }
   }

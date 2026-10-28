@@ -236,12 +236,18 @@ export function replaceNativeMember(value: NativeValue, key: string, replacement
     return { kind: "record", value: items };
 }
 export function moveOrderedValue(value: NativeValue, from: number, to: number): NativeValue {
-    if (value.kind !== "array" || from < 0 || to < 0 || from >= value.value.length || to >= value.value.length)
+    if (value.kind !== "array" || !Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < 0 || from >= value.value.length || to >= value.value.length || from === to)
         return value;
     const items = [...value.value];
     const [item] = items.splice(from, 1);
     items.splice(to, 0, item);
     return { kind: "array", value: items };
+}
+/** A display position is one-based, never a scalar native value or a new path. */
+export function orderedMoveTarget(raw: string, length: number): number | null {
+    if (!Number.isSafeInteger(length) || length < 1 || !/^[1-9][0-9]*$/.test(raw)) return null;
+    const position = Number(raw);
+    return Number.isSafeInteger(position) && position <= length ? position - 1 : null;
 }
 export function unionVariant(shape: Extract<Shape, {
     kind: "union";
@@ -580,24 +586,55 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
             return host;
         }
         const items = ui("div", "native-list");
-        host.append(items);
-        const render = (): void => {
+        const status = ui("p", "data-help native-list-order-status");
+        status.setAttribute("role", "status");
+        status.setAttribute("aria-live", "polite");
+        const composing = new Set<EventTarget>();
+        host.addEventListener("compositionstart", event => { if (event.target) composing.add(event.target); });
+        host.addEventListener("compositionend", event => { if (event.target) composing.delete(event.target); });
+        host.append(items, status);
+        const canRestructure = (): boolean => {
+            if (composing.size) { setUiText(status, uiMessage("dataPanel.compositionPending")); return false; }
+            const invalid = items.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input:invalid,select:invalid,textarea:invalid");
+            if (invalid) {
+                setUiText(status, uiMessage("nativeEditor.finishInvalidBeforeReorder"));
+                invalid.reportValidity();
+                invalid.focus({ preventScroll: true });
+                return false;
+            }
+            setUiText(status, "");
+            return true;
+        };
+        const render = (focusIndex?: number, focusRole = "position"): void => {
             items.replaceChildren();
             if (value.kind !== "array")
                 return;
             if (!value.value.length)
                 items.append(ui("span", "data-empty", uiMessage("nativeEditor.emptyArray")));
+            const length = value.value.length;
             value.value.forEach((item, index) => {
                 const row = ui("fieldset", "native-list-item");
                 row.append(ui("legend", "", displayMessage("nativeEditor.itemLegend", { p0: index + 1 })));
                 const controls = ui("div", "native-list-controls");
-                const up = action(uiMessage("queryShortcut.moveUp"), () => { retire(); value = moveOrderedValue(value, index, index - 1); changed(value); render(); }, "data-button compact");
+                const move = (to: number, role: string): void => {
+                    if (!canRestructure()) return;
+                    const next = moveOrderedValue(value, index, to);
+                    if (next === value) return;
+                    retire();
+                    value = next;
+                    changed(value);
+                    render(to, role);
+                };
+                const up = action(uiMessage("queryShortcut.moveUp"), () => move(index - 1, "up"), "data-button compact");
+                up.dataset.orderAction = "up";
                 up.disabled = index === 0;
-                const down = action(uiMessage("nodeContents.moveDown"), () => { retire(); value = moveOrderedValue(value, index, index + 1); changed(value); render(); }, "data-button compact");
+                const down = action(uiMessage("nodeContents.moveDown"), () => move(index + 1, "down"), "data-button compact");
+                down.dataset.orderAction = "down";
                 down.disabled = value.kind !== "array" || index === value.value.length - 1;
                 const remove = action(uiMessage("nativeEditor.removeMember"), () => {
                     if (value.kind !== "array")
                         return;
+                    if (!canRestructure()) return;
                     retire();
                     value = { kind: "array", value: value.value.filter((_, ordinal) => ordinal !== index) };
                     changed(value);
@@ -605,7 +642,42 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                 }, "data-button compact");
                 remove.disabled = value.kind !== "array" || value.value.length <= resolved.min;
                 controls.append(up, down, remove);
-                row.append(controls, valueEditor(resolved.items, item, schema, next => {
+                const order = ui("details", "native-list-order");
+                order.append(ui("summary", "", uiMessage("nativeEditor.movePosition")));
+                const first = action(uiMessage("nativeEditor.moveFirst"), () => move(0, "first"), "data-button compact");
+                first.dataset.orderAction = "first";
+                first.disabled = index === 0;
+                const last = action(uiMessage("nativeEditor.moveLast"), () => { if (value.kind === "array") move(value.value.length - 1, "last"); }, "data-button compact");
+                last.dataset.orderAction = "last";
+                last.disabled = value.kind !== "array" || index === value.value.length - 1;
+                const position = ui("input", "data-input native-list-position");
+                bindNativeControl(position, { ...identity, path: [...identity.path, { kind: "index", index }] }, "order-position");
+                position.type = "text";
+                position.inputMode = "numeric";
+                position.size = 5;
+                position.value = String(index + 1);
+                position.dataset.orderAction = "position";
+                setUiAttr(position, "aria-label", () => displayMessage("nativeEditor.itemLabel", { p0: uiDisplayParameter(uiTextValue(uiMessage("nativeEditor.movePosition"))), p1: index + 1 }));
+                position.oninput = () => { position.removeAttribute("aria-invalid"); setUiText(status, ""); };
+                const atPosition = (): void => {
+                    if (value.kind !== "array" || composing.size) { canRestructure(); return; }
+                    const to = orderedMoveTarget(position.value, value.value.length);
+                    if (to === null) {
+                        position.setAttribute("aria-invalid", "true");
+                        setUiText(status, displayMessage("nativeEditor.movePositionInvalid", { count: value.value.length }));
+                        position.focus({ preventScroll: true });
+                        return;
+                    }
+                    move(to, "position");
+                };
+                position.addEventListener("keydown", event => {
+                    if (event.key === "Enter" && !event.isComposing && event.keyCode !== 229) { event.preventDefault(); atPosition(); }
+                });
+                order.append(first, last, labelFor(uiMessage("nativeEditor.movePosition"), position), position,
+                    action(uiMessage("nativeEditor.moveToPosition"), atPosition, "data-button compact"),
+                    ui("p", "data-help", displayMessage("nativeEditor.movePositionHelp", { count: length })));
+                if (index === focusIndex && !["up", "down"].includes(focusRole)) order.open = true;
+                row.append(controls, order, valueEditor(resolved.items, item, schema, next => {
                     if (value.kind !== "array")
                         return;
                     const nextItems = [...value.value];
@@ -614,10 +686,16 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                     changed(value);
                 }, () => displayMessage("nativeEditor.itemLabel", { p0: uiDisplayParameter(uiTextValue(label)), p1: index + 1 }), { ...identity, path: [...identity.path, { kind: "index", index }] }, depth + 1, references, binding, lifetime));
                 items.append(row);
+                if (index === focusIndex) {
+                    const requested = [up, down, first, last, position].find(control => control.dataset.orderAction === focusRole && !("disabled" in control && control.disabled));
+                    const fallback = !up.disabled ? up : !down.disabled ? down : position;
+                    (requested ?? fallback).focus({ preventScroll: true });
+                }
             });
             const add = action(uiMessage("nativeEditor.addItem"), () => {
                 if (value.kind !== "array")
                     return;
+                if (!canRestructure()) return;
                 retire();
                 value = { kind: "array", value: [...value.value, emptyNativeValue(resolved.items, schema)] };
                 changed(value);

@@ -8,13 +8,13 @@ import type { QueryRow } from "./query-panel";
 
 function owner() {
     const closeGuard = new ProposalCloseGuard(), inlineDrafts = new Map(), draftFlags = new Set<string>();
-    const captureForms = new Map(), periodNavigators = new Map(), navigationControls = new Map();
+    const captureForms = new Map(), navigationControls = new Map();
     const panel = Object.assign(Object.create(QueryPanel.prototype), {
-        closeGuard, inlineDrafts, draftFlags, captureForms, periodNavigators, navigationControls,
+        closeGuard, inlineDrafts, draftFlags, captureForms, navigationControls,
         savedPending: null, definitionName: "", thumbnailDisposers: [], renderResults() {},
         element: { querySelectorAll() { throw new Error("The close proof cannot inspect rendered controls"); } },
     }) as QueryPanel;
-    return { panel, closeGuard, inlineDrafts, draftFlags, captureForms, periodNavigators, navigationControls };
+    return { panel, closeGuard, inlineDrafts, draftFlags, captureForms, navigationControls };
 }
 
 test("Query close covers invalid raw fields, advanced and parameter proposals and original save state", () => {
@@ -36,15 +36,15 @@ test("Query close covers invalid raw fields, advanced and parameter proposals an
 });
 
 test("Query checks every retained child owner and rolls earlier freezes back if a later owner refuses", () => {
-    const { panel, captureForms, periodNavigators, navigationControls } = owner();
+    const { panel, captureForms, navigationControls } = owner();
     let blocked = true, frozen = false, thawed = 0;
     const capture = { assertCloseReady() { if (blocked) throw new Error("retained capture input"); }, freezeForClose() { frozen = true; return true; }, thawAfterClose() { frozen = false; thawed++; } };
     captureForms.set("inactive-library", capture);
     assert.throws(() => panel.assertCloseReady(), /retained capture/);
     blocked = false;
-    periodNavigators.set("inactive-period", { assertCloseReady() {}, freezeForClose() { return false; }, thawAfterClose() {} });
+    navigationControls.set("inactive-navigation", { assertCloseReady() {}, freezeForClose() { return false; }, thawAfterClose() {} });
     assert.equal(panel.freezeForClose(), false); assert.equal(frozen, false); assert.equal(thawed, 1);
-    periodNavigators.clear();
+    navigationControls.clear();
     navigationControls.set("inactive-tags", { assertCloseReady() { throw new Error("original tag operation"); }, freezeForClose() { return false; }, thawAfterClose() {} });
     assert.throws(() => panel.assertCloseReady(), /original tag/);
 });

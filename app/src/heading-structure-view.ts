@@ -1,8 +1,8 @@
 import { uiDisplayParameter, displayMessage, message, setUiAttr, disposeUiTree, type UiText } from "./ui-locale";
 import { action, ui } from "./data-panel";
 import { graphCanvas, type CanvasState } from "./knowledge-graph-canvas";
-import { defaultCamera, fitCamera, graphLayout } from "./relationship-graph-state";
-import { DOCUMENT_ROOT, headingTree, visibleHeadings, type HeadingSnapshot, type StructureHeading } from "./heading-structure-state";
+import { defaultCamera } from "./relationship-graph-state";
+import { DOCUMENT_ROOT, headingTree, visibleHeadings, nextHeadingMatch, boundedHeadingMap, headingMapLayout, type HeadingSnapshot, type StructureHeading } from "./heading-structure-state";
 import "./heading-structure.css";
 
 const kindLabels: Record<StructureHeading["kind"], UiText> = {
@@ -16,7 +16,10 @@ export class HeadingStructureView {
     private selected = DOCUMENT_ROOT;
     private scope = DOCUMENT_ROOT;
     private search = "";
-    private match = 0;
+    private match = -1;
+    private revealMatch = false;
+    private direction: "horizontal" | "vertical" = "horizontal";
+    private layoutKey = "";
     private depth = 0;
     private mode: "list" | "map" = "list";
     private filter: "all" | "heading" | "caption" = "all";
@@ -26,7 +29,7 @@ export class HeadingStructureView {
     private scroll = 0;
     private element?: HTMLElement;
     private composing = false;
-    private deferred?: { container: HTMLElement; snapshot: HeadingSnapshot; open: (heading: StructureHeading) => void; emptyMessage: UiText };
+    private deferred?: { container: HTMLElement; snapshot: HeadingSnapshot; open: (heading: StructureHeading) => void; emptyMessage: UiText; documentTitle: UiText };
 
     /** Retain navigation state without retaining another document's DOM/bindings. */
     detach(): void {
@@ -40,15 +43,16 @@ export class HeadingStructureView {
     }
 
     clear(): void {
-        this.collapsed.clear(); this.selected = DOCUMENT_ROOT; this.scope = DOCUMENT_ROOT; this.search = ""; this.match = 0;
+        this.collapsed.clear(); this.selected = DOCUMENT_ROOT; this.scope = DOCUMENT_ROOT; this.search = ""; this.match = -1;
+        this.revealMatch = false; this.layoutKey = "";
         this.initialized = false; this.canvas = { positions: new Map(), camera: defaultCamera() };
         this.composing = false; this.deferred = undefined;
         this.detach(); this.scroll = 0;
     }
 
-    render(container: HTMLElement, snapshot: HeadingSnapshot | undefined, open: (heading: StructureHeading) => void, emptyMessage: UiText = message("heading.refreshNativeHeadings")): void {
+    render(container: HTMLElement, snapshot: HeadingSnapshot | undefined, open: (heading: StructureHeading) => void, emptyMessage: UiText = message("heading.refreshNativeHeadings"), documentTitle: UiText = message("heading.documentRoot")): void {
         if (this.composing && this.element?.isConnected && snapshot) {
-            this.deferred = { container, snapshot, open, emptyMessage };
+            this.deferred = { container, snapshot, open, emptyMessage, documentTitle };
             return;
         }
         this.composing = false;
@@ -63,7 +67,7 @@ export class HeadingStructureView {
         const parent = ui("section", "knowledge-heading-structure outline-view");
         this.element = parent;
         container.append(parent);
-        const redraw = () => this.render(container, snapshot, open, emptyMessage);
+        const redraw = () => this.render(container, snapshot, open, emptyMessage, documentTitle);
         const control = (key: string, label: UiText, run: () => void): HTMLButtonElement => {
             const button = action(label, run);
             button.dataset.outlineControl = key;
@@ -101,16 +105,18 @@ export class HeadingStructureView {
         search.type = "search"; search.value = this.search; search.dataset.outlineControl = "search";
         setUiAttr(search, "aria-label", message("heading.searchOutline"));
         setUiAttr(search, "placeholder", message("heading.outlineSearchPlaceholder"));
-        search.oninput = event => { this.search = search.value; this.match = 0; if (!(event as InputEvent).isComposing) redraw(); };
+        search.oninput = event => { this.search = search.value; this.match = -1; if (!(event as InputEvent).isComposing && !this.composing) redraw(); };
         search.addEventListener("compositionstart", () => { this.composing = true; });
         search.addEventListener("compositionend", () => {
-            this.composing = false; this.search = search.value; this.match = 0;
+            this.composing = false; this.search = search.value; this.match = -1;
             const deferred = this.deferred; this.deferred = undefined;
-            if (deferred) this.render(deferred.container, deferred.snapshot, deferred.open, deferred.emptyMessage);
+            if (deferred) this.render(deferred.container, deferred.snapshot, deferred.open, deferred.emptyMessage, deferred.documentTitle);
             else redraw();
         });
         search.onkeydown = event => {
-            if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); this.search = search.value; this.match = 0; redraw(); }
+            if (event.isComposing || this.composing || event.keyCode === 229) return;
+            if (event.key === "Enter") { event.preventDefault(); chooseMatch(event.shiftKey ? -1 : 1); }
+            else if (event.key === "Escape" && this.search) { event.preventDefault(); this.search = ""; this.match = -1; redraw(); }
         };
         controls.append(search);
         const filter = ui("select");
@@ -149,27 +155,47 @@ export class HeadingStructureView {
         const visible = visibleHeadings(basis, this.scope, this.collapsed, this.search, this.depth);
         const shown = visible.items.filter(item => item.key === DOCUMENT_ROOT || this.mode === "map" || this.filter === "all" || (this.filter === "heading") === (item.kind === "heading"));
         const matches = visible.matches.filter(key => shown.some(item => item.key === key));
-        const chooseMatch = (step: number) => {
+        if (this.match >= 0) this.match = matches.indexOf(this.selected);
+        const chooseMatch = (step: -1 | 1) => {
             if (!matches.length) return;
-            this.match = (this.match + step + matches.length) % matches.length;
-            this.selected = matches[this.match]; redraw();
-            this.element?.querySelector<HTMLElement>(`[data-heading-key="${CSS.escape(this.selected)}"]`)?.scrollIntoView({ block: "nearest" });
+            this.match = nextHeadingMatch(matches.length, this.match, step);
+            this.selected = matches[this.match]; this.revealMatch = true; redraw();
+            if (this.mode === "list") this.element?.querySelector<HTMLElement>(`[data-heading-key="${CSS.escape(this.selected)}"]`)?.scrollIntoView({ block: "nearest" });
         };
         if (this.search) {
             const matchControls = ui("div", "outline-match-controls");
-            matchControls.append(control("previous-match", message("heading.previousMatch"), () => chooseMatch(-1)), control("next-match", message("heading.nextMatch"), () => chooseMatch(1)), ui("span", "knowledge-help", displayMessage("heading.outlineMatchCount", { p0: matches.length })));
+            const previousMatch = control("previous-match", message("heading.previousMatch"), () => chooseMatch(-1)), nextMatch = control("next-match", message("heading.nextMatch"), () => chooseMatch(1));
+            previousMatch.disabled = nextMatch.disabled = !matches.length;
+            const position = ui("span", "outline-match-position", displayMessage("heading.outlineMatchPosition", { p0: this.match + 1, p1: matches.length }));
+            position.setAttribute("role", "status");
+            matchControls.append(previousMatch, nextMatch, ui("span", "knowledge-help", displayMessage("heading.outlineMatchCount", { p0: matches.length })), position);
             parent.append(matchControls);
         }
         if (this.mode === "map") {
-            const drawn = shown.slice(0, 200), ids = new Set(drawn.map(n => n.key));
+            const mapControls = ui("div", "outline-map-controls");
+            for (const [direction, label] of [["horizontal", message("heading.mapHorizontal")], ["vertical", message("heading.mapVertical")]] as const) {
+                const button = control(`map-${direction}`, label, () => { this.direction = direction; this.initialized = false; redraw(); });
+                button.setAttribute("aria-pressed", String(this.direction === direction)); mapControls.append(button);
+            }
+            parent.append(mapControls);
+            const drawn = boundedHeadingMap(shown, this.selected), ids = new Set(drawn.map(n => n.key)), headingByKey = new Map(basis.map(item => [item.key, item]));
             const edges = drawn.filter(n => ids.has(n.parent)).map(n => ({ key: `heading:${n.key}`, source: n.parent, target: n.key, direction: "directed" as const }));
-            const positions = graphLayout(drawn, edges, "family", this.canvas.positions);
-            for (const [key, point] of positions.positions) this.canvas.positions.set(key, point);
-            if (!this.initialized && drawn.length) { this.initialized = true; this.canvas.camera = fitCamera([...positions.positions.values()], 700, 420); }
+            const layoutKey = JSON.stringify([this.direction, drawn.map(item => [item.key, item.parent])]);
+            if (layoutKey !== this.layoutKey) { this.layoutKey = layoutKey; this.canvas.positions = headingMapLayout(drawn, this.direction); }
             if (drawn.length < shown.length) parent.append(ui("p", "knowledge-warning", displayMessage("heading.canvasLimit", { p0: drawn.length })));
-            parent.append(graphCanvas(drawn.map(n => ({ key: n.key, title: n.key === DOCUMENT_ROOT ? message("heading.documentRoot") : `${n.number ? `${n.number} ` : ""}${n.text}` })), edges.map(e => ({ ...e, directed: true, label: displayMessage("heading.edgeLabel", { p0: uiDisplayParameter(e.source === DOCUMENT_ROOT ? message("heading.documentRootLabel") : byKey.get(e.source)?.text), p1: uiDisplayParameter(byKey.get(e.target)?.text) }) })), this.canvas,
-                key => choose(key), key => { const item = byKey.get(key); if (item && item.key !== DOCUMENT_ROOT) open(item); }, this.selected, message("heading.layoutOnly")));
+            parent.append(graphCanvas(drawn.map(n => {
+                const childCount = headingByKey.get(n.key)?.children.length ?? 0;
+                return { key: n.key, title: n.key === DOCUMENT_ROOT ? documentTitle : n.text, heading: {
+                    number: n.key === DOCUMENT_ROOT ? message("heading.documentRootLabel") : n.number || displayMessage("heading.mapHeadingLevel", { p0: n.level }),
+                    childCount, expanded: !this.collapsed.has(n.key),
+                    label: displayMessage(!childCount ? "heading.mapChildCount" : this.collapsed.has(n.key) ? "heading.mapExpandChildren" : "heading.mapCollapseChildren", { p0: childCount }),
+                    toggle: childCount && !this.search.trim() ? () => { choose(n.key); this.collapsed.has(n.key) ? this.collapsed.delete(n.key) : this.collapsed.add(n.key); redraw(); } : undefined,
+                } };
+            }), edges.map(e => ({ ...e, directed: true, label: displayMessage("heading.edgeLabel", { p0: uiDisplayParameter(e.source === DOCUMENT_ROOT ? documentTitle : byKey.get(e.source)?.text), p1: uiDisplayParameter(byKey.get(e.target)?.text) }) })), this.canvas,
+                key => choose(key), key => { const item = byKey.get(key); if (item && item.key !== DOCUMENT_ROOT) open(item); }, this.selected, message("heading.layoutOnly"), { fit: !this.initialized, revealKey: this.revealMatch ? this.selected : undefined }));
+            this.initialized = true;
         }
+        this.revealMatch = false;
         const list = ui("ul", "knowledge-heading-list outline-list");
         setUiAttr(list, "aria-label", message("heading.outlineList"));
         for (const item of shown) {

@@ -85,8 +85,15 @@ function fixture() {
   };
   vm.createContext(context); vm.runInContext(compiled, context);
   const workspace: any = new context.WorkspaceScopePort();
+  const calendar = {
+    library: original as typeof original | typeof next | null,
+    scope: null as string | null,
+    assertLibraryDeparture() {},
+    assertLibraryChange() {},
+    setLibrary(library: typeof original | typeof next | null, scope: string | null) { this.library = library; this.scope = scope; },
+  };
   Object.assign(workspace, {
-    closeGuard: new ProposalCloseGuard(), queryPanel: query, library: original,
+    closeGuard: new ProposalCloseGuard(), queryPanel: query, calendarPanel: calendar, library: original,
     invalidateLibraryEnvironment() { effects.push("invalidate-environment"); },
     selectedDocumentChanged: async () => {},
   });
@@ -103,6 +110,7 @@ function fixture() {
     assert.deepEqual([...context.collapsed], before.collapsed); assert.deepEqual([...context.contentSelections], before.selection);
     assert.equal(context.activeSourceOrigin, before.origin);
     assert.equal(workspace.library, original); assert.equal(query.root, original.root);
+    assert.equal(calendar.library, original);
   };
   const target = () => {
     const prior = { sessionId: "target-original", root: next.root, workspaceId: next.workspaceId, nodeId: "node", source: "base", path: "C:/next/note.typ" };
@@ -116,7 +124,7 @@ function fixture() {
     context.documents.push(doc); context.navigationContexts.set(doc, saved);
     return { doc, saved, prior };
   };
-  return { context, query, workspace, original, next, effects, released, actualRenderSidebar, savedMain, assertOriginal, target, creationConsumers: () => vm.runInContext(creationConsumers, context), deliveryConsumers: () => vm.runInContext(deliveryConsumers, context) };
+  return { context, query, calendar, workspace, original, next, effects, released, actualRenderSidebar, savedMain, assertOriginal, target, creationConsumers: () => vm.runInContext(creationConsumers, context), deliveryConsumers: () => vm.runInContext(deliveryConsumers, context) };
 }
 
 test("chooseLibrary rejects a different library before publishing main state or touching panels", async () => {
@@ -138,6 +146,7 @@ test("an admitted library change publishes the same library to main, WorkspaceTo
   const f = fixture(); await f.context.chooseLibrary();
   assert.equal(f.context.inventory, f.next); assert.equal(f.workspace.library, f.next);
   assert.equal(f.query.root, f.next.root); assert.equal(f.query.workspaceId, f.next.workspaceId);
+  assert.equal(f.calendar.library, f.next); assert.equal(f.calendar.scope, null);
   assert.equal(f.context.selectedFolder, null); assert.equal(f.context.query, ""); assert.equal(f.context.collapsed.size, 0);
   assert.equal(f.effects.filter(effect => effect === "sidebar").length, 1);
 });

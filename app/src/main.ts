@@ -652,6 +652,7 @@ const recognitionPanel = new RecognitionPanel({
 });
 let recognitionSession = "";
 const workspaceTools = new WorkspaceTools({
+    revealCalendar: () => { dock.reveal("calendar"); },
     getOutlineSnapshot: () => {
         const doc = current;
         if (!doc || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc) || doc.editor.composing || doc.writing.state.pending || doc.writing.state.composing)
@@ -1031,7 +1032,8 @@ dock.register({ id: "timeline", label: uiMessage("workspaceViews.timeline"), ele
 dock.register({ id: "outline", label: uiMessage("workspaceViews.outline"), element: outlineView, group: "structure" });
 dock.register({ id: "data", label: uiMessage("dataPanel.title"), element: workspaceTools.views.data, side: "right", hidden: true });
 dock.register({ id: "knowledge", label: uiMessage("workspaceTools.linksAnnotations"), element: workspaceTools.views.knowledge, side: "right", hidden: true });
-for (const id of ["calendar", "people"] as const) {
+dock.register({ id: "calendar", label: uiMessage("workspaceViews.calendar"), element: workspaceTools.calendarView, side: "right", hidden: true });
+for (const id of ["people"] as const) {
     const view = el("section", "workspace-extension-view");
     view.append(el("p", "", uiMessage("workspaceViews.extensionsPending")));
     dock.register({ id, label: uiMessage(`workspaceViews.${id}`), element: view, side: "right", hidden: true });
@@ -1057,6 +1059,7 @@ function refreshDockView(id: string): void {
     if (id === "data" || id === "knowledge" || id === "query" || id === "outline")
         void workspaceTools.refreshView(id).catch(showError);
     else if (id === "timeline") void timelineView.documentChanged().catch(showError);
+    else if (id === "calendar") void workspaceTools.refreshCalendar().catch(showError);
     else if (id === "nodes") renderNodeBrowser();
 }
 function saveBusy(doc: LiveDocument): boolean { return doc.session.savePending || historyPanel.hasPending(historyContext(doc)); }

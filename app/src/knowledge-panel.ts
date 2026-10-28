@@ -238,6 +238,8 @@ export interface KnowledgeHost {
     selectSource?(from: number, to: number): void;
     copy?(text: string): Promise<void>;
     beforeAction?(): Promise<void>;
+    /** Reveal this existing view without opening a second document owner. */
+    revealPanel?(): void;
     canEditSource?(): boolean;
 }
 export type KnowledgePanelTab = "links" | "graph" | "citations" | "mentions" | "annotations" | "proofreading" | "files" | "templates";
@@ -338,7 +340,9 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     function invalidateRead(): void { gate.invalidate(); reads.invalidate(); }
     const graph = new RelationshipGraphView();
     let graphSession = "";
-    const proofreading = new ProofreadingPanel({ resultScope: "local", context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new UiError(uiMessage("knowledge.proofreadingApiUnavailable"))), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults, notify: message => host.notify(message, true) });
+    const proofreading = new ProofreadingPanel({ resultScope: "local", context: host.context, scan: (context, options) => host.proofread ? host.proofread(context, options) : Promise.reject(new UiError(uiMessage("knowledge.proofreadingApiUnavailable"))), perform, selectSource: host.selectSource, beforeAction: host.beforeAction, processingDefaults: host.processingDefaults,
+        revealReport: () => { closeGuard.assertMutable(); if (disposed) throw new UiError(uiMessage("workActivity.originalUnavailable")); tab = "proofreading"; host.revealPanel?.(); render(); },
+        notify: message => host.notify(message, true) });
     let snapshot: KnowledgeSnapshot | null = null;
     let snapshotBasis: KnowledgeContext | null = null;
     let tab = "links";
@@ -2089,6 +2093,6 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 surface.classList.add("knowledge-surface");
             drawOverlay();
         },
-        dispose() { assertCloseReady(); disposed = true; invalidateRead(); graph.clear(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); snapshot = null; snapshotBasis = null; window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.removeEventListener("input", authoredInput, true); container.removeEventListener("change", authoredInput, true); disposeUiTree(container); container.replaceChildren(); },
+        dispose() { assertCloseReady(); disposed = true; invalidateRead(); graph.clear(); proofreading.dispose(); rules.closePreviews(); clearOverlay(); mediaController?.dispose(); snapshot = null; snapshotBasis = null; window.removeEventListener("resize", resize); window.removeEventListener("keydown", escape); window.removeEventListener("compositionstart", compositionStart); window.removeEventListener("compositionend", compositionEnd); container.removeEventListener("focusout", onBlur); container.removeEventListener("input", authoredInput, true); container.removeEventListener("change", authoredInput, true); disposeUiTree(container); container.replaceChildren(); },
     };
 }

@@ -20,6 +20,8 @@ import type { ResourceOpenTarget } from "./media-selection";
 import "./media-viewer.css";
 import { DataPanel, type DocumentBasis, type PanelHost, type SourcePatch } from "./data-panel";
 import { QueryPanel } from "./query-panel";
+import { CalendarPanel } from "./period-navigation";
+import "./period-navigation.css";
 import { OutputPanel } from "./export-panel";
 import { mountKnowledgePanel, type KnowledgeContext, type KnowledgePlan, type KnowledgeReceipt, type KnowledgeTextMapping } from "./knowledge-panel";
 import { decodeKnowledgeDelivery, sameKnowledgeBasis, type KnowledgeNodeRef } from "./knowledge-state";
@@ -55,6 +57,7 @@ export interface WorkspaceToolsHost {
     notify(message: UiText, error?: boolean): void;
     stylesChanged(root: string): Promise<void>;
     refreshLibrary?(root: string): Promise<void>;
+    revealCalendar?(): void;
     syncApplied(root: string): Promise<void>;
 }
 export type WorkspaceViewKind = "data" | "knowledge" | "query" | "outline";
@@ -68,7 +71,7 @@ export class WorkspaceTools {
     private readonly closeGuard = new ProposalCloseGuard();
     private readonly dataHost: PanelHost;
     private closeOwners(): { assertCloseReady(): void; freezeForClose(): boolean; thawAfterClose(): void }[] {
-        return [this.propertyPanel, this.queryPanel, this.outputPanel, this.knowledgePanel, this.libraryTrash, ...this.styles.values()];
+        return [this.propertyPanel, this.queryPanel, this.calendarPanel, this.outputPanel, this.knowledgePanel, this.libraryTrash, ...this.styles.values()];
     }
     assertCloseReady(): void { this.closeGuard.assertReady(this.pendingImport !== null); for (const owner of this.closeOwners()) owner.assertCloseReady(); }
     freezeForClose(): boolean {
@@ -95,8 +98,10 @@ export class WorkspaceTools {
     private readonly commandGroups: { tab: RibbonTab; id: string; label: UiText; nodes: HTMLElement[] }[] = [];
     /** Stable content owners. Dock layout only moves these elements. */
     readonly views: Readonly<Record<WorkspaceViewKind, HTMLElement>>;
+    readonly calendarView: HTMLElement;
     private readonly propertyPanel: DataPanel;
     private readonly queryPanel: QueryPanel;
+    private readonly calendarPanel: CalendarPanel;
     private readonly outputPanel: OutputPanel;
     private readonly knowledgeContainer = document.createElement("div");
     private readonly knowledgePanel;
@@ -145,10 +150,16 @@ export class WorkspaceTools {
                 if (this.library?.root === root)
                     await this.queryPanel.refresh();
             } });
-        this.queryPanel = new QueryPanel(dataHost, query => this.outputPanel.open(query));
+        this.calendarPanel = new CalendarPanel(dataHost);
+        this.calendarView = this.calendarPanel.element;
+        this.calendarView.classList.add("workspace-tool-view");
+        this.calendarView.dataset.workspaceTool = "calendar";
+        this.closeGuard.bind(this.calendarView);
+        this.queryPanel = new QueryPanel(dataHost, query => this.outputPanel.open(query), () => this.openCalendar());
         const latex = new LatexInsertionPanel({ ...dataHost, selection: host.selection, editable: host.canEditSource });
         const diagrams = new DiagramPanel(dataHost, host.canEditSource);
         this.knowledgePanel = mountKnowledgePanel(this.knowledgeContainer, {
+            revealPanel: () => this.presentation?.reveal("knowledge"),
             context: () => this.context(), load: context => api("/api/knowledge/read", { context }),
             proofread: async (context, options) => {
                 const render = await api<{
@@ -266,11 +277,13 @@ export class WorkspaceTools {
     private context(): KnowledgeContext | null { const doc = this.host.getDocument(); return doc ? { ...doc, selection: this.host.selection() } : null; }
     assertLibraryDeparture(): void {
         this.closeGuard.assertMutable();
+        this.calendarPanel.assertLibraryDeparture();
         this.queryPanel.assertLibraryDeparture();
     }
     /** All rejecting owners are checked before either consumer changes scope. */
     assertLibraryChange(library: { root: string; workspaceId?: string } | null): void {
         this.closeGuard.assertMutable();
+        this.calendarPanel.assertLibraryChange(library);
         this.queryPanel.assertLibraryChange(library);
     }
     setLibrary(library: {
@@ -280,18 +293,28 @@ export class WorkspaceTools {
         this.assertLibraryChange(library);
         this.queryPanel.setLibrary(library);
         this.queryPanel.setScope(scope);
+        this.calendarPanel.setLibrary(library, scope);
         this.library = library;
     }
     invalidateLibraryEnvironment(root = this.library?.root): void { if (this.closeGuard.frozen) return;
         if (root) {
             this.knowledgePanel.environmentChanged(root);
             this.queryPanel.environmentChanged(root);
+            this.calendarPanel.environmentChanged(root);
         }
     }
     async search(text: string, includeBody: boolean): Promise<void> {
         return this.closeGuard.run(async () => {
             this.queryPanel.setSearch(text, includeBody);
             await this.show("query");
+        });
+    }
+    async refreshCalendar(): Promise<void> { await this.calendarPanel.refresh(); }
+    async openCalendar(): Promise<void> {
+        return this.closeGuard.run(async () => {
+            await this.host.beforeAction();
+            this.host.revealCalendar?.();
+            await this.refreshCalendar();
         });
     }
     openQueryOutput(query: FrozenQuery): void { if (this.closeGuard.frozen) return; this.outputPanel.open(query); }
@@ -403,6 +426,7 @@ export class WorkspaceTools {
             clearTimeout(this.refreshTimer);
             // Retire pre-sync knowledge before any other consumer can await.
             this.knowledgePanel.environmentChanged(root);
+            this.calendarPanel.environmentChanged(root);
             this.outlinePanel.refresh();
             const sameRoot = (value?: string): boolean => value?.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase() === root.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
             // Query results depend on the library, even without an open source. The

@@ -1,12 +1,14 @@
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { NavigationControls, PeriodNavigator } from "./query-panel";
-import type { PanelHost } from "./data-panel";
+import { NavigationControls } from "./query-panel";
+import { CalendarPanel, PeriodNavigator } from "./period-navigation";
+import type { DataSchema, PanelHost } from "./data-panel";
 import { TestDocument, TestElement } from "./dom.test-support";
 
 /** Event dispatch is the boundary under test; no layout, focus or native IME claims. */
 class EventElement extends TestElement {
   inert = false;
+  validity = { valid: true, badInput: false };
   returnValue = "";
   private readonly listeners = new Map<string, { run: (event: Event) => void; capture: boolean }[]>();
   override addEventListener(type?: string, run?: (event: Event) => void, options?: boolean | AddEventListenerOptions): void {
@@ -77,10 +79,10 @@ function host(request: (path: string, body: unknown) => Promise<unknown>, extra:
 }
 
 type PeriodOwner = {
-  series: EventElement; key: EventElement; name: EventElement; parent: EventElement; body: EventElement;
+  series: EventElement; key: EventElement; date: EventElement; kind: EventElement; name: EventElement; parent: EventElement; body: EventElement;
   createButton: EventElement; pending: Record<string, unknown> | null;
   result: unknown; loading: boolean; schemaAvailable: boolean;
-  lookup(steps?: number): Promise<void>; create(): Promise<void>;
+  lookup(steps?: number, fromDate?: boolean): Promise<void>; create(): Promise<void>;
 };
 
 function period(doc: EventDocument, source: PanelHost) {
@@ -98,6 +100,143 @@ function resolved(key: string) {
     matches: [], coverage: "complete", canCreate: true,
   };
 }
+
+function periodSchema(kinds = ["day", "week", "month", "quarter", "year"]): DataSchema {
+  return { fields: [{ id: "calendar/period", key: "period", nullable: false, shape: { kind: "record", members: {}, unknown: "preserve" } }], types: [], aliases: {}, definitions: {}, series_policies: [{ key: "journal", kinds, scope: { kind: "library" }, multiplicity: "unique" }] };
+}
+
+test("calendar date selection submits only a date, then steps from the Core-returned canonical key", async t => {
+  const doc = environment(t), requests: Record<string, unknown>[] = [];
+  const { panel, owner } = period(doc, host(async (route, request) => {
+    assert.equal(route, "/api/data/period/resolve");
+    requests.push(request as Record<string, unknown>);
+    const result = resolved(requests.length === 1 ? "2020-W53" : "2021-W01");
+    return { ...result, bounds: { kind: "record", value: [{ key: "start", value: { kind: "date", value: "2020-12-28" } }, { key: "end_exclusive", value: { kind: "date", value: "2021-01-04" } }] } };
+  }));
+  panel.setSchema(periodSchema());
+  input(owner.series, "journal"); input(owner.kind, "week"); input(owner.date, "2021-01-01");
+  await owner.lookup(0, true);
+  assert.deepEqual(requests[0], { root: "/library", seriesKey: "journal", kind: "week", date: "2021-01-01" });
+  assert.equal(owner.key.value, "2020-W53");
+  assert.match(panel.element.textContent ?? "", /2020-12-28/);
+  assert.match(panel.element.textContent ?? "", /2021-01-04/);
+  await owner.lookup(1);
+  assert.deepEqual(requests[1], { root: "/library", seriesKey: "journal", kind: "week", key: "2020-W53", steps: 1 });
+  assert.equal(owner.key.value, "2021-W01");
+  panel.assertCloseReady();
+});
+
+test("calendar retains an unsupported series kind without silently changing it or resolving", async t => {
+  const doc = environment(t);
+  const { panel, owner } = period(doc, host(async () => assert.fail("unsupported policy must not issue a lookup")));
+  panel.setSchema(periodSchema(["day"]));
+  input(owner.series, "journal"); input(owner.kind, "week"); input(owner.key, "2020-W53");
+  await owner.lookup();
+  assert.equal(owner.kind.value, "week");
+  assert.equal(owner.key.value, "2020-W53");
+  assert.equal(owner.createButton.disabled, true);
+  assert.throws(() => panel.assertCloseReady());
+  panel.setSchema({ ...periodSchema(), series_policies: [] });
+  assert.equal(owner.series.value, "journal");
+  assert.equal(owner.kind.value, "week");
+});
+
+test("calendar partial lookup never enables creation even when a malformed response suggests it", async t => {
+  const doc = environment(t); let calls = 0;
+  const { owner } = period(doc, host(async () => { calls++; return { ...resolved("2026-10-29"), coverage: "partial", canCreate: true }; }));
+  input(owner.series, "journal"); input(owner.key, "2026-10-29");
+  await owner.lookup();
+  assert.equal(owner.createButton.disabled, true);
+  input(owner.name, "would-be-created");
+  await owner.create();
+  assert.equal(calls, 1);
+  assert.equal(owner.pending, null);
+});
+
+test("a late date lookup cannot adopt a new selection even when the visible key is unchanged", async t => {
+  const doc = environment(t), answer = deferred<unknown>();
+  const { panel, owner } = period(doc, host(async () => answer.promise));
+  input(owner.series, "journal"); input(owner.date, "2021-01-01");
+  const lookup = owner.lookup(0, true);
+  input(owner.date, "2021-01-02");
+  answer.resolve(resolved("2020-W53"));
+  await lookup;
+  assert.equal(owner.date.value, "2021-01-02");
+  assert.equal(owner.key.value, "");
+  assert.equal(owner.result, null);
+  assert.throws(() => panel.assertCloseReady());
+});
+
+test("calendar docking and library switches retain exactly one periodic owner per library", async t => {
+  const doc = environment(t), schema = deferred<unknown>(); let reads = 0;
+  const panel = new CalendarPanel(host(async route => { assert.equal(route, "/api/data/schema"); reads++; return schema.promise; }));
+  doc.body.append(panel.element as unknown as EventElement);
+  panel.setLibrary({ root: "/library", workspaceId: "one" }, "/library/folder");
+  const sameRead = panel.refresh();
+  assert.equal(panel.freezeForClose(), false);
+  schema.resolve({ schema: periodSchema() });
+  await sameRead;
+  assert.equal(reads, 1);
+  const internals = panel as unknown as { current: { navigator: PeriodNavigator }; libraries: Map<string, unknown> };
+  const original = internals.current.navigator;
+  input((original as unknown as PeriodOwner).body, "retained #native(draft");
+  assert.equal((original as unknown as PeriodOwner).parent.value, "/library/folder");
+  panel.setLibrary({ root: "/other", workspaceId: "two" }, null);
+  await panel.refresh();
+  panel.element.remove();
+  assert.equal(panel.freezeForClose(), false);
+  panel.setLibrary({ root: "/library", workspaceId: "one" }, null);
+  await panel.refresh();
+  assert.equal(internals.current.navigator, original);
+  assert.equal((original as unknown as PeriodOwner).body.value, "retained #native(draft");
+  assert.equal(internals.libraries.size, 2);
+});
+
+test("an incomplete native date buffer cannot disappear through close or library departure", async t => {
+  const doc = environment(t);
+  const panel = new CalendarPanel(host(async () => ({ schema: periodSchema() })));
+  doc.body.append(panel.element as unknown as EventElement);
+  panel.setLibrary({ root: "/library", workspaceId: "one" }, null);
+  await panel.refresh();
+  const state = panel as unknown as { current: { navigator: PeriodNavigator; root: string } };
+  const date = (state.current.navigator as unknown as PeriodOwner).date;
+  assert.equal(date.value, "");
+  date.validity = { valid: false, badInput: true };
+  date.emit("input");
+  assert.throws(() => panel.assertCloseReady());
+  assert.equal(panel.freezeForClose(), false);
+  assert.throws(() => panel.assertLibraryDeparture());
+  assert.throws(() => panel.setLibrary({ root: "/other", workspaceId: "two" }, null));
+  assert.equal(state.current.root, "/library");
+  assert.equal((state.current.navigator as unknown as PeriodOwner).date, date);
+  date.validity = { valid: true, badInput: false };
+  date.emit("input");
+  panel.assertCloseReady();
+  panel.setLibrary({ root: "/other", workspaceId: "two" }, null);
+  await panel.refresh();
+  assert.equal(state.current.root, "/other");
+});
+
+test("provider-only schema changes retire displayed bounds and in-flight period results", async t => {
+  const doc = environment(t), pending = deferred<unknown>(); let calls = 0;
+  const { panel, owner } = period(doc, host(async () => ++calls === 1 ? resolved("2020-W53") : pending.promise));
+  const schema = (version: string) => ({ ...periodSchema(), providers: [{ id: "calendar", implementation: { id: "table", abi: 1 }, data: { key: "test", version, years: [1, 2] } }] });
+  panel.setSchema(schema("one"));
+  input(owner.series, "journal"); input(owner.key, "2020-W53");
+  await owner.lookup();
+  assert.notEqual(owner.result, null);
+  panel.setSchema(schema("two"));
+  assert.equal(owner.result, null);
+  assert.equal(owner.createButton.disabled, true);
+  assert.doesNotMatch(panel.element.textContent ?? "", /range/);
+  assert.equal(owner.key.value, "2020-W53");
+  const reading = owner.lookup();
+  panel.setSchema(schema("three"));
+  pending.resolve(resolved("2021-W01"));
+  await reading;
+  assert.equal(owner.result, null);
+  assert.equal(owner.key.value, "2020-W53");
+});
 
 test("period raw creation and lookup input belongs to the owner while detached", t => {
   const doc = environment(t);

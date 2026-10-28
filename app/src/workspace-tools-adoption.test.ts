@@ -63,7 +63,7 @@ function projection(document: DocumentBasis) {
 type SelectedTools = WorkspaceTools;
 function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Promise<unknown>) {
     const document = new Document(), previous = new Map<string, PropertyDescriptor | undefined>();
-    for (const [key, value] of Object.entries({ document, localStorage: { getItem: () => null, setItem() {} }, HTMLInputElement: class {}, HTMLTextAreaElement: class {}, CSS: { escape: (text: string) => text } })) {
+    for (const [key, value] of Object.entries({ document, localStorage: { getItem: () => null, setItem() {} }, HTMLElement: Element, HTMLInputElement: class {}, HTMLTextAreaElement: class {}, CSS: { escape: (text: string) => text } })) {
         previous.set(key, Object.getOwnPropertyDescriptor(globalThis, key)); Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
     }
     t.after(() => { for (const [key, value] of previous) { if (value) Object.defineProperty(globalThis, key, value); else Reflect.deleteProperty(globalThis, key); } });
@@ -98,6 +98,7 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
     const tools = Object.assign(new TestedWorkspaceTools(), {
         closeGuard: guard, host, propertyPanel: panel, views, presentation: null,
         queryPanel: { refresh: async () => { refreshed.push("query"); }, environmentChanged: (root: string) => { environments.push({ consumer: "query", root }); }, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
+        calendarPanel: { environmentChanged: (root: string) => { environments.push({ consumer: "calendar", root }); }, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         knowledgePanel: { refresh: async () => { refreshed.push("knowledge"); }, contextChanged: () => { knowledgeContext.changes++; }, environmentChanged: (root: string) => { environments.push({ consumer: "knowledge", root }); }, backgroundEnabled: () => background.enabled, selectTab: (tab: string) => { knowledgeTabs.push(tab); }, attachSurface() {}, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         outlinePanel: { refresh: () => { outline.refreshes++; refreshed.push("outline"); }, invalidate: () => { outline.invalidations++; } },
         outputPanel: { assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
@@ -116,11 +117,11 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
 test("library mutation retires Knowledge before notifying Query, with one shared invalidation entry", t => {
     const f = fixture(t);
     f.tools.invalidateLibraryEnvironment("library");
-    assert.deepEqual(f.environments, [{ consumer: "knowledge", root: "library" }, { consumer: "query", root: "library" }]);
+    assert.deepEqual(f.environments, [{ consumer: "knowledge", root: "library" }, { consumer: "query", root: "library" }, { consumer: "calendar", root: "library" }]);
     assert.equal(f.refreshed.length, 0, "invalidation itself does not start a duplicate scan");
     assert.equal(f.tools.freezeForClose(), true);
     f.tools.invalidateLibraryEnvironment("library");
-    assert.equal(f.environments.length, 2);
+    assert.equal(f.environments.length, 3);
 });
 
 test("post-sync invalidates Knowledge before awaiting Query and then performs a current read", async t => {
@@ -129,7 +130,7 @@ test("post-sync invalidates Knowledge before awaiting Query and then performs a 
     Object.assign(f.tools, { library: { root: "library", workspaceId: "workspace-library" } });
     Object.assign((f.tools as unknown as { queryPanel: object }).queryPanel, { refresh: async () => { f.refreshed.push("query"); await waiting.promise; } });
     const syncing = f.tools.refreshAfterSync("LIBRARY/");
-    assert.deepEqual(f.environments, [{ consumer: "knowledge", root: "LIBRARY/" }]);
+    assert.deepEqual(f.environments, [{ consumer: "knowledge", root: "LIBRARY/" }, { consumer: "calendar", root: "LIBRARY/" }]);
     assert.deepEqual(f.refreshed, ["outline", "query"]);
     assert.equal(f.tools.freezeForClose(), false);
     waiting.resolve(); await syncing;
@@ -165,7 +166,7 @@ test("a known commit with unavailable delivery invalidates library reads before 
     const receipt = await commit.commit({ operationId: "original", planId: "plan" }, { ...selected, dirty: false });
     assert.equal(receipt.operationId, "original"); assert.deepEqual(receipt.documentError, documentError);
     assert.equal(delivered, false);
-    assert.deepEqual(f.environments, [{ consumer: "knowledge", root: "library" }, { consumer: "query", root: "library" }]);
+    assert.deepEqual(f.environments, [{ consumer: "knowledge", root: "library" }, { consumer: "query", root: "library" }, { consumer: "calendar", root: "library" }]);
     f.tools.assertCloseReady();
 });
 

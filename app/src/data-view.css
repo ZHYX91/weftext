@@ -23,6 +23,15 @@ textarea.data-input { resize: vertical; }
 .data-type-picker summary,.data-field-group summary,.schema-settings summary,.query-builder summary,.query-shortcuts summary,.query-diagnostics summary,.query-accessible-table summary,.query-undated summary { cursor: pointer; font-weight: 550; min-height: 28px; }
 .data-type-options { display: flex; flex-wrap: wrap; gap: 5px 12px; margin: 9px 0; }
 .data-property { padding: 12px 0; border-bottom: 1px solid var(--border,#e5e8e0); }
+.data-field-presentation-settings { margin: 8px 0; }
+.data-field-presentation-settings>summary,.data-field-placement>summary { cursor: pointer; }
+.data-field-presentation-settings>.data-input { margin: 6px 0; }
+.data-field-presentation-settings>input[type=checkbox] { margin: 0 6px; }
+.data-field-placement { font-size: 11px; min-width: 0; }
+.data-field-placement[open] { display: flex; flex-wrap: wrap; gap: 4px; }
+.data-field-placement .data-button[aria-pressed=true] { border-color: var(--accent,#526b4d); }
+.data-property-title { flex-wrap: wrap; }
+.data-property-title>h3 { margin-right: auto; }
 .data-group-label { padding: 12px 0 0; color: var(--muted,#687166); }
 .data-cell-state { margin: 3px 0 8px; font-size: 10px; color: var(--muted,#7b8374); }
 .data-cell-state.invalid,.data-cell-state.unavailable,.cell-invalid,.cell-unavailable { color: #a74623; }
@@ -34,6 +43,9 @@ textarea.data-input { resize: vertical; }
 .native-member-heading>span:first-child { flex: 1; }
 .native-list-item { margin: 8px 0; border: 1px solid var(--border,#e0e5da); padding: 8px; border-radius: 6px; min-width: 0; }
 .native-list-item legend { color: var(--muted,#777); font-size: 11px; padding: 0 5px; }
+.native-list-order summary { cursor: pointer; margin-block: 4px; }
+.native-list-position { max-width: 8ch; }
+.native-list-order>.data-button { margin: 3px; }
 .native-list-controls,.data-property-actions { display: flex; gap: 5px; flex-wrap: wrap; margin: 7px 0; }
 .native-unknown { padding: 8px; background: #f0eee9; color: #66635b; margin-top: 8px; border-radius: 5px; font-size: 11px; }
 .data-unknown-fields pre,.schema-preview pre { white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; }

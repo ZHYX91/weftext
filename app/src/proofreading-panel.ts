@@ -1,6 +1,6 @@
 import { replaceUiChildren } from "./ui-locale";
 import { ProposalCloseGuard } from "./proposal-close-guard";
-import { decodeProofreadResult, proofreadFindingUiText, processingMatchUiText, type ProofreadResult } from "./proofreading-wire";
+import { decodeProofreadResult, processingMatchUiText, type ProofreadResult } from "./proofreading-wire";
 export type { ProofreadResult } from "./proofreading-wire";
 import { contentLanguageControl, DEFAULT_CONTENT_LOCALE } from "./content-language";
 import type { UiLocale } from "./ui-locale";
@@ -11,6 +11,10 @@ import type { KnowledgeContext, KnowledgeIntent } from "./knowledge-panel";
 import { sameKnowledgeBasis } from "./knowledge-state";
 import type { ProcessingDocument } from "./processing-settings-panel";
 import { decodeProcessingSettings, defaultProcessingSettings, parseProcessingLanguages, processingLanguageTag, scopeLabel, validateProcessingScope, type ProcessingSettings, type ProcessingRuleScope, type SharedProcessingOrigin } from "./processing-settings";
+import { ProofreadingResultsState } from "./proofreading-results-state";
+import { ProofreadingResultsView } from "./proofreading-results-view";
+import { workActivity } from "./work-activity";
+import type { WorkAction, WorkTaskStatus } from "./work-panel";
 export interface ProofreadRule {
     id: string;
     version: string;
@@ -52,6 +56,8 @@ interface Host {
     processingDefaults?(): Promise<ProcessingDefaultsSuggestion>;
     selectSource?(from: number, to: number): void;
     beforeAction?(): Promise<void>;
+    /** The actual parent owner selects this report's tab and reveals its surface. */
+    revealReport?(): void;
     notify(message: UiText): void;
 }
 const categories: Record<string, UiText> = { character: uiMessage("proofreading.categoryCharacter"), typo: uiMessage("proofreading.categoryTypo"), pair: uiMessage("proofreading.categoryPair"), sensitive: uiMessage("proofreading.categorySensitive") };
@@ -108,8 +114,11 @@ export class ProofreadingPanel {
     private result: ProofreadResult | null = null;
     private basis: KnowledgeContext | null = null;
     private checkedOptions: ProofreadOptions | null = null;
-    private selected = new Set<string>();
-    private category = "all";
+    private readonly resultsState = new ProofreadingResultsState();
+    private resultsView: ProofreadingResultsView | null = null;
+    private viewResult: ProofreadResult | null = null;
+    private messageElement: HTMLElement | null = null;
+    private activity: { id: string; status: WorkTaskStatus; generation: number; lifetime: number; basis: KnowledgeContext } | null = null;
     private annotationLocale: UiLocale = DEFAULT_CONTENT_LOCALE;
     private scope = "document";
     private busy = false;
@@ -123,6 +132,39 @@ export class ProofreadingPanel {
     private languagesDraft: string | null = null;
     private savedOptions = structuredClone(this.options);
     private lifetime = 0;
+    private retireReport(): void {
+        if (this.activity) {
+            const status = this.activity.status === "running" ? "failed" : this.activity.status;
+            workActivity.task({ id: this.activity.id, title: this.preferences.title, status, detail: uiMessage("proofreading.reportRetired") });
+            workActivity.removeResult(this.activity.id);
+            this.activity = null;
+        }
+        this.resultsView?.dispose();
+        this.resultsView = null;
+        this.viewResult = null;
+        this.resultsState.replace(null);
+    }
+    private reportCurrent(activity: NonNullable<ProofreadingPanel["activity"]>, result = this.result): boolean {
+        return this.activity === activity && activity.lifetime === this.lifetime && activity.generation === this.generation
+            && !!result && result === this.result && sameKnowledgeBasis(activity.basis, this.host.context());
+    }
+    private reportVisible(): boolean {
+        return !!this.container?.isConnected && !this.container.closest("[hidden],[inert]") && this.container.getClientRects().length > 0;
+    }
+    private reportActions(activity: NonNullable<ProofreadingPanel["activity"]>, result: ProofreadResult): WorkAction[] {
+        if (!this.host.revealReport && !this.reportVisible()) return [];
+        return [{ id: "report", label: uiMessage("proofreading.viewReport"), run: () => {
+            this.closeGuard.assertMutable();
+            if (!this.reportCurrent(activity, result)) throw new UiError(uiMessage("proofreading.findingExpired"));
+            this.host.revealReport?.();
+            if (!this.reportCurrent(activity, result) || !this.reportVisible()) throw new UiError(uiMessage("workActivity.originalUnavailable"));
+            this.resultsView?.focus();
+        } }];
+    }
+    private refreshReport(): void {
+        if (this.messageElement) setUiText(this.messageElement, this.message);
+        this.resultsView?.refresh(this.busy);
+    }
     private get unresolved(): boolean {
         return this.busy || JSON.stringify(this.options) !== JSON.stringify(this.savedOptions)
             || JSON.stringify(this.ruleDraft) !== JSON.stringify(emptyRuleDraft())
@@ -148,6 +190,7 @@ export class ProofreadingPanel {
     }
     private save(): boolean {
         this.closeGuard.assertMutable();
+        this.retireReport();
         this.result = null;
         this.generation++;
         try {
@@ -170,12 +213,13 @@ export class ProofreadingPanel {
         this.ruleDraftId = null;
         this.allowDraft = null;
         this.languagesDraft = null;
+        this.retireReport();
         this.result = null;
         this.generation++;
         this.message = "";
         this.draw();
     }
-    dispose(): void { this.generation++; this.lifetime++; if (this.container) replaceUiChildren(this.container); this.container = null; this.result = null; this.basis = null; this.checkedOptions = null; this.selected.clear(); this.message = ""; this.busy = false; }
+    dispose(): void { this.generation++; this.lifetime++; this.retireReport(); if (this.container) replaceUiChildren(this.container); this.container = null; this.messageElement = null; this.result = null; this.basis = null; this.checkedOptions = null; this.message = ""; this.busy = false; }
     render(container: HTMLElement): void { this.closeGuard.assertMutable(); this.closeGuard.bind(container); this.container = container; this.draw(); }
     private async run(): Promise<void> {
         return this.closeGuard.run(async () => {
@@ -189,12 +233,12 @@ export class ProofreadingPanel {
                     await this.host.beforeAction?.();
                 }
                 catch (error) {
-                    if (beforeActionGeneration !== this.generation) return;
+                    if (lifetime !== this.lifetime || beforeActionGeneration !== this.generation) return;
                     this.message = error instanceof Error ? errorUiText(error) : String(error);
                     this.draw();
                     return;
                 }
-                if (beforeActionGeneration !== this.generation) return;
+                if (lifetime !== this.lifetime || beforeActionGeneration !== this.generation) return;
                 const context = this.host.context();
                 if (!context)
                     return;
@@ -209,29 +253,42 @@ export class ProofreadingPanel {
                     const encoder = new TextEncoder();
                     options.selection = [encoder.encode(context.source.slice(0, s.from)).length, encoder.encode(context.source.slice(0, s.to)).length];
                 }
+                this.retireReport();
                 this.result = null;
                 this.basis = null;
                 this.checkedOptions = null;
-                this.selected.clear();
                 const generation = ++this.generation;
+                const activity = { id: `proofread:${crypto.randomUUID()}`, status: "running" as WorkTaskStatus, generation, lifetime, basis: context };
+                this.activity = activity;
                 this.message = uiMessage("proofreading.scanning");
+                workActivity.task({ id: activity.id, title: this.preferences.title, status: "running", detail: this.message });
                 this.draw();
                 try {
                     const raw = await this.host.scan(context, options);
-                    if (generation !== this.generation) return;
+                    if (lifetime !== this.lifetime || generation !== this.generation || this.activity !== activity) return;
                     if (!sameKnowledgeBasis(context, this.host.context())) {
                         this.message = uiMessage("proofreading.scanBasisChanged");
+                        activity.status = "failed";
+                        workActivity.task({ id: activity.id, title: this.preferences.title, status: activity.status, detail: this.message });
                         return;
                     }
                     const result = decodeProofreadResult(raw, this.host.resultScope);
                     this.result = result;
                     this.basis = context;
                     this.checkedOptions = options;
-                    this.selected = new Set(result.findings.filter(f => f.sourceRange && !result.existing.includes(f.id)).map(f => f.id));
+                    this.resultsState.replace(result);
                     this.message = displayMessage("proofreading.scanSummary", { p0: result.checkedCharacters, p1: result.findings.length, p2: uiDisplayParameter(result.coverage === "complete" ? "" : uiMessage("proofreading.partialScopeSuffix")) });
+                    activity.status = "succeeded";
+                    const actions = this.reportActions(activity, result);
+                    workActivity.task({ id: activity.id, title: this.preferences.title, status: activity.status, detail: this.message, actions });
+                    workActivity.result({ id: activity.id, title: this.preferences.title, detail: this.message, actions });
                 }
                 catch (error) {
-                    if (generation === this.generation && sameKnowledgeBasis(context, this.host.context())) this.message = errorUiText(error);
+                    if (lifetime === this.lifetime && generation === this.generation && this.activity === activity) {
+                        this.message = sameKnowledgeBasis(context, this.host.context()) ? errorUiText(error) : uiMessage("proofreading.scanBasisChanged");
+                        activity.status = "failed";
+                        workActivity.task({ id: activity.id, title: this.preferences.title, status: activity.status, detail: this.message });
+                    }
                 }
                 }
             finally {
@@ -246,30 +303,30 @@ export class ProofreadingPanel {
             const context = this.host.context();
             if (!this.result || !this.checkedOptions || !sameKnowledgeBasis(this.basis, context)) {
                 this.message = uiMessage("proofreading.annotationBasisChanged");
-                this.draw();
+                this.refreshReport();
                 return;
             }
             if (context?.dirty) {
                 this.message = uiMessage("proofreading.saveBeforeAnnotations");
-                this.draw();
+                this.refreshReport();
                 return;
             }
-            const findings = this.result.findings.filter(f => this.selected.has(f.id) && (this.category === "all" || f.category === this.category)).map(f => f.id);
+            const findings = this.resultsState.selectedIds();
             if (!findings.length || findings.length > 200) {
                 this.message = uiMessage("proofreading.annotationBatchRange");
-                this.draw();
+                this.refreshReport();
                 return;
             }
             const result = this.result;
             const generation = this.generation;
             const lifetime = this.lifetime;
             this.busy = true;
+            this.refreshReport();
             try {
                 const ok = await this.host.perform(ignore ? uiMessage("proofreading.ignoreOperation") : uiMessage("proofreading.annotateOperation"), { kind: "annotationProofread", annotationLocale: this.annotationLocale, options: this.checkedOptions, findings, ignore, ...(result.scanId ? { scanId: result.scanId } : {}) });
                 if (ok && generation === this.generation && this.result === result) {
                     result.existing.push(...findings);
-                    for (const id of findings)
-                        this.selected.delete(id);
+                    this.resultsState.reconcileSelection();
                     this.message = ignore ? uiMessage("proofreading.ignoreSaved") : uiMessage("proofreading.annotationsSaved");
                 }
             }
@@ -279,13 +336,18 @@ export class ProofreadingPanel {
             finally {
                 if (lifetime === this.lifetime) this.busy = false;
             }
-            if (lifetime === this.lifetime) this.draw();
+            if (lifetime === this.lifetime) this.refreshReport();
             });
     }
     private draw(): void {
         const root = this.container;
         if (!root)
             return;
+        const active = root.ownerDocument.activeElement as HTMLElement | null;
+        const reportFocus = active && this.resultsView?.element.contains(active) ? active : null;
+        // The parent Knowledge view may supply a new body. This report owns its
+        // locale scopes and nodes, so moving it does not recreate existing rows.
+        this.resultsView?.element.remove();
         replaceUiChildren(root);
         root.append(el("h3", this.preferences.title), el("p", uiMessage("proofreading.help")));
         const processing = this.options.processing ?? defaultProcessingSettings();
@@ -461,6 +523,7 @@ export class ProofreadingPanel {
         root.append(field(uiMessage("queryPanel.scopeLabel"), scope), start);
         const message = el("p", this.message);
         message.setAttribute("role", "status");
+        this.messageElement = message;
         root.append(message);
         if (!this.result)
             return;
@@ -475,47 +538,24 @@ export class ProofreadingPanel {
         }
         if (!sameKnowledgeBasis(this.basis, this.host.context()))
             root.append(el("p", uiMessage("proofreading.oldResultsHelp")));
-        const filter = select({ all: uiMessage("proofreading.allCategories"), ...categories });
-        filter.value = this.category;
-        filter.onchange = () => { this.closeGuard.assertMutable(); this.category = filter.value; this.draw(); };
-        root.append(filter);
         root.append(contentLanguageControl("annotation", this.annotationLocale, value => { this.closeGuard.assertMutable(); this.annotationLocale = value; }));
-        const shown = this.result.findings.filter(f => this.category === "all" || f.category === this.category);
-        root.append(this.action(uiMessage("proofreading.selectLocatedCategoryResults"), () => {
-            for (const f of shown)
-                if (f.sourceRange && !this.result!.existing.includes(f.id))
-                    this.selected.add(f.id);
-            this.draw();
-        }), this.action(uiMessage("proofreading.clearSelection"), () => { this.selected.clear(); this.draw(); }), this.action(uiMessage("proofreading.annotateSelected"), () => this.add(false)), this.action(uiMessage("proofreading.ignoreSelected"), () => this.add(true)));
-        for (const f of shown) {
-            const row = el("article");
-            row.className = "knowledge-card";
-            const check = el("input");
-            check.type = "checkbox";
-            check.checked = this.selected.has(f.id);
-            check.disabled = !f.sourceRange || this.result.existing.includes(f.id);
-            check.onchange = () => {
-                this.closeGuard.assertMutable();
-                if (check.checked)
-                    this.selected.add(f.id);
-                else
-                    this.selected.delete(f.id);
-            };
-            row.append(field(() => `${uiTextValue(categories[f.category])}：${uiTextValue(f.excerpt)}`, check), el("p", proofreadFindingUiText(f)));
-            if (f.replacement !== null)
-                row.append(el("p", displayMessage("proofreading.replacementSuggestion", { p0: uiDisplayParameter(f.excerpt), p1: uiDisplayParameter(f.replacement), p2: uiDisplayParameter(f.executable ? "" : uiMessage("proofreading.manualFormattingReviewSuffix")) })));
-            if (this.result.existing.includes(f.id))
-                row.append(el("p", uiMessage("proofreading.findingRecorded")));
-            if (!f.sourceRange)
-                row.append(el("p", uiMessage("proofreading.findingLocationUnavailable")));
-            else
-                row.append(this.action(uiMessage("proofreading.locateFinding"), () => {
-                    if (sameKnowledgeBasis(this.basis, this.host.context()))
-                        this.host.selectSource?.(f.sourceRange!.utf16From, f.sourceRange!.utf16To);
-                    else
-                        this.host.notify(uiMessage("proofreading.findingExpired"));
-                }));
-            root.append(row);
+        if (!this.resultsView || this.viewResult !== this.result) {
+            this.resultsView?.dispose();
+            const report = this.result;
+            this.viewResult = report;
+            this.resultsView = new ProofreadingResultsView(this.resultsState, {
+                mutable: () => { this.closeGuard.assertMutable(); return this.result === report; },
+                selectionLimit: () => this.host.notify(uiMessage("proofreading.selectionLimit")),
+                annotate: ignore => this.add(ignore),
+                locate: finding => {
+                    if (this.result === report && sameKnowledgeBasis(this.basis, this.host.context()))
+                        this.host.selectSource?.(finding.sourceRange!.utf16From, finding.sourceRange!.utf16To);
+                    else this.host.notify(uiMessage("proofreading.findingExpired"));
+                },
+            });
         }
+        this.resultsView.refresh(this.busy);
+        root.append(this.resultsView.element);
+        if (reportFocus?.isConnected) reportFocus.focus({ preventScroll: true });
     }
 }

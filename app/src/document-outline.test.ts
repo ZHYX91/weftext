@@ -15,14 +15,14 @@ const snapshot = (): HeadingSnapshot => ({ coverage: "complete", truncated: fals
 
 function fixture(initial: OutlineBasis | null = basis()) {
     let current = initial, accepted: OutlineSnapshot | null = initial ? { basis: { ...initial }, snapshot: snapshot() } : null, available = true;
-    const records: { view: View; snapshot?: HeadingSnapshot; open: (item: StructureHeading) => void; emptyMessage: string }[] = [];
+    const records: { view: View; snapshot?: HeadingSnapshot; open: (item: StructureHeading) => void; emptyMessage: string; documentTitle?: string }[] = [];
     const views: View[] = [], selections: number[][] = [], revealed: StructureHeading[] = [], notices: string[] = [];
     let requests = 0, clears = 0;
     class View {
         state = { search: "", collapsed: new Set<string>() };
         detached = 0; cleared = 0;
         constructor() { views.push(this); }
-        render(_container: HTMLElement, product: HeadingSnapshot | undefined, open: (item: StructureHeading) => void, emptyMessage: string) { records.push({ view: this, snapshot: product, open, emptyMessage }); }
+        render(_container: HTMLElement, product: HeadingSnapshot | undefined, open: (item: StructureHeading) => void, emptyMessage: string, documentTitle?: string) { records.push({ view: this, snapshot: product, open, emptyMessage, documentTitle }); }
         detach() { this.detached++; }
         clear() { this.cleared++; }
     }
@@ -58,6 +58,14 @@ test("local outline consumes the accepted native product without reading, compil
     assert.deepEqual(f.selections, [[9, 14]]);
     assert.equal(f.requests(), 0);
     assert.equal(f.controller.assertCloseReady, undefined);
+});
+
+test("document root gets the captured filename as display text without changing the native heading identity", () => {
+    const f = fixture(basis({ path: "C:\\TEST\\Native title.typ" })), record = f.records.at(-1)!;
+    assert.equal(record.documentTitle, "Native title.typ");
+    assert.equal(record.snapshot, f.accepted()!.snapshot);
+    assert.equal(record.snapshot!.items[0].key, "heading");
+    assert.equal(f.requests(), 0);
 });
 
 test("source edits invalidate immediately and the next accepted projection renews automatically", () => {

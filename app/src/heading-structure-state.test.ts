@@ -1,9 +1,47 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { DOCUMENT_ROOT, headingTree, visibleHeadings, headingMatchesDisplay, type StructureHeading } from "./heading-structure-state";
+import { DOCUMENT_ROOT, headingTree, visibleHeadings, headingMatchesDisplay, nextHeadingMatch, boundedHeadingMap, headingMapLayout, type StructureHeading } from "./heading-structure-state";
 import type { RenderNode } from "./types";
 const heading = (key: string, text: string, level: number): StructureHeading => ({ key, kind: "heading", text, level, generated: true });
 const tree = headingTree([heading("a", "文档根", 1), heading("b", "深层", 4), heading("c", "目标", 5), heading("d", "目标", 2), heading("e", "后记", 1)]);
+
+test("match traversal starts at either end and wraps independently of repeated heading titles", () => {
+    assert.equal(nextHeadingMatch(0, -1, 1), -1);
+    assert.equal(nextHeadingMatch(2, -1, 1), 0);
+    assert.equal(nextHeadingMatch(2, -1, -1), 1);
+    assert.equal(nextHeadingMatch(2, 0, -1), 1);
+    assert.equal(nextHeadingMatch(2, 1, 1), 0);
+    assert.equal(nextHeadingMatch(1, 9, 1), 0);
+});
+
+test("bounded map retains a distant match and its actual ancestors without changing source order or counts", () => {
+    const items = headingTree([heading("parent", "Parent", 1), ...Array.from({ length: 240 }, (_, index) => heading(`child-${index}`, "Same heading", 2))]);
+    const before = JSON.stringify(items), map = boundedHeadingMap(items, "child-239");
+    assert.equal(map.length, 200);
+    assert.ok(map.some(item => item.key === "child-239"));
+    assert.ok(map.some(item => item.key === "parent"));
+    assert.equal(map.at(-1)!.key, "child-239");
+    assert.equal(map.find(item => item.key === "parent")!.children.length, 240);
+    assert.equal(JSON.stringify(items), before);
+});
+
+test("heading layout preserves ordered siblings and native skipped levels in either direction", () => {
+    const horizontal = headingMapLayout(tree, "horizontal"), vertical = headingMapLayout(tree, "vertical");
+    assert.equal(horizontal.get("b")!.x - horizontal.get("a")!.x, 320);
+    assert.ok(horizontal.get("a")!.y < horizontal.get("e")!.y);
+    assert.ok(horizontal.get("c")!.y < horizontal.get("d")!.y);
+    assert.ok(vertical.get("a")!.x < vertical.get("e")!.x);
+    assert.equal(vertical.get("b")!.y - vertical.get("a")!.y, 115);
+    assert.notDeepEqual(horizontal.get(DOCUMENT_ROOT), horizontal.get("a"));
+});
+
+test("map child counts exclude captions while retaining native numbers and distinct root identity", () => {
+    const items = headingTree([{ ...heading("same-name", "Document.typ", 1), number: "一" }, { key: "caption", kind: "figure", text: "Figure", level: 0, generated: true }, heading("child", "Child", 9)].filter(item => item.kind === "heading") as StructureHeading[]);
+    assert.deepEqual(items[0].children, ["same-name"]);
+    assert.deepEqual(items[1].children, ["child"]);
+    assert.equal(items[1].number, "一");
+    assert.equal(items[2].level, 9);
+});
 test("document root is independent and real hierarchy survives skipped levels", () => { assert.equal(tree[0].key, DOCUMENT_ROOT); assert.notEqual(tree[1].key, DOCUMENT_ROOT); assert.equal(tree[2].parent, "a"); assert.equal(tree[3].parent, "b"); assert.equal(tree[4].parent, "a"); assert.equal(tree[1].descendants, 3); assert.equal(tree[1].children.length, 2); assert.equal(tree[0].descendants, 5); });
 test("search reveals matching ancestor paths and clearing restores collapsed state", () => { const collapsed = new Set(["a"]), before = [...collapsed]; assert.deepEqual(visibleHeadings(tree, DOCUMENT_ROOT, collapsed, "", 0).items.map(n => n.key), [DOCUMENT_ROOT, "a", "e"]); const search = visibleHeadings(tree, DOCUMENT_ROOT, collapsed, "目标", 0); assert.deepEqual(search.matches, ["c", "d"]); assert.deepEqual(search.items.map(n => n.key), [DOCUMENT_ROOT, "a", "b", "c", "d"]); assert.deepEqual([...collapsed], before); assert.equal(tree[1].descendants, 3); assert.equal(visibleHeadings(tree, DOCUMENT_ROOT, collapsed, "", 0).items.length, 3); });
 test("subtree and depth are separate and counts never reflect search filtering", () => { const view = visibleHeadings(tree, "b", new Set(), "", 1); assert.deepEqual(view.items.map(n => n.key), ["b", "c"]); assert.equal(view.items[0].descendants, 1); assert.deepEqual(visibleHeadings(tree, "a", new Set(), "", 1).items.map(n => n.key), ["a", "b", "d"]); });

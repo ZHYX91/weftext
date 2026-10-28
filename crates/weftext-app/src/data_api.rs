@@ -106,9 +106,15 @@ struct PeriodRequest {
     root: String,
     series_key: String,
     kind: String,
-    key: String,
+    key: Option<String>,
+    date: Option<String>,
     #[serde(default)]
     steps: i32,
+}
+
+enum PeriodSelection {
+    Key(String),
+    Date(String),
 }
 
 #[derive(Serialize, Deserialize)]
@@ -1187,10 +1193,30 @@ async fn resolve_period(
     State(state): State<AppState>,
     RequestJson(req): RequestJson<PeriodRequest>,
 ) -> ApiResult {
+    let selection = match (req.key, req.date) {
+        (Some(key), None) => PeriodSelection::Key(key),
+        (None, Some(date)) => PeriodSelection::Date(date),
+        _ => {
+            return Err(CoreError::new(
+                "invalidPeriod",
+                UiMessage::error_api_data_period_selection_required(),
+            )
+            .into());
+        }
+    };
     let output = core_call(&state, move |core| {
         let frozen = query_snapshot(core,&req.root,weftext_data::QueryPlan::default())?;
         with_temporary_frozen_query(core, frozen, |_core, frozen| {
-        let value = period_value(&frozen.schema,&req.series_key,&req.kind,&req.key)?;
+        let value = match selection {
+            PeriodSelection::Key(key) => period_value(&frozen.schema, &req.series_key, &req.kind, &key)?,
+            PeriodSelection::Date(date) => weftext_data::period_for_date(
+                &req.series_key,
+                &req.kind,
+                &NativeValue::Date(date),
+                &frozen.schema,
+            )
+            .map_err(|error| CoreError::from_data("invalidPeriod", error))?,
+        };
         let period = weftext_data::period_step(&value,req.steps,&frozen.schema)
             .map_err(|error| CoreError::from_data("invalidPeriod", error))?;
         let bounds = weftext_data::period_bounds(&period,&frozen.schema)
@@ -4743,14 +4769,49 @@ mod tests {
             crate::RequestJson(PeriodRequest {
                 root: root.clone(),
                 series_key: "work-log".into(),
+                date: None,
                 kind: "week".into(),
-                key: "2020-W53".into(),
+                key: Some("2020-W53".into()),
                 steps: 0,
             }),
         )
         .await);
         assert_eq!(initial["coverage"], "complete");
         assert_eq!(initial["canCreate"], true);
+        let Json(selected) = ok(resolve_period(
+            State(state.clone()),
+            crate::RequestJson(PeriodRequest {
+                root: root.clone(),
+                series_key: "work-log".into(),
+                kind: "week".into(),
+                key: None,
+                date: Some("2021-01-01".into()),
+                steps: 0,
+            }),
+        )
+        .await);
+        assert_eq!(selected["period"], initial["period"]);
+        assert_eq!(selected["bounds"], initial["bounds"]);
+        assert_eq!(selected["matches"], json!([]));
+        for (key, date) in [
+            (Some("2020-W53"), Some("2021-01-01")),
+            (None, None),
+            (None, Some("2021-02-29")),
+        ] {
+            let invalid = resolve_period(
+                State(state.clone()),
+                crate::RequestJson(PeriodRequest {
+                    root: root.clone(),
+                    series_key: "work-log".into(),
+                    kind: "week".into(),
+                    key: key.map(str::to_owned),
+                    date: date.map(str::to_owned),
+                    steps: 0,
+                }),
+            )
+            .await;
+            assert_eq!(invalid.err().unwrap().code, "invalidPeriod");
+        }
         let bounds: NativeValue = serde_json::from_value(initial["bounds"].clone()).unwrap();
         assert_eq!(
             bounds.member("start"),
@@ -4793,8 +4854,9 @@ mod tests {
             crate::RequestJson(PeriodRequest {
                 root: root.clone(),
                 series_key: "work-log".into(),
+                date: None,
                 kind: "week".into(),
-                key: "2020-W53".into(),
+                key: Some("2020-W53".into()),
                 steps: 0,
             }),
         )
@@ -4827,8 +4889,9 @@ mod tests {
             crate::RequestJson(PeriodRequest {
                 root: root.clone(),
                 series_key: "work-log".into(),
+                date: None,
                 kind: "week".into(),
-                key: "2020-W53".into(),
+                key: Some("2020-W53".into()),
                 steps: 1,
             }),
         )
@@ -4843,8 +4906,9 @@ mod tests {
             crate::RequestJson(PeriodRequest {
                 root,
                 series_key: "work-log".into(),
+                date: None,
                 kind: "week".into(),
-                key: "2021-W53".into(),
+                key: Some("2021-W53".into()),
                 steps: 0,
             }),
         )

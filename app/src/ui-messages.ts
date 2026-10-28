@@ -3091,7 +3091,6 @@ export const zhCN = {
   "tableGrid.structureChangeUnsafe": "当前表格不能安全变更结构，原稿保留。",
   "tableGrid.changeAwaitingPreview": "变更已进入草稿，等待当前表格预览。",
   "tableGrid.nativeCellUseSource": "此格包含格式、公式或生成内容；保留原生内容，可使用编辑此表源码。",
-  "tableGrid.wholeCellSelectionNotice": " 点击字符位置尚未映射，已选择本格全部文字；可在输入框内继续放置光标。",
   "tableGrid.selectionLabel": "正文表格单元格选择",
   "tableGrid.selectColumn": "选择第 {p0} 列",
   "tableGrid.selectRow": "选择第 {p0} 行",
@@ -10365,7 +10364,78 @@ export const zhCN = {
   "personalInput.copyActiveFinishFirst": "请先完成当前本人副本的编辑。",
   "personalInput.copyChanged": "本人副本或其输入已变化；当前输入仍保留，请检查后重试。",
   "personalInput.copyOnlyCannotRestore": "独立本人副本只能继续编辑或复制，不能作为正文恢复或取得资料写入权限。",
-  "personalInput.copyFinished": "本人副本已可靠保留；原输入、原操作和资料正文未改变。"
+  "personalInput.copyFinished": "本人副本已可靠保留；原输入、原操作和资料正文未改变。",
+  "nodeContents.openNote": "打开笔记",
+  "nodeContents.browseContents": "浏览内容",
+  "heading.outlineMatchPosition": "第 {p0} / {p1} 个命中",
+  "heading.mapHorizontal": "横向标题导图",
+  "heading.mapVertical": "纵向标题导图",
+  "heading.mapHeadingLevel": "标题 {p0}",
+  "heading.mapExpandChildren": "展开 {p0} 个直接子标题",
+  "heading.mapCollapseChildren": "折叠 {p0} 个直接子标题",
+  "heading.mapChildCount": "{p0} 个直接子标题",
+  "periodCalendar.open": "打开日历与周期笔记",
+  "periodCalendar.noLibrary": "打开资料库以浏览周期笔记。",
+  "periodCalendar.selectDate": "选择日期",
+  "periodCalendar.today": "今天",
+  "periodCalendar.dateLookup": "查找所选日期的周期",
+  "periodCalendar.dateHelp": "日期只用于定位已安装系列中的周期；选择和查找不会创建笔记。",
+  "periodCalendar.exactKey": "按准确周期 key 查找",
+  "periodCalendar.noSeries": "当前定义中没有可用周期系列。请先安装系列策略。",
+  "periodCalendar.chooseSeries": "选择当前资料库的周期系列。",
+  "periodCalendar.kindUnavailable": "此系列当前不支持所选周期种类；原输入已保留，请重新选择。",
+  "periodCalendar.range": "日期范围：{p0} 至 {p1}（不含结束日）",
+  "periodCalendar.identity": "{p0} · {p1} · {p2}",
+  "periodCalendar.schemaLoading": "正在读取周期系列定义…",
+  "periodCalendar.dateRequired": "请选择有效日期。",
+  "relationshipDiagnostics.groupBySourceDirectory": "按来源目录分组",
+  "relationshipDiagnostics.resultSort": "结果排序",
+  "relationshipDiagnostics.sortScanOrder": "扫描顺序",
+  "relationshipDiagnostics.sortName": "名称",
+  "relationshipDiagnostics.sortProblemCount": "问题数优先",
+  "relationshipDiagnostics.includeExpected": "显示已确认的预期孤立",
+  "relationshipDiagnostics.isolationSummary": "已确认预期孤立 {p0} · 待复核 {p1} · 扫描不完整 {p2}",
+  "relationshipDiagnostics.expectedMarkRetained": "已保存预期标记；本次尚不能判定为孤立。",
+  "relationshipDiagnostics.expectedNeedsIsolated": "只有当前完整扫描确认无有效入链、出链的节点，才能标记为预期孤立。",
+  "relationshipDiagnostics.pageRange": "第 {p0}–{p1} 项，共 {p2} 项",
+  "relationshipDiagnostics.previousPage": "上一页",
+  "relationshipDiagnostics.nextPage": "下一页",
+  "relationshipDiagnostics.resultPages": "关系诊断结果分页",
+  "nativeEditor.moveFirst": "移到首项",
+  "nativeEditor.moveLast": "移到末项",
+  "nativeEditor.movePosition": "目标位置",
+  "nativeEditor.moveToPosition": "移到指定位置",
+  "nativeEditor.movePositionHelp": "输入 1 到 {count} 的完整位置；列表顺序只在应用字段时写入草稿。",
+  "nativeEditor.movePositionInvalid": "位置须为 1 到 {count} 的整数；输入已保留。",
+  "nativeEditor.finishInvalidBeforeReorder": "先完成列表中的无效输入，再调整顺序；原输入已保留。",
+  "fieldPresentation.menu": "字段呈现",
+  "fieldPresentation.default": "默认位置",
+  "fieldPresentation.top": "置顶",
+  "fieldPresentation.bottom": "沉底",
+  "fieldPresentation.hidden": "隐藏",
+  "fieldPresentation.schemaOrder": "按定义顺序",
+  "fieldPresentation.nameOrder": "按名称排序",
+  "fieldPresentation.showHidden": "显示隐藏字段",
+  "fieldPresentation.reset": "恢复字段呈现默认值",
+  "fieldPresentation.localOnly": "仅调整本机呈现，不改变作者字段与值的顺序。",
+  "fieldPresentation.requiredVisible": "必填、无效、含未绑定成员或有未应用修改的字段会保持可见。",
+  "fieldPresentation.hiddenCount": "隐藏字段：{count}",
+  "fieldPresentation.bottomFields": "沉底字段",
+  "proofreading.resultCount": "已显示 {p0} / {p1} 项（本报告共 {p2} 项），已选 {p3} / 200 项。",
+  "proofreading.sortLabel": "校对结果排序",
+  "proofreading.sortSource": "按来源位置",
+  "proofreading.sortRule": "按校对规则",
+  "proofreading.showMore": "再显示 {p0} 项",
+  "proofreading.selectVisible": "选择当前显示的可定位项（最多 200 项）",
+  "proofreading.selectionLimit": "一次最多选择 200 项。请先处理或取消部分已选项。",
+  "proofreading.selectionVisibilityHelp": "仅处理当前显示并选中的项目；切换分类或排序会取消不再显示的选中项。每次提交最多 200 项，不自动分批写入。",
+  "proofreading.resultListLabel": "校对结果",
+  "proofreading.reportRetired": "本窗口已不再接纳这份校对报告；未取消底层扫描。请在当前文档重新校对。",
+  "proofreading.viewReport": "查看校对报告",
+  "tableGrid.selectCellText": "全选格内文字",
+  "tableGrid.explicitWholeCellSelectionNotice": "已明确选择本格全部文字；输入将替换所选文字。",
+  "tableGrid.caretAtEndNotice": "无法确认点击字符位置，光标已放在格内文字末尾；可在输入框内重新定位或使用“全选格内文字”。",
+  "error.api.data.periodSelectionRequired": "请选择一个有效日期，或提供一个准确周期 key；两者不能同时提交。"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -13461,7 +13531,6 @@ export interface MessageParamsMap {
   "tableGrid.structureChangeUnsafe": {  };
   "tableGrid.changeAwaitingPreview": {  };
   "tableGrid.nativeCellUseSource": {  };
-  "tableGrid.wholeCellSelectionNotice": {  };
   "tableGrid.selectionLabel": {  };
   "tableGrid.selectColumn": { p0: number };
   "tableGrid.selectRow": { p0: number };
@@ -20736,6 +20805,77 @@ export interface MessageParamsMap {
   "personalInput.copyChanged": {  };
   "personalInput.copyOnlyCannotRestore": {  };
   "personalInput.copyFinished": {  };
+  "nodeContents.openNote": {  };
+  "nodeContents.browseContents": {  };
+  "heading.outlineMatchPosition": { p0: number; p1: number };
+  "heading.mapHorizontal": {  };
+  "heading.mapVertical": {  };
+  "heading.mapHeadingLevel": { p0: number };
+  "heading.mapExpandChildren": { p0: number };
+  "heading.mapCollapseChildren": { p0: number };
+  "heading.mapChildCount": { p0: number };
+  "periodCalendar.open": {  };
+  "periodCalendar.noLibrary": {  };
+  "periodCalendar.selectDate": {  };
+  "periodCalendar.today": {  };
+  "periodCalendar.dateLookup": {  };
+  "periodCalendar.dateHelp": {  };
+  "periodCalendar.exactKey": {  };
+  "periodCalendar.noSeries": {  };
+  "periodCalendar.chooseSeries": {  };
+  "periodCalendar.kindUnavailable": {  };
+  "periodCalendar.range": { p0: string; p1: string };
+  "periodCalendar.identity": { p0: string; p1: string; p2: string };
+  "periodCalendar.schemaLoading": {  };
+  "periodCalendar.dateRequired": {  };
+  "relationshipDiagnostics.groupBySourceDirectory": {  };
+  "relationshipDiagnostics.resultSort": {  };
+  "relationshipDiagnostics.sortScanOrder": {  };
+  "relationshipDiagnostics.sortName": {  };
+  "relationshipDiagnostics.sortProblemCount": {  };
+  "relationshipDiagnostics.includeExpected": {  };
+  "relationshipDiagnostics.isolationSummary": { p0: number; p1: number; p2: number };
+  "relationshipDiagnostics.expectedMarkRetained": {  };
+  "relationshipDiagnostics.expectedNeedsIsolated": {  };
+  "relationshipDiagnostics.pageRange": { p0: number; p1: number; p2: number };
+  "relationshipDiagnostics.previousPage": {  };
+  "relationshipDiagnostics.nextPage": {  };
+  "relationshipDiagnostics.resultPages": {  };
+  "nativeEditor.moveFirst": {  };
+  "nativeEditor.moveLast": {  };
+  "nativeEditor.movePosition": {  };
+  "nativeEditor.moveToPosition": {  };
+  "nativeEditor.movePositionHelp": { count: number };
+  "nativeEditor.movePositionInvalid": { count: number };
+  "nativeEditor.finishInvalidBeforeReorder": {  };
+  "fieldPresentation.menu": {  };
+  "fieldPresentation.default": {  };
+  "fieldPresentation.top": {  };
+  "fieldPresentation.bottom": {  };
+  "fieldPresentation.hidden": {  };
+  "fieldPresentation.schemaOrder": {  };
+  "fieldPresentation.nameOrder": {  };
+  "fieldPresentation.showHidden": {  };
+  "fieldPresentation.reset": {  };
+  "fieldPresentation.localOnly": {  };
+  "fieldPresentation.requiredVisible": {  };
+  "fieldPresentation.hiddenCount": { count: number };
+  "fieldPresentation.bottomFields": {  };
+  "proofreading.resultCount": { p0: number; p1: number; p2: number; p3: number };
+  "proofreading.sortLabel": {  };
+  "proofreading.sortSource": {  };
+  "proofreading.sortRule": {  };
+  "proofreading.showMore": { p0: number };
+  "proofreading.selectVisible": {  };
+  "proofreading.selectionLimit": {  };
+  "proofreading.selectionVisibilityHelp": {  };
+  "proofreading.resultListLabel": {  };
+  "proofreading.reportRetired": {  };
+  "proofreading.viewReport": {  };
+  "tableGrid.selectCellText": {  };
+  "tableGrid.explicitWholeCellSelectionNotice": {  };
+  "tableGrid.caretAtEndNotice": {  };
+  "error.api.data.periodSelectionRequired": {  };
 }
 export const messageParamTypes = {
   "workspaceViews.currentDocumentGraph": {},
@@ -24721,7 +24861,6 @@ export const messageParamTypes = {
   "tableGrid.structureChangeUnsafe": {},
   "tableGrid.changeAwaitingPreview": {},
   "tableGrid.nativeCellUseSource": {},
-  "tableGrid.wholeCellSelectionNotice": {},
   "tableGrid.selectionLabel": {},
   "tableGrid.selectColumn": {
     "p0": "integer"
@@ -32970,7 +33109,117 @@ export const messageParamTypes = {
   "personalInput.copyActiveFinishFirst": {},
   "personalInput.copyChanged": {},
   "personalInput.copyOnlyCannotRestore": {},
-  "personalInput.copyFinished": {}
+  "personalInput.copyFinished": {},
+  "nodeContents.openNote": {},
+  "nodeContents.browseContents": {},
+  "heading.outlineMatchPosition": {
+    "p0": "integer",
+    "p1": "integer"
+  },
+  "heading.mapHorizontal": {},
+  "heading.mapVertical": {},
+  "heading.mapHeadingLevel": {
+    "p0": "integer"
+  },
+  "heading.mapExpandChildren": {
+    "p0": "integer"
+  },
+  "heading.mapCollapseChildren": {
+    "p0": "integer"
+  },
+  "heading.mapChildCount": {
+    "p0": "integer"
+  },
+  "periodCalendar.open": {},
+  "periodCalendar.noLibrary": {},
+  "periodCalendar.selectDate": {},
+  "periodCalendar.today": {},
+  "periodCalendar.dateLookup": {},
+  "periodCalendar.dateHelp": {},
+  "periodCalendar.exactKey": {},
+  "periodCalendar.noSeries": {},
+  "periodCalendar.chooseSeries": {},
+  "periodCalendar.kindUnavailable": {},
+  "periodCalendar.range": {
+    "p0": "text",
+    "p1": "text"
+  },
+  "periodCalendar.identity": {
+    "p0": "text",
+    "p1": "text",
+    "p2": "text"
+  },
+  "periodCalendar.schemaLoading": {},
+  "periodCalendar.dateRequired": {},
+  "relationshipDiagnostics.groupBySourceDirectory": {},
+  "relationshipDiagnostics.resultSort": {},
+  "relationshipDiagnostics.sortScanOrder": {},
+  "relationshipDiagnostics.sortName": {},
+  "relationshipDiagnostics.sortProblemCount": {},
+  "relationshipDiagnostics.includeExpected": {},
+  "relationshipDiagnostics.isolationSummary": {
+    "p0": "integer",
+    "p1": "integer",
+    "p2": "integer"
+  },
+  "relationshipDiagnostics.expectedMarkRetained": {},
+  "relationshipDiagnostics.expectedNeedsIsolated": {},
+  "relationshipDiagnostics.pageRange": {
+    "p0": "integer",
+    "p1": "integer",
+    "p2": "integer"
+  },
+  "relationshipDiagnostics.previousPage": {},
+  "relationshipDiagnostics.nextPage": {},
+  "relationshipDiagnostics.resultPages": {},
+  "nativeEditor.moveFirst": {},
+  "nativeEditor.moveLast": {},
+  "nativeEditor.movePosition": {},
+  "nativeEditor.moveToPosition": {},
+  "nativeEditor.movePositionHelp": {
+    "count": "integer"
+  },
+  "nativeEditor.movePositionInvalid": {
+    "count": "integer"
+  },
+  "nativeEditor.finishInvalidBeforeReorder": {},
+  "fieldPresentation.menu": {},
+  "fieldPresentation.default": {},
+  "fieldPresentation.top": {},
+  "fieldPresentation.bottom": {},
+  "fieldPresentation.hidden": {},
+  "fieldPresentation.schemaOrder": {},
+  "fieldPresentation.nameOrder": {},
+  "fieldPresentation.showHidden": {},
+  "fieldPresentation.reset": {},
+  "fieldPresentation.localOnly": {},
+  "fieldPresentation.requiredVisible": {},
+  "fieldPresentation.hiddenCount": {
+    "count": "integer"
+  },
+  "fieldPresentation.bottomFields": {},
+  "proofreading.resultCount": {
+    "p0": "integer",
+    "p1": "integer",
+    "p2": "integer",
+    "p3": "integer"
+  },
+  "proofreading.sortLabel": {},
+  "proofreading.sortSource": {},
+  "proofreading.sortRule": {},
+  "proofreading.showMore": {
+    "p0": "integer"
+  },
+  "proofreading.selectVisible": {},
+  "proofreading.selectionLimit": {},
+  "proofreading.selectionVisibilityHelp": {},
+  "proofreading.resultListLabel": {},
+  "proofreading.reportRetired": {},
+  "proofreading.viewReport": {},
+  "tableGrid.selectCellText": {},
+  "tableGrid.explicitWholeCellSelectionNotice": {},
+  "tableGrid.caretAtEndNotice": {},
+  "error.api.data.periodSelectionRequired": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -36065,7 +36314,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "tableGrid.structureChangeUnsafe": "The current table structure cannot be changed safely; the original draft is preserved.",
   "tableGrid.changeAwaitingPreview": "The change is in the draft. Waiting for the current table preview.",
   "tableGrid.nativeCellUseSource": "This cell contains formatting, formulas, or generated content. Its native content is preserved; use Edit this table's source.",
-  "tableGrid.wholeCellSelectionNotice": " The clicked character position is not mapped, so all text in this cell is selected. You can place the cursor within the input.",
   "tableGrid.selectionLabel": "Document table cell selection",
   "tableGrid.selectColumn": "Select column {p0}",
   "tableGrid.selectRow": "Select row {p0}",
@@ -43339,5 +43587,76 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "personalInput.copyActiveFinishFirst": "Finish editing the current personal copy first.",
   "personalInput.copyChanged": "The personal copy or its input changed. Current input is retained; check it before retrying.",
   "personalInput.copyOnlyCannotRestore": "A separate personal copy can be edited or copied; it cannot restore an author draft or grant document write access.",
-  "personalInput.copyFinished": "The personal copy is durably retained. The original input, operation and document source are unchanged."
+  "personalInput.copyFinished": "The personal copy is durably retained. The original input, operation and document source are unchanged.",
+  "nodeContents.openNote": "Open note",
+  "nodeContents.browseContents": "Browse contents",
+  "heading.outlineMatchPosition": "Match {p0} of {p1}",
+  "heading.mapHorizontal": "Horizontal heading map",
+  "heading.mapVertical": "Vertical heading map",
+  "heading.mapHeadingLevel": "Heading {p0}",
+  "heading.mapExpandChildren": "Expand {p0} direct child headings",
+  "heading.mapCollapseChildren": "Collapse {p0} direct child headings",
+  "heading.mapChildCount": "{p0} direct child headings",
+  "periodCalendar.open": "Open calendar and periodic notes",
+  "periodCalendar.noLibrary": "Open a library to browse periodic notes.",
+  "periodCalendar.selectDate": "Choose date",
+  "periodCalendar.today": "Today",
+  "periodCalendar.dateLookup": "Find the period for this date",
+  "periodCalendar.dateHelp": "The date locates a period in the installed series. Selecting or looking up a date does not create a note.",
+  "periodCalendar.exactKey": "Find by exact period key",
+  "periodCalendar.noSeries": "No periodic series is available in the current definitions. Install a series policy first.",
+  "periodCalendar.chooseSeries": "Choose a periodic series from this library.",
+  "periodCalendar.kindUnavailable": "This series does not currently support the selected period kind. Your input is retained; choose another kind.",
+  "periodCalendar.range": "Date range: {p0} to {p1} (end date excluded)",
+  "periodCalendar.identity": "{p0} · {p1} · {p2}",
+  "periodCalendar.schemaLoading": "Reading periodic series definitions…",
+  "periodCalendar.dateRequired": "Choose a valid date.",
+  "relationshipDiagnostics.groupBySourceDirectory": "Group by source folder",
+  "relationshipDiagnostics.resultSort": "Result order",
+  "relationshipDiagnostics.sortScanOrder": "Scan order",
+  "relationshipDiagnostics.sortName": "Name",
+  "relationshipDiagnostics.sortProblemCount": "Most problems first",
+  "relationshipDiagnostics.includeExpected": "Include confirmed expected isolation",
+  "relationshipDiagnostics.isolationSummary": "Confirmed expected isolation: {p0} · Needs review: {p1} · Incomplete scan: {p2}",
+  "relationshipDiagnostics.expectedMarkRetained": "Expected-isolation preference retained; this scan does not establish isolation.",
+  "relationshipDiagnostics.expectedNeedsIsolated": "Expected isolation can be marked only when the current complete scan confirms no valid incoming or outgoing connections.",
+  "relationshipDiagnostics.pageRange": "Items {p0}–{p1} of {p2}",
+  "relationshipDiagnostics.previousPage": "Previous page",
+  "relationshipDiagnostics.nextPage": "Next page",
+  "relationshipDiagnostics.resultPages": "Relationship diagnostic result pages",
+  "nativeEditor.moveFirst": "Move to first",
+  "nativeEditor.moveLast": "Move to last",
+  "nativeEditor.movePosition": "Target position",
+  "nativeEditor.moveToPosition": "Move to position",
+  "nativeEditor.movePositionHelp": "Enter a whole position from 1 to {count}; the order enters the Draft only when the field is applied.",
+  "nativeEditor.movePositionInvalid": "The position must be a whole number from 1 to {count}; your input is retained.",
+  "nativeEditor.finishInvalidBeforeReorder": "Complete the invalid list input before reordering; your input is retained.",
+  "fieldPresentation.menu": "Field presentation",
+  "fieldPresentation.default": "Default position",
+  "fieldPresentation.top": "Pin to top",
+  "fieldPresentation.bottom": "Move to bottom",
+  "fieldPresentation.hidden": "Hide",
+  "fieldPresentation.schemaOrder": "Schema order",
+  "fieldPresentation.nameOrder": "Sort by name",
+  "fieldPresentation.showHidden": "Show hidden fields",
+  "fieldPresentation.reset": "Reset field presentation",
+  "fieldPresentation.localOnly": "Changes local presentation only; author fields and values keep their order.",
+  "fieldPresentation.requiredVisible": "Required, invalid, unbound-member or unapplied fields remain visible.",
+  "fieldPresentation.hiddenCount": "Hidden fields: {count}",
+  "fieldPresentation.bottomFields": "Fields at bottom",
+  "proofreading.resultCount": "Showing {p0} of {p1} matching issues ({p2} in this report); {p3} of 200 selected.",
+  "proofreading.sortLabel": "Sort proofreading results",
+  "proofreading.sortSource": "Source order",
+  "proofreading.sortRule": "Rule order",
+  "proofreading.showMore": "Show {p0} more",
+  "proofreading.selectVisible": "Select visible located issues (up to 200)",
+  "proofreading.selectionLimit": "Select up to 200 issues at a time. Process or clear some selected issues first.",
+  "proofreading.selectionVisibilityHelp": "Only visible, selected issues are processed. Changing category or order clears selections that are no longer visible. Each submission contains up to 200 issues; writes are never split automatically.",
+  "proofreading.resultListLabel": "Proofreading results",
+  "proofreading.reportRetired": "This window no longer accepts this proofreading report. The underlying scan was not cancelled. Run proofreading on the current document.",
+  "proofreading.viewReport": "View proofreading report",
+  "tableGrid.selectCellText": "Select all cell text",
+  "tableGrid.explicitWholeCellSelectionNotice": "All text in this cell is explicitly selected; typing replaces the selection.",
+  "tableGrid.caretAtEndNotice": "The clicked character position could not be verified. The cursor is at the end of this cell; place it in the input or choose Select all cell text.",
+  "error.api.data.periodSelectionRequired": "Choose one valid date or provide one exact period key; do not submit both."
 };

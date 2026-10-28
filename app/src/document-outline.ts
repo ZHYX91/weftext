@@ -60,7 +60,8 @@ export class DocumentOutlineView {
         this.installed = installed;
         this.presentation = { view, basis: installed?.basis ?? (current ? copyBasis(current) : null), snapshot };
         view.render(this.container, installed?.snapshot, item => this.open(installed, item.key),
-            message(current ? "heading.waitForCurrentProjection" : "heading.openDocumentForOutline"));
+            message(current ? "heading.waitForCurrentProjection" : "heading.openDocumentForOutline"),
+            current?.path.split(/[\\/]/).at(-1) || message("heading.documentRoot"));
     }
 
     private open(installed: OutlineSnapshot | null, key: string): void {

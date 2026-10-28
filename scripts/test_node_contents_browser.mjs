@@ -20,7 +20,7 @@ try{
     const root='D:/Owned/Library',folder=root+'/Parent',ref=id=>'weftext-node://'+ids[0]+'/'+id,parentRef=ref(ids[1]),a=ref(ids[2]),b=ref(ids[3]);
     const entries=[{path:folder+'/A',parentPath:folder,relativePath:'Parent/A',name:'A',kind:'directory',identityStatus:'unmanaged'},{path:folder+'/B',parentPath:folder,relativePath:'Parent/B',name:'B',kind:'directory',identityStatus:'unmanaged'},...['A','B'].map((name,index)=>({path:folder+'/'+name+'/'+name+'.typ',parentPath:folder+'/'+name,relativePath:'Parent/'+name+'/'+name+'.typ',name:name+'.typ',kind:'node',identityStatus:'admitted',nodeId:ids[index+2],source:'Owned '+name+' body',excerpt:'摘要 '+name}))];
     const inventory={root,workspaceId:ids[0],status:'localMvp',entries,warnings:[],complete:true};
-    const fixture=window.fixture={requests:[],reads:[],order:[b,a],operations:new Map(),losePrepare:true,loseCommit:true,changed:0,notices:[],parentRef,a,b,root,folder,release:[],generation:0,controller:undefined};
+    const fixture=window.fixture={requests:[],reads:[],opened:[],browsed:[],menus:[],order:[b,a],operations:new Map(),losePrepare:true,loseCommit:true,changed:0,notices:[],parentRef,a,b,root,folder,release:[],generation:0,previewSerial:0,controller:undefined};
     const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;canvas.getContext('2d').fillRect(0,0,2,2);const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));fixture.blob=blob;
     const request=async(route,body)=>{
       fixture.requests.push({route,body:structuredClone(body)});
@@ -37,17 +37,41 @@ try{
       }
       if(route==='/api/navigation/order/cancel'){const plan=fixture.operations.get(body.operationId);plan.status='resolved';return plan;}
       if(route==='/api/navigation/preview'){
-        const generation=fixture.generation;await new Promise(resolve=>fixture.release.push(resolve));
-        return{state:'ready',sourceBasisKind:'observed',sourceBaseId:'row:'+generation,descriptor:{resourceId:'asset',resource:'weftext-resource://'+ids[0]+'/'+ids[2],name:'pixel.png',revision:'asset-revision',bytes:blob.size,contentType:'image/png',metadata:{kind:'image',width:2,height:2},annotationReady:true,currentness:'accepted'}};
+        const generation=fixture.generation,serial=++fixture.previewSerial;await new Promise(resolve=>fixture.release.push({generation,serial,resolve}));
+        return{state:'ready',sourceBasisKind:'observed',sourceBaseId:'row:'+generation,sourceRevision:null,previewBasis:'currentResourceAtRowSource',descriptor:{resourceId:'asset',resource:'weftext-resource://'+ids[0]+'/'+ids[2],nodeId:body.entityKey.split('/').at(-1),name:'pixel.png',revision:'asset-revision',readBasis:'resource:'+generation,bytes:blob.size,contentType:'image/png',metadata:{kind:'image',width:2,height:2},annotationReady:true,currentness:'accepted'}};
       }
       throw Error('Unexpected component route '+route);
     };
-    window.mount=()=>{fixture.controller?.dispose();fixture.generation++;fixture.controller=mountNodeContents(document.querySelector('section'),inventory,folder,'',new Set(),{request,readBlob:async(route,body)=>{fixture.reads.push({route,body});return blob;},open:()=>{},browse:()=>{},menu:()=>{},preview:()=>{},changed:async()=>{fixture.changed++;},notify:message=>fixture.notices.push(message)});};window.mount();
+    fixture.inventory=inventory;
+    window.mount=(currentFolder=folder)=>{fixture.controller?.dispose();fixture.generation++;fixture.controller=mountNodeContents(document.querySelector('section'),inventory,currentFolder,'',new Set(),{request,readBlob:async(route,body)=>{fixture.reads.push({route,body});return blob;},open:entry=>{fixture.opened.push(structuredClone(entry));},browse:path=>{fixture.browsed.push(path);},menu:(entries,folder)=>{fixture.menus.push({entries:structuredClone(entries),folder});},preview:()=>{},changed:async()=>{fixture.changed++;},notify:message=>fixture.notices.push(message)});};window.mount();
   });
   const rows=page.locator('.node-content-row'),sort=page.getByLabel('节点内容个人排序',{exact:true}),dialog=page.getByRole('dialog',{name:'作者同级顺序变更',exact:true});
   await page.waitForFunction(()=>window.fixture.requests.some(item=>item.route==='/api/navigation/order/read'));
-  assert.deepEqual(await rows.locator(':scope > button:first-of-type').allTextContents(),['A · 目录','B · 目录']);
-  await sort.selectOption('authored');assert.deepEqual(await rows.locator(':scope > button:first-of-type').allTextContents(),['B · 目录','A · 目录']);
+  assert.deepEqual(await rows.locator(':scope > button:first-of-type').allTextContents(),['A · 笔记','B · 笔记']);
+  const nodeA=rows.filter({has:page.getByRole('button',{name:'A · 笔记',exact:true})}),nodeB=rows.filter({has:page.getByRole('button',{name:'B · 笔记',exact:true})});
+  await nodeA.getByRole('button',{name:'A · 笔记',exact:true}).click();
+  await page.waitForFunction(()=>window.fixture.opened.length===1);
+  assert.equal(await page.evaluate(()=>window.fixture.opened[0].path),await page.evaluate(()=>window.fixture.folder+'/A/A.typ'));
+  await nodeA.getByRole('button',{name:'A · 笔记',exact:true}).dblclick();
+  await page.waitForFunction(()=>window.fixture.opened.length===2);
+  await nodeB.getByRole('button',{name:'B · 笔记',exact:true}).focus();await page.keyboard.press('Enter');
+  await page.waitForFunction(()=>window.fixture.opened.length===3);
+  assert.equal(await page.evaluate(()=>window.fixture.opened[2].nodeId),await page.evaluate(()=>window.fixture.b.split('/').at(-1)));
+  await nodeA.getByRole('button',{name:'浏览内容',exact:true}).click();
+  assert.deepEqual(await page.evaluate(()=>window.fixture.browsed),[await page.evaluate(()=>window.fixture.folder+'/A')]);
+  assert.equal(await page.evaluate(()=>window.fixture.opened.length),3);
+  await nodeA.getByRole('button',{name:'打开笔记',exact:true}).click();await page.waitForFunction(()=>window.fixture.opened.length===4);
+  await nodeA.press('Shift+F10');
+  assert.deepEqual(await page.evaluate(()=>window.fixture.menus.at(-1).entries.map(entry=>entry.path)),[await page.evaluate(()=>window.fixture.folder+'/A/A.typ')]);
+  assert.equal(await page.evaluate(()=>window.fixture.menus.at(-1).folder),await page.evaluate(()=>window.fixture.folder+'/A'));
+  await nodeB.getByRole('checkbox').check();await page.getByRole('button',{name:'所选项目操作',exact:true}).click();
+  assert.deepEqual(await page.evaluate(()=>window.fixture.menus.at(-1).entries.map(entry=>entry.path)),await page.evaluate(()=>[window.fixture.folder+'/A/A.typ',window.fixture.folder+'/B/B.typ']));
+  assert.equal(await page.evaluate(()=>window.fixture.requests.some(item=>item.route==='/api/navigation/order/prepare')),false);
+  pass('Healthy child nodes open their exact admitted source by one click or keyboard, double-click opens once, browsing stays separate and all menus retain exact source identities.');
+  await page.evaluate(()=>{const fixture=window.fixture;fixture.inventory.entries.push({path:fixture.folder+'/Conflict/Conflict.typ',parentPath:fixture.folder+'/Conflict',relativePath:'Parent/Conflict/Conflict.typ',name:'Conflict.typ',kind:'node',identityStatus:'bindingConflict'});window.mount(fixture.folder+'/Conflict');});
+  await rows.filter({hasText:'Conflict.typ'}).waitFor();assert.equal(await rows.count(),1);assert.equal(await page.getByRole('button',{name:'浏览内容',exact:true}).count(),0);
+  pass('A conflicting same-coordinate main source remains visible inside its own directory and receives no guessed healthy-node browse action.');
+  await page.evaluate(()=>window.mount());await sort.selectOption('authored');assert.deepEqual(await rows.locator(':scope > button:first-of-type').allTextContents(),['B · 笔记','A · 笔记']);
   await page.getByRole('button',{name:'A 作者顺序上移',exact:true}).click();await dialog.getByRole('button',{name:'取消',exact:true}).click();assert.equal(await page.evaluate(()=>window.fixture.requests.filter(item=>item.route==='/api/navigation/order/prepare').length),0);pass('Personal sorting and canceled author proposal produce no author write.');
   await page.getByRole('button',{name:'A 作者顺序上移',exact:true}).click();await dialog.getByRole('button',{name:'准备此顺序变更',exact:true}).click();await page.waitForFunction(()=>window.fixture.notices.includes('Owned lost prepare reply'));await dialog.getByRole('button',{name:'取消',exact:true}).click();
   const original=await page.evaluate(()=>window.fixture.requests.find(item=>item.route==='/api/navigation/order/prepare').body.operationId);
@@ -55,22 +79,22 @@ try{
   await dialog.getByRole('button',{name:'确认提交原作者顺序',exact:true}).click();await page.waitForFunction(()=>window.fixture.notices.includes('Owned lost commit reply'));await dialog.getByRole('button',{name:'保留原计划，暂不提交',exact:true}).click();await page.getByRole('button',{name:'检查原作者顺序操作',exact:true}).click();await page.waitForFunction(()=>window.fixture.changed===1);
   assert.equal(await page.evaluate(()=>window.fixture.requests.filter(item=>['/api/navigation/order/prepare','/api/operations/commit'].includes(item.route)).every(item=>item.body.operationId===window.fixture.requests.find(item=>item.route==='/api/navigation/order/prepare').body.operationId)),true);assert.ok(original);pass('Lost prepare/commit replies, component restart and original-operation inspection preserve one request and its plan.');
   await page.getByRole('button',{name:'结束已确认顺序操作',exact:true}).click();await page.evaluate(()=>window.mount());await page.getByRole('button',{name:'B 作者顺序上移',exact:true}).waitFor();await page.getByRole('button',{name:'B 作者顺序上移',exact:true}).click();await dialog.getByRole('button',{name:'准备此顺序变更',exact:true}).click();await dialog.waitFor({state:'hidden'});await page.getByRole('button',{name:'取消原作者顺序计划',exact:true}).click();await page.waitForFunction(()=>[...window.fixture.operations.values()].some(item=>item.status==='resolved'));pass('Prepared cancellation durably ends the original plan without committing a replacement.');
-  await page.getByLabel('节点内容缩略图',{exact:true}).check();await page.waitForFunction(()=>window.fixture.release.length>0);
-  const editor=page.getByRole('textbox',{name:'独立正文草稿',exact:true});await editor.focus();await page.evaluate(()=>{for(const release of window.fixture.release.splice(0))release();});await rows.locator('img').first().waitFor();assert.equal(await editor.evaluate(element=>document.activeElement===element),true);assert.equal(await editor.inputValue(),'保留草稿');
+  await page.getByLabel('节点内容缩略图',{exact:true}).uncheck();const firstPreviewSerial=await page.evaluate(()=>window.fixture.previewSerial);await page.getByLabel('节点内容缩略图',{exact:true}).check();await page.waitForFunction(serial=>window.fixture.release.some(item=>item.generation===window.fixture.generation&&item.serial>serial),firstPreviewSerial);
+  const editor=page.getByRole('textbox',{name:'独立正文草稿',exact:true});await editor.focus();await page.evaluate(()=>{for(const item of window.fixture.release.splice(0))item.resolve();});await rows.locator('img').first().waitFor();assert.equal(await editor.evaluate(element=>document.activeElement===element),true);assert.equal(await editor.inputValue(),'保留草稿');
   assert.equal(await page.evaluate(()=>window.fixture.reads.every(item=>item.body.resourceRevision==='asset-revision'&&item.body.revision.startsWith('observed-source:row:'))),true);pass('Late real image decoding preserves editor focus and uses the exact source/resource basis.');
   await page.getByLabel('节点内容缩略图',{exact:true}).uncheck();assert.equal(await rows.locator('img').count(),0);
-  const reads=await page.evaluate(()=>window.fixture.reads.length);await page.getByLabel('节点内容缩略图',{exact:true}).check();await page.waitForFunction(()=>window.fixture.release.length>0);await page.getByLabel('节点内容缩略图',{exact:true}).uncheck();await page.evaluate(()=>{for(const release of window.fixture.release.splice(0))release();});await page.waitForTimeout(300);assert.equal(await rows.locator('img').count(),0);assert.equal(await page.evaluate(()=>window.fixture.reads.length),reads);pass('Turning previews off disposes pixels and suppresses late resource reads.');
+  const reads=await page.evaluate(()=>window.fixture.reads.length),latePreviewSerial=await page.evaluate(()=>window.fixture.previewSerial);await page.getByLabel('节点内容缩略图',{exact:true}).check();await page.waitForFunction(serial=>window.fixture.release.some(item=>item.generation===window.fixture.generation&&item.serial>serial),latePreviewSerial);await page.getByLabel('节点内容缩略图',{exact:true}).uncheck();await page.evaluate(()=>{for(const item of window.fixture.release.splice(0))item.resolve();});await page.waitForTimeout(300);assert.equal(await rows.locator('img').count(),0);assert.equal(await page.evaluate(()=>window.fixture.reads.length),reads);pass('Turning previews off disposes pixels and suppresses late resource reads.');
   await page.evaluate(async()=>{
     const {HostedLibrary}=await import('/src/hosted-library.ts');window.fixture.controller.dispose();
     const host=document.createElement('section');host.id='hosted-order';document.body.append(host);const source='{"version":1}',hash=[...new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(source)))].map(byte=>byte.toString(16).padStart(2,'0')).join('');
     const fixture=window.fixture;fixture.hostedRequests=[];fixture.hostedPlans=new Map();
     fixture.library=new HostedLibrary(host,async(route,body)=>{
       fixture.hostedRequests.push({route,body:structuredClone(body)});
-      if(route==='library')return{roles:[{role:'settings',title:'库设置',read:true,write:true}],styleUse:false,reorderNodes:true,orderParents:[{reference:fixture.parentRef,title:'Parent'}]};
+      if(route==='library')return{roles:[{role:'settings',title:{key:'error.api.hostedLibrary.settingsRoleTitle',params:{}},read:true,write:true}],styleUse:false,reorderNodes:true,orderParents:[{reference:fixture.parentRef,title:'Parent'}]};
       if(route==='library/read')return{role:'settings',basis:'settings-basis',source,installed:false};
       if(route==='library/order/read')return{parentRef:fixture.parentRef,settingsSourceHash:hash,members:[{targetRef:fixture.a,name:'A'},{targetRef:fixture.b,name:'B'}],orderedRefs:[fixture.a,fixture.b],complete:true};
-      if(route==='library/prepare'){const plan={role:'settings',operationId:body.operationId,planId:'hosted-plan',status:'prepared',commitAllowed:true,preview:{beforeSource:source,afterSource:body.source,summary:'Owned settings author order'}};fixture.hostedPlans.set(body.operationId,plan);return plan;}
-      if(route==='library/settle'){const plan=fixture.hostedPlans.get(body.operationId);plan.status='resolved';plan.commitAllowed=false;return plan;}
+      if(route==='library/prepare'){const plan={role:'settings',operationId:body.operationId,planId:'hosted-plan',status:'prepared',commitAllowed:true,preview:{beforeSource:source,afterSource:body.source,summary:{key:'error.api.hostedLibrary.configurationPlanSummary',params:{}}}};fixture.hostedPlans.set(body.operationId,plan);return plan;}
+      if(route==='library/settle'){const previous=fixture.hostedPlans.get(body.operationId),plan={...previous,status:'resolved',planId:null,commitAllowed:false};fixture.hostedPlans.set(body.operationId,plan);return plan;}
       throw Error('Unexpected hosted component route '+route);
     },()=>{});await fixture.library.connect('owned-order-component','actor',1);
   });

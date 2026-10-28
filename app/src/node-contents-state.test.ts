@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { contentsPreferenceKey, contentsSection, directContentsEntries, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, movedSibling } from "./node-contents-state";
+import { contentsActionEntry, contentsPreferenceKey, contentsSection, directContentsEntries, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, movedSibling } from "./node-contents-state";
+import { canonicalNodeSources } from "./file-tree";
+import type { InventoryEntry } from "./types";
 test("author reordering is explicit and preserves exact stable identities", () => {
   const refs = ["same-name:first", "same-name:second", "other"];
   assert.deepEqual(movedSibling(refs, refs[1], -1), [refs[1], refs[0], refs[2]]);
@@ -60,6 +62,27 @@ test("each folder retains independent section positions and ignores invalid pers
   assert.equal(contentsPreferenceKey("D:\\Library\\", undefined, "D:\\Library\\A"), contentsPreferenceKey("d:/library", undefined, "d:/library/a/"));
   assert.notEqual(contentsPreferenceKey("D:/library", "workspace-a", "D:/library/A"), contentsPreferenceKey("D:/library", "workspace-b", "D:/library/A"));
   assert.notEqual(contentsPreferenceKey("D:/library", undefined, "D:/library/A"), contentsPreferenceKey("D:/library", undefined, "D:/library/B"));
+});
+test("a current folder keeps its conflicting or unadmitted same-coordinate main source visible", () => {
+  for (const identityStatus of ["bindingConflict", "duplicate", "unadmitted", "invalid", "missing"]) {
+    const main: InventoryEntry = { path: "D:/library/A/A.typ", parentPath: "D:/library/A", relativePath: "A/A.typ", name: "A.typ", kind: "node", identityStatus };
+    assert.deepEqual(directContentsEntries([main], "D:\\library\\A\\"), [main]);
+  }
+  const admitted: InventoryEntry = { path: "D:/library/A/A.typ", parentPath: "D:/library/A", relativePath: "A/A.typ", name: "A.typ", kind: "node", identityStatus: "admitted" };
+  assert.deepEqual(directContentsEntries([admitted], "D:/library/A"), []);
+});
+test("node content actions bind the captured admitted source while directory browsing keeps its coordinate", () => {
+  const folder: InventoryEntry = { path: "D:/library/A", parentPath: "D:/library", relativePath: "A", name: "A", kind: "directory", identityStatus: "ordinary" };
+  const source: InventoryEntry = { path: "D:/library/A/A.typ", parentPath: folder.path, relativePath: "A/A.typ", name: "A.typ", kind: "node", identityStatus: "admitted", nodeId: "admitted-a", title: "Actual title" };
+  const captured = canonicalNodeSources([folder, source]);
+  assert.equal(contentsActionEntry(folder, captured), source);
+  assert.equal(contentsActionEntry(source, captured), source);
+  assert.equal(contentsActionEntry({ ...folder, path: "d:\\LIBRARY\\a\\" }, captured), source);
+  assert.equal(folder.path, "D:/library/A");
+  for (const identityStatus of ["bindingConflict", "duplicate", "unadmitted"]) {
+    assert.equal(contentsActionEntry(folder, canonicalNodeSources([folder, { ...source, identityStatus }])), folder);
+  }
+  assert.equal(contentsActionEntry(folder, canonicalNodeSources([folder, { ...source, path: "D:/library/A/Other.typ" }])), folder);
 });
 test("order recovery binds original parent, whole request and original plan", () => {
   const pending = { request: { root: "root", parentRef: "parent", baseId: "basis", operationId: "once", children: ["weftext-node://w/a", "weftext-node://w/b"] }, beforeRefs:["weftext-node://w/b", "weftext-node://w/a"], status: "prepared", plan: { operationId: "once", planId: "plan", status: "prepared" } };

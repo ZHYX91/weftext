@@ -5,7 +5,7 @@ import type { Inventory, InventoryEntry } from "./types";
 import { nodeSourceHash } from "./hosted-navigation-state";
 import { mountListThumbnail, type ListPreview } from "./list-thumbnail";
 import type { MediaResource } from "./media-viewer";
-import { contentsPreferenceKey, contentsSection, directContentsEntries, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, movedSibling, type AuthoredOrder, type ContentsPreference, type ContentsSection, type OrderPlan, type PendingOrder } from "./node-contents-state";
+import { contentsActionEntry, contentsPreferenceKey, contentsSection, directContentsEntries, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, movedSibling, type AuthoredOrder, type ContentsPreference, type ContentsSection, type OrderPlan, type PendingOrder } from "./node-contents-state";
 import { canonicalNodeSources } from "./file-tree";
 import "./node-contents.css";
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
@@ -146,7 +146,8 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
     density.onchange = () => { preference.density = density.value as ContentsPreference["density"]; retainPreference(); renderRows(); };
     controls.append(density);
     controls.append(button(uiMessage("nodeContents.resetPreferences"), () => { preference = defaultContentsPreference(); retainPreference(); renderRows(false); renderOrder(); }));
-    const selectedAction = button(uiMessage("nodeContents.selectedActions"), () => host.menu(visible.filter(entry => selections.has(entry.path))));
+    const actionEntry = (entry: InventoryEntry) => contentsActionEntry(entry, canonicalSources);
+    const selectedAction = button(uiMessage("nodeContents.selectedActions"), () => host.menu(visible.filter(entry => selections.has(entry.path)).map(actionEntry)));
     panel.replaceChildren(header, controls, notice, selectedAction, orderHost, rows);
     function updateSelection() {
         rows.querySelectorAll<HTMLElement>("[data-entry-path]").forEach(row => { const selected = selections.has(row.dataset.entryPath!); row.setAttribute("aria-selected", String(selected)); row.querySelector<HTMLInputElement>("input")!.checked = selected; });
@@ -207,22 +208,31 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
             check.type = "checkbox";
             setUiAttr(check, "aria-label", displayMessage("nodeContents.selectEntryLabel", { p0: uiDisplayParameter(entry.name) }));
             check.onchange = () => { check.checked ? selections.add(entry.path) : selections.delete(entry.path); updateSelection(); };
+            const actionTarget = actionEntry(entry), paired = actionTarget !== entry;
             const open = () => {
                 if (entry.kind !== "directory" && !entry.path.toLowerCase().endsWith(".typ")) {
                     return openResource(entry);
                 }
-                return host.open(entry);
+                return host.open(actionTarget);
             }, identityLabel = entry.identityStatus === "bindingConflict" ? uiMessage("shell.fileStatusInvalidIdentity") : entry.identityStatus,
-                title = button(() => `${uiTextValue(entry.title || entry.name)} · ${uiTextValue(entry.identityStatus === "admitted" ? uiMessage("queryColumn.note") : entry.kind === "directory" ? uiMessage("nodeContents.directoryKind") : identityLabel)}`, () => { selections.clear(); selections.add(entry.path); updateSelection(); });
+                title = button(() => `${uiTextValue(entry.title || entry.name)} · ${uiTextValue(paired || entry.identityStatus === "admitted" ? uiMessage("queryColumn.note") : entry.kind === "directory" ? uiMessage("nodeContents.directoryKind") : identityLabel)}`, () => { selections.clear(); selections.add(entry.path); updateSelection(); });
             title.dataset.controlRole = "title";
-            title.ondblclick = () => { void Promise.resolve(open()).catch(error => host.notify(String(error))); };
+            if (paired) {
+                // A healthy node opens its note in one click. The second click
+                // of a native double-click must not dispatch a second open.
+                title.onclick = event => {
+                    if (event.detail > 1) return;
+                    selections.clear(); selections.add(entry.path); updateSelection();
+                    void Promise.resolve().then(open).catch(error => host.notify(error instanceof Error ? errorUiText(error) : String(error)));
+                };
+            } else title.ondblclick = () => { void Promise.resolve(open()).catch(error => host.notify(String(error))); };
             const menu = () => {
                 if (!selections.has(entry.path)) {
                     selections.clear();
                     selections.add(entry.path);
                     updateSelection();
                 }
-                host.menu(visible.filter(item => selections.has(item.path)), entry.kind === "directory" ? entry.path : undefined);
+                host.menu(visible.filter(item => selections.has(item.path)).map(actionEntry), entry.kind === "directory" ? entry.path : undefined);
             };
             row.oncontextmenu = event => { event.preventDefault(); menu(); };
             row.onkeydown = event => {
@@ -237,11 +247,11 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
                     menu();
                 }
             };
-            const openButton = button(uiMessage("common.open"), open);
+            const openButton = button(paired ? uiMessage("nodeContents.openNote") : uiMessage("common.open"), open);
             const ordinary = entry.kind !== "directory" && !entry.path.toLowerCase().endsWith(".typ");
             openButton.disabled = entry.kind === "blocked" || ordinary && !host.resource;
             if (openButton.disabled && ordinary) setUiAttr(openButton, "title", uiMessage("nodeContents.resourceUnavailable"));
-            const previewButton = button(uiMessage("nodeContents.preview"), () => ordinary && host.resource ? openResource(entry) : host.preview([entry]));
+            const previewButton = button(paired ? uiMessage("nodeContents.browseContents") : uiMessage("nodeContents.preview"), () => paired ? host.browse(entry.path) : ordinary && host.resource ? openResource(entry) : host.preview([entry]));
             openButton.dataset.controlRole = "open";
             previewButton.dataset.controlRole = "preview";
             row.append(check, title, openButton, previewButton);

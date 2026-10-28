@@ -3,6 +3,7 @@ import { fitCamera, zoomCamera, type Camera, type Point } from "./relationship-g
 export interface CanvasNode {
     key: string;
     title: UiText;
+    heading?: { number: UiText; childCount: number; expanded: boolean; label: UiText; toggle?: () => void };
 }
 export interface CanvasEdge {
     key: string;
@@ -27,7 +28,8 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
 }
 let canvasSerial = 0;
 /** Display state only. Pointer and keyboard handlers have no authoring host. */
-export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: CanvasState, select: (key: string, edge: boolean) => void, open: (key: string) => void, selected: string, label: UiText): HTMLElement {
+export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: CanvasState, select: (key: string, edge: boolean) => void, open: (key: string) => void, selected: string, label: UiText, options: { revealKey?: string; fit?: boolean } = {}): HTMLElement {
+    const nodeByKey = new Map(nodes.map(node => [node.key, node]));
     const host = document.createElement("div");
     host.className = "knowledge-graph-canvas";
     const controls = document.createElement("div");
@@ -40,11 +42,20 @@ export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: Can
     const world = svg("g", {});
     drawing.append(world);
     const transforms = () => { world.setAttribute("transform", `translate(${state.camera.x} ${state.camera.y}) scale(${state.camera.scale})`); };
+    const reveal = (key: string): void => {
+        const point = state.positions.get(key), item = nodeByKey.get(key);
+        if (!point || !item) return;
+        const x = point.x * state.camera.scale + state.camera.x, y = point.y * state.camera.scale + state.camera.y, halfWidth = item.heading ? 128 : 72;
+        if (x - halfWidth * state.camera.scale < 12 || x + halfWidth * state.camera.scale > 688 || y - 23 * state.camera.scale < 12 || y + 23 * state.camera.scale > 408) {
+            state.camera.x = 350 - point.x * state.camera.scale; state.camera.y = 210 - point.y * state.camera.scale; transforms();
+        }
+    };
     const button = (text: UiText, run: () => void) => { const b = document.createElement("button"); b.type = "button"; setUiText(b, text); b.onclick = run; controls.append(b); };
     button(message("graph.zoomIn"), () => { state.camera = zoomCamera(state.camera, 1.25, { x: 350, y: 210 }); transforms(); });
     button(message("graph.zoomOut"), () => { state.camera = zoomCamera(state.camera, .8, { x: 350, y: 210 }); transforms(); });
     button("100%", () => { state.camera.scale = 1; transforms(); });
-    button(message("graph.fitViewport"), () => { state.camera = fitCamera(nodes.map(n => state.positions.get(n.key)!).filter(Boolean), 700, 420); transforms(); });
+    const fit = (): void => { state.camera = fitCamera(nodes.flatMap(n => { const point = state.positions.get(n.key); return !point ? [] : n.heading ? [{ x: point.x - 40, y: point.y }, { x: point.x + 40, y: point.y }] : [point]; }), 700, 420); };
+    button(message("graph.fitViewport"), () => { fit(); transforms(); });
     for (const [title, dx, dy] of [[message("graph.panLeft"), 60, 0], [message("graph.panRight"), -60, 0], [message("graph.panUp"), 0, 60], [message("graph.panDown"), 0, -60]] as const)
         button(title, () => { state.camera.x += dx; state.camera.y += dy; transforms(); });
     const nodeElements = new Map<string, SVGGElement>(), edgeElements: {
@@ -83,7 +94,7 @@ export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: Can
             if (edge.source === edge.target)
                 path.setAttribute("d", `M${a.x - 40},${a.y - 26} C${a.x - 75 - offset},${a.y - 90 - offset} ${a.x + 75 + offset},${a.y - 90 - offset} ${a.x + 40},${a.y - 26}`);
             else {
-                const dx = b.x - a.x, dy = b.y - a.y, length = Math.max(1, Math.hypot(dx, dy)), border = Math.min(.48, 78 / Math.max(.001, Math.abs(dx)), 28 / Math.max(.001, Math.abs(dy))), end = { x: b.x - dx * border, y: b.y - dy * border };
+                const dx = b.x - a.x, dy = b.y - a.y, length = Math.max(1, Math.hypot(dx, dy)), border = Math.min(.48, (nodeByKey.get(edge.target)?.heading ? 134 : 78) / Math.max(.001, Math.abs(dx)), 28 / Math.max(.001, Math.abs(dy))), end = { x: b.x - dx * border, y: b.y - dy * border };
                 path.setAttribute("d", `M${a.x},${a.y} Q${(a.x + b.x) / 2 - dy / length * offset},${(a.y + b.y) / 2 + dx / length * offset} ${end.x},${end.y}`);
             }
         }
@@ -110,16 +121,47 @@ export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: Can
         return { x: (event.clientX - rect.left) * 700 / Math.max(rect.width, 1), y: (event.clientY - rect.top) * 420 / Math.max(rect.height, 1) };
     };
     for (const node of nodes) {
-        const group = svg("g", { class: `knowledge-graph-node${selected === node.key ? " is-selected" : ""}`, "data-graph-key": node.key, tabindex: "0", role: "button", "aria-label": () => message("graph.nodeKeyboardInstructions", { p0: uiTextValue(node.title) }) });
-        group.append(svg("rect", { x: "-72", y: "-23", width: "144", height: "46", rx: "10" }));
+        const group = svg("g", { class: `knowledge-graph-node${node.heading ? " heading-map-card" : ""}${selected === node.key ? " is-selected" : ""}`, "data-graph-key": node.key, tabindex: node.heading ? "-1" : "0", role: node.heading ? "group" : "button", "aria-label": () => message("graph.nodeKeyboardInstructions", { p0: uiTextValue(node.title) }) });
+        group.append(svg("rect", { x: node.heading ? "-128" : "-72", y: "-23", width: node.heading ? "256" : "144", height: "46", rx: "10" }));
         const text = svg("text", { "text-anchor": "middle", dy: ".35em" });
         setUiText(text, () => { const title = uiTextValue(node.title), graphemes = Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(title), item => item.segment); return graphemes.length > 14 ? `${graphemes.slice(0, 13).join("")}…` : title; });
         const title = svg("title", {});
         setUiText(title, node.title);
         group.append(text, title);
+        if (node.heading) {
+            const body = svg("g", { role: "button", tabindex: "0", "aria-label": () => `${uiTextValue(node.heading!.number)} ${uiTextValue(node.title)}`, "data-outline-control": `map-item:${node.key}` });
+            body.append(...Array.from(group.childNodes)); group.append(body); body.onfocus = () => reveal(node.key);
+            const clipId = `heading-card-${canvasSerial}-${nodeElements.size}`, bodyClip = svg("clipPath", { id: `${clipId}-body` }), numberClip = svg("clipPath", { id: `${clipId}-number` });
+            bodyClip.append(svg("rect", { x: "-79", y: "-22", width: "159", height: "44" }));
+            numberClip.append(svg("rect", { x: "-124", y: "-22", width: "40", height: "44" }));
+            defs.append(bodyClip, numberClip); text.setAttribute("clip-path", `url(#${clipId}-body)`);
+            const number = svg("text", { x: "-104", dy: ".35em", "text-anchor": "middle", class: "heading-map-number", "aria-hidden": "true" });
+            number.setAttribute("clip-path", `url(#${clipId}-number)`);
+            setUiText(number, () => {
+                const full = uiTextValue(node.heading!.number), parts = Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(full), item => item.segment);
+                if (parts.reduce((length, part) => length + (/^[\x00-\x7f]+$/.test(part) ? .6 : 1), 0) <= 3.8) return full;
+                let units = 0, visible = "";
+                for (const part of parts) { units += /^[\x00-\x7f]+$/.test(part) ? .6 : 1; if (units > 2.8) break; visible += part; }
+                return `${visible}…`;
+            });
+            const numberTitle = svg("title", {}); setUiText(numberTitle, node.heading.number); number.append(numberTitle);
+            body.append(number);
+            const branch = svg("g", { class: "heading-map-branch", transform: "translate(107 0)", role: "button", tabindex: node.heading.toggle ? "0" : "-1", "aria-label": node.heading.label, "aria-disabled": String(!node.heading.toggle), "data-heading-branch": node.key, "data-outline-control": `map-fold:${node.key}` });
+            if (node.heading.childCount) branch.setAttribute("aria-expanded", String(node.heading.expanded));
+            branch.append(svg("rect", { x: "-19", y: "-19", width: "38", height: "38", rx: "6" }));
+            const count = svg("text", { "text-anchor": "middle", dy: ".35em", "aria-hidden": "true" });
+            setUiText(count, `${node.heading.childCount ? node.heading.expanded ? "−" : "+" : ""}${node.heading.childCount}`);
+            branch.append(count);
+            branch.onpointerdown = event => event.stopPropagation();
+            branch.onclick = event => { event.preventDefault(); event.stopPropagation(); node.heading?.toggle?.(); };
+            branch.onkeydown = event => { if (event.isComposing || event.keyCode === 229) return; if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); node.heading?.toggle?.(); } };
+            branch.onfocus = () => reveal(node.key);
+            group.append(branch);
+        }
         group.onclick = event => { event.stopPropagation(); };
         group.ondblclick = event => { event.stopPropagation(); event.preventDefault(); };
         group.onkeydown = event => {
+            if (event.isComposing || event.keyCode === 229) return;
             if (event.key === "Enter") {
                 event.preventDefault();
                 open(node.key);
@@ -212,7 +254,9 @@ export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: Can
     };
     drawing.addEventListener("wheel", event => { event.preventDefault(); state.camera = zoomCamera(state.camera, event.deltaY < 0 ? 1.1 : 1 / 1.1, coordinates(event)); transforms(); }, { passive: false });
     redraw();
+    if (options.fit) fit();
     transforms();
+    if (options.revealKey) reveal(options.revealKey);
     host.append(controls, drawing);
     return host;
 }

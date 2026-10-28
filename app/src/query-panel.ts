@@ -1,7 +1,6 @@
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { readNoteProjection, sameProjectionInput } from "./data-projection-read";
 import { joinUiText } from "./ui-locale";
-import { apiErrorUiText, decodeApiErrorBody, type ApiErrorBody } from "./api-error";
 import type { UiMessage } from "./ui-locale";
 import type { CoreDescription } from "./ui-diagnostics";
 import { decodeLocalQueryResult, queryDiagnostics, type QueryEngineGroup, type QueryProductError } from "./query-result";
@@ -225,249 +224,6 @@ export function parseQueryParameters(source: string): Record<string, NativeValue
     };
     Object.values(parsed).forEach(value => check(value));
     return parsed as Record<string, NativeValue>;
-}
-interface PeriodLookup {
-    period: NativeValue;
-    bounds: NativeValue;
-    policy: {
-        multiplicity: string;
-        scope?: {
-            kind?: string;
-        };
-    };
-    matches: QueryRow[];
-    coverage: "complete" | "partial";
-    canCreate: boolean;
-    cutId?: string;
-    diagnostics?: unknown[];
-}
-/** Period creation is a separate explicit Core action after actual resolution. */
-export class PeriodNavigator {
-    // query-child-close-ownership-v1
-    private readonly closeGuard = new ProposalCloseGuard();
-    private lookupDraft = JSON.stringify({ seriesKey: "", kind: "day", key: "" });
-    private lookupBaseline = this.lookupDraft;
-    private creationDraft = "";
-    private creationBaseline = "";
-    private unresolved(): boolean {
-        return this.pending !== null || this.lookupDraft !== this.lookupBaseline || this.creationDraft !== this.creationBaseline;
-    }
-    assertCloseReady(): void { this.closeGuard.assertReady(this.unresolved()); }
-    freezeForClose(): boolean { return this.closeGuard.freeze(this.unresolved()); }
-    thawAfterClose(): void { this.closeGuard.thaw(); }
-    private lookupInput(): string { return JSON.stringify({ seriesKey: this.series.value, kind: this.kind.value, key: this.key.value }); }
-    private creationInput(): string { return JSON.stringify({ parent: this.parent.value, name: this.name.value, title: this.title.value, body: this.body.value }); }
-    readonly element = ui("details", "query-period-navigation");
-    private readonly series = ui("input", "data-input");
-    private readonly kind = selectControl([["day", message("periodNavigation.day")], ["week", message("periodNavigation.week")], ["month", message("periodNavigation.month")], ["quarter", message("periodNavigation.quarter")], ["year", message("periodNavigation.year")]], "day");
-    private readonly key = ui("input", "data-input");
-    private readonly resultHost = ui("div", "period-lookup-result");
-    private readonly parent = ui("input", "data-input");
-    private readonly name = ui("input", "data-input");
-    private readonly title = ui("input", "data-input");
-    private readonly body = ui("textarea", "data-input");
-    private readonly createButton: HTMLButtonElement;
-    private result: PeriodLookup | null = null;
-    private pending: Record<string, unknown> | null = null;
-    private loading = false;
-    private lookupGeneration = 0;
-    private schemaAvailable = true;
-    private readonly schemaMessage = ui("p", "data-warning");
-    constructor(private readonly host: PanelHost, private root: string, scope: () => string) {
-        this.closeGuard.bind(this.element);
-        this.element.append(ui("summary", "", message("periodNavigation.disclosure")));
-        setUiAttr(this.series, "placeholder", message("periodNavigation.seriesPlaceholder"));
-        setUiAttr(this.series, "aria-label", message("periodNavigation.seriesLabel"));
-        setUiAttr(this.key, "placeholder", message("periodNavigation.keyPlaceholder"));
-        setUiAttr(this.key, "aria-label", message("periodNavigation.keyLabel"));
-        const lookup = ui("form", "period-lookup-form");
-        const submit = ui("button", "data-button", message("periodNavigation.lookup"));
-        submit.type = "submit";
-        lookup.append(labeled(message("periodNavigation.series"), this.series), labeled(message("periodNavigation.kind"), this.kind), labeled(message("periodNavigation.key"), this.key), submit, action(message("periodNavigation.previous"), () => this.lookup(-1), "data-button compact"), action(message("periodNavigation.next"), () => this.lookup(1), "data-button compact"));
-        lookup.onsubmit = event => { event.preventDefault(); void this.lookup(); };
-        this.element.append(lookup, ui("p", "data-help", message("periodNavigation.explicitPeriodHelp")), this.schemaMessage, this.resultHost);
-        const creation = ui("details", "period-create-form");
-        creation.append(ui("summary", "", message("periodNavigation.createDisclosure")));
-        this.parent.value = scope();
-        setUiAttr(this.parent, "aria-label", message("periodNavigation.parentLabel"));
-        setUiAttr(this.name, "placeholder", message("periodNavigation.namePlaceholder"));
-        setUiAttr(this.name, "aria-label", message("periodNavigation.nameLabel"));
-        setUiAttr(this.title, "aria-label", message("periodNavigation.titleLabel"));
-        this.body.rows = 4;
-        setUiAttr(this.body, "aria-label", message("periodNavigation.bodyLabel"));
-        this.createButton = action(message("periodNavigation.createOpen"), () => this.create(), "data-button primary");
-        this.createButton.disabled = true;
-        creation.append(labeled(message("periodNavigation.parent"), this.parent), labeled(message("periodNavigation.requiredName"), this.name), labeled(message("periodNavigation.optionalTitle"), this.title), labeled(message("periodNavigation.nativeBody"), this.body), this.createButton, ui("p", "data-help", message("periodNavigation.uniqueSeriesHelp")));
-        this.element.append(creation);
-        // Authored raw values live in this owner even when validation rejects them.
-        this.lookupBaseline = this.lookupDraft = this.lookupInput();
-        this.creationBaseline = this.creationDraft = this.creationInput();
-        const retainLookup = (): void => {
-            if (this.closeGuard.frozen) return;
-            this.lookupDraft = this.lookupInput();
-            this.lookupGeneration++;
-            this.result = null;
-            this.createButton.disabled = this.loading || !this.pending;
-            this.resultHost.replaceChildren(ui("p", "data-help", message("periodNavigation.changedLookup")));
-        };
-        const retainCreation = (): void => {
-            if (!this.closeGuard.frozen) this.creationDraft = this.creationInput();
-        };
-        for (const input of [this.series, this.key, this.kind]) {
-            input.addEventListener("input", retainLookup);
-            input.addEventListener("change", retainLookup);
-        }
-        for (const input of [this.parent, this.name, this.title, this.body]) {
-            input.addEventListener("input", retainCreation);
-            input.addEventListener("change", retainCreation);
-        }
-    }
-    setSchemaAvailable(available: boolean): void { if (this.closeGuard.frozen) return; this.schemaAvailable = available; this.schemaMessage.hidden = available; setUiText(this.schemaMessage, available ? "" : message("periodNavigation.schemaUnavailable")); }
-    private async lookup(steps = 0): Promise<void> {
-        if (this.closeGuard.frozen) return;
-        const endClose = this.closeGuard.begin();
-        try {
-            if (!this.schemaAvailable) {
-                this.host.notify(message("periodNavigation.definitionUnavailable"), true);
-                return;
-            }
-            if (this.loading)
-                return;
-            if (!this.series.value || !this.key.value) {
-                this.host.notify(message("periodNavigation.exactKeyRequired"), true);
-                return;
-            }
-            const generation = ++this.lookupGeneration;
-            const basis = { seriesKey: this.series.value, kind: this.kind.value, key: this.key.value };
-            this.loading = true;
-            this.createButton.disabled = true;
-            this.resultHost.replaceChildren(ui("p", "data-help", message("periodNavigation.resolving")));
-            try {
-                const result = await this.host.request<PeriodLookup>("/api/data/period/resolve", { root: this.root, ...basis, ...(steps ? { steps } : {}) });
-                if (this.closeGuard.frozen || generation !== this.lookupGeneration || this.series.value !== basis.seriesKey || this.kind.value !== basis.kind || this.key.value !== basis.key)
-                    return;
-                this.result = result;
-                const actualKey = nativeMember(result.period, "key");
-                if (actualKey?.kind === "text")
-                    this.key.value = actualKey.value;
-                this.lookupBaseline = this.lookupDraft = this.lookupInput();
-                this.resultHost.replaceChildren(ui("p", "data-help", displayMessage("periodNavigation.resolvedPeriod", { p0: uiDisplayParameter(formatNativeValue(result.period)) })), ui("p", "data-help", displayMessage("periodNavigation.resolvedBounds", { p0: uiDisplayParameter(formatNativeValue(result.bounds)) })), ui("p", result.coverage === "complete" ? "query-result-status" : "data-warning", displayMessage("periodNavigation.lookupSummary", { p0: uiDisplayParameter(result.coverage === "complete" ? message("periodNavigation.completeFrozenScope") : message("periodNavigation.partialScope")), p1: result.matches.length, p2: uiDisplayParameter(result.policy.multiplicity === "unique" ? message("periodNavigation.uniqueSeries") : message("periodNavigation.multipleSeries")) })));
-                for (const row of result.matches)
-                    this.resultHost.append(action(rowTitle(row), async () => {
-                        if (this.closeGuard.frozen) return;
-                        const endOpen = this.closeGuard.begin();
-                        try {
-                            await this.host.prepareAction?.();
-                            if (this.closeGuard.frozen) return;
-                            if (row.entityKey) {
-                                if (!this.host.openResolved)
-                                    throw new UiError(message("queryValidation.stableOpenRequired"));
-                                const opened = await this.host.request<OpenedDocument>("/api/data/open", { root: this.root, entityKey: row.entityKey });
-                                if (this.closeGuard.frozen) return;
-                                await this.host.openResolved(opened);
-                            }
-                            else if (row.path)
-                                await this.host.openDocument(row.path, this.root);
-                            else
-                                throw new UiError(message("periodNavigation.existingTargetUnavailable"));
-                        }
-                        catch (error) {
-                            if (!this.closeGuard.frozen) this.host.notify(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"), true);
-                        }
-                        finally { endOpen(); }
-                    }, "query-row-title"));
-                result.diagnostics?.forEach(item => this.resultHost.append(ui("p", "data-warning", diagnosticText(item))));
-                if (!result.matches.length)
-                    this.resultHost.append(ui("p", "data-help", result.coverage === "complete" ? message("periodNavigation.completeNoMatch") : message("periodNavigation.partialNoMatch")));
-                this.createButton.disabled = !result.canCreate && !this.pending;
-            }
-            catch (error) {
-                if (!this.closeGuard.frozen && generation === this.lookupGeneration) {
-                    this.result = null;
-                    this.resultHost.replaceChildren(ui("p", "data-warning", error instanceof Error ? errorUiText(error) : message("error.invalidResponse")));
-                    this.createButton.disabled = !this.pending;
-                }
-            }
-            finally {
-                if (!this.closeGuard.frozen) {
-                    this.loading = false;
-                    this.createButton.disabled = !this.pending && !this.result?.canCreate;
-                }
-            }
-        } finally { endClose(); }
-    }
-    private async create(): Promise<void> {
-        if (this.closeGuard.frozen) return;
-        const endClose = this.closeGuard.begin();
-        try {
-            if (!this.schemaAvailable && !this.pending) {
-                this.host.notify(message("periodNavigation.definitionUnavailable"), true);
-                return;
-            }
-            if ((!this.result?.canCreate && !this.pending) || this.loading)
-                return;
-        if (!this.pending && (!this.name.value || !this.parent.value)) {
-                this.host.notify(message("periodNavigation.creationLocationRequired"), true);
-                return;
-            }
-            const retry = this.pending !== null;
-            const actualKey = this.result ? nativeMember(this.result.period, "key") : undefined;
-            this.pending ??= { root: this.root, parent: this.parent.value, name: this.name.value, seriesKey: this.series.value, kind: this.kind.value, key: actualKey?.kind === "text" ? actualKey.value : this.key.value, title: this.title.value || undefined, body: this.body.value, operationId: crypto.randomUUID() };
-            const submitted = this.pending;
-            let receiptReceived = false;
-            this.loading = true;
-            this.createButton.disabled = true;
-            try {
-                const result = await submitOriginal<OriginalFact & {
-                    document?: OpenedDocument;
-                    documentError?: ApiErrorBody;
-                }>(this.host.request, "/api/data/period/create", this.pending, "period", retry);
-                if (this.closeGuard.frozen) return;
-                receiptReceived = true;
-                if (result.status !== "committed")
-                    throw new UiError(message("queryDefinition.periodCommittedReceiptRequired"));
-                const document = result.document;
-                const documentError = result.documentError === undefined ? undefined : decodeApiErrorBody(result.documentError);
-                if (result.documentError !== undefined && !documentError) throw new UiError(message("error.invalidResponse"));
-                const deliveryError = result.deliveryError === undefined ? undefined : decodeApiErrorBody(result.deliveryError);
-                if (result.deliveryError !== undefined && !deliveryError) throw new UiError(message("error.invalidResponse"));
-                const deliveryErrors = [documentError, deliveryError].filter((error): error is ApiErrorBody => !!error);
-                if (deliveryErrors.length || !document)
-                    throw new UiError(displayMessage("periodNavigation.submittedOpenPending", { p0: uiDisplayParameter(deliveryErrors.length ? joinUiText(deliveryErrors.map(apiErrorUiText), "\n") : message("common.confirmOriginalOperation")) }));
-                if (!this.host.created)
-                    throw new UiError(message("queryDefinition.periodDocumentDeliveryRequired"));
-                await this.host.created(document, result.operationId);
-                if (this.closeGuard.frozen) return;
-                const unchanged = this.name.value === submitted.name && this.parent.value === submitted.parent && (this.title.value || undefined) === submitted.title && this.body.value === submitted.body && this.series.value === submitted.seriesKey && this.kind.value === submitted.kind && this.key.value === submitted.key;
-                this.pending = null;
-                if (unchanged) {
-                    this.name.value = "";
-                    this.title.value = "";
-                    this.body.value = "";
-                    this.creationBaseline = this.creationDraft = this.creationInput();
-                }
-                this.host.notify(unchanged ? message("periodNavigation.createdOpened") : message("periodNavigation.createdWithNewInput"));
-                this.loading = false;
-                await this.lookup();
-            }
-            catch (error) {
-                if (this.closeGuard.frozen) return;
-                if (!receiptReceived && error instanceof TerminatedAttempt) {
-                    this.pending = null;
-                    this.result = null;
-                }
-                const hint = this.pending ? displayMessage("periodNavigation.originalOperationRetained", { p0: String(this.pending.seriesKey), p1: String(this.pending.key) }) : message("periodNavigation.lookupBeforeCreating");
-                this.resultHost.append(ui("p", "data-warning", () => `${uiTextValue(error instanceof Error ? errorUiText(error) : message("error.invalidResponse"))}${uiTextValue(hint)}`));
-            }
-            finally {
-                if (!this.closeGuard.frozen) {
-                    this.loading = false;
-                    this.createButton.disabled = !this.pending && !this.result?.canCreate;
-                    setUiText(this.createButton, this.pending ? message("periodNavigation.confirmPreviousCreation") : message("periodNavigation.createOpen"));
-                }
-            }
-        } finally { endClose(); }
-    }
 }
 interface TagRegistry {
     tags: {
@@ -1286,11 +1042,11 @@ export class QueryPanel {
     }
     private transientProposal(): boolean { return this.draftFlags.size !== 0 || this.definitionName.length !== 0; }
     private unresolved(): boolean { return this.inlineDrafts.size !== 0 || this.savedPending !== null || this.transientProposal(); }
-    private closeOwners(): (QuickCapture | PeriodNavigator | NavigationControls)[] { return [...this.captureForms.values(), ...this.periodNavigators.values(), ...this.navigationControls.values()]; }
+    private closeOwners(): (QuickCapture | NavigationControls)[] { return [...this.captureForms.values(), ...this.navigationControls.values()]; }
     assertCloseReady(): void { this.closeGuard.assertReady(this.unresolved()); for (const owner of this.closeOwners()) owner.assertCloseReady(); }
     freezeForClose(): boolean {
         try { this.assertCloseReady(); } catch { return false; }
-        const frozen: (QuickCapture | PeriodNavigator | NavigationControls)[] = [];
+        const frozen: (QuickCapture | NavigationControls)[] = [];
         try {
             for (const owner of this.closeOwners()) {
                 frozen.push(owner);
@@ -1382,18 +1138,16 @@ export class QueryPanel {
     private thumbnailDisposers: (() => void)[] = [];
     private previewCache = new Map<string, Promise<RowPreview>>();
     private searchTimer?: ReturnType<typeof setTimeout>;
-    private periodNavigators = new Map<string, PeriodNavigator>();
     private navigationControls = new Map<string, NavigationControls>();
     private controlsContext: string | null = null;
     private controlUpdates: ((reset: boolean) => void)[] | null = null;
     private readonly registeredHost = ui("div");
-    private readonly periodHost = ui("div");
     private readonly savedHost = ui("div");
     private readonly shortcutsHost = ui("div");
     private readonly resultsHost = ui("div", "query-results");
     private readonly controlsHost = ui("div", "query-controls");
     private readonly navigationHost = ui("nav", "query-facets");
-    constructor(private readonly host: PanelHost, private readonly exportResult?: (query: FrozenQuery) => void | Promise<void>) { this.closeGuard.bind(this.element); setUiAttr(this.element, "aria-label", message("queryPanel.title")); setUiAttr(this.navigationHost, "aria-label", message("queryPanel.valueNavigationTitle")); this.element.append(this.controlsHost, this.navigationHost, this.resultsHost); this.renderControls(); this.renderResults(); }
+    constructor(private readonly host: PanelHost, private readonly exportResult?: (query: FrozenQuery) => void | Promise<void>, private readonly openCalendar?: () => void | Promise<void>) { this.closeGuard.bind(this.element); setUiAttr(this.element, "aria-label", message("queryPanel.title")); setUiAttr(this.navigationHost, "aria-label", message("queryPanel.valueNavigationTitle")); this.element.append(this.controlsHost, this.navigationHost, this.resultsHost); this.renderControls(); this.renderResults(); }
     /** New-library creation must settle proposals before opening its original-operation dialog. */
     assertLibraryDeparture(): void {
         this.closeGuard.assertMutable();
@@ -1741,7 +1495,6 @@ export class QueryPanel {
         for (const update of this.controlUpdates!)
             update(reset);
         this.renderRegisteredNavigation();
-        this.renderPeriodNavigation();
     }
     private draftInput(input: HTMLInputElement | HTMLTextAreaElement, read: () => string, write: (value: string) => void): (reset: boolean) => void {
         let composing = false;
@@ -1851,7 +1604,9 @@ export class QueryPanel {
         this.mountAdvancedControls();
         this.mountSavedControls();
         this.mountShortcutControls();
-        this.controlsHost.append(this.registeredHost, this.periodHost, this.savedHost, this.shortcutsHost);
+        this.controlsHost.append(this.registeredHost);
+        if (this.openCalendar) this.controlsHost.append(this.action(message("periodCalendar.open"), this.openCalendar));
+        this.controlsHost.append(this.savedHost, this.shortcutsHost);
     }
     private mountBuilderControls(): void {
         const builder = ui("details", "query-builder");
@@ -2462,27 +2217,6 @@ export class QueryPanel {
             setUiText(save, this.savedPending ? message("queryDefinition.confirmPreviousSave") : message("queryDefinition.saveQueryAndNote"));
             updateLabel(reset);
         });
-    }
-    private renderPeriodNavigation(): void {
-        if (!this.root || !this.workspaceId) {
-            if (this.periodHost.firstChild)
-                this.periodHost.replaceChildren();
-            return;
-        }
-        const root = this.root, workspaceId = this.workspaceId, identity = JSON.stringify([root, workspaceId]);
-        let navigator = this.periodNavigators.get(identity);
-        const available = !!this.schema?.fields.some(item => item.key === "period");
-        if (!navigator && available) {
-            navigator = new PeriodNavigator(this.host, root, () => this.root === root && this.workspaceId === workspaceId && !this.directory?.startsWith("weftext-") ? this.directory ?? root : root);
-            this.periodNavigators.set(identity, navigator);
-        }
-        if (navigator) {
-            if (this.periodHost.firstChild !== navigator.element)
-                this.periodHost.replaceChildren(navigator.element);
-            navigator.setSchemaAvailable(available);
-        }
-        else if (this.periodHost.firstChild)
-            this.periodHost.replaceChildren();
     }
     private async saveDefinition(label: string, key?: string): Promise<void> {
         return this.closeGuard.run(async () => {

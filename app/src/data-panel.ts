@@ -9,6 +9,7 @@ export * from "./native-value-form";
 import { uiDisplayParameter, message as uiMessage, displayMessage, setUiText, setUiAttr, uiTextValue, joinUiText, errorUiText, UiError, type UiText } from "./ui-locale";
 import { type Cell, type NoteProjection } from "./data-projection";
 import { readNoteProjection, sameProjectionInput } from "./data-projection-read";
+import { comparePresentedFields, decodeFieldPresentation, defaultFieldPresentation, effectiveFieldPlacement, setFieldPlacement } from "./data-field-preference";
 export { decodeProjection, decodeCell, type Cell, type FieldProjection, type NoteProjection } from "./data-projection";
 import { descriptionUiText, coreDescriptionUiText } from "./ui-diagnostics";
 import { submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
@@ -36,7 +37,8 @@ export class DataPanel {
     private generation = 0;
     private drafts = new Map<string, FieldDraft>();
     private filter = "";
-    private pinned = new Set<string>();
+    private fieldPresentation = defaultFieldPresentation();
+    private showHiddenFields = false;
     private schemaRead: SchemaRead | null = null;
     private draftCache = new Map<string, Map<string, FieldDraft>>();
     private readonly closeGuard = new ProposalCloseGuard();
@@ -143,10 +145,10 @@ export class DataPanel {
             this.projection = { ...projection, readOnly: projection.readOnly || this.host.canEdit?.() === false };
             this.schemaRead = schemaResult;
             try {
-                this.pinned = new Set(JSON.parse(localStorage.getItem(`weftext-fields:${basis.workspaceId ?? basis.root}`) ?? "[]") as string[]);
+                this.fieldPresentation = decodeFieldPresentation(localStorage.getItem(this.presentationStorageKey()), new Set(this.schema.fields.map(field => field.id)));
             }
             catch {
-                this.pinned.clear();
+                this.fieldPresentation = defaultFieldPresentation();
             }
             if (this.referencesRoot !== basis.root) {
                 this.referencesRoot = basis.root;
@@ -203,6 +205,25 @@ export class DataPanel {
         setUiAttr(filter, "aria-label", uiMessage("dataPanel.filterLabel"));
         filter.oninput = () => { this.filter = filter.value; this.renderFields(); };
         this.element.append(filter);
+        const presentation = ui("details", "data-field-presentation-settings");
+        const presentationScope = this.presentationStorageKey();
+        presentation.append(ui("summary", "", uiMessage("fieldPresentation.menu")));
+        const sort = ui("select", "data-input");
+        sort.id = "property-presentation-sort";
+        setUiAttr(sort, "aria-label", uiMessage("fieldPresentation.menu"));
+        for (const [value, label] of [["schema", uiMessage("fieldPresentation.schemaOrder")], ["name", uiMessage("fieldPresentation.nameOrder")]] as const) {
+            const option = ui("option", "", label); option.value = value; sort.append(option);
+        }
+        sort.value = this.fieldPresentation.sort;
+        sort.onchange = () => { if (!sort.isConnected || !this.canChangePresentation(presentationScope)) return; this.fieldPresentation = { ...this.fieldPresentation, sort: sort.value === "name" ? "name" : "schema" }; this.saveFieldPresentation(); this.applyFieldPresentation(); };
+        const showHidden = ui("input"); showHidden.type = "checkbox"; showHidden.id = "property-presentation-hidden"; showHidden.checked = this.showHiddenFields;
+        showHidden.onchange = () => { if (!showHidden.isConnected || !this.canChangePresentation(presentationScope)) return; this.showHiddenFields = showHidden.checked; this.applyFieldPresentation(); };
+        presentation.append(sort, labelFor(uiMessage("fieldPresentation.showHidden"), showHidden), showHidden, action(uiMessage("fieldPresentation.reset"), () => {
+            if (!this.canChangePresentation(presentationScope)) return;
+            this.fieldPresentation = defaultFieldPresentation(); this.showHiddenFields = false; sort.value = "schema"; showHidden.checked = false;
+            this.saveFieldPresentation(); this.applyFieldPresentation();
+        }), ui("p", "data-help", uiMessage("fieldPresentation.localOnly")), ui("p", "data-help", uiMessage("fieldPresentation.requiredVisible")));
+        this.element.append(presentation, ui("p", "data-help data-hidden-field-count"));
         this.element.append(ui("div", "data-fields"));
         this.renderFields();
         this.reminderDevice.retire();
@@ -292,6 +313,7 @@ export class DataPanel {
         this.reminderDisposers.splice(0).forEach(dispose => dispose());
         target.replaceChildren();
         const schema = this.schema;
+        const presentationScope = this.presentationStorageKey();
         const declared = fieldsForTypes(schema, this.projection.types);
         const ids = new Set(declared.map(item => item.field.id));
         const basis = this.basis;
@@ -301,7 +323,11 @@ export class DataPanel {
                 if (field)
                     declared.push({ field, required: false });
             }
-        const groups = { pinned: ui("div", "data-field-group"), common: ui("div", "data-field-group"), advanced: ui("details", "data-field-group advanced") };
+        const groups = { pinned: ui("div", "data-field-group"), common: ui("div", "data-field-group"), advanced: ui("details", "data-field-group advanced"), bottom: ui("div", "data-field-group"), hidden: ui("div", "data-field-group") };
+        for (const [key, group] of Object.entries(groups)) group.dataset.presentationGroup = key;
+        groups.pinned.append(ui("h3", "data-group-label", uiMessage("dataPanel.pinnedFields")));
+        groups.bottom.append(ui("h3", "data-group-label", uiMessage("fieldPresentation.bottomFields")));
+        groups.hidden.hidden = true;
         groups.advanced.append(ui("summary", "", uiMessage("dataPanel.moreFields")));
         groups.advanced.open = this.advancedOpen;
         groups.advanced.ontoggle = () => {
@@ -315,18 +341,34 @@ export class DataPanel {
             const wrapper = ui("section", "data-property");
             wrapper.dataset.fieldKey = field.key;
             wrapper.dataset.fieldId = field.id;
+            wrapper.dataset.fieldOrder = String(declared.findIndex(item => item.field.id === field.id));
+            wrapper.dataset.fieldName = uiTextValue(fieldNames[field.key] ?? field.key);
+            const draft = this.drafts.get(field.key);
+            wrapper.dataset.protectedField = String(required || projected?.required || cell.state === "invalid" || !!projected?.unbound?.length || !!draft?.changed || !!Object.keys(draft?.rawInputs ?? {}).length);
+            wrapper.dataset.commonField = String(commonFields.has(field.key) || required || !!this.filter);
             const title = ui("div", "data-property-title");
             title.append(ui("h3", "", () => `${uiTextValue(fieldNames[field.key] ?? field.key)}${uiTextValue(required ? " *" : "")}`));
-            const pin = action(this.pinned.has(field.id) ? uiMessage("dataPanel.unpinField") : uiMessage("dataPanel.pinField"), () => {
-                if (this.pinned.has(field.id))
-                    this.pinned.delete(field.id);
-                else
-                    this.pinned.add(field.id);
-                localStorage.setItem(`weftext-fields:${this.basis!.workspaceId ?? this.basis!.root}`, JSON.stringify([...this.pinned]));
-                this.renderFields();
+            const pin = action(this.fieldPresentation.placements[field.id] === "top" ? uiMessage("dataPanel.unpinField") : uiMessage("dataPanel.pinField"), () => {
+                if (!this.canChangePresentation(presentationScope)) return;
+                this.fieldPresentation = setFieldPlacement(this.fieldPresentation, field.id, this.fieldPresentation.placements[field.id] === "top" ? "default" : "top");
+                this.saveFieldPresentation(); this.applyFieldPresentation();
             }, "data-button compact");
-            pin.setAttribute("aria-pressed", String(this.pinned.has(field.id)));
-            title.append(pin);
+            pin.dataset.fieldPin = "true";
+            pin.setAttribute("aria-pressed", String(this.fieldPresentation.placements[field.id] === "top"));
+            const fieldMenu = ui("details", "data-field-placement");
+            fieldMenu.append(ui("summary", "", uiMessage("fieldPresentation.menu")));
+            for (const placement of ["top", "default", "bottom", "hidden"] as const) {
+                const choose = action(uiMessage(`fieldPresentation.${placement}`), () => {
+                    if (!this.canChangePresentation(presentationScope)) return;
+                    this.fieldPresentation = setFieldPlacement(this.fieldPresentation, field.id, placement); this.saveFieldPresentation();
+                    fieldMenu.open = false;
+                    this.applyFieldPresentation();
+                    if (!wrapper.closest<HTMLElement>("[data-presentation-group]")?.hidden) fieldMenu.querySelector<HTMLElement>("summary")?.focus({ preventScroll: true });
+                }, "data-button compact");
+                choose.dataset.fieldPlacement = placement;
+                fieldMenu.append(choose);
+            }
+            title.append(pin, fieldMenu);
             wrapper.append(title, ui("p", `data-cell-state ${cell.state}`, cellLabels[cell.state]));
             if (this.projection.readOnly || cell.state === "unavailable" || cell.state === "invalid" || projected?.writable === false) {
                 wrapper.append(ui("p", "data-help", cell.reason ? descriptionUiText(cell.reason) : uiMessage("dataPanel.fieldWriteUnavailable")));
@@ -391,19 +433,58 @@ export class DataPanel {
                     controls.append(action(uiMessage("dataPanel.setExplicitNone"), () => { draft.value = { kind: "none" }; draft.changed = true; draft.revision = (draft.revision ?? 0) + 1; this.renderFields(); }));
                 wrapper.append(controls);
             }
-            const group = this.pinned.has(field.id) ? groups.pinned : commonFields.has(field.key) || required || this.filter ? groups.common : groups.advanced;
-            group.append(wrapper);
+            groups.common.append(wrapper);
         }
         if (!matching.length)
             target.append(ui("p", "data-empty", declared.length ? uiMessage("dataPanel.noFilterMatch") : uiMessage("dataPanel.noDeclaredFields")));
-        if (groups.pinned.childElementCount) {
-            groups.pinned.prepend(ui("h3", "data-group-label", uiMessage("dataPanel.pinnedFields")));
-            target.append(groups.pinned);
-        }
-        target.append(groups.common);
-        if (groups.advanced.childElementCount > 1)
-            target.append(groups.advanced);
+        target.append(groups.pinned, groups.common, groups.advanced, groups.bottom, groups.hidden);
+        this.applyFieldPresentation();
         this.renderedIdentity = this.draftIdentity;
+    }
+    private presentationStorageKey(): string { return `weftext-field-presentation:${this.basis!.workspaceId ?? this.basis!.root}`; }
+    private canChangePresentation(scope: string): boolean { return !this.closeGuard.frozen && !!this.basis && this.presentationStorageKey() === scope; }
+    private saveFieldPresentation(): void {
+        try { localStorage.setItem(this.presentationStorageKey(), JSON.stringify(this.fieldPresentation)); }
+        catch { /* Local presentation remains usable when storage is unavailable. */ }
+    }
+    private applyFieldPresentation(): void {
+        const target = this.element.querySelector<HTMLElement>(".data-fields");
+        if (!target) return;
+        const groups = new Map([...target.querySelectorAll<HTMLElement>("[data-presentation-group]")].map(group => [group.dataset.presentationGroup!, group]));
+        const fields = [...target.querySelectorAll<HTMLElement>(".data-property[data-field-key]")];
+        fields.sort((left, right) => comparePresentedFields(this.fieldPresentation,
+            { name: left.dataset.fieldName ?? "", order: Number(left.dataset.fieldOrder) }, { name: right.dataset.fieldName ?? "", order: Number(right.dataset.fieldOrder) }));
+        let hidden = 0;
+        const active = document.activeElement instanceof HTMLElement && target.contains(document.activeElement) ? document.activeElement : null;
+        const selection = active instanceof HTMLTextAreaElement || active instanceof HTMLInputElement && ["text", "search", "tel", "url"].includes(active.type) ? { from: active.selectionStart, to: active.selectionEnd } : null;
+        let activeHidden = false;
+        for (const field of fields) {
+            const id = field.dataset.fieldId!, draft = this.drafts.get(field.dataset.fieldKey!);
+            const protectedField = field.dataset.protectedField === "true" || !!draft?.changed || !!Object.keys(draft?.rawInputs ?? {}).length;
+            const placement = effectiveFieldPlacement(this.fieldPresentation, id, protectedField, this.showHiddenFields);
+            const name = placement === "top" ? "pinned" : placement === "bottom" ? "bottom" : placement === "hidden" ? "hidden" : protectedField || field.dataset.commonField === "true" ? "common" : "advanced";
+            const group = groups.get(name);
+            if (!group) continue;
+            group.append(field);
+            const pin = field.querySelector<HTMLButtonElement>("[data-field-pin]");
+            if (pin) { pin.setAttribute("aria-pressed", String(placement === "top")); setUiText(pin, placement === "top" ? uiMessage("dataPanel.unpinField") : uiMessage("dataPanel.pinField")); }
+            for (const choice of field.querySelectorAll<HTMLButtonElement>("[data-field-placement]")) choice.setAttribute("aria-pressed", String(choice.dataset.fieldPlacement === (Object.hasOwn(this.fieldPresentation.placements, id) ? this.fieldPresentation.placements[id] : "default")));
+            if (name === "hidden") {
+                hidden++;
+                if (active && field.contains(active)) activeHidden = true;
+            }
+        }
+        for (const [name, group] of groups) group.hidden = name === "hidden" || !group.querySelector(".data-property");
+        const count = this.element.querySelector<HTMLElement>(".data-hidden-field-count");
+        if (count) setUiText(count, displayMessage("fieldPresentation.hiddenCount", { count: hidden }));
+        if (activeHidden) {
+            const settings = this.element.querySelector<HTMLDetailsElement>(".data-field-presentation-settings");
+            (settings?.open ? settings.querySelector<HTMLElement>("#property-presentation-hidden") : settings?.querySelector<HTMLElement>("summary"))?.focus({ preventScroll: true });
+        }
+        else if (active && this.element.contains(active)) {
+            active.focus({ preventScroll: true });
+            if (selection?.from != null && selection.to != null && (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement)) active.setSelectionRange(selection.from, selection.to);
+        }
     }
     private formInputs(wrapper: HTMLElement): [
         string,

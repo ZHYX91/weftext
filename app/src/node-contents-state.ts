@@ -36,19 +36,24 @@ export function contentsSection(entry: Pick<InventoryEntry, "kind" | "path">): C
     return entry.kind !== "blocked" && /\.(?:png|jpe?g|gif|webp|bmp|tiff?|avif|heic|heif|pdf)$/i.test(entry.path) ? "album" : "files";
 }
 const normalizeContentsPath = (path: string) => path.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
-const canonicalContentsPath = (directory: string) => `${directory}/${directory.split("/").at(-1)}.typ`;
 export function directContentsEntries(entries: readonly InventoryEntry[], folder: string): InventoryEntry[] {
     const selected = normalizeContentsPath(folder);
     // A known birth retains kind=node after an external move or identity
-    // conflict. Only the exact canonical coordinate represents this folder;
-    // those other visible entries must remain available for investigation.
+    // conflict. Only its admitted canonical source represents this folder;
+    // every other visible source stays available for investigation.
     const canonical = canonicalNodeSources(entries);
     return entries.filter(entry => normalizeContentsPath(entry.parentPath) === selected && normalizeContentsPath(entry.path) !== selected
-        && !(entry.kind === "node" && normalizeContentsPath(entry.path) === canonicalContentsPath(selected))).map(entry => {
+        && canonical.get(selected) !== entry).map(entry => {
         if (entry.kind !== "directory") return entry;
         const source = canonical.get(normalizeContentsPath(entry.path));
         return source?.title ? { ...entry, title: source.title } : entry;
     });
+}
+/** A node's display directory and exact admitted source have different jobs.
+ * Open/menu actions may use this captured source; browsing keeps the directory.
+ * An ordinary, missing or conflicting pair never gains a guessed note target. */
+export function contentsActionEntry(entry: InventoryEntry, canonicalSources: ReadonlyMap<string, InventoryEntry>): InventoryEntry {
+    return entry.kind === "directory" ? canonicalSources.get(normalizeContentsPath(entry.path)) ?? entry : entry;
 }
 /** Preferences belong to an exact library and browsing folder, including ordinary folders. */
 export function contentsPreferenceKey(root: string, workspaceId: string | undefined, folder: string): string {

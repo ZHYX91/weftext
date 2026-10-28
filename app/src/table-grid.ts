@@ -3,6 +3,7 @@ import { descriptionUiText } from "./ui-diagnostics";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { type WritingController, type WritingStructure, type WritingTable, type WritingTableCell, type WritingSnapshot, type TableAction } from "./writing";
 import { delimitedTable, flatClipboard, parseHTMLTable, writeDelimited, writeHTMLTable, type ClipboardTable } from "./table-clipboard";
+import { tableCaretAtPoint, verifiedTableCaretOffset } from "./table-cell-caret";
 import { ChangeSet } from "@codemirror/state";
 export interface TableGridOptions {
     onError?(error: Error): void;
@@ -18,6 +19,12 @@ interface Rectangle {
     left: number;
     bottom: number;
     right: number;
+}
+interface ClickCaret {
+    basis: WritingSnapshot;
+    body: WritingTableCell["body"];
+    text: string;
+    offset: number | null;
 }
 /** Personal selection only, keyed by a freshly verified native source hash. */
 const selections = new WeakMap<WritingController, Map<string, {
@@ -84,7 +91,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         from: number;
     } | null = null;
     let grid: HTMLTableElement, inputs = new Map<string, HTMLTextAreaElement>(), bindings: (() => void)[] = [];
-    let selectionVersion = 0, pointerEngaged = false, disposed = false, wholeCellNotice = false;
+    let selectionVersion = 0, pointerEngaged = false, disposed = false, wholeCellNotice = false, caretAtEndNotice = false;
     const selectionKey = () => `${controller.snapshot.sessionId}:${controller.map?.sourceHash}:${current.range.utf16From}:${current.range.utf16To}`;
     const remembered = selections.get(controller)?.get(selectionKey()), sourceSelection = controller.sourceSelection;
     const sourceCell = logicalTableCells(initial.table!).find(cell => cell.body.utf16From <= sourceSelection.from && cell.body.utf16To >= sourceSelection.to);
@@ -167,7 +174,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         const active = tableCellAt(table(), head);
         grid.setAttribute("aria-activedescendant", active ? `${grid.id}-${key(active)}` : "");
         rememberSelection();
-        setUiText(status, joinUiText([displayMessage("tableGrid.selectionStatus", { p0: table().rows, p1: table().columns, p2: range.top + 1, p3: range.bottom + 1, p4: range.left + 1, p5: range.right + 1, p6: uiDisplayParameter(editing ? uiMessage("tableGrid.cellEditingHelp") : uiMessage("tableGrid.gridNavigationHelp")), p7: uiDisplayParameter(available() ? uiMessage("tableGrid.appendRowHelp") : displayMessage("tableGrid.structureReadOnly", { p0: uiDisplayParameter(tableUnavailableReason(table())) })) }), editing && wholeCellNotice ? uiMessage("tableGrid.wholeCellSelectionNotice") : ""]));
+        setUiText(status, joinUiText([displayMessage("tableGrid.selectionStatus", { p0: table().rows, p1: table().columns, p2: range.top + 1, p3: range.bottom + 1, p4: range.left + 1, p5: range.right + 1, p6: uiDisplayParameter(editing ? uiMessage("tableGrid.cellEditingHelp") : uiMessage("tableGrid.gridNavigationHelp")), p7: uiDisplayParameter(available() ? uiMessage("tableGrid.appendRowHelp") : displayMessage("tableGrid.structureReadOnly", { p0: uiDisplayParameter(tableUnavailableReason(table())) })) }), editing && wholeCellNotice ? uiMessage("tableGrid.explicitWholeCellSelectionNotice") : editing && caretAtEndNotice ? uiMessage("tableGrid.caretAtEndNotice") : ""]));
     };
     const select = (position: Position, extend = false, focus = true) => {
         const cell = tableCellAt(table(), position);
@@ -179,6 +186,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         selectionVersion++;
         editing = false;
         wholeCellNotice = false;
+        caretAtEndNotice = false;
         controller.selectRange(cell.body);
         paintSelection();
         if (focus)
@@ -246,7 +254,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
             paintSelection();
         }
     };
-    const edit = async (position = head, selectWhole = false) => {
+    const edit = async (position = head, selectWhole = false, click?: ClickCaret) => {
         await settle();
         render();
         const cell = tableCellAt(table(), position);
@@ -262,10 +270,17 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         selectionVersion++;
         editing = true;
         wholeCellNotice = selectWhole;
+        const region = literal(cell);
+        const clickMatches = click && controller.isSnapshotCurrent(click.basis) && region
+            && cell.body.utf16From === click.body.utf16From && cell.body.utf16To === click.body.utf16To && cell.body.raw === click.body.raw
+            && region.text === click.text && input.value === click.text && click.offset !== null
+            && verifiedTableCaretOffset(region.range.raw, region.text, input.value, input.value.slice(0, click.offset)) === click.offset;
+        const caret = clickMatches ? click.offset! : input.value.length;
+        caretAtEndNotice = !!click && !clickMatches;
         input.hidden = false;
         input.parentElement!.classList.add("table-editing");
         input.focus({ preventScroll: true });
-        input.setSelectionRange(selectWhole ? 0 : input.value.length, input.value.length);
+        input.setSelectionRange(selectWhole ? 0 : caret, selectWhole ? input.value.length : caret);
         paintSelection();
     };
     const finishText = async () => { await settle(); editing = false; grid.focus({ preventScroll: true }); render(true); paintSelection(); };
@@ -417,13 +432,17 @@ export function createTableGrid(controller: WritingController, initial: WritingS
                     if (event.shiftKey) {
                         run(async () => { await finishText(); select(cell, true); });
                     }
-                    else
+                    else {
+                        // Capture before finishing another input can rebuild this
+                        // display. The exact native basis is checked again in edit.
+                        const click = region ? { basis: controller.snapshot, body: cell.body, text: region.text, offset: controller.isSnapshotCurrent(snapshot) ? tableCaretAtPoint(display, region, event) : null } : undefined;
                         run(async () => {
                             await finishText();
                             select(cell);
                             if (region?.range.writable)
-                                await edit(cell, true);
+                                await edit(cell, false, click);
                         });
+                    }
                 });
                 td.addEventListener("pointerdown", event => {
                     if (!(event.ctrlKey || event.metaKey) || controller.state.composing)
@@ -616,6 +635,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         await pastePreview(delimitedTable(text, "\t"));
     }
     const tool = (label: UiText, operation: () => Promise<void> | void) => { const button = node("button", "writing-button", label); button.type = "button"; button.onclick = () => run(operation); tools.append(button); return button; };
+    tool(uiMessage("tableGrid.selectCellText"), () => edit(head, true));
     tool(uiMessage("tableGrid.insertRowAbove"), () => command({ kind: "insertRow", index: selectedRange().top }));
     tool(uiMessage("tableGrid.insertRowBelow"), () => command({ kind: "insertRow", index: selectedRange().bottom + 1 }));
     tool(uiMessage("tableGrid.insertColumnLeft"), () => command({ kind: "insertColumn", index: selectedRange().left }));

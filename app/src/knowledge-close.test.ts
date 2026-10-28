@@ -32,6 +32,8 @@ function fixture() {
         .replace("assertCloseReady, freezeForClose, thawAfterClose,", "assertCloseReady, freezeForClose, thawAfterClose, testPerform: perform, testInspect: inspectPreparation, testInspectPending: inspectPending, testStrict: () => refresh(true), testPending: () => pendingPlan, testRetry: () => perform(pendingPreparation.title, pendingPreparation.intent, pendingPreparation), testDiscard: discardAuthorProposals,");
     const exports: Record<string, any> = {};
     class View { clear() {} render() {} closePreviews() {} assertCloseReady() {} freezeForClose() { return true; } thawAfterClose() {} }
+    const proofreads: Proofreading[] = [];
+    class Proofreading extends View { disposed = false; constructor() { super(); proofreads.push(this); } dispose() { this.disposed = true; } }
     const graphs: any[] = [];
     class Graph extends View { override render(...args: any[]) { graphs.push(args[1]); } }
     runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
@@ -41,7 +43,7 @@ function fixture() {
             : id === "./ui-locale" ? { ...locale, setUiText: (el: Element, value: locale.UiText) => { el.textContent = locale.uiTextValue(value); }, setUiAttr() {}, disposeUiTree() {} }
             : id === "./knowledge-state" ? state : id === "./original-operation" ? original
             : id === "./knowledge-read-queue" ? { KnowledgeReadQueue }
-            : id === "./proofreading-panel" ? { ProofreadingPanel: View }
+            : id === "./proofreading-panel" ? { ProofreadingPanel: Proofreading }
             : id === "./relationship-graph-view" ? { RelationshipGraphView: Graph }
             : id === "./relationship-diagnostics" ? { PersonalRelationRules: View } : {},
     });
@@ -64,7 +66,7 @@ function fixture() {
     const root = document.createElement("div");
     const panel = exports.mountKnowledgePanel(root, host);
     panel.selectTab("graph");
-    return { panel, root, document, host, requests, load, loads, graphs, notices, physical,
+    return { panel, root, document, host, requests, load, loads, graphs, notices, physical, proofreads,
         useContext() { context = { sessionId: "session", serial: 1, inputId: "input", inputRevision: 1, baseId: "base", path: "note", source: "text", root: "owned", workspaceId: "workspace", nodeId: "note", dirty: false }; },
         changeContext(change: any) { context = change === null ? null : { ...context, ...change }; }, mutateContext(change: any) { Object.assign(context, change); },
         resolveOriginal() { lookup = "resolved"; } };
@@ -325,6 +327,7 @@ for (const retirement of ["freeze", "stop", "empty"] as const) test(`a ${retirem
 test("disposed knowledge owners cannot install or start another read", async () => {
     const f = fixture(); f.useContext(); const first = f.panel.refresh();
     f.panel.dispose(); f.load.resolve(snapshot("old")); await first; await f.panel.refresh();
+    assert.equal(f.proofreads[0].disposed, true);
     assert.equal(f.loads.length, 1); assert.equal(f.root.childNodes.length, 0);
     assert.equal(f.graphs.some(value => value?.marker === "old"), false);
 });
