@@ -3,6 +3,7 @@
 These cases exercise the hosted boundary; ZIP inspection is not Word/WPS GUI
 acceptance. No user documents or desktop input are used.
 """
+import uuid
 import io
 import base64
 import json
@@ -142,7 +143,7 @@ class HostedCitationsOutputs(HostedOffice, HostedQuery):
         self.basis(doc, basis['source']+' newer', 8)
         self.basis(doc, basis['source'], 9)
         self.proposal(basis, status=409)
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': proposed['source']})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': proposed['source']})
         self.save(doc, proposed['source'])
         reopened = self.open()
         identity = self.call('navigation/ref', {'sessionId': reopened['sessionId']})['nodeRef']
@@ -239,7 +240,7 @@ class HostedCitationsOutputs(HostedOffice, HostedQuery):
         doc = self.open(); proposed = self.proposal(self.basis(doc))
         self.save(doc, proposed['source'])
         doc = self.open()
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': doc['source']+'\nPRIVATE_UNSAVED_NATIVE_DRAFT'})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': doc['source']+'\nPRIVATE_UNSAVED_NATIVE_DRAFT'})
         (self.root/'raw-private.txt').write_text('RAW_UNADMITTED_MUST_NOT_EXPORT', 'utf-8')
         req = self.request('native')
         self.prepare_output(req, status=404)

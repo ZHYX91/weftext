@@ -4,7 +4,7 @@ import { bibliographyConflictCount, ExchangeController, OutputController, Output
 import type { DocumentBasis } from "./data-panel";
 import { message } from "./ui-locale";
 
-const basis = (): DocumentBasis => ({ sessionId: "session-a", source: "原生草稿", serial: 7, baseId: "base-a", path: "D:/Library/Note/note.typ", root: "D:/Library" });
+const basis = (): DocumentBasis => ({ inputId: "test-input", sessionId: "session-a", source: "原生草稿", serial: 7, baseId: "base-a", path: "D:/Library/Note/note.typ", root: "D:/Library" });
 const hash = "a".repeat(64);
 const prepared = (request: ExportRequest, overrides: Partial<PreparedOutput> = {}): PreparedOutput => ({ id: "artifact-a", requestId: request.requestId, filename: "输出.docx", contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", length: 3, digest: hash, summary: message("common.save"), losses: [],preview:null,expiresInSeconds:3600, status: "prepared", ...overrides });
 const confirmed=(id="artifact-a")=>prepared({requestId:"request-a"} as ExportRequest,{id,status:"confirmed"});
@@ -100,7 +100,7 @@ test("a late template response cannot replace a newer file or format selection",
 const exchangePlan = (operationId="operation-a", losses: import("./office-wire").NativeLoss[] = []) => ({ operationId, planId:"plan-a", kind:"nativeImport", status:"prepared", changes:[], nodeMap:{}, newNodeId:null, revisions:{}, resourceMap:{}, losses });
 const exchangeReceipt = (operationId="operation-a", status="committed") => ({ operationId, planId:"plan-a", status, path:"D:/Library/Imported/note.typ", nodeIds:[] });
 const nativeLoss=()=>({path:"manifest",code:"native",...description(),productDiagnostics:[]});
-const importInput = () => ({ sessionId: "s", baseId: "b", root: "D:/Library", parent: "D:/Library", name: "导入副本", bytesBase64: "eA==", format: "native" as const });
+const importInput = () => ({ inputId: "test-input", sessionId: "s", baseId: "b", root: "D:/Library", parent: "D:/Library", name: "导入副本", bytesBase64: "eA==", format: "native" as const });
 test("unknown import preparation freezes its original and destination under one operation ID", async () => {
   const requests: ExchangeRequest[] = []; let calls = 0;
   const controller = new ExchangeController({ id: () => "operation-a", prepare: async request => { requests.push(structuredClone(request)); if (++calls === 1) { request.bytesBase64 = "mutated"; throw new Error("connection lost"); } return exchangePlan(request.operationId); }, commit: async () => exchangeReceipt() });

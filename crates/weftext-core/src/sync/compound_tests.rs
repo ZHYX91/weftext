@@ -237,6 +237,7 @@ fn saved_descendant_baseline_follows_original_compound_member_after_restart() {
     pair.b.persist_draft(&reopened.session_id, &source).unwrap();
     pair.b
         .flush_document_draft(crate::DocumentDraftFlush {
+            input_id: None,
             session_id: reopened.session_id.clone(),
             base_id: reopened.base_id.clone(),
             source_digest: crate::hash(source.as_bytes()),

@@ -14,7 +14,7 @@ function occurrence(label = "first"): EmbeddedQueryOccurrence {
   const from = source.indexOf("#metadata", label === "first" ? 0 : source.indexOf("外部字节")), to = source.indexOf(` <weftext-query-${label}>`, from) + ` <weftext-query-${label}>`.length;
   return { id: label, key: label, label: `weftext-query-${label}`, kind: "definition", callFrom: utf8Offset(source, from + 1), range: { from: utf8Offset(source, from), to: utf8Offset(source, to), utf16From: from, utf16To: to, raw: source.slice(from, to), writable: true }, writable: true, builderSupported: true, runnable: true, plan: null, binding: null, call: null, reason: null, controlKind: null, controlReason: null, controlDiagnostics: [] };
 }
-const basis: EmbeddedQueryBasis = { sessionId: "session", source, serial: 7 };
+const basis: EmbeddedQueryBasis = { inputId: "test-input", sessionId: "session", source, serial: 7 };
 test("embedded discovery preserves complete typed diagnostics and independent machine classifications", () => {
   const description = { explanation: message("common.unavailable"), diagnostics: [{ origin: "dependency", text: "original\u0000 العربية" }], causes: [] };
   const rawOccurrence = { ...occurrence(), writable: false, builderSupported: false, runnable: false, controlKind: "invalid", controlReason: description, controlDiagnostics: Array.from({ length: 96 }, (_, index) => ({ ...description, diagnostics: [{ origin: "json", text: `parallel-${index}` }] })) };
@@ -147,4 +147,9 @@ test("native close cannot retire an embedded arrangement waiting for its author 
   assert.equal(controller.freezeForClose(), true);
   await assert.rejects((controller as any).arrange({ occurrence: occurrence(), unique: true }, "remove"));
   controller.thawAfterClose(); controller.dispose();
+});
+
+test("same-byte source and serial cannot reuse a prior author generation",()=>{
+ const basis={sessionId:"writer",source:"S",serial:0,inputId:"before"};
+ assert.equal(sameQueryBasis({...basis,inputId:"after-ABA"},basis),false);assert.equal(sameQueryBasis({...basis},basis),true);
 });

@@ -5,6 +5,7 @@ libraries are created; originals, personal Drafts, settings and logs are retaine
 This script does not establish browser Undo, IME, Office or platform acceptance.
 The explicit suite includes only the new tests, never inherited harness suites.
 """
+import uuid
 from _cli_serve import launch_serve
 import argparse
 import copy
@@ -102,7 +103,7 @@ class LocalProcessing(local_harness.LocalFeatures):
         resource = manifest['resources'][0]
         self.assertEqual(settings['defaultStyle']['resource'],
                          f"weftext-resource://{receipt['workspaceId']}/{resource['resourceId']}")
-        plan_path = self.data_dir / 'journal' / (request['operationId'] + '.plan.json')
+        plan_path = self.data_dir / 'journal' / request['operationId'][:2] / (request['operationId'] + '.plan.json')
         frozen = json.loads(plan_path.read_text('utf-8'))
         self.assertEqual(frozen['kind'], 'createLibrary')
         self.assertEqual(frozen['transaction']['request']['intent']['options'], request['options'])
@@ -146,7 +147,7 @@ class LocalProcessing(local_harness.LocalFeatures):
                 ended = self.api('/api/library/create-cancel', request)
                 self.assertEqual(ended['operationId'], request['operationId'])
                 self.assertEqual(ended['status'], 'resolved')
-                journal = self.data_dir / 'journal'
+                journal = self.data_dir / 'journal' / request['operationId'][:2]
                 terminal_path = journal / (request['operationId'] + '.resolution.json')
                 terminal_bytes = terminal_path.read_bytes()
                 terminal = json.loads(terminal_bytes)
@@ -198,7 +199,7 @@ class LocalProcessing(local_harness.LocalFeatures):
         doc = self.note(root, '处理设置与草稿', '#set text(lang: "zh", region: "CN")\n原稿正文😀')
         original = Path(doc['path']).read_bytes()
         draft = doc['source'] + '\n独立的个人未保存草稿'
-        self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': draft})
+        self.api('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': draft})
         settings = root / '.weftext-settings.json'
         unknown = {'version': 1, 'customExtension': {'keep': ['未知', 7, {'nested': True}]},
                    'customLocale': 'zh-Hant-HK'}
@@ -381,7 +382,7 @@ class LocalProcessing(local_harness.LocalFeatures):
         doc = self.ordinary('= 原始标题\n\n原始正文😀\n')
         source = doc['source'] + '\n个人未保存输入'
         original = Path(doc['path']).read_bytes()
-        self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': source})
+        self.api('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': source})
         basis = {'sessionId': doc['sessionId'], 'source': source, 'serial': 17}
         mapping = self.api('/api/editor-map', basis)
         rendered = self.api('/api/render', basis)
@@ -453,7 +454,7 @@ class HostedProcessing(HostedLibrary):
         originals = {name: (self.root / name / (name + '.typ')).read_bytes() for name in self.docs}
         doc = self.open()
         draft = doc['source'] + '\n个人草稿不属于处理设置'
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': draft})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': draft})
         before = self.library_read('settings')
         changed = json.loads(before['source'])
         changed.update(processing=processing(), customExtension={'keep': ['未知', 7]})
@@ -487,7 +488,7 @@ class HostedProcessing(HostedLibrary):
         original = (self.root / 'Shared' / 'Shared.typ').read_bytes()
         source = doc['source'] + '\n原始可编辑范围😀'
         basis = {'sessionId': doc['sessionId'], 'source': source, 'serial': 27}
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': source})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': source})
         mapping = self.call('editor/map', basis)
         self.assertTrue(self.call('editor/render', basis)['ok'])
         proposal = source + '\n$ frac(1, 2) $\n只存在于提案'

@@ -22,6 +22,18 @@ impl Transport {
         })
     }
 
+    #[cfg(all(test, target_os = "linux"))]
+    pub(crate) fn controlled_test(
+        backend: &weftext_core::BackendContext,
+        policy: &std::path::Path,
+        timeout: std::time::Duration,
+    ) -> std::io::Result<Self> {
+        let mut authority = linux::Authority::connect(backend, policy)?;
+        authority.test_timeout = timeout;
+        Ok(Self {
+            client: Some(std::sync::Arc::new(authority)),
+        })
+    }
     pub(crate) async fn spawn(&self, notes_edit: bool) -> Result<Child, WorkerFailure> {
         #[cfg(target_os = "linux")]
         {

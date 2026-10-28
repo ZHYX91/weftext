@@ -152,11 +152,28 @@ test("a saved definition keeps its frozen original through ordinary errors and d
     return { operationId: id, status: "committed", documentError: { code: "committedResultUnavailable", explanation: message("queryDefinition.saveReceiptUnavailable"), diagnostics: [], causes: [] } };
   });
   let delivered = 0;
-  Object.assign(state.host, { getDocument: () => ({ root: "D:/notes", nodeId: "owner", sessionId: "original-session", source: "author draft", serial: 7, baseId: "original-base", path: "D:/notes/A.typ" }), savedDefinition: async () => { delivered++; throw new Error("document delivery unavailable"); } });
+  Object.assign(state.host, { getDocument: () => ({ root: "D:/notes", nodeId: "owner", sessionId: "original-session", source: "author draft", serial: 7, inputRevision: 3, baseId: "original-base", path: "D:/notes/A.typ" }), savedDefinition: async () => { delivered++; throw new Error("document delivery unavailable"); } });
   state.result = result("old-cut"); await internals.saveDefinition("Saved");
   assert.equal(delivered, 1); assert.ok(state.savedPending);
   const original = structuredClone((state.savedPending as { body: unknown }).body);
+  assert.equal((original as { inputRevision: number }).inputRevision, 3);
   await internals.saveDefinition("Changed display input");
   assert.equal(delivered, 2); assert.deepEqual((state.savedPending as { body: unknown }).body, original);
   assert.deepEqual(calls.map(call => call.path), ["/api/query/definition/save", "/api/operations/status", "/api/operations/status"]);
+});
+
+test("definition save cannot switch owners while its initiating draft is being settled", async () => {
+  const held = deferred(), entered = deferred(), requests: unknown[] = [];
+  const { state, internals } = panelHarness(async (route, body) => {
+    requests.push({ route, body });
+    return { operationId: (body as { operationId: string }).operationId, status: "committed" };
+  });
+  let basis = { root: "D:/notes", nodeId: "A", sessionId: "writer-A", source: "A", serial: 1, baseId: "base-A", path: "D:/notes/A.typ", inputRevision: 1 };
+  Object.assign(state.host, { getDocument: () => basis, savedDefinition: async () => {}, prepareAction: async () => { entered.resolve(); await held.promise; } });
+  const saving = internals.saveDefinition("A-query");
+  await entered.promise;
+  basis = { ...basis, nodeId: "B", sessionId: "writer-B", source: "B", baseId: "base-B", path: "D:/notes/B.typ" };
+  held.resolve(); await saving;
+  assert.deepEqual(requests, []);
+  assert.equal(state.savedPending, null);
 });

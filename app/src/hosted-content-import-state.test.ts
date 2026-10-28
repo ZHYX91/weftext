@@ -37,7 +37,7 @@ test("reload retains both original request and later file; malformed record or b
   assert.throws(() => decodeContentDraft(JSON.stringify({ ...later, bytes: 8 })), /解析/); assert.throws(() => contentBytes("YR=="), /不完整/);
 });
 test("staged target cache normalizes only clean buffers, preserving unresolved requests and divergent Draft bases", () => {
-  const clean = { source: "old", baseSource: "old", definitionReservations: ["reservation"] }; assert.deepEqual(hostedOpenedDraft("new", clean), { ...clean, source: "new", baseSource: "new" }); assert.equal(clean.source, "old");
+  const clean = { inputId:"view",viewInputId:"view",source: "old", baseSource: "old", definitionReservations: ["reservation"] }; assert.deepEqual(hostedOpenedDraft("new", clean), { ...clean, source: "new", baseSource: "new" }); assert.equal(clean.source, "old");
   const dirty = { source: "personal", baseSource: "old" }; assert.deepEqual(hostedOpenedDraft("new", dirty), dirty);
-  const unknown = { ...clean, pending: { resource: "Shared", operationId: "original", source: "proposal", request: { sessionId: "old-session", baseId: "old-base", operationId: "original", source: "proposal" } } }; assert.deepEqual(hostedOpenedDraft("new", unknown), unknown);
+  const unknown = { ...clean, pending: { resource: "Shared", operationId: "original", source: "proposal", request: { inputRevision: 1, sessionId: "old-session", baseId: "old-base", operationId: "original", source: "proposal" } } }; assert.deepEqual(hostedOpenedDraft("new", unknown), unknown);
 });

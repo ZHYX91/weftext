@@ -1,12 +1,29 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bindHostedDraftReference, applySaveResult, draftDisposition, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, type HostedDraft } from "./hosted-state";
+import { bindHostedDraftReference, applySaveResult, draftDisposition, freezeHostedSave, mergeDefinitionReservations, hostedCachePrefix, sameHostedQueryAudience, sameHostedQueryIdentity, qualifyHostedDraft, hostedDocumentDraft, type HostedDraft } from "./hosted-state";
 test("offline source compares its original base and preserves newer input after a receipt", () => {
-  assert.equal(draftDisposition("base", {source:"offline",baseSource:"base"}), "restore");
+  assert.equal(draftDisposition("base", {source:"offline",baseSource:"base"}), "compare");
+  assert.equal(draftDisposition("base", {source:"offline",baseSource:"base",basis:{sessionId:"original",baseId:"original-base"}}), "restore");
   assert.equal(draftDisposition("someone else", {source:"offline",baseSource:"base"}), "compare");
-  assert.equal(draftDisposition("someone else", {source:"old saved",baseSource:"old saved"}), "current");
+  assert.equal(draftDisposition("someone else", {source:"old saved",baseSource:"old saved"}), "compare");
   assert.equal(draftDisposition("sent", {source:"new typing",baseSource:"old",pending:{resource:"Shared",operationId:"one",source:"sent"}}), "unknown");
-  assert.deepEqual(applySaveResult({source:"new typing",baseSource:"old"}, "sent"), {source:"new typing",baseSource:"sent"});
+  assert.deepEqual(applySaveResult({source:"new typing",baseSource:"old"}, "sent", null), {source:"new typing",baseSource:"sent"});
+});
+
+test("only an exact live Save receipt advances the retained author basis", () => {
+  const originalBasis = { sessionId: "original-writer", baseId: "original-base" };
+  const draft: HostedDraft = { source: "late Y", baseSource: "B", inputId: "late-input", basis: originalBasis,
+    pending: { resource: "Shared", operationId: "save-X", source: "submitted X" } };
+  const confirmedBasis = { sessionId: "original-writer", baseId: "committed-X-base" };
+  const saved = applySaveResult(draft, "submitted X", confirmedBasis);
+  assert.deepEqual(saved, { source: "late Y", baseSource: "submitted X", inputId: "late-input", basis: confirmedBasis });
+  assert.notEqual(saved.basis, confirmedBasis, "mutable receipt objects must not become the draft's basis");
+  assert.deepEqual(draft.basis, originalBasis); assert.ok(draft.pending);
+  const recovered = applySaveResult(draft, "submitted X", null);
+  assert.deepEqual(recovered.basis, originalBasis);
+  const alias = qualifyHostedDraft({ sessionId: "alias-writer", baseId: "unrelated-new-base", source: "submitted X" }, recovered);
+  assert.equal(alias.basis, undefined); assert.equal(alias.source, "late Y"); assert.equal(alias.baseSource, "submitted X");
+  assert.equal(applySaveResult({ ...draft, basis: undefined }, "submitted X", null).basis, undefined);
 });
 test("a qualified stable Node binds an unbound personal Draft without changing its original basis or operation, while a different Node never borrows the old Draft", () => {
   const original: HostedDraft = { source: "later actor input", baseSource: "original saved", pending: { resource: "Shared", operationId: "original-save", source: "sent" }, definitionReservations: ["reserved-key"] };
@@ -23,13 +40,13 @@ test("an asynchronous query denial may affect only its original actor, epoch, do
 });
 test("original save freezes reservation IDs while later typing and Undo retain the owner reservations", () => {
   const draft: HostedDraft = { source: "proposal", baseSource: "base", definitionReservations: ["first"] };
-  const request = freezeHostedSave(draft, "session", "base-id", "save-one");
+  const request = freezeHostedSave(draft, "session", "base-id", "save-one", 1);
   draft.pending = { resource: "Shared", operationId: request.operationId, source: request.source, request };
   draft.source = "new typing"; draft.definitionReservations!.push("later");
-  assert.deepEqual(request, { sessionId: "session", baseId: "base-id", operationId: "save-one", source: "proposal", definitionReservations: ["first"] });
-  assert.deepEqual(applySaveResult(draft, "proposal"), { source: "new typing", baseSource: "proposal", definitionReservations: ["first", "later"] });
-  const undo: HostedDraft = { ...applySaveResult(draft, "proposal"), source: "base" };
-  assert.deepEqual(freezeHostedSave(undo, "new-session", "new-base", "save-two").definitionReservations, ["first", "later"]);
+  assert.deepEqual(request, { sessionId: "session", baseId: "base-id", operationId: "save-one", inputRevision: 1, source: "proposal", definitionReservations: ["first"] });
+  assert.deepEqual(applySaveResult(draft, "proposal", null), { source: "new typing", baseSource: "proposal", definitionReservations: ["first", "later"] });
+  const undo: HostedDraft = { ...applySaveResult(draft, "proposal", null), source: "base" };
+  assert.deepEqual(freezeHostedSave(undo, "new-session", "new-base", "save-two", 1).definitionReservations, ["first", "later"]);
 });
 test("a pending-only directory cannot accumulate unbound IDs or prove admission; exact statuses clean the next Save", () => {
   const directory = Array.from({ length: 128 }, (_, index) => ({ operationId: `server-pending-${index}`, status: "reserved" }));
@@ -37,11 +54,11 @@ test("a pending-only directory cannot accumulate unbound IDs or prove admission;
   assert.deepEqual(mergeDefinitionReservations(["applied", "unknown"], []), ["applied", "unknown"]);
   assert.deepEqual(mergeDefinitionReservations(["applied", "unknown"], [{ operationId: "unknown", status: "notRegistered" }]), ["applied", "unknown"]);
   const draft: HostedDraft = { source: "saved carrier", baseSource: "base", definitionReservations: ["applied", "cancelled", "unknown"] };
-  const original = freezeHostedSave(draft, "session", "base", "save-first");
+  const original = freezeHostedSave(draft, "session", "base", "save-first", 1);
   draft.definitionReservations = mergeDefinitionReservations(draft.definitionReservations!, [{ operationId: "applied", status: "admitted" }, { operationId: "cancelled", status: "cancelled" }]);
-  assert.deepEqual(freezeHostedSave(draft, "session", "new-base", "save-next").definitionReservations, ["unknown"]);
+  assert.deepEqual(freezeHostedSave(draft, "session", "new-base", "save-next", 1).definitionReservations, ["unknown"]);
   assert.deepEqual(original.definitionReservations, ["applied", "cancelled", "unknown"]);
-  assert.throws(() => freezeHostedSave({ ...draft, definitionReservations: directory.slice(0, 33).map(item => item.operationId) }, "session", "base", "blocked"), /32/);
+  assert.throws(() => freezeHostedSave({ ...draft, definitionReservations: directory.slice(0, 33).map(item => item.operationId) }, "session", "base", "blocked", 1), /32/);
 });
 test("a new server actor epoch cannot look up old source, preview, input or original-plan cache", () => {
   for (const kind of ["draft", "field", "review", "office", "query", "history", "library"] as const) {
@@ -52,4 +69,13 @@ test("a new server actor epoch cannot look up old source, preview, input or orig
     assert.notEqual(hostedCachePrefix(kind, "a:b", "c", 1), hostedCachePrefix(kind, "a", "b:c", 1));
   }
   for (const generation of [NaN, -1, 0.5, Number.MAX_SAFE_INTEGER + 1]) assert.throws(() => hostedCachePrefix("office", "deployment", "actor", generation));
+});
+
+test("only the installed view identity qualifies a fresh projection; same-byte author caches keep an unknown basis",()=>{
+ const opened={sessionId:"fresh",baseId:"fresh-base",source:"B",viewInputId:"core-view"};
+ const view=hostedDocumentDraft(opened);assert.equal(view.inputId,"core-view");assert.equal(draftDisposition("B",view),"current");
+ const original={source:"Y",baseSource:"B",inputId:"actual-author",basis:{sessionId:"old",baseId:"old-base"}};
+ const restored=qualifyHostedDraft(opened,original);assert.equal(restored.basis,undefined);assert.equal(restored.inputId,"actual-author");assert.equal(restored.source,"Y");assert.equal(draftDisposition("B",restored),"compare");
+ const aba=qualifyHostedDraft(opened,{...original,source:"B",viewInputId:"old-view"});assert.equal(draftDisposition("B",aba),"compare");
+ const prior=hostedDocumentDraft({...opened,sessionId:"old",viewInputId:"old-view"});assert.deepEqual(qualifyHostedDraft(opened,prior),view);
 });

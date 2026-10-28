@@ -3,6 +3,7 @@
 These cases use owned fixtures and the real Core journal/HTTP boundary. Local
 routes only provision the initial library/schema while its server is stopped.
 """
+import uuid
 from _creation_result import created_document
 import json
 import sys
@@ -45,7 +46,7 @@ class HostedDefinition(HostedQuery):
         self.provision()
         doc = self.open()
         personal = doc['source'] + '\nPERSONAL_DRAFT_BEFORE_QUERY😀'
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': personal})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': personal})
         prepared, request = self.proposal(doc, source=personal)
         self.assertEqual(prepared['status'], 'reserved')
         self.assertTrue(prepared['draftOnly'])

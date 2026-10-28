@@ -212,8 +212,7 @@ impl Core {
                 preview,
             }),
         };
-        journal::private_create(
-            &self.backend,
+        self.create_private_record(
             &self.actor_record(operation)?,
             &self.actor_operation_bytes(&record)?,
         )?;
@@ -293,7 +292,7 @@ impl Core {
             record.cancelled = true;
             private_replace(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
         } else {
-            journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
+            self.create_private_record(&path, &self.actor_operation_bytes(&record)?)?;
         }
         self.actor_owner_backup_status(resource, operation)?
             .ok_or_else(feature::conflict)

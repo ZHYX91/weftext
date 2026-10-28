@@ -81,6 +81,7 @@ pub struct HistoryRestoreRequest {
     pub operation_id: String,
     pub draft_action: String,
     pub draft_source: Option<String>,
+    pub input_revision: Option<u64>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1278,6 +1279,27 @@ impl Core {
         explicit_owner: Option<(&Path, &Path)>,
     ) -> Result<HistoryRestoreResult> {
         let context = self.history_context(&request.session_id)?;
+        let invalid_cut = || {
+            CoreError::new("draftChanged", UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again())
+        };
+        let input_revision = if let Some(revision) = request.input_revision {
+            let author = request.draft_source.clone().ok_or_else(invalid_cut)?;
+            if revision == 0
+                || revision > 9_007_199_254_740_991
+                || !context
+                    .session
+                    .draft_cuts
+                    .get(&revision)
+                    .is_some_and(|cut| cut.source_digest == hash(author.as_bytes()))
+            {
+                return Err(invalid_cut());
+            }
+            Some((revision, author))
+        } else if context.session.draft_input_revision.is_some() {
+            return Err(invalid_cut());
+        } else {
+            None
+        };
         if context.in_trash {
             return Err(CoreError::new(
                 "readOnlyLifecycle",
@@ -1322,14 +1344,14 @@ impl Core {
                         identity: context.birth.identity.clone(),
                         alternatives: Vec::new(),
                         producer_id: None,
+                        input_id: None,
                         role: DraftRole::Proposal,
                     });
                 }
             }
             for draft in to_protect {
                 let name = fresh();
-                journal::private_create(
-                    &self.backend,
+                self.create_private_record(
                     &self
                         .draft_directory("draft-history")
                         .join(format!("{name}.json")),
@@ -1347,7 +1369,7 @@ impl Core {
             workspace_id: context.birth.workspace_id,
             identity: context.birth.identity,
         };
-        let outcome = self.save_with_restore(
+        let outcome = self.save_with_restore_revision(
             SaveRequest {
                 session_id: request.session_id,
                 base_id: request.base_id,
@@ -1355,6 +1377,7 @@ impl Core {
                 operation_id: operation_id.clone(),
             },
             Some(binding),
+            input_revision,
         )?;
         let mut result = if let Some((root, path)) = explicit_owner {
             self.restore_result_at(&self.operations[&operation_id], root, path)?

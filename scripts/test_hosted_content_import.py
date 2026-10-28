@@ -3,6 +3,7 @@
 Local APIs only provision the owned destination and its admitted Schema/root.
 All import effects, original-request recovery and result reads use hosted HTTP.
 """
+import uuid
 import base64
 import copy
 import hashlib
@@ -302,7 +303,7 @@ class HostedContentImport(HostedHistory):
         self.grant_import(members=rights, resources={'read': True, 'download': True})
         payload, manifest = native_upload(self.schema_source)
         before = self.open()
-        self.call('draft', {'sessionId': before['sessionId'], 'source': before['source'] + '\nKEEP PERSONAL DRAFT'})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': before['baseId'], 'inputRevision': 1, 'sessionId': before['sessionId'], 'source': before['source'] + '\nKEEP PERSONAL DRAFT'})
         policy = self.call('admin/policy', actor='admin')
         result = self.execute(self.request(payload=payload))
         self.assertEqual(self.call('admin/policy', actor='admin'), policy)

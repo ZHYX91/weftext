@@ -204,13 +204,17 @@ async fn edit(
                 UiMessage::error_api_hosted_editor_preview_busy(),
             )
         })?;
-        let output =
-            super::super::notes_edit_from_worker_with(input, command, &state.workers).await?;
+        // Worker errors may include private typed diagnostics. Qualify at
+        // delivery time before publishing success OR a worker failure.
+        let output = worker_failure::observe_hosted_result(
+            worker_failure::HostedContext::NativeNotes,
+            super::super::notes_edit_from_worker_with(input, command, &state.workers).await,
+        );
         return locked(&state, move |inner| {
-            let (actor, session, _) = qualify(inner, &auth, &basis, false, true)?;
-            validate_inputs(inner, &actor, &session.resource, &dependencies)?;
-            environment.recheck(inner, &actor)?;
-            Ok(Json(output.edit))
+            Ok(Json(
+                deliver_native_notes(inner, &auth, &basis, &dependencies, &environment, output)?
+                    .edit,
+            ))
         })
         .await;
     }
@@ -402,6 +406,22 @@ pub(super) fn validate_inputs(
     }
     Ok(())
 }
+// One Notes-specific terminal handoff. Old frozen worker outputs and typed
+// worker failures cannot leave this endpoint before permission revalidation.
+fn deliver_native_notes<T>(
+    inner: &mut HostedInner,
+    auth: &Auth,
+    basis: &Snapshot,
+    dependencies: &BTreeMap<String, String>,
+    environment: &library::Environment,
+    work: Result<T, ApiError>,
+) -> Result<T, ApiError> {
+    let (actor, session, _) = qualify(inner, auth, basis, false, true)?;
+    validate_inputs(inner, &actor, &session.resource, dependencies)?;
+    environment.recheck(inner, &actor)?;
+    work
+}
+
 fn preview_worker_failure(original: ApiError) -> ApiError {
     ApiError::new(
         StatusCode::UNPROCESSABLE_ENTITY,
@@ -431,6 +451,70 @@ pub(super) async fn compile_frozen(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn native_notes_worker_success_and_failure_cannot_bypass_revocation() {
+        // Freeze through the real hosted owner/session/environment path, then
+        // change the actual policy while the worker result is outstanding.
+        for failure in [false, true] {
+            let (_temp, state, auth, document, _, _) = history_api::test_fixture();
+            let mut inner = state.inner.lock().unwrap();
+            let basis = Snapshot {
+                session_id: document["sessionId"].as_str().unwrap().into(),
+                source: document["source"].as_str().unwrap().into(),
+                serial: 1,
+                source_hash: None,
+            };
+            let (actor, session, _) = qualify(&mut inner, &auth, &basis, false, true).unwrap();
+            let (_, dependencies, environment) =
+                freeze(&mut inner, &actor, &session.resource, &basis.source).unwrap();
+            let result = || {
+                if failure {
+                    Err(crate::worker_failure::diagnostics_tests::original_failure(
+                        crate::worker_failure::Kind::OutputRejected,
+                    ))
+                } else {
+                    Ok(json!({"protected": "worker source"}))
+                }
+            };
+            // Both terminal paths are deliverable while the captured authority
+            // remains current; neither can cross a later write revocation.
+            assert_eq!(
+                deliver_native_notes(
+                    &mut inner,
+                    &auth,
+                    &basis,
+                    &dependencies,
+                    &environment,
+                    result()
+                )
+                .is_err(),
+                failure
+            );
+            inner
+                .policy
+                .users
+                .get_mut("alice")
+                .unwrap()
+                .grants
+                .get_mut("Shared")
+                .unwrap()
+                .write = false;
+            let error = deliver_native_notes(
+                &mut inner,
+                &auth,
+                &basis,
+                &dependencies,
+                &environment,
+                result(),
+            )
+            .unwrap_err();
+            assert_eq!(error.code, "unavailable");
+            assert_eq!(error.status, StatusCode::NOT_FOUND);
+            assert!(error.private_worker_failure.is_none());
+        }
+    }
 
     #[tokio::test]
     async fn authorized_preview_preserves_only_the_original_private_worker_facts() {

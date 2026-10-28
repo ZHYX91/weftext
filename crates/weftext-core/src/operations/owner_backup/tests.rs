@@ -100,10 +100,12 @@ fn owner_backup_reused_root_locator_excludes_original_foreign_workspace_and_all_
             .unwrap();
         let private = f.temp.path().join("only-B/private");
         let journal = private.join("journal");
-        for name in fs::read_dir(&journal)
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
-        {
+        for name in fs::read_dir(&journal).unwrap().flat_map(|bucket| {
+            fs::read_dir(bucket.unwrap().path())
+                .unwrap()
+                .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+        }) {
             assert!(
                 !a_plans
                     .iter()
@@ -206,6 +208,7 @@ fn owner_backup_file_save_scope_requires_original_root_witness_not_current_path_
         f.temp
             .path()
             .join("original-scope-verified/private/journal")
+            .join(&id[..2])
             .join(format!("{id}.plan.json"))
             .is_file()
     );
@@ -250,6 +253,7 @@ fn owner_backup_preserves_current_ordinary_family_and_excludes_original_a_after_
                         core.actor_save(
                             "ordinary",
                             HostedSaveRequest {
+                                input_revision: None,
                                 session_id: opened.session_id,
                                 base_id: opened.base_id,
                                 source: "A PRIVATE hosted ordinary".into(),
@@ -305,6 +309,7 @@ fn owner_backup_preserves_current_ordinary_family_and_excludes_original_a_after_
                 f.temp
                     .path()
                     .join("A-complete/private/journal")
+                    .join(&id[..2])
                     .join(format!("{id}.plan.json"))
                     .is_file()
             );
@@ -362,6 +367,7 @@ fn owner_backup_preserves_current_ordinary_family_and_excludes_original_a_after_
             assert!(
                 !b_private
                     .join("journal")
+                    .join(&id[..2])
                     .join(format!("{id}.plan.json"))
                     .exists()
             );
@@ -369,6 +375,7 @@ fn owner_backup_preserves_current_ordinary_family_and_excludes_original_a_after_
         assert!(
             b_private
                 .join("journal")
+                .join(&b_id[..2])
                 .join(format!("{b_id}.plan.json"))
                 .is_file()
         );
@@ -493,6 +500,7 @@ impl Fixture {
                 c.actor_save(
                     "note",
                     HostedSaveRequest {
+                        input_revision: None,
                         session_id: doc.session_id.clone(),
                         base_id: doc.base_id,
                         source: format!("{original}\n{marker}"),
@@ -625,6 +633,7 @@ fn owner_backup_keeps_scoped_actor_drafts_history_unknown_fences_and_pending_sou
         fs::read(
             target
                 .join("private/journal")
+                .join(&pending[..2])
                 .join(format!("{pending}.plan.json"))
         )
         .unwrap(),
@@ -794,6 +803,7 @@ fn owner_backup_pending_actor_source_and_field_freeze_input_owner_before_core_pl
             .with_actor_for_root("nested", &nested, |core| {
                 let doc = core.open(&path, None)?;
                 let request = HostedSaveRequest {
+                    input_revision: None,
                     session_id: doc.session_id,
                     base_id: fresh(),
                     source: "A PRIVATE rejected but retained proposal".into(),
@@ -930,6 +940,7 @@ fn original_qualified_scope_rejects_damaged_stable_locator_before_foreign_routin
                 core.actor_save(
                     "Note",
                     HostedSaveRequest {
+                        input_revision: None,
                         session_id: doc.session_id,
                         base_id: fresh(),
                         source: "retained original author proposal".into(),
@@ -1086,6 +1097,7 @@ fn owner_backup_excludes_device_fence_but_retains_its_exact_routing_dependency()
         !f.temp
             .path()
             .join("with-fence/private/journal")
+            .join(&id[..2])
             .join(format!("{id}.resolution.json"))
             .exists()
     );
@@ -1112,6 +1124,7 @@ fn owner_backup_excludes_device_fence_but_retains_its_exact_routing_dependency()
 fn owner_backup_never_ignores_orphan_or_malformed_selected_resolution() {
     let mut f = Fixture::new();
     let id = fresh();
+    fs::create_dir_all(f.core.journal_path(&id, "commit").parent().unwrap()).unwrap();
     fs::write(
         f.core.journal_path(&id, "commit"),
         b"unknown retained commit",
@@ -1208,10 +1221,16 @@ fn owner_backup_routes_typed_preplan_reservation_and_its_decision_to_only_its_or
         .join("scoped-cancelled-reservation/private/journal");
     assert!(
         journal
+            .join(&id[..2])
             .join(format!("{id}.definition-reservation.json"))
             .exists()
     );
-    assert!(journal.join(format!("{id}.resolution.json")).exists());
+    assert!(
+        journal
+            .join(&id[..2])
+            .join(format!("{id}.resolution.json"))
+            .exists()
+    );
     let p = f
         .core
         .prepare_operation(OperationRequest {
@@ -1229,7 +1248,52 @@ fn owner_backup_routes_typed_preplan_reservation_and_its_decision_to_only_its_or
         !f.temp
             .path()
             .join("other-library/private/journal")
+            .join(&id[..2])
             .join(format!("{id}.definition-reservation.json"))
             .exists()
     );
+}
+
+#[test]
+fn own_new_journal_bucket_does_not_change_the_frozen_backup_input() {
+    let mut f = Fixture::new();
+    let journal = f.data.join("journal");
+    let bucket = (0..256)
+        .map(|n| format!("{n:02x}"))
+        .find(|b| !journal.join(b).exists())
+        .unwrap();
+    let id = format!("{bucket}{}", &fresh()[2..]);
+    let destination = f.temp.path().join("new-bucket-backup");
+    let prepared = f
+        .core
+        .prepare_operation(OperationRequest {
+            operation_id: id.clone(),
+            root: display(&f.root),
+            intent: OperationIntent::BackupLibrary {
+                destination: display(&destination),
+            },
+        })
+        .unwrap();
+    assert!(journal.join(bucket).is_dir());
+    f.core.execute_operation(&id, &prepared.plan_id).unwrap();
+    assert!(destination.join("library/A/A.typ").is_file());
+}
+
+#[test]
+fn complete_backup_reserves_materializations_without_charging_existing_inputs_twice() {
+    let mut f = Fixture::new();
+    for n in 0..1300 {
+        fs::write(f.root.join(format!("owned-raw-{n}.bin")), b"retained raw").unwrap();
+    }
+    let prepared = f.prepare("many-existing-inputs");
+    f.core
+        .execute_operation(&prepared.operation_id, &prepared.plan_id)
+        .unwrap();
+    let target = f.temp.path().join("many-existing-inputs/library");
+    for n in [0, 1299] {
+        assert_eq!(
+            fs::read(target.join(format!("owned-raw-{n}.bin"))).unwrap(),
+            b"retained raw"
+        );
+    }
 }

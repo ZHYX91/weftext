@@ -39,10 +39,7 @@ fn observation_record_cut_preserves_fact_order_and_required_read_failures() {
         Some(accepted.revision.as_str())
     );
     let primary = core.journal_path(&operation_id, "observations");
-    let recovery = core.data_dir.join("journal").join(format!(
-        "{operation_id}.recovery-observations-{}.json",
-        fresh()
-    ));
+    let recovery = core.journal_path(&operation_id, &format!("recovery-observations-{}", fresh()));
     let mut recovered = accepted.clone();
     recovered.revision = fresh();
     fs::write(
@@ -84,7 +81,11 @@ fn observation_record_cut_rejects_new_relevant_names_without_replacing_the_cut()
     let cut = core.observation_record_paths().unwrap();
     let plans = core.committed_plans().unwrap();
     core.check_observation_record_paths(&cut, &plans).unwrap();
-    let journal = core.data_dir.join("journal");
+    let journal = core
+        .journal_path(&operation_id, "plan")
+        .parent()
+        .unwrap()
+        .to_path_buf();
     fs::write(
         journal.join(format!("{operation_id}.unrelated.json")),
         b"{}",

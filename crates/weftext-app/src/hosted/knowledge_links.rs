@@ -327,6 +327,19 @@ impl Captured {
         json!({"actor":self.actor,"actorEpoch":self.epoch,"deployment":self.deployment,"resource":self.resource,"sessionId":self.request.session_id,"sourceHash":self.request.source_hash,"serial":self.request.serial,"snapshot":self.inventory.generation})
     }
     fn add_compile(&mut self, inner: &mut HostedInner, index: usize) {
+        let mut input_sets = BTreeMap::new();
+        let mut cache_charge = 0;
+        self.add_compile_with_inputs(inner, index, &mut input_sets, &mut cache_charge);
+        drop(input_sets);
+        self.bytes -= cache_charge;
+    }
+    fn add_compile_with_inputs(
+        &mut self,
+        inner: &mut HostedInner,
+        index: usize,
+        input_sets: &mut BTreeMap<Vec<String>, inputs::Captured>,
+        cache_charge: &mut usize,
+    ) {
         if self.compilations.iter().any(|c| c.index == index)
             || self.compilations.len() >= MAX_COMPILES
         {
@@ -334,12 +347,41 @@ impl Captured {
         }
         let resource = &self.candidates[index].resource;
         let source = &self.inventory.nodes[index].source;
-        if let Ok((worker, dependencies, environment)) =
-            editor::freeze(inner, &self.actor, resource, source)
-        {
+        // Every source still qualifies its own actual rights and selection.
+        // Only identical input proof is shared within this synchronous capture;
+        // all pre-worker and post-await checks remain.
+        if inner.rights(&self.actor, resource).is_err() {
+            return;
+        }
+        let Ok(file) = inner.file(resource) else {
+            return;
+        };
+        let selection = file.inputs;
+        let captured_inputs = if let Some(captured) = input_sets.get(&selection) {
+            captured.clone()
+        } else {
+            let Ok(captured) = inputs::capture(inner, &self.actor, &selection) else {
+                return;
+            };
+            captured
+        };
+        if let Ok((worker, dependencies, environment)) = editor::freeze_with_inputs(
+            inner,
+            &self.actor,
+            resource,
+            source,
+            captured_inputs.clone(),
+        ) {
             let cost = serde_json::to_vec(&worker)
                 .map_or(MAX_BYTES, |b| b.len())
                 .saturating_add(environment.retained_bytes());
+            // Optional reuse must never displace a compilation which fits the
+            // original budget. Discard/refund the cache before that decision.
+            if self.bytes.saturating_add(cost) > MAX_BYTES && *cache_charge > 0 {
+                input_sets.clear();
+                self.bytes -= *cache_charge;
+                *cache_charge = 0;
+            }
             if self.bytes.saturating_add(cost) <= MAX_BYTES {
                 self.bytes += cost;
                 self.compilations.push(Compilation {
@@ -349,6 +391,25 @@ impl Captured {
                     environment,
                     output: None,
                 });
+                // The accepted environment already owns this exact Arc-backed
+                // payload. Conservatively charge the whole extra proof and key
+                // anyway, but retain it only when spare budget permits.
+                if let std::collections::btree_map::Entry::Vacant(entry) =
+                    input_sets.entry(selection)
+                {
+                    let selection = entry.key();
+                    let charge = captured_inputs
+                        .retained_bytes()
+                        .saturating_add(std::mem::size_of_val(&captured_inputs))
+                        .saturating_add(std::mem::size_of_val(selection))
+                        .saturating_add(selection.len() * std::mem::size_of::<String>())
+                        .saturating_add(selection.iter().map(String::len).sum::<usize>());
+                    if self.bytes.saturating_add(charge) <= MAX_BYTES {
+                        self.bytes += charge;
+                        *cache_charge += charge;
+                        entry.insert(captured_inputs);
+                    }
+                }
             }
         }
     }
@@ -722,13 +783,17 @@ fn capture(
     // Preparing the same bounded compile set in read and proposal captures
     // keeps the displayed generation tied to actual style/input bytes. A new
     // dependency cannot silently reinterpret an old displayed conversion.
-    captured.add_compile(inner, 0);
+    let mut input_sets = BTreeMap::new();
+    let mut cache_charge = 0;
+    captured.add_compile_with_inputs(inner, 0, &mut input_sets, &mut cache_charge);
     let relevant = relevant_labels(&captured);
     for index in 1..captured.inventory.nodes.len() {
         if index < MAX_COMPILES || relevant.contains(&captured.inventory.nodes[index].owner) {
-            captured.add_compile(inner, index);
+            captured.add_compile_with_inputs(inner, index, &mut input_sets, &mut cache_charge);
         }
     }
+    drop(input_sets);
+    captured.bytes -= cache_charge;
     let environment_keys = captured.compilations.iter().map(|c| {
         Ok(json!({"resource":captured.candidates[c.index].resource,"worker":digest(&serde_json::to_vec(&c.worker).map_err(|_|changed())?)}))
     }).collect::<Result<Vec<_>, ApiError>>()?;
@@ -1209,6 +1274,65 @@ async fn proposal(
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn optional_input_reuse_cannot_displace_a_fitting_compile_or_spend_final_budget() {
+        let (_temp, state, auth, doc, _, _) = history_api::test_fixture();
+        let mut inner = state.inner.lock().unwrap();
+        let mut captured = capture(
+            &mut inner,
+            &auth,
+            request(&doc, doc["source"].as_str().unwrap(), 1),
+            true,
+            false,
+            false,
+        )
+        .unwrap();
+        let (worker, _, environment) = editor::freeze(
+            &mut inner,
+            &captured.actor,
+            &captured.candidates[0].resource,
+            &captured.inventory.nodes[0].source,
+        )
+        .unwrap();
+        let cost = serde_json::to_vec(&worker).unwrap().len() + environment.retained_bytes();
+        drop(environment);
+        assert!(cost < MAX_BYTES);
+
+        // The actual unchanged compilation fits exactly. Optional proof reuse
+        // has no remaining allowance and cannot reduce the compiled coverage.
+        captured.compilations.clear();
+        captured.bytes = MAX_BYTES - cost;
+        captured.add_compile(&mut inner, 0);
+        assert_eq!(captured.compilations.len(), 1);
+        assert_eq!(captured.bytes, MAX_BYTES);
+
+        // An earlier accepted compilation can retain optional proof. Once that
+        // temporary charge would displace a real compile, it must be refunded.
+        captured.compilations.clear();
+        captured.bytes = 0;
+        let mut input_sets = BTreeMap::new();
+        let mut cache_charge = 0;
+        captured.add_compile_with_inputs(&mut inner, 0, &mut input_sets, &mut cache_charge);
+        assert_eq!(captured.compilations.len(), 1);
+        assert!(!input_sets.is_empty() && cache_charge > 0);
+        assert!(cache_charge < cost);
+        captured.compilations.clear();
+        captured.bytes = MAX_BYTES - cost + cache_charge;
+        captured.add_compile_with_inputs(&mut inner, 0, &mut input_sets, &mut cache_charge);
+        assert_eq!(captured.compilations.len(), 1);
+        assert!(input_sets.is_empty());
+        assert_eq!(cache_charge, 0);
+        assert_eq!(captured.bytes, MAX_BYTES);
+
+        // The public single-addition path drops its local optional proof and
+        // leaves exactly the accepted worker/environment charge behind.
+        captured.compilations.clear();
+        captured.bytes = 0;
+        captured.add_compile(&mut inner, 0);
+        assert_eq!(captured.compilations.len(), 1);
+        assert_eq!(captured.bytes, cost);
+    }
 
     #[test]
     fn source_values_and_schema_role_are_not_field_semantic_authority() {

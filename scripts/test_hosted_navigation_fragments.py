@@ -1,4 +1,5 @@
 """Real authorized compiled-label navigation, using owned HTTP fixtures."""
+import uuid
 import json
 import sys
 import time
@@ -92,7 +93,7 @@ class HostedNavigationFragments(HostedHistory):
     def test_fragment_current_draft_not_saved_range_and_late_serial_is_rejected(self):
         doc, reference = self.labelled()
         changed = doc['source'].replace('Target heading', 'Much later 😀 heading').replace('<target>', '<personal>')
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': changed})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': changed})
         request = self.fragment_request(doc, reference + '#personal', changed, serial=11)
         self.exact_origin(self.locate(request)['fragment'], changed, 'personal')
         self.assertEqual(self.resolve_fragment(reference + '#personal')['fragment']['status'], 'missing')

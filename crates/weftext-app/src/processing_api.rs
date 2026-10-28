@@ -346,6 +346,7 @@ mod tests {
         );
     }
 
+    #[cfg(windows)]
     fn fixture() -> (tempfile::TempDir, Core, PathBuf, PrepareRequest) {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("library");
@@ -372,6 +373,7 @@ mod tests {
         (temp, core, root, request)
     }
     #[test]
+    #[cfg(windows)]
     fn settling_unknown_id_persists_fence_against_delayed_prepare_after_restart() {
         let (temp, mut core, root, request) = fixture();
         let ended = core
@@ -401,6 +403,7 @@ mod tests {
         assert!(!root.join(".weftext-settings.json").exists());
     }
     #[test]
+    #[cfg(windows)]
     fn cancelling_prepared_proposal_prevents_commit_and_keeps_author_settings_absent() {
         let (_temp, mut core, root, request) = fixture();
         let after = changed_settings(
@@ -433,6 +436,7 @@ mod tests {
         assert!(!root.join(".weftext-settings.json").exists());
     }
     #[test]
+    #[cfg(windows)]
     fn original_effect_retries_survive_restart_and_reject_changed_payload() {
         let (temp, mut core, root, request) = fixture();
         let after = changed_settings(

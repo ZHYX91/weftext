@@ -353,6 +353,7 @@ fn profile(
     actor: &str,
     asset: &str,
     resource: &QualifiedResource,
+    config: &Resource,
 ) -> Result<(Value, crate::media_api::ResourceMetadata), ApiError> {
     input_access(inner, actor, asset, false)?;
     if resource.revision.is_none() {
@@ -363,7 +364,6 @@ fn profile(
             UiMessage::error_api_hosted_media_resource_delivery_budget(),
         ));
     }
-    let config = resolve_asset(inner, actor, asset)?;
     let (metadata, content_type) = crate::media_api::inspect_media(resource.bytes());
     let ready = resource.revision.as_ref().is_some_and(|rev| {
         crate::media_api::metadata_facts(&metadata, &resource.resource_ref, rev).is_some()
@@ -415,7 +415,21 @@ pub(super) fn context(
     asset: &str,
     revision: Option<&str>,
 ) -> Result<Context, ApiError> {
-    let (configured, collection) = resolve_with_collection(inner, actor, asset)?;
+    let resolved = resolve_with_collection(inner, actor, asset)?;
+    let context = context_from_resolution(inner, actor, asset, revision, resolved)?;
+    context.validate(inner, actor)?;
+    Ok(context)
+}
+// Synchronous capture/projection only. Both callers retain their final
+// Context::validate gate before any descriptor or original bytes can leave.
+fn context_from_resolution(
+    inner: &HostedInner,
+    actor: &str,
+    asset: &str,
+    revision: Option<&str>,
+    resolved: ResolvedAsset,
+) -> Result<Context, ApiError> {
+    let (configured, collection) = resolved;
     let owner = inner.file(&configured.owner).ok().ok_or_else(unavailable)?;
     let resource = Arc::new(
         inner
@@ -441,8 +455,7 @@ pub(super) fn context(
             UiMessage::error_api_hosted_media_resource_target_basis_budget(),
         ));
     }
-    let (descriptor, metadata) = profile(inner, actor, asset, &resource)?;
-    validate_original(inner, actor, asset, &resource)?;
+    let (descriptor, metadata) = profile(inner, actor, asset, &resource, &configured)?;
     let context = Context {
         asset: asset.into(),
         resource,
@@ -455,7 +468,6 @@ pub(super) fn context(
             UiMessage::error_api_hosted_media_resource_target_basis_budget(),
         ));
     }
-    context.validate(inner, actor)?;
     Ok(context)
 }
 pub(super) fn expire_revoked(inner: &mut HostedInner) {
@@ -565,14 +577,15 @@ async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Au
             collections.push(json!({"collection":id,"owner":c.owner,"title":resource_collections::title(inner,id)?,"lifecycle":c.lifecycle,"read":rights.read,"download":rights.download,"import":rights.r#import,"status":if ready{"ready"}else{"unavailable"}}));
         }
         for asset in assets {
-            let config=resolve_asset(inner,&actor,&asset);
-            let ready=context(inner,&actor,&asset,None).and_then(|context| {
+            let resolved=resolve_with_collection(inner,&actor,&asset);
+            let config=resolved.as_ref().ok().map(|(config,_)|config.clone());
+            let ready=resolved.and_then(|resolved|context_from_resolution(inner,&actor,&asset,None,resolved)).and_then(|context| {
                 if bytes.saturating_add(context.retained_bytes())>MAX_BYTES {return Err(ApiError::bad(UiMessage::error_api_hosted_media_resource_catalog_budget()));}
                 bytes+=context.retained_bytes();context.validate(inner,&actor)?;Ok(context.descriptor)
             });
             let row=match ready {Ok(row)=>row,Err(_)=>{complete=false;
                 let mut row=json!({"asset":asset,"status":"unavailable"});
-                if let Ok(c)=config {row["owner"]=c.owner.into();row["name"]=c.title.clone().into();row["title"]=c.title.into();row["lifecycle"]=c.lifecycle.into();}
+                if let Some(c)=config {row["owner"]=c.owner.into();row["name"]=c.title.clone().into();row["title"]=c.title.into();row["lifecycle"]=c.lifecycle.into();}
                 if let Some((c,_))=resource_collections::split_member(&inner.config,&asset) {row["collection"]=c.into();}
                 row}};
             resources.push(row);

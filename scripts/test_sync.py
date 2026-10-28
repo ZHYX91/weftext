@@ -1,6 +1,7 @@
 """Two actual local programs, separate private state and author trees. Owned
 fixtures are retained; this never drives a desktop or borrows another project.
 """
+import uuid
 from _creation_result import created_document
 import copy
 import json
@@ -77,7 +78,7 @@ class Sync(unittest.TestCase):
         self.assertGreater(binding['pendingPublications'], 0)
         doc = self.open(self.b, self.rb)
         draft = b + '\n尚未保存的个人草稿'
-        self.call(self.b, '/api/draft', sessionId=doc['sessionId'], baseId=doc['baseId'], source=draft)
+        self.call(self.b, '/api/draft', inputId=str(uuid.uuid4()), inputRevision=1, sessionId=doc['sessionId'], baseId=doc['baseId'], source=draft)
         self.transfer(self.b, self.rb, self.a, [self.key])
         received = self.transfer(self.a, self.ra, self.b, [self.key, self.other_key])
         view = next(o['view'] for o in received['objects'] if o['object'] == self.key)

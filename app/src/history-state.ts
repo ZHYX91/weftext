@@ -91,6 +91,7 @@ export interface HistoryRestoreRequest {
     operationId: string;
     draftAction: "retain" | "none";
     draftSource?: string;
+    inputRevision?: number;
 }
 export interface HistoryRestoreResult {
     receipt: Receipt;
@@ -165,7 +166,7 @@ export function sameHistoryNote(a: HistoryContext, b: HistoryContext | null): bo
 export function historyOwnerKey(context: HistoryContext): string { return JSON.stringify([context.ownerKey ?? context.sessionId, context.workspaceId, context.nodeId]); }
 function sameHistorySession(a: HistoryContext, b: HistoryContext | null): boolean { return sameHistoryNote(a, b) && a.sessionId === b!.sessionId; }
 export function sameHistoryDraft(a: HistoryContext, b: HistoryContext | null): boolean {
-    return sameHistorySession(a, b) && a.path === b!.path && a.baseId === b!.baseId && a.serial === b!.serial && a.source === b!.source;
+    return sameHistorySession(a, b) && a.path === b!.path && a.baseId === b!.baseId && a.serial === b!.serial && a.inputId === b!.inputId && a.source === b!.source;
 }
 /** The source owner uses this before applying a restore receipt; newer input always survives. */
 export function restoreBufferDisposition(basis: HistoryRestoreBasis, current: HistoryContext | null): "replaceClean" | "retainDraft" | "unrelated" {
@@ -360,7 +361,8 @@ export class HistoryController {
             throw fail("draftChanged", uiMessage("historyState.confirmationBasisChanged"));
         if ((basis.dirty || basis.source !== basis.baseSource) && draftAction !== "retain")
             throw fail("draftProtectionRequired", uiMessage("historyState.explicitlyKeepUnsavedDraft"));
-        const request = Object.freeze({ sessionId: basis.sessionId, baseId: basis.baseId, versionId: basis.selectedVersionId, operationId: this.host.id(), draftAction, ...(draftAction === "retain" ? { draftSource: basis.source } : {}) });
+        const request = Object.freeze({ sessionId: basis.sessionId, baseId: basis.baseId, versionId: basis.selectedVersionId, operationId: this.host.id(), draftAction, draftSource: basis.source,
+            ...(basis.inputRevision === undefined ? {} : { inputRevision: basis.inputRevision }) });
         this.pending = { request, basis, attempt: freezeOriginalAttempt(request, "save") };
         this.operation = null;
         return this.execute();

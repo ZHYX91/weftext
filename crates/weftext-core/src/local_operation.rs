@@ -77,7 +77,25 @@ impl Core {
             .file_save
             .as_ref()
             .ok_or_else(file_save_scope::unsupported_scope)?;
-        if data.version != 2 {
+        if data.version != 4 {
+            return Err(file_save_scope::unsupported_scope());
+        }
+        let canonical_digest = data.author_input_digest.as_ref().is_some_and(|digest| {
+            digest.len() == 64
+                && digest
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        });
+        if (data.input_revision == 0
+            && (data.author_input_digest.is_some() || data.author_input_id.is_some()))
+            || (data.input_revision > 0
+                && (data.input_revision > 9_007_199_254_740_991
+                    || !canonical_digest
+                    || !data
+                        .author_input_id
+                        .as_deref()
+                        .is_some_and(|id| valid_operation_id(id).is_ok())))
+        {
             return Err(file_save_scope::unsupported_scope());
         }
         valid_operation_id(&data.session_id)?;
@@ -387,7 +405,7 @@ impl Core {
         let bytes = serde_json::to_vec(&record)?;
         journal::decode_resolution(id, &bytes)?;
         self.validate_unregistered_fence_namespace(id)?;
-        journal::private_create(&self.backend, &self.journal_path(id, "resolution"), &bytes)?;
+        self.create_private_record(&self.journal_path(id, "resolution"), &bytes)?;
         self.local_operation_status(id)
     }
 }
@@ -542,6 +560,7 @@ mod tests {
     fn orphan_evidence_and_uuid_case_alias_cannot_be_declared_effect_free() {
         let (_temp, mut core, _root, _data, _doc) = fixture();
         let id = fresh();
+        fs::create_dir_all(core.journal_path(&id, "install").parent().unwrap()).unwrap();
         fs::write(
             core.journal_path(&id, "install"),
             b"retained unknown original",
@@ -578,6 +597,7 @@ mod tests {
             "{{\n  \"operationId\":\"{original_id}\",\n  \"action\":\"cancelPrepared\",\n  \"message\":\"Original retained prose\"\n}}\n"
         );
         let path = core.journal_path(&original_id, "resolution");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(&path, original.as_bytes()).unwrap();
         assert_eq!(
             core.local_operation_status(&original_id).unwrap()["status"],
@@ -609,6 +629,7 @@ mod tests {
         assert!(journal::decode_resolution(&id,format!(r#"{{"operationId":"{id}","action":"cancelPrepared","action":"keepCurrent","message":"retained"}}"#).as_bytes()).is_err());
         assert!(journal::decode_resolution(&id, &vec![b' '; 4097]).is_err());
         let (_temp, core, _root, _data, _doc) = fixture();
+        fs::create_dir_all(core.journal_path(&id, "resolution").parent().unwrap()).unwrap();
         fs::write(
             core.journal_path(&id, "resolution"),
             serde_json::to_vec(
@@ -634,6 +655,12 @@ mod tests {
         core.reserve_definition_key(&root, &doc.path, &basis.base_id, &original)
             .unwrap();
         let copied = fresh();
+        fs::create_dir_all(
+            core.journal_path(&copied, "definition-reservation")
+                .parent()
+                .unwrap(),
+        )
+        .unwrap();
         fs::copy(
             core.journal_path(&original, "definition-reservation"),
             core.journal_path(&copied, "definition-reservation"),
@@ -716,5 +743,249 @@ mod tests {
         fs::write(core.journal_path(&id, "commit"), original).unwrap();
         core.operations.get_mut(&id).unwrap().kind = "unknown-kind".into();
         assert!(core.local_operation_status(&id).is_err());
+    }
+    #[test]
+    fn startup_resolution_validation_keeps_global_and_operation_namespace_failures() {
+        for case in [
+            "malformed-leaf",
+            "wrong-bucket",
+            "uuid-case-alias",
+            "unknown-sibling",
+            "suffix-case-alias",
+            "malformed-body",
+        ] {
+            let (_temp, mut core, _root, data, _doc) = fixture();
+            let id = fresh();
+            core.settle_local_attempt(&id, "save", &hash(b"original no-input request"))
+                .unwrap();
+            let resolution = core.journal_path(&id, "resolution");
+            let (path, bytes, code) = match case {
+                "malformed-leaf" => (
+                    data.join("journal")
+                        .join(if &id[..2] == "ff" { "00" } else { "ff" })
+                        .join("not-a-uuid.resolution.json"),
+                    b"retained malformed sibling in a different bucket".to_vec(),
+                    "privateEvidence",
+                ),
+                "wrong-bucket" => {
+                    let other = if &id[..2] == "00" { "ff" } else { "00" };
+                    (
+                        data.join("journal")
+                            .join(other)
+                            .join(format!("{id}.install.json")),
+                        b"retained misplaced sibling".to_vec(),
+                        "privateEvidence",
+                    )
+                }
+                "uuid-case-alias" => (
+                    data.join("journal/ab/ABCDEF01-2345-4678-9ABC-DEF012345678.install.json"),
+                    b"retained UUID case alias in its correct lowercase bucket".to_vec(),
+                    "privateEvidence",
+                ),
+                "unknown-sibling" => (
+                    core.journal_path(&id, "unknown"),
+                    b"retained unknown sibling".to_vec(),
+                    "resolutionUnavailable",
+                ),
+                "suffix-case-alias" => (
+                    core.journal_path(&id, "INSTALL"),
+                    b"retained suffix alias".to_vec(),
+                    "resolutionUnavailable",
+                ),
+                "malformed-body" => (
+                    resolution.clone(),
+                    b"{ malformed original resolution".to_vec(),
+                    "resolutionUnavailable",
+                ),
+                _ => unreachable!(),
+            };
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, &bytes).unwrap();
+            let original_resolution = fs::read(&resolution).unwrap();
+            drop(core);
+            let error = Core::new(&data).err().expect(case);
+            assert_eq!(error.code, code, "{case}");
+            assert_eq!(
+                fs::read(&path).unwrap(),
+                bytes,
+                "{case}: originals retained"
+            );
+            assert_eq!(
+                fs::read(&resolution).unwrap(),
+                original_resolution,
+                "{case}: no rewrite"
+            );
+        }
+    }
+
+    #[test]
+    fn startup_resolution_requalifies_full_original_reservation_body() {
+        for changed in [false, true] {
+            let (_temp, mut core, root, data, doc) = fixture();
+            let id = fresh();
+            let basis = core
+                .read_snapshot(&root, std::slice::from_ref(&doc.path))
+                .unwrap()
+                .files
+                .remove(0);
+            core.reserve_definition_key(&root, &doc.path, &basis.base_id, &id)
+                .unwrap();
+            core.settle_local_attempt(&id, "save", &hash(b"original reserved request"))
+                .unwrap();
+            let path = core.journal_path(&id, "definition-reservation");
+            let original = fs::read(&path).unwrap();
+            let original_binding = core
+                .validate_preplan_reservation(&id, "definition-reservation", &original)
+                .unwrap();
+            if changed {
+                // DefinitionReservation is private to operations.rs. Replace
+                // only its actual owner_id field in the original production
+                // bytes; reserializing a Value would reorder the library header.
+                let body: serde_json::Value = serde_json::from_slice(&original).unwrap();
+                let owner = body["owner_id"].as_str().unwrap();
+                let owner_field = format!("\"owner_id\":\"{owner}\"");
+                let text = std::str::from_utf8(&original).unwrap();
+                assert_eq!(text.matches(&owner_field).count(), 1);
+                let other_owner = fresh();
+                assert_ne!(owner, other_owner);
+                let changed_owner = format!("\"owner_id\":\"{other_owner}\"");
+                fs::write(&path, text.replacen(&owner_field, &changed_owner, 1)).unwrap();
+            }
+            let retained = fs::read(&path).unwrap();
+            let header =
+                hosted::read_actor_library_header(&mut std::io::Cursor::new(&retained)).unwrap();
+            assert!(
+                matches!(header, hosted::ActorLibraryHeader::Bound(binding) if binding == original_binding),
+                "both controls must reach full body qualification through the original library header"
+            );
+            drop(core);
+            if changed {
+                let error = Core::new(&data).err().unwrap();
+                assert_eq!(error.code, "resolutionUnavailable");
+                assert_eq!(
+                    error.explanation,
+                    UiMessage::error_core_operations_original_source_reservation_cannot_qualified_to_attempt_and_owner()
+                );
+            } else {
+                let reopened = Core::new(&data).unwrap();
+                assert_eq!(
+                    reopened.local_operation_status(&id).unwrap()["status"],
+                    "resolved"
+                );
+            }
+            assert_eq!(fs::read(&path).unwrap(), retained);
+        }
+    }
+
+    #[test]
+    fn startup_resolution_rejects_individually_valid_competing_original_library_allocations() {
+        let (_temp, mut core, first_root, data, first_doc) = fixture();
+        let second_root = first_root.with_file_name("other-library");
+        core.create_library(&second_root).unwrap();
+        let second_doc = core
+            .create_note_fixture(&second_root, &second_root, "Other")
+            .unwrap();
+        let first = fresh();
+        let second = fresh();
+        let first_basis = core
+            .read_snapshot(&first_root, std::slice::from_ref(&first_doc.path))
+            .unwrap()
+            .files
+            .remove(0);
+        let second_basis = core
+            .read_snapshot(&second_root, std::slice::from_ref(&second_doc.path))
+            .unwrap()
+            .files
+            .remove(0);
+        core.reserve_definition_key(&first_root, &first_doc.path, &first_basis.base_id, &first)
+            .unwrap();
+        core.reserve_definition_key(
+            &second_root,
+            &second_doc.path,
+            &second_basis.base_id,
+            &second,
+        )
+        .unwrap();
+        let first_path = core.journal_path(&first, "definition-reservation");
+        let second_path = core.journal_path(&second, "definition-reservation");
+        let second_definition: serde_json::Value =
+            serde_json::from_slice(&fs::read(&second_path).unwrap()).unwrap();
+        // Reuse the actual second library's qualified source capture in the
+        // existing RevisionReservation schema, under the first original ID.
+        let mut revision: operations::RevisionReservation =
+            serde_json::from_value(second_definition["source"].clone()).unwrap();
+        revision.library =
+            Some(serde_json::from_value(second_definition["library"].clone()).unwrap());
+        revision.operation_id = Some(first.clone());
+        // Serialize the actual production type, whose library field is first.
+        let revision_bytes = serde_json::to_vec(&revision).unwrap();
+        let first_bytes = fs::read(&first_path).unwrap();
+        let first_binding = core
+            .validate_preplan_reservation(&first, "definition-reservation", &first_bytes)
+            .unwrap();
+        let second_binding = core
+            .validate_preplan_reservation(&first, "revision-reservation", &revision_bytes)
+            .unwrap();
+        assert_ne!(
+            first_binding, second_binding,
+            "each allocation is fully valid; only their combined original scope conflicts"
+        );
+        for (bytes, expected) in [
+            (&first_bytes, &first_binding),
+            (&revision_bytes, &second_binding),
+        ] {
+            let header =
+                hosted::read_actor_library_header(&mut std::io::Cursor::new(bytes)).unwrap();
+            assert!(
+                matches!(header, hosted::ActorLibraryHeader::Bound(actual) if &actual == expected),
+                "both individually valid allocations must retain their actual library-first header"
+            );
+        }
+        let revision_path = core.journal_path(&first, "revision-reservation");
+        fs::write(&revision_path, &revision_bytes).unwrap();
+        let resolution = journal::ResolutionRecord {
+            operation_id: first.clone(),
+            action: "cancelPrepared".into(),
+            historical_message: None,
+            attempt: Some(journal::AttemptFence {
+                request_kind: "save".into(),
+                wire_digest: hash(b"original competing allocation request"),
+            }),
+        };
+        let resolution_path = core.journal_path(&first, "resolution");
+        let resolution_bytes = serde_json::to_vec(&resolution).unwrap();
+        fs::write(&resolution_path, &resolution_bytes).unwrap();
+        drop(core);
+        let error = Core::new(&data).err().unwrap();
+        assert_eq!(error.code, "resolutionUnavailable");
+        assert_eq!(
+            error.explanation,
+            UiMessage::error_core_journal_one_attempt_has_competing_original_library_scopes()
+        );
+        assert_eq!(fs::read(first_path).unwrap(), first_bytes);
+        assert_eq!(fs::read(revision_path).unwrap(), revision_bytes);
+        assert_eq!(fs::read(resolution_path).unwrap(), resolution_bytes);
+    }
+
+    #[test]
+    fn standalone_resolution_consumers_keep_fresh_namespace_enumeration_after_startup() {
+        let (_temp, mut core, _root, data, _doc) = fixture();
+        let id = fresh();
+        core.settle_local_attempt(&id, "save", &hash(b"original no-input request"))
+            .unwrap();
+        let sibling = core.journal_path(&id, "unknown");
+        drop(core);
+        let reopened = Core::new(&data).unwrap();
+        assert_eq!(
+            reopened.local_operation_status(&id).unwrap()["status"],
+            "resolved"
+        );
+        let bytes = b"later unknown sibling must never borrow startup qualification";
+        fs::write(&sibling, bytes).unwrap();
+        assert_eq!(
+            reopened.local_operation_status(&id).unwrap_err().code,
+            "resolutionUnavailable"
+        );
+        assert_eq!(fs::read(sibling).unwrap(), bytes);
     }
 }

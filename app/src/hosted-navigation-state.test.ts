@@ -20,7 +20,7 @@ test("navigation stages the actor's actual local/recovered Draft and never settl
   const local = { source: "local", baseSource: "old", definitionReservations: ["original"] };
   assert.deepEqual(nodeTargetDraft("saved", "server draft", "server base", local), local);
   assert.notEqual(nodeTargetDraft("saved", undefined, undefined, local), local);
-  assert.deepEqual(nodeTargetDraft("new saved", undefined, undefined, { source: "old saved", baseSource: "old saved" }), { source: "new saved", baseSource: "new saved" });
+  assert.deepEqual(nodeTargetDraft("new saved", undefined, undefined, { source: "old saved", baseSource: "old saved" }), { source: "old saved", baseSource: "old saved" });
   assert.throws(() => nodeTargetDraft("saved", undefined, undefined, { ...local, pending: { resource: "Shared", operationId: "unknown", source: "sent" } }), /原保存/);
   for (const invalid of [null, {}, { source: "draft" }, { source: 2, baseSource: "base" }]) assert.throws(() => nodeTargetDraft("saved", undefined, undefined, invalid as unknown as typeof local), /恢复稿/);
 });

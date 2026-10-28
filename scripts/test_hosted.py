@@ -108,7 +108,19 @@ class Hosted(unittest.TestCase):
                     self.assertEqual(records(),before)
 
     def call(self, route, data=None, actor='alice', status=200, headers=None):
+        # Fresh authorized source Saves need a real durable ACK even when the
+        # Save is expected to conflict; otherwise draftChanged masks the case.
+        # Original retries reuse the already frozen request and ordinal.
+        counters = self.__dict__.setdefault('_ordered_drafts', {})
+        if route == 'save' and status in (200, 409) and data is not None and 'inputRevision' not in data:
+            ack = self.call('draft', {'sessionId': data['sessionId'], 'baseId': data['baseId'],
+                                    'source': data['source'], 'inputId': uid(), 'inputRevision': counters.get(data['sessionId'], 0) + 1}, actor)
+            data['inputRevision'] = ack['inputRevision']
+        if route == 'draft' and status == 200 and data is not None:
+            data['inputRevision'] = max(data.get('inputRevision', 1), counters.get(data['sessionId'], 0) + 1)
         code, result, returned = self.server.call('/api/hosted/'+route,data,self.tokens.get(actor,'x'*40),headers)
+        if route == 'draft' and code == 200:
+            counters[data['sessionId']] = result['inputRevision']
         self.assertEqual(code,status,str(result)[:1500])
         if status == 200: self.assertEqual(returned.get('Cache-Control'),'no-store')
         return result
@@ -142,7 +154,7 @@ class Hosted(unittest.TestCase):
     def test_repeated_close_releases_sessions_without_discarding_personal_drafts(self):
         original = self.open()
         retained = original['source'] + '\n个人恢复稿 😀\n'
-        self.call('draft', {'sessionId': original['sessionId'], 'source': retained})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': original['baseId'], 'inputRevision': 1, 'sessionId': original['sessionId'], 'source': retained})
         for _ in range(40):
             opened = self.open()
             self.call('session/keepalive', {'sessionId': opened['sessionId']}, 'bob', 410)
@@ -177,21 +189,26 @@ class Hosted(unittest.TestCase):
         self.save(r,r['source']+'unauthorized','reader',404)
         self.call('history',{'sessionId':r['sessionId']},'reader',404)
         self.call('download/prepare',{'resource':'Shared'},'reader',404)
-        self.call('draft',{'sessionId':a['sessionId'],'source':'stolen'},'bob',410)
+        self.call('draft',{'inputId': str(uuid.uuid4()), 'baseId': a['baseId'], 'inputRevision': 1, 'sessionId':a['sessionId'],'source':'stolen'},'bob',410)
         self.call('preview',{'sessionId':a['sessionId'],'source':'stolen'},'bob',410)
 
     def test_concurrent_writers_keep_both_drafts_and_unrelated_document(self):
         a=self.open();b=self.open(actor='bob');other=self.open('Other','bob')
-        self.call('draft',{'sessionId':a['sessionId'],'source':a['source']+'ALICE_DRAFT'})
-        self.call('draft',{'sessionId':b['sessionId'],'source':b['source']+'BOB_DRAFT'},'bob')
+        self.call('draft',{'inputId': str(uuid.uuid4()), 'baseId': a['baseId'], 'inputRevision': 1, 'sessionId':a['sessionId'],'source':a['source']+'ALICE_DRAFT'})
+        self.call('draft',{'inputId': str(uuid.uuid4()), 'baseId': b['baseId'], 'inputRevision': 1, 'sessionId':b['sessionId'],'source':b['source']+'BOB_DRAFT'},'bob')
         receipt,req=self.save(a,a['source']+'ALICE_SAVED')
         self.assertEqual(receipt,self.call('save',req))
-        self.save(b,b['source']+'BOB_CONFLICT','bob',409)
-        self.save(other,other['source']+'UNRELATED_OK','bob')
+        conflict, _ = self.save(b,b['source']+'BOB_CONFLICT','bob',409)
+        self.assertEqual(conflict['error']['code'], 'conflict')
+        unrelated, _ = self.save(other,other['source']+'UNRELATED_OK','bob')
+        self.assertEqual(unrelated['status'], 'committed')
+        self.assertEqual((self.root/'Other/Other.typ').read_text('utf-8'), other['source']+'UNRELATED_OK')
         current=(self.root/'Shared/Shared.typ').read_text('utf-8')
-        self.assertIn('ALICE_SAVED',current);self.assertNotIn('BOB_CONFLICT',current)
+        self.assertEqual(current,a['source']+'ALICE_SAVED')
         recovered=self.open(actor='bob')
-        self.assertIn('BOB_CONFLICT',recovered['recoveredDraft'])
+        self.assertEqual(recovered['source'], current)
+        self.assertEqual(recovered['recoveredDraft'], b['source']+'BOB_CONFLICT')
+        self.assertEqual(recovered['recoveredDraftBaseSource'], b['source'])
         self.assertTrue(recovered['recoveredDraftConflict'])
         self.assertNotIn('ALICE_DRAFT',json.dumps(recovered))
         merged=recovered['source']+'\nBOB_MERGED'
@@ -204,8 +221,10 @@ class Hosted(unittest.TestCase):
         saved,req=self.save(a,a['source']+'saved',op=op)
         other_op=self.call('operation',{'resource':'Shared','operationId':op},'bob')
         self.assertEqual(other_op['status'],'notRegistered')
-        self.save(b,b['source']+'conflict','bob',409,op)
-        self.call('save',{**req,'source':req['source']+'changed'},status=409)
+        conflict, _ = self.save(b,b['source']+'conflict','bob',409,op)
+        self.assertEqual(conflict['error']['code'], 'conflict')
+        changed = self.call('save',{**req,'source':req['source']+'changed'},status=409)
+        self.assertEqual(changed['error']['code'], 'operationConflict')
         self.server.close();self.start()
         self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op}),saved)
         self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op},'bob')['status'],'notCommitted')
@@ -213,7 +232,7 @@ class Hosted(unittest.TestCase):
 
     def test_history_authorized_without_other_users_drafts(self):
         a=self.open();b=self.open(actor='bob')
-        self.call('draft',{'sessionId':b['sessionId'],'source':b['source']+'BOB_PRIVATE'},'bob')
+        self.call('draft',{'inputId': str(uuid.uuid4()), 'baseId': b['baseId'], 'inputRevision': 1, 'sessionId':b['sessionId'],'source':b['source']+'BOB_PRIVATE'},'bob')
         self.save(a,a['source']+'saved history')
         history=self.call('history',{'sessionId':a['sessionId']})
         self.assertNotIn('BOB_PRIVATE',json.dumps(history));self.assertNotIn(str(self.root),json.dumps(history))
@@ -270,7 +289,8 @@ class Hosted(unittest.TestCase):
         a=self.open();op=uid()
         self.assertEqual(self.call('operation',{'resource':'Shared','operationId':op})['status'],'notRegistered')
         self.assertEqual(self.call('operation/settle',{'resource':'Shared','operationId':op})['status'],'cancelled')
-        self.save(a,a['source']+'late original',status=409,op=op)
+        cancelled, _ = self.save(a,a['source']+'late original',status=409,op=op)
+        self.assertEqual(cancelled['error']['code'], 'operationCancelled')
         self.assertNotIn('late original',(self.root/'Shared/Shared.typ').read_text('utf-8'))
         result,req=self.save(a,a['source']+'new explicit proposal')
         self.assertEqual(self.call('operation/settle',{'resource':'Shared','operationId':req['operationId']}),result)

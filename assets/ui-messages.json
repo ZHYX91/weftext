@@ -13202,6 +13202,11 @@
       "en-US": "The note was moved to the recycle bin. Restore it first or save the draft as a new file.",
       "params": {}
     },
+    "shell.creationTargetChanged": {
+      "zh-CN": "创建目标已改变，请重新选择目标后再创建；已提交的原操作可返回原库继续交付。",
+      "en-US": "The creation target changed. Select it again before creating; a committed original operation can be delivered after returning to its library.",
+      "params": {}
+    },
     "shell.saveQueryReservationInputChanged": {
       "zh-CN": "保存前查询预约核对期间出现新输入，请重新保存；输入已保留。",
       "en-US": "New input appeared while checking query reservations before saving. Your input is retained; save again.",
@@ -52630,6 +52635,11 @@
     "error.api.worker.inputEncoding": {
       "zh-CN": "冻结的编译输入无法编码",
       "en-US": "The frozen compiler input could not be encoded",
+      "params": {}
+    },
+    "error.api.worker.cancelled": {
+      "zh-CN": "编译作业已取消",
+      "en-US": "The compilation job was cancelled",
       "params": {}
     },
     "error.api.worker.transportFailed": {

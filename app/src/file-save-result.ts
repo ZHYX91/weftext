@@ -31,6 +31,7 @@ function document(value: unknown): value is OpenedDocument {
   return value.recoveredDraftVariants === undefined || Array.isArray(value.recoveredDraftVariants) && value.recoveredDraftVariants.every(item =>
     object(item) && text(item.path) && typeof item.baseSource === "string" && typeof item.source === "string" && typeof item.baseKnown === "boolean"
       && (item.producerId === undefined || text(item.producerId))
+      && (item.inputId === undefined || text(item.inputId))
       && (item.role === undefined || object(item.role) && (
         item.role.kind === "proposal" && Object.keys(item.role).length === 1
         || item.role.kind === "committedBaseline" && Object.keys(item.role).length === 2 && text(item.role.operationId) && text(item.producerId))));

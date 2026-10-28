@@ -170,7 +170,7 @@ function bodyCloseFixture(pauseAt?: "digest" | "document-flush") {
     api: async (path: string, body: { sessionId: string; baseId: string; sourceDigest: string }) => {
       assert.equal(path, "/api/desktop/document-flush");
       await pause("document-flush");
-      return { ...body, recordDigest: "cd".repeat(32) };
+      return { ...body, evidence:"authorDraft", recordDigest: "cd".repeat(32) };
     },
     readOnlySource: () => false, scheduleRender() {},
   };
@@ -215,4 +215,9 @@ test("body close freeze rejects staged literal input after preparation even when
   assert.equal(f.context.bodyCloseParticipant.freeze(request), false);
   assert.equal(f.writing.pendingText, f.later);
   assert.equal(f.editorFreezes(), 0);
+});
+
+test("comparison release settles the same handle in every writer retirement set",async()=>{
+ const f=fixture();for(const doc of f.context.documents)doc.retiringSessions=new Set(["former-writer"]);
+ await f.context.releaseOpenedSession("former-writer");assert.equal(f.context.documents[0].retiringSessions.size,0);assert.equal(f.calls.length,1);
 });

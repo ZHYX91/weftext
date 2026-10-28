@@ -145,6 +145,180 @@ fn source_annotation_mixed_restart_resumes_only_original_remaining_member() {
     );
     assert!(restarted.open(&note.path, Some(root)).is_ok());
 }
+
+#[test]
+fn recovery_observations_flush_residue_can_settle_original_near_full_bucket_after_restart() {
+    let temp = tempfile::tempdir().unwrap();
+    let profile = temp.path().join("private");
+    let root = temp.path().join("library");
+    let mut core = Core::new(&profile).unwrap();
+    core.create_library(&root).unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+    let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, true);
+    let id = preview.operation_id.clone();
+    let plan = core.operations[&id].clone();
+    let operations::Mutation::Update { files } = &plan.transaction.as_ref().unwrap().mutation
+    else {
+        unreachable!()
+    };
+    for change in files {
+        fs::write(&change.path, &change.after).unwrap();
+    }
+    let capture = core.capture_transaction_recovery(&plan, false).unwrap();
+    let materialized = capture
+        .files
+        .iter()
+        .map(|(index, file)| (capture.members[*index].path.clone(), stamp(file).unwrap()))
+        .collect::<Vec<_>>();
+    core.publish_recovery_facts(&plan, &materialized).unwrap();
+    drop(capture);
+    // Preserve another real pending writer's independent settlement reserve.
+    let other_note = temp.path().join("other.typ");
+    fs::write(&other_note, "other B").unwrap();
+    let other_doc = core.open(&other_note, None).unwrap();
+    let other_id = format!("{}{}", &id[..2], &fresh()[2..]);
+    hosted::set_test_failpoint("saveStaged");
+    assert!(
+        core.save(SaveRequest {
+            operation_id: other_id.clone(),
+            session_id: other_doc.session_id,
+            base_id: other_doc.base_id,
+            source: "other S".into()
+        })
+        .is_err()
+    );
+    let other_plan = fs::read(core.journal_path(&other_id, "plan")).unwrap();
+    let bucket = core.journal_path(&id, "plan").parent().unwrap().to_owned();
+    // Compute the original 32-record margin from actual canonical members;
+    // temporary attempts never earn credit. Both operations only update files.
+    let count = |operation: &str| {
+        fs::read_dir(&bucket)
+            .unwrap()
+            .filter(|entry| {
+                let name = entry
+                    .as_ref()
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned();
+                name.starts_with(&format!("{operation}.")) && name.ends_with(".json")
+            })
+            .count()
+    };
+    let reserves = (32 - count(&id)) + (32 - count(&other_id));
+    let target = 5000 - reserves - 1;
+    for _ in fs::read_dir(&bucket).unwrap().count()..target {
+        let fence_id = format!("{}{}", &id[..2], &fresh()[2..]);
+        let fence = journal::ResolutionRecord {
+            operation_id: fence_id.clone(),
+            action: "cancelPrepared".into(),
+            historical_message: None,
+            attempt: Some(journal::AttemptFence {
+                request_kind: "save".into(),
+                wire_digest: hash(b"retained original intent"),
+            }),
+        };
+        fs::write(
+            core.journal_path(&fence_id, "resolution"),
+            serde_json::to_vec(&fence).unwrap(),
+        )
+        .unwrap();
+    }
+    hosted::set_test_failpoint("privateRecordFlushed");
+    assert_eq!(
+        core.resolve_recovery(&id, "adoptAfterImages")
+            .unwrap_err()
+            .code,
+        "recoveryPending"
+    );
+    let residues = fs::read_dir(&bucket)
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| p.extension().is_some_and(|e| e == "pending"))
+        .map(|p| {
+            let bytes = fs::read(&p).unwrap();
+            (p, bytes)
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(residues.len(), 1);
+    drop(core);
+    let mut core = Core::new(&profile).unwrap();
+    assert_eq!(
+        core.resolve_recovery(&id, "adoptAfterImages")
+            .unwrap()
+            .status,
+        "committed"
+    );
+    for (path, bytes) in residues {
+        assert_eq!(fs::read(path).unwrap(), bytes);
+    }
+    assert_eq!(
+        fs::read(core.journal_path(&other_id, "plan")).unwrap(),
+        other_plan
+    );
+    assert_eq!(fs::read_to_string(&other_note).unwrap(), "other B");
+    core.admit_journal_operation(&core.operations[&other_id])
+        .unwrap();
+    assert_eq!(fs::read(&note.path).unwrap(), after_source);
+    assert!(fs::read_to_string(sidecar).unwrap().contains("recovered"));
+}
+
+#[test]
+fn original_mixed_recovery_cannot_write_after_uncertain_commit_until_restart() {
+    let temp = tempfile::tempdir().unwrap();
+    let profile = temp.path().join("private");
+    let root = temp.path().join("library");
+    let mut core = Core::new(&profile).unwrap();
+    core.create_library(&root).unwrap();
+    let note = core.create_note_fixture(&root, &root, "Note").unwrap();
+    let other_path = temp.path().join("unrelated.typ");
+    fs::write(&other_path, "other B").unwrap();
+    let other = core.open(&other_path, None).unwrap();
+    let (preview, sidecar, after_source) = pair_plan(&mut core, &root, &note, true);
+    fs::write(&note.path, &after_source).unwrap();
+    assert_eq!(
+        core.inspect_recovery(&preview.operation_id)
+            .unwrap()
+            .coherence,
+        "mixedKnown"
+    );
+    hosted::set_test_failpoint("commitPublished");
+    let committed = fresh();
+    assert!(
+        core.save(SaveRequest {
+            session_id: other.session_id,
+            base_id: other.base_id,
+            source: "other committed source".into(),
+            operation_id: committed.clone()
+        })
+        .is_err()
+    );
+    assert!(core.journal_path(&committed, "commit").is_file());
+    let before = fs::read(&sidecar).unwrap();
+    let before_identity = fs::metadata(&sidecar).unwrap().modified().unwrap();
+    assert_eq!(
+        core.resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
+            .unwrap_err()
+            .code,
+        "invalidState"
+    );
+    assert_eq!(fs::read(&sidecar).unwrap(), before);
+    assert_eq!(
+        fs::metadata(&sidecar).unwrap().modified().unwrap(),
+        before_identity
+    );
+    assert!(!core.journal_path(&preview.operation_id, "commit").exists());
+    drop(core);
+    let mut core = Core::new(&profile).unwrap();
+    assert_eq!(
+        core.resolve_recovery(&preview.operation_id, "resumeOriginalPlan")
+            .unwrap()
+            .status,
+        "committed"
+    );
+    assert_eq!(fs::read(&note.path).unwrap(), after_source);
+    assert_ne!(fs::read(&sidecar).unwrap(), before);
+}
 #[test]
 fn mixed_restart_creates_only_original_absent_sidecar_and_records_real_object() {
     let temp = tempfile::tempdir().unwrap();
@@ -969,6 +1143,7 @@ fn draft_complete_record_budget_rejection_preserves_readable_primary_and_origina
             source: format!("{index}{}", "x".repeat(MAX_SOURCE_BYTES - 1)),
             base_known: true,
             producer_id: None,
+            input_id: None,
             role: DraftRole::Proposal,
         })
         .collect();

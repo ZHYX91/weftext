@@ -176,6 +176,10 @@ impl Core {
                 self.validate_sync_recovery_cut(plan)?;
             }
             if action == "resumeOriginalPlan" {
+                // Requalify this original pending transaction before any
+                // continuation changes author bytes or namespaces. An unknown
+                // committed sequence cannot authorize effects until restart.
+                self.admit_journal_operation(plan)?;
                 if matches!(t.mutation, Mutation::Compound { .. }) {
                     self.resume_compound_namespaces(plan, &mut capture)
                         .map_err(|e| recovery_failure(plan, e))?;
@@ -267,8 +271,10 @@ impl Core {
             self.publish_recovery_facts(plan, &materialized)
                 .map_err(|e| recovery_failure(plan, e))?;
             self.commit(plan).map_err(|e| recovery_failure(plan, e))?;
-            for session in self.sessions.values_mut().filter(|s| t.affects(&s.path)) {
-                session.base_id = fresh();
+            for session in self.sessions.values_mut() {
+                if t.affects(&session.path)? {
+                    session.base_id = fresh();
+                }
             }
         }
         // Release all guards only after the durable decision, then re-inspect.

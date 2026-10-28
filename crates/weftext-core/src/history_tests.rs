@@ -257,6 +257,7 @@ impl HistoryFixture {
             operation_id: fresh(),
             draft_action: action.into(),
             draft_source: source.map(str::to_owned),
+            input_revision: None,
         }
     }
     fn operate(&mut self, intent: OperationIntent) -> OperationReceipt {
@@ -959,8 +960,18 @@ fn history_external_rename_replacement_and_current_exclusion_do_not_join_by_name
     let private_snapshot = |directory: &Path| {
         fs::read_dir(directory)
             .unwrap()
-            .map(|entry| {
+            .flat_map(|entry| {
                 let path = entry.unwrap().path();
+                if path.is_dir() {
+                    fs::read_dir(path)
+                        .unwrap()
+                        .map(|nested| nested.unwrap().path())
+                        .collect::<Vec<_>>()
+                } else {
+                    vec![path]
+                }
+            })
+            .map(|path| {
                 let bytes = fs::read(&path).unwrap();
                 (path, bytes)
             })
@@ -1514,4 +1525,84 @@ fn restore_retains_equal_text_buffer_independently_from_acknowledged_producer() 
             .iter()
             .all(|draft| draft.source == "Shared pending buffer")
     );
+}
+
+#[test]
+fn ordered_restore_retains_later_ack_as_current_proposal_after_restart() {
+    let mut f = HistoryFixture::new();
+    let selected = f.initial_version();
+    f.save("saved C");
+    let base = f.doc.source.clone();
+    let source = format!("{base}\nS");
+    let later = format!("{source}\nY");
+    f.core
+        .persist_test_input(&f.doc.session_id, &source, 1)
+        .unwrap();
+    f.core
+        .persist_test_input(&f.doc.session_id, &later, 2)
+        .unwrap();
+    let mut request = f.restore_request(&selected, "retain", Some(&source));
+    request.input_revision = Some(1);
+    let id = request.operation_id.clone();
+    let restored = f.core.restore_history(request.clone()).unwrap();
+    assert_eq!(
+        f.core.restore_history(request).unwrap().receipt,
+        restored.receipt
+    );
+    let (_, delivered) = f
+        .core
+        .refresh_local_saved_session(&id, &f.doc.session_id)
+        .unwrap();
+    assert_eq!(delivered.recovered_draft.as_deref(), Some(later.as_str()));
+    assert!(delivered.recovered_draft_conflict);
+    assert_eq!(
+        f.core
+            .current_session_draft(&f.doc.session_id)
+            .unwrap()
+            .unwrap()
+            .base_source,
+        base
+    );
+    let path = f.doc.path.clone();
+    drop(f.core);
+    let mut recovered = Core::new(&f.data).unwrap();
+    let opened = recovered.open(&path, Some(f.root.clone())).unwrap();
+    assert_eq!(opened.recovered_draft.as_deref(), Some(later.as_str()));
+    assert!(opened.recovered_draft_conflict);
+}
+
+#[test]
+fn no_op_restore_still_retires_the_original_acknowledged_cut() {
+    let mut f = HistoryFixture::new();
+    let selected = f.initial_version();
+    let source = format!("{}\nunsaved S", f.doc.source);
+    f.core
+        .persist_test_input(&f.doc.session_id, &source, 1)
+        .unwrap();
+    let mut request = f.restore_request(&selected, "retain", Some(&source));
+    request.input_revision = Some(1);
+    let restored = f.core.restore_history(request).unwrap();
+    assert_eq!(
+        f.core
+            .persist_test_input(&f.doc.session_id, &source, 1)
+            .unwrap_err()
+            .code,
+        "draftChanged"
+    );
+    assert_eq!(
+        f.core
+            .save_ordered(
+                SaveRequest {
+                    operation_id: fresh(),
+                    session_id: f.doc.session_id.clone(),
+                    base_id: restored.receipt.base_id,
+                    source
+                },
+                1
+            )
+            .unwrap_err()
+            .code,
+        "draftChanged"
+    );
+    assert_eq!(fs::read_to_string(&f.doc.path).unwrap(), restored.source);
 }

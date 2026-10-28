@@ -34,6 +34,7 @@ async fn original_save_status_authorizes_frozen_resource_before_reading_private_
         State(state.clone()),
         Extension(auth.clone()),
         crate::RequestJson(SourceSaveRequest {
+            input_revision: None,
             session_id: session_id(&doc),
             base_id: doc["baseId"].as_str().unwrap().into(),
             source: source.clone(),
@@ -57,10 +58,12 @@ async fn original_save_status_authorizes_frozen_resource_before_reading_private_
     let plan = temp
         .path()
         .join("state/journal")
+        .join(&core_id[..2])
         .join(format!("{core_id}.plan.json"));
     let commit = temp
         .path()
         .join("state/journal")
+        .join(&core_id[..2])
         .join(format!("{core_id}.commit.json"));
     let plan_bytes = std::fs::read(&plan).unwrap();
     let commit_bytes = std::fs::read(&commit).unwrap();
@@ -137,6 +140,7 @@ async fn repeated_open_and_close_releases_only_the_calling_actors_coordinate() {
             State(state.clone()),
             Extension(auth.clone()),
             crate::RequestJson(Open {
+                session_id: None,
                 resource: "Shared".into(),
             }),
         )
@@ -278,4 +282,71 @@ async fn close_does_not_require_a_document_read_grant() {
     .unwrap();
     assert_eq!(closed["closed"], true);
     assert!(!state.inner.lock().unwrap().sessions.contains_key(&id));
+}
+
+#[tokio::test]
+async fn refresh_open_preserves_the_original_writer_view_identity_and_actor_resource_binding() {
+    let (_temp, state, auth, doc, _, _) = history_api::test_fixture();
+    let original = session_id(&doc);
+    let original_view = doc["viewInputId"].as_str().unwrap().to_owned();
+    let reopened = open(
+        State(state.clone()),
+        Extension(auth.clone()),
+        crate::RequestJson(Open {
+            resource: "Shared".into(),
+            session_id: Some(original.clone()),
+        }),
+    )
+    .await
+    .unwrap()
+    .0;
+    assert_eq!(reopened["sessionId"], original);
+    assert_eq!(reopened["viewInputId"], original_view);
+    let ack = draft(
+        State(state.clone()),
+        Extension(auth.clone()),
+        crate::RequestJson(weftext_core::DraftInputRequest {
+            session_id: original.clone(),
+            source: doc["source"].as_str().unwrap().into(),
+            input_revision: 1,
+            input_id: original_view.clone(),
+            base_id: Some(doc["baseId"].as_str().unwrap().into()),
+            retained_base_source: None,
+        }),
+    )
+    .await
+    .unwrap()
+    .0;
+    assert_eq!(ack["status"], "inputAcknowledged");
+    assert_eq!(ack["evidence"], "savedView");
+    assert!(
+        open(
+            State(state.clone()),
+            Extension(auth.clone()),
+            crate::RequestJson(Open {
+                resource: "Target".into(),
+                session_id: Some(original.clone())
+            })
+        )
+        .await
+        .is_err()
+    );
+    let bob = Auth {
+        digest: state.inner.lock().unwrap().policy.users["bob"]
+            .token_sha256
+            .clone(),
+    };
+    assert!(
+        open(
+            State(state.clone()),
+            Extension(bob),
+            crate::RequestJson(Open {
+                resource: "Shared".into(),
+                session_id: Some(original.clone())
+            })
+        )
+        .await
+        .is_err()
+    );
+    assert!(state.inner.lock().unwrap().sessions.contains_key(&original));
 }

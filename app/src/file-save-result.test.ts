@@ -8,7 +8,7 @@ import { submitOriginal, deliverCommitted, committedDeliveryComplete, originalDe
 import { DocumentSession, rebindCommittedSave } from "./session";
 
 const frozen = { operationId: "original", sessionId: "writer", source: "submitted S", sourcePath: "C:/TEST/a.typ", baseId: "before" };
-const document = { sessionId: "fresh", baseId: "actual", path: frozen.sourcePath, root: "C:/TEST", source: frozen.source, kind: "ordinary" };
+const document = { sessionId: frozen.sessionId, baseId: "actual", path: frozen.sourcePath, root: "C:/TEST", source: frozen.source, kind: "ordinary" };
 const receipt = { operationId: frozen.operationId, status: "committed", baseId: "original-base", path: frozen.sourcePath, committedSource: frozen.source, document, documentSourceMatchesCommit: true };
 const malformed = [
   { baseId: undefined }, { baseId: "" }, { baseId: 12 }, { path: undefined }, { path: 12 }, { path: "C:/TEST/other.typ" },
@@ -83,6 +83,6 @@ test("the actual malformed-save delivery explanation changes language without ch
   try {
     locale.set("zh-CN");assert.match(uiTextValue(labels[0]),/原编号和输入保留/);
     locale.set("en-US");assert.match(uiTextValue(labels[0]),/original ID and input are retained/);
-    assert.equal(attempts,1);assert.equal(JSON.stringify(original),before);assert.equal(JSON.stringify(delivered),before);assert.equal(delivered.document.sessionId,"fresh");
+    assert.equal(attempts,1);assert.equal(JSON.stringify(original),before);assert.equal(JSON.stringify(delivered),before);assert.equal(delivered.document.sessionId,document.sessionId);
   } finally {locale.set("zh-CN");}
 });

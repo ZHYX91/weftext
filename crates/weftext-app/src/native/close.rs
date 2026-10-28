@@ -194,12 +194,7 @@ pub(super) enum DraftRequest {
         body: weftext_core::DocumentDraftFlush,
     },
 }
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub(super) struct DraftWrite {
-    pub session_id: String,
-    pub source: String,
-}
+pub(super) type DraftWrite = weftext_core::DraftInputRequest;
 impl DraftRequest {
     pub fn session_id(&self) -> &str {
         match self {
@@ -209,7 +204,10 @@ impl DraftRequest {
         }
     }
     pub fn acknowledges_input(&self) -> bool {
-        matches!(self, Self::Persist { .. } | Self::Resume { .. })
+        matches!(
+            self,
+            Self::Persist { .. } | Self::Resume { .. } | Self::Flush { .. }
+        )
     }
 }
 
@@ -227,6 +225,8 @@ pub(super) enum Proof {
         session_id: String,
         base_id: String,
         source_digest: String,
+        input_id: String,
+        evidence: weftext_core::DocumentDraftEvidence,
         record_digest: String,
         pending_operation_id: Option<String>,
     },
@@ -258,6 +258,8 @@ impl Proof {
                 owner_generation,
                 session_id,
                 source_digest,
+                input_id,
+                evidence: _,
                 record_digest,
                 pending_operation_id,
                 base_id,
@@ -265,6 +267,7 @@ impl Proof {
                 kind == SurfaceKind::Library
                     && owner(owner_id, owner_generation)
                     && crate::broker::canonical_uuid(session_id)
+                    && crate::broker::canonical_uuid(input_id)
                     && digest(source_digest)
                     && digest(record_digest)
                     && !base_id.is_empty()

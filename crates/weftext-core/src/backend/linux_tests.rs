@@ -605,3 +605,147 @@ fn controlled_service_core_round_trip_and_negative_boundaries() {
     );
     assert_eq!(std::fs::read(device_path).unwrap(), device_bytes);
 }
+
+#[test]
+fn linux_case_distinct_pending_targets_have_distinct_original_coordinates() {
+    let a = Path::new("/enrolled/Documents/A.typ");
+    let b = Path::new("/enrolled/Documents/a.typ");
+    assert_ne!(
+        namespace_path_compare(a, b).unwrap(),
+        std::cmp::Ordering::Equal
+    );
+    assert_eq!(namespace_relative_path(b, a).unwrap(), None);
+    assert_eq!(
+        namespace_path_compare(a, Path::new("/enrolled/Documents/A.typ")).unwrap(),
+        std::cmp::Ordering::Equal
+    );
+}
+
+#[test]
+#[ignore = "requires three explicit enrolled service roots and retained fixture directory; run serially"]
+fn exact_configured_profile_reopens_more_than_5000_journal_records_without_lending_its_budget() {
+    use crate::test_support::FixtureRoots;
+    let roots = FixtureRoots::new();
+    let profile = roots.a_path().join("large-profile");
+    let enrollment = PathBuf::from(std::env::var_os("WEFTEXT_LINUX_TEST_PEER_A").unwrap());
+    let backend = BackendContext::controlled_service_for_profile(&enrollment, &profile).unwrap();
+    let mut core = crate::Core::with_backend(&profile, backend).unwrap();
+    let library = roots.a_path().join("library");
+    core.create_library(&library).unwrap();
+    let doc = core
+        .create_note_fixture(&library, &library, "Original")
+        .unwrap();
+    let original = doc.source.clone();
+    let mut ids = Vec::new();
+    // This case verifies retained-record admission and reopening. Seed the
+    // bounded middle as real create-only, synced, private cancellation facts;
+    // the first and last requests still use Core's actual producer. Large
+    // author-save publication is covered separately by the real-save case.
+    for index in 0..5100 {
+        let id = crate::fresh();
+        if index == 0 || index == 5099 {
+            core.settle_local_attempt(
+                &id,
+                "save",
+                &crate::hash(b"actual no-input original request"),
+            )
+            .unwrap();
+        } else {
+            use std::io::Write;
+            use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+            let original = crate::journal::ResolutionRecord {
+                operation_id: id.clone(),
+                action: "cancelPrepared".into(),
+                historical_message: None,
+                attempt: Some(crate::journal::AttemptFence {
+                    request_kind: "save".into(),
+                    wire_digest: crate::hash(b"actual no-input original request"),
+                }),
+            };
+            let path = core.journal_path(&id, "resolution");
+            std::fs::DirBuilder::new()
+                .recursive(true)
+                .mode(0o700)
+                .create(path.parent().unwrap())
+                .unwrap();
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .mode(0o600)
+                .open(&path)
+                .unwrap();
+            file.write_all(&serde_json::to_vec(&original).unwrap())
+                .unwrap();
+            file.sync_all().unwrap();
+        }
+        ids.push(id);
+    }
+    for entry in std::fs::read_dir(profile.join("journal")).unwrap() {
+        std::fs::File::open(entry.unwrap().path())
+            .unwrap()
+            .sync_all()
+            .unwrap();
+    }
+    std::fs::File::open(profile.join("journal"))
+        .unwrap()
+        .sync_all()
+        .unwrap();
+    let count = std::fs::read_dir(profile.join("journal"))
+        .unwrap()
+        .filter_map(|entry| {
+            let path = entry.unwrap().path();
+            path.is_dir()
+                .then(|| std::fs::read_dir(path).unwrap().count())
+        })
+        .sum::<usize>();
+    assert!(count > 5000);
+    drop(core);
+    assert_eq!(
+        BackendContext::controlled_service(&enrollment)
+            .err()
+            .unwrap()
+            .code,
+        "budget"
+    );
+    assert_eq!(
+        BackendContext::controlled_service_for_profile(
+            &enrollment,
+            &roots.a_path().join("nearby-profile")
+        )
+        .err()
+        .unwrap()
+        .code,
+        "budget"
+    );
+    let backend = BackendContext::controlled_service_for_profile(&enrollment, &profile).unwrap();
+    let mut core = crate::Core::with_backend(&profile, backend).unwrap();
+    assert_eq!(
+        core.open(&doc.path, Some(library)).unwrap().source,
+        original
+    );
+    for id in [&ids[0], ids.last().unwrap()] {
+        assert_eq!(
+            core.local_operation_status(id).unwrap()["status"],
+            "resolved"
+        );
+    }
+    drop(core);
+    // A similarly named unrelated subtree receives no profile journal credit.
+    let unrelated = roots.a_path().join("other/journal/00");
+    std::fs::create_dir_all(&unrelated).unwrap();
+    for n in 0..5001 {
+        std::fs::write(
+            unrelated.join(format!("original-{n}")),
+            b"unrelated original bytes",
+        )
+        .unwrap();
+    }
+    assert_eq!(
+        BackendContext::controlled_service_for_profile(&enrollment, &profile)
+            .err()
+            .unwrap()
+            .code,
+        "budget"
+    );
+    assert_eq!(std::fs::read_dir(unrelated).unwrap().count(), 5001);
+}

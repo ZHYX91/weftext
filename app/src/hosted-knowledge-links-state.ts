@@ -2,6 +2,7 @@ import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { applySourcePatches, sourceBoundary, type SourcePatch } from "./editor";
 export interface HostedLinksContext {
+    inputId: string;
     actor: string;
     deployment: string;
     generation: number;
@@ -165,7 +166,7 @@ export interface HostedLinksProfile {
     };
 }
 export function sameHostedLinksContext(a: HostedLinksContext, b: HostedLinksContext | null): boolean {
-    return !!b && a.actor === b.actor && a.deployment === b.deployment && a.generation === b.generation && a.credential === b.credential && a.epoch === b.epoch && a.authorization === b.authorization && a.resource === b.resource && a.sessionId === b.sessionId && a.source === b.source && a.serial === b.serial && a.writable === b.writable && a.pending === b.pending && a.compare === b.compare;
+    return !!b && a.actor === b.actor && a.deployment === b.deployment && a.generation === b.generation && a.credential === b.credential && a.epoch === b.epoch && a.authorization === b.authorization && a.resource === b.resource && a.sessionId === b.sessionId && a.source === b.source && a.serial === b.serial && a.inputId === b.inputId && a.writable === b.writable && a.pending === b.pending && a.compare === b.compare;
 }
 export function requireHostedLinksBasis(basis: HostedLinksBasis, context: HostedLinksContext, hash: string, snapshot?: string): void {
     if (!basis || basis.actor !== context.actor || basis.actorEpoch !== context.generation || basis.deployment !== context.deployment || basis.resource !== context.resource || basis.sessionId !== context.sessionId || basis.serial !== context.serial || basis.sourceHash !== hash || !/^[0-9a-f]{64}$/.test(basis.snapshot) || snapshot !== undefined && basis.snapshot !== snapshot)

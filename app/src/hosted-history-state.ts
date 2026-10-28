@@ -15,6 +15,7 @@ export interface HostedHistoryRequest {
     source: string;
     serial: number;
     sourceHash: string;
+    inputRevision?: number;
 }
 type HostedRestoreReceipt = HistoryRestoreResult["receipt"] & { revisionId: string };
 export interface HostedHistoryStatus {

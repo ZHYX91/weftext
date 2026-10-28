@@ -10,6 +10,8 @@ use weftext_messages::UiMessage;
 #[path = "definition_admission_tests.rs"]
 mod definition_admission_tests;
 mod directory;
+#[cfg(test)]
+mod namespace_tests;
 #[cfg(all(test, windows))]
 mod observation_tests;
 mod owner_backup;
@@ -22,8 +24,8 @@ const MAX_OPERATION_BYTES: usize = 64 * 1024 * 1024;
 const MAX_OPERATION_FILES: usize = 5000;
 // A single observation-name cut retains the original enumeration's directory
 // guard. It carries no accepted revision or source qualification authority.
-struct ObservationRecordPaths {
-    _directory: backend::ScopedDirectoryEntries,
+pub(crate) struct ObservationRecordPaths<'a> {
+    _directory: journal::JournalEntries<'a>,
     paths: Vec<PathBuf>,
 }
 pub(crate) fn observation_record_name_matches(name: &str, operation_id: &str) -> bool {
@@ -32,7 +34,7 @@ pub(crate) fn observation_record_name_matches(name: &str, operation_id: &str) ->
             || (suffix.starts_with(".recovery-observations-") && suffix.ends_with(".json"))
     })
 }
-impl ObservationRecordPaths {
+impl ObservationRecordPaths<'_> {
     fn relevant_names(&self, plans: &[&journal::Plan]) -> BTreeSet<PathBuf> {
         self.paths
             .iter()
@@ -798,12 +800,10 @@ impl FrozenOperation {
         (self.preview.node_map.len() == 1)
             .then(|| self.preview.node_map.values().next().unwrap().clone())
     }
-    pub(crate) fn affects(&self, path: &Path) -> bool {
-        let target = display(path).to_lowercase();
-        let within = |p: &str| {
-            let p = p.to_lowercase();
-            target == p || target.starts_with(&(p + "\\"))
-        };
+    pub(crate) fn affects(&self, path: &Path) -> Result<bool> {
+        // A locator is interpreted in the actual backend namespace. Textual
+        // lowercasing and separators cannot describe both NTFS and POSIX.
+        let mut affected = Vec::<(PathBuf, bool)>::new();
         match &self.mutation {
             Mutation::Compound {
                 relocations,
@@ -813,21 +813,24 @@ impl FrozenOperation {
                 retired_members,
                 ..
             } => {
-                relocations.iter().any(|step| {
-                    within(&step.source)
-                        || within(&step.target)
-                        || step.parking.as_ref().is_some_and(|path| within(path))
-                }) || updates
-                    .iter()
-                    .chain(created_files)
-                    .any(|change| Path::new(&change.path) == path)
-                    || retired_members.iter().any(|member| {
-                        locator_equal(&member.source, &display(path))
-                            || locator_equal(&member.target, &display(path))
-                    })
-                    || created_directories
+                for step in relocations {
+                    affected.push((PathBuf::from(&step.source), true));
+                    affected.push((PathBuf::from(&step.target), true));
+                    if let Some(parking) = &step.parking {
+                        affected.push((PathBuf::from(parking), true));
+                    }
+                }
+                affected.extend(
+                    updates
                         .iter()
-                        .any(|directory| within(directory))
+                        .chain(created_files)
+                        .map(|c| (PathBuf::from(&c.path), false)),
+                );
+                for member in retired_members {
+                    affected.push((PathBuf::from(&member.source), false));
+                    affected.push((PathBuf::from(&member.target), false));
+                }
+                affected.extend(created_directories.iter().map(|d| (PathBuf::from(d), true)));
             }
             Mutation::Relocate {
                 source,
@@ -835,11 +838,14 @@ impl FrozenOperation {
                 updates,
                 ..
             } => {
-                within(source)
-                    || within(target)
-                    || updates
+                affected.push((PathBuf::from(source), true));
+                affected.push((PathBuf::from(target), true));
+                affected.extend(
+                    updates
                         .iter()
-                        .any(|c| c.before.as_ref() != Some(&c.after) && Path::new(&c.path) == path)
+                        .filter(|c| c.before.as_ref() != Some(&c.after))
+                        .map(|c| (PathBuf::from(&c.path), false)),
+                );
             }
             Mutation::CreateTree {
                 target,
@@ -849,22 +855,37 @@ impl FrozenOperation {
                 updates,
                 ..
             } => {
-                (!existing_target && within(target))
-                    || (*existing_target
-                        && directories
+                if !existing_target {
+                    affected.push((PathBuf::from(target), true));
+                } else {
+                    affected.extend(
+                        directories
                             .iter()
-                            .any(|d| within(&display(&Path::new(target).join(d)))))
-                    || files
+                            .map(|d| (Path::new(target).join(d), true)),
+                    );
+                }
+                affected.extend(
+                    files
                         .iter()
-                        .any(|f| f.path.eq_ignore_ascii_case(&display(path)))
-                    || updates
-                        .iter()
-                        .any(|f| f.path.eq_ignore_ascii_case(&display(path)))
+                        .chain(updates)
+                        .map(|c| (PathBuf::from(&c.path), false)),
+                );
             }
-            Mutation::Update { files } => files
-                .iter()
-                .any(|f| f.path.eq_ignore_ascii_case(&display(path))),
+            Mutation::Update { files } => {
+                affected.extend(files.iter().map(|c| (PathBuf::from(&c.path), false)))
+            }
         }
+        for (locator, subtree) in affected {
+            let matches = if subtree {
+                backend::namespace_relative_path(path, &locator)?.is_some()
+            } else {
+                backend::namespace_path_compare(path, &locator)? == std::cmp::Ordering::Equal
+            };
+            if matches {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
     pub(crate) fn has_identity(&self, identity: &FileIdentity) -> bool {
         self.files.iter().any(|f| &f.stamp.identity == identity)
@@ -1089,8 +1110,8 @@ impl Core {
         let records = self.observation_record_paths()?;
         self.read_observation_facts_from_paths(operation_id, &records)
     }
-    fn observation_record_paths(&self) -> Result<ObservationRecordPaths> {
-        let mut directory = self.backend.read_dir(self.data_dir.join("journal"))?;
+    pub(crate) fn observation_record_paths(&self) -> Result<ObservationRecordPaths<'_>> {
+        let mut directory = self.journal_entries()?;
         let paths = directory
             .by_ref()
             .map(|entry| entry.map(|entry| entry.path()))
@@ -1100,9 +1121,9 @@ impl Core {
             paths,
         })
     }
-    fn check_observation_record_paths(
+    pub(crate) fn check_observation_record_paths(
         &self,
-        records: &ObservationRecordPaths,
+        records: &ObservationRecordPaths<'_>,
         plans: &[&journal::Plan],
     ) -> Result<()> {
         if records.relevant_names(plans) != self.observation_record_paths()?.relevant_names(plans) {
@@ -1113,10 +1134,10 @@ impl Core {
         }
         Ok(())
     }
-    fn read_observation_facts_from_paths(
+    pub(crate) fn read_observation_facts_from_paths(
         &self,
         operation_id: &str,
-        records: &ObservationRecordPaths,
+        records: &ObservationRecordPaths<'_>,
     ) -> Result<Vec<RevisionFact>> {
         let paths = records.paths.iter().filter(|path| {
             observation_record_name_matches(
@@ -1390,8 +1411,7 @@ impl Core {
             .collect::<Result<Vec<_>>>()?;
         let record = self.journal_path(&plan.operation_id, "observations");
         if self.backend.entry_exists(&record)? {
-            journal::private_create(
-                &self.backend,
+            self.create_private_record(
                 &self.journal_path(
                     &plan.operation_id,
                     &format!("recovery-observations-{}", fresh()),
@@ -1399,7 +1419,7 @@ impl Core {
                 &serde_json::to_vec(&facts)?,
             )?;
         } else {
-            journal::private_create(&self.backend, &record, &serde_json::to_vec(&facts)?)?;
+            self.create_private_record(&record, &serde_json::to_vec(&facts)?)?;
         }
         if !t.births().is_empty() {
             let births = t.births();
@@ -1445,7 +1465,7 @@ impl Core {
                     ));
                 }
             } else if !actual.is_empty() {
-                journal::private_create(&self.backend, &record, &serde_json::to_vec(&actual)?)?;
+                self.create_private_record(&record, &serde_json::to_vec(&actual)?)?;
             }
         }
         let mut resources = Vec::new();
@@ -1512,7 +1532,7 @@ impl Core {
                     ));
                 }
             } else {
-                journal::private_create(&self.backend, &record, &serde_json::to_vec(&resources)?)?;
+                self.create_private_record(&record, &serde_json::to_vec(&resources)?)?;
             }
         }
         Ok(())
@@ -1523,8 +1543,7 @@ impl Core {
         path: &Path,
         file: &backend::BoundFile,
     ) -> Result<()> {
-        journal::private_create(
-            &self.backend,
+        self.create_private_record(
             &self.journal_path(
                 operation_id,
                 &format!("object-{}", hash(display(path).as_bytes())),
@@ -1565,8 +1584,7 @@ impl Core {
         bytes: &[u8],
         revision: &str,
     ) -> Result<()> {
-        journal::private_create(
-            &self.backend,
+        self.create_private_record(
             &self.journal_path(operation_id, "observations"),
             &serde_json::to_vec(&vec![RevisionFact {
                 path: display(path),
@@ -1669,8 +1687,7 @@ impl Core {
         self.verify_snapshot(&path, base_id, Some(&current))?;
         let key = fresh();
         let revision = self.accepted_revision(&current)?.unwrap_or_else(fresh);
-        journal::private_create(
-            &self.backend,
+        self.create_private_record(
             &record,
             &serde_json::to_vec(&DefinitionReservation {
                 library: self.draft_library_for_root(&root)?,
@@ -1721,9 +1738,8 @@ impl Core {
                     weftext_messages::UiMessage::error_core_operations_owner_not_admitted(),
                 )
             })?;
-        let directory = self.journal_path("probe", "definition-reservation");
         let mut found = None;
-        for entry in self.backend.read_dir(directory.parent().unwrap())? {
+        for entry in self.journal_entries()? {
             let entry = entry?;
             let name = entry.file_name();
             let name = name.to_string_lossy();
@@ -3079,8 +3095,7 @@ impl Core {
             return Ok(old.revision);
         }
         let revision = fresh();
-        journal::private_create(
-            &self.backend,
+        self.create_private_record(
             &reservation_path,
             &serde_json::to_vec(&RevisionReservation {
                 library: self.draft_library_for_root(&root)?,
@@ -5702,12 +5717,10 @@ impl Core {
         }
         if matches!(t.mutation, Mutation::Compound { .. }) {
             self.execute_compound(&plan)?;
-            for session in self
-                .sessions
-                .values_mut()
-                .filter(|session| t.affects(&session.path))
-            {
-                session.base_id = fresh();
+            for session in self.sessions.values_mut() {
+                if t.affects(&session.path)? {
+                    session.base_id = fresh();
+                }
             }
             return Ok(t.receipt.clone());
         }
@@ -6098,14 +6111,12 @@ impl Core {
                     guards.push(guard);
                 }
                 if !resource_births.is_empty() {
-                    journal::private_create(
-                        &self.backend,
+                    self.create_private_record(
                         &self.journal_path(operation_id, "resource-births"),
                         &serde_json::to_vec(&resource_births)?,
                     )?;
                 }
-                journal::private_create(
-                    &self.backend,
+                self.create_private_record(
                     &self.journal_path(operation_id, "observations"),
                     &serde_json::to_vec(&observations)?,
                 )?;
@@ -6312,21 +6323,18 @@ impl Core {
                     guards.push(g);
                 }
                 if !new_births.is_empty() {
-                    journal::private_create(
-                        &self.backend,
+                    self.create_private_record(
                         &self.journal_path(operation_id, "births"),
                         &serde_json::to_vec(&new_births)?,
                     )?;
                 }
                 if !resource_births.is_empty() {
-                    journal::private_create(
-                        &self.backend,
+                    self.create_private_record(
                         &self.journal_path(operation_id, "resource-births"),
                         &serde_json::to_vec(&resource_births)?,
                     )?;
                 }
-                journal::private_create(
-                    &self.backend,
+                self.create_private_record(
                     &self.journal_path(operation_id, "observations"),
                     &serde_json::to_vec(&observations)?,
                 )?;
@@ -6335,15 +6343,16 @@ impl Core {
             }
         }
         // Existing UI sessions retain their drafts but their bases become stale.
-        for session in self.sessions.values_mut().filter(|s| t.affects(&s.path)) {
-            session.base_id = fresh();
+        for session in self.sessions.values_mut() {
+            if t.affects(&session.path)? {
+                session.base_id = fresh();
+            }
         }
         Ok(t.receipt.clone())
     }
     pub(crate) fn install_record(&self, plan: &journal::Plan) -> Result<()> {
-        journal::private_create(
-            &self.backend,
-            &self.journal_path(&plan.operation_id, "install"),
+        self.admit_journal_operation(plan)?;
+        self.create_private_record(&self.journal_path(&plan.operation_id, "install"),
             &serde_json::to_vec(
                 &serde_json::json!({"operationId":plan.operation_id,"fingerprint":plan.fingerprint}),
             )?,

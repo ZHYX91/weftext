@@ -20,6 +20,7 @@ import type { GraphSnapshot, GraphEdge, GraphNode } from "./relationship-graph-s
 import { HeadingStructureView } from "./heading-structure-view";
 import type { HeadingSnapshot, StructureHeading } from "./heading-structure-state";
 export interface KnowledgeContext extends KnowledgeBasis {
+    inputId: string;
     root: string;
     nodeId?: string;
     workspaceId?: string;

@@ -151,8 +151,11 @@ export class SourceEditor {
         },
     });
     generation = 0;
+    authorInputId: string = crypto.randomUUID();
+    markAuthorInput(): string { return this.authorInputId = crypto.randomUUID(); }
     readonly inputId = personalInputId();
-    constructor(source: string, onChange: (source: string) => void, save: () => void, personalInputReady?: () => void) {
+    constructor(source: string, onChange: (source: string, inputId: string) => void, save: () => void, personalInputReady?: () => void, authorInputId?: string) {
+        if (authorInputId) this.authorInputId = authorInputId;
         this.view = new EditorView({
             state: createSourceState(source, [
                 history(), sourceInputOrigins, EditorState.transactionFilter.of(transaction => this.closeFrozen && transaction.docChanged ? [] : transaction), sourceCodePointCount, sourceLongLines, this.gutters.of(lineNumbers()), drawSelection(), highlightActiveLine(), highlightActiveLineGutter(),
@@ -199,7 +202,8 @@ export class SourceEditor {
                     if (update.docChanged) {
                         this.pendingTokens = undefined;
                         this.generation++;
-                        onChange(this.source);
+                        if (update.transactions.some(transaction => transaction.docChanged && !transaction.isUserEvent("input.commit.result"))) this.markAuthorInput();
+                        onChange(this.source, this.authorInputId);
                         this.emit("source");
                     }
                     if (update.selectionSet)
@@ -307,6 +311,9 @@ export class SourceEditor {
         if (this.disposed || this.closeFrozen || sourceSurface && (this.view.state.readOnly || !this.view.state.facet(EditorView.editable)))
             return false;
         return this.historyRequests.request(command, composingHint);
+    }
+    applyCommitted(source: string): void {
+        this.applyPatches(this.source, [{ from: 0, to: this.source.length, expected: this.source, insert: source }], undefined, "input.commit.result");
     }
     apply(from: number, to: number, text: string): void {
         this.applyPatches(this.source, [{ from, to, expected: this.source.slice(from, to), insert: text }], { from: from + text.length, to: from + text.length });

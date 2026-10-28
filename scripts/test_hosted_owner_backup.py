@@ -2,6 +2,7 @@
 
 ZIP integrity is not automatic cross-device restoration or Office acceptance.
 """
+import uuid
 import base64
 import hashlib
 import io
@@ -78,8 +79,8 @@ class HostedOwnerBackup(Hosted):
         self.enable_backup()
         alice = self.open()
         bob = self.open(actor='bob')
-        self.call('draft', {'sessionId': alice['sessionId'], 'source': alice['source'] + '\nALICE_BACKUP_DRAFT'})
-        self.call('draft', {'sessionId': bob['sessionId'], 'source': bob['source'] + '\nBOB_PRIVATE_BACKUP_DRAFT'}, 'bob')
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': alice['baseId'], 'inputRevision': 1, 'sessionId': alice['sessionId'], 'source': alice['source'] + '\nALICE_BACKUP_DRAFT'})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': bob['baseId'], 'inputRevision': 1, 'sessionId': bob['sessionId'], 'source': bob['source'] + '\nBOB_PRIVATE_BACKUP_DRAFT'}, 'bob')
         fences = [uid(), uid()]
         self.call('operation/settle', {'operationId': fences[0], 'resource': 'Shared'})
         self.call('operation/settle', {'operationId': fences[1], 'resource': 'Shared'}, 'bob')

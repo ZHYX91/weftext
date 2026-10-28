@@ -237,7 +237,7 @@ impl ControlledRoot {
     pub(super) fn enrollment(&self) -> &weftext_enrollment::ValidatedEnrollment {
         &self.authority
     }
-    pub(super) fn admit(enrollment: &Path) -> Result<Arc<Self>> {
+    pub(super) fn admit(enrollment: &Path, profile: Option<&Path>) -> Result<Arc<Self>> {
         let authority =
             weftext_enrollment::inspect_enrollment(enrollment).map_err(enrollment_error)?;
         authority
@@ -274,7 +274,28 @@ impl ControlledRoot {
         root.check_fence()?;
         // Admission validates the existing complete namespace. It never treats
         // unenumerated entries or partial scans as proof of exclusive authority.
-        root.validate_tree(&root.directory, 0, &mut 0)?;
+        let journal = profile
+            .map(|profile| -> Result<PathBuf> {
+                let profile = crate::absolute_path(profile)?;
+                root.check_path(&profile)?;
+                Ok(profile
+                    .strip_prefix(&root.path)
+                    .map_err(|_| {
+                        error(
+                            "controlledRootAuthority",
+                            UiMessage::error_core_posix_authority_changed(),
+                        )
+                    })?
+                    .join("journal"))
+            })
+            .transpose()?;
+        root.validate_tree(
+            &root.directory,
+            0,
+            &mut 0,
+            Path::new(""),
+            journal.as_deref(),
+        )?;
         Ok(root)
     }
     pub(super) fn check_fence(&self) -> Result<()> {
@@ -389,12 +410,24 @@ impl ControlledRoot {
         }
         Ok(())
     }
-    fn validate_tree(&self, directory: &File, depth: usize, used: &mut usize) -> Result<()> {
+    fn validate_tree(
+        &self,
+        directory: &File,
+        depth: usize,
+        used: &mut usize,
+        relative: &Path,
+        journal: Option<&Path>,
+    ) -> Result<()> {
         self.verify_object(directory, true)?;
         if depth > 128 {
             return Err(error("budget", UiMessage::error_core_posix_depth_budget()));
         }
-        let (entries, complete) = directory_entries(directory, 5000usize.saturating_sub(*used))?;
+        let limit = if journal == Some(relative) {
+            65_536usize + 256
+        } else {
+            5000usize
+        };
+        let (entries, complete) = directory_entries(directory, limit.saturating_sub(*used))?;
         if !complete {
             return Err(error(
                 "budget",
@@ -422,7 +455,22 @@ impl ControlledRoot {
             )?;
             self.verify_object(&file, entry.is_directory())?;
             if entry.is_directory() {
-                self.validate_tree(&file, depth + 1, used)?;
+                let next = relative.join(&name);
+                if journal == Some(next.as_path()) {
+                    // Only the configured profile gets a migration scan. An
+                    // arbitrary author directory named journal has no privilege.
+                    let mut journal_count = 0;
+                    self.validate_tree(&file, depth + 1, &mut journal_count, &next, journal)?;
+                } else if journal == Some(relative)
+                    && name
+                        .to_str()
+                        .is_some_and(crate::journal::valid_journal_bucket)
+                {
+                    let mut bucket_count = 0;
+                    self.validate_tree(&file, depth + 1, &mut bucket_count, &next, journal)?;
+                } else {
+                    self.validate_tree(&file, depth + 1, used, &next, journal)?;
+                }
             }
         }
         Ok(())

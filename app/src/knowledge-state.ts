@@ -155,6 +155,7 @@ export function layoutMentions(hits: readonly KnowledgeMention[]): KnowledgeMent
     return sorted;
 }
 export interface KnowledgeBasis {
+    inputId?: string;
     sessionId: string;
     path: string;
     source: string;
@@ -162,7 +163,7 @@ export interface KnowledgeBasis {
     baseId: string;
 }
 export function sameKnowledgeBasis(a: KnowledgeBasis | null, b: KnowledgeBasis | null): boolean {
-    return a !== null && b !== null && a.sessionId === b.sessionId && a.path === b.path && a.serial === b.serial && a.baseId === b.baseId && a.source === b.source;
+    return a !== null && b !== null && a.sessionId === b.sessionId && a.path === b.path && a.serial === b.serial && a.inputId === b.inputId && a.baseId === b.baseId && a.source === b.source;
 }
 /** A late background read must never replace a newer document or draft. */
 export class KnowledgeReadGate {

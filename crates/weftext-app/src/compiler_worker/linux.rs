@@ -10,6 +10,8 @@ const CLEANUP_DEADLINE: Duration = Duration::from_secs(5);
 pub(super) struct Authority {
     client: BrokerClient,
     gate: Arc<tokio::sync::Semaphore>,
+    #[cfg(test)]
+    pub(super) test_timeout: Duration,
 }
 impl Authority {
     pub(super) fn connect(
@@ -20,6 +22,8 @@ impl Authority {
             client: BrokerClient::connect(backend.controlled_enrollment(), policy)
                 .map_err(io::Error::other)?,
             gate: Arc::new(tokio::sync::Semaphore::new(1)),
+            #[cfg(test)]
+            test_timeout: Duration::from_secs(20),
         })
     }
 }
@@ -65,23 +69,34 @@ impl Drop for Admission {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct Status {
     exit: crate::owned_process::Status,
-    completed_normally: bool,
+    completion: Completion,
 }
 impl Status {
     fn from_receipt(receipt: &Receipt) -> io::Result<Self> {
         Ok(Self {
             exit: crate::owned_process::Status::linux(receipt.exit_code, receipt.signal)?,
-            completed_normally: receipt.completion == Completion::Exited,
+            completion: receipt.completion.clone(),
         })
     }
     pub(crate) fn success(&self) -> bool {
-        self.completed_normally && self.exit.success()
+        self.completion == Completion::Exited && self.exit.success()
     }
     pub(crate) fn exit(&self) -> crate::owned_process::ProcessExit {
         self.exit.exit()
+    }
+    pub(crate) fn completion(&self) -> Completion {
+        self.completion.clone()
+    }
+    pub(crate) fn failure_kind(&self) -> Kind {
+        match &self.completion {
+            Completion::Timeout => Kind::Deadline,
+            Completion::Cancelled => Kind::Cancelled,
+            Completion::Disconnected | Completion::SetupFailed => Kind::SupervisionLost,
+            Completion::Exited => Kind::NonzeroExit,
+        }
     }
 }
 
@@ -156,6 +171,10 @@ pub(super) async fn spawn(
     })?;
     // Admission moves into the registered launch and then the Child itself.
     // Even a dropped join result retains unknown cleanup via Child::drop.
+    #[cfg(not(test))]
+    let timeout = Duration::from_secs(20);
+    #[cfg(test)]
+    let timeout = authority.test_timeout;
     let launch = crate::work::spawn_blocking(move || {
         admission.begin_launch();
         match authority.client.launch(
@@ -164,7 +183,7 @@ pub(super) async fn spawn(
             } else {
                 WorkerKind::Render
             },
-            Duration::from_secs(20),
+            timeout,
         ) {
             Ok(owned) => Ok(Child {
                 owned,
@@ -223,6 +242,7 @@ pub(super) async fn spawn(
             Ok(()) => match child.try_wait() {
                 Ok(Some(status)) => {
                     failure.exit = Some(status.exit());
+                    failure.completion = Some(status.completion());
                     failure.cleanup_confirmed = true;
                 }
                 Err(error) => failure.cleanup_error = Some(error),
@@ -237,6 +257,86 @@ pub(super) async fn spawn(
 
 #[cfg(test)]
 mod tests {
+    #[tokio::test]
+    async fn exact_broker_exit_reason_is_not_downgraded_to_nonzero_exit() {
+        use axum::response::IntoResponse;
+        let started = weftext_worker_broker::Started {
+            version: 1,
+            job_id: "a".repeat(32),
+            pid: 123,
+            image_sha256: "b".repeat(64),
+        };
+        for (completion, kind, code, signal) in [
+            (Completion::Timeout, Kind::Deadline, None, Some(9)),
+            (Completion::Cancelled, Kind::Cancelled, None, Some(9)),
+            (
+                Completion::Disconnected,
+                Kind::SupervisionLost,
+                None,
+                Some(9),
+            ),
+            (
+                Completion::SetupFailed,
+                Kind::SupervisionLost,
+                None,
+                Some(9),
+            ),
+            (Completion::Exited, Kind::NonzeroExit, Some(7), None),
+        ] {
+            let receipt = Receipt {
+                version: 1,
+                job_id: started.job_id.clone(),
+                completion: completion.clone(),
+                exit_code: code,
+                signal,
+                reaped: 1,
+                cgroup_empty: true,
+                pidfd_exited: true,
+            };
+            receipt.validate(&started).unwrap();
+            let status = Status::from_receipt(&receipt).unwrap();
+            assert_eq!(status.completion(), completion);
+            assert_eq!(status.failure_kind(), kind);
+            assert!(!status.success());
+            let mut failure = WorkerFailure::new(status.failure_kind());
+            failure.exit = Some(status.exit());
+            failure.completion = Some(status.completion());
+            failure.stdout.bytes = b"PRIVATE WORKER SOURCE".to_vec();
+            let response = crate::ApiError::worker_failure(failure).into_response();
+            let (expected_status, expected_code) = match completion {
+                Completion::Timeout => (axum::http::StatusCode::REQUEST_TIMEOUT, "compile_timeout"),
+                Completion::Cancelled => (axum::http::StatusCode::CONFLICT, "compiler_cancelled"),
+                Completion::Exited => (
+                    axum::http::StatusCode::UNPROCESSABLE_ENTITY,
+                    "compiler_failed",
+                ),
+                Completion::Disconnected | Completion::SetupFailed => (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    "compiler_supervisor_unknown",
+                ),
+            };
+            assert_eq!(response.status(), expected_status);
+            let bytes = axum::body::to_bytes(response.into_body(), 4096)
+                .await
+                .unwrap();
+            let body: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+            assert_eq!(body["error"]["code"], expected_code);
+            assert!(!std::str::from_utf8(&bytes).unwrap().contains("PRIVATE"));
+        }
+        let success = Status::from_receipt(&Receipt {
+            version: 1,
+            job_id: started.job_id,
+            completion: Completion::Exited,
+            exit_code: Some(0),
+            signal: None,
+            reaped: 1,
+            cgroup_empty: true,
+            pidfd_exited: true,
+        })
+        .unwrap();
+        assert!(success.success());
+    }
+
     use super::*;
     #[tokio::test]
     async fn detached_caller_retains_admission_until_original_terminal() {

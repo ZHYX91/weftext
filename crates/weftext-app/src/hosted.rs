@@ -207,6 +207,8 @@ struct Auth {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Open {
     resource: String,
+    #[serde(default)]
+    session_id: Option<String>,
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -222,6 +224,7 @@ struct SourceRequest {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct SourceSaveRequest {
+    input_revision: Option<u64>,
     session_id: String,
     base_id: String,
     source: String,
@@ -627,12 +630,20 @@ impl HostedInner {
         format!("{}:{actor}", self.config.deployment)
     }
     fn open(&mut self, actor: &str, resource: &str) -> Result<Value, ApiError> {
+        self.open_for_session(actor, resource, None)
+    }
+    fn open_for_session(
+        &mut self,
+        actor: &str,
+        resource: &str,
+        session_id: Option<&str>,
+    ) -> Result<Value, ApiError> {
         let rights = self.rights(actor, resource)?;
         let file = author_file(self, resource)?;
         self.reap_idle_sessions(Instant::now())?;
-        if self.sessions.len() >= 128
-            || self.sessions.values().filter(|s| s.actor == actor).count() >= 32
-        {
+        let at_limit = self.sessions.len() >= 128
+            || self.sessions.values().filter(|s| s.actor == actor).count() >= 32;
+        if session_id.is_none() && at_limit {
             return Err(ApiError::bad(
                 UiMessage::error_api_hosted_open_session_budget(),
             ));
@@ -642,8 +653,21 @@ impl HostedInner {
         let scope = self.actor_scope(actor);
         let opened = self
             .core
-            .with_actor_for_root(&scope, &self.config.root, |c| c.open(path, Some(root)))
+            .with_actor_for_root(&scope, &self.config.root, |c| match session_id {
+                Some(id) => c.reopen_author_session(id, &path),
+                None => c.open(path, Some(root)),
+            })
             .map_err(Self::core_error)?;
+        if session_id != Some(opened.session_id.as_str()) && at_limit {
+            self.core
+                .with_actor_for_root(&scope, &self.config.root, |c| {
+                    c.close_session(&opened.session_id)
+                })
+                .map_err(Self::core_error)?;
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_open_session_budget(),
+            ));
+        }
         self.sessions.insert(
             opened.session_id.clone(),
             HostedSession {
@@ -654,7 +678,7 @@ impl HostedInner {
             },
         );
         Ok(
-            json!({"resource":resource,"title":file.title,"sessionId":opened.session_id,"baseId":opened.base_id,
+            json!({"resource":resource,"title":file.title,"sessionId":opened.session_id,"viewInputId":opened.view_input_id,"baseId":opened.base_id,
             "source":opened.source,"recoveredDraft":opened.recovered_draft,"recoveredDraftBaseSource":opened.recovered_draft_base_source,
             "recoveredDraftConflict":opened.recovered_draft_conflict,"recoveredDraftWitness":opened.recovered_draft_witness,"rights":rights}),
         )
@@ -777,7 +801,16 @@ async fn open(
     Ok(Json(
         locked(&state, move |inner| {
             let actor = inner.actor(&auth)?;
-            inner.open(&actor, &req.resource)
+            if let Some(id) = &req.session_id {
+                let (_, session, _) = inner.session(&auth, id)?;
+                if session.resource != req.resource {
+                    return Err(unavailable());
+                }
+            }
+            match req.session_id.as_deref() {
+                Some(id) => inner.open_for_session(&actor, &req.resource, Some(id)),
+                None => inner.open(&actor, &req.resource),
+            }
         })
         .await?,
     ))
@@ -825,21 +858,22 @@ async fn keepalive(
 async fn draft(
     State(state): State<HostedState>,
     Extension(auth): Extension<Auth>,
-    RequestJson(req): RequestJson<SourceRequest>,
+    RequestJson(req): RequestJson<weftext_core::DraftInputRequest>,
 ) -> ApiResult {
     Ok(Json(
         locked(&state, move |inner| {
+            let revision = req.input_revision;
             let (actor, _, rights) = inner.session(&auth, &req.session_id)?;
             if !rights.write {
                 return Err(unavailable());
             }
-            inner
+            let evidence = inner
                 .core
                 .with_actor_for_root(&inner.actor_scope(&actor), &inner.config.root, |c| {
-                    c.persist_draft(&req.session_id, &req.source)
+                    c.persist_draft_ordered(req)
                 })
                 .map_err(HostedInner::core_error)?;
-            Ok(json!({"status":"draftRetained"}))
+            Ok(json!({"status":"inputAcknowledged","inputRevision":revision,"evidence":evidence}))
         })
         .await?,
     ))
@@ -877,6 +911,7 @@ async fn save(
                 inner,
                 &auth,
                 weftext_core::HostedSaveRequest {
+                    input_revision: req.input_revision,
                     session_id: req.session_id,
                     base_id: req.base_id,
                     source: req.source,

@@ -3,6 +3,7 @@
 Only owned disposable fixtures are created. The local host provisions admitted
 resources; all tested consumer requests cross the hosted HTTP boundary.
 """
+import uuid
 import base64
 import copy
 import hashlib
@@ -209,7 +210,7 @@ class HostedMedia(HostedQuery):
     def test_media_original_plan_restart_idempotency_and_source_draft(self):
         self.prepare_media()
         source = self.open()
-        self.call('draft', {'sessionId': source['sessionId'], 'source': source['source']+'\nPRIVATE_DRAFT'})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': source['baseId'], 'inputRevision': 1, 'sessionId': source['sessionId'], 'source': source['source']+'\nPRIVATE_DRAFT'})
         plan, request = self.prepare_annotation(self.media_review('image', 'bob'),
             {'kind': 'annotationCreate', 'body': '原操作唯一讨论', 'target': self.whole()}, 'bob')
         self.server.close(); self.start()

@@ -3,6 +3,7 @@
 Local APIs only establish the fixture's admissions. All tested effects and new
 object entry points use hosted HTTP without rewriting operator configuration.
 """
+import uuid
 from _creation_result import created_document
 import base64
 import copy
@@ -160,9 +161,9 @@ class HostedStructure(HostedHistory):
         before = self.open()
         reference = self.call('navigation/ref', {'sessionId': before['sessionId']})['reference']
         alice_draft = before['source'] + '\nALICE_UNSAVED_BEFORE_MOVE'
-        self.call('draft', {'sessionId': before['sessionId'], 'source': alice_draft})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': before['baseId'], 'inputRevision': 1, 'sessionId': before['sessionId'], 'source': alice_draft})
         bob = self.open(actor='bob'); bob_draft = bob['source'] + '\nBOB_PRIVATE_BEFORE_MOVE'
-        self.call('draft', {'sessionId': bob['sessionId'], 'source': bob_draft}, 'bob')
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': bob['baseId'], 'inputRevision': 1, 'sessionId': bob['sessionId'], 'source': bob_draft}, 'bob')
         self.policy(lambda users: users['bob']['grants'].update(Moved={'read': True}))
         self.grant(sources={'Shared': {'move': True}}, destinations={'Moved': {'receive': True}})
         result = self.execute(self.request('move', 'Shared', source='Shared', destination='Moved'))
@@ -218,7 +219,7 @@ class HostedStructure(HostedHistory):
         self.prepare_structure()
         self.grant(sources={'Shared': {'rename': True}}, destinations={'Renamed': {'receive': True}})
         doc = self.open(); draft = doc['source'] + '\nPRIVATE_CURRENT_DRAFT'
-        self.call('draft', {'sessionId': doc['sessionId'], 'source': draft})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': draft})
         request = self.request('rename', 'Shared', source='Shared', destination='Renamed')
         plan = self.prepare(request)
         self.policy(lambda users: users['alice']['structure']['sources']['Shared'].update(rename=False))

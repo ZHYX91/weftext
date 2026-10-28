@@ -28,7 +28,7 @@ export function trashRestoreDraft(drafts: Map<string, LibraryTrashDraft>, root: 
 }
 export interface LibraryTrashHost {
     request<T>(path: string, body?: unknown): Promise<T>;
-    created(document: OpenedDocument): Promise<void>;
+    created(document: OpenedDocument, operationId: string | undefined): Promise<void>;
     notify(message: UiText, error?: boolean): void;
     environmentChanged?(root: string): void;
 }
@@ -184,7 +184,7 @@ export class LibraryTrashRestoreFlow {
                 return;
             }
             try {
-                pending.receipt = await deliverCommitted(pending.receipt, async () => { await this.host.created(document); });
+                pending.receipt = await deliverCommitted(pending.receipt, async () => { await this.host.created(document, pending.request.operationId); });
                 if (!committedDeliveryComplete(pending.receipt))
                     throw new UiError(joinUiText([uiMessage("libraryTrash.restoredOpenInformationUnavailable"), ...knowledgeDeliveryErrors(pending.receipt)], "\n"));
                 pending.delivered = true;

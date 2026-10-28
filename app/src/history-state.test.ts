@@ -6,7 +6,7 @@ import { DocumentSession } from "./session";
 import { createSourceState } from "./editor";
 import { history, undoDepth } from "@codemirror/commands";
 
-const original: HistoryContext = {
+const original: HistoryContext = { inputId: "test-input",
   sessionId: "session", root: "D:/notes", path: "D:/notes/笔记/笔记.typ", workspaceId: "workspace", nodeId: "node",
   source: "v3\r\n", baseSource: "v3\r\n", baseId: "base3", serial: 0, dirty: false,
 };
@@ -316,4 +316,13 @@ test("exact diff lanes reconstruct BOM, Unicode, mixed endings and trailing whit
     assert.equal(diff.filter(part => part.kind !== "added").map(part => part.text).join(""), before);
     assert.equal(diff.filter(part => part.kind !== "removed").map(part => part.text).join(""), after);
   }
+});
+
+test("history restore freezes the acknowledged author revision even for a clean snapshot", async () => {
+  const f = fixture();
+  f.setCurrent({ ...original, inputRevision: 7 });
+  await f.controller.select("save1"); await f.controller.prepareRestore();
+  await f.controller.restore("none");
+  assert.equal(f.requests[0].inputRevision, 7);
+  assert.equal(f.requests[0].draftSource, original.source);
 });

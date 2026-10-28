@@ -326,6 +326,12 @@ impl ApiError {
                     "compile_timeout",
                     UiMessage::error_api_worker_deadline(),
                 ),
+                #[cfg(target_os = "linux")]
+                Kind::Cancelled => (
+                    StatusCode::CONFLICT,
+                    "compiler_cancelled",
+                    UiMessage::error_api_worker_cancelled(),
+                ),
                 Kind::NonzeroExit => (
                     StatusCode::UNPROCESSABLE_ENTITY,
                     "compiler_failed",
@@ -564,12 +570,7 @@ struct CreateNote {
     name: String,
     operation_id: Option<String>,
 }
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DraftRequest {
-    session_id: String,
-    source: String,
-}
+type DraftRequest = weftext_core::DraftInputRequest;
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RenderRequest {
@@ -776,23 +777,67 @@ async fn create_note(
         .await
         .map(Json)
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FrozenSaveRequest {
+    session_id: String,
+    base_id: String,
+    source: String,
+    operation_id: String,
+    input_revision: Option<u64>,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct FrozenSaveAsRequest {
+    session_id: String,
+    path: String,
+    source: String,
+    operation_id: String,
+    input_revision: Option<u64>,
+}
 async fn save(
     State(state): State<AppState>,
-    RequestJson(req): RequestJson<SaveRequest>,
+    RequestJson(req): RequestJson<FrozenSaveRequest>,
 ) -> ApiResult {
     let id = req.operation_id.clone();
     let session = req.session_id.clone();
-    let output = value(core_call(&state, move |c| c.save(req)).await?)?;
+    let input_revision = req.input_revision;
+    let request = SaveRequest {
+        session_id: req.session_id,
+        base_id: req.base_id,
+        source: req.source,
+        operation_id: req.operation_id,
+    };
+    let output = value(
+        core_call(&state, move |c| match input_revision {
+            Some(revision) => c.save_ordered(request, revision),
+            None => c.save(request),
+        })
+        .await?,
+    )?;
     Ok(Json(
         knowledge_api::file_save_delivery(&state, id, output, Some(session)).await,
     ))
 }
 async fn save_as(
     State(state): State<AppState>,
-    RequestJson(req): RequestJson<SaveAsRequest>,
+    RequestJson(req): RequestJson<FrozenSaveAsRequest>,
 ) -> ApiResult {
     let id = req.operation_id.clone();
-    let output = value(core_call(&state, move |c| c.save_as(req)).await?)?;
+    let input_revision = req.input_revision;
+    let request = SaveAsRequest {
+        session_id: req.session_id,
+        path: req.path,
+        source: req.source,
+        operation_id: req.operation_id,
+    };
+    let output = value(
+        core_call(&state, move |c| match input_revision {
+            Some(revision) => c.save_as_ordered(request, revision),
+            None => c.save_as(request),
+        })
+        .await?,
+    )?;
     Ok(Json(
         knowledge_api::file_save_delivery(&state, id, output, None).await,
     ))
@@ -801,11 +846,11 @@ async fn draft(
     State(state): State<AppState>,
     RequestJson(req): RequestJson<DraftRequest>,
 ) -> ApiResult {
-    core_call(&state, move |c| {
-        c.persist_draft(&req.session_id, &req.source)
-    })
-    .await?;
-    Ok(Json(json!({"ok":true})))
+    let revision = req.input_revision;
+    let evidence = core_call(&state, move |c| c.persist_draft_ordered(req)).await?;
+    Ok(Json(
+        json!({"ok":true,"inputRevision":revision,"evidence":evidence}),
+    ))
 }
 async fn resume_draft(
     State(state): State<AppState>,
@@ -1195,6 +1240,10 @@ async fn owned_compiler_worker(
                     .await
                     .map_err(|error| (Kind::Wait, Some(error)))?;
                 facts.exit = Some(status.exit());
+                #[cfg(target_os = "linux")]
+                {
+                    facts.completion = Some(status.completion());
+                }
                 facts.cleanup_confirmed = true;
                 Ok::<_, (Kind, Option<std::io::Error>)>(status)
             };
@@ -1205,7 +1254,14 @@ async fn owned_compiler_worker(
         .map_err(|_| (Kind::Deadline, None, None))?
         .map_err(|(kind, error)| (kind, error, None))?;
         if !output.success() {
-            return Err((Kind::NonzeroExit, None, None));
+            #[cfg(target_os = "linux")]
+            {
+                return Err((output.failure_kind(), None, None));
+            }
+            #[cfg(not(target_os = "linux"))]
+            {
+                return Err((Kind::NonzeroExit, None, None));
+            }
         }
         decode_compiler_worker_output(&facts.stdout.bytes, notes_edit)
             .map_err(|error| (Kind::OutputRejected, None, Some(error)))
@@ -1222,6 +1278,10 @@ async fn owned_compiler_worker(
             Ok(()) => match child.wait().await {
                 Ok(status) => {
                     facts.exit = Some(status.exit());
+                    #[cfg(target_os = "linux")]
+                    {
+                        facts.completion = Some(status.completion());
+                    }
                     facts.cleanup_confirmed = true;
                 }
                 Err(error) => facts.cleanup_error = Some(error),
@@ -1232,10 +1292,30 @@ async fn owned_compiler_worker(
                 // the same held process/job's independent actual exit can be.
                 if let Ok(Some(status)) = child.try_wait() {
                     facts.exit = Some(status.exit());
+                    #[cfg(target_os = "linux")]
+                    {
+                        facts.completion = Some(status.completion());
+                    }
                     facts.cleanup_confirmed = true;
                 }
             }
         }
+    }
+    #[cfg(target_os = "linux")]
+    if facts.cleanup_confirmed
+        && matches!(
+            facts.kind,
+            Kind::Setup | Kind::InputIo | Kind::StdoutIo | Kind::StderrIo | Kind::Wait
+        )
+    {
+        use weftext_worker_broker::Completion;
+        facts.kind = match facts.completion {
+            Some(Completion::Timeout) => Kind::Deadline,
+            Some(Completion::Disconnected | Completion::SetupFailed) => Kind::SupervisionLost,
+            Some(Completion::Exited) if facts.exit.is_some_and(|exit| matches!(exit, crate::owned_process::ProcessExit::Linux {code,signal} if code != Some(0) || signal.is_some())) => Kind::NonzeroExit,
+            // Cleanup-induced cancellation cannot erase the original pump failure.
+            _ => facts.kind,
+        };
     }
     let facts = Arc::new(facts);
     let mut error = match protocol_error {
@@ -1271,6 +1351,89 @@ mod worker_capture_tests {
     use super::*;
     use worker_failure::{Kind, StreamCapture, WorkerFailure};
 
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    #[ignore = "requires an explicit real controlled-service enrollment, broker policy and fixture image; run serially"]
+    async fn real_broker_pump_retains_terminal_cause_after_pipe_failure_and_cleanup() {
+        use weftext_worker_broker::Completion;
+        let enrollment = std::env::var_os("WEFTEXT_WORKER_PUMP_TEST_ENROLLMENT")
+            .expect("explicit test enrollment");
+        let policy = std::env::var_os("WEFTEXT_WORKER_PUMP_TEST_POLICY")
+            .expect("explicit test broker policy");
+        let case = std::env::var("WEFTEXT_WORKER_PUMP_TEST_CASE").expect("explicit expected case");
+        let (kind, completion, public, notes, timeout) = match case.as_str() {
+            "setupFailed" => (
+                Kind::SupervisionLost,
+                Completion::SetupFailed,
+                "compiler_supervisor_unknown",
+                false,
+                Duration::from_secs(20),
+            ),
+            "timeout" => (
+                Kind::Deadline,
+                Completion::Timeout,
+                "compile_timeout",
+                false,
+                Duration::from_millis(200),
+            ),
+            "disconnected" => (
+                Kind::SupervisionLost,
+                Completion::Disconnected,
+                "compiler_supervisor_unknown",
+                false,
+                Duration::from_secs(20),
+            ),
+            "budget" => (
+                Kind::StdoutBudget,
+                Completion::Cancelled,
+                "compiler_output_budget",
+                true,
+                Duration::from_secs(20),
+            ),
+            "nonzero" => (
+                Kind::NonzeroExit,
+                Completion::Exited,
+                "compiler_failed",
+                false,
+                Duration::from_secs(20),
+            ),
+            _ => panic!("unknown fixture expectation"),
+        };
+        let backend =
+            weftext_core::BackendContext::controlled_service(std::path::Path::new(&enrollment))
+                .unwrap();
+        let transport = compiler_worker::Transport::controlled_test(
+            &backend,
+            std::path::Path::new(&policy),
+            timeout,
+        )
+        .unwrap();
+        let error = bounded_compiler_worker(
+            serde_json::json!({"padding":"x".repeat(32*1024*1024)}),
+            notes,
+            transport,
+        )
+        .await
+        .unwrap_err();
+        let facts = error
+            .private_worker_failure
+            .as_ref()
+            .expect("original private worker facts");
+        assert!(facts.cleanup_confirmed);
+        assert_eq!(facts.kind, kind);
+        assert_eq!(facts.completion, Some(completion));
+        if case != "budget" {
+            assert!(
+                facts.io_error.is_some(),
+                "the real input pump must fail before receipt reconciliation"
+            );
+            assert!(!facts.stdin_complete);
+        } else {
+            assert!(facts.stdout.truncated);
+        }
+        assert_eq!(error.code, public);
+        assert!(facts.exit.is_some());
+    }
     #[tokio::test]
     async fn original_stream_bytes_survive_invalid_utf8_and_real_eof() {
         let raw = vec![0xff, b'a', 0, b'\n'];

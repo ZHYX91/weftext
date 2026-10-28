@@ -166,7 +166,7 @@ mod tests {
         let response = client
             .post(format!("{base}/api/draft"))
             .header("x-weftext-token", &token)
-            .json(&serde_json::json!({"sessionId":id,"source":"retained author input"}))
+            .json(&serde_json::json!({"sessionId":id,"source":"retained author input","inputRevision":1,"inputId":uuid::Uuid::new_v4(),"baseId":opened["baseId"]}))
             .send()
             .await
             .unwrap();

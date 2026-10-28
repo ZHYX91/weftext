@@ -13,7 +13,7 @@ const tree: RenderNode = { kind: "text", key: "preview", tag: null, text: "compi
 function fixture() {
   const prior = Object.getOwnPropertyDescriptor(globalThis, "document"), testDocument = new TestDocument(), body = testDocument.body;
   Object.defineProperty(globalThis, "document", { configurable: true, value: testDocument });
-  let basis: DocumentBasis | null = { sessionId: "session", baseId: "base", serial: 1, source: "甲乙丙丁", path: "resource:note", root: "" }, selection = { from: 0, to: 1 }, editable = true;
+  let basis: DocumentBasis | null = { inputId: "test-input", sessionId: "session", baseId: "base", serial: 1, source: "甲乙丙丁", path: "resource:note", root: "" }, selection = { from: 0, to: 1 }, editable = true;
   const requests: { source: string; proposalSource: string; serial: number }[] = [], applied: SourcePatch[] = [];
   let deferred: ((value: unknown) => void) | null = null, delay = false;
   const host: PanelHost = {

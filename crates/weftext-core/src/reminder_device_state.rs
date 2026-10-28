@@ -2658,7 +2658,12 @@ mod tests {
         state.libraries.insert(
             LIBRARY.into(),
             LibrarySelection {
-                root: "D:/qualified-library".into(),
+                root: if cfg!(windows) {
+                    "D:/qualified-library"
+                } else {
+                    "/qualified-library"
+                }
+                .into(),
                 identity: FileIdentity::Windows {
                     volume: 1,
                     index: 2,

@@ -39,6 +39,7 @@ pub use actor_history::ActorHistoryRestoreStatus;
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HostedSaveRequest {
+    pub input_revision: Option<u64>,
     pub session_id: String,
     pub base_id: String,
     pub source: String,
@@ -134,6 +135,7 @@ mod tests {
                     c.actor_save(
                         "note",
                         HostedSaveRequest {
+                            input_revision: None,
                             session_id: doc.session_id,
                             base_id: doc.base_id,
                             source: "after".into(),
@@ -858,7 +860,7 @@ impl Core {
         check_size(request.source.as_bytes())?;
         let ids = definition::canonical_proposal_ids(proposal_ids)?;
         let mut intent = serde_json::json!({
-            "resource":resource,"session":request.session_id,"base":request.base_id,"source":request.source
+            "resource":resource,"session":request.session_id,"base":request.base_id,"source":request.source,"inputRevision":request.input_revision
         });
         if !ids.is_empty() {
             intent["definitionReservations"] = serde_json::to_value(&ids)?;
@@ -936,23 +938,23 @@ impl Core {
                     history: None,
                     owner_backup: None,
                 };
-                journal::private_create(
-                    &self.backend,
-                    &path,
-                    &self.actor_operation_bytes(&record)?,
-                )?;
+                self.create_private_record(&path, &self.actor_operation_bytes(&record)?)?;
                 record
             }
         };
         #[cfg(all(test, windows))]
         definition_test_failpoint("actorSaveDurable")?;
         self.freeze_definition_save_reservations(&request, &record)?;
-        let outcome = self.save(SaveRequest {
+        let save_request = SaveRequest {
             session_id: request.session_id,
             base_id: request.base_id,
             source: request.source,
             operation_id: record.core_operation_id,
-        })?;
+        };
+        let outcome = match request.input_revision {
+            Some(revision) => self.save_ordered(save_request, revision),
+            None => self.save(save_request),
+        }?;
         let mut status = self
             .actor_save_status(resource, &request.operation_id)?
             .ok_or_else(|| {
@@ -1086,13 +1088,17 @@ impl Core {
             history: None,
             owner_backup: None,
         };
-        journal::private_create(&self.backend, &path, &self.actor_operation_bytes(&record)?)?;
-        let outcome = self.save(SaveRequest {
+        self.create_private_record(&path, &self.actor_operation_bytes(&record)?)?;
+        let save_request = SaveRequest {
             session_id: request.session_id,
             base_id: request.base_id,
             source: request.source,
             operation_id: record.core_operation_id,
-        })?;
+        };
+        let outcome = match request.input_revision {
+            Some(revision) => self.save_ordered(save_request, revision),
+            None => self.save(save_request),
+        }?;
         let mut status = self
             .actor_field_status(resource, field_id, &request.operation_id)?
             .ok_or_else(|| {
@@ -1133,8 +1139,7 @@ impl Core {
                 history: None,
                 owner_backup: None,
             };
-            journal::private_create(
-                &self.backend,
+            self.create_private_record(
                 &self.actor_record(operation)?,
                 &self.actor_operation_bytes(&record)?,
             )?;

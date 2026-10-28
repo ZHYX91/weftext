@@ -7,6 +7,7 @@ No received versions, private records or Trash destinations are fabricated.
 Run: python scripts/test_sync_retirement.py EXE [exact_test_name ...]
 WEFTEXT_SYNC_EVIDENCE_DIR selects a fresh retained directory.
 """
+import uuid
 from _creation_result import created_document
 import hashlib
 import json
@@ -80,7 +81,7 @@ class SyncRetirement(SyncCompound):
         for name, relative in self.initial_paths.items():
             doc = self.open(self.b, self.rb, relative)
             self.drafts[name] = doc['source'] + f'\nB OWNER PRIVATE {name} 🌿'
-            self.call(self.b, '/api/draft', sessionId=doc['sessionId'], source=self.drafts[name])
+            self.call(self.b, '/api/draft', inputId=str(uuid.uuid4()), baseId=doc['baseId'], inputRevision=1, sessionId=doc['sessionId'], source=self.drafts[name])
             versions = self.call(self.b, '/api/history/list', sessionId=doc['sessionId'])['versions']
             self.history[name] = {version['versionId']: self.call(self.b, '/api/history/read',
                 sessionId=doc['sessionId'], versionId=version['versionId'])['source']

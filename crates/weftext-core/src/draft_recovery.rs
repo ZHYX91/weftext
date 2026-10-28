@@ -4,9 +4,18 @@
 use super::*;
 use std::collections::BTreeSet;
 use weftext_messages::UiMessage;
+// Per-test-thread measurement; not a persistent cache or a witness.
+#[cfg(all(test, windows))]
+thread_local! {
+    static QUALIFIED_DRAFT_READ_CALLS: std::cell::Cell<usize> =
+        const { std::cell::Cell::new(0) };
+}
 #[cfg(all(test, windows))]
 #[path = "draft_baseline_tests.rs"]
 mod baseline_tests;
+#[cfg(all(test, windows))]
+#[path = "draft_input_order_tests.rs"]
+mod input_order_tests;
 const MAX_DRAFT_RECORD_BYTES: usize = 16 * 1024 * 1024;
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
@@ -58,6 +67,8 @@ pub struct DraftAlternative {
     pub base_known: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub producer_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input_id: Option<String>,
     #[serde(default)]
     pub role: DraftRole,
 }
@@ -70,6 +81,7 @@ impl Draft {
             source: self.source.clone(),
             base_known: self.base_known,
             producer_id: self.producer_id.clone(),
+            input_id: self.input_id.clone(),
             role: self.role.clone(),
         }
     }
@@ -84,6 +96,9 @@ impl Draft {
 
     pub(super) fn validate_producers(&self) -> Result<()> {
         for input in std::iter::once(self.proposal()).chain(self.alternatives.iter().cloned()) {
+            if let Some(id) = &input.input_id {
+                valid_operation_id(id)?;
+            }
             if let DraftRole::CommittedBaseline { operation_id } = &input.role {
                 valid_operation_id(operation_id)?;
                 if input.producer_id.is_none() {
@@ -116,6 +131,15 @@ pub struct DocumentDraftFlush {
     pub session_id: String,
     pub base_id: String,
     pub source_digest: String,
+    #[serde(default)]
+    pub input_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentDraftEvidence {
+    AuthorDraft,
+    SavedView,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -125,6 +149,7 @@ pub struct DocumentDraftReceipt {
     pub base_id: String,
     pub source_digest: String,
     pub record_digest: String,
+    pub evidence: DocumentDraftEvidence,
 }
 
 /// Explicitly continue the primary actually installed in a recovery editor.
@@ -137,6 +162,67 @@ pub struct ResumeDraftRequest {
     pub recovered_source: String,
 }
 impl Core {
+    /// Resolve content provenance from this UI's observed Base, never from a
+    /// mutable Session that may already contain a generated afterimage.
+    pub(super) fn ordered_draft_basis(
+        &self,
+        request: &DraftInputRequest,
+    ) -> Result<(String, bool)> {
+        let invalid = || {
+            CoreError::new("draftChanged", UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again())
+        };
+        let session = self.sessions.get(&request.session_id).ok_or_else(invalid)?;
+        match (&request.base_id, &request.retained_base_source) {
+            (None, Some(source)) => {
+                check_size(source.as_bytes())?;
+                return Ok((source.clone(), false));
+            }
+            (Some(base), None) if valid_operation_id(base).is_ok() => {
+                if base == &session.base_id {
+                    return session.conflicting_draft.as_ref().map_or_else(
+                        || Ok((decode(&session.bytes)?, true)),
+                        |draft| Ok((draft.base_source.clone(), draft.base_known)),
+                    );
+                }
+                let scope = session.file_scope.as_ref().map_err(Clone::clone)?;
+                // Classify original metadata before any author-body read. Only
+                // this same Session/physical owner can supply a historic basis.
+                for plan in self.operations.values().filter(|plan| {
+                    plan.kind == "save"
+                        && plan.identity.as_ref() == Some(&session.stamp.identity)
+                        && plan.file_save.as_ref().is_some_and(|data| {
+                            data.session_id == request.session_id
+                                && data.base_id.as_ref() == Some(base)
+                                && &data.scope == scope
+                        })
+                }) {
+                    self.validate_file_save_plan(plan)?;
+                    // A resolved/prepared attempt can share this Base with a
+                    // later actual commit. It cannot supply a historical basis.
+                    if !self.committed(&plan.operation_id)? {
+                        continue;
+                    }
+                    let original = self.read_original_file_save_plan(plan)?;
+                    if serde_json::to_vec(&original)? != serde_json::to_vec(plan)? {
+                        return Err(invalid());
+                    }
+                    if let Some(draft) = &session.conflicting_draft {
+                        return Ok((draft.base_source.clone(), draft.base_known));
+                    }
+                    let data = plan.file_save.as_ref().unwrap();
+                    if plan.history_restore.is_none()
+                        && plan.after == session.bytes
+                        && data.author_input_digest.as_deref() == Some(hash(&plan.after).as_str())
+                    {
+                        return Ok((decode(&session.bytes)?, true));
+                    }
+                    return Ok((decode(plan.before.as_deref().ok_or_else(invalid)?)?, true));
+                }
+            }
+            _ => {}
+        }
+        Err(invalid())
+    }
     /// Validate the original durable effect before treating a retained entry as
     /// a committed projection. This never grants its producer to another UI.
     pub(super) fn qualify_committed_baseline(
@@ -160,6 +246,7 @@ impl Core {
             || binding.scope != *scope
             || plan.identity.as_ref() != Some(identity)
             || input.producer_id.as_deref() != Some(binding.draft_producer_id.as_str())
+            || input.input_id != binding.author_input_id
             || !input.base_known
             || input.source.as_bytes() != plan.after
             || input.base_source.as_bytes() != plan.after
@@ -202,6 +289,7 @@ impl Core {
         next.base_source = first.base_source;
         next.base_known = first.base_known;
         next.producer_id = first.producer_id;
+        next.input_id = first.input_id;
         next.role = first.role;
         next.alternatives = entries.collect();
         Ok(Some(next))
@@ -217,8 +305,10 @@ impl Core {
             .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
         // Establish the retained original authority before reading author
         // bytes for the explicit continuation; a current path is not a grant.
-        let scope =
-            self.draft_scope_for_session(&request.session_id, session.conflicting_draft.as_ref())?;
+        let scope = self.draft_scope_for_session_unread(
+            &request.session_id,
+            session.conflicting_draft.as_ref(),
+        )?;
         self.validate_original_input_scope(&scope)?;
         // A path-equivalent replacement, changed disk basis or pending operation
         // cannot transfer an original producer's continuation authority.
@@ -282,6 +372,7 @@ impl Core {
         let session = self.sessions.get_mut(&request.session_id).unwrap();
         session.draft_producer_id = producer;
         session.draft_input = Some(draft.proposal());
+        session.draft_cuts.clear();
         Ok(())
     }
 
@@ -311,6 +402,26 @@ impl Core {
                 weftext_messages::UiMessage::error_core_draft_recovery_the_document_base_changed(),
             ));
         }
+        if session.draft_input.is_none() {
+            self.validate_acknowledged_input(&request.session_id)?;
+            if request.input_id.as_ref() != Some(&session.view_input_id)
+                || request.source_digest != hash(&session.bytes)
+            {
+                return Err(CoreError::new("draftFlushMismatch", UiMessage::error_core_draft_recovery_the_persisted_draft_does_not_contain_the_prepared_input()));
+            }
+            return Ok(DocumentDraftReceipt {
+                record_digest: hash(&serde_json::to_vec(&(
+                    &request.session_id,
+                    &request.base_id,
+                    &request.source_digest,
+                    &request.input_id,
+                ))?),
+                session_id: request.session_id,
+                base_id: request.base_id,
+                source_digest: request.source_digest,
+                evidence: DocumentDraftEvidence::SavedView,
+            });
+        }
         // Use the single qualified reader: both original scope and FI are
         // admitted on the retained handle before any author payload is read.
         let (draft, bytes) = self.current_session_draft_record(&request.session_id)?
@@ -324,7 +435,11 @@ impl Core {
                 weftext_messages::UiMessage::error_core_draft_recovery_this_input_producer_has_no_acknowledged_draft(),
             )
         })?;
-        if hash(input.source.as_bytes()) != request.source_digest
+        if request
+            .input_id
+            .as_ref()
+            .is_some_and(|id| input.input_id.as_ref() != Some(id))
+            || hash(input.source.as_bytes()) != request.source_digest
             || !std::iter::once(draft.proposal())
                 .chain(draft.alternatives.iter().cloned())
                 .any(|p| same_proposal(&p, input))
@@ -339,6 +454,7 @@ impl Core {
             base_id: request.base_id,
             source_digest: request.source_digest,
             record_digest: hash(&bytes),
+            evidence: DocumentDraftEvidence::AuthorDraft,
         })
     }
 
@@ -351,7 +467,8 @@ impl Core {
             .sessions
             .get(session_id)
             .ok_or_else(|| CoreError::new("sessionMissing", UiMessage::error_reopen_source()))?;
-        let scope = self.draft_scope_for_session(session_id, session.conflicting_draft.as_ref())?;
+        let scope =
+            self.draft_scope_for_session_unread(session_id, session.conflicting_draft.as_ref())?;
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
         let Some((draft, bytes)) =
             self.read_draft_record(&path, &scope, &session.stamp.identity)?
@@ -378,6 +495,47 @@ impl Core {
         Ok(self
             .current_session_draft_record(session_id)?
             .map(|(draft, _)| draft))
+    }
+
+    /// An old ACK is evidence of an author cut, not a cache of the current
+    /// private file's qualification. Recheck the producer's complete durable
+    /// entry before acknowledging a retry or using a frozen save cut.
+    pub(super) fn validate_acknowledged_input(&self, session_id: &str) -> Result<Option<Draft>> {
+        self.check_actor_session(session_id)?;
+        let invalid = || {
+            CoreError::new("draftChanged",
+            UiMessage::error_core_draft_recovery_review_the_complete_current_recovery_record_again())
+        };
+        let session = &self.sessions[session_id];
+        let Some(input) = session.draft_input.as_ref() else {
+            let cut = session
+                .draft_input_revision
+                .and_then(|revision| session.draft_cuts.get(&revision))
+                .ok_or_else(invalid)?;
+            if cut.input_id != session.view_input_id
+                || cut.source_digest != hash(&session.bytes)
+                || cut.basis_digest
+                    != hash(&serde_json::to_vec(&(
+                        Some(&session.base_id),
+                        None::<String>,
+                    ))?)
+            {
+                return Err(invalid());
+            }
+            self.check_session_base(session_id, &session.base_id)?;
+            self.validate_current_file_save_scope(&session.file_scope.clone()?, &session.path)?;
+            return Ok(None);
+        };
+        let current = self
+            .current_session_draft(session_id)?
+            .ok_or_else(invalid)?;
+        if !std::iter::once(current.proposal())
+            .chain(current.alternatives.iter().cloned())
+            .any(|entry| same_proposal(input, &entry))
+        {
+            return Err(invalid());
+        }
+        Ok(Some(current))
     }
 
     pub(super) fn store_session_draft(
@@ -469,7 +627,7 @@ impl Core {
             .file_scope
             .clone()
     }
-    pub(crate) fn draft_scope_for_session(
+    pub(crate) fn draft_scope_for_session_unread(
         &self,
         session_id: &str,
         retained: Option<&Draft>,
@@ -486,6 +644,15 @@ impl Core {
                 UiMessage::error_core_original_scope_draft_retained_scope_differs(),
             ));
         }
+        Ok(scope)
+    }
+    pub(crate) fn draft_scope_for_session(
+        &self,
+        session_id: &str,
+        retained: Option<&Draft>,
+    ) -> Result<QualifiedInputScope> {
+        let scope = self.draft_scope_for_session_unread(session_id, retained)?;
+        let session = &self.sessions[session_id];
         let path = self.object_draft_path(&session.stamp.identity, &scope)?;
         if let Some((original, _)) =
             self.read_draft_record(&path, &scope, &session.stamp.identity)?
@@ -505,6 +672,29 @@ impl Core {
         }
         Ok(scope)
     }
+    /// Select only structural lineage candidates before opening original facts.
+    /// These protected checks are repeated per operation, never a permission cache.
+    fn committed_draft_relocations(
+        &self,
+        scope: &QualifiedInputScope,
+    ) -> Result<Vec<&journal::Plan>> {
+        let QualifiedInputScope::Library { binding } = scope else {
+            return Ok(Vec::new());
+        };
+        let mut plans = Vec::new();
+        for plan in self.operations.values().filter(|plan| {
+            plan.workspace_id.as_ref() == Some(&binding.workspace_id)
+                && plan
+                    .transaction
+                    .as_ref()
+                    .is_some_and(|transaction| !transaction.relocations().is_empty())
+        }) {
+            if self.committed(&plan.operation_id)? {
+                plans.push(plan);
+            }
+        }
+        Ok(plans)
+    }
     fn check_committed_draft_paths(
         &self,
         scope: &QualifiedInputScope,
@@ -515,10 +705,11 @@ impl Core {
         if same_draft_path(first, second) {
             return Ok(());
         }
+        let plans = self.committed_draft_relocations(scope)?;
         let mut paths = BTreeSet::from([first.to_owned()]);
         loop {
             let previous = paths.len();
-            for plan in self.committed_plans()?.into_iter() {
+            for plan in &plans {
                 let Some(transaction) = &plan.transaction else {
                     continue;
                 };
@@ -573,10 +764,11 @@ impl Core {
         path: &Path,
         identity: &FileIdentity,
     ) -> Result<BTreeSet<String>> {
+        let plans = self.committed_draft_relocations(scope)?;
         let mut lineage = BTreeSet::from([display(path)]);
         loop {
             let before = lineage.len();
-            for plan in self.committed_plans()?.into_iter() {
+            for plan in &plans {
                 if !matches!(scope, QualifiedInputScope::Library { binding }
                     if plan.workspace_id.as_ref() == Some(&binding.workspace_id))
                 {
@@ -661,6 +853,8 @@ impl Core {
         scope: &QualifiedInputScope,
         identity: &FileIdentity,
     ) -> Result<Option<(Draft, Vec<u8>)>> {
+        #[cfg(all(test, windows))]
+        QUALIFIED_DRAFT_READ_CALLS.with(|count| count.set(count.get() + 1));
         let guard = match ParentGuard::acquire(&self.backend, path) {
             Ok(guard) => guard,
             Err(error) if error.code == "missing" => return Ok(None),
@@ -757,8 +951,7 @@ impl Core {
                 self.qualify_committed_baseline(&next.scope, &next.identity, &input)?;
             }
             // Preserve the original before rebinding the unique current record.
-            journal::private_create(
-                &self.backend,
+            self.create_private_record(
                 &self
                     .draft_directory("draft-history")
                     .join(format!("{}.json", fresh())),
@@ -790,6 +983,7 @@ fn same_input(a: &DraftAlternative, b: &DraftAlternative) -> bool {
         .as_ref()
         .is_some_and(|producer| b.producer_id.as_ref() == Some(producer))
         && a.source == b.source
+        && a.input_id == b.input_id
         && a.base_source == b.base_source
         && a.base_known == b.base_known
         && same_draft_path(&a.path, &b.path)
@@ -805,6 +999,7 @@ mod flush_tests {
 
     fn flush(core: &mut Core, doc: &OpenedDocument, source: &str) -> DocumentDraftReceipt {
         core.flush_document_draft(DocumentDraftFlush {
+            input_id: None,
             session_id: doc.session_id.clone(),
             base_id: doc.base_id.clone(),
             source_digest: hash(source.as_bytes()),
@@ -1075,6 +1270,7 @@ mod flush_tests {
         assert!(core.sessions[&last.session_id].draft_input.is_none());
         assert!(
             core.flush_document_draft(DocumentDraftFlush {
+                input_id: None,
                 session_id: last.session_id.clone(),
                 base_id: last.base_id.clone(),
                 source_digest: hash(source.as_bytes())
@@ -1091,6 +1287,7 @@ mod flush_tests {
         let mut core = Core::new(temp.path().join("state")).unwrap();
         let opened = core.open(&path, Some(temp.path().to_path_buf())).unwrap();
         let request = |source: &str, base: &str| DocumentDraftFlush {
+            input_id: None,
             session_id: opened.session_id.clone(),
             base_id: base.into(),
             source_digest: hash(source.as_bytes()),
@@ -1135,6 +1332,7 @@ mod flush_tests {
         fs::write(&record_path, &changed).unwrap();
         assert!(
             core.flush_document_draft(DocumentDraftFlush {
+                input_id: None,
                 session_id: opened.session_id,
                 base_id: opened.base_id,
                 source_digest: hash(b"draft")

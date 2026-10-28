@@ -1,4 +1,5 @@
 """Narrow fields/Query through the actual server, durable journal and ACL."""
+import uuid
 import copy
 import json
 import secrets
@@ -46,7 +47,7 @@ class HostedFields(HostedEditor):
         self.prepare_fields()
         self.policy(lambda users: users['alice']['grants']['Shared'].update(fields={'tasks/status': {'read': True, 'write': True}}))
         personal = self.open()
-        self.call('draft', {'sessionId': personal['sessionId'], 'source': personal['source'] + '\nMY_PRIVATE_UNSAVED_DRAFT'})
+        self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': personal['baseId'], 'inputRevision': 1, 'sessionId': personal['sessionId'], 'source': personal['source'] + '\nMY_PRIVATE_UNSAVED_DRAFT'})
         own = self.field(actor='alice')
         self.call('fields/write', self.proposal(own, 'cancelled'), 'alice')
         reopened = self.open()

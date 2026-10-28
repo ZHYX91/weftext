@@ -342,7 +342,10 @@ fn parse_rules(bytes: &[u8]) -> Rules {
                 );
                 continue;
             };
+            #[cfg(windows)]
             let path = PathBuf::from(text.replace('/', "\\"));
+            #[cfg(not(windows))]
+            let path = PathBuf::from(text);
             if path.is_absolute()
                 || path
                     .components()
@@ -470,5 +473,29 @@ mod description_tests {
                 .any(|diagnostic| diagnostic.origin == DiagnosticOrigin::Json
                     && !diagnostic.text.is_empty())
         );
+    }
+}
+
+#[cfg(test)]
+mod rules_namespace_tests {
+    use super::*;
+    #[test]
+    fn exact_rules_use_native_separators_and_reject_parent_traversal() {
+        assert!(
+            validate_library_rules(br#"{"version":1,"ignored":["../hidden"],"unmanaged":[]}"#)
+                .is_err()
+        );
+        let rules = parse_rules(br#"{"version":1,"ignored":["A/child.typ"],"unmanaged":[]}"#);
+        assert!(rules.warnings.is_empty());
+        assert!(rules.ignored.contains(&Path::new("A").join("child.typ")));
+        #[cfg(target_os = "linux")]
+        {
+            let distinct = parse_rules(
+                br#"{"version":1,"ignored":["A.typ","a.typ","A\\child.typ"],"unmanaged":[]}"#,
+            );
+            assert!(distinct.warnings.is_empty());
+            assert_eq!(distinct.ignored.len(), 3);
+            assert!(distinct.ignored.contains(Path::new("A\\child.typ")));
+        }
     }
 }

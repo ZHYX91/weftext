@@ -3,6 +3,7 @@
 Own fixtures and processes use the independent product harness. Historical
 content is compared to the exact originally saved bytes, not a newer head.
 """
+import uuid
 import hashlib
 import shutil
 import sys
@@ -20,7 +21,7 @@ class ReceivedHistory(Sync):
     def test_received_retained_ancestor_pagination_exact_bytes_and_draft(self):
         original = self.open(self.b, self.rb)
         draft = original['source'] + '\n历史查看期间保留的草稿 😀'
-        self.call(self.b, '/api/draft', sessionId=original['sessionId'],
+        self.call(self.b, '/api/draft', inputId=str(uuid.uuid4()), inputRevision=1, sessionId=original['sessionId'],
                   baseId=original['baseId'], source=draft)
         before_binding = self.call(self.b, '/api/sync/binding', root=str(self.rb))
         initial = self.history()['versions'][0]
@@ -151,13 +152,13 @@ class ReceivedHistory(Sync):
     def test_adoption_is_explicit_exact_and_recovers_original_after_restart(self):
         doc = self.open(self.a, self.ra)
         draft = doc['source'] + '\n未保存的私人草稿'
-        self.call(self.a, '/api/draft', sessionId=doc['sessionId'], baseId=doc['baseId'], source=draft)
+        self.call(self.a, '/api/draft', inputId=str(uuid.uuid4()), inputRevision=1, sessionId=doc['sessionId'], baseId=doc['baseId'], source=draft)
         original = self.call(self.a, '/api/sync/history', identity=self.identity, object=self.key)['versions']
         path = self.ra / 'Note/Note.typ'
         external = doc['source'] + '\n明确采纳外部当前内容'
         path.write_bytes(external.encode('utf-8'))
         # Ordinary Save must not silently turn an external edit into a portable commit.
-        self.call(self.a, '/api/save', expected=409, sessionId=doc['sessionId'], baseId=doc['baseId'],
+        self.call(self.a, '/api/save', expected=409, inputRevision=1, sessionId=doc['sessionId'], baseId=doc['baseId'],
                   source=draft, operationId=uid())
         cut = self.adoption_cut()
         self.assertTrue(cut['expectedInstalled'])

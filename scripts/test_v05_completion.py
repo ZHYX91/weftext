@@ -6,6 +6,7 @@ input or clipboard is used. These checks establish HTTP and exact-source
 behavior; they do not establish the LHT/IQV browser interaction clauses,
 five-view controls, focus, touch, keyboard, Undo or late browser result handling.
 """
+import uuid
 from _cli_serve import launch_serve
 import argparse
 import copy
@@ -67,7 +68,7 @@ class V05Completion(features.LocalFeatures):
     def restore_request(self, doc, version_id, draft_source=None, action='none'):
         return {'sessionId': doc['sessionId'], 'baseId': doc['baseId'],
                 'versionId': version_id, 'operationId': features.uid(),
-                'draftAction': action, 'draftSource': draft_source}
+                'draftAction': action, 'draftSource': draft_source, 'inputRevision': doc.get('inputRevision')}
 
     def install_schema(self, root):
         before = self.api('/api/data/schema', {'root': str(root)})
@@ -174,7 +175,7 @@ class V05Completion(features.LocalFeatures):
             self.assertEqual(row['sha256'], features.sha(version['source']))
             self.assertEqual(row['byteLength'], len(version['source'].encode()))
             self.assertEqual(row['timeBasis'], 'commitClock')
-            commit_path = self.data_dir / 'journal' / f"{version['id']}.commit.json"
+            commit_path = self.data_dir / 'journal' / (version['id'])[:2] / f"{version['id']}.commit.json"
             commit = json.loads(commit_path.read_bytes())
             self.assertEqual(row['savedAtUnixMs'], commit['savedAtUnixMs'])
             self.assertEqual(row['commitSequence'], commit['commitSequence'])
@@ -189,7 +190,8 @@ class V05Completion(features.LocalFeatures):
             self.assertEqual(read['previewStatus'], 'sourceOnly')
         self.assertEqual(sequences, sorted(set(sequences)))
         draft = doc['source'] + '\n尚未保存的草稿🌿。\n'
-        self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': draft})
+        self.api('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': draft})
+        doc['inputRevision'] = 1
         before = Path(doc['path']).read_bytes()
         compared = self.api('/api/history/compare', {
             'sessionId': doc['sessionId'], 'versionId': versions[0]['id']})
@@ -208,14 +210,19 @@ class V05Completion(features.LocalFeatures):
         root, _, doc, versions = self.history_versions('恢复保护')
         persisted = doc['source'] + '\n已持久化但未保存的草稿。\n'
         buffer = persisted + '缓冲区更新🌿。\n'
-        self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': persisted})
+        self.api('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': persisted})
+        doc['inputRevision'] = 1
+        # The frozen buffer must own its exact durable ACK; the same writer's
+        # earlier proposal is superseded by this actual edit.
+        self.api('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 2, 'sessionId': doc['sessionId'], 'source': buffer})
+        doc['inputRevision'] = 2
         before = self.timeline(doc)
         request = self.restore_request(doc, versions[0]['id'], buffer)
         refusal = self.api('/api/history/restore', request, status=409)
         self.assertEqual(refusal['error']['code'], 'draftProtectionRequired')
         self.assertEqual(Path(doc['path']).read_bytes(), versions[-1]['source'].encode())
         self.assertEqual(self.timeline(doc)['versions'], before['versions'])
-        self.assertEqual(self.reopen(doc, root)['recoveredDraft'], persisted)
+        self.assertEqual(self.reopen(doc, root)['recoveredDraft'], buffer)
         request['draftAction'] = 'retain'
         envelope = self.api('/api/history/restore', request)
         self.assertEqual(envelope['status'], 'committed')
@@ -227,7 +234,7 @@ class V05Completion(features.LocalFeatures):
         self.assertEqual(restored['receipt']['status'], 'saved')
         self.assertEqual(restored['receipt']['operationId'], request['operationId'])
         self.assertNotEqual(restored['receipt']['baseId'], versions[0]['revision'])
-        self.assertEqual({item['source'] for item in restored['protectedDrafts']}, {persisted, buffer})
+        self.assertEqual({item['source'] for item in restored['protectedDrafts']}, {buffer})
         self.assertTrue(all(item['baseKnown'] for item in restored['protectedDrafts']))
         self.assertEqual(Path(doc['path']).read_bytes(), versions[0]['source'].encode())
         after = self.timeline(doc)
@@ -235,7 +242,7 @@ class V05Completion(features.LocalFeatures):
         self.assertEqual(after['currentSavedVersionId'], request['operationId'])
         for version in versions:
             self.assertEqual(self.history_read(doc, version['id'])['source'], version['source'])
-        self.assertTrue({persisted, buffer}.issubset({item['source'] for item in after['protectedDrafts']}))
+        self.assertTrue({buffer}.issubset({item['source'] for item in after['protectedDrafts']}))
         # Simulate a lost response by querying and replaying the original request.
         status = self.api('/api/history/status', {'operationId': request['operationId']})
         self.assertEqual(status['status'], 'committed')
@@ -253,7 +260,7 @@ class V05Completion(features.LocalFeatures):
         # Keep the original exact plan/effects and temporarily park its durable
         # decision witness. An uncertain original operation must be reported
         # and block new history access/retry effects until it is reconciled.
-        commit = self.data_dir / 'journal' / f"{request['operationId']}.commit.json"
+        commit = self.data_dir / 'journal' / (request['operationId'])[:2] / f"{request['operationId']}.commit.json"
         parked_commit = commit.with_suffix('.json.owned-parked')
         commit.rename(parked_commit)
         try:
@@ -272,7 +279,8 @@ class V05Completion(features.LocalFeatures):
     def test_04_restore_external_conflict_preserves_external_source_and_draft(self):
         root, _, doc, versions = self.history_versions('外部竞争')
         buffer = doc['source'] + '\n等待恢复时的本地草稿🌿。\n'
-        self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': buffer})
+        self.api('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': buffer})
+        doc['inputRevision'] = 1
         request = self.restore_request(doc, versions[0]['id'], buffer, 'retain')
         external = versions[-1]['source'] + '\n外部编辑的准确字节。\n'
         Path(doc['path']).write_bytes(external.encode())
@@ -334,7 +342,7 @@ class V05Completion(features.LocalFeatures):
         self.assertEqual(timeline['retention']['availableVersions'], len(timeline['versions']))
         # Preserve the actual witness under another owned filename, then restore
         # it. No record or fixture is permanently deleted.
-        witness = self.data_dir / 'journal' / f"{versions[0]['id']}.observations.json"
+        witness = self.data_dir / 'journal' / (versions[0]['id'])[:2] / f"{versions[0]['id']}.observations.json"
         parked = witness.with_suffix('.json.owned-parked')
         witness.rename(parked)
         try:
@@ -359,7 +367,7 @@ class V05Completion(features.LocalFeatures):
             self.assertEqual(read['previewStatus'], 'sourceOnly')
         finally:
             parked_schema.rename(schema)
-        commits = [self.data_dir / 'journal' / f"{version['id']}.commit.json" for version in versions]
+        commits = [self.data_dir / 'journal' / (version['id'])[:2] / f"{version['id']}.commit.json" for version in versions]
         exact_commits = [path.read_bytes() for path in commits]
         try:
             records = [json.loads(value) for value in exact_commits]
@@ -427,7 +435,8 @@ class V05Completion(features.LocalFeatures):
 
         root, _, doc, versions = self.history_versions('草稿写入失败')
         draft = doc['source'] + '\n需要保护的准确草稿🌿。\n'
-        self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': draft})
+        self.api('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': draft})
+        doc['inputRevision'] = 1
         source_identity = physical_identity(Path(doc['path']))
         expected_identity = {'platform': 'windows',
                              **dict(zip(('volume', 'index', 'created'), source_identity))}

@@ -5,6 +5,7 @@ import { action, ui } from "./data-panel";
 import { nodeSourceHash } from "./hosted-navigation-state";
 import { hostedLinksPatch, requireHostedLinksBasis, sameHostedLinksContext, sameHostedLinksIdentity, type HostedLinksBasis, type HostedLinksContext, type HostedLinksIdentity, type HostedLinksEdge, type HostedLinksHit, type HostedLinksProfile, type HostedLinksProposal, type HostedLinksResolution } from "./hosted-knowledge-links-state";
 import type { SourcePatch } from "./editor";
+import type { EmbeddedQueryBasis } from "./embedded-query";
 import { PersonalRelationRules, RelationshipDiagnosticsView, visibleCandidate, type RelationNode, type RelationIssue } from "./relationship-diagnostics";
 import type { HostedLinksNode } from "./hosted-knowledge-links-state";
 import { RelationshipGraphView } from "./relationship-graph-view";
@@ -15,11 +16,7 @@ export interface HostedKnowledgeLinksHost {
     context(): HostedLinksContext | null;
     identity(): HostedLinksIdentity | null;
     flush(): Promise<void>;
-    apply(patches: SourcePatch[], basis: {
-        sessionId: string;
-        source: string;
-        serial: number;
-    }, event: string): Promise<void>;
+    apply(patches: SourcePatch[], basis: EmbeddedQueryBasis, event: string): Promise<void>;
     navigate(reference: string): Promise<void>;
     select(from: number, to: number): void;
     revealRendered?(heading: StructureHeading): boolean;
@@ -233,7 +230,7 @@ export class HostedKnowledgeLinks {
         const patch = hostedLinksPatch(result, context, hash, profile.basis.snapshot);
         // The host's existing shared editor independently checks composition and
         // exact source/serial before one native Undo transaction.
-        await this.owner.apply([patch], { sessionId: context.sessionId, source: context.source, serial: context.serial }, "input.knowledge.link.proposal");
+        await this.owner.apply([patch], { sessionId: context.sessionId, source: context.source, serial: context.serial, inputId: context.inputId }, "input.knowledge.link.proposal");
         this.documentChanged();
         setUiText(this.message, uiMessage("hostedLinks.conversionAddedToDraftUndo"));
     }

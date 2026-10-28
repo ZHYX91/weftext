@@ -634,11 +634,18 @@ impl Core {
     }
 
     pub(crate) fn sync_setups(&self) -> Result<Vec<&SyncSetup>> {
-        Ok(self
-            .committed_plans()?
-            .into_iter()
-            .filter_map(|plan| plan.sync_setup.as_ref())
-            .collect())
+        // Classify original Plan roles before opening commit bodies. An
+        // ordinary save is not a replica binding; relevant setup facts still
+        // receive fresh original-commit qualification on every operation.
+        let mut setups = Vec::new();
+        for plan in self.operations.values() {
+            if let Some(setup) = &plan.sync_setup
+                && self.committed(&plan.operation_id)?
+            {
+                setups.push(setup);
+            }
+        }
+        Ok(setups)
     }
     pub(crate) fn sync_setup_for(&self, root: &Path) -> Result<&SyncSetup> {
         let matches: Vec<_> = self

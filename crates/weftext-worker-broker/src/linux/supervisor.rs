@@ -433,14 +433,7 @@ pub(super) fn run(
         }
     };
     let lifecycle = (|| {
-        let mut setup_status = [0u8; 4];
-        let n = status_read.read(&mut setup_status)?;
-        if n != 0 {
-            return Err(invalid(format!(
-                "trusted child setup failed: errno {}",
-                i32::from_ne_bytes(setup_status)
-            )));
-        }
+        // Started identifies the atomically born owned job, before exec qualification.
         session.send(
             &Started {
                 version: 1,
@@ -450,6 +443,14 @@ pub(super) fn run(
             },
             &[],
         )?;
+        let mut setup_status = [0u8; 4];
+        let n = status_read.read(&mut setup_status)?;
+        if n != 0 {
+            return Err(invalid(format!(
+                "trusted child setup failed: errno {}",
+                i32::from_ne_bytes(setup_status)
+            )));
+        }
         let deadline = Instant::now() + Duration::from_millis(launch.timeout_ms);
         loop {
             if STOP.load(Ordering::Relaxed) {
@@ -499,8 +500,8 @@ pub(super) fn run(
         .unwrap_or(Completion::SetupFailed);
     // This happens for malformed controls and transport errors too.
     let receipt = job.finish(completion)?;
-    lifecycle?;
-    session.send(&receipt, &[])
+    session.send(&receipt, &[])?;
+    lifecycle.map(|_| ())
 }
 
 /// Only trusted syscall setup runs between clone and exec. It does not call product code.

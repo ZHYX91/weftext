@@ -1,4 +1,5 @@
 """Actual Office conversions with scoped hosted authority and durable IDs."""
+import uuid
 import base64
 import hashlib
 import io
@@ -83,7 +84,7 @@ class HostedOffice(HostedReview):
         reply, _ = self.prepare_annotation(self.review(), dict(kind='annotationReply', annotationId=annotation['id'], body='REPLY_PRESERVED'))
         self.commit_annotation(reply)
         source = self.open()['source']; original = (self.root/'Shared/weftext.annotations.json').read_bytes()
-        doc = self.open(); self.call('draft', {'sessionId': doc['sessionId'], 'source': source+'\nPERSONAL_INPUT'})
+        doc = self.open(); self.call('draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': source+'\nPERSONAL_INPUT'})
         request = {**self.output_request(), 'reviewMode': 'changes'}
         self.call('office/export/prepare', {**request, 'source': source+'dirty'}, status=400)
         result, _ = self.output(request); artifact = self.deliver(result); parts = self.parts(artifact)

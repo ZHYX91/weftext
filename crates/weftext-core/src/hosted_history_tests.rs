@@ -39,6 +39,7 @@ impl Fixture {
                 c.actor_save(
                     "Note",
                     HostedSaveRequest {
+                        input_revision: None,
                         session_id: doc.session_id.clone(),
                         base_id: doc.base_id.clone(),
                         source: newer.clone(),
@@ -68,6 +69,7 @@ impl Fixture {
             operation_id: operation.into(),
             draft_action: "retain".into(),
             draft_source,
+            input_revision: None,
         }
     }
     fn restore(&mut self, request: HistoryRestoreRequest) -> Result<ActorHistoryRestoreStatus> {
@@ -525,6 +527,7 @@ fn hosted_history_session_qualification_keeps_stable_ref_for_external_body_and_o
             c.actor_save(
                 "Note",
                 HostedSaveRequest {
+                    input_revision: None,
                     session_id: bob.session_id,
                     base_id: bob.base_id,
                     source: bob.source + "\nBob合法保存",
@@ -633,6 +636,7 @@ fn hosted_history_same_byte_later_save_and_return_to_old_content_are_superseded_
                 c.actor_save(
                     "Note",
                     HostedSaveRequest {
+                        input_revision: None,
                         session_id: current.session_id.clone(),
                         base_id: current.base_id.clone(),
                         source,
@@ -881,6 +885,7 @@ fn hosted_history_restore_preserves_original_saved_definition_admission_without_
                 "Note",
                 &f.root,
                 HostedSaveRequest {
+                    input_revision: None,
                     session_id: f.doc.session_id.clone(),
                     base_id: f.doc.base_id.clone(),
                     source: defined.clone(),
@@ -903,6 +908,7 @@ fn hosted_history_restore_preserves_original_saved_definition_admission_without_
             c.actor_save(
                 "Note",
                 HostedSaveRequest {
+                    input_revision: None,
                     session_id: f.doc.session_id.clone(),
                     base_id: f.doc.base_id.clone(),
                     source: f.doc.source.clone(),

@@ -143,6 +143,7 @@ fn sync_setup_releases_private_captures_and_retries_owned_original_bytes_after_r
             let enable = fresh();
             let blocked_path = blocker.map(|kind| core.journal_path(&enable, kind));
             if let Some(path) = &blocked_path {
+                fs::create_dir_all(path.parent().unwrap()).unwrap();
                 fs::create_dir(path).unwrap();
             }
             let first = core.enable_sync(&root, &enable);
@@ -660,6 +661,7 @@ fn selected_library_backup_includes_sync_history_and_pending_publication() {
     );
     let outbox = target
         .join("private/journal")
+        .join(&pending[..2])
         .join(format!("{pending}.plan.json"));
     let plan: Plan = serde_json::from_slice(&fs::read(outbox).unwrap()).unwrap();
     assert!(plan.sync_publication.is_some());
@@ -671,4 +673,45 @@ fn selected_library_backup_includes_sync_history_and_pending_publication() {
             .join(format!("{}.json", info.identity.genesis))
             .exists()
     );
+}
+
+#[cfg(windows)]
+#[test]
+fn sync_setup_selection_qualifies_only_actual_setup_candidates() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut core = Core::new(temp.path().join("private")).unwrap();
+    let note = temp.path().join("ordinary.typ");
+    fs::write(&note, "B").unwrap();
+    let doc = core.open(&note, None).unwrap();
+    let id = fresh();
+    core.save(SaveRequest {
+        operation_id: id.clone(),
+        session_id: doc.session_id,
+        base_id: doc.base_id,
+        source: "S".into(),
+    })
+    .unwrap();
+    fs::write(
+        core.journal_path(&id, "commit"),
+        b"retained damaged unrelated commit",
+    )
+    .unwrap();
+    assert!(core.sync_setups().unwrap().is_empty());
+    assert!(core.local_operation_status(&id).is_err());
+    assert_eq!(fs::read_to_string(note).unwrap(), "S");
+    // A real setup remains an actual dependency; malformed original evidence
+    // is never replaced by a cached successful qualification.
+    let other = tempfile::tempdir().unwrap();
+    let mut core = Core::new(other.path().join("private")).unwrap();
+    let root = other.path().join("library");
+    core.create_library(&root).unwrap();
+    let id = fresh();
+    core.enable_sync(&root, &id).unwrap();
+    assert_eq!(core.sync_setups().unwrap().len(), 1);
+    fs::write(
+        core.journal_path(&id, "commit"),
+        b"retained damaged setup commit",
+    )
+    .unwrap();
+    assert!(core.sync_setups().is_err());
 }

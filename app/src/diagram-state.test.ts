@@ -5,7 +5,7 @@ const png = Uint8Array.from(Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC
 const source = 'flowchart LR\n  A[中文😀] --> B[完成 "引号"]';
 const image: DiagramImage = { source, png, width: 1, height: 1 };
 const id = "12345678-1234-1234-1234-123456789abc";
-const basis = { sessionId: "s", baseId: "b", serial: 1, root: "r", path: "p", source: "原稿\n" };
+const basis = { inputId: "test-input", sessionId: "s", baseId: "b", serial: 1, root: "r", path: "p", source: "原稿\n" };
 test("one native block retains exact Chinese source and PNG; editing source marks stale", () => {
   const block = diagramBlock(id, image); const document = `前文\n${block}\n后文`;
   const [item] = diagramOccurrences(document); assert.equal(item.source, source); assert.deepEqual(item.png, png); assert.equal(document.slice(item.from, item.to), block); assert.equal(item.stale, false);

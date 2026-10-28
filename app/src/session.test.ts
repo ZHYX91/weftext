@@ -101,8 +101,8 @@ test("literal editing refuses changed raw ranges and escapes native control punc
 
 test("an older draft persistence response cannot acknowledge newer input", () => {
   const session = new DocumentSession(opened);
-  session.acknowledgeDraft("新", 4);
-  session.acknowledgeDraft("旧", 2);
+  session.acknowledgeDraft("新", 4, 1);
+  session.acknowledgeDraft("旧", 2, 2);
   assert.equal(session.lastDraftSource, "新");
   assert.equal(session.lastDraftSerial, 4);
 });
@@ -148,19 +148,19 @@ test("Save As reopens only the exact saved target and never qualifies its old pr
   assert.equal(canRebindSaveAs(submitted, { ...external, source: submitted, recoveredDraftConflict: true }), false);
 });
 
-test("original save delivery rebinds a lost Session with its actual base while preserving newer input and editor state", () => {
+test("original save delivery refreshes the original writer with its actual base while preserving newer input and editor state", () => {
   const session = new DocumentSession({ ...opened, nodeId: "node", workspaceId: "workspace" });
   session.edit("submitted"); const frozen = { sessionId: session.opened.sessionId, source: session.source };
   session.edit("submitted + waiting input");
   const sourceState = createSourceState(session.source), selection = sourceState.selection;
-  const fresh = { ...session.opened, sessionId: "reopened", source: "submitted", baseId: "actual-fresh-base" };
+  const fresh = { ...session.opened, source: "submitted", baseId: "actual-fresh-base" };
   assert.equal(rebindCommittedSave(session, frozen, fresh), true);
   assert.equal(session.source, "submitted + waiting input"); assert.equal(session.baseSource, "submitted");
-  assert.equal(session.baseId, "actual-fresh-base"); assert.equal(session.opened.sessionId, "reopened");
+  assert.equal(session.baseId, "actual-fresh-base"); assert.equal(session.opened.sessionId, frozen.sessionId);
   assert.equal(sourceState.doc.toString(), "submitted + waiting input"); assert.equal(sourceState.selection, selection);
 });
 test("a later current source or changed owner/Session cannot borrow the original receipt base", () => {
-  for (const change of [{ source: "later committed T" }, { nodeId: "different" }, { workspaceId: "different" }]) {
+  for (const change of [{ source: "later committed T" }, { nodeId: "different" }, { workspaceId: "different" }, { sessionId: "independent-comparison" }]) {
     const session = new DocumentSession({ ...opened, nodeId: "node", workspaceId: "workspace" }); session.edit("new input Y");
     const before = structuredClone(session.opened);
     assert.equal(rebindCommittedSave(session, { sessionId: "s", source: "submitted S" }, { ...session.opened, source: "submitted S", baseId: "actual-T-base", ...change }), false);
@@ -191,6 +191,17 @@ test("a live Session error remains visible across locale and equal-source projec
   session.acceptProjection(render(session.source, session.serial)); assert.equal(session.error, note);
   session.edit("作者新增😀\r\n"); assert.equal(session.error, null);
   session.error = note;
-  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "saved" }, { ...opened, workspaceId: "qualified", sessionId: "fresh", source: "saved", baseId: "actual" }), true);
+  assert.equal(rebindCommittedSave(session, { sessionId: opened.sessionId, source: "saved" }, { ...opened, workspaceId: "qualified", source: "saved", baseId: "actual" }), true);
   assert.equal(session.error, null); assert.equal(session.source, "作者新增😀\r\n"); assert.equal(session.baseId, "actual"); locale.set("zh-CN");
+});
+
+test("an unacknowledged same-value ABA cannot borrow an earlier source ACK", () => {
+  const session = new DocumentSession(opened);
+  session.edit("S");
+  session.acknowledgeDraft("S", session.serial, 1);
+  assert.equal(session.acknowledgedInputRevision, 1);
+  session.edit("Y"); session.edit("S");
+  assert.equal(session.acknowledgedInputRevision, null);
+  session.acknowledgeDraft("S", session.serial, 3);
+  assert.equal(session.acknowledgedInputRevision, 3);
 });

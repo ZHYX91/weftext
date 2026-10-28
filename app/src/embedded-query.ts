@@ -15,10 +15,12 @@ import { resourceCellReferences } from "./media-selection";
 import { decodeErrorDescription, decodeErrorDescriptions, descriptionUiText, exactKeys, type DataErrorKind, type ErrorDescription } from "./ui-diagnostics";
 import { joinUiText } from "./ui-locale";
 export interface EmbeddedQueryBasis {
+    inputId: string;
     sessionId: string;
     source: string;
     serial: number;
 }
+export function queryBasisWire(basis: Pick<EmbeddedQueryBasis,"sessionId"|"source"|"serial">) { return {sessionId:basis.sessionId, source:basis.source, serial:basis.serial}; }
 export interface EmbeddedQueryOccurrence {
     id: string;
     key: string | null;
@@ -116,7 +118,7 @@ export function embeddedControlDiagnostics(item: EmbeddedQueryOccurrence): UiTex
     return [...(item.controlReason ? [descriptionUiText(item.controlReason)] : []), ...item.controlDiagnostics.map(descriptionUiText)];
 }
 export function sameQueryBasis(left: EmbeddedQueryBasis | null, right: EmbeddedQueryBasis): boolean {
-    return !!left && left.sessionId === right.sessionId && left.serial === right.serial && left.source === right.source;
+    return !!left && left.sessionId === right.sessionId && left.serial === right.serial && left.inputId === right.inputId && left.source === right.source;
 }
 /** The complete author range comes from the official AST, never displayed text. */
 export function exactQueryOccurrence(source: string, occurrence: EmbeddedQueryOccurrence): boolean {
@@ -324,7 +326,7 @@ export class EmbeddedQueryController {
     }
     async discover(basis: EmbeddedQueryBasis): Promise<boolean> {
         const generation = ++this.discoveryGeneration;
-        const raw = await this.host.request<unknown>("/api/query/embedded/discover", basis);
+        const raw = await this.host.request<unknown>("/api/query/embedded/discover", queryBasisWire(basis));
         if (generation !== this.discoveryGeneration || !sameQueryBasis(this.host.basis(), basis))
             return false;
         const discovery = decodeEmbeddedQueryDiscovery(raw);
@@ -604,7 +606,7 @@ export class EmbeddedQueryController {
         state.error = undefined;
         this.refreshResult(item);
         try {
-            const result = await this.host.request<EmbeddedQueryRun>("/api/query/embedded/run", { ...basis, occurrenceId: item.id, parameters });
+            const result = await this.host.request<EmbeddedQueryRun>("/api/query/embedded/run", { ...queryBasisWire(basis), occurrenceId: item.id, parameters });
             if (!state.gate.accepts(token, this.host.basis(), result))
                 return;
             state.result = this.host.queryResultScope === "hosted" ? decodeHostedQueryResult(result.result,true) : decodeLocalQueryResult(result.result);
@@ -815,7 +817,7 @@ export class EmbeddedQueryController {
         await this.host.prepareEdit();
         if (!sameQueryBasis(basis, this.host.basis()))
             throw new UiError(message("embeddedQuery.arrangementBasisChanged"));
-        const result = await this.host.request<EmbeddedQueryEdit>("/api/query/embedded/edit", { ...basis, occurrenceId: item.id, action: command });
+        const result = await this.host.request<EmbeddedQueryEdit>("/api/query/embedded/edit", { ...queryBasisWire(basis), occurrenceId: item.id, action: command });
         if (!sameQueryBasis(basis, this.host.basis()) || !this.canWrite(association) || this.host.mode() === "read")
             throw new UiError(message("embeddedQuery.arrangementEligibilityChanged"));
         const patches = validateQueryArrangement(basis, item, occurrences, command, result, hash);
@@ -837,7 +839,7 @@ export class EmbeddedQueryController {
         await this.host.prepareEdit();
         if (!sameQueryBasis(this.host.basis(), basis))
             throw new UiError(message("embeddedQuery.editBasisChanged"));
-        const result = await this.host.request<EmbeddedQueryEdit>("/api/query/embedded/edit", { ...basis, occurrenceId: item.id, ...proposal });
+        const result = await this.host.request<EmbeddedQueryEdit>("/api/query/embedded/edit", { ...queryBasisWire(basis), occurrenceId: item.id, ...proposal });
         if (!sameQueryBasis(this.host.basis(), basis) || this.host.mode() === "read" || !this.canWrite(association))
             throw new UiError(message("embeddedQuery.editEligibilityChanged"));
         const patches = validateEmbeddedEdit(basis, item, result, this.discovery?.sourceHash);

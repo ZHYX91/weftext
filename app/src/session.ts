@@ -7,7 +7,7 @@ export function uniqueRetainedDrafts(inputs: readonly DraftInput[]): DraftInput[
     const out: DraftInput[] = [];
     for (const input of inputs) {
         if (!out.some(other => other === input || input.producerId !== undefined && other.producerId === input.producerId
-            && other.path === input.path && other.baseSource === input.baseSource && other.source === input.source && other.baseKnown === input.baseKnown
+            && other.inputId === input.inputId && other.path === input.path && other.baseSource === input.baseSource && other.source === input.source && other.baseKnown === input.baseKnown
             && other.role?.kind === input.role?.kind
             && (input.role?.kind !== "committedBaseline" || other.role?.kind === "committedBaseline" && other.role.operationId === input.role.operationId))) out.push(input);
     }
@@ -27,10 +27,15 @@ export class DocumentSession {
     baseId: string;
     path: string;
     serial = 0;
+    inputId: string = crypto.randomUUID();
+    private lastDraftInputId: string | null = null;
     projection: RenderOutput | null = null;
     savePending = false;
     lastDraftSource: string | null = null;
     lastDraftSerial = -1;
+    lastDraftRevision: number | null = null;
+    private nextDraftRevision = 0;
+    issueDraftRevision(): number { return ++this.nextDraftRevision; }
     error: UiText | null = null;
     recovered: boolean;
     /** Only the recovery primary actually installed in this editor may be
@@ -38,6 +43,7 @@ export class DocumentSession {
     readonly recoveryContinuation: { sessionId: string; recordWitness: string; recoveredSource: string } | null;
     recoveryContinuationSettled = false;
     constructor(public opened: OpenedDocument) {
+        if (opened.viewInputId && opened.recoveredDraft == null) this.inputId = opened.viewInputId;
         this.path = opened.path;
         this.baseId = opened.baseId;
         this.baseSource = opened.source;
@@ -46,10 +52,15 @@ export class DocumentSession {
         this.recoveryContinuation = opened.recoveredDraft != null && opened.recoveredDraftWitness
             ? { sessionId: opened.sessionId, recordWitness: opened.recoveredDraftWitness, recoveredSource: opened.recoveredDraft } : null;
     }
+    get acknowledgedInputRevision(): number | null {
+        return this.lastDraftSource === this.source && this.lastDraftSerial === this.serial && this.lastDraftInputId === this.inputId ? this.lastDraftRevision : null;
+    }
     get dirty(): boolean { return this.source !== this.baseSource; }
     get projectionCurrent(): boolean { return this.projection?.serial === this.serial && this.projection.source === this.source; }
-    edit(source: string): void {
+    edit(source: string, inputId?: string): void {
+        if (inputId) this.inputId = inputId;
         if (source !== this.source) {
+            if (!inputId) this.inputId = crypto.randomUUID();
             this.source = source;
             this.serial++;
             this.error = null;
@@ -68,11 +79,12 @@ export class DocumentSession {
         this.recovered = false;
         this.error = null;
     }
-    acknowledgeDraft(source: string, serial: number): void {
-        if (serial < this.lastDraftSerial)
-            return;
+    acknowledgeDraft(source: string, serial: number, revision: number, inputId = this.inputId): void {
+        if (serial < this.lastDraftSerial) return;
+        this.lastDraftInputId = inputId;
         this.lastDraftSerial = serial;
         this.lastDraftSource = source;
+        this.lastDraftRevision = revision;
     }
 }
 /** Install only the same original owner's verified saved bytes. A fresh
@@ -82,7 +94,7 @@ export function rebindCommittedSave(session: DocumentSession, frozen: { sessionI
   const sameOwner = prior.nodeId && prior.workspaceId
     ? document.nodeId === prior.nodeId && document.workspaceId === prior.workspaceId
     : !document.nodeId && (!prior.workspaceId || document.workspaceId === prior.workspaceId) && document.path.replaceAll("\\", "/").toLowerCase() === session.path.replaceAll("\\", "/").toLowerCase();
-  if (prior.sessionId !== frozen.sessionId || !sameOwner || document.source !== frozen.source || document.recoveredDraftConflict) return false;
+  if (prior.sessionId !== frozen.sessionId || document.sessionId !== prior.sessionId || !sameOwner || document.source !== frozen.source || document.recoveredDraftConflict) return false;
   session.opened = document;
   session.acknowledgeSave(frozen.source, document.baseId, document.path);
   return true;

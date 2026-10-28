@@ -182,9 +182,29 @@ class LocalApplication(unittest.TestCase):
         self.assertFalse(invalid['ok'])
         self.assertTrue(invalid['diagnostics'])
 
+    def test_frozen_save_keeps_newer_ack_and_same_writer(self):
+        path, doc = self.ordinary('B')
+        self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': 'S'}, status=422)
+        input_ids = {1: uid(), 2: uid()}
+        for revision, source in [(1, 'S'), (2, 'Y'), (1, 'S')]:
+            ack = self.api('/api/draft', {'inputId': input_ids[revision], 'baseId': doc['baseId'], 'sessionId': doc['sessionId'], 'source': source, 'inputRevision': revision})
+            self.assertEqual(ack, {'ok': True, 'inputRevision': revision, 'evidence': 'authorDraft'})
+        request = {'sessionId': doc['sessionId'], 'baseId': doc['baseId'], 'source': 'S', 'operationId': uid(), 'inputRevision': 1}
+        saved = self.api('/api/save', request)
+        self.assertEqual(path.read_text('utf-8'), 'S')
+        opened = saved['document']
+        self.assertEqual(opened['sessionId'], doc['sessionId'])
+        self.assertEqual(opened['recoveredDraft'], 'Y')
+        self.assertFalse(opened['recoveredDraftConflict'])
+        replay = self.api('/api/save', request)
+        self.assertEqual(replay['operationId'], saved['operationId'])
+        self.assertEqual(replay['document']['recoveredDraft'], 'Y')
+        self.api('/api/save', {'sessionId': doc['sessionId'], 'baseId': opened['baseId'], 'source': 'Y', 'operationId': uid(), 'inputRevision': 2})
+        self.assertEqual(path.read_text('utf-8'), 'Y')
+
     def test_recovered_draft_requires_explicit_merge(self):
         path, doc = self.ordinary('原稿')
-        self.api('/api/draft', {'sessionId': doc['sessionId'], 'source': '未保存草稿'})
+        self.api('/api/draft', {'inputId': str(uuid.uuid4()), 'baseId': doc['baseId'], 'inputRevision': 1, 'sessionId': doc['sessionId'], 'source': '未保存草稿'})
         path.write_text('外部新稿', encoding='utf-8')
         opened = self.api('/api/open', {'path': str(path)})
         self.assertEqual(opened['recoveredDraftBaseSource'], '原稿')

@@ -555,6 +555,10 @@ mod retained_presence_tests {
     use crate::test_support::{FixtureRoots, open_core};
 
     #[test]
+    #[cfg_attr(
+        target_os = "linux",
+        ignore = "requires three explicit independently enrolled test roots"
+    )]
     fn nested_presence_follows_actual_original_roots_through_each_phase() {
         let roots = FixtureRoots::new();
         let core = open_core(roots.a_path().join("private")).unwrap();
