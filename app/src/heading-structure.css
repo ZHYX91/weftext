@@ -1,10 +1,11 @@
-.outline-view { min-width: 0; min-height: 0; overflow: auto; height: 100%; padding: 8px; box-sizing: border-box; }
+.outline-view { min-width: 0; min-height: 0; overflow: auto; height: 100%; padding: 8px; box-sizing: border-box; font-size: 12px; }
 .outline-view-modes, .outline-controls, .outline-match-controls, .outline-options-body { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
 .outline-view button, .outline-view input, .outline-view select { font: inherit; min-width: 0; }
 .outline-view-modes button[aria-pressed="true"] { background: var(--accent-soft, #e6ece2); color: var(--accent, #38685b); }
 .outline-controls { margin-block: 8px; }
 .outline-controls input[type="search"] { width: 100%; box-sizing: border-box; }
 .outline-controls select { max-width: 100%; }
+.outline-controls input, .outline-controls select, .outline-options input { border: 1px solid var(--line, #dce3d7); border-radius: 5px; padding: 5px 7px; min-height: 28px; background: #fff; color: inherit; }
 .outline-options { margin-block: 4px 8px; }
 .outline-options summary { cursor: pointer; font-size: .88em; }
 .outline-options-body { margin-block: 6px; }

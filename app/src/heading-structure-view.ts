@@ -23,24 +23,37 @@ export class HeadingStructureView {
     private canvas: CanvasState = { positions: new Map(), camera: defaultCamera() };
     private initialized = false;
     private optionsOpen = false;
+    private scroll = 0;
     private element?: HTMLElement;
     private composing = false;
-    private deferred?: { container: HTMLElement; snapshot: HeadingSnapshot; open: (heading: StructureHeading) => void };
+    private deferred?: { container: HTMLElement; snapshot: HeadingSnapshot; open: (heading: StructureHeading) => void; emptyMessage: UiText };
+
+    /** Retain navigation state without retaining another document's DOM/bindings. */
+    detach(): void {
+        if (this.element) {
+            this.scroll = this.element.scrollTop;
+            const options = this.element.querySelector<HTMLDetailsElement>(".outline-options");
+            if (options) this.optionsOpen = options.open;
+            disposeUiTree(this.element); this.element.remove(); this.element = undefined;
+        }
+        this.composing = false; this.deferred = undefined;
+    }
 
     clear(): void {
         this.collapsed.clear(); this.selected = DOCUMENT_ROOT; this.scope = DOCUMENT_ROOT; this.search = ""; this.match = 0;
         this.initialized = false; this.canvas = { positions: new Map(), camera: defaultCamera() };
         this.composing = false; this.deferred = undefined;
-        if (this.element) { disposeUiTree(this.element); this.element.remove(); this.element = undefined; }
+        this.detach(); this.scroll = 0;
     }
 
-    render(container: HTMLElement, snapshot: HeadingSnapshot | undefined, open: (heading: StructureHeading) => void): void {
+    render(container: HTMLElement, snapshot: HeadingSnapshot | undefined, open: (heading: StructureHeading) => void, emptyMessage: UiText = message("heading.refreshNativeHeadings")): void {
         if (this.composing && this.element?.isConnected && snapshot) {
-            this.deferred = { container, snapshot, open };
+            this.deferred = { container, snapshot, open, emptyMessage };
             return;
         }
         this.composing = false;
-        const previous = this.element, scroll = previous?.scrollTop ?? 0;
+        const previous = this.element, scroll = previous?.scrollTop ?? this.scroll;
+        this.scroll = scroll;
         const focused = previous?.contains(container.ownerDocument.activeElement) ? container.ownerDocument.activeElement as HTMLInputElement : null;
         const focusKey = focused?.dataset.outlineControl;
         const selection = focused?.tagName === "INPUT" && focused.type === "search" ? [focused.selectionStart, focused.selectionEnd] : null;
@@ -50,7 +63,7 @@ export class HeadingStructureView {
         const parent = ui("section", "knowledge-heading-structure outline-view");
         this.element = parent;
         container.append(parent);
-        const redraw = () => this.render(container, snapshot, open);
+        const redraw = () => this.render(container, snapshot, open, emptyMessage);
         const control = (key: string, label: UiText, run: () => void): HTMLButtonElement => {
             const button = action(label, run);
             button.dataset.outlineControl = key;
@@ -72,7 +85,7 @@ export class HeadingStructureView {
         }
         parent.append(modes);
         if (!snapshot) {
-            parent.append(ui("p", "knowledge-help", message("heading.refreshNativeHeadings")));
+            parent.append(ui("p", "knowledge-help", emptyMessage));
             restoreFocus();
             return;
         }
@@ -93,7 +106,7 @@ export class HeadingStructureView {
         search.addEventListener("compositionend", () => {
             this.composing = false; this.search = search.value; this.match = 0;
             const deferred = this.deferred; this.deferred = undefined;
-            if (deferred) this.render(deferred.container, deferred.snapshot, deferred.open);
+            if (deferred) this.render(deferred.container, deferred.snapshot, deferred.open, deferred.emptyMessage);
             else redraw();
         });
         search.onkeydown = event => {

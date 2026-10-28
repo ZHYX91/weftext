@@ -35,6 +35,7 @@ import { decodeEditorMapResponse, WritingController, groupWritingRenderNodes, gr
 import { nativeElement } from "./native-node";
 import { installNavigationLayout } from "./navigation-layout";
 import { WorkspaceDock } from "./workspace-dock";
+import { sameOutlineBasis, type OutlineBasis } from "./document-outline";
 import "./workspace-dock.css";
 import "./workspace-views.css";
 import { WorkPanel } from "./work-panel";
@@ -169,6 +170,7 @@ interface LiveDocument {
     notesMount?: DocumentNotesMount;
     authoringAssets: AuthoringAssetsAdapter;
 }
+const outlineProjections = new WeakMap<RenderOutput, OutlineBasis>();
 function sourceConsumersAvailable(doc: LiveDocument): boolean { return !doc.sourceRefreshing && !sourceConsumerNeedsComparison(doc.session.opened, doc.comparisonTarget); }
 const app = document.querySelector<HTMLDivElement>("#app")!;
 const shell = el("div", "shell");
@@ -650,6 +652,14 @@ const recognitionPanel = new RecognitionPanel({
 });
 let recognitionSession = "";
 const workspaceTools = new WorkspaceTools({
+    getOutlineSnapshot: () => {
+        const doc = current;
+        if (!doc || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc) || doc.editor.composing || doc.writing.state.pending || doc.writing.state.composing)
+            return null;
+        const projection = doc.session.projection!, basis = outlineProjections.get(projection);
+        const currentBasis: OutlineBasis = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, inputId: doc.session.inputId, path: doc.session.path, root: doc.session.opened.root };
+        return basis && projection.headingStructure && sameOutlineBasis(basis, currentBasis) ? { basis, snapshot: projection.headingStructure } : null;
+    },
     revealHeading: heading => {
         const doc = current;
         if (!doc || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc) || !renderHost || !renderHost.isConnected || !renderHost.getClientRects().length || !headingMatchesDisplay(doc.session.projection?.tree, heading))
@@ -1143,7 +1153,6 @@ async function acceptResolvedDocument(opened: OpenedDocument, confirmed?: (accep
             renderSidebar();
             void workspaceTools.selectedDocumentChanged().catch(showError);
         }
-        shell.classList.remove("sidebar-open");
     } finally {
         try {
             if (refreshed && !ownsOpenedSession(refreshed.sessionId)) await releaseOpenedSession(refreshed.sessionId);
@@ -1327,6 +1336,7 @@ function renderSidebar(): void {
         list.append(empty);
     }
     else {
+        const listedInventory = inventory;
         const heading = el("div", "section-label", query ? uiMessage("shell.searchResults") : uiMessage("shell.filesAndNotes"));
         if (!inventory.complete)
             heading.append(el("span", "partial-label", uiMessage("shell.scanIncomplete")));
@@ -1334,7 +1344,12 @@ function renderSidebar(): void {
         const visible = fileTreeEntries(inventory.entries, null, query, collapsed);
         for (const entry of visible) {
             const directory = entry.kind === "directory";
-            const row = button("", () => directory ? browseFolder(entry.folderPath!) : openInventoryEntry(entry, inventory!.root, inventory!.workspaceId), `tree-row ${current && normalize(current.session.path) === normalize(entry.path) ? "active" : ""}`, entry.folderPath ? "folder" : "file");
+            const row = button("", async () => {
+                if (directory) browseFolder(entry.folderPath!);
+                else if (entry.kind === "file" && !entry.path.toLowerCase().endsWith(".typ"))
+                    await (await openInventoryResource(listedInventory.root, entry.parentPath, entry.path)).open();
+                else await openInventoryEntry(entry, listedInventory.root, listedInventory.workspaceId);
+            }, `tree-row ${current && normalize(current.session.path) === normalize(entry.path) ? "active" : ""}`, entry.folderPath ? "folder" : "file");
             const depth = Math.max(0, entry.relativePath.replaceAll("\\", "/").split("/").length - 1);
             row.style.paddingLeft = "0";
             const names = el("span", "tree-names");
@@ -1345,7 +1360,7 @@ function renderSidebar(): void {
             if (!["ordinary", "admitted"].includes(entry.identityStatus))
                 row.append(el("span", "identity-badge", labelStatus[entry.identityStatus] ?? entry.identityStatus));
             setUiAttr(row, "title", () => `${uiTextValue(entry.path)}\n${uiTextValue(labelStatus[entry.identityStatus] ?? entry.identityStatus)}`);
-            if (entry.kind === "blocked" || !directory && !entry.path.toLowerCase().endsWith(".typ"))
+            if (entry.kind === "blocked")
                 row.disabled = true;
             const menu = () => nodeMenu([entry], entry.folderPath ?? undefined);
             row.oncontextmenu = event => { event.preventDefault(); row.focus(); menu(); };
@@ -1442,6 +1457,11 @@ function nodeMenu(entries: InventoryEntry[], folder?: string): void {
 async function previewNodes(entries: InventoryEntry[]): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
     try {
+        const resource = entries.length === 1 ? entries[0] : null;
+        if (inventory && resource?.kind === "file" && !resource.path.toLowerCase().endsWith(".typ")) {
+            await (await openInventoryResource(inventory.root, resource.parentPath, resource.path)).open();
+            return;
+        }
         await modal(uiMessage("shell.itemPreview"), uiMessage("shell.itemPreviewDescription"), (form, close) => {
             for (const entry of entries)
                 form.append(el("strong", "", entry.title || entry.name), el("pre", "", () => `${uiTextValue(entry.relativePath)}\n${uiTextValue(labelStatus[entry.identityStatus] ?? entry.identityStatus)}\n${uiTextValue(entry.excerpt ?? uiMessage("shell.itemSummaryUnavailable"))}`));
@@ -1514,7 +1534,10 @@ function renderNodeBrowser(): void {
         rememberNodeFolder(); followDocument = !followDocument; persistNodeBrowse(); renderNodeBrowser();
     }, "text-button");
     follow.setAttribute("aria-pressed", String(followDocument));
-    toolbar.append(follow, button(uiMessage("workspaceViews.nodeGraph"), async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("graph"); }, "text-button"));
+    const graph = button(uiMessage("workspaceViews.currentDocumentGraph"), async () => { await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("graph"); }, "text-button");
+    graph.disabled = !current || !inventory || normalize(current.session.opened.root) !== normalize(inventory.root);
+    if (current) setUiAttr(graph, "title", current.session.path);
+    toolbar.append(follow, graph);
     nodesView.append(toolbar);
     if (!inventory) { nodesView.append(el("p", "sidebar-empty", uiMessage("workspaceViews.chooseNode"))); return; }
     const path = el("div", "node-browser-path");
@@ -1522,7 +1545,7 @@ function renderNodeBrowser(): void {
     if (normalize(folder) !== normalize(inventory.root)) {
         const parent = folder.replaceAll("\\", "/").split("/").slice(0, -1).join("/");
         path.append(button("↑", () => browseFolder(parent), "text-button"), el("span", "", basename(folder)));
-        setUiAttr(path.querySelectorAll("button")[1], "aria-label", uiMessage("shell.returnEntireLibrary"));
+        setUiAttr(path.querySelectorAll("button")[1], "aria-label", uiMessage("workspaceViews.parentFolder"));
     }
     setUiAttr(path, "title", folder);
     const filter = el("input", "node-browser-filter");
@@ -2023,6 +2046,7 @@ function renderContent(): void {
     }
 }
 function refreshChrome(): void {
+    workspaceTools.refreshOutline();
     workPanel.selectProblemScope(current?.navigationKey ?? null);
     if (current) renderDiagnostics(current);
     void timelineView.documentChanged().catch(showError);
@@ -2468,6 +2492,7 @@ async function compile(doc: LiveDocument): Promise<void> {
             void pagedPreview?.render({ sessionId: doc.session.opened.sessionId, source, serial });
         try {
             const basis = { sessionId: doc.session.opened.sessionId, source, serial, inputId: doc.session.inputId };
+            const outlineBasis: OutlineBasis = { ...basis, path: doc.session.path, root: doc.session.opened.root };
             const hadQueries = doc.queries.hasQueries;
             const [result, editorMap] = await Promise.all([
                 api<RenderOutput>("/api/render", queryBasisWire(basis)),
@@ -2479,11 +2504,13 @@ async function compile(doc: LiveDocument): Promise<void> {
             if (result.sourceInfo.notes?.sourceHash === editorMap.sourceHash)
                 editorMap.notes = result.sourceInfo.notes;
             if (doc.session.acceptProjection(result)) {
+                outlineProjections.set(result, outlineBasis);
                 // Map observers consume the accepted projection as well as its source.
                 // Publish it before notifying them so initial notes controls can enable.
                 doc.writing.installMap(editorMap, source, serial);
                 doc.editor.tokens(result.sourceInfo.syntaxTokens, doc.mode === "styled", syntaxBasis);
                 if (doc === current) {
+                    workspaceTools.refreshOutline();
                     if (doc.layout === "paged" && hadQueries !== doc.queries.hasQueries)
                         renderContent();
                     else
@@ -2655,7 +2682,6 @@ async function openDocument(path: string, root?: string): Promise<void> {
             try { addDocument(opened); }
             finally { if (!ownsOpenedSession(opened.sessionId)) await releaseOpenedSession(opened.sessionId); }
         }
-        shell.classList.remove("sidebar-open");
     } finally { finishNativeActivity(); }
 }
 function readOnlySource(doc: LiveDocument): boolean { return doc.session.opened.readOnly === true || doc.session.opened.kind === "trash" || doc.session.opened.kind === "managedTrash"; }

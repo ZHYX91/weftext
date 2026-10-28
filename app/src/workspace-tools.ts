@@ -30,6 +30,7 @@ import { openProcessingSettingsPanel, decodeProcessingDocument, type ProcessingR
 import type { OpenedDocument } from "./types";
 import type { FrozenQuery, EmbeddedQuerySelection } from "./export-state";
 import type { StructureHeading } from "./heading-structure-state";
+import { DocumentOutlineView, type OutlineSnapshot } from "./document-outline";
 export interface WorkspaceToolsHost {
     embeddedQueries?(): EmbeddedQuerySelection[];
     getDocument(): (DocumentBasis & {
@@ -37,6 +38,7 @@ export interface WorkspaceToolsHost {
         workspaceId?: string;
     }) | null;
     selection(): KnowledgeContext["selection"];
+    getOutlineSnapshot(): OutlineSnapshot | null;
     applyPatch(patch: SourcePatch, basis: DocumentBasis): Promise<void>;
     openDocument(path: string, root?: string): Promise<void>;
     openResolved(document: OpenedDocument): Promise<void>;
@@ -98,6 +100,7 @@ export class WorkspaceTools {
     private readonly outputPanel: OutputPanel;
     private readonly knowledgeContainer = document.createElement("div");
     private readonly knowledgePanel;
+    private readonly outlinePanel: DocumentOutlineView;
     private readonly libraryTrash;
     private library: {
         root: string;
@@ -172,7 +175,6 @@ export class WorkspaceTools {
             inspectOperation: async (id, context) => { const receipt = decodeKnowledgeDelivery(await api<KnowledgeReceipt>("/api/operations/status", { operationId: id, context })); if (receipt.operationId !== id)
                 throw new UiError(uiMessage("error.invalidResponse")); return deliverCommitted(receipt, value => host.applyReceipt(value, context)); },
             selectSource: host.selectSource,
-            revealHeading: host.revealHeading,
             previewTemplate: (id, parameters, context) => api("/api/knowledge/template-preview", { templateId: id, parameters, context }),
             linkCopy: (link, form, context) => api("/api/knowledge/link-copy", { occurrence: link.occurrence, form, context }),
             mountMedia: (container, selected, initial) => mountMediaViewer(container, {
@@ -182,13 +184,17 @@ export class WorkspaceTools {
             }, selected, initial),
         });
         const outline = document.createElement("section");
+        this.outlinePanel = new DocumentOutlineView(outline, {
+            getDocument: host.getDocument, getOutlineSnapshot: host.getOutlineSnapshot,
+            selectSource: host.selectSource, revealHeading: host.revealHeading, notify: host.notify,
+            canNavigate: () => !this.closeGuard.frozen,
+        });
         this.views = Object.freeze({ data: this.propertyPanel.element, knowledge: this.knowledgeContainer, query: this.queryPanel.element, outline });
         for (const [kind, view] of Object.entries(this.views)) {
             view.classList.add("workspace-tool-view");
             view.dataset.workspaceTool = kind;
             this.closeGuard.bind(view);
         }
-        this.knowledgePanel.attachOutline(outline);
         const add = (tab: RibbonTab, id: string, label: UiText, nodes: HTMLElement[]) => this.commandGroups.push({ tab, id, label, nodes });
         add("knowledge", "note", uiMessage("localChrome.note"), [
             this.button(uiMessage("dataPanel.title"), () => this.toggle("data")),
@@ -307,7 +313,7 @@ export class WorkspaceTools {
     /** Opening a view never replaces another view or its proposal owner. */
     async show(kind: WorkspaceViewKind): Promise<void> {
         return this.closeGuard.run(async () => {
-            await this.host.beforeAction();
+            if (kind !== "outline") await this.host.beforeAction();
             if (!this.presentation) throw new Error("Workspace dock is not attached");
             this.presentation.reveal(kind);
             await this.refreshView(kind);
@@ -316,7 +322,7 @@ export class WorkspaceTools {
     /** Only toolbar switches use toggle; explicit open actions always use show. */
     private async toggle(kind: WorkspaceViewKind): Promise<void> {
         return this.closeGuard.run(async () => {
-            await this.host.beforeAction();
+            if (kind !== "outline") await this.host.beforeAction();
             if (!this.presentation) throw new Error("Workspace dock is not attached");
             if (this.presentation.visible(kind)) {
                 this.presentation.hide(kind);
@@ -326,10 +332,17 @@ export class WorkspaceTools {
             await this.refreshView(kind);
         });
     }
+    /** Accepted native projections can refresh navigation without a preview surface. */
+    refreshOutline(): void {
+        if (this.closeGuard.frozen) return;
+        this.outlinePanel.refresh();
+    }
     /** Dock-tab activation reads the current context without settling author input. */
     async refreshView(kind: WorkspaceViewKind): Promise<void> {
         return this.closeGuard.run(async () => {
-            if (kind === "data")
+            if (kind === "outline")
+                this.outlinePanel.refresh();
+            else if (kind === "data")
                 await this.propertyPanel.refresh();
             else if (kind === "query")
                 await this.queryPanel.refresh();
@@ -339,11 +352,6 @@ export class WorkspaceTools {
     }
     selectKnowledgeTab(tab: import("./knowledge-panel").KnowledgePanelTab): void {
         if (this.closeGuard.frozen) return;
-        if (tab === "headings") {
-            this.presentation?.reveal("outline");
-            void this.refreshView("outline").catch(error => this.host.notify(errorUiText(error), true));
-            return;
-        }
         const visible = this.viewVisible("knowledge");
         this.presentation?.reveal("knowledge");
         this.knowledgePanel.selectTab(tab);
@@ -355,16 +363,18 @@ export class WorkspaceTools {
     async selectedDocumentChanged(): Promise<void> {
         if (this.closeGuard.frozen) return;
         return this.closeGuard.run(async () => {
+            this.outlinePanel.refresh();
             if (this.viewVisible("data")) {
                 clearTimeout(this.refreshTimer);
                 await this.propertyPanel.refresh();
             }
-            if (this.viewVisible("knowledge") || this.viewVisible("outline") || !this.host.getDocument())
+            if (this.viewVisible("knowledge") || this.knowledgePanel.backgroundEnabled() || !this.host.getDocument())
                 await this.knowledgePanel.refresh();
         });
     }
     documentChanged(): void { if (this.closeGuard.frozen) return;
         clearTimeout(this.refreshTimer);
+        this.outlinePanel.invalidate();
         this.knowledgePanel.attachSurface(null);
         // A known moved writer has no current consumer context until explicit
         // comparison. This retires snapshots/late delivery without reading paths.
@@ -376,13 +386,14 @@ export class WorkspaceTools {
                 void this.propertyPanel.refresh().catch(error => this.host.notify(String(error), true));
             if (this.viewVisible("query") && !this.views.query.contains(document.activeElement))
                 this.queryPanel.documentChanged();
-            if (this.viewVisible("knowledge") || this.viewVisible("outline"))
+            if (this.viewVisible("knowledge") || this.knowledgePanel.backgroundEnabled())
                 void this.knowledgePanel.refresh().catch(error => this.host.notify(errorUiText(error), true));
         }, 450);
     }
     async refreshAfterSync(root: string): Promise<void> {
         return this.closeGuard.run(async () => {
             clearTimeout(this.refreshTimer);
+            this.outlinePanel.refresh();
             const sameRoot = (value?: string): boolean => value?.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase() === root.replaceAll("\\", "/").replace(/\/$/, "").toLowerCase();
             // Query results depend on the library, even without an open source. The
             // panel retains its current plan/parameters; frozen outputs stay frozen.
@@ -400,16 +411,18 @@ export class WorkspaceTools {
                 await this.propertyPanel.refresh();
             // Knowledge refresh also renews the selected media/annotation catalog.
             // Its own input guard retains an actively edited review form.
-            await this.knowledgePanel.refresh();
+            if (this.viewVisible("knowledge") || this.knowledgePanel.backgroundEnabled())
+                await this.knowledgePanel.refresh();
         });
     }
     async projectionChanged(surface: HTMLElement | null, mappings: KnowledgeTextMapping[]): Promise<void> {
         return this.closeGuard.run(async () => {
+            this.outlinePanel.refresh();
             this.knowledgePanel.attachSurface(surface, mappings);
             // Knowledge discovery observes the projection; it must never delay body
             // installation or an unrelated property/navigation action. Default-off
             // hints also avoid compiling other notes while this panel is closed.
-            if (this.host.getDocument()?.nodeId && (this.viewVisible("knowledge") || this.viewVisible("outline") || this.knowledgePanel.backgroundEnabled()))
+            if (this.host.getDocument()?.nodeId && (this.viewVisible("knowledge") || this.knowledgePanel.backgroundEnabled()))
                 void this.knowledgePanel.refresh().catch(error => this.host.notify(String(error), true));
         });
     }

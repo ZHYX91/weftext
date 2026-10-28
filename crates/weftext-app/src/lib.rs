@@ -2208,6 +2208,19 @@ fn notes_worker_main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Add read-navigation structure from this exact native compilation. This is
+/// deliberately an App response product, rather than another compile, parser or
+/// library-wide knowledge scan. Paged output has its own tree-free contract.
+fn flow_render_response(
+    output: &weftext_engine::RenderOutput,
+    source: &str,
+) -> Result<Value, serde_json::Error> {
+    let structure = weftext_knowledge::heading_structure(output.tree.as_ref(), source, 5_000);
+    let mut response = serde_json::to_value(output)?;
+    response["headingStructure"] = serde_json::to_value(structure)?;
+    Ok(response)
+}
+
 fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
     use base64::Engine as _;
     use std::io::{Read, Write};
@@ -2251,10 +2264,101 @@ fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
         if input.paged {
             serde_json::to_value(engine.render_frozen_paged(&request)?)?
         } else {
-            serde_json::to_value(engine.render_frozen(&request)?)?
+            flow_render_response(&engine.render_frozen(&request)?, &request.source)?
         }
     };
     serde_json::to_writer(std::io::stdout().lock(), &output)?;
     std::io::stdout().flush()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod render_heading_structure_tests {
+    use super::*;
+
+    fn frozen(source: &str) -> weftext_engine::FrozenRenderRequest {
+        let root = std::env::current_dir().unwrap();
+        weftext_engine::FrozenRenderRequest {
+            source: source.into(),
+            path: root.join("outline-response.typ"),
+            root,
+            files: Default::default(),
+            style: None,
+        }
+    }
+
+    #[test]
+    fn render_heading_structure_serializes_the_same_frozen_native_product() {
+        let source = "= Draft 😀\n#heading(level: 10)[Deep]\n#figure(rect(width: 10pt, height: 10pt), kind: image, caption: [Picture])\n#figure(table(columns: 1, [Cell]), caption: [Data])\n#figure(raw(\"print(1)\", block: true), caption: [Listing])\n#set math.equation(numbering: \"(1)\")\n$ x = 1 $";
+        let engine = weftext_engine::Engine::new_with_system_fonts(false).unwrap();
+        let output = engine.render_frozen(&frozen(source)).unwrap();
+        assert!(output.ok, "{:?}", output.diagnostics);
+        let expected = weftext_knowledge::heading_structure(output.tree.as_ref(), source, 5_000);
+        let response = flow_render_response(&output, source).unwrap();
+        assert_eq!(
+            response["headingStructure"],
+            serde_json::to_value(&expected).unwrap()
+        );
+        assert_eq!(
+            response["tree"],
+            serde_json::to_value(&output.tree).unwrap()
+        );
+        assert_eq!(
+            response["sourceInfo"],
+            serde_json::to_value(&output.source_info).unwrap()
+        );
+        assert_eq!(response["headingStructure"]["coverage"], "complete");
+        assert_eq!(
+            expected
+                .items
+                .iter()
+                .map(|item| item.kind)
+                .collect::<Vec<_>>(),
+            vec!["heading", "heading", "figure", "table", "code", "equation"]
+        );
+        assert_eq!(expected.items[1].level, 10);
+        assert!(
+            expected
+                .items
+                .iter()
+                .all(|item| item.range.as_ref().is_none_or(|range| range.verify(source)))
+        );
+        assert!(expected.items[0].range.is_some());
+        assert!(
+            expected.items[1].generated,
+            "generated headings do not acquire a source address"
+        );
+        assert!(expected.items[1].range.is_none());
+    }
+
+    #[test]
+    fn render_heading_structure_tracks_new_source_and_clears_failed_compilation() {
+        let engine = weftext_engine::Engine::new_with_system_fonts(false).unwrap();
+        for (source, text) in [("= Original", "Original"), ("= Changed 😀", "Changed 😀")] {
+            let output = engine.render_frozen(&frozen(source)).unwrap();
+            assert!(output.ok, "{:?}", output.diagnostics);
+            let response = flow_render_response(&output, source).unwrap();
+            assert_eq!(
+                response["headingStructure"]["items"]
+                    .as_array()
+                    .unwrap()
+                    .len(),
+                1
+            );
+            assert_eq!(response["headingStructure"]["items"][0]["text"], text);
+            assert_eq!(
+                response["headingStructure"]["items"][0]["range"]["raw"],
+                source
+            );
+        }
+        let source = "#unknown-outline-function()";
+        let output = engine.render_frozen(&frozen(source)).unwrap();
+        assert!(!output.ok);
+        assert!(output.tree.is_none());
+        let response = flow_render_response(&output, source).unwrap();
+        assert_eq!(
+            response["headingStructure"],
+            json!({"coverage":"partial","truncated":false,"items":[]})
+        );
+    }
 }

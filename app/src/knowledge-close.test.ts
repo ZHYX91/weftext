@@ -27,9 +27,7 @@ function fixture() {
     const source = readFileSync(new URL("./knowledge-panel.ts", import.meta.url), "utf8")
         .replace("assertCloseReady, freezeForClose, thawAfterClose,", "assertCloseReady, freezeForClose, thawAfterClose, testPerform: perform, testInspect: inspectPreparation, testRetry: () => perform(pendingPreparation.title, pendingPreparation.intent, pendingPreparation), testDiscard: discardAuthorProposals,");
     const exports: Record<string, any> = {};
-    const outlines: { owner: object; container: Element; snapshot: any; open: (item: any) => void }[] = [];
     class View { clear() {} render() {} closePreviews() {} assertCloseReady() {} freezeForClose() { return true; } thawAfterClose() {} }
-    class Outline { clear() {} render(container: Element, snapshot: any, open: (item: any) => void) { outlines.push({ owner: this, container, snapshot, open }); } }
     runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
         exports, document, HTMLElement: Element, crypto, structuredClone, queueMicrotask,
         window: { addEventListener() {}, removeEventListener() {} }, localStorage: { getItem() { return null; } },
@@ -38,23 +36,21 @@ function fixture() {
             : id === "./knowledge-state" ? state : id === "./original-operation" ? original
             : id === "./proofreading-panel" ? { ProofreadingPanel: View }
             : id === "./relationship-graph-view" ? { RelationshipGraphView: View }
-            : id === "./heading-structure-view" ? { HeadingStructureView: Outline }
             : id === "./relationship-diagnostics" ? { PersonalRelationRules: View } : {},
     });
     let context: any = null;
     const requests: any[] = [];
-    const selections: number[][] = [], notices: any[] = [];
     let lookup = "unknown";
     const load = deferred<any>();
     const host = {
-        context: () => context, notify: (...args: any[]) => notices.push(args), selectSource: (from: number, to: number) => selections.push([from, to]), load: () => load.promise,
+        context: () => context, notify() {}, load: () => load.promise,
         prepare: async (intent: any, basis: any, id: string) => { requests.push({ intent, basis, id }); throw new Error("transport lost"); },
         inspectOperation: async (id: string) => ({ operationId: id, status: lookup }),
     };
     const root = document.createElement("div");
     const panel = exports.mountKnowledgePanel(root, host);
-    panel.selectTab("headings");
-    return { panel, root, requests, load, outlines, selections, notices, document, useContext(source = "text", sessionId = "session") { context = { sessionId, serial: 1, baseId: "base", path: "note", source, root: "owned", dirty: false }; }, resolveOriginal() { lookup = "resolved"; } };
+    panel.selectTab("graph");
+    return { panel, root, requests, load, useContext() { context = { sessionId: "session", serial: 1, baseId: "base", path: "note", source: "text", root: "owned", dirty: false }; }, resolveOriginal() { lookup = "resolved"; } };
 }
 
 test("lost knowledge preparation retains its exact original ID and request until real status resolves it", async () => {
@@ -91,32 +87,9 @@ test("frozen knowledge owner invalidates late snapshot reads", async () => {
     f.panel.assertCloseReady(); f.panel.thawAfterClose();
 });
 
-test("independent outline shares authorized reads and exact source guards without another author owner", async () => {
-    const f = fixture(); f.useContext();
-    f.panel.selectTab("graph");
-    const outline = f.document.createElement("div"); f.panel.attachOutline(outline);
-    assert.equal(f.panel.backgroundEnabled(), true);
-    const caption = { key: "caption", kind: "figure", nativeKind: "figure", level: 0, text: "Caption", generated: false, range: { utf16From: 1, utf16To: 3 } };
-    const snapshot = { coverage: "complete", truncated: false, items: [caption] };
-    const refresh = f.panel.refresh();
-    f.load.resolve({ graph: {}, headingStructure: snapshot, links: {}, diagnostics: {}, renderedLinks: [], propertyReferences: { coverage: "complete", items: [], diagnostics: [] }, citations: null, mentions: {}, annotations: [], annotationStatus: "valid", annotationDiagnostics: [], templates: [], trash: [], warnings: [], errors: [] });
-    await refresh;
-    const rendered = f.outlines.at(-1)!;
-    assert.equal(rendered.container, outline); assert.equal(rendered.snapshot, snapshot);
-    rendered.open(caption); assert.deepEqual(f.selections, [[1, 3]]);
-    f.panel.selectTab("headings"); assert.equal(f.outlines.at(-1)!.container, outline);
+test("local knowledge has no duplicate outline tab, background scan or external outline mount", () => {
+    const f = fixture();
+    assert.equal(f.panel.backgroundEnabled(), false);
+    assert.equal(f.panel.attachOutline, undefined);
     assert.equal(f.root.all().some(node => node.getAttribute("role") === "tab" && node.textContent === locale.uiTextValue(locale.message("knowledge.headingStructure"))), false);
-    f.useContext("changed"); rendered.open(caption);
-    assert.deepEqual(f.selections, [[1, 3]]); assert.equal(f.notices.length, 1);
-    f.panel.assertCloseReady(); assert.equal(f.panel.freezeForClose(), true);
-    assert.throws(() => f.panel.attachOutline(null)); f.panel.thawAfterClose();
-    f.panel.attachOutline(null); assert.equal(f.panel.backgroundEnabled(), false);
-});
-
-test("outline navigation controller survives document switching independently from right inspector tabs", () => {
-    const f = fixture(), outline = f.document.createElement("div");
-    f.useContext("text", "session-a"); f.panel.attachOutline(outline); const first = f.outlines.at(-1)!.owner;
-    f.useContext("text", "session-b"); f.panel.selectTab("headings"); const second = f.outlines.at(-1)!.owner;
-    assert.notEqual(second, first);
-    f.useContext("text", "session-a"); f.panel.selectTab("headings"); assert.equal(f.outlines.at(-1)!.owner, first);
 });

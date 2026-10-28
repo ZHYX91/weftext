@@ -87,6 +87,7 @@ function dockCommandFixture(t: TestContext) {
         host: { beforeAction: () => state.before(), getDocument: () => state.document, notify(error: unknown) { throw error; } },
         propertyPanel: { element: view, refresh: async () => {} },
         queryPanel: { element: document.createElement("div"), refresh: async () => {} }, knowledgePanel: { refresh: async () => {} },
+        outlinePanel: { refresh() {} },
     });
     return { document, opener, outside, state, tools, visible, changes, view, input };
 }

@@ -135,6 +135,7 @@ const treeRow = name => page.locator('.file-tree').getByRole('button', { name, e
 const treeWrapper = name => treeRow(name).locator('..');
 const dockTab = id => page.locator(`[data-dock-tab="${id}"]`);
 const dockView = id => page.locator(`#workspace-view-${id}`);
+const knowledgeReads = () => result.requests.filter(request => request.route === '/api/knowledge/read').length;
 async function revealView(id) {
   if (!await dockTab(id).isVisible()) {
     await selectTab('view');
@@ -232,8 +233,10 @@ try {
   const parentFolder = path.dirname(parent.path), imagePath = path.join(parentFolder, 'layout-resource.png'), ordinaryPath = path.join(parentFolder, 'layout-resource.txt');
   await writeFile(imagePath, png(), { flag: 'wx' });
   await writeFile(ordinaryPath, 'Owned ordinary resource\n', { flag: 'wx' });
-  const parentSource = parent.source + '\n\n= Layout TEST\n\nLayout selection TEST\n\n== Layout child heading\n\n#table(columns: 2, [A], [B], [one], [two])\n\n#figure(rect(width: 10pt, height: 10pt), kind: "figure", caption: [Layout figure caption])\n';
+  const parentSource = parent.source + '\n\n= Layout TEST\n\nLayout selection TEST\n\n== Layout child heading\n\n#table(columns: 2, [A], [B], [one], [two])\n\n#figure(rect(width: 10pt, height: 10pt), kind: image, caption: [Layout figure caption])\n';
   await api('/api/save', { sessionId: parent.sessionId, baseId: parent.baseId, source: parentSource, operationId: randomUUID() });
+  const fixtureRender = await api('/api/render', { sessionId: parent.sessionId, source: parentSource, serial: 1 });
+  assert.equal(fixtureRender.ok, true, 'Owned layout fixture must actually compile before any UI result is assessed: ' + JSON.stringify(fixtureRender.diagnostics));
   for (const document of [parent, child, sibling]) originals.set(document.path, await readFile(document.path));
   for (const filename of [imagePath, ordinaryPath]) originals.set(filename, await readFile(filename));
   assert.equal(originals.get(parent.path).toString('utf8'), parentSource);
@@ -288,6 +291,14 @@ try {
   assert.equal(await page.locator('nav.tabs .document-tab[aria-current="page"] .tab-name').textContent(), 'Parent.typ');
   pass('One disclosure keeps its parent, hides descendants only, retains order and opens the real selected source');
 
+  await treeRow('layout-resource.txt').click();
+  const resourceDialog = page.locator('.inventory-resource-dialog[open]');
+  await resourceDialog.waitFor();
+  await until(async () => (await resourceDialog.textContent()).includes('Owned ordinary resource'), 'Files view did not open the exact ordinary resource');
+  await resourceDialog.getByRole('button', { name: '关闭', exact: true }).click();
+  await expectSource(parentSource);
+  pass('Files opens ordinary resources through the same revision-scoped read-only viewer without changing the author');
+
   // Directory browsing has its own view and never narrows the filesystem tree.
   await treeWrapper('Parent').locator(':scope > .tree-scope-button').filter({ has: page.locator('svg') }).click();
   await dockView('nodes').waitFor({ state: 'visible' });
@@ -301,7 +312,6 @@ try {
   const imageRow = nodes().locator('.node-content-row').filter({ has: page.locator('[data-control-role="title"]', { hasText: 'layout-resource.png' }) });
   const fileRow = nodes().locator('.node-content-row').filter({ has: page.locator('[data-control-role="title"]', { hasText: 'layout-resource.txt' }) });
   await imageRow.locator('[data-control-role="open"]').click();
-  const resourceDialog = page.locator('.inventory-resource-dialog[open]');
   await resourceDialog.waitFor();
   await until(() => resourceDialog.locator('img').evaluateAll(images => images.some(image => image.naturalWidth === 2 && image.naturalHeight === 2)), 'Ordinary image did not display its actual owned pixels');
   await resourceDialog.getByRole('button', { name: '关闭', exact: true }).click();
@@ -366,6 +376,49 @@ try {
   assert.equal(await source().evaluate((element, original) => element === original, outlineHandle), true);
   await expectSource(parentSource); await showFiles();
   pass('Independent Outline lists native headings and captions, preserves filter focus, navigates exact source and offers a heading map');
+
+  // The ordinary Outline must consume the same accepted native compile rather
+  // than opening the whole-library knowledge/relationship discovery path.
+  const outlineKnowledgeReads = knowledgeReads();
+  assert.equal(outlineKnowledgeReads, 0, 'Opening and navigating the ordinary Outline started a full knowledge scan');
+  await selectTab('view');
+  await ribbon().getByRole('button', { name: '源码', exact: true }).click();
+  await page.locator('.document-body.mode-source').waitFor();
+  await ribbon().locator('.preview-toggle').click();
+  assert.equal(await page.locator('.preview-pane').count(), 0, 'The hidden-preview check retained a native preview host');
+  assert.equal(await dockView('outline').isVisible(), true);
+  const hiddenHeadingText = 'Layout hidden-preview heading', hiddenSource = parentSource + '= ' + hiddenHeadingText;
+  const hiddenRenderResponse = page.waitForResponse(response => {
+    if (new URL(response.url()).pathname !== '/api/render' || response.status() !== 200) return false;
+    try { return response.request().postDataJSON()?.source === hiddenSource; } catch { return false; }
+  });
+  const hiddenEditor = await source().elementHandle();
+  await source().focus(); await page.keyboard.press('Control+End');
+  await page.keyboard.type('= ' + hiddenHeadingText); await expectSource(hiddenSource);
+  const hiddenRender = await (await hiddenRenderResponse).json();
+  assert.equal(hiddenRender.ok, true);
+  const hiddenItems = hiddenRender.headingStructure?.items?.filter(item => item.kind === 'heading' && item.text === hiddenHeadingText);
+  assert.equal(hiddenItems?.length, 1, 'The actual native render did not publish the authored hidden-preview heading');
+  const nativeHiddenHeading = hiddenItems[0];
+  assert.ok(nativeHiddenHeading.range, 'The literal native heading did not provide an exact main source range');
+  const hiddenRow = () => outline().locator(`li[data-heading-key=${JSON.stringify(nativeHiddenHeading.key)}]`);
+  await until(async () => await hiddenRow().count() === 1, 'Outline did not automatically publish the accepted heading while preview was hidden');
+  assert.equal(await page.locator('.preview-pane').count(), 0);
+  assert.equal(knowledgeReads(), outlineKnowledgeReads, 'Outline updating with preview hidden started a knowledge scan');
+  await hiddenRow().locator('.outline-jump').click();
+  const hiddenSelection = await editorSnapshot();
+  assert.deepEqual([hiddenSelection.from, hiddenSelection.to], [nativeHiddenHeading.range.utf16From, nativeHiddenHeading.range.utf16To], 'Hidden-preview Outline did not select the actual native range');
+  assert.equal(hiddenSelection.source, hiddenSource);
+  assert.equal(await source().evaluate((element, original) => element === original, hiddenEditor), true);
+  await source().focus(); await page.keyboard.press('Control+z'); await expectSource(parentSource);
+  await until(async () => await outline().locator('[data-outline-kind="figure"]').count() === 1 && await outline().locator('.outline-row').filter({ hasText: hiddenHeadingText }).count() === 0, 'Outline did not retire the undone heading while preview stayed hidden');
+  assert.equal(knowledgeReads(), outlineKnowledgeReads);
+  await ribbon().locator('.preview-toggle').click();
+  await page.locator('.preview-pane').waitFor({ state: 'visible' });
+  await selectTab('home');
+  result.outlineProjectionChecks = { knowledgeReadsBefore: outlineKnowledgeReads, knowledgeReadsAfter: knowledgeReads(), previewHidden: true,
+    nativeRange: nativeHiddenHeading.range, selectedRange: { from: hiddenSelection.from, to: hiddenSelection.to } };
+  pass('Outline updates from the accepted native render without knowledge scans or a preview host and preserves exact source navigation and Undo');
   await page.screenshot({ path: path.join(out, 'workspace-initial-1440.png'), fullPage: false });
   await observeEditorInput();
 
@@ -465,8 +518,15 @@ try {
   assert.equal(await dockView('data').evaluate((element, original) => element === original, propertyElement), true);
   await viewAction('nodes', '移到左侧栏');
   await revealView('data'); await viewAction('data', '隐藏视图');
-  await page.locator('.workspace-dock-right').waitFor({ state: 'hidden' });
   assert.equal(await dockView('data').evaluate(element => element.isConnected && !!element.closest('[hidden][inert]')), true, 'Hidden property owner was detached rather than parked');
+  await assertSameEditor(handle, crossSideEditor);
+  assert.equal(await page.locator('.workspace-dock-right .workspace-dock-group').count(), 0, 'Hiding the last right view retained a visible view group');
+  // The user may retain an empty drop area. Closing the side is a separate action.
+  if (await page.locator('.workspace-dock-right').isVisible()) {
+    await selectTab('view');
+    await ribbon().locator('[data-toggle-side="right"]').click();
+  }
+  await page.locator('.workspace-dock-right').waitFor({ state: 'hidden' });
   await showFiles();
   await selectTab('home');
   pass('Five modes remain reachable; cross-side drag and hidden property owners preserve mounted controls and the author editor');
@@ -504,7 +564,7 @@ try {
   await output.getByRole('button', { name: '关闭', exact: true }).first().click();
   await workStatus.click();
   await workPanel.locator('.work-panel-tab[data-tab="results"]').click();
-  const resultRow = workPanel.locator(`.work-panel-item[data-id="${actualOutput.id}"]`);
+  const resultRow = workPanel.locator(`.work-panel-item[data-state="result"][data-id="${actualOutput.id}"]`);
   await resultRow.waitFor();
   assert.ok((await resultRow.textContent()).includes(actualOutput.filename));
   await resultRow.getByRole('button', { name: '查看详情', exact: true }).click();
@@ -533,6 +593,9 @@ try {
   pass('Sidebar width geometry remains keyboard-adjustable independently of Dock visibility and grouping');
 
   await until(async () => (await page.locator('.status-right').textContent()).includes('草稿预览已更新'), 'Current author source did not finish its preview before layout capture');
+  assert.equal(await dockView('outline').isVisible(), true, 'The final Outline stability check requires the visible view');
+  await until(async () => await outline().locator('[data-outline-kind="figure"]').count() === 1 && await outline().locator('[data-outline-kind="heading"]').count() >= 2, 'Visible Outline did not recover the current accepted native headings/caption after ordinary edits and Undo');
+  pass('Visible Outline recovers current native headings and captions after ordinary editing and Undo');
   for (const [width, label] of [[1440, 'desktop'], [1024, 'compact-desktop'], [768, 'tablet'], [720, '1440-at-200-percent-equivalent'], [390, 'phone'], [320, '1280-at-400-percent-equivalent']]) {
     await page.setViewportSize({ width, height: 900 });
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -565,6 +628,11 @@ try {
     if (width === 1440 || width === 390) await page.screenshot({ path: path.join(out, `workspace-${width}.png`), fullPage: false });
   }
   pass('Responsive workspace keeps readable controls and local overflow at desktop, narrow and zoom-equivalent CSS widths');
+  // Core's active author handle can deny external reads. Drain the actual owned
+  // browser and typed Core owner before reading original files; no lock bypass.
+  browserClosing = true;
+  await browser.close(); browser = undefined;
+  await stop();
   for (const [filename, bytes] of originals) assert.deepEqual(await readFile(filename), bytes, 'Navigation/formatting Undo changed an original saved author file');
   assert.equal(hash(await readFile(exe)), result.executableSha256);
   await Promise.all([...responseTasks]);

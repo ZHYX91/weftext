@@ -89,6 +89,7 @@ export interface SourceInfo {
 }
 export type Diagnostic = EngineDiagnostic;
 export interface RenderOutput {
+  headingStructure: import("./heading-structure-state").HeadingSnapshot;
   ok: boolean;
   html: string;
   tree: RenderNode | null;

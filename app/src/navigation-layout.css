@@ -28,6 +28,6 @@
 @media (max-width: 780px) {
   .navigation-layout-controls { gap: 4px; }
   .shell.navigation-layout { grid-template-columns: minmax(0, 1fr); }
-  .shell.navigation-layout > .sidebar { position: absolute; inset: 0 auto 0 0; width: min(var(--navigation-sidebar-width, 264px), 88vw); transform: none; visibility: visible; transition: none; }
+  .shell.navigation-layout > .sidebar { position: absolute; z-index: 45; inset: 0 auto 0 0; width: min(var(--navigation-sidebar-width, 264px), 88vw); box-shadow: 4px 0 25px #20341320; }
 }
 @media (prefers-reduced-motion: reduce) { .navigation-resize-handle::after { transition: none; } }

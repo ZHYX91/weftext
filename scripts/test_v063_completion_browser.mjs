@@ -56,9 +56,22 @@ async function commit(prepared) {
   return api('/api/operations/commit', { operationId: preview.operationId, planId: preview.planId });
 }
 async function save(doc, source) {
-  const fresh = await api('/api/open', { root, path: doc.path });
-  await api('/api/save', { sessionId: fresh.sessionId, baseId: fresh.baseId, source, operationId: randomUUID() });
-  return api('/api/open', { root, path: doc.path });
+  const operationId = randomUUID();
+  const receipt = await api('/api/save', { sessionId: doc.sessionId, baseId: doc.baseId, source, operationId });
+  assert.equal(receipt.operationId, operationId);
+  assert.equal(receipt.status, 'saved');
+  assert.equal(receipt.recoveryIssue, undefined);
+  assert.equal(receipt.documentError, undefined);
+  assert.equal(receipt.committedSource, source);
+  assert.equal(receipt.documentSourceMatchesCommit, true);
+  assert.equal(receipt.document.sessionId, doc.sessionId);
+  assert.equal(receipt.document.path, doc.path);
+  assert.equal(receipt.document.root, doc.root);
+  assert.equal(receipt.document.nodeId, doc.nodeId);
+  assert.equal(receipt.document.workspaceId, doc.workspaceId);
+  assert.equal(receipt.document.source, source);
+  assert.equal(receipt.document.recoveredDraftConflict, false);
+  return receipt.document;
 }
 async function note(name, container = root, body = '') {
   const doc = createdDocument(await api('/api/note/create', { root, parent: container, name, operationId: randomUUID() }));
@@ -72,9 +85,14 @@ function png() {
   return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', deflateSync(Buffer.from([0, 255, 0, 0, 0, 255, 0, 0, 255, 0, 0, 0, 255, 0]))), chunk('IEND', Buffer.alloc(0))]);
 }
 async function attachImage(doc) {
-  const fresh = await api('/api/open', { root, path: doc.path });
+  const fresh = await api('/api/open', { sessionId: doc.sessionId });
+  assert.equal(fresh.sessionId, doc.sessionId);
+  assert.equal(fresh.path, doc.path);
+  assert.equal(fresh.baseId, doc.baseId);
+  assert.equal(fresh.source, doc.source);
+  assert.equal(fresh.recoveredDraftConflict, false);
   await commit(await api('/api/resources/prepare-import', { sessionId: fresh.sessionId, name: 'TEST-pixels.png', bytes: png().toString('base64'), operationId: randomUUID() }));
-  return save(doc, doc.source + '\n\n#image("TEST-pixels.png", width: 24pt)\n');
+  return save(fresh, fresh.source + '\n\n#image("TEST-pixels.png", width: 24pt)\n');
 }
 function observe(target) {
   const client = ++observedClient;
@@ -225,7 +243,7 @@ try {
   // library still has 22 notes, one task and the original untyped B-Plain.
   relationTarget = await save(relationTarget, relationTarget.source.replace('types: ()', 'types: ("person",)'));
   relationSource = await save(relationSource, relationSource.source.replace('types: ()', `types: ("person",), parents: ((target: (ref: "${reference(relationTarget)}"),),), siblings: ((target: (ref: "${reference(relationTarget)}"),),)`));
-  parent = await save(parent, parent.source + `\n\n= TEST Duplicate\n\nRoot before.\n\n== TEST Child\n\nChild content.\n\n==== TEST Deep\n\nDeep content.\n\n= TEST Duplicate\n\n#link("${reference(image)}")[first image link]\n\n#link("${reference(image)}")[second image link]\n\n#link("${reference(plain)}")[plain link]\n\n#figure(rect(width: 10pt, height: 10pt), kind: "figure", caption: [TEST Figure Caption])\n#figure(table(columns: 1, [Data]), caption: [TEST Table Caption])\n#figure(raw("const x = 1", block: true), caption: [TEST Code Caption])\n#set math.equation(numbering: "(1)")\n$ x = 1 $\n`);
+  parent = await save(parent, parent.source + `\n\n= TEST Duplicate\n\nRoot before.\n\n== TEST Child\n\nChild content.\n\n==== TEST Deep\n\nDeep content.\n\n= TEST Duplicate\n\n#link("${reference(image)}")[first image link]\n\n#link("${reference(image)}")[second image link]\n\n#link("${reference(plain)}")[plain link]\n\n#figure(rect(width: 10pt, height: 10pt), kind: image, caption: [TEST Figure Caption])\n#figure(table(columns: 1, [Data]), caption: [TEST Table Caption])\n#figure(raw("const x = 1", block: true), caption: [TEST Code Caption])\n#set math.equation(numbering: "(1)")\n$ x = 1 $\n`);
   savedParent = parent.source;
   await stop(); await start(['--open', image.path, '--root', root]);
   browser = await chromium.launch({ headless: true, ...(process.env.WEFTEXT_BROWSER_EXECUTABLE ? { executablePath: process.env.WEFTEXT_BROWSER_EXECUTABLE } : { channel: 'chrome' }) });

@@ -6,6 +6,12 @@
     "en-US"
   ],
   "messages": {
+    "workspaceViews.currentDocumentGraph": { "zh-CN": "当前文档关系图", "en-US": "Current document graph", "params": {} },
+    "workspaceViews.parentFolder": { "zh-CN": "上级文件夹", "en-US": "Parent folder", "params": {} },
+    "heading.waitForCurrentProjection": { "zh-CN": "等待当前草稿预览完成，大纲会自动更新。", "en-US": "The outline updates automatically when the current draft preview is ready.", "params": {} },
+    "heading.openDocumentForOutline": { "zh-CN": "打开文档以查看大纲。", "en-US": "Open a document to view its outline.", "params": {} },
+    "heading.outlineBasisChanged": { "zh-CN": "大纲已过期，等待当前预览完成后自动更新。", "en-US": "The outline is out of date and updates when the current preview is ready.", "params": {} },
+    "heading.generatedItemSourceUnavailable": { "zh-CN": "此大纲项没有可定位的本篇源码或当前显示位置。", "en-US": "This outline item has no locatable source or current display position.", "params": {} },
     "heading.outlineMatchCount": { "zh-CN": "{p0} 个大纲项命中", "en-US": "{p0} outline matches", "params": { "p0": "integer" } },
     "heading.outlineEntrySummary": { "zh-CN": "{p0}：{p1} 个直接子项／{p2} 个后代子项", "en-US": "{p0}: {p1} direct items / {p2} descendant items", "params": { "p0": "text", "p1": "integer", "p2": "integer" } },
     "heading.searchOutline": { "zh-CN": "搜索标题与题注", "en-US": "Search headings and captions", "params": {} },

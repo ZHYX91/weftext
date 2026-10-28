@@ -17,7 +17,7 @@ import { message as uiMessage, setUiText, errorUiText } from "./ui-locale";
 const workspaceSource = ts.createSourceFile("workspace-tools.ts", readFileSync(new URL("./workspace-tools.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 const workspaceClass = workspaceSource.statements.find(node => ts.isClassDeclaration(node) && node.name?.text === "WorkspaceTools") as ts.ClassDeclaration;
 assert.ok(workspaceClass);
-const methodNames = ["closeOwners", "assertCloseReady", "freezeForClose", "thawAfterClose", "button", "attachDock", "viewVisible", "show", "toggle", "refreshView", "selectKnowledgeTab", "selectedDocumentChanged", "documentChanged"];
+const methodNames = ["closeOwners", "assertCloseReady", "freezeForClose", "thawAfterClose", "button", "attachDock", "viewVisible", "show", "toggle", "refreshOutline", "refreshView", "selectKnowledgeTab", "selectedDocumentChanged", "documentChanged", "projectionChanged"];
 const methods = workspaceClass.members.filter(node => ts.isMethodDeclaration(node) && methodNames.includes(node.name.getText(workspaceSource)));
 assert.equal(methods.length, methodNames.length);
 const compiled = ts.transpileModule(`class TestedWorkspaceTools { ${methods.map(node => node.getText(workspaceSource)).join("\n")} }\nglobalThis.TestedWorkspaceTools = TestedWorkspaceTools;`, {
@@ -83,6 +83,7 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
     const views = { data: panel.element, knowledge: document.createElement("section"), query: document.createElement("section"), outline: document.createElement("section") };
     for (const view of Object.values(views)) document.body.append(view as unknown as Element);
     const visible = new Set<WorkspaceViewKind>(), refreshed: WorkspaceViewKind[] = [], knowledgeTabs: string[] = [];
+    const outline = { refreshes: 0, invalidations: 0 }, background = { enabled: false };
     const presentation = {
         reveal: (kind: WorkspaceViewKind) => { visible.add(kind); views[kind].hidden = false; },
         hide: (kind: WorkspaceViewKind) => { visible.delete(kind); views[kind].hidden = true; },
@@ -94,7 +95,8 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
     const tools = Object.assign(new TestedWorkspaceTools(), {
         closeGuard: guard, host, propertyPanel: panel, views, presentation: null,
         queryPanel: { refresh: async () => { refreshed.push("query"); }, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
-        knowledgePanel: { refresh: async () => { refreshed.push("knowledge"); }, selectTab: (tab: string) => { knowledgeTabs.push(tab); }, attachSurface() {}, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
+        knowledgePanel: { refresh: async () => { refreshed.push("knowledge"); }, backgroundEnabled: () => background.enabled, selectTab: (tab: string) => { knowledgeTabs.push(tab); }, attachSurface() {}, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
+        outlinePanel: { refresh: () => { outline.refreshes++; refreshed.push("outline"); }, invalidate: () => { outline.invalidations++; } },
         outputPanel: { assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         libraryTrash: { assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         styles: new Map(), pendingImport: null,
@@ -105,7 +107,7 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
         await tools.selectedDocumentChanged();
         await turn();
     };
-    return { document, state, requests, notices, panel, guard, tools, select, views, presentation, visible, refreshed, knowledgeTabs };
+    return { document, state, requests, notices, panel, guard, tools, select, views, presentation, visible, refreshed, knowledgeTabs, outline, background };
 }
 
 test("delayed open adoption renews an already open empty property consumer while it owns focus", async t => {
@@ -148,7 +150,7 @@ test("outline routes to its own view and leaves a focused knowledge input mounte
     f.views.knowledge.append(input);
     input.value = "retained annotation proposal";
     f.document.activeElement = input;
-    f.tools.selectKnowledgeTab("headings");
+    await f.tools.show("outline");
     assert.equal(f.visible.has("outline"), true);
     assert.equal(f.visible.has("knowledge"), true);
     assert.deepEqual(f.knowledgeTabs, []);
@@ -164,22 +166,66 @@ test("direct dock activation reads context without preparing or settling author 
     Object.assign((f.tools as unknown as { host: object }).host, { beforeAction: async () => { prepares++; } });
     await f.tools.refreshView("outline");
     assert.equal(prepares, 0);
-    assert.deepEqual(f.refreshed, ["knowledge"]);
+    assert.deepEqual(f.refreshed, ["outline"]);
 });
 
-test("direct outline selection reads once while tab selection after show reuses the fresh knowledge view", async t => {
+test("accepted outline refresh needs no mounted projection surface and starts no network read", t => {
+    const f = fixture(t); f.state.current = basis(); let prepares = 0;
+    Object.assign((f.tools as unknown as { host: object }).host, { beforeAction: async () => { prepares++; } });
+    f.tools.refreshOutline();
+    assert.equal(f.outline.refreshes, 1);
+    assert.deepEqual(f.refreshed, ["outline"]);
+    assert.equal(f.requests.length, 0); assert.equal(prepares, 0);
+    assert.equal(f.guard.freeze(false), true);
+    f.tools.refreshOutline();
+    assert.equal(f.outline.refreshes, 1, "frozen close preparation keeps the existing navigation surface");
+});
+
+test("opening outline is local while tab selection after show reuses the fresh knowledge view", async t => {
     const f = fixture(t);
-    f.tools.selectKnowledgeTab("headings"); await turn();
-    assert.deepEqual(f.refreshed, ["knowledge"]);
+    let prepares = 0;
+    Object.assign((f.tools as unknown as { host: object }).host, { beforeAction: async () => { prepares++; } });
+    await f.tools.show("outline");
+    assert.deepEqual(f.refreshed, ["outline"]);
+    assert.equal(prepares, 0);
     assert.equal(f.visible.has("outline"), true);
     await f.tools.show("knowledge");
     f.tools.selectKnowledgeTab("annotations"); await turn();
-    assert.deepEqual(f.refreshed, ["knowledge", "knowledge"]);
+    assert.deepEqual(f.refreshed, ["outline", "knowledge"]);
     assert.deepEqual(f.knowledgeTabs, ["annotations"]);
     f.presentation.hide("knowledge");
     f.tools.selectKnowledgeTab("links"); await turn();
-    assert.deepEqual(f.refreshed, ["knowledge", "knowledge", "knowledge"]);
+    assert.deepEqual(f.refreshed, ["outline", "knowledge", "knowledge"]);
     assert.deepEqual(f.knowledgeTabs, ["annotations", "links"]);
+});
+
+test("outline-only navigation invalidates edits and refreshes accepted projections without full knowledge scans", async t => {
+    const f = fixture(t); f.state.current = basis(); f.presentation.reveal("outline");
+    await f.select(basis());
+    assert.equal(f.outline.refreshes, 1);
+    f.tools.documentChanged();
+    assert.equal(f.outline.invalidations, 1, "source edits retire the old navigation capability immediately");
+    await f.tools.projectionChanged(null, []);
+    await new Promise<void>(resolve => setTimeout(resolve, 500));
+    assert.equal(f.outline.refreshes, 2);
+    assert.deepEqual(f.refreshed, ["outline", "outline"]);
+    assert.equal(f.requests.length, 0);
+    f.presentation.hide("outline");
+    await f.tools.projectionChanged(null, []);
+    assert.equal(f.outline.refreshes, 3, "a hidden view also retires/rebases its snapshot");
+    assert.equal(f.requests.length, 0);
+});
+
+for (const enabled of ["visible", "hints"] as const) test(`full knowledge reads remain available for ${enabled}`, async t => {
+    const f = fixture(t); f.state.current = basis();
+    if (enabled === "visible") f.presentation.reveal("knowledge"); else f.background.enabled = true;
+    await f.select(basis());
+    assert.deepEqual(f.refreshed, ["outline", "knowledge"]);
+    f.tools.documentChanged();
+    await new Promise<void>(resolve => setTimeout(resolve, 500));
+    await f.tools.projectionChanged(null, []); await turn();
+    assert.equal(f.refreshed.filter(view => view === "knowledge").length, 3);
+    assert.equal(f.outline.invalidations, 1); assert.equal(f.outline.refreshes, 2);
 });
 
 test("selection leaves an unrelated query refresh timer owned by its existing path", async t => {

@@ -1,5 +1,11 @@
 // Generated from assets/ui-messages.json. Run node scripts/generate_ui_messages.mjs.
 export const zhCN = {
+  "workspaceViews.currentDocumentGraph": "当前文档关系图",
+  "workspaceViews.parentFolder": "上级文件夹",
+  "heading.waitForCurrentProjection": "等待当前草稿预览完成，大纲会自动更新。",
+  "heading.openDocumentForOutline": "打开文档以查看大纲。",
+  "heading.outlineBasisChanged": "大纲已过期，等待当前预览完成后自动更新。",
+  "heading.generatedItemSourceUnavailable": "此大纲项没有可定位的本篇源码或当前显示位置。",
   "heading.outlineMatchCount": "{p0} 个大纲项命中",
   "heading.outlineEntrySummary": "{p0}：{p1} 个直接子项／{p2} 个后代子项",
   "heading.searchOutline": "搜索标题与题注",
@@ -10363,6 +10369,12 @@ export const zhCN = {
 
 export type MessageKey = keyof typeof zhCN;
 export interface MessageParamsMap {
+  "workspaceViews.currentDocumentGraph": {  };
+  "workspaceViews.parentFolder": {  };
+  "heading.waitForCurrentProjection": {  };
+  "heading.openDocumentForOutline": {  };
+  "heading.outlineBasisChanged": {  };
+  "heading.generatedItemSourceUnavailable": {  };
   "heading.outlineMatchCount": { p0: number };
   "heading.outlineEntrySummary": { p0: string; p1: number; p2: number };
   "heading.searchOutline": {  };
@@ -20724,6 +20736,12 @@ export interface MessageParamsMap {
   "personalInput.copyFinished": {  };
 }
 export const messageParamTypes = {
+  "workspaceViews.currentDocumentGraph": {},
+  "workspaceViews.parentFolder": {},
+  "heading.waitForCurrentProjection": {},
+  "heading.openDocumentForOutline": {},
+  "heading.outlineBasisChanged": {},
+  "heading.generatedItemSourceUnavailable": {},
   "heading.outlineMatchCount": {
     "p0": "integer"
   },
@@ -32953,6 +32971,12 @@ export const messageParamTypes = {
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
+  "workspaceViews.currentDocumentGraph": "Current document graph",
+  "workspaceViews.parentFolder": "Parent folder",
+  "heading.waitForCurrentProjection": "The outline updates automatically when the current draft preview is ready.",
+  "heading.openDocumentForOutline": "Open a document to view its outline.",
+  "heading.outlineBasisChanged": "The outline is out of date and updates when the current preview is ready.",
+  "heading.generatedItemSourceUnavailable": "This outline item has no locatable source or current display position.",
   "heading.outlineMatchCount": "{p0} outline matches",
   "heading.outlineEntrySummary": "{p0}: {p1} direct items / {p2} descendant items",
   "heading.searchOutline": "Search headings and captions",
