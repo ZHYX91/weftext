@@ -19,9 +19,9 @@
 .outline-view .knowledge-graph-canvas { max-width: 100%; }
 .outline-match-position { font-variant-numeric: tabular-nums; }
 .outline-map-controls button[aria-pressed="true"] { background: var(--accent-soft, #e6ece2); }
-.heading-map-card .heading-map-number { font-size: 10px; }
+.heading-map-card .heading-map-number { font-size: 12px; }
 .heading-map-card [data-outline-control^="map-item:"]:focus > rect { stroke: var(--accent, #38685b); stroke-width: 3px; }
 .heading-map-card .heading-map-branch rect { fill: var(--accent-soft, #e6ece2); stroke: var(--line, #dce3d7); }
-.heading-map-card .heading-map-branch text { font-size: 11px; }
+.heading-map-card .heading-map-branch text { font-size: 12px; }
 .heading-map-card .heading-map-branch:focus rect { stroke: var(--accent, #38685b); stroke-width: 3px; }
 .heading-map-card .heading-map-branch[aria-disabled="true"] { opacity: .65; }

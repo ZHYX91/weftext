@@ -1,6 +1,6 @@
 import { uiDisplayParameter, displayMessage, message, setUiAttr, disposeUiTree, type UiText } from "./ui-locale";
 import { action, ui } from "./data-panel";
-import { graphCanvas, type CanvasState } from "./knowledge-graph-canvas";
+import { disposeGraphCanvasTree, graphCanvas, type CanvasState } from "./knowledge-graph-canvas";
 import { defaultCamera } from "./relationship-graph-state";
 import { DOCUMENT_ROOT, headingTree, visibleHeadings, nextHeadingMatch, boundedHeadingMap, headingMapLayout, type HeadingSnapshot, type StructureHeading } from "./heading-structure-state";
 import "./heading-structure.css";
@@ -37,7 +37,7 @@ export class HeadingStructureView {
             this.scroll = this.element.scrollTop;
             const options = this.element.querySelector<HTMLDetailsElement>(".outline-options");
             if (options) this.optionsOpen = options.open;
-            disposeUiTree(this.element); this.element.remove(); this.element = undefined;
+            disposeGraphCanvasTree(this.element); disposeUiTree(this.element); this.element.remove(); this.element = undefined;
         }
         this.composing = false; this.deferred = undefined;
     }
@@ -63,7 +63,7 @@ export class HeadingStructureView {
         const selection = focused?.tagName === "INPUT" && focused.type === "search" ? [focused.selectionStart, focused.selectionEnd] : null;
         const previousOptions = previous?.querySelector<HTMLDetailsElement>(".outline-options");
         if (previousOptions) this.optionsOpen = previousOptions.open;
-        if (previous) { disposeUiTree(previous); previous.remove(); }
+        if (previous) { disposeGraphCanvasTree(previous); disposeUiTree(previous); previous.remove(); }
         const parent = ui("section", "knowledge-heading-structure outline-view");
         this.element = parent;
         container.append(parent);
@@ -192,7 +192,7 @@ export class HeadingStructureView {
                     toggle: childCount && !this.search.trim() ? () => { choose(n.key); this.collapsed.has(n.key) ? this.collapsed.delete(n.key) : this.collapsed.add(n.key); redraw(); } : undefined,
                 } };
             }), edges.map(e => ({ ...e, directed: true, label: displayMessage("heading.edgeLabel", { p0: uiDisplayParameter(e.source === DOCUMENT_ROOT ? documentTitle : byKey.get(e.source)?.text), p1: uiDisplayParameter(byKey.get(e.target)?.text) }) })), this.canvas,
-                key => choose(key), key => { const item = byKey.get(key); if (item && item.key !== DOCUMENT_ROOT) open(item); }, this.selected, message("heading.layoutOnly"), { fit: !this.initialized, revealKey: this.revealMatch ? this.selected : undefined }));
+                key => choose(key), key => { const item = byKey.get(key); if (item && item.key !== DOCUMENT_ROOT) open(item); }, this.selected, message("heading.layoutOnly"), { readableRootKey: !this.initialized ? drawn[0]?.key : undefined, revealKey: this.revealMatch ? this.selected : undefined, direction: this.direction }));
             this.initialized = true;
         }
         this.revealMatch = false;

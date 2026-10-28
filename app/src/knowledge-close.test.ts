@@ -35,6 +35,7 @@ function fixture() {
     const proofreads: Proofreading[] = [];
     class Proofreading extends View { disposed = false; constructor() { super(); proofreads.push(this); } dispose() { this.disposed = true; } }
     const graphs: any[] = [];
+    const canvasDisposals: number[] = [];
     class Graph extends View { override render(...args: any[]) { graphs.push(args[1]); } }
     runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
         exports, document, HTMLElement: Element, crypto, structuredClone, queueMicrotask,
@@ -45,6 +46,7 @@ function fixture() {
             : id === "./knowledge-read-queue" ? { KnowledgeReadQueue }
             : id === "./proofreading-panel" ? { ProofreadingPanel: Proofreading }
             : id === "./relationship-graph-view" ? { RelationshipGraphView: Graph }
+            : id === "./knowledge-graph-canvas" ? { disposeGraphCanvasTree: (container: Element) => canvasDisposals.push(container.children.length) }
             : id === "./relationship-diagnostics" ? { PersonalRelationRules: View } : {},
     });
     let context: any = null;
@@ -66,11 +68,19 @@ function fixture() {
     const root = document.createElement("div");
     const panel = exports.mountKnowledgePanel(root, host);
     panel.selectTab("graph");
-    return { panel, root, document, host, requests, load, loads, graphs, notices, physical, proofreads,
+    return { panel, root, document, host, requests, load, loads, graphs, notices, physical, proofreads, canvasDisposals,
         useContext() { context = { sessionId: "session", serial: 1, inputId: "input", inputRevision: 1, baseId: "base", path: "note", source: "text", root: "owned", workspaceId: "workspace", nodeId: "note", dirty: false }; },
         changeContext(change: any) { context = change === null ? null : { ...context, ...change }; }, mutateContext(change: any) { Object.assign(context, change); },
         resolveOriginal() { lookup = "resolved"; } };
 }
+
+test("knowledge tab replacement retires old canvas bindings before replacing its DOM", () => {
+    const f = fixture(), before = f.canvasDisposals.length;
+    f.panel.selectTab("links");
+    assert.equal(f.canvasDisposals.length, before + 1);
+    assert.ok(f.canvasDisposals.at(-1)! > 0, "the old display is still present when its canvas owner retires");
+    f.panel.dispose();
+});
 
 test("lost knowledge preparation retains its exact original ID and request until real status resolves it", async () => {
     const f = fixture(); f.useContext();

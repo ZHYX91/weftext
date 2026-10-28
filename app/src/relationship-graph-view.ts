@@ -2,8 +2,9 @@ import { uiDisplayParameter } from "./ui-locale";
 import { displayMessage } from "./ui-locale";
 import { message, setUiText, setUiAttr, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { action, ui } from "./data-panel";
-import { graphCanvas, type CanvasState } from "./knowledge-graph-canvas";
-import { defaultCamera, defaultGraphFilters, fitCamera, graphLayout, graphMatches, graphVisible, type GraphSnapshot, type GraphNode, type GraphEdge, type GraphFilters } from "./relationship-graph-state";
+import { disposeGraphCanvasTree, graphCanvas, type CanvasState } from "./knowledge-graph-canvas";
+import { disposeUiTree } from "./ui-locale";
+import { defaultCamera, defaultGraphFilters, graphLayout, graphMatches, graphVisible, type GraphSnapshot, type GraphNode, type GraphEdge, type GraphFilters } from "./relationship-graph-state";
 import { TagTree } from "./tag-tree";
 import { tagPicker } from "./tag-picker";
 export interface RelationshipGraphHost {
@@ -37,9 +38,13 @@ export class RelationshipGraphView {
     private mode: "general" | "ranked" | "family" = "general";
     private canvas: CanvasState = { positions: new Map(), camera: defaultCamera() };
     private initialized = false;
-    clear(): void { this.filters = undefined; this.selected = ""; this.search = ""; this.initialized = false; this.canvas = { positions: new Map(), camera: defaultCamera() }; }
+    private pendingLocate?: string;
+    private element?: HTMLElement;
+    clear(): void { if (this.element) { disposeGraphCanvasTree(this.element); disposeUiTree(this.element); this.element.remove(); this.element = undefined; } this.filters = undefined; this.selected = ""; this.search = ""; this.initialized = false; this.pendingLocate = undefined; this.canvas = { positions: new Map(), camera: defaultCamera() }; }
     render(container: HTMLElement, snapshot: GraphSnapshot | undefined, root: string, host: RelationshipGraphHost): void {
+        if (this.element) { disposeGraphCanvasTree(this.element); disposeUiTree(this.element); this.element.remove(); }
         const parent = ui("section", "knowledge-graph-view");
+        this.element = parent;
         parent.append(ui("h3", "", message("graph.title")));
         container.append(parent);
         if (!snapshot || snapshot.scope !== "authorizedNativeSourcesAndTypedReferences") {
@@ -50,7 +55,7 @@ export class RelationshipGraphView {
             this.filters = defaultGraphFilters(root);
         this.filters.root = root;
         const filter = this.filters;
-        const redraw = () => { parent.remove(); this.render(container, snapshot, root, host); }, run = (work: () => unknown) => { void Promise.resolve().then(work).catch(host.error); };
+        const redraw = () => this.render(container, snapshot, root, host), run = (work: () => unknown) => { void Promise.resolve().then(work).catch(host.error); };
         const controls = ui("div", "knowledge-graph-controls"), change = (work: () => void) => { work(); redraw(); };
         controls.append(select("scope", message("graph.scope"), [["local", message("graph.localScope")], ["global", message("graph.libraryScope")]], filter.scope, v => change(() => { filter.scope = v as GraphFilters["scope"]; filter.expanded = []; })), select("direction", message("graph.direction"), [["both", message("graph.bothDirections")], ["out", message("graph.outgoing")], ["in", message("graph.incoming")]], filter.direction, v => change(() => { filter.direction = v as GraphFilters["direction"]; filter.expanded = []; })), select("depth", message("graph.neighborhoodDepth"), [0, 1, 2, 3, 4, 8].map(n => [String(n), String(n)]), String(filter.depth), v => change(() => { filter.depth = Number(v); filter.expanded = []; })), select("relation", message("graph.relationshipType"), [["", message("graph.allRelationships")], ...[...new Set(snapshot.edges.map(e => e.relation))].map(id => [id, id] as [
                 string,
@@ -125,11 +130,7 @@ export class RelationshipGraphView {
             const matches = graphMatches(visible.nodes, this.search);
             for (const node of matches)
                 results.append(action(displayMessage("graph.locateNode", { p0: uiDisplayParameter(node.title) }), () => {
-                    const point = this.canvas.positions.get(node.key);
-                    if (point) {
-                        this.canvas.camera.x = 350 - point.x * this.canvas.camera.scale;
-                        this.canvas.camera.y = 210 - point.y * this.canvas.camera.scale;
-                    }
+                    this.pendingLocate = node.key;
                     choose(node.key, false);
                     redraw();
                 }));
@@ -142,15 +143,13 @@ export class RelationshipGraphView {
         const display = visible.nodes.slice(0, 200), displayIds = new Set(display.map(n => n.key)), edges = visible.edges.filter(e => displayIds.has(e.source) && displayIds.has(e.target)).slice(0, 1000), layout = graphLayout(display, edges.filter(e => !e.derived), this.mode, this.canvas.positions);
         for (const [key, point] of layout.positions)
             this.canvas.positions.set(key, point);
-        if (!this.initialized && display.length) {
-            this.initialized = true;
-            this.canvas.camera = fitCamera([...layout.positions.values()], 700, 420);
-        }
+        const initialFit = display.length > 0 && (!this.initialized || !this.canvas.viewport);
         if (layout.cycle && this.mode !== "general")
             parent.append(ui("p", "knowledge-warning", message("graph.cycleUsesGeneralLayout")));
         if (display.length !== visible.nodes.length || edges.length !== visible.edges.length)
             parent.append(ui("p", "knowledge-warning", displayMessage("graph.canvasLimit", { p0: display.length, p1: edges.length })));
-        parent.append(graphCanvas(display.map(n => ({ key: n.key, title: n.title })), edges.map(e => ({ key: e.key, source: e.source, target: e.target, directed: e.direction === "directed", label: () => `${uiTextValue(nodes.get(e.source)?.title)} ${uiTextValue(e.direction === "symmetric" ? "↔" : "→")} ${uiTextValue(nodes.get(e.target)?.title)} · ${uiTextValue(e.relation)}${uiTextValue(e.derived ? message("graph.derivedReverseSuffix") : "")}` })), this.canvas, choose, open, this.selected, message("graph.keyboardInstructions")));
+        parent.append(graphCanvas(display.map(n => ({ key: n.key, title: n.title })), edges.map(e => ({ key: e.key, source: e.source, target: e.target, directed: e.direction === "directed", label: () => `${uiTextValue(nodes.get(e.source)?.title)} ${uiTextValue(e.direction === "symmetric" ? "↔" : "→")} ${uiTextValue(nodes.get(e.target)?.title)} · ${uiTextValue(e.relation)}${uiTextValue(e.derived ? message("graph.derivedReverseSuffix") : "")}` })), this.canvas, choose, open, this.selected, message("graph.keyboardInstructions"), { fit: initialFit, revealKey: this.pendingLocate, centerReveal: true }));
+        this.initialized = this.initialized || display.length > 0; this.pendingLocate = undefined;
         const detail = ui("div", "knowledge-card");
         paintDetail = () => {
             detail.replaceChildren();

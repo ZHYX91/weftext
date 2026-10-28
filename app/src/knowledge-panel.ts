@@ -16,6 +16,7 @@ import { citationInsertionByte, decodeNativeCitationSnapshot, newNativeCitationI
 import { PersonalRelationRules, RelationshipDiagnosticsView, visibleCandidate, type RelationDiagnostics, type RelationNode, type RelationIssue } from "./relationship-diagnostics";
 import { nodeSourceHash } from "./hosted-navigation-state";
 import { RelationshipGraphView } from "./relationship-graph-view";
+import { disposeGraphCanvasTree } from "./knowledge-graph-canvas";
 import type { GraphSnapshot, GraphEdge, GraphNode } from "./relationship-graph-state";
 import type { HeadingSnapshot } from "./heading-structure-state";
 import { KnowledgeReadQueue, type KnowledgeReadOutcome } from "./knowledge-read-queue";
@@ -1839,6 +1840,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         const focusKey = sameKnowledgeBasis(renderedBasis, host.context()) ? focused?.dataset.knowledgeFocus : undefined;
         renderedBasis = host.context();
         const scroll = container.querySelector(".knowledge-body")?.scrollTop ?? 0;
+        disposeGraphCanvasTree(container);
         container.replaceChildren();
         const heading = element("div", "knowledge-heading");
         heading.append(element("strong", "", uiMessage("knowledge.title")), action(uiMessage("reminder.refresh"), refresh, "knowledge-refresh"));

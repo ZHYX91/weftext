@@ -1,5 +1,6 @@
 import { message, setUiText, setUiAttr, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
-import { fitCamera, zoomCamera, type Camera, type Point } from "./relationship-graph-state";
+import { type Camera, type Point } from "./relationship-graph-state";
+import { canvasBoundsVisible, fitCanvasCamera, headingCardWidth, revealCanvasCamera, scaleCanvasCamera, type CanvasBounds, type CanvasViewport } from "./graph-canvas-viewport";
 export interface CanvasNode {
     key: string;
     title: UiText;
@@ -15,6 +16,13 @@ export interface CanvasEdge {
 export interface CanvasState {
     positions: Map<string, Point>;
     camera: Camera;
+    viewport?: CanvasViewport;
+}
+const canvasDisposers = new WeakMap<Element, () => void>();
+/** The view owner calls this before replacing or retiring its canvas DOM. */
+export function disposeGraphCanvasTree(root: ParentNode): void {
+    for (const canvas of root.querySelectorAll(".knowledge-graph-canvas")) canvasDisposers.get(canvas)?.();
+    canvasDisposers.get(root as Element)?.();
 }
 function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, UiText>): SVGElementTagNameMap[K] {
     const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -28,33 +36,37 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
 }
 let canvasSerial = 0;
 /** Display state only. Pointer and keyboard handlers have no authoring host. */
-export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: CanvasState, select: (key: string, edge: boolean) => void, open: (key: string) => void, selected: string, label: UiText, options: { revealKey?: string; fit?: boolean } = {}): HTMLElement {
+export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: CanvasState, select: (key: string, edge: boolean) => void, open: (key: string) => void, selected: string, label: UiText, options: { revealKey?: string; centerReveal?: boolean; fit?: boolean; readableRootKey?: string; direction?: "horizontal" | "vertical" } = {}): HTMLElement {
     const nodeByKey = new Map(nodes.map(node => [node.key, node]));
     const host = document.createElement("div");
     host.className = "knowledge-graph-canvas";
     const controls = document.createElement("div");
     controls.className = "knowledge-graph-controls";
     const drawing = svg("svg", { viewBox: "0 0 700 420", role: "group", "aria-label": label, tabindex: "0" });
+    // Explicit sizing prevents intrinsic SVG aspect-ratio feedback and generic icon CSS.
+    drawing.style.width = "100%"; drawing.style.height = "320px"; drawing.style.minHeight = "240px";
+    let viewport = state.viewport ?? { width: 700, height: 420 }, disposed = false, measured = false;
+    let pendingRoot = options.readableRootKey ?? (!state.viewport && nodes[0]?.heading ? nodes[0].key : undefined), pendingReveal = options.revealKey, pendingFit = options.fit === true;
+    const events = new AbortController();
+    const headingCards: { node: CanvasNode; rect: SVGRectElement; bodyClip: SVGRectElement; numberClip: SVGRectElement; number: SVGTextElement; branch: SVGGElement }[] = [];
     const markerId = `knowledge-arrow-${++canvasSerial}`, defs = svg("defs", {}), marker = svg("marker", { id: markerId, markerWidth: "8", markerHeight: "8", refX: "8", refY: "4", orient: "auto", markerUnits: "strokeWidth" });
     marker.append(svg("path", { d: "M0,0 L8,4 L0,8 z", fill: "currentColor" }));
     defs.append(marker);
     drawing.append(defs);
     const world = svg("g", {});
     drawing.append(world);
-    const transforms = () => { world.setAttribute("transform", `translate(${state.camera.x} ${state.camera.y}) scale(${state.camera.scale})`); };
-    const reveal = (key: string): void => {
+    const transforms = () => { if (!disposed) world.setAttribute("transform", `translate(${state.camera.x} ${state.camera.y}) scale(${state.camera.scale})`); };
+    const bounds = (key: string, branch = false): CanvasBounds | undefined => {
         const point = state.positions.get(key), item = nodeByKey.get(key);
-        if (!point || !item) return;
-        const x = point.x * state.camera.scale + state.camera.x, y = point.y * state.camera.scale + state.camera.y, halfWidth = item.heading ? 128 : 72;
-        if (x - halfWidth * state.camera.scale < 12 || x + halfWidth * state.camera.scale > 688 || y - 23 * state.camera.scale < 12 || y + 23 * state.camera.scale > 408) {
-            state.camera.x = 350 - point.x * state.camera.scale; state.camera.y = 210 - point.y * state.camera.scale; transforms();
-        }
+        return !point || !item ? undefined : branch && item.heading ? { x: point.x + headingCardWidth(viewport) / 2 - 21, y: point.y, halfWidth: 19, halfHeight: 19 } : { ...point, halfWidth: item.heading ? headingCardWidth(viewport) / 2 : 72, halfHeight: 23 };
     };
-    const button = (text: UiText, run: () => void) => { const b = document.createElement("button"); b.type = "button"; setUiText(b, text); b.onclick = run; controls.append(b); };
-    button(message("graph.zoomIn"), () => { state.camera = zoomCamera(state.camera, 1.25, { x: 350, y: 210 }); transforms(); });
-    button(message("graph.zoomOut"), () => { state.camera = zoomCamera(state.camera, .8, { x: 350, y: 210 }); transforms(); });
-    button("100%", () => { state.camera.scale = 1; transforms(); });
-    const fit = (): void => { state.camera = fitCamera(nodes.flatMap(n => { const point = state.positions.get(n.key); return !point ? [] : n.heading ? [{ x: point.x - 40, y: point.y }, { x: point.x + 40, y: point.y }] : [point]; }), 700, 420); };
+    const reveal = (key: string, branch = false, root: false | "horizontal" | "vertical" = false, readable = false): void => { const box = bounds(key, branch); if (!disposed && box) { state.camera = revealCanvasCamera(state.camera, box, viewport, root, readable); transforms(); } };
+    const center = () => ({ x: viewport.width / 2, y: viewport.height / 2 });
+    const button = (text: UiText, run: () => void) => { const b = document.createElement("button"); b.type = "button"; setUiText(b, text); b.onclick = () => { if (!disposed) run(); }; controls.append(b); };
+    button(message("graph.zoomIn"), () => { state.camera = scaleCanvasCamera(state.camera, state.camera.scale * 1.25, center()); transforms(); });
+    button(message("graph.zoomOut"), () => { state.camera = scaleCanvasCamera(state.camera, state.camera.scale * .8, center()); transforms(); });
+    button("100%", () => { state.camera = scaleCanvasCamera(state.camera, 1, center()); if (nodes[0]?.heading) reveal(nodeByKey.has(selected) ? selected : nodes[0].key); transforms(); });
+    const fit = (): void => { state.camera = fitCanvasCamera(nodes.map(node => bounds(node.key)).filter((box): box is CanvasBounds => box !== undefined), viewport); };
     button(message("graph.fitViewport"), () => { fit(); transforms(); });
     for (const [title, dx, dy] of [[message("graph.panLeft"), 60, 0], [message("graph.panRight"), -60, 0], [message("graph.panUp"), 0, 60], [message("graph.panDown"), 0, -60]] as const)
         button(title, () => { state.camera.x += dx; state.camera.y += dy; transforms(); });
@@ -94,7 +106,7 @@ export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: Can
             if (edge.source === edge.target)
                 path.setAttribute("d", `M${a.x - 40},${a.y - 26} C${a.x - 75 - offset},${a.y - 90 - offset} ${a.x + 75 + offset},${a.y - 90 - offset} ${a.x + 40},${a.y - 26}`);
             else {
-                const dx = b.x - a.x, dy = b.y - a.y, length = Math.max(1, Math.hypot(dx, dy)), border = Math.min(.48, (nodeByKey.get(edge.target)?.heading ? 134 : 78) / Math.max(.001, Math.abs(dx)), 28 / Math.max(.001, Math.abs(dy))), end = { x: b.x - dx * border, y: b.y - dy * border };
+                const dx = b.x - a.x, dy = b.y - a.y, length = Math.max(1, Math.hypot(dx, dy)), border = Math.min(.48, (nodeByKey.get(edge.target)?.heading ? headingCardWidth(viewport) / 2 + 6 : 78) / Math.max(.001, Math.abs(dx)), 28 / Math.max(.001, Math.abs(dy))), end = { x: b.x - dx * border, y: b.y - dy * border };
                 path.setAttribute("d", `M${a.x},${a.y} Q${(a.x + b.x) / 2 - dy / length * offset},${(a.y + b.y) / 2 + dx / length * offset} ${end.x},${end.y}`);
             }
         }
@@ -118,7 +130,7 @@ export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: Can
             return { x: point.x, y: point.y };
         }
         const rect = drawing.getBoundingClientRect();
-        return { x: (event.clientX - rect.left) * 700 / Math.max(rect.width, 1), y: (event.clientY - rect.top) * 420 / Math.max(rect.height, 1) };
+        return { x: (event.clientX - rect.left) * viewport.width / Math.max(rect.width, 1), y: (event.clientY - rect.top) * viewport.height / Math.max(rect.height, 1) };
     };
     for (const node of nodes) {
         const group = svg("g", { class: `knowledge-graph-node${node.heading ? " heading-map-card" : ""}${selected === node.key ? " is-selected" : ""}`, "data-graph-key": node.key, tabindex: node.heading ? "-1" : "0", role: node.heading ? "group" : "button", "aria-label": () => message("graph.nodeKeyboardInstructions", { p0: uiTextValue(node.title) }) });
@@ -139,9 +151,9 @@ export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: Can
             number.setAttribute("clip-path", `url(#${clipId}-number)`);
             setUiText(number, () => {
                 const full = uiTextValue(node.heading!.number), parts = Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(full), item => item.segment);
-                if (parts.reduce((length, part) => length + (/^[\x00-\x7f]+$/.test(part) ? .6 : 1), 0) <= 3.8) return full;
+                if (parts.reduce((length, part) => length + (/^[\x00-\x7f]+$/.test(part) ? .6 : 1), 0) <= 3.1) return full;
                 let units = 0, visible = "";
-                for (const part of parts) { units += /^[\x00-\x7f]+$/.test(part) ? .6 : 1; if (units > 2.8) break; visible += part; }
+                for (const part of parts) { units += /^[\x00-\x7f]+$/.test(part) ? .6 : 1; if (units > 2.1) break; visible += part; }
                 return `${visible}…`;
             });
             const numberTitle = svg("title", {}); setUiText(numberTitle, node.heading.number); number.append(numberTitle);
@@ -155,8 +167,9 @@ export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: Can
             branch.onpointerdown = event => event.stopPropagation();
             branch.onclick = event => { event.preventDefault(); event.stopPropagation(); node.heading?.toggle?.(); };
             branch.onkeydown = event => { if (event.isComposing || event.keyCode === 229) return; if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.stopPropagation(); node.heading?.toggle?.(); } };
-            branch.onfocus = () => reveal(node.key);
+            branch.onfocus = () => reveal(node.key, true);
             group.append(branch);
+            headingCards.push({ node, rect: body.querySelector("rect")!, bodyClip: bodyClip.querySelector("rect")!, numberClip: numberClip.querySelector("rect")!, number, branch });
         }
         group.onclick = event => { event.stopPropagation(); };
         group.ondblclick = event => { event.stopPropagation(); event.preventDefault(); };
@@ -252,11 +265,53 @@ export function graphCanvas(nodes: CanvasNode[], edges: CanvasEdge[], state: Can
             transforms();
         }
     };
-    drawing.addEventListener("wheel", event => { event.preventDefault(); state.camera = zoomCamera(state.camera, event.deltaY < 0 ? 1.1 : 1 / 1.1, coordinates(event)); transforms(); }, { passive: false });
+    drawing.addEventListener("wheel", event => { event.preventDefault(); state.camera = scaleCanvasCamera(state.camera, state.camera.scale * (event.deltaY < 0 ? 1.1 : 1 / 1.1), coordinates(event)); transforms(); }, { passive: false, signal: events.signal });
+    const syncViewport = (): void => {
+        if (disposed || !drawing.isConnected) return;
+        const style = getComputedStyle(drawing), box = drawing.getBoundingClientRect();
+        const edge = (a: string, b: string) => (parseFloat(a) || 0) + (parseFloat(b) || 0);
+        const borderX = edge(style.borderLeftWidth, style.borderRightWidth), borderY = edge(style.borderTopWidth, style.borderBottomWidth);
+        const width = box.width - borderX, height = box.height - borderY;
+        if (width <= 0 || height <= 0) return; // Hidden/parked Dock views retain their camera and observer.
+        const oldRoot = nodes[0] && bounds(nodes[0].key), changed = width !== viewport.width || height !== viewport.height, knownViewport = measured || state.viewport !== undefined, retainRoot = knownViewport && changed && oldRoot && state.camera.scale >= 1 && canvasBoundsVisible(state.camera, oldRoot, viewport);
+        if (knownViewport && changed) { state.camera.x += (width - viewport.width) / 2; state.camera.y += (height - viewport.height) / 2; }
+        viewport = { width, height }; state.viewport = viewport;
+        drawing.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        for (const card of headingCards) {
+            const half = headingCardWidth(viewport) / 2;
+            card.rect.setAttribute("x", String(-half)); card.rect.setAttribute("width", String(half * 2));
+            card.bodyClip.setAttribute("x", String(-half + 49)); card.bodyClip.setAttribute("width", String(half * 2 - 97));
+            card.numberClip.setAttribute("x", String(-half + 4)); card.number.setAttribute("x", String(-half + 24));
+            card.branch.setAttribute("transform", `translate(${half - 21} 0)`);
+        }
+        redraw();
+        if (pendingFit) { fit(); pendingFit = false; }
+        if (pendingRoot) { reveal(pendingRoot, false, options.direction ?? "horizontal"); pendingRoot = undefined; }
+        else if (retainRoot && nodes[0]?.heading) reveal(nodes[0].key);
+        if (pendingReveal) {
+            const point = state.positions.get(pendingReveal);
+            if (options.centerReveal && point) { state.camera.scale = Math.max(1, state.camera.scale); state.camera.x = width / 2 - point.x * state.camera.scale; state.camera.y = height / 2 - point.y * state.camera.scale; }
+            else reveal(pendingReveal, false, false, true);
+            pendingReveal = undefined;
+        }
+        measured = true; transforms();
+    };
+    const observer = new ResizeObserver(syncViewport);
+    observer.observe(drawing);
+    canvasDisposers.set(host, () => {
+        if (disposed) return;
+        disposed = true; observer.disconnect(); events.abort();
+        if (drag && drawing.hasPointerCapture(drag.pointer)) { try { drawing.releasePointerCapture(drag.pointer); } catch { /* Detached SVGs may already have released the capture. */ } }
+        drag = undefined; lastTap = undefined;
+        for (const element of host.querySelectorAll<HTMLElement | SVGElement>("*")) {
+            element.onclick = null; element.ondblclick = null; element.onkeydown = null; element.onfocus = null;
+            element.onpointerdown = null; element.onpointermove = null; element.onpointerup = null; element.onpointercancel = null;
+        }
+        canvasDisposers.delete(host);
+    });
     redraw();
-    if (options.fit) fit();
     transforms();
-    if (options.revealKey) reveal(options.revealKey);
+    queueMicrotask(syncViewport);
     host.append(controls, drawing);
     return host;
 }
