@@ -8,6 +8,21 @@
 .workspace-files-view .sidebar-bottom { margin-top: 8px; padding-top: 6px; }
 .workspace-tool-view { padding: 10px; min-height: 0; min-width: 0; flex: 1; overflow: auto; }
 .workspace-tool-view[data-workspace-tool="outline"] { padding: 0; }
+.workspace-dock-view .query-panel { flex: 1; min-height: 0; min-width: 0; width: 100%; border: 0; container: dock-query / inline-size; }
+.workspace-dock-view .query-controls { box-sizing: border-box; min-height: 0; max-height: 55%; flex: 0 1 auto; padding: 10px 10px 8px; }
+.workspace-dock-view .query-heading { flex-wrap: wrap; justify-content: flex-start; align-items: flex-start; gap: 5px; }
+.workspace-dock-view .query-heading h2 { flex: 0 0 100%; margin: 0 0 3px; }
+.workspace-dock-view .query-heading > .data-button, .workspace-dock-view .query-search-form > .data-button { flex: 0 0 auto; max-width: 100%; }
+.workspace-dock-view .query-panel .data-button, .workspace-dock-view .query-scope-row, .workspace-dock-view .query-presentation, .workspace-dock-view .query-control-label > .data-input { font-size: 12px; }
+.workspace-dock-view .query-control-label { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.workspace-dock-view .query-control-label > .data-input { min-width: 0; max-width: 100%; }
+.workspace-dock-view .query-facets { box-sizing: border-box; min-height: 0; max-height: min(18%, 96px); flex: 0 1 auto; padding: 6px 10px; }
+.workspace-dock-view .query-facets:empty { padding: 0; }
+.workspace-dock-view .query-results { box-sizing: border-box; flex: 1 0 min(96px, 40%); min-height: 0; padding: 8px 10px 12px; }
+@container dock-query (max-width: 420px) {
+  .query-search-form { flex-wrap: wrap; }
+  .query-search-form > input { flex: 1 0 100%; }
+}
 .workspace-nodes-view { padding: 6px 8px; gap: 5px; }
 .node-browser-toolbar, .node-browser-path { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; flex-shrink: 0; }
 .node-browser-path { font-size: 12px; overflow-wrap: anywhere; }

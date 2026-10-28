@@ -32,8 +32,8 @@ const result = {
 const root = path.join(out, 'TEST-library'), data = path.join(out, 'private-state');
 let child, browser, context, page, base, token, stderr = '', phase = 'setup';
 let image, plain, parent, farImage, savedImage, savedParent, dirtyImage, dirtyParent, relationSource, relationTarget;
-const queryReceipts = [], knowledgeReceipts = [], previewRequests = [], mutations = [];
-const observedRequests = new Map(); let observedClient = 0;
+const queryReceipts = [], knowledgeReceipts = [], renderReceipts = [], previewRequests = [], mutations = [];
+const observedRequests = new Map(), pageClients = new WeakMap(); let observedClient = 0;
 let caseStartedAt = performance.now();
 
 async function until(check, label = 'condition', timeout = 30000) {
@@ -96,6 +96,7 @@ async function attachImage(doc) {
 }
 function observe(target) {
   const client = ++observedClient;
+  pageClients.set(target, client);
   target.on('pageerror', error => result.pageErrors.push({ phase, error: String(error) }));
   target.on('request', request => {
     const route = new URL(request.url()).pathname; if (!route.startsWith('/api/')) return;
@@ -115,6 +116,11 @@ function observe(target) {
       if (response.status() >= 400) result.httpErrors.push({ phase: capturedPhase, route, status: response.status(), body: await response.text() });
       if (route === '/api/query/run' && response.ok()) { const value = await response.json(); queryReceipts.push({ phase: capturedPhase, requestId: entry?.id, request: response.request().postDataJSON(), result: value }); if (entry) entry.bodyRecordedAt = new Date().toISOString(); }
       if (route === '/api/knowledge/read' && response.ok()) knowledgeReceipts.push({ phase: capturedPhase, request: response.request().postDataJSON(), result: await response.json() });
+      if (route === '/api/render' && response.ok()) {
+        const value = await response.json();
+        renderReceipts.push({ phase: capturedPhase, requestId: entry?.id, request: response.request().postDataJSON(),
+          result: { ok: value.ok, headingStructure: value.headingStructure, diagnostics: value.diagnostics } });
+      }
     } catch (error) { if (!target.isClosed()) (result.observerErrors ??= []).push(String(error)); }
   });
 }
@@ -186,18 +192,52 @@ async function moveTag(tag, parentTag, cancel = false) {
 async function taskScope() { if (!await queryPanel().locator('.query-chips .query-chip').filter({ hasText: /^类型：任务 ×$/ }).count()) { await runQuery(22); await click('任务 · 1', queryPanel()); await runQuery(1); } }
 async function clearConditions() { const chips = queryPanel().locator('.query-chips .query-chip').filter({ hasText: /^标签：/ }); while (await chips.count()) await chips.first().click(); }
 async function runQuery(count, predicate) {
-  const start = queryReceipts.length, action = { phase, at: new Date().toISOString(), expectedRows: count, predicate, receiptCountAtStart: start, requestCountAtStart: result.requests.length, pendingQueryIds: [...observedRequests.values()].filter(entry => entry.route === '/api/query/run' && !entry.finishedAt && !entry.failedAt).map(entry => entry.id) }; (result.queryActions ??= []).push(action); await click('查询', queryPanel()); action.clickedAt = new Date().toISOString();
-  const receipt = await until(async () => {
-    if (await queryPanel().locator('.query-results').getAttribute('aria-busy') !== 'false') return false;
-    if ((await queryPanel().locator('.query-results').innerText()).includes('先前读取的结果')) return false;
-    const displayedBases = await queryPanel().locator('.query-basis').allTextContents();
-    return queryReceipts.slice(start).find(item => item.result.cutId && displayedBases.includes(`读取版本：${item.result.cutId}`) && (!predicate || JSON.stringify(item.request.plan).includes(predicate)));
-  }, 'actual Query receipt');
-  action.matchedRequestId = receipt.requestId; action.matchedDisplayedCutId = receipt.result.cutId;
-  // An admitted frozen read does not continuously confirm current filesystem
-  // state. Its truthful stale marker differs from the UI's superseded result.
-  assert.equal(receipt.result.rows.length, count, JSON.stringify(receipt.result)); assert.equal(receipt.result.coverage, 'complete'); assert.equal(receipt.result.snapshotMode, 'admittedFrozen'); assert.equal(receipt.result.freshness, 'stale'); assert.notEqual(receipt.result.superseded, true);
-  await until(() => queryPanel().locator('.query-card').count().then(n => n === count), 'rendered Query results'); return receipt;
+  const start = queryReceipts.length, startedMs = performance.now(), client = pageClients.get(page);
+  assert.ok(client, 'Query must belong to an observed original browser client');
+  const action = { phase, client, at: new Date().toISOString(), expectedRows: count, predicate, receiptCountAtStart: start,
+    requestCountAtStart: result.requests.length, pendingQueryIds: [...observedRequests.values()]
+      .filter(entry => entry.client === client && entry.route === '/api/query/run' && !entry.finishedAt && !entry.failedAt).map(entry => entry.id),
+    timingScope: 'Bounded functional waits, not a responsiveness or performance qualification', waits: [], completed: false };
+  (result.queryActions ??= []).push(action);
+  const eligibleRequests = () => result.requests.filter((entry, index) => entry.client === client && entry.route === '/api/query/run'
+    && (index >= action.requestCountAtStart || action.pendingQueryIds.includes(entry.id))
+    && (!predicate || JSON.stringify(entry.body?.plan).includes(predicate)));
+  const eligibleReceipts = () => {
+    const ids = new Set(eligibleRequests().map(entry => entry.id));
+    return queryReceipts.slice(start).filter(item => ids.has(item.requestId) && item.result.cutId
+      && (!predicate || JSON.stringify(item.request.plan).includes(predicate)));
+  };
+  async function waitFor(check, label) {
+    const wait = { label, startedAt: new Date().toISOString(), budgetMs: 30000, completed: false }, waitStarted = performance.now();
+    action.waits.push(wait);
+    try { const value = await until(check, label, wait.budgetMs); wait.completed = true; return value; }
+    finally { wait.elapsedMs = performance.now() - waitStarted; wait.endedAt = new Date().toISOString(); }
+  }
+  try {
+    // Schema acquisition and the actual frozen query are distinct product
+    // phases. Observe the one click and its original/coalesced requests, without
+    // retrying it or letting a response from another client satisfy this action.
+    await click('查询', queryPanel()); action.clickedAt = new Date().toISOString();
+    await waitFor(() => eligibleRequests().length > 0, 'Schema acquisition followed by original Query issuance');
+    await waitFor(() => eligibleReceipts().length > 0, 'original Query response body');
+    const receipt = await waitFor(async () => {
+      if (await queryPanel().locator('.query-results').getAttribute('aria-busy') !== 'false') return false;
+      if ((await queryPanel().locator('.query-results').innerText()).includes('先前读取的结果')) return false;
+      const displayedBases = await queryPanel().locator('.query-basis').allTextContents();
+      return eligibleReceipts().find(item => displayedBases.includes(`读取版本：${item.result.cutId}`));
+    }, 'same original Query cutId visibly installed');
+    action.matchedRequestId = receipt.requestId; action.matchedDisplayedCutId = receipt.result.cutId;
+    // An admitted frozen read does not continuously confirm current filesystem
+    // state. Its truthful stale marker differs from the UI's superseded result.
+    assert.equal(receipt.result.rows.length, count, JSON.stringify(receipt.result)); assert.equal(receipt.result.coverage, 'complete'); assert.equal(receipt.result.snapshotMode, 'admittedFrozen'); assert.equal(receipt.result.freshness, 'stale'); assert.notEqual(receipt.result.superseded, true);
+    await waitFor(() => queryPanel().locator('.query-card').count().then(n => n === count), 'same Query rendered cards');
+    action.completed = true; return receipt;
+  } finally {
+    action.elapsedMs = performance.now() - startedMs; action.endedAt = new Date().toISOString();
+    action.originalRequests = eligibleRequests().map(entry => ({ id: entry.id, at: entry.at, elapsedMs: entry.elapsedMs, status: entry.status, responseElapsedMs: entry.responseElapsedMs }));
+    action.schemaRequests = result.requests.slice(action.requestCountAtStart).filter(entry => entry.client === client && entry.route === '/api/data/schema')
+      .map(entry => ({ id: entry.id, at: entry.at, elapsedMs: entry.elapsedMs, status: entry.status, responseElapsedMs: entry.responseElapsedMs }));
+  }
 }
 async function holdNextActualQuery() {
   const target = page, pattern = '**/api/query/run', tasks = new Set(), errors = []; let captured = false, heldValue, release;
@@ -219,6 +259,19 @@ async function refreshKnowledge(expected) {
   await until(async () => (await page.locator('.status-right').innerText()).includes('草稿预览已更新'), 'native render ready');
   const start = knowledgeReceipts.length; await click('刷新', knowledge());
   return until(() => knowledgeReceipts.slice(start).find(item => item.request.context?.source === expected), 'actual same-Draft knowledge receipt');
+}
+async function currentOutline(expected) {
+  const readsBefore = result.requests.filter(entry => entry.route === '/api/knowledge/read').length;
+  const receipt = await until(async () => {
+    if (await source() !== expected || !await page.locator('.outline-view').isVisible()) return false;
+    if (!(await page.locator('.status-right').innerText()).includes('草稿预览已更新')) return false;
+    const keys = await page.locator('.outline-view [data-heading-key]').evaluateAll(rows => rows.map(row => row.dataset.headingKey));
+    return renderReceipts.findLast(item => item.request.source === expected && item.result.ok && item.result.headingStructure
+      && (keys.length > 0 || item.result.headingStructure.items.length === 0)
+      && keys.every(key => item.result.headingStructure.items.some(heading => heading.key === key)));
+  }, 'current Outline from its exact ordinary native render');
+  assert.equal(result.requests.filter(entry => entry.route === '/api/knowledge/read').length, readsBefore, 'Observing the current document Outline started a whole-library knowledge read');
+  return receipt;
 }
 
 try {
@@ -436,7 +489,7 @@ try {
   result.snapshots.push({ typedGraph: { generation: typedGraph.generation, source: relationSourceKey, target: relationTargetKey, edges: typedEdges } });
   await pass('Actual Core-authored person fields reach the embedded graph as separate directed, symmetric and derived-inverse relations; type filters, arrowheads and original field provenance remain exact, and inverse source navigation opens its real author then returns without writes.');
 
-  phase = 'actual-heading-structure'; await knowledgeCommand('打开只读标题结构／大纲', '标题结构'); await knowledgeCommand('打开只读标题结构／大纲', '标题结构'); const headingsReceipt = await refreshKnowledge(dirtyParent), headings = headingsReceipt.result.headingStructure;
+  phase = 'actual-heading-structure'; await knowledgeCommand('打开只读标题结构／大纲', '标题结构'); await knowledgeCommand('打开只读标题结构／大纲', '标题结构'); const headingsReceipt = await currentOutline(dirtyParent), headings = headingsReceipt.result.headingStructure;
   assert.ok(headings); const repeated = headings.items.filter(heading => heading.kind === 'heading' && heading.text === 'TEST Duplicate'); assert.equal(repeated.length, 2); assert.ok(repeated.every(heading => heading.range)); assert.notEqual(repeated[0].key, repeated[1].key);
   const heading = repeated[1], structure = () => page.locator('.outline-view');
   await structure().getByLabel('搜索标题与题注', { exact: true }).fill('TEST Duplicate'); await structure().getByLabel('搜索标题与题注', { exact: true }).press('Enter');
@@ -448,7 +501,7 @@ try {
   await pass('Native duplicate headings retain distinct accurate keys/ranges; keyboard search/jump chooses the second exact heading and all new read-only views preserve the original document Undo and navigation Draft.');
 
   phase = 'actual-heading-subtree'; await knowledgeCommand('打开只读标题结构／大纲', '标题结构');
-  const structureReceipt = await refreshKnowledge(dirtyParent), nativeHeadings = structureReceipt.result.headingStructure;
+  const structureReceipt = await currentOutline(dirtyParent), nativeHeadings = structureReceipt.result.headingStructure;
   assert.equal(nativeHeadings.coverage, 'complete'); assert.equal(nativeHeadings.truncated, false);
   const headingItems = nativeHeadings.items.filter(item => item.kind === 'heading'), captionItems = nativeHeadings.items.filter(item => item.kind !== 'heading');
   assert.deepEqual(headingItems.map(item => [item.text, item.level]), [['TEST Duplicate', 1], ['TEST Child', 2], ['TEST Deep', 4], ['TEST Duplicate', 1]]);
@@ -517,7 +570,7 @@ try {
   await click('大纲列表', structureView());
   await expectSource(dirtyParent); assert.equal(await disk(parent.path), savedParent); assert.equal(mutations.length, structureMutations);
   result.snapshots.push({ headingSubtree: nativeHeadings });
-  await pass('The same native endpoint drives actual heading counts, keyboard folding and full/subtree controls; search reveals collapsed ancestors without changing their real counts, clears back to the saved fold and traverses duplicate matches in both directions with wraparound, without author writes.');
+  await pass('The same accepted native render drives actual heading counts, keyboard folding and full/subtree controls without extra knowledge reads; search reveals collapsed ancestors without changing their real counts, clears back to the saved fold and traverses duplicate matches in both directions with wraparound, without author writes.');
 
   phase = 'explicit-inspector-commands'; await knowledgeCommand('导入或浏览图片与资源', '文件'); await knowledgeCommand('导入或浏览图片与资源', '文件');
   await expectSource(dirtyParent); await workspaceCommand(page, 'knowledge', '链接与批注'); await until(async () => !await knowledge().isVisible(), 'toolbar still closes its own active inspector');
@@ -536,9 +589,9 @@ try {
   result.failure = String(error.stack ?? error); result.failedPhase = phase;
   if (page && !page.isClosed()) { await page.screenshot({ path: path.join(out, 'failure.png'), fullPage: true }).catch(() => {}); await writeFile(path.join(out, 'failure-ui.txt'), await page.locator('body').innerText().catch(() => '')).catch(() => {}); }
   result.failureDiagnostics = [await failureSnapshot('at-deadline')];
-  if (String(error).includes('Timed out: actual Query receipt')) {
+  if (result.queryActions?.at(-1)?.completed === false && result.queryActions.at(-1).phase === phase && String(error).includes('Timed out:')) {
     const pending = [...observedRequests.values()].filter(entry => entry.route === '/api/query/run' && !entry.bodyRecordedAt && !entry.failedAt && (entry.status === undefined || entry.status < 400));
-    result.failureReadOnlyObservation = { originalAssertionFailed: true, originalDeadlineMs: 30000, additionalObservationLimitMs: 35000, pendingIds: pending.map(entry => entry.id), startedAt: new Date().toISOString(), note: 'No UI input, retry or product request is sent. Late original receipts remain diagnostic and never change the failed outcome.' };
+    result.failureReadOnlyObservation = { originalAssertionFailed: true, failedWait: result.queryActions.at(-1).waits.at(-1), additionalObservationLimitMs: 35000, pendingIds: pending.map(entry => entry.id), startedAt: new Date().toISOString(), note: 'No UI input, retry or product request is sent. Late original receipts remain diagnostic and never change the failed outcome.' };
     const deadline = performance.now() + 35000; while (pending.some(entry => !entry.bodyRecordedAt && !entry.failedAt) && performance.now() < deadline) await pause(100);
     result.failureReadOnlyObservation.finishedAt = new Date().toISOString(); result.failureReadOnlyObservation.originalReceipts = pending.map(entry => ({ ...entry }));
     result.failureDiagnostics.push(await failureSnapshot('after-passive-observation'));
@@ -547,7 +600,7 @@ try {
 } finally {
   await browser?.close(); await stop(); result.finishedAt = new Date().toISOString();
   result.ownedProcessesClosed = (!child || child.exitCode !== null || child.signalCode !== null) && (!browser || !browser.isConnected());
-  result.previewRequests = previewRequests; result.mutations = mutations; result.queryReceipts = queryReceipts; result.knowledgeReceipts = knowledgeReceipts;
+  result.previewRequests = previewRequests; result.mutations = mutations; result.queryReceipts = queryReceipts; result.knowledgeReceipts = knowledgeReceipts; result.renderReceipts = renderReceipts;
   await writeFile(path.join(out, 'results.json'), stringifyServeJson(result, 2)); await writeFile(path.join(out, 'server.stderr.log'), stderr);
   console.log(JSON.stringify({ out, completed: result.completed, failedPhase: result.failedPhase, cases: result.cases.length, ownedProcessesClosed: result.ownedProcessesClosed }));
 }

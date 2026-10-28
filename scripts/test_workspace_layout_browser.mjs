@@ -429,6 +429,92 @@ try {
   for (const id of ['nodes', 'query', 'timeline', 'outline', 'files']) {
     await revealView(id); await assertSameEditor(handle, stable);
   }
+  // Query has the same narrow, vertically shared space as the other dock
+  // views. Exercise an actual changed search and its original Core result,
+  // rather than proving only that the panel can be mounted at desktop width.
+  await revealView('query');
+  const queryPanel = dockView('query').locator('.query-panel'), queryResults = queryPanel.locator('.query-results');
+  await until(async () => await queryResults.getAttribute('aria-busy') === 'false', 'Initial dock Query did not settle', 60000);
+  const wholeLibrary = queryPanel.locator('.query-scope-row').getByRole('button', { name: '全库', exact: true });
+  if (await wholeLibrary.isVisible()) {
+    await wholeLibrary.click();
+    await until(async () => await queryResults.getAttribute('aria-busy') === 'false', 'Whole-library Query scope did not settle', 60000);
+  }
+  const titleSearch = queryPanel.getByRole('searchbox', { name: '查询标题文字', exact: true });
+  await titleSearch.fill('Parent');
+  const exactQueryResponse = page.waitForResponse(response => {
+    if (new URL(response.url()).pathname !== '/api/query/run' || response.request().method() !== 'POST') return false;
+    try { return response.request().postDataJSON()?.plan?.where?.includes('Parent'); } catch { return false; }
+  }, { timeout: 60000 });
+  await queryPanel.locator('.query-search-form').getByRole('button', { name: '查询', exact: true }).click();
+  const actualQueryResponse = await exactQueryResponse;
+  assert.equal(actualQueryResponse.status(), 200);
+  const actualQuery = await actualQueryResponse.json(), actualQueryRequest = actualQueryResponse.request().postDataJSON();
+  assert.equal(actualQuery.rows.length, 1);
+  assert.equal(actualQuery.rows[0].entityKey, `weftext-node://${parent.workspaceId}/${parent.nodeId}`);
+  assert.equal(actualQuery.coverage, 'complete');
+  assert.notEqual(actualQuery.superseded, true);
+  await until(async () => await queryResults.getAttribute('aria-busy') === 'false'
+    && (await queryResults.locator('.query-basis').allTextContents()).includes(`读取版本：${actualQuery.cutId}`)
+    && await queryResults.locator('.query-card').count() === 1, 'Dock Query did not visibly install its exact original result');
+  const widthHandle = page.locator('.navigation-sidebar-resizer'), queryLayouts = [];
+  const setSidebarWidth = async width => {
+    await widthHandle.focus(); await page.keyboard.press('Enter');
+    assert.equal(Number(await widthHandle.getAttribute('aria-valuenow')), 264);
+    for (let current = 264; current < width; current += 12) await page.keyboard.press('ArrowRight');
+    assert.equal(Number(await widthHandle.getAttribute('aria-valuenow')), width);
+  };
+  for (const width of [264, 420]) {
+    await setSidebarWidth(width);
+    await titleSearch.focus();
+    await queryPanel.locator('.query-heading h2').scrollIntoViewIfNeeded();
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(await titleSearch.evaluate(element => document.activeElement === element), true, 'Narrow Query layout lost search focus');
+    const layout = await queryPanel.evaluate(panel => {
+      const controls = panel.querySelector('.query-controls'), results = panel.querySelector('.query-results'), heading = panel.querySelector('.query-heading');
+      const rect = element => { const r = element.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height }; };
+      const title = heading.querySelector('h2'), range = document.createRange(); range.selectNodeContents(title);
+      return { width: rect(panel).width, panel: rect(panel), controls: rect(controls), results: rect(results),
+        title: { ...rect(title), textHeight: range.getBoundingClientRect().height, lineHeight: parseFloat(getComputedStyle(title).lineHeight) },
+        buttons: [...heading.querySelectorAll('button')].map(button => ({ text: button.textContent, ...rect(button), fontSize: parseFloat(getComputedStyle(button).fontSize), whiteSpace: getComputedStyle(button).whiteSpace })),
+        documentWidth: document.documentElement.scrollWidth, viewportWidth: innerWidth, resultCount: results.querySelectorAll('.query-card').length };
+    });
+    queryLayouts.push({ requestedWidth: width, ...layout });
+    assert.ok(layout.width <= width + 1, 'Query retains a minimum width beyond its dock');
+    assert.ok(layout.controls.height > 40 && layout.results.height >= 90, 'Query controls starve the vertically shared result area: ' + JSON.stringify(layout));
+    assert.ok(layout.title.textHeight <= layout.title.lineHeight * 1.2, 'Narrow Query title wraps vertically');
+    assert.ok(layout.title.top >= layout.controls.top && layout.title.bottom <= layout.controls.bottom, 'Narrow Query title is clipped by its local controls scroller');
+    for (const button of layout.buttons) {
+      assert.ok(button.fontSize >= 12, 'Narrow Query heading button becomes unreadably small');
+      assert.ok(button.left >= layout.panel.left && button.right <= layout.panel.right + 1, 'Narrow Query heading button overflows its dock');
+      assert.ok(button.height <= 48, 'Narrow Query heading button text is vertically crushed');
+      assert.ok(button.top >= layout.controls.top && button.bottom <= layout.controls.bottom, 'Narrow Query heading button is clipped by the controls scroller');
+    }
+    assert.ok(layout.documentWidth <= layout.viewportWidth + 1, 'Narrow Query creates global horizontal overflow');
+    const cardTitle = queryResults.locator('.query-card .query-row-title'); await cardTitle.scrollIntoViewIfNeeded();
+    const titleVisible = await cardTitle.evaluate(element => {
+      const title = element.getBoundingClientRect(), viewport = element.closest('.query-results').getBoundingClientRect();
+      return Math.min(title.bottom, viewport.bottom) - Math.max(title.top, viewport.top);
+    });
+    assert.ok(titleVisible >= 18, 'Actual Query card title cannot be reached inside the local result scroll area');
+    // A below-the-fold advanced control remains reachable through the local
+    // controls scroller while the independent results area stays available.
+    const advanced = queryPanel.locator('.query-advanced-plan');
+    await advanced.locator('summary').focus(); await page.keyboard.press('Enter');
+    await page.keyboard.press('Tab'); await page.keyboard.press('Tab');
+    const advancedInput = advanced.locator('textarea.query-plan-input');
+    assert.equal(await advancedInput.evaluate(element => document.activeElement === element && element.closest('.query-controls').scrollTop > 0), true);
+    assert.ok(await queryResults.evaluate(element => element.getBoundingClientRect().height >= 90));
+    await advanced.locator('summary').focus(); await page.keyboard.press('Enter');
+    await titleSearch.focus();
+    await queryPanel.locator('.query-heading h2').scrollIntoViewIfNeeded();
+    await assertSameEditor(handle, stable);
+    await page.screenshot({ path: path.join(out, `workspace-query-${width}.png`), fullPage: false });
+  }
+  await setSidebarWidth(264); await showFiles();
+  result.queryLayoutChecks = { request: actualQueryRequest, cutId: actualQuery.cutId, entityKey: actualQuery.rows[0].entityKey, layouts: queryLayouts };
+  assert.equal(opens(), openCount); assert.equal(navigationCount, navigations);
+  pass('Actual narrow Search keeps horizontal readable controls, local advanced-control scrolling and exact original Query results without replacing the editor');
   const groupsBefore = await page.locator('.workspace-dock-left .workspace-dock-group').count();
   await viewAction('nodes', '拆分到下方');
   assert.equal(await page.locator('.workspace-dock-left .workspace-dock-group').count(), groupsBefore + 1);
