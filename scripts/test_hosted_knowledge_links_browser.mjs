@@ -101,7 +101,21 @@ try {
   const restoredRuleControls=diagnostics.locator('details').filter({has:page.getByText('个人规则（1）',{exact:true})});await restoredRuleControls.locator('summary').click();await restoredRuleControls.getByRole('button',{name:'移除此规则',exact:true}).click();
   assert.equal(await diagnostics.locator('article').filter({hasText:fixture.refs.Other+'#lost'}).count(),2);assert.equal((await draft()).source,fixture.sources.Shared);assert.equal(await savedSource('Shared'),fixture.sources.Shared);
   assert.equal((await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),ruleStorageKey)).rules.length,0);
-  await passed('a real hosted issue preference is saved under its confirmed deployment, actor and workspace; reload reapplies it without removing backend diagnostics or changing the Draft/saved author source, and removal persists');
+  // Undo returned to equal bytes, but the recovered author input still belongs
+  // to the old session. Review both exact texts before explicitly adopting the
+  // new session's basis; this is a draft resolution, never an author save.
+  assert.equal((await draft()).source,fixture.sources.Shared);assert.equal(await savedSource('Shared'),fixture.sources.Shared);
+  assert.equal(await page.locator('#current').textContent(),fixture.sources.Shared);assert.equal(await page.locator('#comparison').isVisible(),true);assert.equal(await page.locator('#save').isDisabled(),true);
+  const implicitSaves=[],observeSave=request=>{if(new URL(request.url()).pathname==='/api/hosted/save')implicitSaves.push(request.url());};page.on('request',observeSave);
+  try{
+    const resolved=response(page,r=>r.url().endsWith('/api/hosted/draft/resolve'));await page.locator('#rebase').click();const resolution=await resolved;
+    assert.equal(resolution.status(),200,await resolution.text());assert.equal((await resolution.json()).status,'draftRebased');
+    assert.deepEqual(resolution.request().postDataJSON(),{sessionId:reopenedRuleProfile.basis.sessionId,source:fixture.sources.Shared});
+    await page.locator('#comparison').waitFor({state:'hidden'});await page.waitForFunction(()=>!document.querySelector('#save').disabled);
+    assert.equal((await draft()).source,fixture.sources.Shared);assert.equal(await savedSource('Shared'),fixture.sources.Shared);await readLinks();
+  }finally{page.off('request',observeSave);}
+  assert.deepEqual(implicitSaves,[]);
+  await passed('a real hosted issue preference is saved under its confirmed deployment, actor and workspace; reload reapplies it without removing backend diagnostics or changing author source, removal persists, and explicit same-text draft resolution restores the new session basis without saving');
   await panel().getByLabel('显示潜在提及',{exact:true}).check();await panel().getByLabel('候选范围',{exact:true}).selectOption('fragments');
   const headingRow=mentions.locator('.query-result-row').filter({hasText:'章节 · 文字位置'}),headingConvert=headingRow.getByRole('button',{name:'将此范围转换为链接：Other #章',exact:true});assert.equal(await headingConvert.count(),1);
   const fragmentReply=response(page,r=>r.url().endsWith('/api/hosted/knowledge-links/convert'));await headingConvert.click();const fragmentProposal=await(await fragmentReply).json();assert.equal(fragmentProposal.patch.range.raw,'章节');assert.ok(fragmentProposal.patch.after.includes(fixture.refs.Other+'#%E7%AB%A0'));await waitSource(fragmentProposal.patch.after);await page.locator('#source .cm-content').press('ControlOrMeta+z');await waitSource(fixture.sources.Shared);assert.equal(await savedSource('Shared'),fixture.sources.Shared);

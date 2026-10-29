@@ -17,7 +17,7 @@ const exe = path.resolve(process.argv[2]), out = path.resolve(process.argv[3]);
 await mkdir(out, { recursive: false });
 const { chromium } = createRequire(import.meta.url)(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwright');
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-const result = { exe, sha256: sha(await readFile(exe)), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), frontend: dev ? 'current Vite frontend with stated backend' : 'embedded candidate', cases: [], pageErrors: [], completed: false, limits: ['A separate HTML page in real headless Chrome is the external producer; this does not establish Word/Excel clipboard producers, OS IME or full AT.'] };
+const result = { exe, sha256: sha(await readFile(exe)), version: execFileSync(exe, ['--version'], { windowsHide: true }).toString().trim(), harness: { path: path.resolve(import.meta.filename), sha256: sha(await readFile(import.meta.filename)) }, frontend: dev ? 'current Vite frontend with stated backend' : 'embedded candidate', cases: [], pageErrors: [], completed: false, limits: ['A separate HTML page in real headless Chrome is the external producer; this does not establish Word/Excel clipboard producers, OS IME or full AT.'] };
 const root = path.join(out, 'library'), data = path.join(out, 'state');
 const hostedToken = randomUUID(), adminToken = randomUUID();
 result.client = hosted ? 'controlled hosted writer' : 'local owner';
@@ -40,12 +40,13 @@ const click = label => page.getByRole('button', { name: label, exact: true }).cl
 const mode = label => workspaceMode(page, hosted ? label === '源码' ? 'V01 源码' : 'V04 可视写作' : label);
 const sourceSelector = hosted ? '#source .cm-content' : '.source-host .cm-content';
 const surface = () => page.locator('.writing-table-surface').first();
+const cells = () => surface().locator('[data-cell-row][data-cell-column]').evaluateAll(cells => cells.map(cell => ({ row: Number(cell.dataset.cellRow), column: Number(cell.dataset.cellColumn), rowspan: cell.rowSpan, colspan: cell.colSpan, text: cell.querySelector('textarea')?.value })));
 async function source() { return page.locator(sourceSelector).evaluate(element => { const view = element.cmTile?.root?.view; if (view?.contentDOM !== element) throw new Error('Actual source editor unavailable'); return view.state.doc.toString(); }); }
 async function verifySource(expected) { await mode('源码'); await page.waitForFunction(({ expected, selector }) => { const element = document.querySelector(selector), view = element?.cmTile?.root?.view; return view?.contentDOM === element && view.state.doc.toString() === expected; }, { expected, selector: sourceSelector }); }
-async function target() {
+async function target(row = 1, column = 0) {
   await mode('可视编辑'); await surface().locator('.writing-table-tools[aria-busy="false"]').waitFor();
-  await surface().locator('[data-cell-row="1"][data-cell-column="0"] .table-cell-display').click();
-  await surface().getByLabel('第 2 行第 1 列文字', { exact: true }).press('Escape');
+  await surface().locator(`[data-cell-row="${row}"][data-cell-column="${column}"] .table-cell-display`).click();
+  await surface().getByLabel(`第 ${row + 1} 行第 ${column + 1} 列文字`, { exact: true }).press('Escape');
   await surface().getByRole('grid').focus();
 }
 try {
@@ -67,6 +68,13 @@ try {
   browser = await chromium.launch({ channel: 'chrome', headless: true }); result.browser = browser.version();
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, permissions: ['clipboard-read', 'clipboard-write'] });
   page = await context.newPage(); page.setDefaultTimeout(30000); page.on('pageerror', error => result.pageErrors.push(String(error)));
+  result.nativeTableEdits = [];
+  page.on('request', request => {
+    const pathname = new URL(request.url()).pathname;
+    if (request.method() !== 'POST' || !['/api/edit', '/api/hosted/editor/edit'].includes(pathname)) return;
+    const body = request.postDataJSON();
+    if (body?.intent?.kind === 'tableEdit') result.nativeTableEdits.push({ path: pathname, action: body.intent.action });
+  });
   await page.goto(frontend + (hosted ? '/hosted.html' : '/#token=' + token));
   if (hosted) { await page.getByLabel('访问凭据', { exact: true }).fill(hostedToken); await click('连接'); await page.getByRole('button', { name: '外部粘贴文档', exact: true }).waitFor(); await page.waitForLoadState('networkidle'); await click('外部粘贴文档'); await page.locator('#source .cm-content[contenteditable=true]').waitFor(); }
   await verifySource(initial);
@@ -77,14 +85,16 @@ try {
   await producer.keyboard.press('Control+c');
   result.producer = { url: producer.url(), copyEvents: await producer.evaluate(() => window.__copyEvents) };
   assert.equal(result.producer.copyEvents.length, 1); assert.equal(result.producer.copyEvents[0].trusted, true);
-  await page.bringToFront(); await target(); await surface().getByRole('grid').press('Control+v');
-  let dialog = page.getByRole('dialog', { name: '粘贴表格范围', exact: true }); await dialog.waitFor();
-  await dialog.getByRole('button', { name: '取消', exact: true }).click(); await verifySource(initial); assert.equal(await readFile(doc.path, 'utf8'), initial);
-  result.cases.push('Native external HTML copy and trusted paste preview can be canceled without changing Draft or disk.');
-  await target(); await surface().getByRole('grid').press('Control+v'); dialog = page.getByRole('dialog', { name: '粘贴表格范围', exact: true }); await dialog.waitFor();
-  await dialog.getByRole('button', { name: '粘贴', exact: true }).click();
+  await page.bringToFront();
+  result.clipboard = await page.evaluate(async () => Promise.all((await navigator.clipboard.read()).map(async item => ({ types: [...item.types].sort(), payloads: Object.fromEntries(await Promise.all(item.types.filter(type => ['text/html', 'text/plain'].includes(type)).map(async type => [type, await (await item.getType(type)).text()]))) }))));
+  const copiedHtml = result.clipboard.find(item => item.types.includes('text/html'));
+  assert.ok(copiedHtml, 'The actual native clipboard must contain HTML'); assert.match(copiedHtml.payloads['text/html'], /colspan="2"/); assert.match(copiedHtml.payloads['text/html'], /外部甲/);
+  assert.ok(result.clipboard.some(item => item.types.includes('text/plain')), 'The actual native clipboard must retain its plain-text alternative');
+  await target(); await surface().getByRole('grid').press('Control+v');
   await surface().locator('[data-cell-row="1"][data-cell-column="0"][colspan="2"]').waitFor();
-  result.pastedCells = await surface().locator('[data-cell-row][data-cell-column]').evaluateAll(cells => cells.map(cell => ({ row: Number(cell.dataset.cellRow), column: Number(cell.dataset.cellColumn), rowspan: cell.rowSpan, colspan: cell.colSpan, text: cell.querySelector('textarea')?.value })));
+  assert.equal(await page.getByRole('dialog').count(), 0, 'Lossless in-bounds native paste must execute without another confirmation');
+  result.pastedCells = await cells();
+  assert.equal(result.nativeTableEdits.length, 1, 'Direct paste must dispatch one native table operation');
   assert.deepEqual(result.pastedCells, [
     { row: 0, column: 0, rowspan: 1, colspan: 1, text: '头甲' }, { row: 0, column: 1, rowspan: 1, colspan: 1, text: '头乙' }, { row: 0, column: 2, rowspan: 1, colspan: 1, text: '头丙' },
     { row: 1, column: 0, rowspan: 1, colspan: 2, text: '外部甲\n外部乙' }, { row: 1, column: 2, rowspan: 1, colspan: 1, text: '右边保留' },
@@ -96,9 +106,43 @@ try {
   assert.equal(await readFile(doc.path, 'utf8'), initial);
   await page.locator(sourceSelector).press('Control+z'); await verifySource(initial);
   await page.locator(sourceSelector).press('Control+Shift+Z'); await verifySource(pasted);
-  result.cases.push('One native paste preserves merged cells, line breaks, empty values and untouched cells; one Undo/Redo restores the exact Draft.');
+  result.cases.push('Lossless in-bounds native paste executes without a confirmation, preserves merged cells, line breaks, empty values and untouched cells; one Undo/Redo restores the exact Draft.');
+  await page.locator(sourceSelector).press('Control+z'); await verifySource(initial);
+
+  // Reuse the same native clipboard at the final row: the two-row source now
+  // requires one real row of expansion, which still belongs to a preview.
+  await target(2); const beforeExpansionCells = await cells(), beforeExpansionEdits = result.nativeTableEdits.length;
+  await surface().getByRole('grid').press('Control+v');
+  let dialog = page.getByRole('dialog', { name: '粘贴表格范围', exact: true }); await dialog.waitFor();
+  result.expansionPreviewCells = await cells();
+  assert.deepEqual(result.expansionPreviewCells, beforeExpansionCells); assert.equal(await surface().getByRole('grid').getAttribute('aria-rowcount'), '3');
+  assert.equal(result.nativeTableEdits.length, beforeExpansionEdits, 'Preview must not dispatch a native table edit');
+  await dialog.getByRole('button', { name: '取消', exact: true }).click(); await verifySource(initial); assert.equal(await readFile(doc.path, 'utf8'), initial);
+  assert.equal(result.nativeTableEdits.length, beforeExpansionEdits, 'Cancellation must not dispatch a native table edit');
+  result.cases.push('Native external HTML paste that would expand the table previews its actual scope; cancellation preserves the exact Draft, three-row topology and disk.');
+
+  await target(2); await surface().getByRole('grid').press('Control+v'); dialog = page.getByRole('dialog', { name: '粘贴表格范围', exact: true }); await dialog.waitFor();
+  assert.deepEqual(await cells(), beforeExpansionCells); assert.equal(result.nativeTableEdits.length, beforeExpansionEdits);
+  await dialog.getByRole('button', { name: '扩展并粘贴', exact: true }).click();
+  await surface().locator('[data-cell-row="2"][data-cell-column="0"][colspan="2"]').waitFor();
+  assert.equal(result.nativeTableEdits.length, beforeExpansionEdits + 1, 'Confirmed expansion must dispatch one native table operation');
+  assert.equal(await surface().getByRole('grid').getAttribute('aria-rowcount'), '4');
+  result.expandedCells = await cells();
+  assert.deepEqual(result.expandedCells, [
+    { row: 0, column: 0, rowspan: 1, colspan: 1, text: '头甲' }, { row: 0, column: 1, rowspan: 1, colspan: 1, text: '头乙' }, { row: 0, column: 2, rowspan: 1, colspan: 1, text: '头丙' },
+    { row: 1, column: 0, rowspan: 1, colspan: 1, text: '旧甲' }, { row: 1, column: 1, rowspan: 1, colspan: 1, text: '旧乙' }, { row: 1, column: 2, rowspan: 1, colspan: 1, text: '右边保留' },
+    { row: 2, column: 0, rowspan: 1, colspan: 2, text: '外部甲\n外部乙' }, { row: 2, column: 2, rowspan: 1, colspan: 1, text: '末格保留' },
+    { row: 3, column: 0, rowspan: 1, colspan: 1, text: '重复' }, { row: 3, column: 1, rowspan: 1, colspan: 1, text: '' }, { row: 3, column: 2, rowspan: 1, colspan: 1, text: '' },
+  ]);
+  await mode('源码'); const expanded = await source();
+  for (const text of ['头甲', '头乙', '头丙', '旧甲', '旧乙', '外部甲', '外部乙', '重复', '右边保留', '末格保留', '表前保留', '表后保留']) assert.ok(expanded.includes(text), text);
+  for (const text of ['旧丙', '旧丁']) assert.ok(!expanded.includes(text), text);
+  assert.equal(await readFile(doc.path, 'utf8'), initial);
+  await page.locator(sourceSelector).press('Control+z'); await verifySource(initial);
+  await page.locator(sourceSelector).press('Control+Shift+Z'); await verifySource(expanded);
+  result.cases.push('Explicit expansion adds exactly one row, preserves merge topology, the original first two rows and untouched right column; one Undo/Redo restores the entire operation.');
   result.pasteEvents = await page.evaluate(() => window.__externalPasteEvents);
-  assert.equal(result.pasteEvents.length, 2);
+  assert.equal(result.pasteEvents.length, 3);
   for (const event of result.pasteEvents) { assert.equal(event.trusted, true); assert.ok(event.types.includes('text/html')); assert.match(event.html, /colspan="2"/); assert.match(event.html, /外部甲/); }
   assert.equal(await readFile(doc.path, 'utf8'), initial); assert.deepEqual(result.pageErrors, []);
   result.completed = true;
