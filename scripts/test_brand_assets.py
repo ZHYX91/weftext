@@ -79,7 +79,7 @@ class BrandAssets(unittest.TestCase):
         baseline = brand.assets()
         # Mutate BOTH SVGs identically so the path-equality guard cannot mask a
         # parser failure. Exercise the actual native/package/WebUI producer.
-        positive = path.replace(' L ', '\nL\t').replace(' M ', '\nM\t')
+        positive = path.replace(' L ', '\r\nL\t').replace(' M ', '\nM\t')
         for case, modified in {**mutations, 'explicit commands with whitespace': positive}.items():
             with self.subTest(case=case), tempfile.TemporaryDirectory(prefix='weftext-brand-path-') as folder:
                 directory = Path(folder)
@@ -97,6 +97,26 @@ class BrandAssets(unittest.TestCase):
                             if output.suffix in ('.png', '.ico'):
                                 self.assertEqual(actual[output], expected)
                         self.assertEqual(actual[ROOT / 'app/public/brand/app-icon.svg'], (directory / 'app-icon.svg').read_bytes())
+
+    def test_path_lexing_rejects_unicode_numbers_and_whitespace_in_actual_assets(self):
+        originals = {name: (brand.BRAND / name).read_bytes() for name in ('app-icon.svg', 'logo-mark.svg')}
+        path = ET.fromstring(originals['app-icon.svg'])[-1].attrib['d']
+        mutations = {f'space U+{ord(character):04X}': path.replace('619.12 ', '619.12' + character, 1)
+                     for character in ('\u00a0', '\u2003', '\u2009', '\u2028', '\u3000')}
+        mutations.update({f'digit U+{ord(character):04X}': path.replace('619.12', character + '19.12', 1)
+                          for character in ('\uff16', '\u0666', '\u096c')})
+        for scope in ('app only', 'both originals'):
+            for case, modified in mutations.items():
+                with self.subTest(scope=scope, case=case), tempfile.TemporaryDirectory(prefix='weftext-brand-lex-') as folder:
+                    directory = Path(folder)
+                    for name, original in originals.items():
+                        if scope == 'both originals' or name == 'app-icon.svg':
+                            svg = ET.fromstring(original)
+                            svg[-1].set('d', modified)
+                            original = ET.tostring(svg)
+                        (directory / name).write_bytes(original)
+                    with patch.object(brand, 'BRAND', directory), self.assertRaises(ValueError):
+                        brand.assets()
 
     def test_compression_bytes_are_not_pixel_identity(self):
         original = brand.image(16)

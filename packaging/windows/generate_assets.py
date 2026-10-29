@@ -47,8 +47,8 @@ def geometry(path):
     require(set(node.attrib) == {'d', 'fill', 'fill-rule'})
     require(node.attrib['fill-rule'] == 'evenodd')
     require(node.attrib['fill'] == ('#F4EFE4' if application else 'currentColor'))
-    number = r'-?\d+(?:\.\d+)?'
-    require(not re.sub(r'[A-Za-z]|' + number + r'|\s+', '', node.attrib['d']))
+    number = r'-?[0-9]+(?:\.[0-9]+)?'
+    require(not re.sub(r'[A-Za-z]|' + number + r'|[ \t\r\n]+', '', node.attrib['d']))
     tokens = re.findall(r'[A-Za-z]|' + number, node.attrib['d'])
     polygons, points = [], []
     while tokens:
