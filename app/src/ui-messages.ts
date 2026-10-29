@@ -10570,7 +10570,247 @@ export const zhCN = {
   "localResourceBatch.chooseFiles": "选择要批量导入的资源文件",
   "localResourceBatch.noPending": "当前笔记没有待确认的资源批次。",
   "valuePresets.lockUnavailable": "当前浏览器不支持预设写入锁，命名保存和删除已停用；仍可读取并采用已有预设，当前输入保留。",
-  "nativeEditor.finishInvalidBeforeStructure": "先完成记录中的无效输入，再添加、移除或清空成员；原输入已保留。"
+  "nativeEditor.finishInvalidBeforeStructure": "先完成记录中的无效输入，再添加、移除或清空成员；原输入已保留。",
+  "builtinProperty.field.names": "名称",
+  "builtinProperty.field.phones": "电话",
+  "builtinProperty.field.emails": "电子邮件",
+  "builtinProperty.field.addresses": "地址",
+  "builtinProperty.field.websites": "网站",
+  "builtinProperty.field.aliases": "别名",
+  "builtinProperty.field.tags": "标签",
+  "builtinProperty.field.accounts": "账号",
+  "builtinProperty.field.nationalityStates": "国籍记录",
+  "builtinProperty.field.legalSexStates": "法定性别记录",
+  "builtinProperty.field.genderIdentityStates": "性别认同记录",
+  "builtinProperty.field.professions": "职业",
+  "builtinProperty.field.engagements": "任职记录",
+  "builtinProperty.field.lifeEvents": "生平事件",
+  "builtinProperty.field.measurements": "测量记录",
+  "builtinProperty.field.avatar": "头像",
+  "builtinProperty.field.parents": "父母",
+  "builtinProperty.field.spouses": "配偶",
+  "builtinProperty.field.siblings": "兄弟姐妹",
+  "builtinProperty.field.guardians": "监护人",
+  "builtinProperty.field.managers": "上级",
+  "builtinProperty.field.mentors": "导师",
+  "builtinProperty.field.familyRelations": "亲属关系",
+  "builtinProperty.field.socialRelations": "社会关系",
+  "builtinProperty.field.professionalRelations": "职业关系",
+  "builtinProperty.field.organizationStates": "组织状态记录",
+  "builtinProperty.field.identifiers": "标识符",
+  "builtinProperty.field.classifications": "分类",
+  "builtinProperty.field.sites": "场所",
+  "builtinProperty.field.parent": "上级组织",
+  "builtinProperty.field.governs": "治理的组织",
+  "builtinProperty.field.owns": "拥有的组织",
+  "builtinProperty.field.alliedWith": "联盟组织",
+  "builtinProperty.field.relatedOrganizations": "相关组织",
+  "builtinProperty.field.brandOf": "所属品牌组织",
+  "builtinProperty.field.businessGuidedBy": "业务指导组织",
+  "builtinProperty.field.jointlyLedBy": "联合领导组织",
+  "builtinProperty.field.memberOf": "所属成员组织",
+  "builtinProperty.field.subsidiaryOf": "母公司",
+  "builtinProperty.field.supervisedBy": "监督组织",
+  "builtinProperty.field.territoriallyAdministeredBy": "属地管理组织",
+  "builtinProperty.field.status": "状态",
+  "builtinProperty.field.priority": "优先级",
+  "builtinProperty.field.start": "开始",
+  "builtinProperty.field.due": "到期",
+  "builtinProperty.field.completedAt": "完成时间",
+  "builtinProperty.field.dependencies": "依赖任务",
+  "builtinProperty.field.project": "项目",
+  "builtinProperty.field.publication": "出版信息",
+  "builtinProperty.field.period": "周期",
+  "builtinProperty.field.range": "时间范围",
+  "builtinProperty.field.eventStatus": "事件状态",
+  "builtinProperty.field.recurrence": "重复规则",
+  "builtinProperty.field.participants": "参与者",
+  "builtinProperty.field.reminders": "提醒意图",
+  "builtinProperty.field.reminder": "提醒",
+  "builtinProperty.member.abstract": "摘要",
+  "builtinProperty.member.accessed": "访问时间",
+  "builtinProperty.member.action": "操作",
+  "builtinProperty.member.address": "地址",
+  "builtinProperty.member.affiliations": "所属机构",
+  "builtinProperty.member.agent": "贡献者",
+  "builtinProperty.member.alternativeTitles": "其他标题",
+  "builtinProperty.member.at": "时间",
+  "builtinProperty.member.before": "提前时长",
+  "builtinProperty.member.byMonth": "月份",
+  "builtinProperty.member.byMonthDay": "每月日期",
+  "builtinProperty.member.byWeekday": "星期",
+  "builtinProperty.member.calendar": "历法",
+  "builtinProperty.member.calendarVersion": "历法版本",
+  "builtinProperty.member.channel": "渠道",
+  "builtinProperty.member.citationKey": "建议引用键",
+  "builtinProperty.member.clock": "当地时间",
+  "builtinProperty.member.confidence": "置信度",
+  "builtinProperty.member.container": "刊物或合集",
+  "builtinProperty.member.context": "相关组织",
+  "builtinProperty.member.count": "次数",
+  "builtinProperty.member.creditedAs": "署名",
+  "builtinProperty.member.custom": "自定义关系",
+  "builtinProperty.member.customKind": "自定义类型",
+  "builtinProperty.member.customLabel": "自定义用途",
+  "builtinProperty.member.day": "日",
+  "builtinProperty.member.department": "部门",
+  "builtinProperty.member.description": "说明",
+  "builtinProperty.member.during": "有效期",
+  "builtinProperty.member.employer": "任职组织",
+  "builtinProperty.member.end": "结束",
+  "builtinProperty.member.endExclusive": "结束（不含）",
+  "builtinProperty.member.entries": "条目",
+  "builtinProperty.member.eventTime": "事件时间",
+  "builtinProperty.member.exDates": "排除日期",
+  "builtinProperty.member.exceptions": "单次例外",
+  "builtinProperty.member.family": "姓",
+  "builtinProperty.member.fold": "重复时刻选择",
+  "builtinProperty.member.fraction": "小数秒",
+  "builtinProperty.member.frequency": "频率",
+  "builtinProperty.member.gap": "缺失时刻处理",
+  "builtinProperty.member.given": "名",
+  "builtinProperty.member.id": "标识",
+  "builtinProperty.member.identifier": "标识值",
+  "builtinProperty.member.interval": "间隔",
+  "builtinProperty.member.issue": "期",
+  "builtinProperty.member.issued": "出版日期",
+  "builtinProperty.member.key": "周期键",
+  "builtinProperty.member.keywords": "关键词",
+  "builtinProperty.member.kind": "类型",
+  "builtinProperty.member.label": "用途",
+  "builtinProperty.member.language": "语言",
+  "builtinProperty.member.leapMonth": "闰月",
+  "builtinProperty.member.level": "级别",
+  "builtinProperty.member.locator": "来源位置",
+  "builtinProperty.member.minutesBefore": "提前分钟数",
+  "builtinProperty.member.month": "月",
+  "builtinProperty.member.note": "备注",
+  "builtinProperty.member.number": "号码",
+  "builtinProperty.member.observedAt": "观测时间",
+  "builtinProperty.member.onset": "原始开始时间",
+  "builtinProperty.member.ordinal": "序号",
+  "builtinProperty.member.pages": "页码",
+  "builtinProperty.member.position": "职务",
+  "builtinProperty.member.precision": "精度",
+  "builtinProperty.member.preferred": "首选名称",
+  "builtinProperty.member.preset": "预设关系",
+  "builtinProperty.member.publicationHistory": "出版状态记录",
+  "builtinProperty.member.quantity": "量值",
+  "builtinProperty.member.rDates": "额外日期",
+  "builtinProperty.member.rank": "职级",
+  "builtinProperty.member.ref": "笔记引用",
+  "builtinProperty.member.reference": "引用",
+  "builtinProperty.member.relationship": "关系类别",
+  "builtinProperty.member.resource": "资源",
+  "builtinProperty.member.resources": "资源",
+  "builtinProperty.member.revision": "修订",
+  "builtinProperty.member.role": "角色",
+  "builtinProperty.member.roles": "贡献角色",
+  "builtinProperty.member.rule": "计算规则",
+  "builtinProperty.member.schema": "结构定义",
+  "builtinProperty.member.scheme": "标识体系",
+  "builtinProperty.member.script": "文字系统",
+  "builtinProperty.member.selected": "选用此项",
+  "builtinProperty.member.seriesKey": "系列键",
+  "builtinProperty.member.service": "账号服务",
+  "builtinProperty.member.serviceKey": "自定义服务",
+  "builtinProperty.member.sources": "来源",
+  "builtinProperty.member.state": "状态",
+  "builtinProperty.member.status": "状态",
+  "builtinProperty.member.system": "职级体系",
+  "builtinProperty.member.target": "目标",
+  "builtinProperty.member.text": "文字",
+  "builtinProperty.member.time": "时刻",
+  "builtinProperty.member.title": "标题",
+  "builtinProperty.member.unit": "单位",
+  "builtinProperty.member.until": "截至（含）",
+  "builtinProperty.member.url": "网址",
+  "builtinProperty.member.usage": "用途",
+  "builtinProperty.member.value": "值",
+  "builtinProperty.member.venue": "发表载体",
+  "builtinProperty.member.version": "版本",
+  "builtinProperty.member.versionOf": "所基于的作品",
+  "builtinProperty.member.volume": "卷",
+  "builtinProperty.member.weekStart": "一周起始日",
+  "builtinProperty.member.work": "作品",
+  "builtinProperty.member.year": "年",
+  "builtinProperty.member.zone": "时区",
+  "builtinProperty.member.zoneVersion": "时区版本",
+  "builtinProperty.member.contributors": "作者与贡献者",
+  "builtinProperty.member.identifiers": "标识符",
+  "builtinProperty.member.range": "时间范围",
+  "builtinProperty.member.start": "开始",
+  "builtinProperty.choice.personal": "个人",
+  "builtinProperty.choice.work": "工作",
+  "builtinProperty.choice.other": "其他",
+  "builtinProperty.choice.ordinary": "常用",
+  "builtinProperty.choice.legal": "法定",
+  "builtinProperty.choice.former": "曾用",
+  "builtinProperty.choice.alias": "别名",
+  "builtinProperty.choice.transliteration": "音译",
+  "builtinProperty.choice.wechat": "微信",
+  "builtinProperty.choice.qq": "QQ",
+  "builtinProperty.choice.x": "X",
+  "builtinProperty.choice.facebook": "Facebook",
+  "builtinProperty.choice.custom": "自定义",
+  "builtinProperty.choice.birth": "出生",
+  "builtinProperty.choice.death": "去世",
+  "builtinProperty.choice.employmentStart": "入职",
+  "builtinProperty.choice.graduation": "毕业",
+  "builtinProperty.choice.marriage": "结婚",
+  "builtinProperty.choice.height": "身高",
+  "builtinProperty.choice.weight": "体重",
+  "builtinProperty.choice.draft": "草稿",
+  "builtinProperty.choice.accepted": "已接受",
+  "builtinProperty.choice.published": "已出版",
+  "builtinProperty.choice.article": "文章",
+  "builtinProperty.choice.book": "图书",
+  "builtinProperty.choice.report": "报告",
+  "builtinProperty.choice.standard": "标准",
+  "builtinProperty.choice.dataset": "数据集",
+  "builtinProperty.choice.chapter": "章节",
+  "builtinProperty.choice.thesis": "学位论文",
+  "builtinProperty.choice.web": "网页",
+  "builtinProperty.choice.day": "日",
+  "builtinProperty.choice.week": "周",
+  "builtinProperty.choice.month": "月",
+  "builtinProperty.choice.quarter": "季度",
+  "builtinProperty.choice.year": "年",
+  "builtinProperty.choice.MO": "星期一",
+  "builtinProperty.choice.TU": "星期二",
+  "builtinProperty.choice.WE": "星期三",
+  "builtinProperty.choice.TH": "星期四",
+  "builtinProperty.choice.FR": "星期五",
+  "builtinProperty.choice.SA": "星期六",
+  "builtinProperty.choice.SU": "星期日",
+  "builtinProperty.choice.cancel": "取消",
+  "builtinProperty.choice.replace": "替换",
+  "builtinProperty.choice.tentative": "暂定",
+  "builtinProperty.choice.confirmed": "已确认",
+  "builtinProperty.choice.cancelled": "已取消",
+  "builtinProperty.choice.daily": "每日",
+  "builtinProperty.choice.weekly": "每周",
+  "builtinProperty.choice.monthly": "每月",
+  "builtinProperty.choice.yearly": "每年",
+  "builtinProperty.choice.earlier": "较早时刻",
+  "builtinProperty.choice.later": "较晚时刻",
+  "builtinProperty.choice.skip": "跳过",
+  "builtinProperty.choice.extendedRelative": "其他亲属",
+  "builtinProperty.choice.acquaintance": "熟人",
+  "builtinProperty.choice.classmate": "同学",
+  "builtinProperty.choice.friend": "朋友",
+  "builtinProperty.choice.colleague": "同事",
+  "builtinProperty.choice.absolute": "指定时间",
+  "builtinProperty.choice.dueBefore": "到期前",
+  "builtinProperty.choice.dueDay": "到期当天",
+  "builtinProperty.choice.open": "未完成",
+  "builtinProperty.choice.done": "已完成",
+  "builtinProperty.choice.low": "低",
+  "builtinProperty.choice.normal": "普通",
+  "builtinProperty.choice.high": "高",
+  "builtinProperty.choice.urgent": "紧急",
+  "nativeEditor.customEnumValue": "自定义值",
+  "nativeEditor.customEnumLabel": "{label} · 自定义值"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -21146,6 +21386,246 @@ export interface MessageParamsMap {
   "localResourceBatch.noPending": {  };
   "valuePresets.lockUnavailable": {  };
   "nativeEditor.finishInvalidBeforeStructure": {  };
+  "builtinProperty.field.names": {  };
+  "builtinProperty.field.phones": {  };
+  "builtinProperty.field.emails": {  };
+  "builtinProperty.field.addresses": {  };
+  "builtinProperty.field.websites": {  };
+  "builtinProperty.field.aliases": {  };
+  "builtinProperty.field.tags": {  };
+  "builtinProperty.field.accounts": {  };
+  "builtinProperty.field.nationalityStates": {  };
+  "builtinProperty.field.legalSexStates": {  };
+  "builtinProperty.field.genderIdentityStates": {  };
+  "builtinProperty.field.professions": {  };
+  "builtinProperty.field.engagements": {  };
+  "builtinProperty.field.lifeEvents": {  };
+  "builtinProperty.field.measurements": {  };
+  "builtinProperty.field.avatar": {  };
+  "builtinProperty.field.parents": {  };
+  "builtinProperty.field.spouses": {  };
+  "builtinProperty.field.siblings": {  };
+  "builtinProperty.field.guardians": {  };
+  "builtinProperty.field.managers": {  };
+  "builtinProperty.field.mentors": {  };
+  "builtinProperty.field.familyRelations": {  };
+  "builtinProperty.field.socialRelations": {  };
+  "builtinProperty.field.professionalRelations": {  };
+  "builtinProperty.field.organizationStates": {  };
+  "builtinProperty.field.identifiers": {  };
+  "builtinProperty.field.classifications": {  };
+  "builtinProperty.field.sites": {  };
+  "builtinProperty.field.parent": {  };
+  "builtinProperty.field.governs": {  };
+  "builtinProperty.field.owns": {  };
+  "builtinProperty.field.alliedWith": {  };
+  "builtinProperty.field.relatedOrganizations": {  };
+  "builtinProperty.field.brandOf": {  };
+  "builtinProperty.field.businessGuidedBy": {  };
+  "builtinProperty.field.jointlyLedBy": {  };
+  "builtinProperty.field.memberOf": {  };
+  "builtinProperty.field.subsidiaryOf": {  };
+  "builtinProperty.field.supervisedBy": {  };
+  "builtinProperty.field.territoriallyAdministeredBy": {  };
+  "builtinProperty.field.status": {  };
+  "builtinProperty.field.priority": {  };
+  "builtinProperty.field.start": {  };
+  "builtinProperty.field.due": {  };
+  "builtinProperty.field.completedAt": {  };
+  "builtinProperty.field.dependencies": {  };
+  "builtinProperty.field.project": {  };
+  "builtinProperty.field.publication": {  };
+  "builtinProperty.field.period": {  };
+  "builtinProperty.field.range": {  };
+  "builtinProperty.field.eventStatus": {  };
+  "builtinProperty.field.recurrence": {  };
+  "builtinProperty.field.participants": {  };
+  "builtinProperty.field.reminders": {  };
+  "builtinProperty.field.reminder": {  };
+  "builtinProperty.member.abstract": {  };
+  "builtinProperty.member.accessed": {  };
+  "builtinProperty.member.action": {  };
+  "builtinProperty.member.address": {  };
+  "builtinProperty.member.affiliations": {  };
+  "builtinProperty.member.agent": {  };
+  "builtinProperty.member.alternativeTitles": {  };
+  "builtinProperty.member.at": {  };
+  "builtinProperty.member.before": {  };
+  "builtinProperty.member.byMonth": {  };
+  "builtinProperty.member.byMonthDay": {  };
+  "builtinProperty.member.byWeekday": {  };
+  "builtinProperty.member.calendar": {  };
+  "builtinProperty.member.calendarVersion": {  };
+  "builtinProperty.member.channel": {  };
+  "builtinProperty.member.citationKey": {  };
+  "builtinProperty.member.clock": {  };
+  "builtinProperty.member.confidence": {  };
+  "builtinProperty.member.container": {  };
+  "builtinProperty.member.context": {  };
+  "builtinProperty.member.count": {  };
+  "builtinProperty.member.creditedAs": {  };
+  "builtinProperty.member.custom": {  };
+  "builtinProperty.member.customKind": {  };
+  "builtinProperty.member.customLabel": {  };
+  "builtinProperty.member.day": {  };
+  "builtinProperty.member.department": {  };
+  "builtinProperty.member.description": {  };
+  "builtinProperty.member.during": {  };
+  "builtinProperty.member.employer": {  };
+  "builtinProperty.member.end": {  };
+  "builtinProperty.member.endExclusive": {  };
+  "builtinProperty.member.entries": {  };
+  "builtinProperty.member.eventTime": {  };
+  "builtinProperty.member.exDates": {  };
+  "builtinProperty.member.exceptions": {  };
+  "builtinProperty.member.family": {  };
+  "builtinProperty.member.fold": {  };
+  "builtinProperty.member.fraction": {  };
+  "builtinProperty.member.frequency": {  };
+  "builtinProperty.member.gap": {  };
+  "builtinProperty.member.given": {  };
+  "builtinProperty.member.id": {  };
+  "builtinProperty.member.identifier": {  };
+  "builtinProperty.member.interval": {  };
+  "builtinProperty.member.issue": {  };
+  "builtinProperty.member.issued": {  };
+  "builtinProperty.member.key": {  };
+  "builtinProperty.member.keywords": {  };
+  "builtinProperty.member.kind": {  };
+  "builtinProperty.member.label": {  };
+  "builtinProperty.member.language": {  };
+  "builtinProperty.member.leapMonth": {  };
+  "builtinProperty.member.level": {  };
+  "builtinProperty.member.locator": {  };
+  "builtinProperty.member.minutesBefore": {  };
+  "builtinProperty.member.month": {  };
+  "builtinProperty.member.note": {  };
+  "builtinProperty.member.number": {  };
+  "builtinProperty.member.observedAt": {  };
+  "builtinProperty.member.onset": {  };
+  "builtinProperty.member.ordinal": {  };
+  "builtinProperty.member.pages": {  };
+  "builtinProperty.member.position": {  };
+  "builtinProperty.member.precision": {  };
+  "builtinProperty.member.preferred": {  };
+  "builtinProperty.member.preset": {  };
+  "builtinProperty.member.publicationHistory": {  };
+  "builtinProperty.member.quantity": {  };
+  "builtinProperty.member.rDates": {  };
+  "builtinProperty.member.rank": {  };
+  "builtinProperty.member.ref": {  };
+  "builtinProperty.member.reference": {  };
+  "builtinProperty.member.relationship": {  };
+  "builtinProperty.member.resource": {  };
+  "builtinProperty.member.resources": {  };
+  "builtinProperty.member.revision": {  };
+  "builtinProperty.member.role": {  };
+  "builtinProperty.member.roles": {  };
+  "builtinProperty.member.rule": {  };
+  "builtinProperty.member.schema": {  };
+  "builtinProperty.member.scheme": {  };
+  "builtinProperty.member.script": {  };
+  "builtinProperty.member.selected": {  };
+  "builtinProperty.member.seriesKey": {  };
+  "builtinProperty.member.service": {  };
+  "builtinProperty.member.serviceKey": {  };
+  "builtinProperty.member.sources": {  };
+  "builtinProperty.member.state": {  };
+  "builtinProperty.member.status": {  };
+  "builtinProperty.member.system": {  };
+  "builtinProperty.member.target": {  };
+  "builtinProperty.member.text": {  };
+  "builtinProperty.member.time": {  };
+  "builtinProperty.member.title": {  };
+  "builtinProperty.member.unit": {  };
+  "builtinProperty.member.until": {  };
+  "builtinProperty.member.url": {  };
+  "builtinProperty.member.usage": {  };
+  "builtinProperty.member.value": {  };
+  "builtinProperty.member.venue": {  };
+  "builtinProperty.member.version": {  };
+  "builtinProperty.member.versionOf": {  };
+  "builtinProperty.member.volume": {  };
+  "builtinProperty.member.weekStart": {  };
+  "builtinProperty.member.work": {  };
+  "builtinProperty.member.year": {  };
+  "builtinProperty.member.zone": {  };
+  "builtinProperty.member.zoneVersion": {  };
+  "builtinProperty.member.contributors": {  };
+  "builtinProperty.member.identifiers": {  };
+  "builtinProperty.member.range": {  };
+  "builtinProperty.member.start": {  };
+  "builtinProperty.choice.personal": {  };
+  "builtinProperty.choice.work": {  };
+  "builtinProperty.choice.other": {  };
+  "builtinProperty.choice.ordinary": {  };
+  "builtinProperty.choice.legal": {  };
+  "builtinProperty.choice.former": {  };
+  "builtinProperty.choice.alias": {  };
+  "builtinProperty.choice.transliteration": {  };
+  "builtinProperty.choice.wechat": {  };
+  "builtinProperty.choice.qq": {  };
+  "builtinProperty.choice.x": {  };
+  "builtinProperty.choice.facebook": {  };
+  "builtinProperty.choice.custom": {  };
+  "builtinProperty.choice.birth": {  };
+  "builtinProperty.choice.death": {  };
+  "builtinProperty.choice.employmentStart": {  };
+  "builtinProperty.choice.graduation": {  };
+  "builtinProperty.choice.marriage": {  };
+  "builtinProperty.choice.height": {  };
+  "builtinProperty.choice.weight": {  };
+  "builtinProperty.choice.draft": {  };
+  "builtinProperty.choice.accepted": {  };
+  "builtinProperty.choice.published": {  };
+  "builtinProperty.choice.article": {  };
+  "builtinProperty.choice.book": {  };
+  "builtinProperty.choice.report": {  };
+  "builtinProperty.choice.standard": {  };
+  "builtinProperty.choice.dataset": {  };
+  "builtinProperty.choice.chapter": {  };
+  "builtinProperty.choice.thesis": {  };
+  "builtinProperty.choice.web": {  };
+  "builtinProperty.choice.day": {  };
+  "builtinProperty.choice.week": {  };
+  "builtinProperty.choice.month": {  };
+  "builtinProperty.choice.quarter": {  };
+  "builtinProperty.choice.year": {  };
+  "builtinProperty.choice.MO": {  };
+  "builtinProperty.choice.TU": {  };
+  "builtinProperty.choice.WE": {  };
+  "builtinProperty.choice.TH": {  };
+  "builtinProperty.choice.FR": {  };
+  "builtinProperty.choice.SA": {  };
+  "builtinProperty.choice.SU": {  };
+  "builtinProperty.choice.cancel": {  };
+  "builtinProperty.choice.replace": {  };
+  "builtinProperty.choice.tentative": {  };
+  "builtinProperty.choice.confirmed": {  };
+  "builtinProperty.choice.cancelled": {  };
+  "builtinProperty.choice.daily": {  };
+  "builtinProperty.choice.weekly": {  };
+  "builtinProperty.choice.monthly": {  };
+  "builtinProperty.choice.yearly": {  };
+  "builtinProperty.choice.earlier": {  };
+  "builtinProperty.choice.later": {  };
+  "builtinProperty.choice.skip": {  };
+  "builtinProperty.choice.extendedRelative": {  };
+  "builtinProperty.choice.acquaintance": {  };
+  "builtinProperty.choice.classmate": {  };
+  "builtinProperty.choice.friend": {  };
+  "builtinProperty.choice.colleague": {  };
+  "builtinProperty.choice.absolute": {  };
+  "builtinProperty.choice.dueBefore": {  };
+  "builtinProperty.choice.dueDay": {  };
+  "builtinProperty.choice.open": {  };
+  "builtinProperty.choice.done": {  };
+  "builtinProperty.choice.low": {  };
+  "builtinProperty.choice.normal": {  };
+  "builtinProperty.choice.high": {  };
+  "builtinProperty.choice.urgent": {  };
+  "nativeEditor.customEnumValue": {  };
+  "nativeEditor.customEnumLabel": { label: string };
 }
 export const messageParamTypes = {
   "localResourceBatch.title": {},
@@ -33674,7 +34154,249 @@ export const messageParamTypes = {
   "localResourceBatch.chooseFiles": {},
   "localResourceBatch.noPending": {},
   "valuePresets.lockUnavailable": {},
-  "nativeEditor.finishInvalidBeforeStructure": {}
+  "nativeEditor.finishInvalidBeforeStructure": {},
+  "builtinProperty.field.names": {},
+  "builtinProperty.field.phones": {},
+  "builtinProperty.field.emails": {},
+  "builtinProperty.field.addresses": {},
+  "builtinProperty.field.websites": {},
+  "builtinProperty.field.aliases": {},
+  "builtinProperty.field.tags": {},
+  "builtinProperty.field.accounts": {},
+  "builtinProperty.field.nationalityStates": {},
+  "builtinProperty.field.legalSexStates": {},
+  "builtinProperty.field.genderIdentityStates": {},
+  "builtinProperty.field.professions": {},
+  "builtinProperty.field.engagements": {},
+  "builtinProperty.field.lifeEvents": {},
+  "builtinProperty.field.measurements": {},
+  "builtinProperty.field.avatar": {},
+  "builtinProperty.field.parents": {},
+  "builtinProperty.field.spouses": {},
+  "builtinProperty.field.siblings": {},
+  "builtinProperty.field.guardians": {},
+  "builtinProperty.field.managers": {},
+  "builtinProperty.field.mentors": {},
+  "builtinProperty.field.familyRelations": {},
+  "builtinProperty.field.socialRelations": {},
+  "builtinProperty.field.professionalRelations": {},
+  "builtinProperty.field.organizationStates": {},
+  "builtinProperty.field.identifiers": {},
+  "builtinProperty.field.classifications": {},
+  "builtinProperty.field.sites": {},
+  "builtinProperty.field.parent": {},
+  "builtinProperty.field.governs": {},
+  "builtinProperty.field.owns": {},
+  "builtinProperty.field.alliedWith": {},
+  "builtinProperty.field.relatedOrganizations": {},
+  "builtinProperty.field.brandOf": {},
+  "builtinProperty.field.businessGuidedBy": {},
+  "builtinProperty.field.jointlyLedBy": {},
+  "builtinProperty.field.memberOf": {},
+  "builtinProperty.field.subsidiaryOf": {},
+  "builtinProperty.field.supervisedBy": {},
+  "builtinProperty.field.territoriallyAdministeredBy": {},
+  "builtinProperty.field.status": {},
+  "builtinProperty.field.priority": {},
+  "builtinProperty.field.start": {},
+  "builtinProperty.field.due": {},
+  "builtinProperty.field.completedAt": {},
+  "builtinProperty.field.dependencies": {},
+  "builtinProperty.field.project": {},
+  "builtinProperty.field.publication": {},
+  "builtinProperty.field.period": {},
+  "builtinProperty.field.range": {},
+  "builtinProperty.field.eventStatus": {},
+  "builtinProperty.field.recurrence": {},
+  "builtinProperty.field.participants": {},
+  "builtinProperty.field.reminders": {},
+  "builtinProperty.field.reminder": {},
+  "builtinProperty.member.abstract": {},
+  "builtinProperty.member.accessed": {},
+  "builtinProperty.member.action": {},
+  "builtinProperty.member.address": {},
+  "builtinProperty.member.affiliations": {},
+  "builtinProperty.member.agent": {},
+  "builtinProperty.member.alternativeTitles": {},
+  "builtinProperty.member.at": {},
+  "builtinProperty.member.before": {},
+  "builtinProperty.member.byMonth": {},
+  "builtinProperty.member.byMonthDay": {},
+  "builtinProperty.member.byWeekday": {},
+  "builtinProperty.member.calendar": {},
+  "builtinProperty.member.calendarVersion": {},
+  "builtinProperty.member.channel": {},
+  "builtinProperty.member.citationKey": {},
+  "builtinProperty.member.clock": {},
+  "builtinProperty.member.confidence": {},
+  "builtinProperty.member.container": {},
+  "builtinProperty.member.context": {},
+  "builtinProperty.member.count": {},
+  "builtinProperty.member.creditedAs": {},
+  "builtinProperty.member.custom": {},
+  "builtinProperty.member.customKind": {},
+  "builtinProperty.member.customLabel": {},
+  "builtinProperty.member.day": {},
+  "builtinProperty.member.department": {},
+  "builtinProperty.member.description": {},
+  "builtinProperty.member.during": {},
+  "builtinProperty.member.employer": {},
+  "builtinProperty.member.end": {},
+  "builtinProperty.member.endExclusive": {},
+  "builtinProperty.member.entries": {},
+  "builtinProperty.member.eventTime": {},
+  "builtinProperty.member.exDates": {},
+  "builtinProperty.member.exceptions": {},
+  "builtinProperty.member.family": {},
+  "builtinProperty.member.fold": {},
+  "builtinProperty.member.fraction": {},
+  "builtinProperty.member.frequency": {},
+  "builtinProperty.member.gap": {},
+  "builtinProperty.member.given": {},
+  "builtinProperty.member.id": {},
+  "builtinProperty.member.identifier": {},
+  "builtinProperty.member.interval": {},
+  "builtinProperty.member.issue": {},
+  "builtinProperty.member.issued": {},
+  "builtinProperty.member.key": {},
+  "builtinProperty.member.keywords": {},
+  "builtinProperty.member.kind": {},
+  "builtinProperty.member.label": {},
+  "builtinProperty.member.language": {},
+  "builtinProperty.member.leapMonth": {},
+  "builtinProperty.member.level": {},
+  "builtinProperty.member.locator": {},
+  "builtinProperty.member.minutesBefore": {},
+  "builtinProperty.member.month": {},
+  "builtinProperty.member.note": {},
+  "builtinProperty.member.number": {},
+  "builtinProperty.member.observedAt": {},
+  "builtinProperty.member.onset": {},
+  "builtinProperty.member.ordinal": {},
+  "builtinProperty.member.pages": {},
+  "builtinProperty.member.position": {},
+  "builtinProperty.member.precision": {},
+  "builtinProperty.member.preferred": {},
+  "builtinProperty.member.preset": {},
+  "builtinProperty.member.publicationHistory": {},
+  "builtinProperty.member.quantity": {},
+  "builtinProperty.member.rDates": {},
+  "builtinProperty.member.rank": {},
+  "builtinProperty.member.ref": {},
+  "builtinProperty.member.reference": {},
+  "builtinProperty.member.relationship": {},
+  "builtinProperty.member.resource": {},
+  "builtinProperty.member.resources": {},
+  "builtinProperty.member.revision": {},
+  "builtinProperty.member.role": {},
+  "builtinProperty.member.roles": {},
+  "builtinProperty.member.rule": {},
+  "builtinProperty.member.schema": {},
+  "builtinProperty.member.scheme": {},
+  "builtinProperty.member.script": {},
+  "builtinProperty.member.selected": {},
+  "builtinProperty.member.seriesKey": {},
+  "builtinProperty.member.service": {},
+  "builtinProperty.member.serviceKey": {},
+  "builtinProperty.member.sources": {},
+  "builtinProperty.member.state": {},
+  "builtinProperty.member.status": {},
+  "builtinProperty.member.system": {},
+  "builtinProperty.member.target": {},
+  "builtinProperty.member.text": {},
+  "builtinProperty.member.time": {},
+  "builtinProperty.member.title": {},
+  "builtinProperty.member.unit": {},
+  "builtinProperty.member.until": {},
+  "builtinProperty.member.url": {},
+  "builtinProperty.member.usage": {},
+  "builtinProperty.member.value": {},
+  "builtinProperty.member.venue": {},
+  "builtinProperty.member.version": {},
+  "builtinProperty.member.versionOf": {},
+  "builtinProperty.member.volume": {},
+  "builtinProperty.member.weekStart": {},
+  "builtinProperty.member.work": {},
+  "builtinProperty.member.year": {},
+  "builtinProperty.member.zone": {},
+  "builtinProperty.member.zoneVersion": {},
+  "builtinProperty.member.contributors": {},
+  "builtinProperty.member.identifiers": {},
+  "builtinProperty.member.range": {},
+  "builtinProperty.member.start": {},
+  "builtinProperty.choice.personal": {},
+  "builtinProperty.choice.work": {},
+  "builtinProperty.choice.other": {},
+  "builtinProperty.choice.ordinary": {},
+  "builtinProperty.choice.legal": {},
+  "builtinProperty.choice.former": {},
+  "builtinProperty.choice.alias": {},
+  "builtinProperty.choice.transliteration": {},
+  "builtinProperty.choice.wechat": {},
+  "builtinProperty.choice.qq": {},
+  "builtinProperty.choice.x": {},
+  "builtinProperty.choice.facebook": {},
+  "builtinProperty.choice.custom": {},
+  "builtinProperty.choice.birth": {},
+  "builtinProperty.choice.death": {},
+  "builtinProperty.choice.employmentStart": {},
+  "builtinProperty.choice.graduation": {},
+  "builtinProperty.choice.marriage": {},
+  "builtinProperty.choice.height": {},
+  "builtinProperty.choice.weight": {},
+  "builtinProperty.choice.draft": {},
+  "builtinProperty.choice.accepted": {},
+  "builtinProperty.choice.published": {},
+  "builtinProperty.choice.article": {},
+  "builtinProperty.choice.book": {},
+  "builtinProperty.choice.report": {},
+  "builtinProperty.choice.standard": {},
+  "builtinProperty.choice.dataset": {},
+  "builtinProperty.choice.chapter": {},
+  "builtinProperty.choice.thesis": {},
+  "builtinProperty.choice.web": {},
+  "builtinProperty.choice.day": {},
+  "builtinProperty.choice.week": {},
+  "builtinProperty.choice.month": {},
+  "builtinProperty.choice.quarter": {},
+  "builtinProperty.choice.year": {},
+  "builtinProperty.choice.MO": {},
+  "builtinProperty.choice.TU": {},
+  "builtinProperty.choice.WE": {},
+  "builtinProperty.choice.TH": {},
+  "builtinProperty.choice.FR": {},
+  "builtinProperty.choice.SA": {},
+  "builtinProperty.choice.SU": {},
+  "builtinProperty.choice.cancel": {},
+  "builtinProperty.choice.replace": {},
+  "builtinProperty.choice.tentative": {},
+  "builtinProperty.choice.confirmed": {},
+  "builtinProperty.choice.cancelled": {},
+  "builtinProperty.choice.daily": {},
+  "builtinProperty.choice.weekly": {},
+  "builtinProperty.choice.monthly": {},
+  "builtinProperty.choice.yearly": {},
+  "builtinProperty.choice.earlier": {},
+  "builtinProperty.choice.later": {},
+  "builtinProperty.choice.skip": {},
+  "builtinProperty.choice.extendedRelative": {},
+  "builtinProperty.choice.acquaintance": {},
+  "builtinProperty.choice.classmate": {},
+  "builtinProperty.choice.friend": {},
+  "builtinProperty.choice.colleague": {},
+  "builtinProperty.choice.absolute": {},
+  "builtinProperty.choice.dueBefore": {},
+  "builtinProperty.choice.dueDay": {},
+  "builtinProperty.choice.open": {},
+  "builtinProperty.choice.done": {},
+  "builtinProperty.choice.low": {},
+  "builtinProperty.choice.normal": {},
+  "builtinProperty.choice.high": {},
+  "builtinProperty.choice.urgent": {},
+  "nativeEditor.customEnumValue": {},
+  "nativeEditor.customEnumLabel": {
+    "label": "text"
+  }
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -44248,5 +44970,245 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "localResourceBatch.chooseFiles": "Choose resource files to import as one batch",
   "localResourceBatch.noPending": "This note has no resource batch awaiting confirmation.",
   "valuePresets.lockUnavailable": "This browser does not support the preset write lock. Saving and deletion are disabled; existing presets remain readable and usable, and current input is retained.",
-  "nativeEditor.finishInvalidBeforeStructure": "Complete invalid record input before adding, removing or clearing members; your input is retained."
+  "nativeEditor.finishInvalidBeforeStructure": "Complete invalid record input before adding, removing or clearing members; your input is retained.",
+  "builtinProperty.field.names": "Names",
+  "builtinProperty.field.phones": "Phones",
+  "builtinProperty.field.emails": "Email addresses",
+  "builtinProperty.field.addresses": "Addresses",
+  "builtinProperty.field.websites": "Websites",
+  "builtinProperty.field.aliases": "Aliases",
+  "builtinProperty.field.tags": "Tags",
+  "builtinProperty.field.accounts": "Accounts",
+  "builtinProperty.field.nationalityStates": "Nationality records",
+  "builtinProperty.field.legalSexStates": "Legal sex records",
+  "builtinProperty.field.genderIdentityStates": "Gender identity records",
+  "builtinProperty.field.professions": "Professions",
+  "builtinProperty.field.engagements": "Employment records",
+  "builtinProperty.field.lifeEvents": "Life events",
+  "builtinProperty.field.measurements": "Measurements",
+  "builtinProperty.field.avatar": "Avatar",
+  "builtinProperty.field.parents": "Parents",
+  "builtinProperty.field.spouses": "Spouses",
+  "builtinProperty.field.siblings": "Siblings",
+  "builtinProperty.field.guardians": "Guardians",
+  "builtinProperty.field.managers": "Managers",
+  "builtinProperty.field.mentors": "Mentors",
+  "builtinProperty.field.familyRelations": "Family relationships",
+  "builtinProperty.field.socialRelations": "Social relationships",
+  "builtinProperty.field.professionalRelations": "Professional relationships",
+  "builtinProperty.field.organizationStates": "Organization status records",
+  "builtinProperty.field.identifiers": "Identifiers",
+  "builtinProperty.field.classifications": "Classifications",
+  "builtinProperty.field.sites": "Sites",
+  "builtinProperty.field.parent": "Parent organization",
+  "builtinProperty.field.governs": "Governed organizations",
+  "builtinProperty.field.owns": "Owned organizations",
+  "builtinProperty.field.alliedWith": "Allied organizations",
+  "builtinProperty.field.relatedOrganizations": "Related organizations",
+  "builtinProperty.field.brandOf": "Brand owner",
+  "builtinProperty.field.businessGuidedBy": "Business guidance organizations",
+  "builtinProperty.field.jointlyLedBy": "Joint leadership organizations",
+  "builtinProperty.field.memberOf": "Membership organizations",
+  "builtinProperty.field.subsidiaryOf": "Parent companies",
+  "builtinProperty.field.supervisedBy": "Supervising organizations",
+  "builtinProperty.field.territoriallyAdministeredBy": "Territorial administration organizations",
+  "builtinProperty.field.status": "Status",
+  "builtinProperty.field.priority": "Priority",
+  "builtinProperty.field.start": "Start",
+  "builtinProperty.field.due": "Due",
+  "builtinProperty.field.completedAt": "Completed at",
+  "builtinProperty.field.dependencies": "Task dependencies",
+  "builtinProperty.field.project": "Project",
+  "builtinProperty.field.publication": "Publication",
+  "builtinProperty.field.period": "Period",
+  "builtinProperty.field.range": "Time range",
+  "builtinProperty.field.eventStatus": "Event status",
+  "builtinProperty.field.recurrence": "Recurrence",
+  "builtinProperty.field.participants": "Participants",
+  "builtinProperty.field.reminders": "Reminder intents",
+  "builtinProperty.field.reminder": "Reminder",
+  "builtinProperty.member.abstract": "Abstract",
+  "builtinProperty.member.accessed": "Accessed at",
+  "builtinProperty.member.action": "Action",
+  "builtinProperty.member.address": "Address",
+  "builtinProperty.member.affiliations": "Affiliations",
+  "builtinProperty.member.agent": "Contributor",
+  "builtinProperty.member.alternativeTitles": "Alternative titles",
+  "builtinProperty.member.at": "At",
+  "builtinProperty.member.before": "Advance duration",
+  "builtinProperty.member.byMonth": "Months",
+  "builtinProperty.member.byMonthDay": "Days of month",
+  "builtinProperty.member.byWeekday": "Weekdays",
+  "builtinProperty.member.calendar": "Calendar",
+  "builtinProperty.member.calendarVersion": "Calendar version",
+  "builtinProperty.member.channel": "Channel",
+  "builtinProperty.member.citationKey": "Suggested citation key",
+  "builtinProperty.member.clock": "Local time",
+  "builtinProperty.member.confidence": "Confidence",
+  "builtinProperty.member.container": "Publication or collection",
+  "builtinProperty.member.context": "Organization context",
+  "builtinProperty.member.count": "Count",
+  "builtinProperty.member.creditedAs": "Credited as",
+  "builtinProperty.member.custom": "Custom relationship",
+  "builtinProperty.member.customKind": "Custom kind",
+  "builtinProperty.member.customLabel": "Custom usage label",
+  "builtinProperty.member.day": "Day",
+  "builtinProperty.member.department": "Department",
+  "builtinProperty.member.description": "Description",
+  "builtinProperty.member.during": "Validity period",
+  "builtinProperty.member.employer": "Employer",
+  "builtinProperty.member.end": "End",
+  "builtinProperty.member.endExclusive": "End (exclusive)",
+  "builtinProperty.member.entries": "Entries",
+  "builtinProperty.member.eventTime": "Event time",
+  "builtinProperty.member.exDates": "Excluded dates",
+  "builtinProperty.member.exceptions": "Occurrence exceptions",
+  "builtinProperty.member.family": "Family name",
+  "builtinProperty.member.fold": "Ambiguous-time choice",
+  "builtinProperty.member.fraction": "Fractional seconds",
+  "builtinProperty.member.frequency": "Frequency",
+  "builtinProperty.member.gap": "Missing-time handling",
+  "builtinProperty.member.given": "Given name",
+  "builtinProperty.member.id": "ID",
+  "builtinProperty.member.identifier": "Identifier",
+  "builtinProperty.member.interval": "Interval",
+  "builtinProperty.member.issue": "Issue",
+  "builtinProperty.member.issued": "Issued date",
+  "builtinProperty.member.key": "Period key",
+  "builtinProperty.member.keywords": "Keywords",
+  "builtinProperty.member.kind": "Kind",
+  "builtinProperty.member.label": "Usage label",
+  "builtinProperty.member.language": "Language",
+  "builtinProperty.member.leapMonth": "Leap month",
+  "builtinProperty.member.level": "Level",
+  "builtinProperty.member.locator": "Source location",
+  "builtinProperty.member.minutesBefore": "Minutes before",
+  "builtinProperty.member.month": "Month",
+  "builtinProperty.member.note": "Note",
+  "builtinProperty.member.number": "Number",
+  "builtinProperty.member.observedAt": "Observed at",
+  "builtinProperty.member.onset": "Original onset",
+  "builtinProperty.member.ordinal": "Ordinal",
+  "builtinProperty.member.pages": "Pages",
+  "builtinProperty.member.position": "Position",
+  "builtinProperty.member.precision": "Precision",
+  "builtinProperty.member.preferred": "Preferred name",
+  "builtinProperty.member.preset": "Preset relationship",
+  "builtinProperty.member.publicationHistory": "Publication status history",
+  "builtinProperty.member.quantity": "Quantity",
+  "builtinProperty.member.rDates": "Additional dates",
+  "builtinProperty.member.rank": "Rank",
+  "builtinProperty.member.ref": "Note reference",
+  "builtinProperty.member.reference": "Reference",
+  "builtinProperty.member.relationship": "Relationship category",
+  "builtinProperty.member.resource": "Resource",
+  "builtinProperty.member.resources": "Resources",
+  "builtinProperty.member.revision": "Revision",
+  "builtinProperty.member.role": "Role",
+  "builtinProperty.member.roles": "Contributor roles",
+  "builtinProperty.member.rule": "Calculation rule",
+  "builtinProperty.member.schema": "Schema",
+  "builtinProperty.member.scheme": "Identifier scheme",
+  "builtinProperty.member.script": "Script",
+  "builtinProperty.member.selected": "Use this record",
+  "builtinProperty.member.seriesKey": "Series key",
+  "builtinProperty.member.service": "Account service",
+  "builtinProperty.member.serviceKey": "Custom service",
+  "builtinProperty.member.sources": "Sources",
+  "builtinProperty.member.state": "State",
+  "builtinProperty.member.status": "Status",
+  "builtinProperty.member.system": "Rank system",
+  "builtinProperty.member.target": "Target",
+  "builtinProperty.member.text": "Text",
+  "builtinProperty.member.time": "Time",
+  "builtinProperty.member.title": "Title",
+  "builtinProperty.member.unit": "Unit",
+  "builtinProperty.member.until": "Until (inclusive)",
+  "builtinProperty.member.url": "URL",
+  "builtinProperty.member.usage": "Usage",
+  "builtinProperty.member.value": "Value",
+  "builtinProperty.member.venue": "Venue",
+  "builtinProperty.member.version": "Version",
+  "builtinProperty.member.versionOf": "Version of",
+  "builtinProperty.member.volume": "Volume",
+  "builtinProperty.member.weekStart": "Week starts on",
+  "builtinProperty.member.work": "Work",
+  "builtinProperty.member.year": "Year",
+  "builtinProperty.member.zone": "Time zone",
+  "builtinProperty.member.zoneVersion": "Time-zone version",
+  "builtinProperty.member.contributors": "Authors and contributors",
+  "builtinProperty.member.identifiers": "Identifiers",
+  "builtinProperty.member.range": "Time range",
+  "builtinProperty.member.start": "Start",
+  "builtinProperty.choice.personal": "Personal",
+  "builtinProperty.choice.work": "Work",
+  "builtinProperty.choice.other": "Other",
+  "builtinProperty.choice.ordinary": "Ordinary",
+  "builtinProperty.choice.legal": "Legal",
+  "builtinProperty.choice.former": "Former",
+  "builtinProperty.choice.alias": "Alias",
+  "builtinProperty.choice.transliteration": "Transliteration",
+  "builtinProperty.choice.wechat": "WeChat",
+  "builtinProperty.choice.qq": "QQ",
+  "builtinProperty.choice.x": "X",
+  "builtinProperty.choice.facebook": "Facebook",
+  "builtinProperty.choice.custom": "Custom",
+  "builtinProperty.choice.birth": "Birth",
+  "builtinProperty.choice.death": "Death",
+  "builtinProperty.choice.employmentStart": "Employment start",
+  "builtinProperty.choice.graduation": "Graduation",
+  "builtinProperty.choice.marriage": "Marriage",
+  "builtinProperty.choice.height": "Height",
+  "builtinProperty.choice.weight": "Weight",
+  "builtinProperty.choice.draft": "Draft",
+  "builtinProperty.choice.accepted": "Accepted",
+  "builtinProperty.choice.published": "Published",
+  "builtinProperty.choice.article": "Article",
+  "builtinProperty.choice.book": "Book",
+  "builtinProperty.choice.report": "Report",
+  "builtinProperty.choice.standard": "Standard",
+  "builtinProperty.choice.dataset": "Dataset",
+  "builtinProperty.choice.chapter": "Chapter",
+  "builtinProperty.choice.thesis": "Thesis",
+  "builtinProperty.choice.web": "Web page",
+  "builtinProperty.choice.day": "Day",
+  "builtinProperty.choice.week": "Week",
+  "builtinProperty.choice.month": "Month",
+  "builtinProperty.choice.quarter": "Quarter",
+  "builtinProperty.choice.year": "Year",
+  "builtinProperty.choice.MO": "Monday",
+  "builtinProperty.choice.TU": "Tuesday",
+  "builtinProperty.choice.WE": "Wednesday",
+  "builtinProperty.choice.TH": "Thursday",
+  "builtinProperty.choice.FR": "Friday",
+  "builtinProperty.choice.SA": "Saturday",
+  "builtinProperty.choice.SU": "Sunday",
+  "builtinProperty.choice.cancel": "Cancel",
+  "builtinProperty.choice.replace": "Replace",
+  "builtinProperty.choice.tentative": "Tentative",
+  "builtinProperty.choice.confirmed": "Confirmed",
+  "builtinProperty.choice.cancelled": "Cancelled",
+  "builtinProperty.choice.daily": "Daily",
+  "builtinProperty.choice.weekly": "Weekly",
+  "builtinProperty.choice.monthly": "Monthly",
+  "builtinProperty.choice.yearly": "Yearly",
+  "builtinProperty.choice.earlier": "Earlier time",
+  "builtinProperty.choice.later": "Later time",
+  "builtinProperty.choice.skip": "Skip",
+  "builtinProperty.choice.extendedRelative": "Extended relative",
+  "builtinProperty.choice.acquaintance": "Acquaintance",
+  "builtinProperty.choice.classmate": "Classmate",
+  "builtinProperty.choice.friend": "Friend",
+  "builtinProperty.choice.colleague": "Colleague",
+  "builtinProperty.choice.absolute": "Specific time",
+  "builtinProperty.choice.dueBefore": "Before due time",
+  "builtinProperty.choice.dueDay": "On due day",
+  "builtinProperty.choice.open": "Open",
+  "builtinProperty.choice.done": "Done",
+  "builtinProperty.choice.low": "Low",
+  "builtinProperty.choice.normal": "Normal",
+  "builtinProperty.choice.high": "High",
+  "builtinProperty.choice.urgent": "Urgent",
+  "nativeEditor.customEnumValue": "Custom value",
+  "nativeEditor.customEnumLabel": "{label} · Custom value"
 };

@@ -1,3 +1,4 @@
+import { schemaFieldLabel } from "./builtin-property-labels";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { readNoteProjection } from "./data-projection-read";
 import { sameSourceInput, sourceInputBasis } from "./source-input-basis";
@@ -1597,7 +1598,7 @@ export class QueryPanel {
             summary.checked = this.preference.summaries;
             thumbnails.checked = this.preference.thumbnails;
             const sortValue = this.preference.sort === "title" ? "@title" : this.preference.fieldBindings?.[this.preference.sort] ?? this.fieldByKey(this.preference.sort) ?? this.preference.sort;
-            updateQueryChoices(sort, [{ value: "@title", label: message("queryColumn.title") }, ...(this.schema?.fields.filter(field => { const shape = resolveShape(field.shape, this.schema!); return shape.kind === "scalar" || shape.kind === "enum"; }).map(field => ({ value: field.id, label: fieldNames[field.key] ?? field.key })) ?? [])], sortValue);
+            updateQueryChoices(sort, [{ value: "@title", label: message("queryColumn.title") }, ...(this.schema?.fields.filter(field => { const shape = resolveShape(field.shape, this.schema!); return shape.kind === "scalar" || shape.kind === "enum"; }).map(field => ({ value: field.id, label: schemaFieldLabel(this.schema!, field) })) ?? [])], sortValue);
             sort.disabled = descending.disabled = !!selected || !!this.exactPlan;
             setUiText(descending, this.preference.descending ? message("queryPanel.descendingToggle") : message("queryPanel.ascendingToggle"));
         });
@@ -1764,7 +1765,7 @@ export class QueryPanel {
                 builder.open = false;
             }
             updateQueryChoices(type, [{ value: "", label: message("queryFilter.addTypePlaceholder") }, ...(schema?.types.map(item => { const alias = Object.entries(schema.aliases).find(([, id]) => id === item.id)?.[0] ?? item.id; return { value: item.id, label: typeNames[alias] ?? alias }; }) ?? [])]);
-            const choices = fields.map(item => ({ value: item.id, label: fieldNames[item.key] ?? item.key }));
+            const choices = fields.map(item => ({ value: item.id, label: schemaFieldLabel(this.schema!, item) }));
             const fieldValid = updateQueryChoices(field, choices), groupValid = updateQueryChoices(groupKey, [{ value: "", label: message("queryAggregate.noFieldGrouping") }, ...choices]), amountValid = updateQueryChoices(amount, choices);
             updateBranch(reset);
             filterMessage.hidden = fieldValid;
@@ -1778,7 +1779,7 @@ export class QueryPanel {
                 if (!row) {
                     const input = ui("input");
                     input.type = "checkbox";
-                    row = { input, label: labeled(fieldNames[item.key] ?? item.key, input), key: item.key };
+                    row = { input, label: labeled(schemaFieldLabel(this.schema!, item), input), key: item.key };
                     columnRows.set(item.id, row);
                     columns.append(row.label);
                     input.onchange = () => {
@@ -1801,7 +1802,7 @@ export class QueryPanel {
                 }
                 row.key = item.key;
                 if (row.label.firstChild?.nodeType === 3)
-                    setUiText(row.label.firstChild, fieldNames[item.key] ?? item.key);
+                    setUiText(row.label.firstChild, schemaFieldLabel(this.schema!, item));
                 setUiAttr(row.label, "title", "");
                 const binding = this.preference.fieldBindings?.[item.key];
                 row.input.checked = this.preference.columns.includes(item.key) && (!binding || binding === item.id);
@@ -2439,13 +2440,13 @@ export class QueryPanel {
                 if (!["scalar", "enum", "union"].includes(shape.kind) && field.key !== "tags")
                     continue;
                 const key = JSON.stringify([this.root, row.entityKey, field.id]), binding = JSON.stringify([field.shape, this.schema.definitions]), draft = this.inlineDrafts.get(key) ?? { value: structuredClone(cell.value), raw: {}, binding, revision: 0 };
-                section.append(ui("strong", "", fieldNames[field.key] ?? field.key));
+                section.append(ui("strong", "", schemaFieldLabel(this.schema!, field)));
                 if (draft.binding !== binding) {
                     section.append(ui("p", "data-warning", message("queryEdit.fieldShapeChanged")), ui("pre", "", JSON.stringify(draft, null, 2)), this.action(message("queryEdit.discardOldFieldInput"), () => { this.inlineDrafts.delete(key); this.renderResults(); }));
                     edit.append(section);
                     continue;
                 }
-                section.append(valueEditor(field.shape, draft.value, this.schema, next => this.retainInlineDraft(key, draft, next), displayMessage("queryEdit.resultFieldLabel", { p0: uiDisplayParameter(fieldNames[field.key] ?? field.key) }), { fieldId: field.id, path: [] }, 0, this.tagReferences));
+                section.append(valueEditor(field.shape, draft.value, this.schema, next => this.retainInlineDraft(key, draft, next), displayMessage("queryEdit.resultFieldLabel", { p0: uiDisplayParameter(schemaFieldLabel(this.schema!, field)) }), { fieldId: field.id, path: [] }, 0, this.tagReferences));
                 if (field.key === "tags" && this.root)
                     section.append(this.action(message("queryEdit.readTagCatalog"), async () => { const root = this.root!, generation = this.generation; await loadTagFormReferences(this.host, root, this.tagReferences, this.element, () => root === this.root && generation === this.generation); }));
                 for (const [id, control] of nativeFormControls(section))

@@ -1,3 +1,4 @@
+import { schemaFieldLabel } from "./builtin-property-labels";
 import { uiDisplayParameter } from "./ui-locale";
 import { displayMessage } from "./ui-locale";
 import type { AuthorInputSession } from "./author-input";
@@ -14,7 +15,7 @@ export interface PlanField {
 export function queryPlanFields(schema: DataSchema | null, plan: QueryPlan): PlanField[] {
     const fields: PlanField[] = [{ key: "title", expr: "title", label: message("queryColumn.title"), shape: { kind: "scalar", semantic: "text" } }];
     for (const field of schema?.fields ?? [])
-        fields.push({ key: field.key, expr: `field(${JSON.stringify(field.id)})`, label: fieldNames[field.key] ?? field.key, shape: field.shape });
+        fields.push({ key: field.key, expr: `field(${JSON.stringify(field.id)})`, label: schemaFieldLabel(schema!, field), shape: field.shape });
     for (const column of plan.select)
         if (!fields.some(field => field.expr === column.expr))
             fields.push({ key: column.name, expr: column.expr, label: fieldNames[column.name] ?? column.name, shape: { kind: "scalar", semantic: "text" } });

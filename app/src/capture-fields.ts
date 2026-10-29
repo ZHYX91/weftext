@@ -1,8 +1,9 @@
+import { schemaFieldLabel } from "./builtin-property-labels";
 import type { AuthorInputFactory, AuthorInputSession, AuthorInputSnapshot } from "./author-input";
 import { CaptureController, type CaptureMutableRecord } from "./capture-controller";
 import type { CaptureAdvancedControls } from "./capture-form";
 import { captureString, captureText, restoreCaptureField, type CaptureInput, type CaptureRawInput } from "./capture-draft-state";
-import { action, emptyNativeValue, fieldNames, fieldsForTypes, nativeControlAddress, nativeFormControls, typeNames, ui, valueEditor, type DataSchema, type FormReferences, type NativeValue } from "./native-value-form";
+import { action, emptyNativeValue, fieldsForTypes, nativeControlAddress, nativeFormControls, typeNames, ui, valueEditor, type DataSchema, type FormReferences, type NativeValue } from "./native-value-form";
 import { reminderForm, type ReminderForm } from "./reminder-form";
 import { newReminder } from "./reminder-values";
 import { disposeUiTree, errorUiText, message, replaceUiChildren, setUiValidity, t, UiError, type UiText } from "./ui-locale";
@@ -70,7 +71,7 @@ export class CaptureFields<R extends CaptureMutableRecord> implements CaptureAdv
     const selected=fieldsForTypes(this.view.schema,input.typeIds);
     for(const {field,required} of selected) {
       if(this.view.allowedFields && !this.view.allowedFields.includes(field.id))continue;
-      const row=ui("section","capture-field");const label:UiText=fieldNames[field.key]??field.key;row.append(ui("h4","",label));this.fields.append(row);
+      const row=ui("section","capture-field");const label:UiText=schemaFieldLabel(this.view.schema,field);row.append(ui("h4","",label));this.fields.append(row);
       const stored=input.fields.find(value=>value.fieldId===field.id);
       if(!stored) {
         const add=action(message("quickCapture.fillField"),()=>{

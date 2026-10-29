@@ -450,6 +450,90 @@ mod tests {
         );
     }
     #[test]
+    fn rich_workflow_independent_symmetric_assertions_keep_each_real_author_regardless_of_id_order()
+    {
+        let schema = weftext_data::Schema::bundled().unwrap();
+        for (first, second) in [(A, B), (B, A)] {
+            let mut first_node = node(first, "");
+            first_node.source = format!(
+                "#metadata((id: \"{first}\", types: (\"person\",), siblings: ((target: (ref: \"{}\"), note: \"first assertion\"),))) <weftext>",
+                uri(second)
+            );
+            let mut second_node = node(second, "");
+            second_node.source = format!(
+                "#metadata((id: \"{second}\", types: (\"person\",), siblings: ((target: (ref: \"{}\"), note: \"independent assertion\"),))) <weftext>",
+                uri(first)
+            );
+            let fields = BTreeSet::from(["people/siblings".into()]);
+            let relations = BTreeSet::from(["people/sibling".into()]);
+            let mut definitions =
+                graph_relations(&first_node, &schema, Some(&fields), Some(&relations));
+            definitions.extend(graph_relations(
+                &second_node,
+                &schema,
+                Some(&fields),
+                Some(&relations),
+            ));
+            assert_eq!(definitions.len(), 2);
+            let path = vec![
+                r#"{"kind":"index","index":0}"#.into(),
+                r#"{"kind":"member","key":"target"}"#.into(),
+                r#"{"kind":"member","key":"ref"}"#.into(),
+            ];
+            let properties = [
+                PropertyReferenceInput {
+                    source: owner(first),
+                    field_id: "people/siblings".into(),
+                    item_path: path.clone(),
+                    target: uri(second),
+                },
+                PropertyReferenceInput {
+                    source: owner(second),
+                    field_id: "people/siblings".into(),
+                    item_path: path.clone(),
+                    target: uri(first),
+                },
+            ];
+            let inv = inventory(vec![first_node.clone(), second_node.clone()]);
+            let graph = relationship_graph(&inv, &properties, &definitions, true, 100, 100);
+            assert_eq!(
+                graph.edges.len(),
+                2,
+                "independent sources are never replaced by a representative"
+            );
+            assert_ne!(graph.edges[0].key, graph.edges[1].key);
+            for edge in &graph.edges {
+                assert_eq!(edge.author_source, edge.source);
+                assert_eq!(edge.field_id.as_deref(), Some("people/siblings"));
+                assert_eq!(edge.item_path, path);
+                assert_eq!(edge.direction, "symmetric");
+                assert!(!edge.derived);
+                let actual = if edge.author_source == graph_key(&owner(first)) {
+                    &first_node
+                } else {
+                    &second_node
+                };
+                assert_eq!(
+                    edge.source_hash,
+                    weftext_engine::source_hash(&actual.source)
+                );
+            }
+            // With only one selected assertion, symmetry cannot manufacture another author fact.
+            let one = relationship_graph(&inv, &properties[..1], &definitions, true, 100, 100);
+            assert_eq!(one.edges.len(), 1);
+            assert_eq!(one.edges[0].author_source, graph_key(&owner(first)));
+            assert!(
+                graph_relations(
+                    &first_node,
+                    &schema,
+                    Some(&BTreeSet::new()),
+                    Some(&relations)
+                )
+                .is_empty()
+            );
+        }
+    }
+    #[test]
     fn independent_relation_and_field_grants_precede_semantic_projection() {
         let source = node(A, "");
         let schema = weftext_data::Schema::bundled().unwrap();

@@ -1,3 +1,4 @@
+import { schemaFieldLabel } from "./builtin-property-labels";
 import { uiDisplayParameter } from "./ui-locale";
 import { message, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { AuthorInputScopes, type AuthorInputFactory } from "./author-input";
@@ -293,13 +294,16 @@ export class HostedFields {
         if (!draft || !this.selected)
             return;
         const selected = this.selected, epoch = this.epoch, inputs = this.inputScopes.get(draft, { kind: "field", resource: selected.resource, fieldId: selected.fieldId }, () => this.epoch === epoch && this.draft === draft && this.selected === selected);
-        this.editor.append(ui("h3", "", `${this.selected.resource} · ${profile?.field.key ?? this.selected.fieldId}`));
+        // The authorized profile supplies one expanded shape; captions never require reading the whole schema.
+        const presentedField = profile && { id: selected.fieldId, key: profile.field.key, shape: profile.field.shape, nullable: profile.field.nullable };
+        const editorSchema: DataSchema = { ...schema, fields: presentedField ? [presentedField] : [] };
+        this.editor.append(ui("h3", "", () => `${selected.resource} · ${uiTextValue(presentedField ? schemaFieldLabel(editorSchema, presentedField) : selected.fieldId)}`));
         this.editor.append(ui("p", "", profile ? displayMessage("hostedFields.currentCell", { p0: uiDisplayParameter(this.cellText(profile.field.cell)) }) : message("hostedFields.currentReadUnavailable")));
         const form = ui("fieldset");
         form.disabled = this.busy || !profile?.field.writable || !!draft.pending || !!draft.tagCreation;
         const shape = profile?.field.shape ?? draft.shape;
         if (shape)
-            form.append(valueEditor(shape, draft.value, schema, value => {
+            form.append(valueEditor(shape, draft.value, editorSchema, value => {
                 draft.value = value;
                 try {
                     this.retain();

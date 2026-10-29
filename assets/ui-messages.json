@@ -54816,6 +54816,1208 @@
       "zh-CN": "先完成记录中的无效输入，再添加、移除或清空成员；原输入已保留。",
       "en-US": "Complete invalid record input before adding, removing or clearing members; your input is retained.",
       "params": {}
+    },
+    "builtinProperty.field.names": {
+      "zh-CN": "名称",
+      "en-US": "Names",
+      "params": {}
+    },
+    "builtinProperty.field.phones": {
+      "zh-CN": "电话",
+      "en-US": "Phones",
+      "params": {}
+    },
+    "builtinProperty.field.emails": {
+      "zh-CN": "电子邮件",
+      "en-US": "Email addresses",
+      "params": {}
+    },
+    "builtinProperty.field.addresses": {
+      "zh-CN": "地址",
+      "en-US": "Addresses",
+      "params": {}
+    },
+    "builtinProperty.field.websites": {
+      "zh-CN": "网站",
+      "en-US": "Websites",
+      "params": {}
+    },
+    "builtinProperty.field.aliases": {
+      "zh-CN": "别名",
+      "en-US": "Aliases",
+      "params": {}
+    },
+    "builtinProperty.field.tags": {
+      "zh-CN": "标签",
+      "en-US": "Tags",
+      "params": {}
+    },
+    "builtinProperty.field.accounts": {
+      "zh-CN": "账号",
+      "en-US": "Accounts",
+      "params": {}
+    },
+    "builtinProperty.field.nationalityStates": {
+      "zh-CN": "国籍记录",
+      "en-US": "Nationality records",
+      "params": {}
+    },
+    "builtinProperty.field.legalSexStates": {
+      "zh-CN": "法定性别记录",
+      "en-US": "Legal sex records",
+      "params": {}
+    },
+    "builtinProperty.field.genderIdentityStates": {
+      "zh-CN": "性别认同记录",
+      "en-US": "Gender identity records",
+      "params": {}
+    },
+    "builtinProperty.field.professions": {
+      "zh-CN": "职业",
+      "en-US": "Professions",
+      "params": {}
+    },
+    "builtinProperty.field.engagements": {
+      "zh-CN": "任职记录",
+      "en-US": "Employment records",
+      "params": {}
+    },
+    "builtinProperty.field.lifeEvents": {
+      "zh-CN": "生平事件",
+      "en-US": "Life events",
+      "params": {}
+    },
+    "builtinProperty.field.measurements": {
+      "zh-CN": "测量记录",
+      "en-US": "Measurements",
+      "params": {}
+    },
+    "builtinProperty.field.avatar": {
+      "zh-CN": "头像",
+      "en-US": "Avatar",
+      "params": {}
+    },
+    "builtinProperty.field.parents": {
+      "zh-CN": "父母",
+      "en-US": "Parents",
+      "params": {}
+    },
+    "builtinProperty.field.spouses": {
+      "zh-CN": "配偶",
+      "en-US": "Spouses",
+      "params": {}
+    },
+    "builtinProperty.field.siblings": {
+      "zh-CN": "兄弟姐妹",
+      "en-US": "Siblings",
+      "params": {}
+    },
+    "builtinProperty.field.guardians": {
+      "zh-CN": "监护人",
+      "en-US": "Guardians",
+      "params": {}
+    },
+    "builtinProperty.field.managers": {
+      "zh-CN": "上级",
+      "en-US": "Managers",
+      "params": {}
+    },
+    "builtinProperty.field.mentors": {
+      "zh-CN": "导师",
+      "en-US": "Mentors",
+      "params": {}
+    },
+    "builtinProperty.field.familyRelations": {
+      "zh-CN": "亲属关系",
+      "en-US": "Family relationships",
+      "params": {}
+    },
+    "builtinProperty.field.socialRelations": {
+      "zh-CN": "社会关系",
+      "en-US": "Social relationships",
+      "params": {}
+    },
+    "builtinProperty.field.professionalRelations": {
+      "zh-CN": "职业关系",
+      "en-US": "Professional relationships",
+      "params": {}
+    },
+    "builtinProperty.field.organizationStates": {
+      "zh-CN": "组织状态记录",
+      "en-US": "Organization status records",
+      "params": {}
+    },
+    "builtinProperty.field.identifiers": {
+      "zh-CN": "标识符",
+      "en-US": "Identifiers",
+      "params": {}
+    },
+    "builtinProperty.field.classifications": {
+      "zh-CN": "分类",
+      "en-US": "Classifications",
+      "params": {}
+    },
+    "builtinProperty.field.sites": {
+      "zh-CN": "场所",
+      "en-US": "Sites",
+      "params": {}
+    },
+    "builtinProperty.field.parent": {
+      "zh-CN": "上级组织",
+      "en-US": "Parent organization",
+      "params": {}
+    },
+    "builtinProperty.field.governs": {
+      "zh-CN": "治理的组织",
+      "en-US": "Governed organizations",
+      "params": {}
+    },
+    "builtinProperty.field.owns": {
+      "zh-CN": "拥有的组织",
+      "en-US": "Owned organizations",
+      "params": {}
+    },
+    "builtinProperty.field.alliedWith": {
+      "zh-CN": "联盟组织",
+      "en-US": "Allied organizations",
+      "params": {}
+    },
+    "builtinProperty.field.relatedOrganizations": {
+      "zh-CN": "相关组织",
+      "en-US": "Related organizations",
+      "params": {}
+    },
+    "builtinProperty.field.brandOf": {
+      "zh-CN": "所属品牌组织",
+      "en-US": "Brand owner",
+      "params": {}
+    },
+    "builtinProperty.field.businessGuidedBy": {
+      "zh-CN": "业务指导组织",
+      "en-US": "Business guidance organizations",
+      "params": {}
+    },
+    "builtinProperty.field.jointlyLedBy": {
+      "zh-CN": "联合领导组织",
+      "en-US": "Joint leadership organizations",
+      "params": {}
+    },
+    "builtinProperty.field.memberOf": {
+      "zh-CN": "所属成员组织",
+      "en-US": "Membership organizations",
+      "params": {}
+    },
+    "builtinProperty.field.subsidiaryOf": {
+      "zh-CN": "母公司",
+      "en-US": "Parent companies",
+      "params": {}
+    },
+    "builtinProperty.field.supervisedBy": {
+      "zh-CN": "监督组织",
+      "en-US": "Supervising organizations",
+      "params": {}
+    },
+    "builtinProperty.field.territoriallyAdministeredBy": {
+      "zh-CN": "属地管理组织",
+      "en-US": "Territorial administration organizations",
+      "params": {}
+    },
+    "builtinProperty.field.status": {
+      "zh-CN": "状态",
+      "en-US": "Status",
+      "params": {}
+    },
+    "builtinProperty.field.priority": {
+      "zh-CN": "优先级",
+      "en-US": "Priority",
+      "params": {}
+    },
+    "builtinProperty.field.start": {
+      "zh-CN": "开始",
+      "en-US": "Start",
+      "params": {}
+    },
+    "builtinProperty.field.due": {
+      "zh-CN": "到期",
+      "en-US": "Due",
+      "params": {}
+    },
+    "builtinProperty.field.completedAt": {
+      "zh-CN": "完成时间",
+      "en-US": "Completed at",
+      "params": {}
+    },
+    "builtinProperty.field.dependencies": {
+      "zh-CN": "依赖任务",
+      "en-US": "Task dependencies",
+      "params": {}
+    },
+    "builtinProperty.field.project": {
+      "zh-CN": "项目",
+      "en-US": "Project",
+      "params": {}
+    },
+    "builtinProperty.field.publication": {
+      "zh-CN": "出版信息",
+      "en-US": "Publication",
+      "params": {}
+    },
+    "builtinProperty.field.period": {
+      "zh-CN": "周期",
+      "en-US": "Period",
+      "params": {}
+    },
+    "builtinProperty.field.range": {
+      "zh-CN": "时间范围",
+      "en-US": "Time range",
+      "params": {}
+    },
+    "builtinProperty.field.eventStatus": {
+      "zh-CN": "事件状态",
+      "en-US": "Event status",
+      "params": {}
+    },
+    "builtinProperty.field.recurrence": {
+      "zh-CN": "重复规则",
+      "en-US": "Recurrence",
+      "params": {}
+    },
+    "builtinProperty.field.participants": {
+      "zh-CN": "参与者",
+      "en-US": "Participants",
+      "params": {}
+    },
+    "builtinProperty.field.reminders": {
+      "zh-CN": "提醒意图",
+      "en-US": "Reminder intents",
+      "params": {}
+    },
+    "builtinProperty.field.reminder": {
+      "zh-CN": "提醒",
+      "en-US": "Reminder",
+      "params": {}
+    },
+    "builtinProperty.member.abstract": {
+      "zh-CN": "摘要",
+      "en-US": "Abstract",
+      "params": {}
+    },
+    "builtinProperty.member.accessed": {
+      "zh-CN": "访问时间",
+      "en-US": "Accessed at",
+      "params": {}
+    },
+    "builtinProperty.member.action": {
+      "zh-CN": "操作",
+      "en-US": "Action",
+      "params": {}
+    },
+    "builtinProperty.member.address": {
+      "zh-CN": "地址",
+      "en-US": "Address",
+      "params": {}
+    },
+    "builtinProperty.member.affiliations": {
+      "zh-CN": "所属机构",
+      "en-US": "Affiliations",
+      "params": {}
+    },
+    "builtinProperty.member.agent": {
+      "zh-CN": "贡献者",
+      "en-US": "Contributor",
+      "params": {}
+    },
+    "builtinProperty.member.alternativeTitles": {
+      "zh-CN": "其他标题",
+      "en-US": "Alternative titles",
+      "params": {}
+    },
+    "builtinProperty.member.at": {
+      "zh-CN": "时间",
+      "en-US": "At",
+      "params": {}
+    },
+    "builtinProperty.member.before": {
+      "zh-CN": "提前时长",
+      "en-US": "Advance duration",
+      "params": {}
+    },
+    "builtinProperty.member.byMonth": {
+      "zh-CN": "月份",
+      "en-US": "Months",
+      "params": {}
+    },
+    "builtinProperty.member.byMonthDay": {
+      "zh-CN": "每月日期",
+      "en-US": "Days of month",
+      "params": {}
+    },
+    "builtinProperty.member.byWeekday": {
+      "zh-CN": "星期",
+      "en-US": "Weekdays",
+      "params": {}
+    },
+    "builtinProperty.member.calendar": {
+      "zh-CN": "历法",
+      "en-US": "Calendar",
+      "params": {}
+    },
+    "builtinProperty.member.calendarVersion": {
+      "zh-CN": "历法版本",
+      "en-US": "Calendar version",
+      "params": {}
+    },
+    "builtinProperty.member.channel": {
+      "zh-CN": "渠道",
+      "en-US": "Channel",
+      "params": {}
+    },
+    "builtinProperty.member.citationKey": {
+      "zh-CN": "建议引用键",
+      "en-US": "Suggested citation key",
+      "params": {}
+    },
+    "builtinProperty.member.clock": {
+      "zh-CN": "当地时间",
+      "en-US": "Local time",
+      "params": {}
+    },
+    "builtinProperty.member.confidence": {
+      "zh-CN": "置信度",
+      "en-US": "Confidence",
+      "params": {}
+    },
+    "builtinProperty.member.container": {
+      "zh-CN": "刊物或合集",
+      "en-US": "Publication or collection",
+      "params": {}
+    },
+    "builtinProperty.member.context": {
+      "zh-CN": "相关组织",
+      "en-US": "Organization context",
+      "params": {}
+    },
+    "builtinProperty.member.count": {
+      "zh-CN": "次数",
+      "en-US": "Count",
+      "params": {}
+    },
+    "builtinProperty.member.creditedAs": {
+      "zh-CN": "署名",
+      "en-US": "Credited as",
+      "params": {}
+    },
+    "builtinProperty.member.custom": {
+      "zh-CN": "自定义关系",
+      "en-US": "Custom relationship",
+      "params": {}
+    },
+    "builtinProperty.member.customKind": {
+      "zh-CN": "自定义类型",
+      "en-US": "Custom kind",
+      "params": {}
+    },
+    "builtinProperty.member.customLabel": {
+      "zh-CN": "自定义用途",
+      "en-US": "Custom usage label",
+      "params": {}
+    },
+    "builtinProperty.member.day": {
+      "zh-CN": "日",
+      "en-US": "Day",
+      "params": {}
+    },
+    "builtinProperty.member.department": {
+      "zh-CN": "部门",
+      "en-US": "Department",
+      "params": {}
+    },
+    "builtinProperty.member.description": {
+      "zh-CN": "说明",
+      "en-US": "Description",
+      "params": {}
+    },
+    "builtinProperty.member.during": {
+      "zh-CN": "有效期",
+      "en-US": "Validity period",
+      "params": {}
+    },
+    "builtinProperty.member.employer": {
+      "zh-CN": "任职组织",
+      "en-US": "Employer",
+      "params": {}
+    },
+    "builtinProperty.member.end": {
+      "zh-CN": "结束",
+      "en-US": "End",
+      "params": {}
+    },
+    "builtinProperty.member.endExclusive": {
+      "zh-CN": "结束（不含）",
+      "en-US": "End (exclusive)",
+      "params": {}
+    },
+    "builtinProperty.member.entries": {
+      "zh-CN": "条目",
+      "en-US": "Entries",
+      "params": {}
+    },
+    "builtinProperty.member.eventTime": {
+      "zh-CN": "事件时间",
+      "en-US": "Event time",
+      "params": {}
+    },
+    "builtinProperty.member.exDates": {
+      "zh-CN": "排除日期",
+      "en-US": "Excluded dates",
+      "params": {}
+    },
+    "builtinProperty.member.exceptions": {
+      "zh-CN": "单次例外",
+      "en-US": "Occurrence exceptions",
+      "params": {}
+    },
+    "builtinProperty.member.family": {
+      "zh-CN": "姓",
+      "en-US": "Family name",
+      "params": {}
+    },
+    "builtinProperty.member.fold": {
+      "zh-CN": "重复时刻选择",
+      "en-US": "Ambiguous-time choice",
+      "params": {}
+    },
+    "builtinProperty.member.fraction": {
+      "zh-CN": "小数秒",
+      "en-US": "Fractional seconds",
+      "params": {}
+    },
+    "builtinProperty.member.frequency": {
+      "zh-CN": "频率",
+      "en-US": "Frequency",
+      "params": {}
+    },
+    "builtinProperty.member.gap": {
+      "zh-CN": "缺失时刻处理",
+      "en-US": "Missing-time handling",
+      "params": {}
+    },
+    "builtinProperty.member.given": {
+      "zh-CN": "名",
+      "en-US": "Given name",
+      "params": {}
+    },
+    "builtinProperty.member.id": {
+      "zh-CN": "标识",
+      "en-US": "ID",
+      "params": {}
+    },
+    "builtinProperty.member.identifier": {
+      "zh-CN": "标识值",
+      "en-US": "Identifier",
+      "params": {}
+    },
+    "builtinProperty.member.interval": {
+      "zh-CN": "间隔",
+      "en-US": "Interval",
+      "params": {}
+    },
+    "builtinProperty.member.issue": {
+      "zh-CN": "期",
+      "en-US": "Issue",
+      "params": {}
+    },
+    "builtinProperty.member.issued": {
+      "zh-CN": "出版日期",
+      "en-US": "Issued date",
+      "params": {}
+    },
+    "builtinProperty.member.key": {
+      "zh-CN": "周期键",
+      "en-US": "Period key",
+      "params": {}
+    },
+    "builtinProperty.member.keywords": {
+      "zh-CN": "关键词",
+      "en-US": "Keywords",
+      "params": {}
+    },
+    "builtinProperty.member.kind": {
+      "zh-CN": "类型",
+      "en-US": "Kind",
+      "params": {}
+    },
+    "builtinProperty.member.label": {
+      "zh-CN": "用途",
+      "en-US": "Usage label",
+      "params": {}
+    },
+    "builtinProperty.member.language": {
+      "zh-CN": "语言",
+      "en-US": "Language",
+      "params": {}
+    },
+    "builtinProperty.member.leapMonth": {
+      "zh-CN": "闰月",
+      "en-US": "Leap month",
+      "params": {}
+    },
+    "builtinProperty.member.level": {
+      "zh-CN": "级别",
+      "en-US": "Level",
+      "params": {}
+    },
+    "builtinProperty.member.locator": {
+      "zh-CN": "来源位置",
+      "en-US": "Source location",
+      "params": {}
+    },
+    "builtinProperty.member.minutesBefore": {
+      "zh-CN": "提前分钟数",
+      "en-US": "Minutes before",
+      "params": {}
+    },
+    "builtinProperty.member.month": {
+      "zh-CN": "月",
+      "en-US": "Month",
+      "params": {}
+    },
+    "builtinProperty.member.note": {
+      "zh-CN": "备注",
+      "en-US": "Note",
+      "params": {}
+    },
+    "builtinProperty.member.number": {
+      "zh-CN": "号码",
+      "en-US": "Number",
+      "params": {}
+    },
+    "builtinProperty.member.observedAt": {
+      "zh-CN": "观测时间",
+      "en-US": "Observed at",
+      "params": {}
+    },
+    "builtinProperty.member.onset": {
+      "zh-CN": "原始开始时间",
+      "en-US": "Original onset",
+      "params": {}
+    },
+    "builtinProperty.member.ordinal": {
+      "zh-CN": "序号",
+      "en-US": "Ordinal",
+      "params": {}
+    },
+    "builtinProperty.member.pages": {
+      "zh-CN": "页码",
+      "en-US": "Pages",
+      "params": {}
+    },
+    "builtinProperty.member.position": {
+      "zh-CN": "职务",
+      "en-US": "Position",
+      "params": {}
+    },
+    "builtinProperty.member.precision": {
+      "zh-CN": "精度",
+      "en-US": "Precision",
+      "params": {}
+    },
+    "builtinProperty.member.preferred": {
+      "zh-CN": "首选名称",
+      "en-US": "Preferred name",
+      "params": {}
+    },
+    "builtinProperty.member.preset": {
+      "zh-CN": "预设关系",
+      "en-US": "Preset relationship",
+      "params": {}
+    },
+    "builtinProperty.member.publicationHistory": {
+      "zh-CN": "出版状态记录",
+      "en-US": "Publication status history",
+      "params": {}
+    },
+    "builtinProperty.member.quantity": {
+      "zh-CN": "量值",
+      "en-US": "Quantity",
+      "params": {}
+    },
+    "builtinProperty.member.rDates": {
+      "zh-CN": "额外日期",
+      "en-US": "Additional dates",
+      "params": {}
+    },
+    "builtinProperty.member.rank": {
+      "zh-CN": "职级",
+      "en-US": "Rank",
+      "params": {}
+    },
+    "builtinProperty.member.ref": {
+      "zh-CN": "笔记引用",
+      "en-US": "Note reference",
+      "params": {}
+    },
+    "builtinProperty.member.reference": {
+      "zh-CN": "引用",
+      "en-US": "Reference",
+      "params": {}
+    },
+    "builtinProperty.member.relationship": {
+      "zh-CN": "关系类别",
+      "en-US": "Relationship category",
+      "params": {}
+    },
+    "builtinProperty.member.resource": {
+      "zh-CN": "资源",
+      "en-US": "Resource",
+      "params": {}
+    },
+    "builtinProperty.member.resources": {
+      "zh-CN": "资源",
+      "en-US": "Resources",
+      "params": {}
+    },
+    "builtinProperty.member.revision": {
+      "zh-CN": "修订",
+      "en-US": "Revision",
+      "params": {}
+    },
+    "builtinProperty.member.role": {
+      "zh-CN": "角色",
+      "en-US": "Role",
+      "params": {}
+    },
+    "builtinProperty.member.roles": {
+      "zh-CN": "贡献角色",
+      "en-US": "Contributor roles",
+      "params": {}
+    },
+    "builtinProperty.member.rule": {
+      "zh-CN": "计算规则",
+      "en-US": "Calculation rule",
+      "params": {}
+    },
+    "builtinProperty.member.schema": {
+      "zh-CN": "结构定义",
+      "en-US": "Schema",
+      "params": {}
+    },
+    "builtinProperty.member.scheme": {
+      "zh-CN": "标识体系",
+      "en-US": "Identifier scheme",
+      "params": {}
+    },
+    "builtinProperty.member.script": {
+      "zh-CN": "文字系统",
+      "en-US": "Script",
+      "params": {}
+    },
+    "builtinProperty.member.selected": {
+      "zh-CN": "选用此项",
+      "en-US": "Use this record",
+      "params": {}
+    },
+    "builtinProperty.member.seriesKey": {
+      "zh-CN": "系列键",
+      "en-US": "Series key",
+      "params": {}
+    },
+    "builtinProperty.member.service": {
+      "zh-CN": "账号服务",
+      "en-US": "Account service",
+      "params": {}
+    },
+    "builtinProperty.member.serviceKey": {
+      "zh-CN": "自定义服务",
+      "en-US": "Custom service",
+      "params": {}
+    },
+    "builtinProperty.member.sources": {
+      "zh-CN": "来源",
+      "en-US": "Sources",
+      "params": {}
+    },
+    "builtinProperty.member.state": {
+      "zh-CN": "状态",
+      "en-US": "State",
+      "params": {}
+    },
+    "builtinProperty.member.status": {
+      "zh-CN": "状态",
+      "en-US": "Status",
+      "params": {}
+    },
+    "builtinProperty.member.system": {
+      "zh-CN": "职级体系",
+      "en-US": "Rank system",
+      "params": {}
+    },
+    "builtinProperty.member.target": {
+      "zh-CN": "目标",
+      "en-US": "Target",
+      "params": {}
+    },
+    "builtinProperty.member.text": {
+      "zh-CN": "文字",
+      "en-US": "Text",
+      "params": {}
+    },
+    "builtinProperty.member.time": {
+      "zh-CN": "时刻",
+      "en-US": "Time",
+      "params": {}
+    },
+    "builtinProperty.member.title": {
+      "zh-CN": "标题",
+      "en-US": "Title",
+      "params": {}
+    },
+    "builtinProperty.member.unit": {
+      "zh-CN": "单位",
+      "en-US": "Unit",
+      "params": {}
+    },
+    "builtinProperty.member.until": {
+      "zh-CN": "截至（含）",
+      "en-US": "Until (inclusive)",
+      "params": {}
+    },
+    "builtinProperty.member.url": {
+      "zh-CN": "网址",
+      "en-US": "URL",
+      "params": {}
+    },
+    "builtinProperty.member.usage": {
+      "zh-CN": "用途",
+      "en-US": "Usage",
+      "params": {}
+    },
+    "builtinProperty.member.value": {
+      "zh-CN": "值",
+      "en-US": "Value",
+      "params": {}
+    },
+    "builtinProperty.member.venue": {
+      "zh-CN": "发表载体",
+      "en-US": "Venue",
+      "params": {}
+    },
+    "builtinProperty.member.version": {
+      "zh-CN": "版本",
+      "en-US": "Version",
+      "params": {}
+    },
+    "builtinProperty.member.versionOf": {
+      "zh-CN": "所基于的作品",
+      "en-US": "Version of",
+      "params": {}
+    },
+    "builtinProperty.member.volume": {
+      "zh-CN": "卷",
+      "en-US": "Volume",
+      "params": {}
+    },
+    "builtinProperty.member.weekStart": {
+      "zh-CN": "一周起始日",
+      "en-US": "Week starts on",
+      "params": {}
+    },
+    "builtinProperty.member.work": {
+      "zh-CN": "作品",
+      "en-US": "Work",
+      "params": {}
+    },
+    "builtinProperty.member.year": {
+      "zh-CN": "年",
+      "en-US": "Year",
+      "params": {}
+    },
+    "builtinProperty.member.zone": {
+      "zh-CN": "时区",
+      "en-US": "Time zone",
+      "params": {}
+    },
+    "builtinProperty.member.zoneVersion": {
+      "zh-CN": "时区版本",
+      "en-US": "Time-zone version",
+      "params": {}
+    },
+    "builtinProperty.member.contributors": {
+      "zh-CN": "作者与贡献者",
+      "en-US": "Authors and contributors",
+      "params": {}
+    },
+    "builtinProperty.member.identifiers": {
+      "zh-CN": "标识符",
+      "en-US": "Identifiers",
+      "params": {}
+    },
+    "builtinProperty.member.range": {
+      "zh-CN": "时间范围",
+      "en-US": "Time range",
+      "params": {}
+    },
+    "builtinProperty.member.start": {
+      "zh-CN": "开始",
+      "en-US": "Start",
+      "params": {}
+    },
+    "builtinProperty.choice.personal": {
+      "zh-CN": "个人",
+      "en-US": "Personal",
+      "params": {}
+    },
+    "builtinProperty.choice.work": {
+      "zh-CN": "工作",
+      "en-US": "Work",
+      "params": {}
+    },
+    "builtinProperty.choice.other": {
+      "zh-CN": "其他",
+      "en-US": "Other",
+      "params": {}
+    },
+    "builtinProperty.choice.ordinary": {
+      "zh-CN": "常用",
+      "en-US": "Ordinary",
+      "params": {}
+    },
+    "builtinProperty.choice.legal": {
+      "zh-CN": "法定",
+      "en-US": "Legal",
+      "params": {}
+    },
+    "builtinProperty.choice.former": {
+      "zh-CN": "曾用",
+      "en-US": "Former",
+      "params": {}
+    },
+    "builtinProperty.choice.alias": {
+      "zh-CN": "别名",
+      "en-US": "Alias",
+      "params": {}
+    },
+    "builtinProperty.choice.transliteration": {
+      "zh-CN": "音译",
+      "en-US": "Transliteration",
+      "params": {}
+    },
+    "builtinProperty.choice.wechat": {
+      "zh-CN": "微信",
+      "en-US": "WeChat",
+      "params": {}
+    },
+    "builtinProperty.choice.qq": {
+      "zh-CN": "QQ",
+      "en-US": "QQ",
+      "params": {}
+    },
+    "builtinProperty.choice.x": {
+      "zh-CN": "X",
+      "en-US": "X",
+      "params": {}
+    },
+    "builtinProperty.choice.facebook": {
+      "zh-CN": "Facebook",
+      "en-US": "Facebook",
+      "params": {}
+    },
+    "builtinProperty.choice.custom": {
+      "zh-CN": "自定义",
+      "en-US": "Custom",
+      "params": {}
+    },
+    "builtinProperty.choice.birth": {
+      "zh-CN": "出生",
+      "en-US": "Birth",
+      "params": {}
+    },
+    "builtinProperty.choice.death": {
+      "zh-CN": "去世",
+      "en-US": "Death",
+      "params": {}
+    },
+    "builtinProperty.choice.employmentStart": {
+      "zh-CN": "入职",
+      "en-US": "Employment start",
+      "params": {}
+    },
+    "builtinProperty.choice.graduation": {
+      "zh-CN": "毕业",
+      "en-US": "Graduation",
+      "params": {}
+    },
+    "builtinProperty.choice.marriage": {
+      "zh-CN": "结婚",
+      "en-US": "Marriage",
+      "params": {}
+    },
+    "builtinProperty.choice.height": {
+      "zh-CN": "身高",
+      "en-US": "Height",
+      "params": {}
+    },
+    "builtinProperty.choice.weight": {
+      "zh-CN": "体重",
+      "en-US": "Weight",
+      "params": {}
+    },
+    "builtinProperty.choice.draft": {
+      "zh-CN": "草稿",
+      "en-US": "Draft",
+      "params": {}
+    },
+    "builtinProperty.choice.accepted": {
+      "zh-CN": "已接受",
+      "en-US": "Accepted",
+      "params": {}
+    },
+    "builtinProperty.choice.published": {
+      "zh-CN": "已出版",
+      "en-US": "Published",
+      "params": {}
+    },
+    "builtinProperty.choice.article": {
+      "zh-CN": "文章",
+      "en-US": "Article",
+      "params": {}
+    },
+    "builtinProperty.choice.book": {
+      "zh-CN": "图书",
+      "en-US": "Book",
+      "params": {}
+    },
+    "builtinProperty.choice.report": {
+      "zh-CN": "报告",
+      "en-US": "Report",
+      "params": {}
+    },
+    "builtinProperty.choice.standard": {
+      "zh-CN": "标准",
+      "en-US": "Standard",
+      "params": {}
+    },
+    "builtinProperty.choice.dataset": {
+      "zh-CN": "数据集",
+      "en-US": "Dataset",
+      "params": {}
+    },
+    "builtinProperty.choice.chapter": {
+      "zh-CN": "章节",
+      "en-US": "Chapter",
+      "params": {}
+    },
+    "builtinProperty.choice.thesis": {
+      "zh-CN": "学位论文",
+      "en-US": "Thesis",
+      "params": {}
+    },
+    "builtinProperty.choice.web": {
+      "zh-CN": "网页",
+      "en-US": "Web page",
+      "params": {}
+    },
+    "builtinProperty.choice.day": {
+      "zh-CN": "日",
+      "en-US": "Day",
+      "params": {}
+    },
+    "builtinProperty.choice.week": {
+      "zh-CN": "周",
+      "en-US": "Week",
+      "params": {}
+    },
+    "builtinProperty.choice.month": {
+      "zh-CN": "月",
+      "en-US": "Month",
+      "params": {}
+    },
+    "builtinProperty.choice.quarter": {
+      "zh-CN": "季度",
+      "en-US": "Quarter",
+      "params": {}
+    },
+    "builtinProperty.choice.year": {
+      "zh-CN": "年",
+      "en-US": "Year",
+      "params": {}
+    },
+    "builtinProperty.choice.MO": {
+      "zh-CN": "星期一",
+      "en-US": "Monday",
+      "params": {}
+    },
+    "builtinProperty.choice.TU": {
+      "zh-CN": "星期二",
+      "en-US": "Tuesday",
+      "params": {}
+    },
+    "builtinProperty.choice.WE": {
+      "zh-CN": "星期三",
+      "en-US": "Wednesday",
+      "params": {}
+    },
+    "builtinProperty.choice.TH": {
+      "zh-CN": "星期四",
+      "en-US": "Thursday",
+      "params": {}
+    },
+    "builtinProperty.choice.FR": {
+      "zh-CN": "星期五",
+      "en-US": "Friday",
+      "params": {}
+    },
+    "builtinProperty.choice.SA": {
+      "zh-CN": "星期六",
+      "en-US": "Saturday",
+      "params": {}
+    },
+    "builtinProperty.choice.SU": {
+      "zh-CN": "星期日",
+      "en-US": "Sunday",
+      "params": {}
+    },
+    "builtinProperty.choice.cancel": {
+      "zh-CN": "取消",
+      "en-US": "Cancel",
+      "params": {}
+    },
+    "builtinProperty.choice.replace": {
+      "zh-CN": "替换",
+      "en-US": "Replace",
+      "params": {}
+    },
+    "builtinProperty.choice.tentative": {
+      "zh-CN": "暂定",
+      "en-US": "Tentative",
+      "params": {}
+    },
+    "builtinProperty.choice.confirmed": {
+      "zh-CN": "已确认",
+      "en-US": "Confirmed",
+      "params": {}
+    },
+    "builtinProperty.choice.cancelled": {
+      "zh-CN": "已取消",
+      "en-US": "Cancelled",
+      "params": {}
+    },
+    "builtinProperty.choice.daily": {
+      "zh-CN": "每日",
+      "en-US": "Daily",
+      "params": {}
+    },
+    "builtinProperty.choice.weekly": {
+      "zh-CN": "每周",
+      "en-US": "Weekly",
+      "params": {}
+    },
+    "builtinProperty.choice.monthly": {
+      "zh-CN": "每月",
+      "en-US": "Monthly",
+      "params": {}
+    },
+    "builtinProperty.choice.yearly": {
+      "zh-CN": "每年",
+      "en-US": "Yearly",
+      "params": {}
+    },
+    "builtinProperty.choice.earlier": {
+      "zh-CN": "较早时刻",
+      "en-US": "Earlier time",
+      "params": {}
+    },
+    "builtinProperty.choice.later": {
+      "zh-CN": "较晚时刻",
+      "en-US": "Later time",
+      "params": {}
+    },
+    "builtinProperty.choice.skip": {
+      "zh-CN": "跳过",
+      "en-US": "Skip",
+      "params": {}
+    },
+    "builtinProperty.choice.extendedRelative": {
+      "zh-CN": "其他亲属",
+      "en-US": "Extended relative",
+      "params": {}
+    },
+    "builtinProperty.choice.acquaintance": {
+      "zh-CN": "熟人",
+      "en-US": "Acquaintance",
+      "params": {}
+    },
+    "builtinProperty.choice.classmate": {
+      "zh-CN": "同学",
+      "en-US": "Classmate",
+      "params": {}
+    },
+    "builtinProperty.choice.friend": {
+      "zh-CN": "朋友",
+      "en-US": "Friend",
+      "params": {}
+    },
+    "builtinProperty.choice.colleague": {
+      "zh-CN": "同事",
+      "en-US": "Colleague",
+      "params": {}
+    },
+    "builtinProperty.choice.absolute": {
+      "zh-CN": "指定时间",
+      "en-US": "Specific time",
+      "params": {}
+    },
+    "builtinProperty.choice.dueBefore": {
+      "zh-CN": "到期前",
+      "en-US": "Before due time",
+      "params": {}
+    },
+    "builtinProperty.choice.dueDay": {
+      "zh-CN": "到期当天",
+      "en-US": "On due day",
+      "params": {}
+    },
+    "builtinProperty.choice.open": {
+      "zh-CN": "未完成",
+      "en-US": "Open",
+      "params": {}
+    },
+    "builtinProperty.choice.done": {
+      "zh-CN": "已完成",
+      "en-US": "Done",
+      "params": {}
+    },
+    "builtinProperty.choice.low": {
+      "zh-CN": "低",
+      "en-US": "Low",
+      "params": {}
+    },
+    "builtinProperty.choice.normal": {
+      "zh-CN": "普通",
+      "en-US": "Normal",
+      "params": {}
+    },
+    "builtinProperty.choice.high": {
+      "zh-CN": "高",
+      "en-US": "High",
+      "params": {}
+    },
+    "builtinProperty.choice.urgent": {
+      "zh-CN": "紧急",
+      "en-US": "Urgent",
+      "params": {}
+    },
+    "nativeEditor.customEnumValue": {
+      "zh-CN": "自定义值",
+      "en-US": "Custom value",
+      "params": {}
+    },
+    "nativeEditor.customEnumLabel": {
+      "zh-CN": "{label} · 自定义值",
+      "en-US": "{label} · Custom value",
+      "params": {
+        "label": "text"
+      }
     }
   }
 }

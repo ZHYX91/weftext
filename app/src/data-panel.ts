@@ -1,3 +1,4 @@
+import { schemaFieldLabel } from "./builtin-property-labels";
 import { reminderForm, type ReminderRawInput } from "./reminder-form";
 import { nativeControlAddress } from "./native-control-identity";
 import { newReminder } from "./reminder-values";
@@ -17,7 +18,7 @@ import { createValuePresetState, mountValuePresets, valuePresetContext, type Val
 export { decodeProjection, decodeCell, type Cell, type FieldProjection, type NoteProjection } from "./data-projection";
 import { descriptionUiText, coreDescriptionUiText } from "./ui-diagnostics";
 import { submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
-import { action, ui, labelFor, emptyReferences, loadFormReferences, fieldNames, typeNames, cellLabels, commonFields, fieldsForTypes, typeConflicts, resolveShape, emptyNativeValue, nativeFormControls, valueEditor, decodeSourcePatch, formatNativeValue, diagnosticText, type NativeValue, type Shape, type DataSchema, type SchemaField, type SchemaRead, type DocumentBasis, type PanelHost, type SourcePatch } from "./native-value-form";
+import { action, ui, labelFor, emptyReferences, loadFormReferences, typeNames, cellLabels, commonFields, fieldsForTypes, typeConflicts, resolveShape, emptyNativeValue, nativeFormControls, valueEditor, decodeSourcePatch, formatNativeValue, diagnosticText, type NativeValue, type Shape, type DataSchema, type SchemaField, type SchemaRead, type DocumentBasis, type PanelHost, type SourcePatch } from "./native-value-form";
 interface FieldDraft {
     value: NativeValue;
     changed: boolean;
@@ -186,7 +187,7 @@ export class DataPanel {
                 if (retired) this.host.notify(uiMessage("dataPanel.valuePresetRetired"));
             };
             const owner = { retire: () => finish(true), current }; this.presetDialog = owner;
-            dialog.append(ui("h2", "", displayMessage("dataPanel.valuePresetTitle", { field: uiDisplayParameter(fieldNames[field.key] ?? field.key) })), ui("p", "data-help", uiMessage("dataPanel.valuePresetStageHelp")), body,
+            dialog.append(ui("h2", "", displayMessage("dataPanel.valuePresetTitle", { field: uiDisplayParameter(schemaFieldLabel(schema, field)) })), ui("p", "data-help", uiMessage("dataPanel.valuePresetStageHelp")), body,
                 action(uiMessage("common.close"), () => finish()));
             dialog.addEventListener("cancel", event => { event.preventDefault(); finish(); });
             dialog.addEventListener("close", () => finish());
@@ -477,7 +478,7 @@ export class DataPanel {
             if (!this.closeGuard.frozen && groups.advanced.isConnected)
                 this.advancedOpen = groups.advanced.open;
         };
-        const matching = declared.filter(({ field }) => `${uiTextValue(field.key)} ${uiTextValue(fieldNames[field.key] ?? "")}`.toLowerCase().includes(this.filter.toLowerCase()));
+        const matching = declared.filter(({ field }) => `${uiTextValue(field.key)} ${uiTextValue(schemaFieldLabel(schema, field))}`.toLowerCase().includes(this.filter.toLowerCase()));
         for (const { field, required } of matching) {
             const projected = this.projection.fields.find(item => item.fieldId === field.id);
             const cell: Cell = projected?.cell ?? { state: "absent" };
@@ -485,12 +486,12 @@ export class DataPanel {
             wrapper.dataset.fieldKey = field.key;
             wrapper.dataset.fieldId = field.id;
             wrapper.dataset.fieldOrder = String(declared.findIndex(item => item.field.id === field.id));
-            wrapper.dataset.fieldName = uiTextValue(fieldNames[field.key] ?? field.key);
+            wrapper.dataset.fieldName = uiTextValue(schemaFieldLabel(schema, field));
             const draft = this.drafts.get(field.key);
             wrapper.dataset.protectedField = String(required || projected?.required || cell.state === "invalid" || !!projected?.unbound?.length || !!draft?.changed || !!Object.keys(draft?.rawInputs ?? {}).length);
             wrapper.dataset.commonField = String(commonFields.has(field.key) || required || !!this.filter);
             const title = ui("div", "data-property-title");
-            title.append(ui("h3", "", () => `${uiTextValue(fieldNames[field.key] ?? field.key)}${uiTextValue(required ? " *" : "")}`));
+            title.append(ui("h3", "", () => `${uiTextValue(schemaFieldLabel(schema, field))}${uiTextValue(required ? " *" : "")}`));
             const pin = action(this.fieldPresentation.placements[field.id] === "top" ? uiMessage("dataPanel.unpinField") : uiMessage("dataPanel.pinField"), () => {
                 if (!this.canChangePresentation(presentationScope)) return;
                 this.fieldPresentation = setFieldPlacement(this.fieldPresentation, field.id, this.fieldPresentation.placements[field.id] === "top" ? "default" : "top");
@@ -572,7 +573,7 @@ export class DataPanel {
                         retained.push(...form.restoreRaw(raw).rejected.map(item => item.input.text));
                         if (retained.length) wrapper.append(ui("pre", "data-readonly-source", retained.join("\n")));
                     } else {
-                        wrapper.append(valueEditor(field.shape, draft.value, schema, changed, fieldNames[field.key] ?? field.key, { fieldId: field.id, path: [] }, 0, this.references));
+                        wrapper.append(valueEditor(field.shape, draft.value, schema, changed, schemaFieldLabel(schema, field), { fieldId: field.id, path: [] }, 0, this.references));
                         for (const [key, control] of this.formInputs(wrapper)) if (draft.rawInputs && key in draft.rawInputs) {
                             control.value = draft.rawInputs[key];
                             control.dispatchEvent(new Event("input", {bubbles:true}));
@@ -917,7 +918,7 @@ export class QuickCapture {
             values = new Map();
             for (const { field, required } of fieldsForTypes(schema, type.value ? [type.value] : [])) {
                 const container = required || commonFields.has(field.key) ? ui("section", "capture-property") : ui("details", "capture-property");
-                const heading = container instanceof HTMLDetailsElement ? ui("summary", "", fieldNames[field.key] ?? field.key) : ui("h3", "", () => `${uiTextValue(fieldNames[field.key] ?? field.key)}${uiTextValue(required ? " *" : "")}`);
+                const heading = container instanceof HTMLDetailsElement ? ui("summary", "", schemaFieldLabel(schema, field)) : ui("h3", "", () => `${uiTextValue(schemaFieldLabel(schema, field))}${uiTextValue(required ? " *" : "")}`);
                 container.append(heading);
                 const addEditor = (): void => {
                     this.markInput();
@@ -928,7 +929,7 @@ export class QuickCapture {
                         const form = reminderForm(value, schema, changed, {fieldId:field.id,path:[]});
                         container.append(form.element);
                         this.reminderDisposers.push(form.dispose);
-                    } else container.append(valueEditor(field.shape, value, schema, changed, fieldNames[field.key] ?? field.key, {fieldId:field.id,path:[]}, 0, this.references));
+                    } else container.append(valueEditor(field.shape, value, schema, changed, schemaFieldLabel(schema, field), {fieldId:field.id,path:[]}, 0, this.references));
                 };
                 if (required)
                     addEditor();
