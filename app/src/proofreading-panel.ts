@@ -60,6 +60,17 @@ interface Host {
     revealReport?(): void;
     notify(message: UiText): void;
 }
+interface ProofreadActivity {
+    id: string;
+    status: WorkTaskStatus;
+    generation: number;
+    lifetime: number;
+    basis: KnowledgeContext;
+}
+interface ProofreadFlight {
+    activity: ProofreadActivity | null;
+    stopped: boolean;
+}
 const categories: Record<string, UiText> = { character: uiMessage("proofreading.categoryCharacter"), typo: uiMessage("proofreading.categoryTypo"), pair: uiMessage("proofreading.categoryPair"), sensitive: uiMessage("proofreading.categorySensitive") };
 export function decodeProofreadingOptions(input: unknown): ProofreadOptions {
     const value = input as ProofreadOptions;
@@ -118,7 +129,9 @@ export class ProofreadingPanel {
     private resultsView: ProofreadingResultsView | null = null;
     private viewResult: ProofreadResult | null = null;
     private messageElement: HTMLElement | null = null;
-    private activity: { id: string; status: WorkTaskStatus; generation: number; lifetime: number; basis: KnowledgeContext } | null = null;
+    private activity: ProofreadActivity | null = null;
+    // Stopping delivery never aborts or releases the original background request.
+    private scanFlight: ProofreadFlight | null = null;
     private annotationLocale: UiLocale = DEFAULT_CONTENT_LOCALE;
     private scope = "document";
     private busy = false;
@@ -160,6 +173,18 @@ export class ProofreadingPanel {
             if (!this.reportCurrent(activity, result) || !this.reportVisible()) throw new UiError(uiMessage("workActivity.originalUnavailable"));
             this.resultsView?.focus();
         } }];
+    }
+    private stopWaiting(activity: ProofreadActivity): void {
+        this.closeGuard.assertMutable();
+        const flight = this.scanFlight;
+        if (!flight || flight.activity !== activity || flight.stopped || this.activity !== activity
+            || activity.lifetime !== this.lifetime || activity.generation !== this.generation)
+            throw new UiError(uiMessage("proofreading.findingExpired"));
+        flight.stopped = true;
+        activity.status = "waiting";
+        this.message = uiMessage("proofreading.stoppedPending");
+        workActivity.task({ id: activity.id, title: this.preferences.title, status: activity.status, detail: this.message });
+        this.draw();
     }
     private refreshReport(): void {
         if (this.messageElement) setUiText(this.messageElement, this.message);
@@ -219,13 +244,15 @@ export class ProofreadingPanel {
         this.message = "";
         this.draw();
     }
-    dispose(): void { this.generation++; this.lifetime++; this.retireReport(); if (this.container) replaceUiChildren(this.container); this.container = null; this.messageElement = null; this.result = null; this.basis = null; this.checkedOptions = null; this.message = ""; this.busy = false; }
+    dispose(): void { this.generation++; this.lifetime++; this.retireReport(); if (this.container) replaceUiChildren(this.container); this.container = null; this.messageElement = null; this.result = null; this.basis = null; this.checkedOptions = null; this.message = ""; this.busy = this.scanFlight !== null; }
     render(container: HTMLElement): void { this.closeGuard.assertMutable(); this.closeGuard.bind(container); this.container = container; this.draw(); }
     private async run(): Promise<void> {
         return this.closeGuard.run(async () => {
-            if (this.busy)
+            if (this.busy || this.scanFlight)
                 return;
             const lifetime = this.lifetime;
+            const flight: ProofreadFlight = { activity: null, stopped: false };
+            this.scanFlight = flight;
             this.busy = true;
             try {
                 const beforeActionGeneration = this.generation;
@@ -260,12 +287,14 @@ export class ProofreadingPanel {
                 const generation = ++this.generation;
                 const activity = { id: `proofread:${crypto.randomUUID()}`, status: "running" as WorkTaskStatus, generation, lifetime, basis: context };
                 this.activity = activity;
+                flight.activity = activity;
                 this.message = uiMessage("proofreading.scanning");
-                workActivity.task({ id: activity.id, title: this.preferences.title, status: "running", detail: this.message });
+                workActivity.task({ id: activity.id, title: this.preferences.title, status: "running", detail: this.message,
+                    actions: [{ id: "stopWaiting", label: uiMessage("proofreading.stopWaiting"), run: () => this.stopWaiting(activity) }] });
                 this.draw();
                 try {
                     const raw = await this.host.scan(context, options);
-                    if (lifetime !== this.lifetime || generation !== this.generation || this.activity !== activity) return;
+                    if (flight.stopped || lifetime !== this.lifetime || generation !== this.generation || this.activity !== activity) return;
                     if (!sameKnowledgeBasis(context, this.host.context())) {
                         this.message = uiMessage("proofreading.scanBasisChanged");
                         activity.status = "failed";
@@ -284,7 +313,7 @@ export class ProofreadingPanel {
                     workActivity.result({ id: activity.id, title: this.preferences.title, detail: this.message, actions });
                 }
                 catch (error) {
-                    if (lifetime === this.lifetime && generation === this.generation && this.activity === activity) {
+                    if (!flight.stopped && lifetime === this.lifetime && generation === this.generation && this.activity === activity) {
                         this.message = sameKnowledgeBasis(context, this.host.context()) ? errorUiText(error) : uiMessage("proofreading.scanBasisChanged");
                         activity.status = "failed";
                         workActivity.task({ id: activity.id, title: this.preferences.title, status: activity.status, detail: this.message });
@@ -292,7 +321,15 @@ export class ProofreadingPanel {
                 }
                 }
             finally {
-                if (lifetime === this.lifetime) { this.busy = false; this.draw(); }
+                if (this.scanFlight === flight) this.scanFlight = null;
+                if (flight.stopped && flight.activity) {
+                    flight.activity.status = "cancelled";
+                    const detail = uiMessage("proofreading.stoppedSettled");
+                    workActivity.task({ id: flight.activity.id, title: this.preferences.title, status: "cancelled", detail });
+                    if (this.activity === flight.activity && lifetime === this.lifetime) this.message = detail;
+                }
+                this.busy = false;
+                if (this.container) this.draw();
             }
             });
     }
@@ -517,10 +554,16 @@ export class ProofreadingPanel {
         root.append(settings);
         const scope = select({ document: uiMessage("proofreading.scopeDocument"), selection: uiMessage("proofreading.scopeSelection") });
         scope.value = this.scope;
+        scope.disabled = this.busy;
         scope.onchange = () => { this.closeGuard.assertMutable(); this.scope = scope.value; };
         const start = this.action(this.busy ? uiMessage("proofreading.scanBusy") : uiMessage("proofreading.startScan"), () => this.run());
         start.disabled = this.busy;
         root.append(field(uiMessage("queryPanel.scopeLabel"), scope), start);
+        const scan = this.scanFlight?.activity;
+        if (scan && this.activity === scan && !this.scanFlight!.stopped) {
+            root.append(this.action(uiMessage("proofreading.stopWaiting"), () => this.stopWaiting(scan)),
+                el("p", uiMessage("proofreading.stopWaitingHelp")));
+        }
         const message = el("p", this.message);
         message.setAttribute("role", "status");
         this.messageElement = message;

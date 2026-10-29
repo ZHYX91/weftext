@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { contentsActionEntry, contentsPreferenceKey, contentsSection, directContentsEntries, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, movedSibling } from "./node-contents-state";
+import { contentsActionEntry, contentsPreferenceKey, contentsSection, directContentsEntries, decodeAuthoredOrder, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, isTerminalOrderStatus, movedSibling } from "./node-contents-state";
 import { canonicalNodeSources } from "./file-tree";
 import type { InventoryEntry } from "./types";
 test("author reordering is explicit and preserves exact stable identities", () => {
@@ -90,4 +90,19 @@ test("order recovery binds original parent, whole request and original plan", ()
   assert.throws(() => decodePendingOrder(JSON.stringify(pending), "root", "same-name-new-parent"));
   assert.throws(() => decodePendingOrder(JSON.stringify({ ...pending, plan: { ...pending.plan, operationId: "another" } }), "root", "parent"));
   assert.throws(() => decodePendingOrder(JSON.stringify({ ...pending, request: { ...pending.request, children: ["weftext-node://w/a", "weftext-node://w/a"] } }), "root", "parent"));
+});
+
+test("fresh order retirement requires an exact, internally consistent parent projection", () => {
+  const read = { parentRef: "parent", baseId: "fresh", beforeSource: null, complete: true, members: [{ targetRef: "a", path: "A", name: "A" }, { targetRef: "b", path: "B", name: "B" }], orderedRefs: ["b", "a"] };
+  assert.deepEqual(decodeAuthoredOrder(read, "parent"), read);
+  assert.equal(decodeAuthoredOrder({ ...read, complete: false }, "parent").complete, false);
+  for (const malformed of [
+    { ...read, parentRef: "same-name-replacement" }, { ...read, baseId: "" },
+    { ...read, complete: undefined }, { ...read, orderedRefs: ["a", "a"] },
+    { ...read, orderedRefs: ["a", "other"] }, { ...read, orderedRefs: ["a"] },
+    { ...read, members: [read.members[0], read.members[0]] },
+    { ...read, members: [{ ...read.members[0], path: null }, read.members[1]] },
+  ]) assert.throws(() => decodeAuthoredOrder(malformed, "parent"));
+  for (const status of ["committed", "resolved", "cancelled"]) assert.equal(isTerminalOrderStatus(status), true);
+  for (const status of ["unknown", "prepared", "preparing", "failed", ""]) assert.equal(isTerminalOrderStatus(status), false);
 });

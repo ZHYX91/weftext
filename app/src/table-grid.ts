@@ -215,27 +215,36 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         if (controller.state.composing)
             throw new UiError(uiMessage("tableGrid.compositionPending"));
         await controller.flush();
+        if (controller.state.composing)
+            throw new UiError(uiMessage("tableGrid.compositionPending"));
         if (!refreshCurrent())
             throw new UiError(uiMessage("tableGrid.mappingUnavailable"));
     };
-    const confirmCurrent = async (title: UiText, message: UiText, label: UiText): Promise<boolean> => {
+    const prepareCurrent = async () => {
+        const selection = selectionVersion;
         await settle();
-        const basis = controller.snapshot, selection = selectionVersion;
-        const accepted = await confirmProposal(title, message, label);
-        if (!accepted)
-            return false;
-        if (!controller.isSnapshotCurrent(basis) || selectionVersion !== selection)
+        if (selectionVersion !== selection)
             throw new UiError(uiMessage("tableGrid.proposalExpired"));
-        return true;
+        return { basis: controller.snapshot, selection };
     };
-    const command = async (change: TableAction, next: Position = head) => {
+    const command = async (change: TableAction, next: Position = head, expected?: Awaited<ReturnType<typeof prepareCurrent>>) => {
+        const selection = selectionVersion;
         await settle();
+        const target = expected ?? { basis: controller.snapshot, selection };
+        const requireTarget = () => {
+            requireCurrent();
+            if (controller.state.composing)
+                throw new UiError(uiMessage("tableGrid.compositionPending"));
+            if (!controller.isSnapshotCurrent(target.basis) || selectionVersion !== target.selection)
+                throw new UiError(uiMessage("tableGrid.proposalExpired"));
+        };
+        requireTarget();
         if (!available())
             throw new UiError(tableUnavailableReason(table(), uiMessage("tableGrid.structureChangeUnsafe")));
         const beforeRange = selectedRange(), rowSelected = beforeRange.top === beforeRange.bottom && beforeRange.left === 0 && beforeRange.right === table().columns - 1, columnSelected = beforeRange.left === beforeRange.right && beforeRange.top === 0 && beforeRange.bottom === table().rows - 1;
         editing = false;
         grid.focus({ preventScroll: true });
-        await controller.execute(() => { requireCurrent(); return { kind: "tableEdit", range: current.range, action: change }; });
+        await controller.execute(() => { requireTarget(); return { kind: "tableEdit", range: current.range, action: change }; });
         if (!refreshCurrent())
             throw new UiError(uiMessage("tableGrid.changeAwaitingPreview"));
         anchor = { ...next };
@@ -590,16 +599,18 @@ export function createTableGrid(controller: WritingController, initial: WritingS
             setUiText(notice, displayMessage("tableGrid.copyComplete", { p0: uiDisplayParameter(whole ? uiMessage("tableGrid.wholeTableScope") : uiMessage("tableGrid.selectedRangeScope")), p1: uiDisplayParameter(format.toUpperCase()), p2: data.rows, p3: data.columns }));
     }
     async function pastePreview(data: ClipboardTable): Promise<void> {
-        await settle();
-        const basis = controller.snapshot, selection = selectionVersion, range = selectedRange(), at = { row: range.top, column: range.left }, extendsTable = at.row + data.rows > table().rows || at.column + data.columns > table().columns;
+        const target = await prepareCurrent();
+        const range = selectedRange(), at = { row: range.top, column: range.left }, extendsTable = at.row + data.rows > table().rows || at.column + data.columns > table().columns;
         if ((range.bottom > range.top || range.right > range.left) && (data.rows !== range.bottom - range.top + 1 || data.columns !== range.right - range.left + 1))
             throw new UiError(displayMessage("tableGrid.pasteSelectionSizeMismatch", { p0: data.rows, p1: data.columns }));
-        const message = displayMessage("tableGrid.pastePreviewDescription", { p0: at.row + 1, p1: at.column + 1, p2: data.rows, p3: data.columns, p4: uiDisplayParameter(extendsTable ? uiMessage("tableGrid.pasteRequiresExpansion") : uiMessage("tableGrid.pasteWithinTable")), p5: joinUiText(data.losses, "\n") });
-        if (!await confirmProposal(uiMessage("tableGrid.pasteRange"), message, extendsTable ? uiMessage("tableGrid.expandAndPaste") : uiMessage("tableGrid.paste"), data))
-            return;
-        if (!controller.isSnapshotCurrent(basis) || selectionVersion !== selection)
+        if (extendsTable || data.losses.length > 0) {
+            const message = displayMessage("tableGrid.pastePreviewDescription", { p0: at.row + 1, p1: at.column + 1, p2: data.rows, p3: data.columns, p4: uiDisplayParameter(extendsTable ? uiMessage("tableGrid.pasteRequiresExpansion") : uiMessage("tableGrid.pasteWithinTable")), p5: joinUiText(data.losses, "\n") });
+            if (!await confirmProposal(uiMessage("tableGrid.pasteRange"), message, extendsTable ? uiMessage("tableGrid.expandAndPaste") : uiMessage("tableGrid.paste"), data))
+                return;
+        }
+        if (!controller.isSnapshotCurrent(target.basis) || selectionVersion !== target.selection)
             throw new UiError(uiMessage("tableGrid.pastePreviewExpired"));
-        await command({ kind: "pasteCells", ...at, rows: data.rows, columns: data.columns, cells: data.cells, expand: extendsTable });
+        await command({ kind: "pasteCells", ...at, rows: data.rows, columns: data.columns, cells: data.cells, expand: extendsTable }, head, target);
     }
     async function readClipboard(): Promise<void> {
         await settle();
@@ -634,7 +645,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         check();
         await pastePreview(delimitedTable(text, "\t"));
     }
-    const tool = (label: UiText, operation: () => Promise<void> | void) => { const button = node("button", "writing-button", label); button.type = "button"; button.onclick = () => run(operation); tools.append(button); return button; };
+    const tool = (label: UiText, operation: () => Promise<void> | void, description?: UiText) => { const button = node("button", "writing-button", label); button.type = "button"; if (description) { setUiAttr(button, "title", description); setUiAttr(button, "aria-description", description); } button.onclick = () => run(operation); tools.append(button); return button; };
     tool(uiMessage("tableGrid.selectCellText"), () => edit(head, true));
     tool(uiMessage("tableGrid.insertRowAbove"), () => command({ kind: "insertRow", index: selectedRange().top }));
     tool(uiMessage("tableGrid.insertRowBelow"), () => command({ kind: "insertRow", index: selectedRange().bottom + 1 }));
@@ -660,16 +671,14 @@ export function createTableGrid(controller: WritingController, initial: WritingS
             await command({ kind: axis === "row" ? "moveRow" : "moveColumn", from, to }, axis === "row" ? { row: to, column: head.column } : { row: head.row, column: to });
         });
     tool(uiMessage("tableGrid.mergeSelectedCells"), async () => {
+        const target = await prepareCurrent();
         const range = selectedRange();
-        if (!await confirmCurrent(uiMessage("tableGrid.mergeSelectedCellsTitle"), uiMessage("tableGrid.mergeHelp"), uiMessage("tableGrid.merge")))
-            return;
-        await command({ kind: "merge", ...range }, { row: range.top, column: range.left });
-    });
+        await command({ kind: "merge", ...range }, { row: range.top, column: range.left }, target);
+    }, uiMessage("tableGrid.mergeHelp"));
     tool(uiMessage("tableGrid.splitCurrentCell"), async () => {
-        if (!await confirmCurrent(uiMessage("tableGrid.splitCurrentCellTitle"), uiMessage("tableGrid.splitHelp"), uiMessage("tableGrid.split")))
-            return;
-        await command({ kind: "split", ...head });
-    });
+        const target = await prepareCurrent();
+        await command({ kind: "split", ...head }, head, target);
+    }, uiMessage("tableGrid.splitHelp"));
     tool(uiMessage("tableGrid.firstRowAsHeader"), () => command({ kind: "setHeader", rows: 1, columns: 0 }));
     tool(uiMessage("tableGrid.leadingRowsAsHeader"), () => {
         const range = selectedRange();
@@ -679,12 +688,11 @@ export function createTableGrid(controller: WritingController, initial: WritingS
     });
     tool(uiMessage("tableGrid.removeHeader"), () => command({ kind: "setHeader", rows: 0, columns: 0 }));
     tool(uiMessage("tableGrid.transposeWholeTable"), async () => {
+        const target = await prepareCurrent();
         if ((table().headerRows ?? 0) > 0)
             throw new UiError(uiMessage("tableGrid.transposeRequiresNoHeader"));
-        if (!await confirmCurrent(uiMessage("tableGrid.transposeWholeTable"), uiMessage("tableGrid.transposeHelp"), uiMessage("tableGrid.confirmTranspose")))
-            return;
-        await command({ kind: "transpose" }, { row: head.column, column: head.row });
-    });
+        await command({ kind: "transpose" }, { row: head.column, column: head.row }, target);
+    }, uiMessage("tableGrid.transposeHelp"));
     tool(uiMessage("tableGrid.copyRangeHtml"), () => copy("html"));
     tool(uiMessage("tableGrid.copyRangeTsv"), () => copy("tsv"));
     tool(uiMessage("tableGrid.copyRangeCsv"), () => copy("csv"));

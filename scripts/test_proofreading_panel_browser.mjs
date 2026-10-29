@@ -34,10 +34,10 @@ try {
         work.setContext("proofreading-component"); document.querySelector("footer").before(work.element); document.querySelector("footer").append(work.statusButton);
         const unsubscribe = workActivity.subscribe(event => { events.push(event); if (event.kind === "task") work.reportTask(event.task); else if (event.kind === "result") work.addResult(event.result); else work.removeResult(event.id); });
         const raw = count => ({ coverage: "complete", findings: Array.from({ length: count }, (_, index) => ({ id: `finding-${index}`, category: index % 2 ? "character" : "typo", ruleId: index % 2 ? "rule-a" : "rule-b", ruleVersion: "1", excerpt: `实际显示的合成原文 ${index}`, messageOrigin: "author", authorMessage: "合成规则，请核对", replacement: null, sourceRange: { from: index * 2, to: index * 2 + 1, utf16From: index * 2, utf16To: index * 2 + 1, raw: "x" }, executable: false })), checkedCharacters: count * 2, warnings: [], existing: [], processing: defaultProcessingSettings(), processingOrigin: null, fragments: [] });
-        let owner, resolveScan, resolveBefore, preflight = false, commit = false, reveals = 0, scanCount = 0, selectedSource = [];
-        const fixture = { view, work, events, notes, writes, basis, locale, raw, get owner() { return owner; }, get scanCount() { return scanCount; }, get reveals() { return reveals; }, get selectedSource() { return selectedSource; }, set commit(value) { commit = value; }, resolve(count) { const accept = resolveScan; resolveScan = undefined; accept(raw(count)); }, preflightDone() { resolveBefore(); }, mount(heldBefore = false) {
+        let owner, resolveScan, rejectScan, resolveBefore, preflight = false, readable = true, commit = false, reveals = 0, scanCount = 0, selectedSource = [];
+        const fixture = { view, work, events, notes, writes, basis, locale, raw, get owner() { return owner; }, get scanCount() { return scanCount; }, get reveals() { return reveals; }, get selectedSource() { return selectedSource; }, set readable(value) { readable = value; }, set commit(value) { commit = value; }, resolve(count) { const accept = resolveScan; resolveScan = rejectScan = undefined; accept(raw(count)); }, reject() { const reject = rejectScan; resolveScan = rejectScan = undefined; reject(new Error("Controlled original scan failure")); }, preflightDone() { resolveBefore(); }, mount(heldBefore = false) {
             owner?.dispose(); view.hidden = false; view.replaceChildren(); preflight = heldBefore;
-            owner = new ProofreadingPanel({ resultScope: "local", context: () => ({ ...basis }), beforeAction: () => preflight ? new Promise(resolve => { resolveBefore = resolve; }) : Promise.resolve(), scan: () => { scanCount++; return new Promise(resolve => { resolveScan = resolve; }); }, perform: async (_label, intent) => { writes.push(structuredClone(intent)); return commit; }, selectSource: (from, to) => selectedSource.push([from, to]), revealReport: () => { reveals++; view.hidden = false; owner.render(view); }, notify: text => notes.push(uiTextValue(text)) });
+            owner = new ProofreadingPanel({ resultScope: "local", context: () => readable ? ({ ...basis }) : null, beforeAction: () => preflight ? new Promise(resolve => { resolveBefore = resolve; }) : Promise.resolve(), scan: () => { scanCount++; return new Promise((resolve, reject) => { resolveScan = resolve; rejectScan = reject; }); }, perform: async (_label, intent) => { writes.push(structuredClone(intent)); return commit; }, selectSource: (from, to) => selectedSource.push([from, to]), revealReport: () => { reveals++; view.hidden = false; owner.render(view); }, notify: text => notes.push(uiTextValue(text)) });
             owner.render(view); return owner;
         }, mountKnowledge() {
             owner?.dispose(); view.hidden = false; view.replaceChildren();
@@ -129,6 +129,66 @@ try {
         await page.evaluate(async () => { window.fixture.owner.dispose(); window.fixture.preflightDone(); await Promise.resolve(); await Promise.resolve(); });
         assert.equal(await page.evaluate(() => window.fixture.scanCount), 3);
         assert.equal(await view.locator(".proofreading-finding").count(), 0);
+    });
+    await check("stopping result adoption keeps the real request occupied and discards its late success", async () => {
+        await page.evaluate(() => window.fixture.mount());
+        await view.getByRole("button", { name: "Start proofreading", exact: true }).click();
+        await page.waitForFunction(() => window.fixture.scanCount === 4);
+        assert.equal(await page.evaluate(() => window.fixture.owner.freezeForClose()), false);
+        await page.evaluate(() => { window.oldStopAction = window.fixture.events.filter(event => event.kind === "task").at(-1).task.actions[0]; });
+        await view.getByRole("button", { name: "Stop waiting for results", exact: true }).click();
+        assert.equal(await page.evaluate(() => window.fixture.events.filter(event => event.kind === "task").at(-1).task.status), "waiting");
+        assert.match(await view.innerText(), /background scan may continue/);
+        assert.match(await view.innerText(), /cannot start until this client request settles/);
+        assert.equal(await page.evaluate(() => window.fixture.owner.freezeForClose()), false);
+        assert.equal(await view.getByRole("button", { name: "Proofreading…", exact: true }).isDisabled(), true);
+        await page.evaluate(() => window.fixture.owner.run());
+        assert.equal(await page.evaluate(() => window.fixture.scanCount), 4);
+        assert.equal(await page.evaluate(async () => { try { await window.oldStopAction.run(); return false; } catch { return true; } }), true);
+        await page.evaluate(() => window.fixture.resolve(3));
+        await page.waitForFunction(() => window.fixture.events.filter(event => event.kind === "task").at(-1).task.status === "cancelled");
+        assert.match(await view.innerText(), /client request has settled/);
+        assert.match(await view.innerText(), /does not confirm background cancellation/);
+        assert.equal(await page.evaluate(() => { const ready = window.fixture.owner.freezeForClose(); window.fixture.owner.thawAfterClose(); return ready; }), true);
+        assert.equal(await view.locator(".proofreading-finding").count(), 0);
+        assert.equal(await page.evaluate(() => window.fixture.events.filter(event => event.kind === "result").length), 1);
+        assert.equal(await view.getByRole("button", { name: "Start proofreading", exact: true }).isEnabled(), true);
+    });
+    await check("the task stop action owns one request and suppresses its late failure", async () => {
+        await view.getByRole("button", { name: "Start proofreading", exact: true }).click();
+        await page.waitForFunction(() => window.fixture.scanCount === 5);
+        assert.equal(await page.evaluate(async () => { try { await window.oldStopAction.run(); return false; } catch { return true; } }), true);
+        assert.equal(await page.evaluate(() => window.fixture.events.filter(event => event.kind === "task").at(-1).task.status), "running");
+        await page.evaluate(() => window.fixture.work.reveal("tasks"));
+        await page.locator(".work-panel").getByRole("button", { name: "Stop waiting for results", exact: true }).click();
+        assert.equal(await view.getByRole("button", { name: "Proofreading…", exact: true }).isDisabled(), true);
+        await page.evaluate(() => window.fixture.reject());
+        await page.waitForFunction(() => window.fixture.events.filter(event => event.kind === "task").at(-1).task.status === "cancelled");
+        assert.doesNotMatch(await view.innerText(), /Controlled original scan failure/);
+        // A rejected client transport cannot prove that a server-side scan stopped.
+        assert.match(await view.innerText(), /client request has settled/);
+        assert.match(await view.innerText(), /does not confirm background cancellation/);
+        assert.doesNotMatch(await view.innerText(), /original request has finished|background (?:scan|request) (?:has finished|has ended|has been cancelled|is cancelled)/i);
+        assert.equal(await view.locator(".proofreading-finding").count(), 0);
+    });
+    await check("revocation and retiring a stopped owner cannot publish its result or release a live request early", async () => {
+        await view.getByRole("button", { name: "Start proofreading", exact: true }).click();
+        await page.waitForFunction(() => window.fixture.scanCount === 6);
+        await page.evaluate(() => { window.fixture.readable = false; window.fixture.resolve(2); });
+        await page.waitForFunction(() => window.fixture.events.filter(event => event.kind === "task").at(-1).task.status === "failed");
+        assert.equal(await view.locator(".proofreading-finding").count(), 0);
+        await page.evaluate(() => { window.fixture.readable = true; });
+        await view.getByRole("button", { name: "Start proofreading", exact: true }).click();
+        await page.waitForFunction(() => window.fixture.scanCount === 7);
+        await view.getByRole("button", { name: "Stop waiting for results", exact: true }).click();
+        await page.evaluate(async () => { window.fixture.owner.dispose(); window.fixture.owner.render(window.fixture.view); await window.fixture.owner.run(); });
+        assert.equal(await page.evaluate(() => window.fixture.scanCount), 7);
+        assert.equal(await view.getByRole("button", { name: "Proofreading…", exact: true }).isDisabled(), true);
+        await page.evaluate(() => window.fixture.resolve(2));
+        await page.waitForFunction(() => window.fixture.events.filter(event => event.kind === "task").at(-1).task.status === "cancelled");
+        assert.equal(await view.locator(".proofreading-finding").count(), 0);
+        assert.equal(await page.evaluate(() => window.fixture.events.filter(event => event.kind === "result").length), 1);
+        assert.equal(await view.getByRole("button", { name: "Start proofreading", exact: true }).isEnabled(), true);
     });
     await check("the real Knowledge owner reveals its original proofreading tab from a bottom result", async () => {
         await page.evaluate(() => window.fixture.mountKnowledge());

@@ -11,6 +11,7 @@ import type { HostedLinksNode } from "./hosted-knowledge-links-state";
 import { RelationshipGraphView } from "./relationship-graph-view";
 import { HeadingStructureView } from "./heading-structure-view";
 import type { StructureHeading } from "./heading-structure-state";
+import { HostedRelationPreferences, hostedRelationScope } from "./hosted-relation-preferences";
 type Request = <T>(path: string, body?: unknown, signal?: AbortSignal) => Promise<T>;
 export interface HostedKnowledgeLinksHost {
     context(): HostedLinksContext | null;
@@ -42,11 +43,23 @@ export class HostedKnowledgeLinks {
     private showMentions = false;
     private mentionDomain = "all";
     private exclusionScope = "note";
-    private rules = new PersonalRelationRules();
+    private rulePreferences?: HostedRelationPreferences;
+    private ruleIdentity?: HostedLinksIdentity;
+    private ruleWorkspace = "";
+    private rules = this.newRules();
+    private rulesReadFailed = false;
     private diagnostics = this.diagnosticView();
     private graph = new RelationshipGraphView();
     private headings = new HeadingStructureView();
     private viewSession = "";
+    private newRules(initial: PersonalRelationRules["rules"] = []): PersonalRelationRules {
+        const rules = new PersonalRelationRules(next => {
+            if (rules !== this.rules || !this.rulePreferences)
+                throw new UiError(uiMessage("hostedLinks.personalRulesReadFailed"));
+            this.rulePreferences.save(next);
+        }, JSON.stringify(initial));
+        return rules;
+    }
     private diagnosticView(): RelationshipDiagnosticsView {
         return new RelationshipDiagnosticsView(this.rules, async (node) => {
             const { context, epoch } = this.current();
@@ -86,7 +99,7 @@ export class HostedKnowledgeLinks {
             }
         });
     }
-    clear(): void { this.graph.clear(); this.headings.clear(); this.rules.closePreviews(); this.epoch++; this.controller?.abort(); this.controller = undefined; this.profile = undefined; this.captured = undefined; this.hash = undefined; this.busy = false; this.showMentions = false; this.rules = new PersonalRelationRules(); this.diagnostics = this.diagnosticView(); this.content.replaceChildren(); this.host.replaceChildren(); this.host.hidden = true; }
+    clear(): void { this.graph.clear(); this.headings.clear(); this.rules.closePreviews(); this.epoch++; this.controller?.abort(); this.controller = undefined; this.profile = undefined; this.captured = undefined; this.hash = undefined; this.busy = false; this.showMentions = false; this.rulesReadFailed = false; this.rulePreferences = undefined; this.ruleIdentity = undefined; this.ruleWorkspace = ""; this.rules = this.newRules(); this.diagnostics = this.diagnosticView(); this.content.replaceChildren(); this.host.replaceChildren(); this.host.hidden = true; }
     connect(): void { this.clear(); this.documentChanged(); }
     async showStructure(kind: "graph" | "headings"): Promise<void> {
         if (!this.profile)
@@ -166,6 +179,35 @@ export class HostedKnowledgeLinks {
         }
     }
     private accepts(context: HostedLinksContext, epoch: number): boolean { return epoch === this.epoch && sameHostedLinksContext(context, this.owner.context()); }
+    private bindRules(context: HostedLinksContext, profile: HostedLinksProfile): void {
+        // This source identity comes from the just-verified server projection, never a configured alias or title.
+        let scope: ReturnType<typeof hostedRelationScope>;
+        try { scope = hostedRelationScope(context, profile); }
+        catch { throw new UiError(uiMessage("hostedLinks.linkScopeOrFormatUnconfirmed")); }
+        this.rules.closePreviews();
+        const sameScope = this.ruleWorkspace === scope.workspace && sameHostedLinksIdentity(context, this.ruleIdentity ?? null);
+        this.rulePreferences = undefined;
+        try {
+            const preferences = new HostedRelationPreferences(() => this.host.ownerDocument.defaultView!.localStorage, scope, profile,
+                () => this.profile === profile && this.captured === context && !this.stale && this.accepts(context, this.epoch)
+                    && sameHostedLinksIdentity(context, this.owner.identity()));
+            this.rulePreferences = preferences;
+            this.rulesReadFailed = false;
+        }
+        catch {
+            this.rulesReadFailed = true;
+            // Never turn an unreadable record into an empty successful overwrite.
+        }
+        const visible = this.rulePreferences?.rules ?? [];
+        if (sameScope)
+            this.rules.rules = visible;
+        else {
+            this.rules = this.newRules(visible);
+            this.diagnostics = this.diagnosticView();
+        }
+        this.ruleWorkspace = scope.workspace;
+        this.ruleIdentity = { actor: context.actor, deployment: context.deployment, generation: context.generation, credential: context.credential, authorization: context.authorization };
+    }
     private async audience(context: HostedLinksContext, epoch: number): Promise<boolean> {
         const current = await this.request<{
             actor: string;
@@ -203,6 +245,7 @@ export class HostedKnowledgeLinks {
         this.captured = context;
         this.hash = hash;
         this.stale = false;
+        this.bindRules(context, result);
         setUiText(this.message, result.links.coverage === "complete" ? uiMessage("hostedLinks.linksReadForAuthorizedScope") : uiMessage("hostedLinks.scanIncompleteConfirmedResultsOnly"));
     }
     private current(): {
@@ -298,7 +341,7 @@ export class HostedKnowledgeLinks {
         row.append(ui("p", "", displayMessage("hostedLinks.mentionTextRange", { p0: uiDisplayParameter(hit.terms.join(" / ")), p1: hit.startScalar, p2: hit.endScalar })));
         for (const candidate of hit.candidates ?? hit.targets.map(target => ({ target, term: hit.terms[0], provenance: "title", fragment: undefined }))) {
             const target = candidate.target;
-            if ((this.mentionDomain === "fragments" && !candidate.fragment || this.mentionDomain === "notes" && candidate.fragment) || !visibleCandidate(this.rules.rules, this.owner.context()?.resource ?? "", candidate.term, this.relationNode(target).key))
+            if ((this.mentionDomain === "fragments" && !candidate.fragment || this.mentionDomain === "notes" && candidate.fragment) || !visibleCandidate(this.rules.rules, this.profile?.graph?.root ?? "", candidate.term, this.relationNode(target).key))
                 continue;
             const choice = ui("div"), open = action(uiMessage("hostedLinks.openCandidate"), () => this.run(async () => {
                 const { context, epoch } = this.current();
@@ -310,7 +353,7 @@ export class HostedKnowledgeLinks {
             const convert = action(displayMessage("hostedLinks.convertRangeToLink", { p0: uiDisplayParameter(target.title), p1: uiDisplayParameter(candidate.fragment ? ` #${candidate.fragment}` : "") }), () => this.run(() => this.convert({ kind: "mention", fragmentId: fragment, startScalar: hit.startScalar, endScalar: hit.endScalar, target: target.nodeRef, fragment: candidate.fragment })));
             const context = this.owner.context();
             convert.disabled = this.busy || !hit.writable || !this.profile?.writable || !context?.writable || !!context.pending || !!context.compare;
-            const source = this.exclusionScope === "note" ? this.owner.context()?.resource : undefined;
+            const source = this.exclusionScope === "note" ? this.profile?.graph?.root : undefined;
             choice.append(convert, action(uiMessage("knowledge.excludeTarget"), () => this.rules.preview({ kind: "target", value: this.relationNode(target).key, source }, displayMessage("hostedLinks.excludeTargetDescription", { p0: uiDisplayParameter(target.title), p1: uiDisplayParameter(this.relationNode(target).key), p2: uiDisplayParameter(source ? uiMessage("knowledge.scopeThisNote") : uiMessage("hostedLinks.pageAuthorizationScope")) }), this.profile?.mentions.fragments.flatMap(f => f.hits).filter(h => h.targets.some(t => t.resource === target.resource)).length ?? 0, () => this.paint())), action(uiMessage("knowledge.ignoreTerm"), () => this.rules.preview({ kind: "term", value: candidate.term, source }, displayMessage("hostedLinks.ignoreTermDescription", { p0: uiDisplayParameter(candidate.term), p1: uiDisplayParameter(source ? uiMessage("knowledge.scopeThisNote") : uiMessage("hostedLinks.pageAuthorizationScope")) }), this.profile?.mentions.fragments.flatMap(f => f.hits).filter(h => h.terms.includes(candidate.term)).length ?? 0, () => this.paint())));
             row.append(choice);
         }
@@ -322,6 +365,10 @@ export class HostedKnowledgeLinks {
         const profile = this.profile;
         if (!profile)
             return;
+        if (!this.captured || !this.accepts(this.captured, this.epoch) || !sameHostedLinksIdentity(this.captured, this.owner.identity())) {
+            this.documentChanged();
+            return;
+        }
         if (this.composing) {
             this.deferredPaint = true;
             return;
@@ -329,6 +376,7 @@ export class HostedKnowledgeLinks {
         const active = document.activeElement;
         const focus = active instanceof HTMLInputElement && this.content.contains(active) ? { label: active.getAttribute("aria-label"), start: active.selectionStart, end: active.selectionEnd } : null;
         this.content.replaceChildren();
+        this.content.append(ui("p", this.rulesReadFailed ? "knowledge-warning" : "hint", uiMessage(this.rulesReadFailed ? "hostedLinks.personalRulesReadFailed" : "hostedLinks.personalRulesBrowserScope")));
         const graphSection = ui("details"), graphTitle = ui("summary", "", uiMessage("hostedLinks.relationshipGraph"));
         graphSection.dataset.knowledgeView = "graph";
         graphSection.append(graphTitle);

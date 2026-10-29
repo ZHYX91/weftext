@@ -5,7 +5,7 @@ import type { Inventory, InventoryEntry } from "./types";
 import { nodeSourceHash } from "./hosted-navigation-state";
 import { mountListThumbnail, type ListPreview } from "./list-thumbnail";
 import type { MediaResource } from "./media-viewer";
-import { contentsActionEntry, contentsPreferenceKey, contentsSection, directContentsEntries, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, movedSibling, type AuthoredOrder, type ContentsPreference, type ContentsSection, type OrderPlan, type PendingOrder } from "./node-contents-state";
+import { contentsActionEntry, contentsPreferenceKey, contentsSection, directContentsEntries, decodeAuthoredOrder, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, isTerminalOrderStatus, movedSibling, type AuthoredOrder, type ContentsPreference, type ContentsSection, type OrderPlan, type PendingOrder } from "./node-contents-state";
 import { canonicalNodeSources } from "./file-tree";
 import "./node-contents.css";
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
@@ -100,8 +100,10 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
         }
         finally {
             busy = false;
-            if (!disposed)
+            if (!disposed) {
+                renderRows();
                 renderOrder();
+            }
         }
     };
     header.append(button(leaf(inventory.root), () => host.browse(null)));
@@ -369,7 +371,7 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
         if (pending) {
             const originalPending = pending;
             orderHost.append(el("p", displayMessage("nodeContents.originalOrderStatus", { p0: uiDisplayParameter(originalPending.request.operationId), p1: uiDisplayParameter(originalPending.status) })));
-            const inspect = button(uiMessage("nodeContents.inspectOriginalOrder"), () => runBusy(async () => { receive(await host.request<OrderPlan>("/api/operations/status", { operationId: pending!.request.operationId })); }));
+            const inspect = button(uiMessage("nodeContents.inspectOriginalOrder"), () => runBusy(inspectOriginalOrder));
             inspect.disabled = busy;
             orderHost.append(inspect);
             if (!pending.plan && !pending.attempted) {
@@ -381,29 +383,48 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
                 const confirm = button(uiMessage("nodeContents.confirmOriginalChanges"), () => showProposal(pending!.request.children, true));
                 confirm.disabled = busy;
                 orderHost.append(confirm);
-                const cancel = button(uiMessage("nodeContents.cancelOriginalPlan"), () => runBusy(async () => { receive(await host.request<OrderPlan>("/api/navigation/order/cancel", { root: inventory.root, operationId: pending!.request.operationId, planId: pending!.plan!.planId })); }));
+                const cancel = button(uiMessage("nodeContents.cancelOriginalPlan"), () => runBusy(async () => { await receive(await host.request<OrderPlan>("/api/navigation/order/cancel", { root: inventory.root, operationId: pending!.request.operationId, planId: pending!.plan!.planId })); }));
                 cancel.disabled = busy;
                 orderHost.append(cancel);
             }
-            if (["committed", "resolved", "cancelled"].includes(pending.status))
-                orderHost.append(button(uiMessage("nodeContents.finishOriginalOperation"), () => { pending = undefined; retainPending(); renderOrder(); renderRows(); }));
         }
     }
-    function receive(plan: OrderPlan) {
+    async function inspectOriginalOrder(): Promise<void> {
+        if (!pending) return;
+        await receive(await host.request<OrderPlan>("/api/operations/status", { operationId: pending.request.operationId }));
+    }
+    async function receive(plan: OrderPlan): Promise<void> {
+        // The old owner may finish a request after navigation remounts this
+        // parent. It must never modify the replacement owner's recovery key.
+        if (disposed) return;
         if (!pending || plan.operationId !== pending.request.operationId || pending.plan && plan.planId && pending.plan.planId !== plan.planId)
             throw new UiError(uiMessage("nodeContents.orderReceiptMismatch"));
+        const original = pending;
         if (plan.planId)
-            pending.plan = plan;
-        pending.status = plan.status;
+            original.plan = plan;
+        original.status = plan.status;
         retainPending();
         if (plan.status === "committed") {
             host.notify(uiMessage("nodeContents.orderCommitted"));
-            void host.changed().catch(error => host.notify(String(error)));
+            // The host updates the library/tree without retiring this owner.
+            // A failed library refresh retains the known original outcome.
+            await host.changed();
         }
+        if (!isTerminalOrderStatus(plan.status) || disposed || pending !== original || original.status !== plan.status)
+            return;
+        const fresh = await refreshOrder();
+        if (disposed || pending !== original || original.status !== plan.status || recoveryBlocked)
+            return;
+        if (!fresh?.complete)
+            throw new UiError(uiMessage("nodeContents.orderScopeIncomplete"));
+        // Remove the durable record first. A storage error keeps the original
+        // in memory as well, so it cannot silently enable a new operation.
+        localStorage.removeItem(pendingKey());
+        pending = undefined;
     }
     async function prepare() {
         const selected = pending!;
-        receive(await host.request<OrderPlan>("/api/navigation/order/prepare", structuredClone(selected.request)));
+        await receive(await host.request<OrderPlan>("/api/navigation/order/prepare", structuredClone(selected.request)));
     }
     function propose(refs: string[]) {
         if (busy || pending || recoveryBlocked || !order?.complete || refs.join("\n") === order.orderedRefs.join("\n"))
@@ -434,7 +455,7 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
                 if (prepared) {
                     if (pending !== original || pending?.status !== "prepared" || !pending.plan)
                         throw new UiError(uiMessage("nodeContents.originalChanged"));
-                    await runBusy(async () => { pending!.attempted = true; pending!.status = "unknown"; retainPending(); receive(await host.request<OrderPlan>("/api/operations/commit", { operationId: pending!.request.operationId, planId: pending!.plan!.planId })); });
+                    await runBusy(async () => { pending!.attempted = true; pending!.status = "unknown"; retainPending(); await receive(await host.request<OrderPlan>("/api/operations/commit", { operationId: pending!.request.operationId, planId: pending!.plan!.planId })); });
                 }
                 else {
                     if (pending || order !== selectedOrder || recoveryBlocked)
@@ -465,17 +486,16 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
         dialogs.add(dialog);
         dialog.showModal();
     }
-    async function refreshOrder() {
+    async function refreshOrder(): Promise<AuthoredOrder | undefined> {
         if (!parentRef)
             return;
-        const read = await host.request<AuthoredOrder>("/api/navigation/order/read", { root: inventory.root, parentRef });
+        const read = decodeAuthoredOrder(await host.request<AuthoredOrder>("/api/navigation/order/read", { root: inventory.root, parentRef }), parentRef);
         if (disposed)
             return;
-        if (read.parentRef !== parentRef || !read.baseId || !Array.isArray(read.members) || !Array.isArray(read.orderedRefs))
-            throw new UiError(uiMessage("nodeContents.parentReceiptMismatch"));
         order = read;
         renderRows();
         renderOrder();
+        return read;
     }
     renderRows();
     renderOrder();
@@ -502,7 +522,10 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
                 recoveryBlocked = true;
                 persistenceError = displayMessage("nodeContents.recoveryBlocked", { p0: uiDisplayParameter(error instanceof Error ? errorUiText(error) : String(error)) });
             }
-            await refreshOrder();
+            if (pending && isTerminalOrderStatus(pending.status))
+                await runBusy(inspectOriginalOrder);
+            else
+                await refreshOrder();
         }
         catch (error) {
             if (!disposed) {

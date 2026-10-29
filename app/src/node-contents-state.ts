@@ -72,6 +72,26 @@ export interface AuthoredOrder {
     orderedRefs: string[];
     complete: boolean;
 }
+/** A fresh order is usable only when its complete member projection and order
+ * describe the same exact parent and identities. Never repair a malformed read
+ * with a previous list or with the requested order. */
+export function decodeAuthoredOrder(value: unknown, parentRef: string): AuthoredOrder {
+    const read = value as Partial<AuthoredOrder> | null;
+    if (!read || read.parentRef !== parentRef || typeof read.baseId !== "string" || !read.baseId
+        || read.beforeSource !== null && typeof read.beforeSource !== "string" || typeof read.complete !== "boolean"
+        || !Array.isArray(read.members) || !Array.isArray(read.orderedRefs)
+        || read.members.some(member => !member || typeof member.targetRef !== "string" || !member.targetRef || typeof member.path !== "string" || !member.path || typeof member.name !== "string")
+        || read.orderedRefs.some(ref => typeof ref !== "string" || !ref))
+        throw new UiError(uiMessage("nodeContents.parentReceiptMismatch"));
+    const members = new Set(read.members.map(member => member.targetRef)), ordered = new Set(read.orderedRefs);
+    if (members.size !== read.members.length || ordered.size !== read.orderedRefs.length
+        || members.size !== ordered.size || [...members].some(ref => !ordered.has(ref)))
+        throw new UiError(uiMessage("nodeContents.parentReceiptMismatch"));
+    return read as AuthoredOrder;
+}
+export function isTerminalOrderStatus(status: string): boolean {
+    return status === "committed" || status === "resolved" || status === "cancelled";
+}
 export interface OrderPlan {
     operationId: string;
     planId: string;

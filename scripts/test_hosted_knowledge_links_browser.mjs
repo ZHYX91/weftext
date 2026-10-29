@@ -90,6 +90,18 @@ try {
   await ignore.click();await ruleDialog.getByRole('button',{name:'保存个人规则',exact:true}).click();assert.equal(await diagnostics.locator('article').filter({hasText:fixture.refs.Other+'#lost'}).count(),0);
   await diagnostics.locator('details').filter({has:page.getByText('个人规则（1）',{exact:true})}).locator('summary').click();await diagnostics.getByRole('button',{name:'撤销偏好修改',exact:true}).click();assert.equal(await diagnostics.locator('article').filter({hasText:fixture.refs.Other+'#lost'}).count(),2);
   await passed('hosted target/source/occurrence diagnostics preserve both invalid-fragment sources; scoped personal ignore previews cancel, save and undo while retaining real node edges');
+  await ignore.click();await ruleDialog.getByRole('button',{name:'保存个人规则',exact:true}).click();
+  const ruleWorkspace=stageProfile.graph.root.split('/')[0],ruleAudience=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('weftext-hosted-identity')));
+  const ruleStorageKey='weftext-hosted-relations-v1:'+JSON.stringify([ruleAudience.deployment,ruleAudience.actor,ruleWorkspace]);
+  const persistedRule=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),ruleStorageKey);assert.equal(persistedRule.version,1);assert.equal(persistedRule.rules.length,1);assert.equal(persistedRule.rules[0].kind,'issue');
+  assert.equal((await draft()).source,fixture.sources.Shared);assert.equal(await savedSource('Shared'),fixture.sources.Shared);
+  await page.reload();await ready();await author();const reopenedRuleProfile=await readLinks();
+  assert.equal(reopenedRuleProfile.graph.root,stageProfile.graph.root);assert.equal(reopenedRuleProfile.diagnostics.issues.filter(i=>i.resolution.status==='fragmentMissing').length,2);
+  assert.equal(await diagnostics.locator('article').filter({hasText:fixture.refs.Other+'#lost'}).count(),0);
+  const restoredRuleControls=diagnostics.locator('details').filter({has:page.getByText('个人规则（1）',{exact:true})});await restoredRuleControls.locator('summary').click();await restoredRuleControls.getByRole('button',{name:'移除此规则',exact:true}).click();
+  assert.equal(await diagnostics.locator('article').filter({hasText:fixture.refs.Other+'#lost'}).count(),2);assert.equal((await draft()).source,fixture.sources.Shared);assert.equal(await savedSource('Shared'),fixture.sources.Shared);
+  assert.equal((await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),ruleStorageKey)).rules.length,0);
+  await passed('a real hosted issue preference is saved under its confirmed deployment, actor and workspace; reload reapplies it without removing backend diagnostics or changing the Draft/saved author source, and removal persists');
   await panel().getByLabel('显示潜在提及',{exact:true}).check();await panel().getByLabel('候选范围',{exact:true}).selectOption('fragments');
   const headingRow=mentions.locator('.query-result-row').filter({hasText:'章节 · 文字位置'}),headingConvert=headingRow.getByRole('button',{name:'将此范围转换为链接：Other #章',exact:true});assert.equal(await headingConvert.count(),1);
   const fragmentReply=response(page,r=>r.url().endsWith('/api/hosted/knowledge-links/convert'));await headingConvert.click();const fragmentProposal=await(await fragmentReply).json();assert.equal(fragmentProposal.patch.range.raw,'章节');assert.ok(fragmentProposal.patch.after.includes(fixture.refs.Other+'#%E7%AB%A0'));await waitSource(fragmentProposal.patch.after);await page.locator('#source .cm-content').press('ControlOrMeta+z');await waitSource(fixture.sources.Shared);assert.equal(await savedSource('Shared'),fixture.sources.Shared);

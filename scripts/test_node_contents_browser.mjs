@@ -20,19 +20,30 @@ try{
     const root='D:/Owned/Library',folder=root+'/Parent',ref=id=>'weftext-node://'+ids[0]+'/'+id,parentRef=ref(ids[1]),a=ref(ids[2]),b=ref(ids[3]);
     const entries=[{path:folder+'/A',parentPath:folder,relativePath:'Parent/A',name:'A',kind:'directory',identityStatus:'unmanaged'},{path:folder+'/B',parentPath:folder,relativePath:'Parent/B',name:'B',kind:'directory',identityStatus:'unmanaged'},...['A','B'].map((name,index)=>({path:folder+'/'+name+'/'+name+'.typ',parentPath:folder+'/'+name,relativePath:'Parent/'+name+'/'+name+'.typ',name:name+'.typ',kind:'node',identityStatus:'admitted',nodeId:ids[index+2],source:'Owned '+name+' body',excerpt:'摘要 '+name}))];
     const inventory={root,workspaceId:ids[0],status:'localMvp',entries,warnings:[],complete:true};
-    const fixture=window.fixture={requests:[],reads:[],opened:[],browsed:[],menus:[],order:[b,a],operations:new Map(),losePrepare:true,loseCommit:true,changed:0,notices:[],parentRef,a,b,root,folder,release:[],generation:0,previewSerial:0,controller:undefined};
+    const fixture=window.fixture={requests:[],reads:[],opened:[],browsed:[],menus:[],order:[b,a],operations:new Map(),operationOrders:new Map(),losePrepare:true,loseCommit:true,changed:0,notices:[],parentRef,a,b,root,folder,release:[],generation:0,previewSerial:0,orderReads:0,readFault:null,failChanged:false,failRemove:false,failSet:false,failSetAfterCommit:false,holdRead:false,heldReads:[],controller:undefined};
+    const removeItem=Storage.prototype.removeItem;Storage.prototype.removeItem=function(key){if(fixture.failRemove&&key===`weftext-node-contents:${encodeURIComponent(parentRef)}:operation`)throw Error('Owned operation retirement storage failure');return removeItem.call(this,key);};
+    const setItem=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(fixture.failSet&&key===`weftext-node-contents:${encodeURIComponent(parentRef)}:operation`)throw Error('Owned terminal record storage failure');return setItem.call(this,key,value);};
     const canvas=document.createElement('canvas');canvas.width=2;canvas.height=2;canvas.getContext('2d').fillRect(0,0,2,2);const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));fixture.blob=blob;
     const request=async(route,body)=>{
       fixture.requests.push({route,body:structuredClone(body)});
       if(route==='/api/navigation/capture')return{targetRef:parentRef,status:'managed'};
-      if(route==='/api/navigation/order/read')return{parentRef,baseId:'basis',beforeSource:null,members:[{targetRef:a,path:folder+'/A',name:'A'},{targetRef:b,path:folder+'/B',name:'B'}],orderedRefs:fixture.order,complete:true};
+      if(route==='/api/navigation/order/read'){
+        const read={parentRef,baseId:'basis:'+ ++fixture.orderReads,beforeSource:null,members:[{targetRef:a,path:folder+'/A',name:'A'},{targetRef:b,path:folder+'/B',name:'B'}],orderedRefs:[...fixture.order],complete:true};
+        if(fixture.holdRead)await new Promise(resolve=>fixture.heldReads.push(resolve));
+        const fault=fixture.readFault;fixture.readFault=null;
+        if(fault==='network')throw Error('Owned fresh order read failure');
+        if(fault==='incomplete')read.complete=false;
+        if(fault==='parent')read.parentRef=ref('55555555-5555-4555-8555-555555555555');
+        return read;
+      }
       if(route==='/api/navigation/order/prepare'){
-        const plan={operationId:body.operationId,planId:'plan:'+body.operationId,status:'prepared',changes:[{path:root+'/.weftext-settings.json',action:'create',bytes:450}]};fixture.operations.set(body.operationId,plan);
+        const plan={operationId:body.operationId,planId:'plan:'+body.operationId,status:'prepared',changes:[{path:root+'/.weftext-settings.json',action:'create',bytes:450}]};fixture.operations.set(body.operationId,plan);fixture.operationOrders.set(body.operationId,[...body.children]);
         if(fixture.losePrepare){fixture.losePrepare=false;throw Error('Owned lost prepare reply');}return plan;
       }
       if(route==='/api/operations/status')return fixture.operations.get(body.operationId);
       if(route==='/api/operations/commit'){
-        const plan=fixture.operations.get(body.operationId);if(plan.status!=='prepared')throw Error('Original plan is not prepared');fixture.order=[a,b];plan.status='committed';
+        const plan=fixture.operations.get(body.operationId);if(plan.status!=='prepared')throw Error('Original plan is not prepared');fixture.order=[...fixture.operationOrders.get(body.operationId)];plan.status='committed';
+        if(fixture.failSetAfterCommit){fixture.failSetAfterCommit=false;fixture.failSet=true;}
         if(fixture.loseCommit){fixture.loseCommit=false;throw Error('Owned lost commit reply');}return plan;
       }
       if(route==='/api/navigation/order/cancel'){const plan=fixture.operations.get(body.operationId);plan.status='resolved';return plan;}
@@ -43,7 +54,7 @@ try{
       throw Error('Unexpected component route '+route);
     };
     fixture.inventory=inventory;
-    window.mount=(currentFolder=folder)=>{fixture.controller?.dispose();fixture.generation++;fixture.controller=mountNodeContents(document.querySelector('section'),inventory,currentFolder,'',new Set(),{request,readBlob:async(route,body)=>{fixture.reads.push({route,body});return blob;},open:entry=>{fixture.opened.push(structuredClone(entry));},browse:path=>{fixture.browsed.push(path);},menu:(entries,folder)=>{fixture.menus.push({entries:structuredClone(entries),folder});},preview:()=>{},changed:async()=>{fixture.changed++;},notify:message=>fixture.notices.push(message)});};window.mount();
+    window.mount=(currentFolder=folder)=>{fixture.controller?.dispose();fixture.generation++;fixture.controller=mountNodeContents(document.querySelector('section'),inventory,currentFolder,'',new Set(),{request,readBlob:async(route,body)=>{fixture.reads.push({route,body});return blob;},open:entry=>{fixture.opened.push(structuredClone(entry));},browse:path=>{fixture.browsed.push(path);},menu:(entries,folder)=>{fixture.menus.push({entries:structuredClone(entries),folder});},preview:()=>{},changed:async()=>{fixture.changed++;if(fixture.failChanged)throw Error('Owned library inventory refresh failure');},notify:message=>fixture.notices.push(message)});};window.mount();
   });
   const rows=page.locator('.node-content-row'),sort=page.getByLabel('节点内容个人排序',{exact:true}),dialog=page.getByRole('dialog',{name:'作者同级顺序变更',exact:true});
   await page.waitForFunction(()=>window.fixture.requests.some(item=>item.route==='/api/navigation/order/read'));
@@ -78,7 +89,46 @@ try{
   await page.evaluate(()=>window.mount());await page.getByRole('button',{name:'检查原作者顺序操作',exact:true}).click();await page.getByRole('button',{name:'查看原顺序变更并确认',exact:true}).click();
   await dialog.getByRole('button',{name:'确认提交原作者顺序',exact:true}).click();await page.waitForFunction(()=>window.fixture.notices.includes('Owned lost commit reply'));await dialog.getByRole('button',{name:'保留原计划，暂不提交',exact:true}).click();await page.getByRole('button',{name:'检查原作者顺序操作',exact:true}).click();await page.waitForFunction(()=>window.fixture.changed===1);
   assert.equal(await page.evaluate(()=>window.fixture.requests.filter(item=>['/api/navigation/order/prepare','/api/operations/commit'].includes(item.route)).every(item=>item.body.operationId===window.fixture.requests.find(item=>item.route==='/api/navigation/order/prepare').body.operationId)),true);assert.ok(original);pass('Lost prepare/commit replies, component restart and original-operation inspection preserve one request and its plan.');
-  await page.getByRole('button',{name:'结束已确认顺序操作',exact:true}).click();await page.evaluate(()=>window.mount());await page.getByRole('button',{name:'B 作者顺序上移',exact:true}).waitFor();await page.getByRole('button',{name:'B 作者顺序上移',exact:true}).click();await dialog.getByRole('button',{name:'准备此顺序变更',exact:true}).click();await dialog.waitFor({state:'hidden'});await page.getByRole('button',{name:'取消原作者顺序计划',exact:true}).click();await page.waitForFunction(()=>[...window.fixture.operations.values()].some(item=>item.status==='resolved'));pass('Prepared cancellation durably ends the original plan without committing a replacement.');
+  const pending=()=>page.evaluate(()=>JSON.parse(localStorage.getItem(`weftext-node-contents:${encodeURIComponent(window.fixture.parentRef)}:operation`)||'null'));
+  const awaitRetired=()=>page.waitForFunction(()=>!localStorage.getItem(`weftext-node-contents:${encodeURIComponent(window.fixture.parentRef)}:operation`)&&document.querySelectorAll('.node-sibling-actions button').length>0);
+  await awaitRetired();assert.equal(await page.getByRole('button',{name:'结束已确认顺序操作',exact:true}).count(),0);assert.deepEqual(await rows.locator(':scope > button:first-of-type').allTextContents(),['A · 笔记','B · 笔记']);
+  const prepareMove=async()=>{
+    const name=await page.evaluate(()=>window.fixture.order[1]===window.fixture.a?'A':'B');
+    await page.getByRole('button',{name:name+' 作者顺序上移',exact:true}).click();await dialog.getByRole('button',{name:'准备此顺序变更',exact:true}).click();await dialog.waitFor({state:'hidden'});
+    const operation=await pending();assert.equal(operation.status,'prepared');
+    await page.getByRole('button',{name:'查看原顺序变更并确认',exact:true}).click();
+    return operation.request.operationId;
+  };
+  const commit=()=>dialog.getByRole('button',{name:'确认提交原作者顺序',exact:true}).click();
+  const commitCount=id=>page.evaluate(id=>window.fixture.requests.filter(item=>item.route==='/api/operations/commit'&&item.body.operationId===id).length,id);
+  let next=await prepareMove();await commit();await dialog.waitFor({state:'hidden'});await awaitRetired();
+  assert.equal(await commitCount(next),1);assert.deepEqual(await rows.locator(':scope > button:first-of-type').allTextContents(),['B · 笔记','A · 笔记']);
+  const latestPrepare=await page.evaluate(()=>window.fixture.requests.filter(item=>item.route==='/api/navigation/order/prepare').at(-1));assert.notEqual(latestPrepare.body.operationId,original);assert.notEqual(latestPrepare.body.baseId,'basis:1');
+  pass('A recovered committed operation automatically retires only after a fresh exact order, allowing the next explicit prepare/confirm/commit without a finish click or remount.');
+  next=await prepareMove();await dialog.getByRole('button',{name:'保留原计划，暂不提交',exact:true}).click();await page.getByRole('button',{name:'取消原作者顺序计划',exact:true}).click();await awaitRetired();assert.equal(await commitCount(next),0);assert.equal(await page.evaluate(id=>window.fixture.operations.get(id).status,next),'resolved');
+  pass('Prepared cancellation refreshes the real order and automatically retires the original plan without committing a replacement.');
+  for(const fault of ['network','incomplete','parent']){
+    next=await prepareMove();await page.evaluate(fault=>{window.fixture.readFault=fault;},fault);await commit();
+    await page.waitForFunction(id=>JSON.parse(localStorage.getItem(`weftext-node-contents:${encodeURIComponent(window.fixture.parentRef)}:operation`)).status==='committed',next);
+    await dialog.getByRole('button',{name:'保留原计划，暂不提交',exact:true}).click();
+    assert.equal((await pending()).request.operationId,next);assert.equal(await page.locator('.node-sibling-actions button').count(),0);assert.equal(await commitCount(next),1);
+    await page.getByRole('button',{name:'检查原作者顺序操作',exact:true}).click();await awaitRetired();assert.equal(await commitCount(next),1);
+  }
+  pass('Network failure, incomplete membership and a wrong-parent refresh retain the committed original and block new sorting; inspecting that same operation recovers without another commit.');
+  next=await prepareMove();await page.evaluate(()=>{window.fixture.failChanged=true;});await commit();await page.waitForFunction(()=>window.fixture.notices.includes('Owned library inventory refresh failure'));await dialog.getByRole('button',{name:'保留原计划，暂不提交',exact:true}).click();assert.equal((await pending()).request.operationId,next);assert.equal(await page.locator('.node-sibling-actions button').count(),0);
+  await page.evaluate(()=>{window.fixture.failChanged=false;window.mount();});await awaitRetired();assert.equal(await commitCount(next),1);assert.ok(await page.evaluate(id=>window.fixture.requests.some(item=>item.route==='/api/operations/status'&&item.body.operationId===id),next));
+  pass('Committed-but-failed library refresh keeps the original terminal record; a remount verifies the Core outcome, refreshes and retires it without repeating the write.');
+  next=await prepareMove();await page.evaluate(()=>{window.fixture.failRemove=true;});await commit();await page.waitForFunction(()=>window.fixture.notices.includes('Owned operation retirement storage failure'));await dialog.getByRole('button',{name:'保留原计划，暂不提交',exact:true}).click();assert.equal((await pending()).request.operationId,next);assert.equal(await page.locator('.node-sibling-actions button').count(),0);
+  await page.evaluate(()=>{window.fixture.failRemove=false;});await page.getByRole('button',{name:'检查原作者顺序操作',exact:true}).click();await awaitRetired();assert.equal(await commitCount(next),1);
+  pass('A failed durable-record removal leaves both the original record and in-memory pending state intact until original-operation recovery succeeds.');
+  next=await prepareMove();await page.evaluate(()=>{window.fixture.failSetAfterCommit=true;});await commit();await page.waitForFunction(()=>window.fixture.notices.includes('Owned terminal record storage failure'));await dialog.getByRole('button',{name:'保留原计划，暂不提交',exact:true}).click();assert.equal((await pending()).request.operationId,next);assert.equal((await pending()).status,'unknown');assert.equal(await page.locator('.node-sibling-actions button').count(),0);assert.equal(await commitCount(next),1);
+  await page.evaluate(()=>{window.fixture.failSet=false;window.mount();});await page.getByRole('button',{name:'检查原作者顺序操作',exact:true}).click();await awaitRetired();assert.equal(await commitCount(next),1);
+  pass('A committed response whose terminal record cannot be stored preserves the durable unknown request across restart and recovers only by querying that same operation.');
+  next=await prepareMove();await page.evaluate(()=>{window.fixture.holdRead=true;});await commit();await page.waitForFunction(()=>window.fixture.heldReads.length===1);await page.evaluate(()=>{window.fixture.holdRead=false;window.mount();});await awaitRetired();
+  const replacement=await prepareMove();await dialog.getByRole('button',{name:'保留原计划，暂不提交',exact:true}).click();await page.evaluate(()=>{for(const release of window.fixture.heldReads.splice(0))release();});await page.waitForTimeout(100);
+  assert.equal((await pending()).request.operationId,replacement);assert.notEqual(replacement,next);assert.equal((await pending()).status,'prepared');assert.equal(await commitCount(next),1);
+  await page.getByRole('button',{name:'取消原作者顺序计划',exact:true}).click();await awaitRetired();
+  pass('A retired owner’s late fresh-order response cannot erase a replacement owner’s new prepared operation or alter its original recovery identity.');
   await page.getByLabel('节点内容缩略图',{exact:true}).uncheck();const firstPreviewSerial=await page.evaluate(()=>window.fixture.previewSerial);await page.getByLabel('节点内容缩略图',{exact:true}).check();await page.waitForFunction(serial=>window.fixture.release.some(item=>item.generation===window.fixture.generation&&item.serial>serial),firstPreviewSerial);
   const editor=page.getByRole('textbox',{name:'独立正文草稿',exact:true});await editor.focus();await page.evaluate(()=>{for(const item of window.fixture.release.splice(0))item.resolve();});await rows.locator('img').first().waitFor();assert.equal(await editor.evaluate(element=>document.activeElement===element),true);assert.equal(await editor.inputValue(),'保留草稿');
   assert.equal(await page.evaluate(()=>window.fixture.reads.every(item=>item.body.resourceRevision==='asset-revision'&&item.body.revision.startsWith('observed-source:row:'))),true);pass('Late real image decoding preserves editor focus and uses the exact source/resource basis.');

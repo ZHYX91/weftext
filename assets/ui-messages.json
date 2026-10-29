@@ -6,6 +6,36 @@
     "en-US"
   ],
   "messages": {
+    "hostedLinks.personalRulesReadFailed": {
+      "zh-CN": "个人链接规则未能读取，浏览器中的原记录已保留。本次未加载规则，也未应用偏好修改；请重新读取链接后重试。",
+      "en-US": "Personal link rules could not be read. The browser's original record is retained. No rules or preference changes were applied; read the links again to retry.",
+      "params": {}
+    },
+    "hostedLinks.personalRulesBrowserScope": {
+      "zh-CN": "个人关系规则保存在此浏览器，按服务器、账号和笔记库分别保存。只显示当前获权范围内适用的规则。",
+      "en-US": "Personal relationship rules are saved in this browser separately for each server, account and library. Only rules applicable to the currently authorized scope are shown.",
+      "params": {}
+    },
+    "proofreading.stopWaiting": {
+      "zh-CN": "停止等待结果",
+      "en-US": "Stop waiting for results",
+      "params": {}
+    },
+    "proofreading.stopWaitingHelp": {
+      "zh-CN": "停止等待只会阻止展示本次结果；后台扫描可能继续运行。本次客户端请求结束前不能再次校对。",
+      "en-US": "Stopping prevents this result from being shown; the background scan may continue. Another scan can start after this client request settles.",
+      "params": {}
+    },
+    "proofreading.stoppedPending": {
+      "zh-CN": "已停止采用本次结果，后台扫描可能继续运行。正在等待本次客户端请求结束，期间不能再次校对。",
+      "en-US": "This result will not be used; the background scan may continue. Another scan cannot start until this client request settles.",
+      "params": {}
+    },
+    "proofreading.stoppedSettled": {
+      "zh-CN": "本次客户端请求已结束；未展示或采用本次结果。停止等待不表示后台已取消。",
+      "en-US": "The client request has settled. Its result was not shown or used. Stopping the wait does not confirm background cancellation.",
+      "params": {}
+    },
     "workspaceViews.currentDocumentGraph": {
       "zh-CN": "当前文档关系图",
       "en-US": "Current document graph",

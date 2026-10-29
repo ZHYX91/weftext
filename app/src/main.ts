@@ -1278,7 +1278,7 @@ async function pathDialog(kind: "openLibrary" | "createLibrary" | "file" | "save
         }));
     } finally { finishNativeActivity(); }
 }
-function renderSidebar(): void {
+function renderSidebar(refreshNodeBrowser = true): void {
     if (sidebarComposing)
         return;
     workspaceTools.assertLibraryChange(inventory);
@@ -1422,7 +1422,7 @@ function renderSidebar(): void {
             newInput.setSelectionRange(selection[0], selection[1]);
     }
     navigationLayout.restoreSidebarState();
-    renderNodeBrowser();
+    if (refreshNodeBrowser) renderNodeBrowser();
 }
 function toggleFolder(path: string): void { const key = normalize(path); collapsed.has(key) ? collapsed.delete(key) : collapsed.add(key); renderSidebar(); }
 function browseFolder(path: string | null): void {
@@ -1587,7 +1587,8 @@ async function openInventoryResource(root: string, folder: string, path: string)
 function renderNodeContents(host: HTMLElement, folder: string): void {
     if (!inventory)
         return;
-    const selected = inventory, panel = el("section", "node-contents");
+    let selected = inventory;
+    const panel = el("section", "node-contents");
     setUiAttr(panel, "aria-label", uiMessage("shell.nodeContents"));
     host.append(panel);
     nodeContents = mountNodeContents(panel, selected, folder, nodeQuery, contentSelections, {
@@ -1599,9 +1600,13 @@ function renderNodeContents(host: HTMLElement, folder: string): void {
             workspaceTools.invalidateLibraryEnvironment(selected.root);
             if (inventory === selected) {
                 const next = await api<Inventory>("/api/library/open", { path: selected.root });
+                if (inventory !== selected) return;
                 workspaceTools.assertLibraryChange(next);
                 inventory = next;
-                renderSidebar();
+                selected = next;
+                // Sibling ordering refreshes the inventory without replacing
+                // the operation owner before its exact order read/retirement.
+                renderSidebar(false);
             }
 
         }),

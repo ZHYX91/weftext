@@ -227,6 +227,12 @@ async function assertSameEditor(handle, expected) {
 try {
   await start();
   await api('/api/library/create', { path: root, operationId: randomUUID() });
+  // Admit this owned fixture's root explicitly so its actual Parent/Sibling
+  // nodes can participate in shared author ordering through the real UI.
+  const rootAdmission = await api('/api/navigation/admit-directory', { root, path: root, operationId: randomUUID() });
+  const rootAdmissionResult = await api('/api/operations/commit', { operationId: rootAdmission.preview.operationId, planId: rootAdmission.preview.planId });
+  assert.equal(rootAdmissionResult.status, 'committed');
+  result.orderFixture = { parentRef: rootAdmission.targetRef, operationId: rootAdmission.preview.operationId };
   const parent = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Parent', operationId: randomUUID() }));
   const child = createdDocument(await api('/api/note/create', { root, parent: path.dirname(parent.path), name: 'Child', operationId: randomUUID() }));
   const sibling = createdDocument(await api('/api/note/create', { root, parent: root, name: 'Sibling', operationId: randomUUID() }));
@@ -421,6 +427,75 @@ try {
   pass('Outline updates from the accepted native render without knowledge scans or a preview host and preserves exact source navigation and Undo');
   await page.screenshot({ path: path.join(out, 'workspace-initial-1440.png'), fullPage: false });
   await observeEditorInput();
+
+  // Exercise the actual main.ts host callback twice on the same mounted owner.
+  // The second explicit reorder restores the initial shared order; document
+  // text/selection/history and the independent filesystem tree stay intact.
+  const sortSentinel = 'Layout sort Undo TEST', sortingSource = parentSource + sortSentinel;
+  await source().focus(); await page.keyboard.press('Control+End'); await page.keyboard.type(sortSentinel); await expectSource(sortingSource);
+  await selectText('Layout selection TEST');
+  const sortingEditor = await source().elementHandle(), sortingSelection = await editorSnapshot();
+  await revealView('nodes');
+  const orderResponse = (route, predicate = () => true) => page.waitForResponse(response => {
+    if (new URL(response.url()).pathname !== route || response.request().method() !== 'POST') return false;
+    try { return predicate(response.request().postDataJSON()); } catch { return false; }
+  });
+  const initialOrderResponse = orderResponse('/api/navigation/order/read', body => body.parentRef === rootAdmission.targetRef);
+  await nodePath().getByRole('button', { name: path.basename(root), exact: true }).click();
+  const initialOrderHttp = await initialOrderResponse; assert.equal(initialOrderHttp.status(), 200);
+  let freshOrder = await initialOrderHttp.json();
+  assert.equal(freshOrder.complete, true);
+  const parentRef = `weftext-node://${parent.workspaceId}/${parent.nodeId}`, siblingRef = `weftext-node://${sibling.workspaceId}/${sibling.nodeId}`;
+  assert.deepEqual(new Set(freshOrder.orderedRefs), new Set([parentRef, siblingRef]));
+  const initialAuthorOrder = [...freshOrder.orderedRefs];
+  await nodes().getByLabel('节点内容个人排序', { exact: true }).selectOption('authored');
+  const sortingOwner = await nodes().locator('.node-contents').elementHandle();
+  const orderDialog = page.getByRole('dialog', { name: '作者同级顺序变更', exact: true });
+  const orderNodeTitles = () => nodes().locator('[data-contents-section="nodes"] .node-content-row [data-control-role="title"]').allTextContents();
+  const orderNames = refs => refs.map(ref => `${ref === parentRef ? 'Parent' : 'Sibling'} · 笔记`);
+  const orderCheckpoints = [];
+  for (let step = 0; step < 2; step++) {
+    const prior = freshOrder, movedRef = prior.orderedRefs[1], movedName = movedRef === parentRef ? 'Parent' : 'Sibling';
+    await until(async () => JSON.stringify(await orderNodeTitles()) === JSON.stringify(orderNames(prior.orderedRefs)), 'Nodes did not install its exact fresh author order');
+    await nodes().getByRole('button', { name: `${movedName} 作者顺序上移`, exact: true }).click();
+    const preparedResponse = orderResponse('/api/navigation/order/prepare', body => body.parentRef === rootAdmission.targetRef);
+    await orderDialog.getByRole('button', { name: '准备此顺序变更', exact: true }).click();
+    const preparedHttp = await preparedResponse; assert.equal(preparedHttp.status(), 200);
+    const prepared = await preparedHttp.json(), prepareRequest = preparedHttp.request().postDataJSON();
+    assert.equal(prepared.status, 'prepared'); assert.ok(prepared.changes?.length > 0);
+    assert.equal(prepareRequest.baseId, prior.baseId, 'The next reorder did not use its actual fresh read basis');
+    await orderDialog.waitFor({ state: 'hidden' });
+    await nodes().getByRole('button', { name: '查看原顺序变更并确认', exact: true }).click();
+    for (const change of prepared.changes) assert.ok((await orderDialog.textContent()).includes(change.path), 'Confirmation omitted the actual prepared file impact');
+    const committedResponse = orderResponse('/api/operations/commit', body => body.operationId === prepared.operationId && body.planId === prepared.planId);
+    const freshResponse = orderResponse('/api/navigation/order/read', body => body.parentRef === rootAdmission.targetRef);
+    await orderDialog.getByRole('button', { name: '确认提交原作者顺序', exact: true }).click();
+    const committedHttp = await committedResponse; assert.equal(committedHttp.status(), 200);
+    assert.equal((await committedHttp.json()).status, 'committed');
+    const freshHttp = await freshResponse; assert.equal(freshHttp.status(), 200); freshOrder = await freshHttp.json();
+    assert.equal(freshOrder.complete, true); assert.equal(freshOrder.parentRef, rootAdmission.targetRef);
+    assert.deepEqual(freshOrder.orderedRefs, [...prior.orderedRefs].reverse());
+    await orderDialog.waitFor({ state: 'hidden' });
+    await until(() => page.evaluate(parent => !localStorage.getItem(`weftext-node-contents:${encodeURIComponent(parent)}:operation`), rootAdmission.targetRef), 'Normal sorting did not automatically retire its original operation');
+    await until(async () => JSON.stringify(await orderNodeTitles()) === JSON.stringify(orderNames(freshOrder.orderedRefs)), 'Nodes did not show the committed fresh author order');
+    assert.equal(await nodes().getByRole('button', { name: '结束已确认顺序操作', exact: true }).count(), 0);
+    assert.equal(await nodes().locator('.node-contents').evaluate((element, original) => element === original, sortingOwner), true, 'The real host inventory refresh replaced the sorting owner');
+    assert.deepEqual(await page.locator('.file-tree .tree-row .tree-name').allTextContents(), originalOrder, 'Shared author sorting changed the independent filesystem tree');
+    for (const [name, filename] of [['Parent', parent.path], ['Sibling', sibling.path]])
+      assert.equal(path.normalize((await treeRow(name).getAttribute('title')).split('\n')[0]), path.normalize(filename), 'Refreshed file tree lost the exact admitted main note');
+    await assertSameEditor(sortingEditor, sortingSelection);
+    orderCheckpoints.push({ operationId: prepared.operationId, planId: prepared.planId, prepareBaseId: prepareRequest.baseId, children: prepareRequest.children, freshBaseId: freshOrder.baseId, freshRefs: freshOrder.orderedRefs });
+  }
+  assert.deepEqual(freshOrder.orderedRefs, initialAuthorOrder, 'The integration check did not restore the original author order');
+  assert.notEqual(orderCheckpoints[0].operationId, orderCheckpoints[1].operationId);
+  await source().focus(); await page.keyboard.press('Control+z'); await expectSource(parentSource);
+  await page.keyboard.press('Control+Shift+z'); await expectSource(sortingSource);
+  await page.keyboard.press('Control+z'); await expectSource(parentSource);
+  await nodes().locator('.node-browser-toolbar button').first().click();
+  assert.equal(path.normalize(await nodePath().getAttribute('title')), path.normalize(parentFolder));
+  await showFiles(); await sortingOwner.dispose(); await sortingEditor.dispose();
+  result.authorOrderChecks = { parentRef: rootAdmission.targetRef, initialAuthorOrder, operations: orderCheckpoints, restoredAuthorOrder: freshOrder.orderedRefs, exactEditorAndSelectionRetained: true, realUndoRedoRetained: true };
+  pass('Two real main-host author reorders retain prepared-impact confirmation, automatically retire with fresh order, preserve the owner/tree/editor and restore the original order and Undo history');
 
   await selectText('Layout selection TEST');
   const handle = await source().elementHandle(), stable = await editorSnapshot();

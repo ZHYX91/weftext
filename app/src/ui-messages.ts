@@ -1,5 +1,11 @@
 // Generated from assets/ui-messages.json. Run node scripts/generate_ui_messages.mjs.
 export const zhCN = {
+  "hostedLinks.personalRulesReadFailed": "个人链接规则未能读取，浏览器中的原记录已保留。本次未加载规则，也未应用偏好修改；请重新读取链接后重试。",
+  "hostedLinks.personalRulesBrowserScope": "个人关系规则保存在此浏览器，按服务器、账号和笔记库分别保存。只显示当前获权范围内适用的规则。",
+  "proofreading.stopWaiting": "停止等待结果",
+  "proofreading.stopWaitingHelp": "停止等待只会阻止展示本次结果；后台扫描可能继续运行。本次客户端请求结束前不能再次校对。",
+  "proofreading.stoppedPending": "已停止采用本次结果，后台扫描可能继续运行。正在等待本次客户端请求结束，期间不能再次校对。",
+  "proofreading.stoppedSettled": "本次客户端请求已结束；未展示或采用本次结果。停止等待不表示后台已取消。",
   "workspaceViews.currentDocumentGraph": "当前文档关系图",
   "workspaceViews.parentFolder": "上级文件夹",
   "heading.waitForCurrentProjection": "等待当前草稿预览完成，大纲会自动更新。",
@@ -10440,6 +10446,12 @@ export const zhCN = {
 
 export type MessageKey = keyof typeof zhCN;
 export interface MessageParamsMap {
+  "hostedLinks.personalRulesReadFailed": {  };
+  "hostedLinks.personalRulesBrowserScope": {  };
+  "proofreading.stopWaiting": {  };
+  "proofreading.stopWaitingHelp": {  };
+  "proofreading.stoppedPending": {  };
+  "proofreading.stoppedSettled": {  };
   "workspaceViews.currentDocumentGraph": {  };
   "workspaceViews.parentFolder": {  };
   "heading.waitForCurrentProjection": {  };
@@ -20878,6 +20890,12 @@ export interface MessageParamsMap {
   "error.api.data.periodSelectionRequired": {  };
 }
 export const messageParamTypes = {
+  "hostedLinks.personalRulesReadFailed": {},
+  "hostedLinks.personalRulesBrowserScope": {},
+  "proofreading.stopWaiting": {},
+  "proofreading.stopWaitingHelp": {},
+  "proofreading.stoppedPending": {},
+  "proofreading.stoppedSettled": {},
   "workspaceViews.currentDocumentGraph": {},
   "workspaceViews.parentFolder": {},
   "heading.waitForCurrentProjection": {},
@@ -33223,6 +33241,12 @@ export const messageParamTypes = {
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
+  "hostedLinks.personalRulesReadFailed": "Personal link rules could not be read. The browser's original record is retained. No rules or preference changes were applied; read the links again to retry.",
+  "hostedLinks.personalRulesBrowserScope": "Personal relationship rules are saved in this browser separately for each server, account and library. Only rules applicable to the currently authorized scope are shown.",
+  "proofreading.stopWaiting": "Stop waiting for results",
+  "proofreading.stopWaitingHelp": "Stopping prevents this result from being shown; the background scan may continue. Another scan can start after this client request settles.",
+  "proofreading.stoppedPending": "This result will not be used; the background scan may continue. Another scan cannot start until this client request settles.",
+  "proofreading.stoppedSettled": "The client request has settled. Its result was not shown or used. Stopping the wait does not confirm background cancellation.",
   "workspaceViews.currentDocumentGraph": "Current document graph",
   "workspaceViews.parentFolder": "Parent folder",
   "heading.waitForCurrentProjection": "The outline updates automatically when the current draft preview is ready.",

@@ -19,11 +19,13 @@ translation_status: source
 
 0.6.3 的导航／普通写作、属性／多 Query 组织与普通根笔记预设切片沿用同一产品入口与唯一候选记录。实际客户端必须验证返回草稿／选区／Undo、取消与过期地图、权限撤销清除；最近访问／导航轨迹和保留编辑器是页面内个人状态，不成为作者内容或新权限。原 0.6.1 IME／撤销证据限制继续保留。
 
-此前 `0.6.3-rc.4` 候选保留前三阶段能力，新增多级标签的 Core／Query／独立授权／同步及 Native 消费者、二维关系图谱、只读标题结构、作者同级顺序和按需媒体缩略图。整版验收仍在进行；各旧候选及新增定向检查的通过记录不自动升级为本次最终候选通过，具体支持与原限制见 MVP。优先在本地运行产品入口，云端 CI 并行复核干净环境；本地开发及安全整理不统一等待云端，但合并仍须核实际提交 CI 和用户授权。沿同一候选记录汇总 TAG01–10／UX01–12、真实客户端、受影响 Office／权限／同步／恢复和产物对应，不另建完成事实库。最终候选真实 IME 与 K 候选原撤销异常仍待人工复验；固定参照插件的部分旧实测不替代整版同任务对照。
+此前 `0.6.3-rc.4` 候选保留前三阶段能力，新增多级标签的 Core／Query／独立授权／同步及 Native 消费者、二维关系图谱、只读标题结构、作者同级顺序和按需媒体缩略图。整版验收仍在进行；各旧候选及新增定向检查的通过记录不自动升级为本次最终候选通过，具体支持与原限制见 MVP。默认在本地分支开发、运行产品检查并本地合并；远端推送、PR 和云端 CI 按用户要求使用，不作为本地交付前置。使用 PR 时核对实际提交的 CI 状态；发布与重写远端历史仍须有用户授权。沿同一候选记录汇总 TAG01–10／UX01–12、真实客户端、受影响 Office／权限／同步／恢复和产物对应，不另建完成事实库。最终候选真实 IME 与 K 候选原撤销异常仍待人工复验；固定参照插件的部分旧实测不替代整版同任务对照。
 
 属性／Query 切片验证预设取消／原操作恢复／不重置、多个出现项独立状态、精确重排／移除及单步撤销、typed 错误输入保留、共享调用 current／pinned、直接字段独立写权与撤权，以及普通根笔记同步双程序往返。`scripts/test_query_organization.py` 接入原完整检查入口；浏览器脚本 `scripts/test_query_organization_browser.mjs` 显式接收同一候选程序和自有证据目录。源码冻结后复用同一优化程序完成 HTTP、实际浏览器及打包核对。
 
 纯文档改动运行 `python scripts/check.py`。涉及 schema、类型/时间算法或模型时运行 `python scripts/check.py --models`。实现切片增加自己的格式、静态分析和必要测试；跨平台、文件故障、权限、编辑和 Office 输出按真实影响选场景。失败记录实际原因；不通过删断言或改期望掩盖问题。
+
+无损表格操作和托管个人关系规则的受控浏览器组件回归分别为 `node scripts/test_table_actions_components_browser.mjs NEW_ABSOLUTE_OUTPUT`、`node scripts/test_hosted_relation_preferences_browser.mjs NEW_ABSOLUTE_OUTPUT`。它们运行当前前端和受控端口，不替代真实 Core／宿主验收；节点连续排序及托管规则刷新持久化另由既有 `test_workspace_layout_browser.mjs`、`test_hosted_knowledge_links_browser.mjs` 对同批合格 CLI 的嵌入界面验证。CLI 必须取同批 catalog／构建回执旁的角色产物，不以 target 下的中间程序或 GUI 角色替代。
 
 `python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 40 个 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由完整 Rust 组逐项执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。
 
