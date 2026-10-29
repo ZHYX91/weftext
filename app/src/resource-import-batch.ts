@@ -417,8 +417,9 @@ export class ResourceImportBatch {
         });
         table.append(head, body);
         const total = document.createElement("p"); total.dataset.resourceImportTotal = ""; total.textContent = `${info.length} / 64 · ${info.reduce((sum, file) => sum + file.bytes, 0).toLocaleString()} / 67,108,864 B`;
-        const modeLabel = document.createElement("label"); setUiText(modeLabel, message("localResourceBatch.mode"));
+        const modeLabel = document.createElement("label"); modeLabel.style.display = "block"; setUiText(modeLabel, message("localResourceBatch.mode"));
         const mode = document.createElement("select"); mode.dataset.resourceImportControl = "mode"; setUiAttr(mode, "aria-label", message("localResourceBatch.mode"));
+        mode.style.width = "100%"; mode.style.maxWidth = "100%"; mode.style.minWidth = "0";
         for (const value of ["importOnly", "autoAppend", "linksAppend"] as const) { const option = document.createElement("option"); option.value = value; setUiText(option, message(`localResourceBatch.${value}`)); option.disabled = value !== "importOnly" && !this.host.canEdit(); mode.append(option); }
         mode.value = this.record?.locator.mode ?? this.draft?.mode ?? "importOnly"; mode.disabled = this.busy || !!this.record || this.blocked;
         const draft = this.draft; mode.addEventListener("change", () => { if (mode.isConnected && this.element.open && this.element.contains(mode) && draft && this.draft === draft && !this.record && !this.busy) draft.mode = mode.value as LocalResourceMode; }); modeLabel.append(mode);
