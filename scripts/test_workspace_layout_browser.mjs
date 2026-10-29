@@ -481,8 +481,12 @@ try {
     assert.equal(await nodes().getByRole('button', { name: '结束已确认顺序操作', exact: true }).count(), 0);
     assert.equal(await nodes().locator('.node-contents').evaluate((element, original) => element === original, sortingOwner), true, 'The real host inventory refresh replaced the sorting owner');
     assert.deepEqual(await page.locator('.file-tree .tree-row .tree-name').allTextContents(), originalOrder, 'Shared author sorting changed the independent filesystem tree');
-    for (const [name, filename] of [['Parent', parent.path], ['Sibling', sibling.path]])
-      assert.equal(path.normalize((await treeRow(name).getAttribute('title')).split('\n')[0]), path.normalize(filename), 'Refreshed file tree lost the exact admitted main note');
+    // Nodes is the active tab. Inspect the retained Files DOM explicitly; this
+    // checks its identity projection without claiming the hidden view is shown.
+    for (const [name, filename] of [['Parent', parent.path], ['Sibling', sibling.path]]) {
+      const retained = page.locator('.file-tree').getByRole('button', { name, exact: true, includeHidden: true });
+      assert.equal(path.normalize((await retained.getAttribute('title')).split('\n')[0]), path.normalize(filename), 'Refreshed file tree lost the exact admitted main note');
+    }
     await assertSameEditor(sortingEditor, sortingSelection);
     orderCheckpoints.push({ operationId: prepared.operationId, planId: prepared.planId, prepareBaseId: prepareRequest.baseId, children: prepareRequest.children, freshBaseId: freshOrder.baseId, freshRefs: freshOrder.orderedRefs });
   }
