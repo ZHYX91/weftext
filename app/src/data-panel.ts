@@ -8,7 +8,8 @@ import { apiErrorUiText, decodeApiErrorBody, type ApiErrorBody } from "./api-err
 export * from "./native-value-form";
 import { uiDisplayParameter, message as uiMessage, displayMessage, setUiText, setUiAttr, uiTextValue, joinUiText, errorUiText, UiError, type UiText } from "./ui-locale";
 import { type Cell, type NoteProjection } from "./data-projection";
-import { readNoteProjection, sameProjectionInput } from "./data-projection-read";
+import { readNoteProjection } from "./data-projection-read";
+import { sameSourceInput, sourceInputBasis, type SourceInputBasis } from "./source-input-basis";
 import { comparePresentedFields, decodeFieldPresentation, defaultFieldPresentation, effectiveFieldPlacement, setFieldPlacement } from "./data-field-preference";
 import { FieldTransfer, type FieldTransferContext } from "./field-transfer";
 import { transferContextKey } from "./field-transfer-state";
@@ -32,17 +33,6 @@ interface SchemaProposal {
     plan?: { planId: string; operationId: string };
     preview?: unknown;
 }
-function samePanelInput(current: DocumentBasis | null, original: DocumentBasis): boolean {
-    // /data/project binds this exact author input, not its asynchronous /draft
-    // acknowledgement. The latter can advance without another source event.
-    return sameProjectionInput(current, original) && current!.workspaceId === original.workspaceId
-        && current!.nodeId === original.nodeId;
-}
-function panelReadBasis(basis: DocumentBasis): DocumentBasis {
-    // A source projection neither proves nor hands out Core Draft ACK authority.
-    const { inputRevision: _acknowledgedRevision, ...sourceBasis } = basis;
-    return sourceBasis;
-}
 export class DataPanel {
     readonly element = ui("aside", "data-panel");
     private schema: DataSchema | null = null;
@@ -55,7 +45,7 @@ export class DataPanel {
     private showHiddenFields = false;
     private schemaRead: SchemaRead | null = null;
     /** Only a successfully bound projection may supply author field authority. */
-    private projectionBasis: DocumentBasis | null = null;
+    private projectionBasis: SourceInputBasis | null = null;
     private readingProjection = false;
     private draftCache = new Map<string, Map<string, FieldDraft>>();
     private readonly closeGuard = new ProposalCloseGuard();
@@ -134,10 +124,10 @@ export class DataPanel {
         this.rememberInputs(); this.generation++; this.retireInputOwners();
         this.reminderDisposers.splice(0).forEach(dispose => dispose()); this.reminderDevice.retire();
     }
-    private acceptedBasis(): DocumentBasis | null {
+    private acceptedBasis(): SourceInputBasis | null {
         const basis = this.projectionBasis;
-        return !this.readingProjection && basis && this.basis && samePanelInput(this.basis, basis)
-            && samePanelInput(this.host.getDocument(), basis) ? panelReadBasis(basis) : null;
+        return !this.readingProjection && basis && this.basis && sameSourceInput(this.basis, basis)
+            && sameSourceInput(this.host.getDocument(), basis) ? sourceInputBasis(basis) : null;
     }
     private transferContext(): FieldTransferContext | null {
         const basis = this.acceptedBasis(), schemaRead = this.schemaRead, projection = this.projection;
@@ -172,7 +162,7 @@ export class DataPanel {
             const original = JSON.stringify(this.projection?.fields.find(item => item.fieldId === field.id)?.cell ?? { state: "absent" });
             let live = true, component: ReturnType<typeof mountValuePresets> | undefined;
             const current = (): boolean => live && this.presetDialog === owner && !!this.acceptedBasis()
-                && samePanelInput(this.acceptedBasis(), basis) && this.schemaRead?.semanticDigest === read.semanticDigest
+                && sameSourceInput(this.acceptedBasis(), basis) && this.schemaRead?.semanticDigest === read.semanticDigest
                 && this.schemaRead.revision === read.revision && this.schemaRead.source === read.source
                 && this.schema?.fields.some(item => item.id === field.id && JSON.stringify([item.id, item.shape, this.schema!.definitions]) === binding) === true;
             const value = (): NativeValue => this.drafts.get(field.key)?.value
@@ -251,9 +241,9 @@ export class DataPanel {
         this.rememberInputs();
         const selected = this.host.getDocument();
         const basis = selected && { ...selected };
-        if (!basis || !this.projectionBasis || !samePanelInput(basis, this.projectionBasis)) this.retireInputOwners();
+        if (!basis || !this.projectionBasis || !sameSourceInput(basis, this.projectionBasis)) this.retireInputOwners();
         const generation = ++this.generation;
-        const current = () => generation === this.generation && !!basis && samePanelInput(this.host.getDocument(), basis);
+        const current = () => generation === this.generation && !!basis && sameSourceInput(this.host.getDocument(), basis);
         const identity = (doc: DocumentBasis) => JSON.stringify([doc.workspaceId, doc.nodeId ?? doc.path]);
         if (!basis) {
             this.readingProjection = false;
@@ -290,7 +280,7 @@ export class DataPanel {
             this.schema = schemaResult.schema;
             this.projection = { ...projection, readOnly: projection.readOnly || this.host.canEdit?.() === false };
             this.schemaRead = schemaResult;
-            this.projectionBasis = panelReadBasis(basis);
+            this.projectionBasis = sourceInputBasis(basis);
             this.readingProjection = false;
             try {
                 this.fieldPresentation = decodeFieldPresentation(localStorage.getItem(this.presentationStorageKey()), new Set(this.schema.fields.map(field => field.id)));
@@ -410,7 +400,7 @@ export class DataPanel {
         }
     }
     private renderTypes(schema: DataSchema, tokens: string[]): void {
-        const basis = this.basis;
+        const basis = this.basis && sourceInputBasis(this.basis);
         const identity = this.draftIdentity!;
         const details = ui("details", "data-type-picker");
         details.append(ui("summary", "", displayMessage("dataPanel.typesDisclosure", { p0: uiDisplayParameter(tokens.length ? joinUiText(tokens.map(token => typeNames[token] ?? token), "、") : uiMessage("dataPanel.ordinaryNote")) })));
@@ -469,7 +459,7 @@ export class DataPanel {
         const presentationScope = this.presentationStorageKey();
         const declared = fieldsForTypes(schema, this.projection.types);
         const ids = new Set(declared.map(item => item.field.id));
-        const basis = this.basis;
+        const basis = this.basis && sourceInputBasis(this.basis);
         for (const item of this.projection.fields)
             if (!ids.has(item.fieldId)) {
                 const field = schema.fields.find(field => field.id === item.fieldId);
@@ -673,7 +663,7 @@ export class DataPanel {
                 delete draft.rawInputs;
         }
     }
-    private async applyField(key: string, value: NativeValue, basis: DocumentBasis | null): Promise<void> {
+    private async applyField(key: string, value: NativeValue, basis: SourceInputBasis | null): Promise<void> {
         if (this.closeGuard.frozen) return;
         const drafts = this.drafts, draft = drafts.get(key), revision = draft?.revision;
         await this.closeGuard.run(async () => {
@@ -682,7 +672,7 @@ export class DataPanel {
             await this.refresh();
         });
     }
-    private async applyTypes(types: string[], basis: DocumentBasis | null, identity: string): Promise<void> {
+    private async applyTypes(types: string[], basis: SourceInputBasis | null, identity: string): Promise<void> {
         if (this.closeGuard.frozen || this.typeInstalling.has(identity)) return;
         if (this.schema) {
             const conflicts = typeConflicts(this.schema, types);
@@ -701,7 +691,7 @@ export class DataPanel {
             } finally { this.typeInstalling.delete(identity); }
         });
     }
-    private async patch(route: string, request: Record<string, unknown>, basis: DocumentBasis | null): Promise<boolean> {
+    private async patch(route: string, request: Record<string, unknown>, input: SourceInputBasis | null): Promise<boolean> {
         if (this.composing) {
             this.host.notify(uiMessage("dataPanel.compositionPending"), true);
             return false;
@@ -710,9 +700,10 @@ export class DataPanel {
             this.host.notify(uiMessage("dataPanel.editUnavailable"), true);
             return false;
         }
-        if (!basis)
+        if (!input)
             return false;
-        if (this.host.getDocument()?.source !== basis.source || this.host.getDocument()?.sessionId !== basis.sessionId || this.host.getDocument()?.serial !== basis.serial) {
+        const basis = sourceInputBasis(input);
+        if (!sameSourceInput(this.host.getDocument(), basis)) {
             this.host.notify(uiMessage("dataPanel.sourceBasisChanged"), true);
             return false;
         }
@@ -724,6 +715,8 @@ export class DataPanel {
                 patches: SourcePatch[];
                 source?: string;
             }>(route, { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, ...request });
+            if (this.composing || this.closeGuard.frozen || this.host.canEdit?.() === false || !sameSourceInput(this.host.getDocument(), basis))
+                throw new UiError(uiMessage("dataPanel.sourceBasisChanged"));
             await this.host.applyPatch(decodeSourcePatch(result, basis.source), basis);
             this.host.notify(uiMessage("dataPanel.applied"));
             return true;

@@ -10,7 +10,7 @@ import { pathToFileURL } from "node:url";
 const repo = path.resolve(import.meta.dirname, ".."), out = process.argv[2];
 assert.ok(out && path.isAbsolute(out)); assert.ok(path.relative(repo, out).startsWith(".." + path.sep));
 await mkdir(out);
-const files = ["scripts/test_data_panel_workflows_browser.mjs", "app/src/data-panel.ts", "app/src/value-presets.ts", "app/src/field-transfer.ts", "app/src/field-transfer-state.ts", "app/src/proposal-close-guard.ts", "app/src/data-projection.ts", "app/src/data-projection-read.ts", "app/src/native-value-form.ts", "app/src/native-control-identity.ts", "app/src/editor.ts", "app/src/session.ts", "app/src/workspace-tools.ts", "app/src/ui-locale.ts", "app/src/ui-messages.ts", "assets/ui-messages.json", "app/src/data-view.css"];
+const files = ["scripts/test_data_panel_workflows_browser.mjs", "app/src/data-panel.ts", "app/src/source-input-basis.ts", "app/src/value-presets.ts", "app/src/field-transfer.ts", "app/src/field-transfer-state.ts", "app/src/proposal-close-guard.ts", "app/src/data-projection.ts", "app/src/data-projection-read.ts", "app/src/native-value-form.ts", "app/src/native-control-identity.ts", "app/src/editor.ts", "app/src/session.ts", "app/src/workspace-tools.ts", "app/src/ui-locale.ts", "app/src/ui-messages.ts", "assets/ui-messages.json", "app/src/data-view.css"];
 const inventory = async () => Promise.all(files.map(async file => ({ path: file, sha256: createHash("sha256").update(await readFile(path.join(repo, file))).digest("hex") })));
 const result = { scope: "Actual DataPanel/preset body dialog/FieldTransfer and SourceEditor; bounded exact protocol host, no Core/durable-save/native/OS IME acceptance", cases: [], completed: false, pageErrors: [], sourceBefore: await inventory(), ownership: { browserClosed: false, viteClosed: false } };
 const { chromium } = createRequire(import.meta.url)(process.env.WEFTEXT_PLAYWRIGHT_MODULE || "playwright");
@@ -37,6 +37,7 @@ try {
                 this.owner?.dispose(); this.editor?.destroy(); document.querySelector("#editor").replaceChildren(); localStorage.clear();
                 this.calls = []; this.patches = []; this.notifications = []; this.current = true; this.editable = true; this.readOnly = false; this.failAck = false;
                 this.holdTransfer = false; this.holdDelivery = false; this.transferWaiting = false; this.deliveryWaiting = false; this.holdSchema = false; this.schemaWaiting = false; this.holdProject = false; this.projectWaiting = false;
+                this.holdEdit = false; this.editWaiting = false;
                 this.schema = { definitions: {}, aliases: {}, fields: [
                     { id: "fixture/names", key: "names", shape: structuredClone(list), nullable: false },
                     { id: "fixture/phones", key: "phones", shape: structuredClone(list), nullable: false },
@@ -77,6 +78,7 @@ try {
                         }
                         if (route === "/api/data/edit") {
                             const values = decode(body.source); values[body.key] = body.value;
+                            if (this.holdEdit) { this.editWaiting = true; await new Promise(resolve => { this.releaseEdit = () => { this.editWaiting = false; resolve(); }; }); }
                             return { from: 0, to: body.source.length, text: encode(values) };
                         }
                         if (route === "/api/data/transfer") {
@@ -284,6 +286,28 @@ try {
         assert.equal(result.ackInstalled.accepted, true); assert.equal(result.ackInstalled.reads, 1);
         await page.evaluate(() => { window.fixture.autoArmed = false; }); await move().click();
         await page.waitForFunction(() => window.fixture.patches.length === 1); await settleTransfer(); assert.equal(await count("/api/data/transfer"), 1);
+    });
+    for (const mutation of ["ack", "inputId", "baseId", "workspaceId", "nodeId", "permission"]) await check(`field Apply awaiting its source proposal handles ${mutation} without borrowing ACK or stale-owner authority`, async () => {
+        await reset(); await field("title").locator(".native-value-editor").getByRole("textbox").fill("Retained authored title😀");
+        await page.evaluate(() => { window.fixture.holdEdit = true; });
+        await field("title").getByRole("button", { name: "应用到草稿", exact: true }).click();
+        await page.waitForFunction(() => window.fixture.editWaiting);
+        await page.evaluate(mutation => {
+            const f = window.fixture;
+            if (mutation === "ack") { f.basis.inputRevision = 10; f.basis.inputRevision = 11; }
+            else if (mutation === "permission") f.editable = false;
+            else f.basis = { ...f.basis, [mutation]: f.basis[mutation] + "-replacement" };
+            f.releaseEdit();
+        }, mutation);
+        await page.waitForFunction(() => !window.fixture.owner.element.hasAttribute("aria-busy"));
+        assert.equal(await count("/api/data/edit"), 1);
+        assert.equal(await page.evaluate(() => window.fixture.patches.length), mutation === "ack" ? 1 : 0);
+        if (mutation === "ack") assert.equal(await page.evaluate(() => window.fixture.values().title.value), "Retained authored title😀");
+        else {
+            assert.equal(await page.evaluate(() => window.fixture.editor.source === window.fixture.initialSource), true);
+            assert.equal(await page.evaluate(() => window.fixture.owner.drafts.get("title").value.value), "Retained authored title😀");
+            assert.equal(await frozen(), false);
+        }
     });
     await reset(); await open(); await save("可读预设", "configured item");
     await page.screenshot({ path: path.join(out, "data-panel-presets-desktop.png"), fullPage: true });

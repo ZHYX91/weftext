@@ -7,6 +7,7 @@ import { uiDisplayParameter, message as uiMessage, displayMessage, setUiValidity
 import type { ValuePath } from "./author-input";
 import type { PanelFieldInputFactory } from "./panel-field-input";
 import type { NativeValue } from "./native-values";
+import type { SourceInputBasis } from "./source-input-basis";
 export type { NativeValue } from "./native-values";
 import type { OpenedDocument } from "./types";
 import { TagTree } from "./tag-tree";
@@ -88,17 +89,7 @@ export interface FormReferences {
     state: "loading" | "ready" | "partial" | "unavailable";
     messages: UiText[];
 }
-export interface DocumentBasis {
-    /** Client-side author identity; not a transport revision. */
-    inputId: string;
-    sessionId: string;
-    source: string;
-    serial: number;
-    baseId: string;
-    path: string;
-    root: string;
-    nodeId?: string;
-    workspaceId?: string;
+export interface DocumentBasis extends SourceInputBasis {
     dirty?: boolean;
     /** Present only when this exact input identity, source and serial have a Core-qualified author Draft or saved-view cut. */
     inputRevision?: number;

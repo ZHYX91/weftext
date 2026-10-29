@@ -233,6 +233,31 @@ function device(t: TestContext, f: ReturnType<typeof fixture>, inspection: () =>
   const control = new ReminderDeviceControl(host); f.element.append(control.element as unknown as Element); t.after(() => control.retire());
   return { control, basis };
 }
+
+test("Device inspection accepts ACK-only changes but retires same-byte replacement authors and saved-state changes", async t => {
+  const f = fixture(t, async () => running), original: DocumentBasis = { inputId: "author", root: "library", path: "task.typ", source: "saved task", sessionId: "session", serial: 1, baseId: "base", dirty: false, inputRevision: 1 };
+  let current = { ...original }, resolve!: (value: ReminderInspection) => void;
+  const host = { getDocument: () => current, request: async () => new Promise<ReminderInspection>(finish => { resolve = finish; }) } as unknown as PanelHost;
+  const control = new ReminderDeviceControl(host); f.element.append(control.element as unknown as Element); t.after(() => control.retire());
+  for (const changed of ["ack", "inputId", "dirty"] as const) {
+    control.retire(); current = { ...original };
+    const pending = control.refresh(original);
+    if (changed === "ack") { current.inputRevision = 2; current.inputRevision = 3; }
+    else if (changed === "inputId") current.inputId = "same bytes from another author event";
+    else current.dirty = true;
+    resolve(inspectionWire()); await pending;
+    assert.equal(control.element.textContent!.includes(text("reminder.enabledDevice")), changed === "ack", changed);
+  }
+});
+
+test("A saved task's old consent button cannot submit under a same-byte replacement author", async t => {
+  const f = fixture(t, async () => running), d = device(t, f, inspectionWire);
+  await d.control.refresh(d.basis);
+  const button = (d.control.element as unknown as Element).all().find(node => node.tag === "button" && node.textContent === text("reminder.enable"))!;
+  assert.ok(button); d.basis.inputId = "later equal-byte author";
+  button.onclick?.(); await new Promise<void>(resolve => setImmediate(resolve));
+  assert.equal(d.control.hasPending(), false, "a retired button cannot create an original settings mutation");
+});
 function assertTypedDetail(displayed: string) {
   assert.ok(displayed.includes(uiTextValue(message("common.operation", { operationId: "original-reminder 😀" }))));
   assert.ok(displayed.includes("Exact original OS diagnostic 😀\r\n"));

@@ -1,4 +1,5 @@
 import type { DocumentBasis, PanelHost } from "./data-panel";
+import { sameSourceInput } from "./source-input-basis";
 import { LocaleScope, errorUiText, message, type MessageKey, type MessageParams, type UiText } from "./ui-locale";
 import type { ReminderOwner as Owner, ReminderInspection as Inspection } from "./reminder-types";
 import { openReminderOverview } from "./reminder-overview";
@@ -9,7 +10,7 @@ type ReminderKey = Extract<MessageKey, `reminder.${string}`>;
 type LabelKey = { [K in ReminderKey]: keyof MessageParams<K> extends never ? K : never }[ReminderKey];
 interface Pending { route: string; request: Record<string, unknown>; basis: DocumentBasis }
 const ownerEqual = (a: Owner, b: Owner): boolean => a.workspaceId === b.workspaceId && a.nodeId === b.nodeId;
-const sameBasis = (a: DocumentBasis | null, b: DocumentBasis): boolean => !!a && a.sessionId === b.sessionId && a.source === b.source && a.serial === b.serial && a.baseId === b.baseId && a.path === b.path && a.root === b.root && a.nodeId === b.nodeId && a.workspaceId === b.workspaceId && !!a.dirty === !!b.dirty;
+const sameBasis = (a: DocumentBasis | null, b: DocumentBasis): boolean => sameSourceInput(a, b) && !!a!.dirty === !!b.dirty;
 
 /** Personal consent belongs to saved NodeRef/reminder identity and this Core
  * device, never to a copied field, an unsaved Draft or a browser timezone. */

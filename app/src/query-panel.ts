@@ -1,5 +1,6 @@
 import { ProposalCloseGuard } from "./proposal-close-guard";
-import { readNoteProjection, sameProjectionInput } from "./data-projection-read";
+import { readNoteProjection } from "./data-projection-read";
+import { sameSourceInput, sourceInputBasis } from "./source-input-basis";
 import { joinUiText } from "./ui-locale";
 import type { UiMessage } from "./ui-locale";
 import type { CoreDescription } from "./ui-diagnostics";
@@ -2663,8 +2664,8 @@ export class QueryPanel {
                 const selected = this.host.getDocument();
                 if (!selected || (target.nodeId ? selected.nodeId !== target.nodeId : selected.path !== target.path))
                     throw new UiError(message("queryEdit.documentIdentityMismatch"));
-                const basis = { ...selected }, generation = this.generation;
-                const current = () => generation === this.generation && this.host.canEdit?.() !== false && sameProjectionInput(this.host.getDocument(), basis);
+                const basis = sourceInputBasis(selected), generation = this.generation;
+                const current = () => generation === this.generation && this.host.canEdit?.() !== false && sameSourceInput(this.host.getDocument(), basis);
                 const projection = await readNoteProjection(this.host.request.bind(this.host), basis);
                 if (!current()) throw new UiError(message("queryEdit.documentIdentityMismatch"));
                 const projected = projection.fields.find(field => field.key === key);
@@ -2679,6 +2680,7 @@ export class QueryPanel {
                     patches: SourcePatch[];
                     source?: string;
                 }>("/api/data/edit", { sessionId: basis.sessionId, source: basis.source, serial: basis.serial, key, path: [], value });
+                if (!current()) throw new UiError(message("queryEdit.documentIdentityMismatch"));
                 await this.host.applyPatch(decodeSourcePatch(result, basis.source), basis);
                 applied?.();
                 if (this.result) {

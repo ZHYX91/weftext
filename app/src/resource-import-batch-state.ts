@@ -1,4 +1,5 @@
-import type { DocumentBasis, SourcePatch } from "./native-value-form";
+import type { SourcePatch } from "./native-value-form";
+import { sourceInputKey, type SourceInputBasis } from "./source-input-basis";
 import { isUnicodeScalarText, message, UiError } from "./ui-locale";
 import { decodeWritingMap, exactWritingRange, validateWritingResult, type WritingMap, type WritingResult } from "./writing";
 
@@ -56,21 +57,17 @@ function decodeOwner(value: unknown): LocalResourceOwner {
     const item = record(value, ["workspaceId", "nodeId", "root", "path"]);
     return { workspaceId: text(item.workspaceId), nodeId: text(item.nodeId), root: text(item.root), path: text(item.path) };
 }
-export function resourceOwner(basis: DocumentBasis): LocalResourceOwner {
+export function resourceOwner(basis: SourceInputBasis): LocalResourceOwner {
     return decodeOwner({ workspaceId: basis.workspaceId, nodeId: basis.nodeId, root: basis.root, path: basis.path });
 }
 export function sameResourceOwner(a: LocalResourceOwner | null | undefined, b: LocalResourceOwner | null | undefined): boolean {
     return !!a && !!b && a.workspaceId === b.workspaceId && a.nodeId === b.nodeId && a.root === b.root && a.path === b.path;
 }
-/** Resource insertion proposes a source edit, not a Save/read grant. A Draft
- * ACK can advance for this same author input without changing its identity. */
-export function resourceSourceBasis(basis: DocumentBasis): DocumentBasis {
-    const { inputRevision: _acknowledgedRevision, ...sourceBasis } = basis;
-    return sourceBasis;
-}
-export function resourceBasisKey(basis: DocumentBasis): string {
+/** Resource insertion also requires a valid managed owner. Source identity
+ * alone grants neither that owner nor any original operation outcome. */
+export function resourceBasisKey(basis: SourceInputBasis): string {
     resourceOwner(basis);
-    return JSON.stringify([basis.inputId, basis.sessionId, basis.source, basis.serial, basis.baseId, basis.path, basis.root, basis.workspaceId, basis.nodeId]);
+    return sourceInputKey(basis);
 }
 export function localResourceKey(owner: LocalResourceOwner): string {
     const checked = decodeOwner(owner);
@@ -191,7 +188,7 @@ export function decodeLocalResourcePlan(value: unknown, request: LocalResourceLo
  * keeps the complete current basis/map current across await. Frozen root/path
  * metadata cannot qualify a renamed or moved runtime route by themselves.
  * Native EditOutput.sourceHash belongs to the resulting source, not that input. */
-export function decodeLocalResourceInsertion(value: unknown, request: LocalResourceLocator, plan: LocalResourcePlan, basis: DocumentBasis, sourceHash: string, originalMap: WritingMap): SourcePatch {
+export function decodeLocalResourceInsertion(value: unknown, request: LocalResourceLocator, plan: LocalResourcePlan, basis: SourceInputBasis, sourceHash: string, originalMap: WritingMap): SourcePatch {
     const original = locator(request), currentOwner = resourceOwner(basis);
     if (original.owner.workspaceId !== currentOwner.workspaceId || original.owner.nodeId !== currentOwner.nodeId
         || plan.operationId !== original.operationId || plan.kind !== "importResources" || plan.status !== "committed"

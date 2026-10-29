@@ -60,11 +60,17 @@ test("authority keys change on document, input, schema, permission and source ch
         (context: FieldTransferContext) => context.basis.source += "changed",
         (context: FieldTransferContext) => context.basis.root += "new",
         (context: FieldTransferContext) => context.basis.nodeId += "new",
-        (context: FieldTransferContext) => context.basis.inputRevision = 2,
+        (context: FieldTransferContext) => context.basis.sessionId += "new",
+        (context: FieldTransferContext) => context.basis.path += "new",
+        (context: FieldTransferContext) => context.basis.workspaceId += "new",
         (context: FieldTransferContext) => context.schemaRead.revision += "new",
         (context: FieldTransferContext) => context.schemaRead.semanticDigest = "b".repeat(64),
         (context: FieldTransferContext) => context.projection.fields[1].writable = false,
     ]) { const changed = structuredClone(original); change(changed); assert.notEqual(transferContextKey(changed), key); }
+    for (const inputRevision of [undefined, 2, 3]) {
+        const changed = { ...original, basis: { ...original.basis, inputRevision } };
+        assert.equal(transferContextKey(changed), key, "a source transfer is independent of the Core Draft ACK");
+    }
 });
 
 test("one exact UTF16 patch is tied to the old source, both IDs, ordinal selection and semantic schema", async () => {

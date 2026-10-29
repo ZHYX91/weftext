@@ -1,11 +1,12 @@
 import type { FieldProjection, NoteProjection } from "./data-projection";
-import { resolveShape, type DocumentBasis, type SchemaRead, type SourcePatch } from "./native-value-form";
+import { resolveShape, type SchemaRead, type SourcePatch } from "./native-value-form";
+import { sourceInputKey, type SourceInputBasis } from "./source-input-basis";
 import { exactKeys } from "./ui-diagnostics";
 import { isUnicodeScalarText, message, UiError } from "./ui-locale";
 
 /** A projection of one local whole-document author input, never a narrow field grant. */
 export interface FieldTransferContext {
-    basis: DocumentBasis;
+    basis: SourceInputBasis;
     schemaRead: SchemaRead & { semanticDigest: string };
     projection: NoteProjection;
 }
@@ -25,9 +26,7 @@ export function transferLists(context: FieldTransferContext): TransferList[] {
 }
 
 export function transferContextKey(context: FieldTransferContext): string {
-    const basis = context.basis;
-    return JSON.stringify([basis.inputId, basis.sessionId, basis.source, basis.serial, basis.baseId, basis.path, basis.root,
-        basis.workspaceId, basis.nodeId, basis.inputRevision, context.schemaRead.source, context.schemaRead.revision, context.schemaRead.semanticDigest,
+    return JSON.stringify([sourceInputKey(context.basis), context.schemaRead.source, context.schemaRead.revision, context.schemaRead.semanticDigest,
         context.projection.id, context.projection.qualification, context.projection.readOnly, context.projection.budgetExhausted,
         context.projection.fields.map(field => [field.fieldId, field.writable, field.unbound, field.cell.state])]);
 }

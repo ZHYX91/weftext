@@ -126,24 +126,26 @@ for (const stage of ["data/edit", "applyPatch"] as const) test(`Query real ${sta
     assert.equal(panel.freezeForClose(), false);
 });
 
-for (const stage of ["projection", "confirmation"] as const) for (const changed of ["document", "inputIdentity"] as const) {
+for (const stage of ["projection", "confirmation", "edit"] as const) for (const changed of ["document", "inputId", "sessionId", "source", "serial", "baseId", "path", "root", "workspaceId", "nodeId", "permission"] as const) {
     test(`Query real ${stage} ignores a changed ${changed} and preserves later invalid raw input`, async () => {
         const { panel, inlineDrafts } = owner(), port = panel as unknown as InlineOwner;
         const draft: InlineDraft = { value: { kind: "int", value: "1" }, raw: {}, binding: "binding", revision: 1 };
-        const basis: DocumentBasis = { inputId: "original-input", root: "/library", path: "note.typ", sessionId: "session", source: "source", serial: 1, baseId: "base" };
-        let current = { ...basis }, edits = 0, deliveries = 0, confirmations = 0;
+        const basis: DocumentBasis = { inputId: "original-input", root: "/library", path: "note.typ", sessionId: "session", source: "source", serial: 1, baseId: "base", workspaceId: "workspace", nodeId: "node" };
+        let current = { ...basis }, edits = 0, deliveries = 0, confirmations = 0, editable = true;
         const pending = deferred(), reached = deferred();
         inlineDrafts.set("row", draft);
         Object.assign(panel, { root: basis.root, resultPlan: null, result: null,
             async confirmChange() { confirmations++; if (stage === "confirmation") { reached.resolve(); await pending.promise; } return true; },
             host: {
-                getDocument: () => current, openDocument: async () => {}, notify() {},
+                getDocument: () => current, canEdit: () => editable, openDocument: async () => {}, notify() {},
                 async request(route: string) {
                     if (route === "/api/data/project") {
                         if (stage === "projection") { reached.resolve(); await pending.promise; }
                         return projectionResponse(basis);
                     }
-                    assert.equal(route, "/api/data/edit"); edits++; return { from: 0, to: 0, text: "applied" };
+                    assert.equal(route, "/api/data/edit"); edits++;
+                    if (stage === "edit") { reached.resolve(); await pending.promise; }
+                    return { from: 0, to: 0, text: "applied" };
                 },
                 async applyPatch() { deliveries++; },
             } });
@@ -151,14 +153,37 @@ for (const stage of ["projection", "confirmation"] as const) for (const changed 
         await reached.promise;
         port.retainInlineDraft("row", draft, undefined, { integer: "-" });
         if (changed === "document") current = { ...basis, path: "other.typ", source: "other source", sessionId: "other-session", inputId: "other-input" };
-        else current.inputId = "same-bytes-new-input";
+        else if (changed === "permission") editable = false;
+        else current = { ...current, [changed]: changed === "serial" ? current.serial + 2 : `${current[changed]}-changed` };
         pending.resolve(); await applying;
-        assert.equal(confirmations, stage === "confirmation" ? 1 : 0);
-        assert.equal(edits, 0); assert.equal(deliveries, 0);
+        assert.equal(confirmations, stage === "projection" ? 0 : 1);
+        assert.equal(edits, stage === "edit" ? 1 : 0); assert.equal(deliveries, 0);
         assert.equal(inlineDrafts.get("row"), draft); assert.deepEqual(draft.raw, { integer: "-" });
         assert.equal(panel.freezeForClose(), false);
     });
 }
+
+test("Query source edits accept repeated ACKs without carrying ACK authority into host patch delivery", async () => {
+    const { panel, inlineDrafts } = owner(), port = panel as unknown as InlineOwner;
+    const draft: InlineDraft = { value: { kind: "int", value: "1" }, raw: {}, binding: "binding", revision: 1 };
+    const basis: DocumentBasis = { inputId: "author", root: "/library", path: "note.typ", sessionId: "session", source: "source", serial: 1, baseId: "base", inputRevision: 1 };
+    let delivered: DocumentBasis | undefined;
+    inlineDrafts.set("row", draft);
+    Object.assign(panel, { root: basis.root, resultPlan: null, result: null,
+        async confirmChange() { basis.inputRevision!++; return true; },
+        host: {
+            getDocument: () => basis, openDocument: async () => {}, notify() {},
+            async request(route: string) {
+                basis.inputRevision!++;
+                if (route === "/api/data/project") return projectionResponse(basis);
+                assert.equal(route, "/api/data/edit"); return { from: 0, to: 0, text: "applied" };
+            },
+            async applyPatch(_patch: unknown, source: DocumentBasis) { delivered = source; },
+        } });
+    await port.applyInlineDraft({ key: "row", path: basis.path, lifecycle: "live", readOnly: false, cells: {} }, inlineField, "row", draft);
+    assert.ok(delivered); assert.equal(Object.hasOwn(delivered, "inputRevision"), false);
+    assert.equal(basis.inputRevision, 4); assert.equal(inlineDrafts.size, 0); assert.equal(panel.freezeForClose(), true);
+});
 
 for (const mismatch of ["serial", "sourceHash"] as const) test(`Query real projection rejects mismatched ${mismatch} before confirmation or editing`, async () => {
     const { panel, inlineDrafts } = owner(), port = panel as unknown as InlineOwner;
