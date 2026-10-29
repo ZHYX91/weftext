@@ -468,7 +468,11 @@ WebUI 的纯输入恢复与保护草稿分域：源码以共享 CodeMirror Chang
 
 大纲保持实际深度、过滤/折叠/当前节/聚焦；聚焦和专注不删源。导航→列表→正文及窄屏返回保 Draft、Undo、筛选和可恢复位置。local 命名布局与 NAV01–05 列表偏好仅记个人呈现及可重新解析目标，不存结果、权限或旧地图；恢复重新授权，目标失效不猜同名。迟到缩略图/preview 不抢输入焦点。潜在链接只是提示；多个同范围/交叉范围及溢出都可显式选，不能最长匹配吞掉其它候选，转换继续走链接 owner。
 
-每个平台分别测真实 CJK IME、Arabic/Hebrew 混排、emoji/combining、键盘/触屏、screen reader、200/400% zoom、320px、高对比、减少动画。live region 不逐字报 preedit；focus/composition 节点不因虚拟化消失。缺某 surface 能力准确标 unavailable；CLI 不宣称图形验收。性能保留待实测目标：输入反馈 p95≤50ms、layout≤100ms，1000事件 cold/warm 各3run；Desktop 10MiB/100k lines，Mobile 1MiB/10k lines、单行1MiB，steady memory 256/128MiB；十倍超限不丢稿。目标未跑不得冒通过。
+每个平台分别测真实 CJK IME、Arabic/Hebrew 混排、emoji/combining、键盘/触屏、screen reader、200/400% zoom、320px、高对比、减少动画。live region 不逐字报 preedit；focus/composition 节点不因虚拟化消失。缺某 surface 能力准确标 unavailable；CLI 不宣称图形验收。
+
+按 REQUIREMENTS §4.1 分负载校准性能。原输入反馈 p95≤50ms、layout≤100ms，Desktop 10MiB/100k lines、Mobile 1MiB/10k lines、单行1MiB及 steady memory 256/128MiB 保留为研究目标，不作为所有档位、任意 Typst 程序及全部进程同时满足的已定支持承诺。继续使用 WORKFLOW 的现有测量入口和原 1000 事件、冷／热各三轮；普通写作、大源码、复杂排版、查询分别记录源码／产物、设备、模式、实际大小、分位数、峰值与稳态内存的进程范围。UI、Core、WebView 与 worker 的内存不能以单进程数冒总占用。当前源码／请求容量限制按实际接口报告，不因研究目标较大就宣称已经支持。
+
+根据实际结果明确可支持范围与预览降频、按需加载或只读复杂区域；新的性能预算须说明负载与依据，保留原失败，不能回写旧结果或放松原检查获得通过。超限检查包括原十倍负载探测：在接纳前安全拒绝或保留已接纳输入，不承诺无限加载、计算或任意大输入均可持久化；已有草稿不得丢失。降低预览频率不能冻结输入、吞掉撤销或把过期结果当当前结果。未运行项仍为未验。
 
 ## 11. 独立批注的协调边界
 

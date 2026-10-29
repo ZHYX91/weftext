@@ -45,6 +45,19 @@ The coordinated design covers §5 requirements and §6 failure scenarios. [REVIE
 
 Titles, subtitles, mixed headings, Word output, rich note types, five views and Chinese defaults remain in scope. Historical mechanisms are not compatibility obligations. Implementation, product acceptance and release are recorded separately.
 
+### 4.1 Scope alignment and delivery principles (2026-10-30)
+
+Restore selected user capabilities reduced by AsciiDoc representation limits, without restoring wrappers, protocols or a universal fact system built only for that carrier. These are current scope decisions, not implementation or acceptance claims.
+
+- **Core capabilities.** Keep ordinary writing, continuity across five views, rich native properties, queries, file organization, stable links and explicitly bounded Office exchange. Ordinary tasks must not require provenance, confidence, per-value identity or internal protocol details.
+- **Rich capabilities used on demand.** Retain selected uses of employment and state history, multiple sources, disputed records, quantities and richer relations through optional fields, groups and templates. Ordinary notes must not require a complete HR, CRM or historical-research workflow. Optional use does not cancel promised editing, querying or export.
+- **Explicit deferrals.** Full HR/CRM, unselected automatic relationship inference/writeback, a general fact-adjudication platform, complete project management and unselected connectors do not enter the first delivery merely because native values can express them. Retain existing inverse views and provenance-bearing derived relations; deferring automatic writeback does not remove them. Recording sources and disputes does not mean automatically deciding truth. New scope needs a user task and benefit; historical field counts are not completion goals.
+- **Bound visual editing and format exchange.** Preserve complete legal Typst source and make common constructs usable. Explain local limitations and provide explicit source access for complex constructs that cannot be safely rewritten. Five views share author source, Draft and Undo, without promising reversible editing of arbitrary generated content. Verify Office semantics on actual supported hosts rather than promising lossless round trips for every document; retain originals, unknown information and precise loss reports.
+- **Deliver by platform.** Windows daily use and installation may form an independently accepted delivery while other platforms follow according to actual capabilities. Retain every platform direction and open gate. One platform does not qualify the complete cross-platform version, and unfinished mobile work does not block separate delivery of an accepted Windows scope. Publication remains a separate action.
+- **Measure performance by workload.** Separate ordinary writing, large source, complex layout and queries; record hardware, mode, cold/warm state, latency percentiles and the actual process-memory scope. Retain existing numbers as research targets rather than a simultaneous promise for every workload. Do not rename failed cases or relax existing checks to obtain a pass. Preview throttling, on-demand loading and explicit supported limits are permitted; preservation of accepted input and safe over-limit refusal cannot be weakened.
+
+Reliable saves, retaining both conflict versions, revocation boundaries and original-request recovery are core outcomes that simplification cannot remove. Implement through existing SOURCE/EDITOR/FEATURES/CORE owners and ROADMAP cases, without another requirements or acceptance ledger.
+
 ## 5. Requirements inventory and scope
 
 Source levels: **U** is an explicit user choice; **P** is a product experience or necessary quality condition selected in the prior candidate, retained as redesign input without pretending every parameter was specified by the user; **D** is authorized elaboration whose solution remains a design choice. Combined levels indicate mixed origins, not that every detail is a user quotation. Changes to P product scope must explain the tradeoff rather than silently deleting a feature through a technical replacement. Links identify current design owners; historical sources and discussions are archived without importing old mechanisms.
@@ -137,6 +150,19 @@ Earlier field reductions made for the old carrier have been superseded. Current 
 5. **Judge elegance across the complete workflow.** Check representative types across authored source, property forms, editing/undo, Query/views and import/export. References, sharing or history also require the corresponding identity, authorization and save/sync checks. Successful syntax compilation alone is insufficient. Record actual tradeoffs or unsupported capabilities explicitly rather than presenting old-language limits as product choices.
 
 The rewrite must assign retention/redesign/deferral reasons and current owners to each capability class, covering historically selected capabilities without treating the entire old schema as the new implementation. At minimum, verify that equal contact values retain distinct labels/notes and order; employment and organization references preserve time and target meaning; ordered paper authors agree across forms, Query and export; task details remain body content with structured fields supporting views; and ordinary use does not require optional complex information. These are design checks, not executed product tests.
+
+#### 5.2.1 Specific restoration and redesign boundaries
+
+| Capability | Current disposition | Actual task to verify |
+| --- | --- | --- |
+| Multiple values, nesting, labels/notes and author order | Restore and retain; missing convenient controls cannot reduce them to prose | Two equal phone values retain their own labels/notes through reorder, Undo, save/reopen, Query and export |
+| Employment, organization references, state/event history and sources | Retain selected structures as optional input; never invent unknown dates, while body text remains available for narrative | Two employments preserve their separate organization, position and period; same-item queries and export cannot combine fields from different records |
+| Papers, ordered contributors, versions and citations | Keep one business authority and explicit import mapping, without maintaining separate paper and citation copies | Import a paper with same-name authors and different roles, reorder authors, cite and export, then verify identity and order |
+| Relations and inverse views | Retain direction, provenance and independent assertions; redesign unsuitable storage mechanisms | Editing A's relation cannot silently write B or require B's write permission because of random ID order. Independent assertions of the same pair may share a visual edge, but edits select and reauthorize the real source. Target reads and schema constraints still apply; inverse visibility does not imply mutual confirmation |
+| Confidence, disputed assertions, observation precision and per-value identity | Retain selected source/history/measurement uses as optional business data, not mandatory wrappers for every property | Ordinary contact values allow direct entry. Evidenced disputes or observations retain sources; decimal confidence is not objective credibility. Cross-version per-value identity needs an independent addressing task and comparison with lighter alternatives |
+| Advanced calendars, recurrence and domain presets | Retain selected semantics; deliver actual data packs, professional presets and convenient controls according to supported scope | Preserve precision, zones and recurrence exceptions; missing packs, incomplete coverage and unknown imported values stay explicit rather than becoming invented defaults |
+
+This table refines RQ08–10 and 15–17; SOURCE §5.1 continues to own detailed coverage of the seven capability classes. Removing a general mechanism does not remove domain information, and simplifying the default UI cannot discard saved complex records. Unimplemented or unverified consumers remain identified in the existing roadmap and candidate record.
 
 ### 5.3 Library defaults and native style overrides
 
@@ -369,6 +395,12 @@ Core Obsidian graph evidence is the [official controls documentation](https://ob
 Adopt task interactions, not Markdown syntax, private plugin fields or runtime dependencies. Weftext deliberately retains shared Draft: table Esc leaves editing while keeping input; numbering uses native rules rather than obligatory literal heading prefixes; nodes keep existing stable identities; potential links retain exact matching and complete overlaps; graphs select for provenance inspection before explicit opening.
 
 Table PNG/record conversion, bulk literal-prefix rewriting, plugin-specific URIs/Markdown extensions and 3D/cruising/shortest-path tours do not automatically enter these versions. EDITOR §2.8 defines shared Query controls, keyboard, focus, IME and cancellation. Interaction decisions are now specified; discoverability, task time, platform feel and performance must still be verified on the corresponding implementation candidate rather than omitted or inferred.
+
+### 5.16 Brand continuity
+
+Preserve the established ancient-Chinese 文-inspired mark and blue-black/warm-paper application icon; it is not a strict reproduction of one oracle-bone glyph. Technical restructuring must not replace the brand with W or a generic placeholder. Restore by checking the retained original geometry and explicitly importing brand assets, without copying private historical records into the product repository. Actually delivered entry points derive resources from one source, covering executable/tray, installer and WebUI surfaces that use the mark; check small sizes, transparency/light/dark backgrounds and resource references. A new principal mark is a separate product decision; small-size adaptation must retain its identifying features.
+
+Current Windows resources still use W, an open omission. This requirement does not claim restored icons or completed acceptance.
 
 ## 6. Bringing the original 21 findings into the new design
 

@@ -12,6 +12,20 @@ The current development tree integrates the existing v0.7 slices: GUI/CLI entry 
 
 The 2026-10-25 closeout reconciliation confirms that fixed development commit `6698572` completes implementation and local affected acceptance for stages 1–3 below; Design and Product CI also passed. Stage 4 first gained bounded native Library/Capture, close/recovery and concurrent-startup runs on `af16918`; `9d469e6` then passed modeless-notice multiwindow repair regression and bounded real Pinyin tasks on two input surfaces. MVP retains exact scope. Complete native-window and platform acceptance remain separate. Continue stage 4, followed by installation and the other platforms; v0.8 work is not starting. These stages neither change requirements nor establish whole-version acceptance.
 
+## Near-term order after requirements alignment (2026-10-30)
+
+REQUIREMENTS §4.1, §5.2.1 and §5.16 define restored scope, complexity boundaries and branding; INTEGRATION §1.1 defines targeted preparation. This revision changes requirements and order only, without claiming new implementation or closing historical acceptance gates. Continue v0.7 without starting v0.8; use the existing UX/DSK cases below and WORKFLOW candidate records.
+
+| Order | Work and rationale | Completion boundary |
+| --- | --- | --- |
+| First address the repeatedly failing boundary | Review property projections, resource insertion and related author-input consumers; distinguish source identity from background Draft ACK and extract only actual shared semantics, without unifying save/close authority | Same-input ACK positives and new-input, changed-object, Undo/Redo, revocation and original-request recovery negatives; passing only the two existing examples is insufficient |
+| Restore omitted branding alongside that work | Check the retained 文 artwork and restore one brand source with executable/tray/installer and other actual consumers | Actual generation/references, small-size and background checks; current W is not yet replaced |
+| Then complete rich-type and everyday workflows | Check all seven classes under SOURCE §5.1, starting with contact, employment, paper and relation tasks; complete concrete entries through the plugin gaps and UX01–12 below | Consistent source, forms, Query, save/recovery and export; retain optional complex data and explicitly track remaining capabilities rather than treating four examples as full coverage |
+| Close Windows as a separate delivery | Complete affected real daily tasks, input/Undo, workload measurements and DSK installation/notification/upgrade preservation | Fixed source/artifact and accurate supported scope; retain failed/unrun items. Research performance numbers are not product support and budget changes do not rewrite old results |
+| Complete other products platform by platform | Connect actual Core/Host/Engine/filesystem paths for Linux, Android and Apple | Separate build, actual execution, input/lifecycle and installation evidence per platform; Windows can deliver separately without closing whole-version cross-platform gates |
+
+Do not rewrite Core or split every module based on file size, or recreate the old universal fact system; selected rich business capabilities still require delivery. Read-only requirements review cannot replace real workflows. Interface changes update related local/hosted/CLI consumers and documentation together.
+
 ## Completion and gap reconciliation (2026-10-25)
 
 Product milestones start at v0.1; earlier designs and prototypes do not receive a separate “accepted v0.0 product” status. This table summarizes the existing scope. Original candidate results remain in [MVP](MVP.md) and the same candidate records defined by WORKFLOW. Distinguish implemented code, accepted original scope, unverified current candidates and incomplete products; version numbers and test counts do not establish completion.
