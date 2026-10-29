@@ -35,11 +35,11 @@ test("transfer authority never pairs a new basis or pending read with the old ac
 
 test("same-cut Draft ACK metadata advances without retiring or qualifying a source-read lease", () => {
     const f = fixture(), context = f.internals.transferContext()!;
-    assert.equal(context.basis.inputRevision, undefined);
+    assert.equal(Object.hasOwn(context.basis, "inputRevision"), false);
     for (const inputRevision of [undefined, 2, 3, 99]) {
         f.state.current = { ...f.basis, inputRevision };
         const renewed = f.internals.transferContext(); assert.ok(renewed);
-        assert.equal(renewed.basis.inputRevision, undefined, "a projection cannot confer ACK authority");
+        assert.equal(Object.hasOwn(renewed.basis, "inputRevision"), false, "a projection cannot confer ACK authority");
         assert.equal(f.internals.isTransferCurrent(context), true);
         assert.equal(f.internals.canTransferFields(), true);
     }

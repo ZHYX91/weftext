@@ -1,7 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readNoteProjection, sameProjectionInput } from "./data-projection-read";
+import { readNoteProjection } from "./data-projection-read";
+import { sameSourceInput } from "./source-input-basis";
 import type { DocumentBasis, PanelHost } from "./native-value-form";
 
 const hash = (source: string) => createHash("sha256").update(source).digest("hex");
@@ -40,14 +41,14 @@ test("pending projection reads keep the submitted source and schema even if call
     original.source = "later"; original.serial++; originalSchema.source = "changed"; originalSchema.revision = "changed";
     finish(wire());
     assert.deepEqual(await read, { ...projection, readOnly: false });
-    assert.equal(sameProjectionInput(original, basis), false);
+    assert.equal(sameSourceInput(original, basis), false);
 });
 
 test("same-byte input ABA and document/session changes invalidate a projection consumer", () => {
-    assert.equal(sameProjectionInput({ ...basis }, basis), true);
-    for (const change of [{ inputId: "later-input" }, { sessionId: "later-session" }, { baseId: "later-base" }, { serial: 2 }, { source: "later" }, { path: "other.typ" }, { root: "other-library" }])
-        assert.equal(sameProjectionInput({ ...basis, ...change }, basis), false);
-    assert.equal(sameProjectionInput(null, basis), false);
+    assert.equal(sameSourceInput({ ...basis }, basis), true);
+    for (const change of [{ inputId: "later-input" }, { sessionId: "later-session" }, { baseId: "later-base" }, { serial: 2 }, { source: "later" }, { path: "other.typ" }, { root: "other-library" }, { nodeId: "other-node" }, { workspaceId: "other-workspace" }])
+        assert.equal(sameSourceInput({ ...basis, ...change }, basis), false);
+    assert.equal(sameSourceInput(null, basis), false);
 });
 
 for (const original of ["source", "schema"] as const) for (const [kind, incomplete] of [["high", "\ud800"], ["low", "\udc00"]] as const) {

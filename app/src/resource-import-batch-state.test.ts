@@ -4,12 +4,13 @@ import { history, isolateHistory, undo, undoDepth } from "@codemirror/commands";
 import { createSourceState } from "./editor";
 import { DocumentSession } from "./session";
 import type { DocumentBasis } from "./native-value-form";
+import { sourceInputBasis } from "./source-input-basis";
 import { message, UiError } from "./ui-locale";
 import { writingRange, type WritingMap } from "./writing";
 import {
     checkLocalResourceSizes, decodeLocalResourceInsertion, decodeLocalResourceLocator, decodeLocalResourcePlan,
     localResourceBatchBytes, localResourceKey, readLocalResourceLocator, removeLocalResourceLocator,
-    resourceBasisKey, resourceDigest, resourceOwner, resourceSourceBasis, sameResourceOwner, writeLocalResourceLocator,
+    resourceBasisKey, resourceDigest, resourceOwner, sameResourceOwner, writeLocalResourceLocator,
     type LocalResourceLocator, type LocalResourceMode, type LocalResourcePlan, type LocalResourceStorage,
 } from "./resource-import-batch-state";
 
@@ -66,9 +67,9 @@ test("resource source cuts retain the author identity separately from Draft ACKs
     for (const inputRevision of [undefined, original.inputRevision! + 1]) {
         const acknowledged = { ...original, inputRevision };
         assert.equal(resourceBasisKey(original), resourceBasisKey(acknowledged));
-        assert.deepEqual(resourceSourceBasis(original), resourceSourceBasis(acknowledged));
+        assert.deepEqual(sourceInputBasis(original), sourceInputBasis(acknowledged));
     }
-    assert.equal(Object.hasOwn(resourceSourceBasis(original), "inputRevision"), false);
+    assert.equal(Object.hasOwn(sourceInputBasis(original), "inputRevision"), false);
     assert.equal(original.inputRevision, 7, "the acknowledged basis is not mutated or treated as a source-edit grant");
 });
 
@@ -79,13 +80,13 @@ test("real session repeated Draft acknowledgements leave the captured resource a
         viewInputId: original.inputId });
     const current = (): DocumentBasis => ({ ...original, inputId: session.inputId, source: session.source, serial: session.serial,
         baseId: session.baseId, path: session.path, inputRevision: session.acknowledgedInputRevision ?? undefined });
-    const captured = resourceSourceBasis(current()), key = resourceBasisKey(captured);
+    const captured = sourceInputBasis(current()), key = resourceBasisKey(captured);
     for (let count = 0; count < 3; count++) {
         const revision = session.issueDraftRevision();
         session.acknowledgeDraft(session.source, session.serial, revision, session.inputId);
         assert.equal(session.acknowledgedInputRevision, revision);
         assert.equal(resourceBasisKey(current()), key);
-        assert.deepEqual(resourceSourceBasis(current()), captured);
+        assert.deepEqual(sourceInputBasis(current()), captured);
         assert.equal(Object.hasOwn(captured, "inputRevision"), false);
     }
     assert.equal(session.acknowledgedInputRevision, 3, "source proposals do not erase or acquire Save ACK authority");
@@ -98,7 +99,7 @@ test("real same-text replacement and edit-Undo ABA cannot revive an earlier reso
         viewInputId: original.inputId });
     const current = (): DocumentBasis => ({ ...original, inputId: session.inputId, source: session.source, serial: session.serial,
         baseId: session.baseId, path: session.path, inputRevision: session.acknowledgedInputRevision ?? undefined });
-    const captured = resourceSourceBasis(current()), key = resourceBasisKey(captured);
+    const captured = sourceInputBasis(current()), key = resourceBasisKey(captured);
     session.edit(session.source, "another-same-text-writer");
     assert.equal(session.source, captured.source);
     assert.equal(session.serial, captured.serial);

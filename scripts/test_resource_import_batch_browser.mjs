@@ -1,8 +1,9 @@
 // Real headless DOM/SourceEditor checks with a controlled resource-operation
 // ledger. These are component checks, not real Core, native host or OS IME QA.
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createServer as createPortServer } from 'node:net';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -12,6 +13,8 @@ assert.ok(path.isAbsolute(process.argv[2]), 'Use an absolute, new private output
 const out = path.resolve(process.argv[2]), repo = path.resolve(import.meta.dirname, '..');
 assert.ok(path.relative(repo, out).startsWith('..' + path.sep), 'Keep private test evidence outside the public repository');
 await mkdir(out, { recursive: false });
+const inputs = ['scripts/test_resource_import_batch_browser.mjs', 'app/src/resource-import-batch.ts', 'app/src/resource-import-batch-state.ts', 'app/src/source-input-basis.ts', 'app/src/native-value-form.ts', 'app/src/proposal-close-guard.ts', 'app/src/writing.ts', 'app/src/session.ts', 'app/src/editor.ts', 'app/src/ui-locale.ts', 'app/src/ui-messages.ts', 'assets/ui-messages.json'];
+const inventory = async () => Promise.all(inputs.map(async file => ({ path: file, sha256: createHash('sha256').update(await readFile(path.join(repo, file))).digest('hex') })));
 const require = createRequire(import.meta.url), { chromium } = require(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwright');
 const { createServer } = await import(pathToFileURL(path.join(repo, 'app/node_modules/vite/dist/node/index.js')).href);
 const vite = await createServer({ root: path.join(repo, 'app'), configFile: false, server: { host: '127.0.0.1', port: 0, strictPort: true, hmr: false },
@@ -22,6 +25,7 @@ const vite = await createServer({ root: path.join(repo, 'app'), configFile: fals
     });
   } }] });
 const result = { cases: [], pageErrors: [], completed: false, ownedProcessesClosed: false,
+  sourceBefore: await inventory(),
   limits: ['Current-source headless Chrome with real DOM, SourceEditor/Undo and localStorage over controlled DTO ports; no real Core, filesystem import, native host, OS IME or authorization acceptance.'] };
 let browser, page, base;
 const pass = name => result.cases.push(name);
@@ -629,7 +633,8 @@ try {
   try { await browser?.close(); } catch (error) { result.browserCloseFailure = String(error); }
   try { await vite.close(); } catch (error) { result.frontendCloseFailure = String(error); }
   result.ownedProcessesClosed = !result.browserCloseFailure && !result.frontendCloseFailure;
+  result.sourceAfter = await inventory(); result.inputsUnchanged = JSON.stringify(result.sourceBefore) === JSON.stringify(result.sourceAfter);
   await writeFile(path.join(out, 'results.json'), JSON.stringify(result, null, 2));
   console.log(JSON.stringify({ out, completed: result.completed, cases: result.cases.length, failure: result.failure, ownedProcessesClosed: result.ownedProcessesClosed }));
 }
-if (!result.completed || !result.ownedProcessesClosed) process.exitCode = 1;
+if (!result.completed || !result.ownedProcessesClosed || !result.inputsUnchanged) process.exitCode = 1;

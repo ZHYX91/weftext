@@ -167,6 +167,45 @@ test("DataPanel applying an old note never deletes a same-key draft in the newly
     assert.equal(drafts.has("field"), false); assert.equal(next.has("field"), true); assert.equal(owner.freezeForClose(), false);
 });
 
+for (const stage of ["before request", "awaiting edit"] as const) for (const changed of ["inputId", "sessionId", "source", "serial", "baseId", "path", "root", "workspaceId", "nodeId", "permission"] as const) {
+    test(`DataPanel ${stage} refuses changed ${changed} and retains the unapplied field`, async () => {
+        const original: DocumentBasis = { ...basis, workspaceId: "library", nodeId: "node", inputRevision: 4 };
+        let current = { ...original }, editable = true, requests = 0, deliveries = 0, refreshes = 0;
+        let release!: () => void, entered!: () => void;
+        const waiting = new Promise<void>(resolve => { release = resolve; }), reached = new Promise<void>(resolve => { entered = resolve; });
+        const { owner, drafts } = dataOwner(), draft = field(); drafts.set("field", draft);
+        const host = { getDocument: () => current, canEdit: () => editable, notify() {},
+            async request() { requests++; entered(); await waiting; return { from: 0, to: 0, text: "patch" }; },
+            async applyPatch() { deliveries++; },
+        } as unknown as PanelHost;
+        Object.assign(owner, { host, element: { setAttribute() {}, removeAttribute() {} }, refresh: async () => { refreshes++; } });
+        const change = () => {
+            if (changed === "permission") editable = false;
+            else current = { ...current, [changed]: changed === "serial" ? current.serial + 2 : `${current[changed]}-new` };
+        };
+        if (stage === "before request") change();
+        const applying = (owner as unknown as { applyField(key: string, value: unknown, basis: DocumentBasis): Promise<void> }).applyField("field", draft.value, original);
+        if (stage === "awaiting edit") { await reached; change(); }
+        release(); await applying;
+        assert.equal(requests, stage === "before request" ? 0 : 1); assert.equal(deliveries, 0); assert.equal(refreshes, 0);
+        assert.equal(drafts.get("field"), draft); assert.equal(owner.freezeForClose(), false);
+    });
+}
+
+test("DataPanel awaited edit survives repeated same-input ACKs and hands the host only a source proposal", async () => {
+    const original = { ...basis, inputRevision: 4 }, current = { ...original };
+    const { owner, drafts } = dataOwner(), draft = field(); drafts.set("field", draft);
+    let delivered: DocumentBasis | undefined;
+    const host = { getDocument: () => current, notify() {},
+        async request() { current.inputRevision++; await Promise.resolve(); current.inputRevision++; return { from: 0, to: 0, text: "patch" }; },
+        async applyPatch(_patch: unknown, source: DocumentBasis) { delivered = source; },
+    } as unknown as PanelHost;
+    Object.assign(owner, { host, element: { setAttribute() {}, removeAttribute() {} }, refresh: async () => {} });
+    await (owner as unknown as { applyField(key: string, value: unknown, basis: DocumentBasis): Promise<void> }).applyField("field", draft.value, original);
+    assert.ok(delivered); assert.equal(Object.hasOwn(delivered, "inputRevision"), false);
+    assert.equal(original.inputRevision, 4); assert.equal(current.inputRevision, 6); assert.equal(drafts.size, 0);
+});
+
 test("QuickCapture rejects raw-only input, unresolved original creation and busy delivery; freeze blocks new input", () => {
     const { owner, guard } = captureOwner();
     (owner as unknown as { markInput(): void }).markInput();

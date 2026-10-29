@@ -12,7 +12,7 @@ const repo = path.resolve(import.meta.dirname, '..'), out = path.resolve(process
 assert.ok(path.isAbsolute(process.argv[2]));
 assert.ok(path.relative(repo, out).startsWith('..' + path.sep));
 await mkdir(out, { recursive: false });
-const inputs = ['app/src/field-transfer.ts', 'app/src/field-transfer-state.ts', 'app/src/native-value-form.ts', 'app/src/data-projection.ts', 'app/src/ui-locale.ts', 'app/src/ui-messages.ts', 'assets/ui-messages.json', 'scripts/test_field_transfer_components_browser.mjs'];
+const inputs = ['app/src/field-transfer.ts', 'app/src/field-transfer-state.ts', 'app/src/source-input-basis.ts', 'app/src/native-value-form.ts', 'app/src/data-projection.ts', 'app/src/ui-locale.ts', 'app/src/ui-messages.ts', 'assets/ui-messages.json', 'scripts/test_field_transfer_components_browser.mjs'];
 const inventory = async () => Promise.all(inputs.map(async file => ({ path: file, sha256: createHash('sha256').update(await readFile(path.join(repo, file))).digest('hex') })));
 const result = { schemaVersion: 1, startedUtc: new Date().toISOString(), sourceBefore: await inventory(), cases: [], pageErrors: [], completed: false,
     scope: 'Actual FieldTransfer form, selection routing and asynchronous host authority gates with controlled readonly responses',
