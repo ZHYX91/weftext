@@ -193,7 +193,7 @@ try {
   const panel = page.locator('.data-panel'), field = key => panel.locator(`.data-property[data-field-key="${key}"]`), transfer = panel.locator('.data-field-transfer');
   await field('left_values').waitFor({ state: 'attached' });
   const advanced = panel.locator('.data-field-group.advanced');
-  if (await advanced.count() && !await advanced.evaluate(element => element.open)) await advanced.locator('summary').click();
+  if (await advanced.count() && !await advanced.evaluate(element => element.open)) await advanced.locator(':scope > summary').click();
   await listValues('left_values', ['same', 'same', 'tail']); await listValues('right_values', ['dest']);
   await field('left_values').locator('[data-field-preset="batch/left_values"]').click();
   const dialog = page.locator('dialog.data-value-preset-dialog'); await dialog.waitFor();

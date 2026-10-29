@@ -194,6 +194,22 @@ fn resolve_with_collection(
     let (collection, member) =
         resource_collections::split_member(&inner.config, asset).ok_or_else(unavailable)?;
     let captured = Arc::new(resource_collections::capture(inner, actor, collection)?);
+    let resource = resource_from_collection(inner, collection, member, &captured)?;
+    inner
+        .core
+        .validate_resource_collection_witness(&inner.config.root, &captured.witness)
+        .map_err(|_| changed())?;
+    Ok((resource, Some(captured)))
+}
+/// Resolve only the member of this original cut. This performs no current
+/// collection capture and grants no access by itself; callers authorize first
+/// and retain the cut's final witness check before delivering a projection.
+fn resource_from_collection(
+    inner: &HostedInner,
+    collection: &str,
+    member: &str,
+    captured: &weftext_core::QualifiedResourceCollection,
+) -> Result<Resource, ApiError> {
     let mut matching = captured
         .entries
         .iter()
@@ -216,19 +232,14 @@ fn resolve_with_collection(
         .and_then(|p| p.to_str())
         .ok_or_else(changed)?
         .to_owned();
-    inner
-        .core
-        .validate_resource_collection_witness(&inner.config.root, &captured.witness)
-        .map_err(|_| changed())?;
-    let resource = Resource {
+    Ok(Resource {
         owner: c.owner.clone(),
         expected_owner: captured.owner.clone(),
         path,
         title,
         reference: entry.resource_ref.clone(),
         lifecycle: c.lifecycle.clone(),
-    };
-    Ok((resource, Some(captured)))
+    })
 }
 fn changed() -> ApiError {
     ApiError::new(
@@ -393,10 +404,12 @@ pub(super) struct Context {
     pub(super) collection: Option<Arc<weftext_core::QualifiedResourceCollection>>,
 }
 impl Context {
-    pub(super) fn retained_bytes(&self) -> usize {
+    fn owned_retained_bytes(&self) -> usize {
         self.resource.witness.retained_bytes()
-            + self.collection.as_ref().map_or(0, |c| c.retained_bytes())
             + serde_json::to_vec(&(&self.metadata, &self.descriptor)).map_or(MAX_BYTES, |v| v.len())
+    }
+    pub(super) fn retained_bytes(&self) -> usize {
+        self.owned_retained_bytes() + self.collection.as_ref().map_or(0, |c| c.retained_bytes())
     }
     pub(super) fn validate(&self, inner: &HostedInner, actor: &str) -> Result<(), ApiError> {
         validate_original(inner, actor, &self.asset, &self.resource)?;
@@ -556,49 +569,304 @@ fn retain(inner: &mut HostedInner, ticket: Ticket) -> Result<String, ApiError> {
     inner.media.tickets.insert(id.clone(), ticket);
     Ok(id)
 }
-async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
-    Ok(Json(locked(&state,move|inner| {
-        let actor=inner.actor(&auth)?;let mut resources=vec![];let mut bytes=0usize;let mut complete=true;
-        let mut assets=inner.config.resources.keys().filter(|id|input_access(inner,&actor,id,false).is_ok()).cloned().collect::<Vec<_>>();
-        let mut collections=vec![];let mut witnesses=vec![];
-        let mut configured_collections=inner.config.resource_collections.clone();
-        for id in content_import::collection_ids(inner,&actor)? {configured_collections.insert(id.clone(),resource_collections::configured(inner,&id)?);}
-        for (id,c) in &configured_collections {
-            let Some(rights)=inner.policy.users[&actor].resource_collections.get(id).cloned().or_else(||content_import::resource_rights(inner,&actor,id)).filter(|r|r.read || r.r#import) else {continue;};
-            let captured=resource_collections::qualify(inner,id);
-            let ready=match captured {Ok(captured) if bytes.saturating_add(captured.retained_bytes())<=MAX_BYTES=>{
-                bytes+=captured.retained_bytes();
-                if rights.read {
-                    if captured.unrecognized_entries>0 {complete=false;}
-                    for e in &captured.entries {assets.push(format!("{id}/{}",e.resource_ref.rsplit('/').next().ok_or_else(changed)?));}
+fn catalog_rights(
+    inner: &HostedInner,
+    actor: &str,
+    collection: &str,
+) -> Option<resource_collections::Rights> {
+    let user = inner.policy.users.get(actor).filter(|user| user.enabled)?;
+    user.resource_collections
+        .get(collection)
+        .cloned()
+        .or_else(|| content_import::resource_rights(inner, actor, collection))
+        .filter(|rights| rights.read || rights.r#import)
+}
+
+fn unavailable_catalog_row(inner: &HostedInner, asset: &str, config: Option<Resource>) -> Value {
+    let mut row = json!({"asset":asset,"status":"unavailable"});
+    if let Some(config) = config {
+        row["owner"] = config.owner.into();
+        row["name"] = config.title.clone().into();
+        row["title"] = config.title.into();
+        row["lifecycle"] = config.lifecycle.into();
+    }
+    if let Some((collection, _)) = resource_collections::split_member(&inner.config, asset) {
+        row["collection"] = collection.into();
+    }
+    row
+}
+
+enum CatalogResource {
+    Ready(Context),
+    Unavailable(Value),
+}
+impl CatalogResource {
+    fn asset(&self) -> &str {
+        match self {
+            Self::Ready(context) => &context.asset,
+            Self::Unavailable(row) => row["asset"].as_str().unwrap(),
+        }
+    }
+}
+
+/// One request-local cut. Collection Arcs are shared only among this catalog's
+/// members; each resource still owns its exact independent Core witness.
+struct CatalogCut {
+    resources: Vec<CatalogResource>,
+    collections: Vec<Value>,
+    cuts: BTreeMap<String, Arc<weftext_core::QualifiedResourceCollection>>,
+    bindings: BTreeSet<String>,
+    binding: String,
+    retained: usize,
+    complete: bool,
+}
+impl CatalogCut {
+    fn resolution(
+        &self,
+        inner: &HostedInner,
+        actor: &str,
+        asset: &str,
+    ) -> Result<ResolvedAsset, ApiError> {
+        input_access(inner, actor, asset, false)?;
+        if let Some(configured) = inner.config.resources.get(asset) {
+            return Ok((configured.clone(), None));
+        }
+        let (collection, member) =
+            resource_collections::split_member(&inner.config, asset).ok_or_else(unavailable)?;
+        let captured = self.cuts.get(collection).ok_or_else(changed)?;
+        Ok((
+            resource_from_collection(inner, collection, member, captured)?,
+            Some(Arc::clone(captured)),
+        ))
+    }
+
+    fn capture(inner: &HostedInner, actor: &str) -> Result<Self, ApiError> {
+        Self::capture_with(inner, actor, |inner, id| {
+            resource_collections::qualify(inner, id).map(Arc::new)
+        })
+    }
+
+    fn capture_with(
+        inner: &HostedInner,
+        actor: &str,
+        mut capture: impl FnMut(
+            &HostedInner,
+            &str,
+        )
+            -> Result<Arc<weftext_core::QualifiedResourceCollection>, ApiError>,
+    ) -> Result<Self, ApiError> {
+        let mut cut = Self {
+            resources: vec![],
+            collections: vec![],
+            cuts: BTreeMap::new(),
+            bindings: BTreeSet::new(),
+            binding: String::new(),
+            retained: 0,
+            complete: true,
+        };
+        let mut assets = inner
+            .config
+            .resources
+            .keys()
+            .filter(|id| input_access(inner, actor, id, false).is_ok())
+            .cloned()
+            .collect::<Vec<_>>();
+        cut.bindings.extend(assets.iter().cloned());
+        let mut configured = inner.config.resource_collections.clone();
+        for id in content_import::collection_ids(inner, actor)? {
+            configured.insert(id.clone(), resource_collections::configured(inner, &id)?);
+        }
+        let mut retained_cuts = BTreeSet::new();
+        for (id, config) in configured {
+            let Some(rights) = catalog_rights(inner, actor, &id) else {
+                continue;
+            };
+            cut.bindings.insert(format!("{id}/*"));
+            let mut row = json!({"collection":id,"owner":config.owner,"title":resource_collections::title(inner,&id)?,"lifecycle":config.lifecycle,"read":rights.read,"download":rights.download,"import":rights.r#import,"status":"unavailable"});
+            let row_bytes = serde_json::to_vec(&row).map_err(|_| changed())?.len();
+            cut.retained = cut.retained.saturating_add(row_bytes);
+            if cut.retained > MAX_BYTES {
+                return Err(ApiError::bad(
+                    UiMessage::error_api_hosted_media_resource_catalog_budget(),
+                ));
+            }
+            match capture(inner, &id) {
+                Ok(captured) => {
+                    // Pointer identity is actual shared ownership. Equal owner,
+                    // ref or content does not deduplicate distinct witnesses.
+                    let pointer = Arc::as_ptr(&captured) as usize;
+                    let added = if retained_cuts.contains(&pointer) {
+                        0
+                    } else {
+                        captured.retained_bytes()
+                    };
+                    if cut.retained.saturating_add(added) <= MAX_BYTES {
+                        cut.retained += added;
+                        retained_cuts.insert(pointer);
+                        if rights.read {
+                            if captured.unrecognized_entries > 0 {
+                                cut.complete = false;
+                            }
+                            for entry in &captured.entries {
+                                assets.push(format!(
+                                    "{id}/{}",
+                                    entry.resource_ref.rsplit('/').next().ok_or_else(changed)?
+                                ));
+                            }
+                        }
+                        cut.cuts.insert(id, captured);
+                        row["status"] = "ready".into();
+                    } else {
+                        cut.complete = false;
+                    }
                 }
-                witnesses.push((id.clone(),Arc::new(captured)));true
-            },_=>{complete=false;false}};
-            collections.push(json!({"collection":id,"owner":c.owner,"title":resource_collections::title(inner,id)?,"lifecycle":c.lifecycle,"read":rights.read,"download":rights.download,"import":rights.r#import,"status":if ready{"ready"}else{"unavailable"}}));
+                Err(_) => cut.complete = false,
+            }
+            cut.retained = cut
+                .retained
+                .saturating_sub(row_bytes)
+                .saturating_add(serde_json::to_vec(&row).map_err(|_| changed())?.len());
+            cut.collections.push(row);
         }
         for asset in assets {
-            let resolved=resolve_with_collection(inner,&actor,&asset);
-            let config=resolved.as_ref().ok().map(|(config,_)|config.clone());
-            let ready=resolved.and_then(|resolved|context_from_resolution(inner,&actor,&asset,None,resolved)).and_then(|context| {
-                if bytes.saturating_add(context.retained_bytes())>MAX_BYTES {return Err(ApiError::bad(UiMessage::error_api_hosted_media_resource_catalog_budget()));}
-                bytes+=context.retained_bytes();context.validate(inner,&actor)?;Ok(context.descriptor)
-            });
-            let row=match ready {Ok(row)=>row,Err(_)=>{complete=false;
-                let mut row=json!({"asset":asset,"status":"unavailable"});
-                if let Some(c)=config {row["owner"]=c.owner.into();row["name"]=c.title.clone().into();row["title"]=c.title.into();row["lifecycle"]=c.lifecycle.into();}
-                if let Some((c,_))=resource_collections::split_member(&inner.config,&asset) {row["collection"]=c.into();}
-                row}};
+            let resolved = cut.resolution(inner, actor, &asset);
+            let config = resolved.as_ref().ok().map(|(config, _)| config.clone());
+            let fallback = unavailable_catalog_row(inner, &asset, config);
+            let fallback_bytes = serde_json::to_vec(&fallback).map_err(|_| changed())?.len();
+            let ready = resolved
+                .and_then(|resolved| context_from_resolution(inner, actor, &asset, None, resolved));
+            let entry = match ready {
+                Ok(context)
+                    if cut.retained.saturating_add(context.owned_retained_bytes()) <= MAX_BYTES =>
+                {
+                    cut.retained += context.owned_retained_bytes();
+                    CatalogResource::Ready(context)
+                }
+                _ => {
+                    cut.complete = false;
+                    cut.retained = cut.retained.saturating_add(fallback_bytes);
+                    if cut.retained > MAX_BYTES {
+                        return Err(ApiError::bad(
+                            UiMessage::error_api_hosted_media_resource_catalog_budget(),
+                        ));
+                    }
+                    CatalogResource::Unavailable(fallback)
+                }
+            };
+            cut.resources.push(entry);
+        }
+        cut.binding = binding_hash(inner, &cut.bindings)?;
+        cut.retained = cut
+            .retained
+            .saturating_add(cut.binding.len())
+            .saturating_add(cut.bindings.iter().map(String::len).sum::<usize>());
+        if cut.retained > MAX_BYTES {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_media_resource_catalog_budget(),
+            ));
+        }
+        Ok(cut)
+    }
+
+    fn finish(self, inner: &HostedInner, actor: &str) -> Result<Value, ApiError> {
+        self.finish_with(inner, actor, |inner, captured| {
+            inner
+                .core
+                .validate_resource_collection_witness(&inner.config.root, &captured.witness)
+                .map_err(|_| changed())
+        })
+    }
+
+    fn finish_with(
+        mut self,
+        inner: &HostedInner,
+        actor: &str,
+        mut validate_collection: impl FnMut(
+            &HostedInner,
+            &weftext_core::QualifiedResourceCollection,
+        ) -> Result<(), ApiError>,
+    ) -> Result<Value, ApiError> {
+        // Freeze both each configured locator and the owner's file binding.
+        // An old cut must not prove itself after a valid configuration remap.
+        if !binding_hash(inner, &self.bindings).is_ok_and(|binding| binding == self.binding) {
+            return Err(changed());
+        }
+        let mut resources = vec![];
+        for entry in std::mem::take(&mut self.resources) {
+            let asset = entry.asset();
+            // Recheck each alias before resource proof or descriptor delivery.
+            // An import-only collection must not inherit its old read grant.
+            if input_access(inner, actor, asset, false).is_err() {
+                self.complete = false;
+                continue;
+            }
+            let row = match entry {
+                CatalogResource::Ready(context) => {
+                    let configured = self
+                        .resolution(inner, actor, &context.asset)
+                        .map(|(config, _)| config);
+                    let valid = configured.as_ref().is_ok_and(|config| {
+                        config.expected_owner == context.resource.owner
+                            && config.reference == context.resource.resource_ref
+                            && config.lifecycle == context.resource.lifecycle
+                    }) && inner
+                        .core
+                        .validate_resource_witness(&inner.config.root, &context.resource.witness)
+                        .is_ok();
+                    if valid {
+                        context.descriptor
+                    } else {
+                        self.complete = false;
+                        unavailable_catalog_row(inner, &context.asset, configured.ok())
+                    }
+                }
+                CatalogResource::Unavailable(row) => row,
+            };
             resources.push(row);
         }
-        for (id,c) in witnesses {
-            if inner.core.validate_resource_collection_witness(&inner.config.root,&c.witness).is_err() {
-                complete=false;
-                for row in &mut collections {if row["collection"]==id {row["status"]="unavailable".into();}}
-                resources.retain(|row|row["collection"]!=id);
+        self.collections.retain_mut(|row| {
+            let id = row["collection"].as_str().unwrap();
+            let Some(rights) = catalog_rights(inner, actor, id) else {
+                return false;
+            };
+            row["read"] = rights.read.into();
+            row["download"] = rights.download.into();
+            row["import"] = rights.r#import.into();
+            true
+        });
+        let mut validated = BTreeMap::new();
+        for (id, captured) in &self.cuts {
+            if catalog_rights(inner, actor, id).is_none() {
+                continue;
+            }
+            let pointer = Arc::as_ptr(captured) as usize;
+            let valid = *validated
+                .entry(pointer)
+                .or_insert_with(|| validate_collection(inner, captured).is_ok());
+            if !valid {
+                self.complete = false;
+                for row in &mut self.collections {
+                    if row["collection"] == *id {
+                        row["status"] = "unavailable".into();
+                    }
+                }
+                resources.retain(|row| row["collection"] != *id);
             }
         }
-        Ok(json!({"resources":resources,"collections":collections,"coverage":if complete{"complete"}else{"partial"},"scope":"configuredAuthorizedResources"}))
-    }).await?))
+        Ok(
+            json!({"resources":resources,"collections":self.collections,"coverage":if self.complete{"complete"}else{"partial"},"scope":"configuredAuthorizedResources"}),
+        )
+    }
+}
+
+async fn catalog(State(state): State<HostedState>, Extension(auth): Extension<Auth>) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            CatalogCut::capture(inner, &actor)?.finish(inner, &actor)
+        })
+        .await?,
+    ))
 }
 async fn prepare_delivery(
     state: HostedState,
@@ -868,6 +1136,262 @@ pub(super) mod tests {
                 },
             );
         asset
+    }
+    #[cfg(windows)]
+    fn catalog_fixture() -> (tempfile::TempDir, HostedState, Auth) {
+        let (temp, state, auth, _) = fixture();
+        collection_alias(&state, false);
+        let mut inner = state.inner.lock().unwrap();
+        let root = inner.config.root.clone();
+        let operation = uuid::Uuid::new_v4().to_string();
+        let preview = inner
+            .core
+            .prepare_import_resources(
+                &root,
+                root.join("Shared/Shared.typ"),
+                vec![
+                    weftext_core::ResourceImportUpload {
+                        name: "second.bin".into(),
+                        bytes: b"second original".to_vec(),
+                    },
+                    weftext_core::ResourceImportUpload {
+                        name: "third.bin".into(),
+                        bytes: b"third original".to_vec(),
+                    },
+                ],
+                &operation,
+            )
+            .unwrap();
+        inner
+            .core
+            .execute_operation(&operation, &preview.plan_id)
+            .unwrap();
+        inner
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .resources
+            .clear();
+        drop(inner);
+        (temp, state, auth)
+    }
+    #[cfg(windows)]
+    #[test]
+    fn catalog_reuses_one_collection_capture_and_final_check_for_three_exact_members() {
+        let (_temp, state, _auth) = catalog_fixture();
+        let inner = state.inner.lock().unwrap();
+        let mut captures = 0;
+        let cut = CatalogCut::capture_with(&inner, "alice", |inner, id| {
+            captures += 1;
+            resource_collections::qualify(inner, id).map(Arc::new)
+        })
+        .unwrap();
+        assert_eq!(captures, 1);
+        assert_eq!(cut.resources.len(), 3);
+        let shared = &cut.cuts["Owned"];
+        let mut owned = 0usize;
+        for entry in &cut.resources {
+            let CatalogResource::Ready(context) = entry else {
+                panic!("current resource must qualify");
+            };
+            assert!(Arc::ptr_eq(context.collection.as_ref().unwrap(), shared));
+            assert!(context.resource.revision.is_some());
+            assert_eq!(
+                context.resource.resource_ref,
+                context.descriptor["resource"]
+            );
+            // Every ResourceWitness really owns its own owner/manifest/resource
+            // cut. Only the shared collection Arc is deducted from this sum.
+            owned += context.owned_retained_bytes();
+        }
+        let rows = cut
+            .collections
+            .iter()
+            .map(|row| serde_json::to_vec(row).unwrap().len())
+            .sum::<usize>();
+        let bindings = cut.binding.len() + cut.bindings.iter().map(String::len).sum::<usize>();
+        assert_eq!(
+            cut.retained,
+            shared.retained_bytes() + owned + rows + bindings
+        );
+        assert!(cut.retained <= MAX_BYTES);
+        let mut final_checks = 0;
+        let result = cut
+            .finish_with(&inner, "alice", |inner, captured| {
+                final_checks += 1;
+                inner
+                    .core
+                    .validate_resource_collection_witness(&inner.config.root, &captured.witness)
+                    .map_err(|_| changed())
+            })
+            .unwrap();
+        assert_eq!(final_checks, 1);
+        assert_eq!(result["coverage"], "complete");
+        assert_eq!(result["resources"].as_array().unwrap().len(), 3);
+        assert!(
+            result["resources"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|row| row["status"] == "ready")
+        );
+    }
+    #[cfg(windows)]
+    #[test]
+    fn catalog_final_collection_gate_removes_members_after_accepted_manifest_change() {
+        let (_temp, state, _auth) = catalog_fixture();
+        let mut inner = state.inner.lock().unwrap();
+        let cut = CatalogCut::capture(&inner, "alice").unwrap();
+        let root = inner.config.root.clone();
+        let operation = uuid::Uuid::new_v4().to_string();
+        let preview = inner
+            .core
+            .prepare_import_resource(
+                &root,
+                root.join("Shared/Shared.typ"),
+                "late.bin",
+                b"late".to_vec(),
+                &operation,
+            )
+            .unwrap();
+        inner
+            .core
+            .execute_operation(&operation, &preview.plan_id)
+            .unwrap();
+        let result = cut.finish(&inner, "alice").unwrap();
+        assert_eq!(result["coverage"], "partial");
+        assert_eq!(result["resources"], json!([]));
+        assert_eq!(result["collections"][0]["status"], "unavailable");
+        for hidden in [
+            "private-locator",
+            "second.bin",
+            "third.bin",
+            "late.bin",
+            "weftext-resource://",
+            "metadata",
+        ] {
+            assert!(!result.to_string().contains(hidden));
+        }
+    }
+    #[cfg(windows)]
+    #[test]
+    fn catalog_final_resource_gate_withholds_changed_bytes_and_owner_replacement() {
+        for replace_owner in [false, true] {
+            let (_temp, state, _auth) = catalog_fixture();
+            let inner = state.inner.lock().unwrap();
+            let cut = CatalogCut::capture(&inner, "alice").unwrap();
+            if replace_owner {
+                let source = inner.config.root.join("Shared/Shared.typ");
+                std::fs::rename(&source, source.with_extension("saved.typ")).unwrap();
+                std::fs::write(&source, b"different physical owner").unwrap();
+            } else {
+                std::fs::write(
+                    inner.config.root.join("Shared/second.bin"),
+                    b"changed after capture",
+                )
+                .unwrap();
+            }
+            let result = cut.finish(&inner, "alice").unwrap();
+            assert_eq!(result["coverage"], "partial");
+            let rows = result["resources"].as_array().unwrap();
+            if replace_owner {
+                assert!(rows.is_empty());
+                assert_eq!(result["collections"][0]["status"], "unavailable");
+            } else {
+                let changed = rows.iter().find(|row| row["name"] == "second.bin").unwrap();
+                assert_eq!(changed["status"], "unavailable");
+                for field in ["resource", "revision", "metadata", "contentType", "bytes"] {
+                    assert!(changed.get(field).is_none());
+                }
+                assert_eq!(
+                    rows.iter().filter(|row| row["status"] == "ready").count(),
+                    2
+                );
+            }
+        }
+    }
+    #[cfg(windows)]
+    #[test]
+    fn catalog_final_alias_read_check_withholds_revoked_members_and_keeps_import_only_summary() {
+        for import_only in [false, true] {
+            let (_temp, state, _auth) = catalog_fixture();
+            let mut inner = state.inner.lock().unwrap();
+            let cut = CatalogCut::capture(&inner, "alice").unwrap();
+            let rights = inner
+                .policy
+                .users
+                .get_mut("alice")
+                .unwrap()
+                .resource_collections
+                .get_mut("Owned")
+                .unwrap();
+            rights.read = false;
+            rights.r#import = import_only;
+            let result = cut.finish(&inner, "alice").unwrap();
+            assert_eq!(result["resources"], json!([]));
+            let collections = result["collections"].as_array().unwrap();
+            if import_only {
+                assert_eq!(collections.len(), 1);
+                assert_eq!(collections[0]["read"], false);
+                assert_eq!(collections[0]["import"], true);
+            } else {
+                assert!(collections.is_empty());
+            }
+            for hidden in [
+                "private-locator",
+                "second.bin",
+                "third.bin",
+                "weftext-resource://",
+                "metadata",
+            ] {
+                assert!(!result.to_string().contains(hidden));
+            }
+        }
+    }
+    #[cfg(windows)]
+    #[test]
+    fn catalog_final_binding_check_withholds_changed_configured_alias() {
+        let (_temp, state, _auth, _revision) = fixture();
+        let mut inner = state.inner.lock().unwrap();
+        let cut = CatalogCut::capture(&inner, "alice").unwrap();
+        inner
+            .config
+            .resources
+            .get_mut("Diagram")
+            .unwrap()
+            .expected_owner
+            .node_id = uuid::Uuid::new_v4().to_string();
+        assert_eq!(
+            cut.finish(&inner, "alice").unwrap_err().status,
+            StatusCode::CONFLICT
+        );
+    }
+    #[cfg(windows)]
+    #[test]
+    fn catalog_final_binding_rejects_valid_collection_owner_remap_with_old_owner_intact() {
+        let (_temp, state, _auth) = catalog_fixture();
+        let mut inner = state.inner.lock().unwrap();
+        let cut = CatalogCut::capture(&inner, "alice").unwrap();
+        let root = inner.config.root.clone();
+        let owner = inner
+            .core
+            .qualified_node_at(&root, &root.join("Target/Target.typ"))
+            .unwrap()
+            .owner;
+        let collection = inner.config.resource_collections.get_mut("Owned").unwrap();
+        collection.owner = "Target".into();
+        collection.expected_owner = Some(owner);
+        assert!(
+            inner
+                .core
+                .qualified_node_at(&root, &root.join("Shared/Shared.typ"))
+                .is_ok()
+        );
+        assert_eq!(
+            cut.finish(&inner, "alice").unwrap_err().status,
+            StatusCode::CONFLICT
+        );
     }
     #[cfg(windows)]
     #[tokio::test]

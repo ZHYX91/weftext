@@ -33,8 +33,15 @@ interface SchemaProposal {
     preview?: unknown;
 }
 function samePanelInput(current: DocumentBasis | null, original: DocumentBasis): boolean {
+    // /data/project binds this exact author input, not its asynchronous /draft
+    // acknowledgement. The latter can advance without another source event.
     return sameProjectionInput(current, original) && current!.workspaceId === original.workspaceId
-        && current!.nodeId === original.nodeId && current!.inputRevision === original.inputRevision;
+        && current!.nodeId === original.nodeId;
+}
+function panelReadBasis(basis: DocumentBasis): DocumentBasis {
+    // A source projection neither proves nor hands out Core Draft ACK authority.
+    const { inputRevision: _acknowledgedRevision, ...sourceBasis } = basis;
+    return sourceBasis;
 }
 export class DataPanel {
     readonly element = ui("aside", "data-panel");
@@ -130,7 +137,7 @@ export class DataPanel {
     private acceptedBasis(): DocumentBasis | null {
         const basis = this.projectionBasis;
         return !this.readingProjection && basis && this.basis && samePanelInput(this.basis, basis)
-            && samePanelInput(this.host.getDocument(), basis) ? basis : null;
+            && samePanelInput(this.host.getDocument(), basis) ? panelReadBasis(basis) : null;
     }
     private transferContext(): FieldTransferContext | null {
         const basis = this.acceptedBasis(), schemaRead = this.schemaRead, projection = this.projection;
@@ -283,7 +290,7 @@ export class DataPanel {
             this.schema = schemaResult.schema;
             this.projection = { ...projection, readOnly: projection.readOnly || this.host.canEdit?.() === false };
             this.schemaRead = schemaResult;
-            this.projectionBasis = { ...basis };
+            this.projectionBasis = panelReadBasis(basis);
             this.readingProjection = false;
             try {
                 this.fieldPresentation = decodeFieldPresentation(localStorage.getItem(this.presentationStorageKey()), new Set(this.schema.fields.map(field => field.id)));

@@ -27,10 +27,24 @@ test("transfer authority never pairs a new basis or pending read with the old ac
     Object.assign(f.owner, { readingProjection: true }); assert.equal(f.internals.transferContext(), null);
     Object.assign(f.owner, { readingProjection: false, basis: { ...f.basis, inputId: "new-input-same-bytes" } }); assert.equal(f.internals.transferContext(), null);
     Object.assign(f.owner, { basis: { ...f.basis } });
-    for (const key of ["inputId", "baseId", "workspaceId", "nodeId", "inputRevision"] as const) {
-        f.state.current = { ...f.basis, [key]: key === "inputRevision" ? 99 : "replacement" };
+    for (const key of ["inputId", "baseId", "workspaceId", "nodeId"] as const) {
+        f.state.current = { ...f.basis, [key]: "replacement" };
         assert.equal(f.internals.transferContext(), null, key);
     }
+});
+
+test("same-cut Draft ACK metadata advances without retiring or qualifying a source-read lease", () => {
+    const f = fixture(), context = f.internals.transferContext()!;
+    assert.equal(context.basis.inputRevision, undefined);
+    for (const inputRevision of [undefined, 2, 3, 99]) {
+        f.state.current = { ...f.basis, inputRevision };
+        const renewed = f.internals.transferContext(); assert.ok(renewed);
+        assert.equal(renewed.basis.inputRevision, undefined, "a projection cannot confer ACK authority");
+        assert.equal(f.internals.isTransferCurrent(context), true);
+        assert.equal(f.internals.canTransferFields(), true);
+    }
+    f.state.current = { ...f.basis, inputId: "new-author-same-bytes", inputRevision: 2 };
+    assert.equal(f.internals.isTransferCurrent(context), false, "an equal ACK cannot revive an old author input");
 });
 
 test("an accepted transfer context retires on actual schema or projection qualification replacement", () => {

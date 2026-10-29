@@ -10,7 +10,7 @@ import { pathToFileURL } from "node:url";
 const repo = path.resolve(import.meta.dirname, ".."), out = process.argv[2];
 assert.ok(out && path.isAbsolute(out)); assert.ok(path.relative(repo, out).startsWith(".." + path.sep));
 await mkdir(out);
-const files = ["scripts/test_data_panel_workflows_browser.mjs", "app/src/data-panel.ts", "app/src/value-presets.ts", "app/src/field-transfer.ts", "app/src/field-transfer-state.ts", "app/src/proposal-close-guard.ts", "app/src/data-projection.ts", "app/src/data-projection-read.ts", "app/src/native-value-form.ts", "app/src/native-control-identity.ts", "app/src/editor.ts", "app/src/ui-locale.ts", "app/src/ui-messages.ts", "assets/ui-messages.json", "app/src/data-view.css"];
+const files = ["scripts/test_data_panel_workflows_browser.mjs", "app/src/data-panel.ts", "app/src/value-presets.ts", "app/src/field-transfer.ts", "app/src/field-transfer-state.ts", "app/src/proposal-close-guard.ts", "app/src/data-projection.ts", "app/src/data-projection-read.ts", "app/src/native-value-form.ts", "app/src/native-control-identity.ts", "app/src/editor.ts", "app/src/session.ts", "app/src/workspace-tools.ts", "app/src/ui-locale.ts", "app/src/ui-messages.ts", "assets/ui-messages.json", "app/src/data-view.css"];
 const inventory = async () => Promise.all(files.map(async file => ({ path: file, sha256: createHash("sha256").update(await readFile(path.join(repo, file))).digest("hex") })));
 const result = { scope: "Actual DataPanel/preset body dialog/FieldTransfer and SourceEditor; bounded exact protocol host, no Core/durable-save/native/OS IME acceptance", cases: [], completed: false, pageErrors: [], sourceBefore: await inventory(), ownership: { browserClosed: false, viteClosed: false } };
 const { chromium } = createRequire(import.meta.url)(process.env.WEFTEXT_PLAYWRIGHT_MODULE || "playwright");
@@ -24,7 +24,7 @@ try {
     await page.route("**/panel-workflows", route => route.fulfill({ contentType: "text/html", body: '<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/src/data-view.css"><style>body{margin:0;font:14px sans-serif}main{display:grid;grid-template-columns:minmax(0,1fr) 450px;gap:16px;padding:16px}#editor{height:500px;min-width:0}.data-panel{width:450px;height:920px;box-sizing:border-box}dialog{box-sizing:border-box}dialog .data-input{box-sizing:border-box;max-width:100%}.data-field-transfer{padding:12px 0;border-top:1px solid #ddd}@media(max-width:650px){main{grid-template-columns:minmax(0,1fr)}.data-panel{width:100%;max-height:none}}</style><main><section id="editor"></section><section id="panel"></section></main>' }));
     await page.goto(`http://127.0.0.1:${vite.httpServer.address().port}/panel-workflows`);
     await page.evaluate(async () => {
-        const [{ DataPanel }, { SourceEditor }, { locale, uiTextValue }, { nativeFormControls }] = await Promise.all([import("/src/data-panel.ts"), import("/src/editor.ts"), import("/src/ui-locale.ts"), import("/src/native-value-form.ts")]);
+        const [{ DataPanel }, { SourceEditor }, { locale, uiTextValue }, { nativeFormControls }, { DocumentSession }, { WorkspaceTools }] = await Promise.all([import("/src/data-panel.ts"), import("/src/editor.ts"), import("/src/ui-locale.ts"), import("/src/native-value-form.ts"), import("/src/session.ts"), import("/src/workspace-tools.ts")]);
         locale.set("zh-CN");
         const text = value => ({ kind: "text", value }), list = { kind: "list", items: { kind: "scalar", semantic: "text" }, min: 0, max: null };
         const encode = values => "// controlled projection fixture " + JSON.stringify(values) + "\n= Native author😀\nOriginal body retained.\n";
@@ -33,9 +33,10 @@ try {
         window.fixture = {
             owner: null, editor: null,
             async reset() {
+                clearTimeout(this.autoTools?.refreshTimer); clearTimeout(this.ackTimer); this.autoTools = null; this.autoArmed = false;
                 this.owner?.dispose(); this.editor?.destroy(); document.querySelector("#editor").replaceChildren(); localStorage.clear();
                 this.calls = []; this.patches = []; this.notifications = []; this.current = true; this.editable = true; this.readOnly = false; this.failAck = false;
-                this.holdTransfer = false; this.holdDelivery = false; this.transferWaiting = false; this.deliveryWaiting = false; this.holdSchema = false; this.schemaWaiting = false;
+                this.holdTransfer = false; this.holdDelivery = false; this.transferWaiting = false; this.deliveryWaiting = false; this.holdSchema = false; this.schemaWaiting = false; this.holdProject = false; this.projectWaiting = false;
                 this.schema = { definitions: {}, aliases: {}, fields: [
                     { id: "fixture/names", key: "names", shape: structuredClone(list), nullable: false },
                     { id: "fixture/phones", key: "phones", shape: structuredClone(list), nullable: false },
@@ -69,6 +70,7 @@ try {
                         if (route === "/api/navigation/tags") return { tags: [], complete: true, warnings: [] };
                         if (route === "/api/data/project") {
                             const values = decode(body.source);
+                            if (this.holdProject) { this.projectWaiting = true; await new Promise(resolve => { this.releaseProject = () => { this.holdProject = false; this.projectWaiting = false; resolve(); }; }); }
                             return { serial: body.serial, sourceHash: await hash(body.source), schemaHash: await hash(read.source), schemaRevision: read.revision, readOnly: this.readOnly,
                                 projection: { qualification: "qualified", id: this.basis.nodeId, types: ["fixture/person"], resolvedTypes: ["fixture/person"], unknownFields: [], diagnostics: [], budgetExhausted: false,
                                     fields: this.schema.fields.map(field => ({ fieldId: field.id, key: field.key, cell: { state: "value", value: values[field.key] }, sourceRange: { from: 0, to: body.source.length }, raw: JSON.stringify(values[field.key]), writable: true, required: true, unbound: [] })) } };
@@ -89,6 +91,43 @@ try {
                     },
                 };
                 this.owner = new DataPanel(host); document.querySelector("#panel").replaceChildren(this.owner.element); await this.owner.refresh();
+            },
+            async automaticAck(mode) {
+                await this.reset(); this.editor.destroy(); document.querySelector("#editor").replaceChildren();
+                this.ackEvents = []; this.autoReadsSettled = 0; this.pendingAck = null;
+                this.realSession = new DocumentSession({ ...this.basis, kind: "managed", source: this.initialSource });
+                const sync = () => { const s = this.realSession; this.basis = { ...this.basis, source: s.source, serial: s.serial, inputId: s.inputId, baseId: s.baseId, inputRevision: s.acknowledgedInputRevision ?? undefined }; };
+                this.acceptAck = () => {
+                    const s = this.realSession, cut = this.pendingAck;
+                    if (!cut) return;
+                    const before = JSON.stringify([s.source, s.serial, s.inputId, s.baseId]), previous = s.acknowledgedInputRevision;
+                    s.acknowledgeDraft(cut.source, cut.serial, cut.revision, cut.inputId); sync(); this.pendingAck = null;
+                    this.ackEvents.push({ phase: "ack", before: previous, after: s.acknowledgedInputRevision, stableAuthorCutEqual: before === JSON.stringify([s.source, s.serial, s.inputId, s.baseId]) });
+                };
+                this.editor = new SourceEditor(this.initialSource, (source, inputId) => {
+                    const s = this.realSession; s.edit(source, inputId); sync();
+                    if (!this.autoArmed) return;
+                    WorkspaceTools.prototype.documentChanged.call(this.autoTools);
+                    clearTimeout(this.ackTimer);
+                    this.ackTimer = setTimeout(() => {
+                        this.pendingAck = { source: s.source, serial: s.serial, inputId: s.inputId, revision: s.issueDraftRevision() };
+                        this.ackEvents.push({ phase: "draft", acknowledged: s.acknowledgedInputRevision, schemaWaiting: this.schemaWaiting, projectWaiting: this.projectWaiting });
+                        if (mode === "schema" || mode === "project") { this.acceptAck(); if (mode === "schema") this.releaseSchema(); else this.releaseProject(); }
+                    }, 450);
+                }, () => {}, undefined, this.realSession.inputId);
+                this.editor.mount(document.querySelector("#editor"));
+                const values = decode(this.initialSource); values.names.value.push(text("previous projection"));
+                this.editor.apply(0, this.editor.source.length, encode(values));
+                this.pendingAck = { source: this.realSession.source, serial: this.realSession.serial, inputId: this.realSession.inputId, revision: this.realSession.issueDraftRevision() }; this.acceptAck();
+                await this.owner.refresh();
+                const refresh = this.owner.refresh.bind(this.owner);
+                this.owner.refresh = async () => { this.ackEvents.push({ phase: "read", acknowledged: this.realSession.acknowledgedInputRevision }); try { await refresh(); } finally { this.autoReadsSettled++; } };
+                this.autoTools = {
+                    closeGuard: { frozen: false }, host: { getDocument: () => this.basis, notify() {} }, propertyPanel: this.owner,
+                    views: { data: this.owner.element, query: document.createElement("section") }, viewVisible: kind => kind === "data",
+                    knowledgePanel: { contextChanged() {}, attachSurface() {}, backgroundEnabled: () => false }, outlinePanel: { invalidate() {} },
+                };
+                this.holdSchema = mode === "schema"; this.holdProject = mode === "project"; this.autoArmed = true;
             },
             canFreeze() { const frozen = this.owner.freezeForClose(); if (frozen) this.owner.thawAfterClose(); return frozen; },
             authorDrafts() { return [...this.owner.drafts].map(([key, value]) => ({ key, changed: value.changed, revision: value.revision ?? 0, raw: value.rawInputs ?? {} })); },
@@ -222,6 +261,29 @@ try {
         assert.equal(await page.evaluate(() => window.fixture.owner.composing), false);
         await page.evaluate(async () => { window.fixture.releaseSchema(); await window.fixture.pendingRefresh; });
         assert.equal(await move().isVisible(), true); assert.equal(await frozen(), true); assert.equal(await count("/api/data/transfer"), 0);
+    });
+    await check("automatic Undo refresh accepts the same author cut when its real Session ACK arrives during schema read", async () => {
+        await page.evaluate(() => window.fixture.automaticAck("schema"));
+        assert.equal(await field("names").locator(".native-list-item").count(), 4);
+        await page.locator("#editor .cm-content[contenteditable=true]").press("Control+z");
+        await page.waitForFunction(() => window.fixture.autoReadsSettled === 1 && !window.fixture.schemaWaiting && window.fixture.pendingAck === null);
+        result.ackSchema = await page.evaluate(() => ({ events: window.fixture.ackEvents, sourceItems: window.fixture.values().names.value.length, shownItems: window.fixture.owner.element.querySelectorAll('.data-property[data-field-key="names"] .native-list-item').length, accepted: !!window.fixture.owner.acceptedBasis() }));
+        assert.equal(result.ackSchema.sourceItems, 3); assert.equal(result.ackSchema.shownItems, 3); assert.equal(result.ackSchema.accepted, true);
+    });
+    await check("automatic Undo refresh accepts ACK during projection while preserving source, inputId and Base guards", async () => {
+        await page.evaluate(() => window.fixture.automaticAck("project")); await page.locator("#editor .cm-content[contenteditable=true]").press("Control+z");
+        await page.waitForFunction(() => window.fixture.autoReadsSettled === 1 && !window.fixture.projectWaiting && window.fixture.pendingAck === null);
+        result.ackProject = await page.evaluate(() => ({ events: window.fixture.ackEvents, sourceItems: window.fixture.values().names.value.length, shownItems: window.fixture.owner.element.querySelectorAll('.data-property[data-field-key="names"] .native-list-item').length, accepted: !!window.fixture.owner.acceptedBasis() }));
+        assert.equal(result.ackProject.sourceItems, 3); assert.equal(result.ackProject.shownItems, 3); assert.equal(result.ackProject.accepted, true);
+    });
+    await check("late and repeated same-cut ACKs leave the installed projection and exact transfer usable without an explicit refresh", async () => {
+        await page.evaluate(() => window.fixture.automaticAck("installed")); await page.locator("#editor .cm-content[contenteditable=true]").press("Control+z");
+        await page.waitForFunction(() => window.fixture.autoReadsSettled === 1 && !!window.fixture.pendingAck);
+        await page.evaluate(() => { const f = window.fixture; f.acceptAck(); f.pendingAck = { source: f.realSession.source, serial: f.realSession.serial, inputId: f.realSession.inputId, revision: f.realSession.issueDraftRevision() }; f.acceptAck(); });
+        result.ackInstalled = await page.evaluate(() => ({ events: window.fixture.ackEvents, accepted: !!window.fixture.owner.acceptedBasis(), reads: window.fixture.autoReadsSettled }));
+        assert.equal(result.ackInstalled.accepted, true); assert.equal(result.ackInstalled.reads, 1);
+        await page.evaluate(() => { window.fixture.autoArmed = false; }); await move().click();
+        await page.waitForFunction(() => window.fixture.patches.length === 1); await settleTransfer(); assert.equal(await count("/api/data/transfer"), 1);
     });
     await reset(); await open(); await save("可读预设", "configured item");
     await page.screenshot({ path: path.join(out, "data-panel-presets-desktop.png"), fullPage: true });
