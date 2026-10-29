@@ -47,19 +47,27 @@ def geometry(path):
     require(set(node.attrib) == {'d', 'fill', 'fill-rule'})
     require(node.attrib['fill-rule'] == 'evenodd')
     require(node.attrib['fill'] == ('#F4EFE4' if application else 'currentColor'))
-    assert not re.sub(r'[A-Za-z]|-?\d+(?:\.\d+)?|\s+', '', node.attrib['d'])
-    tokens = re.findall(r'[A-Za-z]|-?\d+(?:\.\d+)?', node.attrib['d'])
+    number = r'-?\d+(?:\.\d+)?'
+    require(not re.sub(r'[A-Za-z]|' + number + r'|\s+', '', node.attrib['d']))
+    tokens = re.findall(r'[A-Za-z]|' + number, node.attrib['d'])
     polygons, points = [], []
     while tokens:
         command = tokens.pop(0)
         if command in ('M', 'L'):
-            points.append((float(tokens.pop(0)), float(tokens.pop(0))))
+            # Each supported subpath is exactly M (x y), then explicit L pairs,
+            # then Z. An internal M is not a connecting line in SVG.
+            require((command == 'M' and not points) or (command == 'L' and bool(points)))
+            require(len(tokens) >= 2 and all(re.fullmatch(number, token) for token in tokens[:2]))
+            point = (float(tokens.pop(0)), float(tokens.pop(0)))
+            require(all(math.isfinite(coordinate) for coordinate in point))
+            points.append(point)
         elif command == 'Z':
+            require(len(points) >= 3)
             polygons.append(points)
             points = []
         else:
             raise ValueError(f'Unsupported brand path command: {command}')
-    assert not points and len(polygons) == 3
+    require(not points and len(polygons) == 3)
     return svg, polygons, bytes.fromhex(node.attrib['fill'][1:]) if node.attrib['fill'].startswith('#') else None
 
 
@@ -161,7 +169,8 @@ def decoded_ico(data):
 
 def assets():
     # Both retained SVG originals carry the identical principal path.
-    assert geometry(BRAND / 'logo-mark.svg')[1] == geometry(BRAND / 'app-icon.svg')[1]
+    if geometry(BRAND / 'logo-mark.svg')[1] != geometry(BRAND / 'app-icon.svg')[1]:
+        raise ValueError('Principal brand paths differ between retained SVG assets')
     result = {WINDOWS / name: image(size) for name, size in
               (('StoreLogo.png', 50), ('Square150x150Logo.png', 150), ('Square44x44Logo.png', 44))}
     images = [(size, image(size)) for size in (32, 16, 48, 256)]

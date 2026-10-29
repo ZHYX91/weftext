@@ -54,6 +54,50 @@ class BrandAssets(unittest.TestCase):
                     with patch.object(brand, 'BRAND', directory), self.assertRaises(ValueError):
                         brand.assets()
 
+    def test_path_state_is_validated_through_the_asset_consumer(self):
+        originals = {name: (brand.BRAND / name).read_bytes() for name in ('app-icon.svg', 'logo-mark.svg')}
+        path = ET.fromstring(originals['app-icon.svg'])[-1].attrib['d']
+        mutations = {
+            'internal moveto': path.replace(' L ', ' M ', 1),
+            'initial lineto': path.replace('M ', 'L ', 1),
+            'initial close': 'Z ' + path,
+            'close without active subpath': path.replace(' Z M ', ' Z Z M ', 1),
+            'lineto after closed subpath': path.replace(' Z M ', ' Z L ', 1),
+            'missing close before moveto': path.replace(' Z M ', ' M ', 1),
+            'unclosed final subpath': path.rsplit(' Z', 1)[0],
+            'missing coordinate': path.replace('619.12 ', '', 1),
+            'incomplete trailing lineto': path.rsplit(' Z', 1)[0] + ' L 5',
+            'incomplete trailing moveto': path + ' M 5',
+            'implicit lineto coordinates': path.replace(' L ', ' ', 1),
+            'relative moveto': path.replace('M ', 'm ', 1),
+            'relative lineto': path.replace(' L ', ' l ', 1),
+            'unsupported curve': path.replace(' L ', ' C ', 1),
+            'unsupported separator': path.replace('619.12 ', '619.12,', 1),
+            'empty path': '',
+            'degenerate subpaths': 'M 1 1 L 2 2 Z M 3 3 L 4 4 Z M 5 5 L 6 6 Z',
+        }
+        baseline = brand.assets()
+        # Mutate BOTH SVGs identically so the path-equality guard cannot mask a
+        # parser failure. Exercise the actual native/package/WebUI producer.
+        positive = path.replace(' L ', '\nL\t').replace(' M ', '\nM\t')
+        for case, modified in {**mutations, 'explicit commands with whitespace': positive}.items():
+            with self.subTest(case=case), tempfile.TemporaryDirectory(prefix='weftext-brand-path-') as folder:
+                directory = Path(folder)
+                for name, original in originals.items():
+                    svg = ET.fromstring(original)
+                    svg[-1].set('d', modified)
+                    (directory / name).write_bytes(ET.tostring(svg))
+                with patch.object(brand, 'BRAND', directory):
+                    if case in mutations:
+                        with self.assertRaises(ValueError):
+                            brand.assets()
+                    else:
+                        actual = brand.assets()
+                        for output, expected in baseline.items():
+                            if output.suffix in ('.png', '.ico'):
+                                self.assertEqual(actual[output], expected)
+                        self.assertEqual(actual[ROOT / 'app/public/brand/app-icon.svg'], (directory / 'app-icon.svg').read_bytes())
+
     def test_compression_bytes_are_not_pixel_identity(self):
         original = brand.image(16)
         header, rows = brand.decoded_png(original)
