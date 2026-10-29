@@ -6,6 +6,11 @@
     "en-US"
   ],
   "messages": {
+    "capture.originalStatusChecked": {
+      "zh-CN": "本次保存状态已查询，具体结果见上方。",
+      "en-US": "This save’s status has been queried; see the result above.",
+      "params": {}
+    },
     "hostedLinks.personalRulesReadFailed": {
       "zh-CN": "个人链接规则未能读取，浏览器中的原记录已保留。本次未加载规则，也未应用偏好修改；请重新读取链接后重试。",
       "en-US": "Personal link rules could not be read. The browser's original record is retained. No rules or preference changes were applied; read the links again to retry.",

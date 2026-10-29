@@ -1,5 +1,6 @@
 // Generated from assets/ui-messages.json. Run node scripts/generate_ui_messages.mjs.
 export const zhCN = {
+  "capture.originalStatusChecked": "本次保存状态已查询，具体结果见上方。",
   "hostedLinks.personalRulesReadFailed": "个人链接规则未能读取，浏览器中的原记录已保留。本次未加载规则，也未应用偏好修改；请重新读取链接后重试。",
   "hostedLinks.personalRulesBrowserScope": "个人关系规则保存在此浏览器，按服务器、账号和笔记库分别保存。只显示当前获权范围内适用的规则。",
   "proofreading.stopWaiting": "停止等待结果",
@@ -10446,6 +10447,7 @@ export const zhCN = {
 
 export type MessageKey = keyof typeof zhCN;
 export interface MessageParamsMap {
+  "capture.originalStatusChecked": {  };
   "hostedLinks.personalRulesReadFailed": {  };
   "hostedLinks.personalRulesBrowserScope": {  };
   "proofreading.stopWaiting": {  };
@@ -20890,6 +20892,7 @@ export interface MessageParamsMap {
   "error.api.data.periodSelectionRequired": {  };
 }
 export const messageParamTypes = {
+  "capture.originalStatusChecked": {},
   "hostedLinks.personalRulesReadFailed": {},
   "hostedLinks.personalRulesBrowserScope": {},
   "proofreading.stopWaiting": {},
@@ -33241,6 +33244,7 @@ export const messageParamTypes = {
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
+  "capture.originalStatusChecked": "This save’s status has been queried; see the result above.",
   "hostedLinks.personalRulesReadFailed": "Personal link rules could not be read. The browser's original record is retained. No rules or preference changes were applied; read the links again to retry.",
   "hostedLinks.personalRulesBrowserScope": "Personal relationship rules are saved in this browser separately for each server, account and library. Only rules applicable to the currently authorized scope are shown.",
   "proofreading.stopWaiting": "Stop waiting for results",

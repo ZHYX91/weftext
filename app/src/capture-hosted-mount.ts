@@ -164,7 +164,14 @@ export async function mountHostedCapture(host: HTMLElement, ports: HostedCapture
       if (!session.controller.state.draft.pending) assertNewSubmission();
       await session.save(mode, catalog, async resource => { assertCurrent(); await ports.deliverCommitted(resource); assertCurrent(); }, close);
     },
-    confirmOriginal: async () => { assertCurrent(); showFact(await session.confirmOriginal()); },
+    confirmOriginal: async () => {
+      assertCurrent();
+      const before = session.controller.state.draft, fact = await session.confirmOriginal();
+      assertCurrent();
+      const currentDraft = session.controller.state.draft;
+      if (!fact || before.pending?.operationId !== fact.operationId || currentDraft.draftId !== before.draftId || currentDraft.pending?.operationId !== fact.operationId) return null;
+      showFact(fact); return fact.operationId;
+    },
     requestClose: close,
   });
   guard = new CaptureCloseGuard(session.controller, inputs, {

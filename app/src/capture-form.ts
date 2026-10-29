@@ -24,7 +24,8 @@ export interface CaptureFormHost<R extends CaptureMutableRecord> {
   target: HTMLElement;
   advanced(container: HTMLElement): CaptureAdvancedControls;
   submit(mode: "close" | "next" | "open"): Promise<void>;
-  confirmOriginal(): Promise<void>;
+  /** A validated lookup response for this original; not proof of commit or delivery. */
+  confirmOriginal(): Promise<string | null>;
   requestClose(): Promise<void>;
   canOpen?():boolean;
   canSaveNext?():boolean;
@@ -47,6 +48,7 @@ export class CaptureForm<R extends CaptureMutableRecord> {
   private readonly mode = document.createElement("select");
   private active = true;
   private busy = false;
+  private queriedOriginal: { draftId: string; operationId: string } | null = null;
   private renderedInputRevision: number;
   get pendingAction(): boolean { return this.busy; }
   constructor(private readonly host: CaptureFormHost<R>) {
@@ -76,11 +78,11 @@ export class CaptureForm<R extends CaptureMutableRecord> {
     const actions = document.createElement("div"); actions.className = "capture-actions";
     this.openButton=this.button(message("capture.openNote"), () => host.submit("open"));
     this.nextButton=this.button(message("capture.saveNext"),async()=>{if(host.canSaveNext?.()===false)throw new UiError(message("capture.targetRequired"));await host.submit("next");});
-    actions.append(this.button(message("capture.saveClose"), () => host.submit("close")), this.nextButton, this.openButton, this.button(host.labels.confirmOriginal, () => host.confirmOriginal()), this.button(host.labels.keepClose, () => host.requestClose()), this.button(message("common.retry"), () => host.controller.retryPersistence()));
+    actions.append(this.button(message("capture.saveClose"), () => host.submit("close")), this.nextButton, this.openButton, this.button(host.labels.confirmOriginal, () => this.confirmOriginal()), this.button(host.labels.keepClose, () => host.requestClose()), this.button(message("common.retry"), () => host.controller.retryPersistence()));
     this.status.setAttribute("aria-live", "polite"); this.diagnostic.className = "capture-diagnostic";
     this.labels.bindText(this.status, () => {
       const current = this.host.controller.state;
-      return current.blocked ? message("desktop.unsavedClose") : current.persisting ? message("capture.persisting") : current.draft.pending ? message("capture.pending") : current.formReady ? host.labels.draftSaved : message("capture.rawRetained");
+      return current.blocked ? message("desktop.unsavedClose") : current.persisting ? message("capture.persisting") : current.draft.pending ? message(this.originalChecked(current) ? "capture.originalStatusChecked" : "capture.pending") : current.formReady ? host.labels.draftSaved : message("capture.rawRetained");
     });
     this.element.append(actions, this.status, this.diagnostic);
     this.element.addEventListener("compositionstart", () => { if (this.active) host.controller.beginComposition(); });
@@ -113,6 +115,21 @@ export class CaptureForm<R extends CaptureMutableRecord> {
     button.onclick = () => { if (!this.active || this.busy) return;try {this.collectOwnedRaw(); this.busy = true; this.updateButtons(); void run().catch(error => this.showError(error)).finally(() => { this.busy = false; this.update(this.host.controller.state); });}catch(error){this.busy=false;this.updateButtons();this.showError(error);} };
     return button;
   }
+  private originalChecked(state: CaptureControllerState<R>): boolean {
+    return this.queriedOriginal?.draftId === state.draft.draftId
+      && this.queriedOriginal.operationId === state.draft.pending?.operationId;
+  }
+  private async confirmOriginal(): Promise<void> {
+    const before = this.host.controller.state.draft;
+    // A later lookup failure does not erase an earlier response for the same
+    // original. This flag grants no fresh commit, delivery or write eligibility.
+    this.update(this.host.controller.state);
+    const operationId = await this.host.confirmOriginal();
+    const current = this.host.controller.state.draft;
+    if (this.active && operationId && before.pending?.operationId === operationId
+      && current.draftId === before.draftId && current.pending?.operationId === operationId)
+      this.queriedOriginal = { draftId: current.draftId, operationId };
+  }
   collectOwnedRaw(): void {
     if (!this.active) return;
     const input = this.host.controller.state.input;
@@ -126,7 +143,6 @@ export class CaptureForm<R extends CaptureMutableRecord> {
   }
   update(state: CaptureControllerState<R>): void {
     if (state.blocked) this.showError(state.error);
-    this.status.dataset.state = state.blocked ? "blocked" : state.persisting ? "persisting" : state.draft.pending ? "pending" : state.formReady ? "ready" : "recovery";
     if (this.renderedInputRevision !== state.draft.inputRevision && state.editRevision === this.host.controller.editRevision && !state.persisting) {
       // A Core advance may clear only its consumed cut. Controller.state.input
       // is the later in-memory value when newer edits exist.
@@ -135,8 +151,13 @@ export class CaptureForm<R extends CaptureMutableRecord> {
       this.advanced.update(state.input,state.draft.lastMutation.kind==="advance");
       this.renderedInputRevision = state.draft.inputRevision;
     }
-    this.labels.refresh();
+    this.refreshStatus(state);
     this.updateButtons();
+  }
+  private refreshStatus(state: CaptureControllerState<R>): void {
+    if (!this.originalChecked(state)) this.queriedOriginal = null;
+    this.status.dataset.state = state.blocked ? "blocked" : state.persisting ? "persisting" : state.draft.pending ? this.originalChecked(state) ? "originalChecked" : "pending" : state.formReady ? "ready" : "recovery";
+    this.labels.refresh();
   }
   private updateButtons(): void { for (const button of this.buttons) button.disabled = !this.active || this.busy; if(this.openButton)this.openButton.disabled ||= !this.host.canOpen?.();if(this.nextButton)this.nextButton.disabled ||= this.host.canSaveNext?.()===false; }
   showError(error: unknown): void { setUiText(this.diagnostic,errorUiText(error)); }
@@ -144,11 +165,11 @@ export class CaptureForm<R extends CaptureMutableRecord> {
    * retired after the synchronous final sample, before their source is hidden. */
   retireAuthorization(): void {
     if (!this.active) return;
-    this.collectOwnedRaw(); this.active = false; this.session.retire(); this.advanced.retireAuthorization();
+    this.collectOwnedRaw(); this.active = false; this.queriedOriginal = null; this.session.retire(); this.advanced.retireAuthorization();
     for (const control of this.controls.values()) control.readOnly = true;
-    this.mode.disabled = true; this.updateButtons();
+    this.mode.disabled = true; this.refreshStatus(this.host.controller.state); this.updateButtons();
   }
   freeze(): void { this.element.inert = true; }
   thaw(): void { if (this.active) this.element.inert = false; }
-  dispose(): void { this.active = false; this.session.retire(); this.advanced.dispose(); this.labels.dispose(); }
+  dispose(): void { this.active = false; this.queriedOriginal = null; this.session.retire(); this.advanced.dispose(); this.labels.dispose(); }
 }

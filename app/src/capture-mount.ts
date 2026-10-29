@@ -83,7 +83,11 @@ export async function mountLocalCapture(host:HTMLElement,ports:CaptureMountPorts
     advanced:container=>{advancedHost=container;const controls:CaptureAdvancedControls={collectOwnedRaw:()=>{collectTarget();fields?.collectOwnedRaw();},update:(input,consumed)=>{if(consumed){root.value=captureString(input.rootInput);parent.value=captureString(input.parentInput);}fields?.update(input,consumed);},retireAuthorization:()=>{targetSession.retire();root.readOnly=parent.readOnly=true;fields?.retireAuthorization();},dispose:()=>{schemaVersion++;targetSession.retire();fields?.dispose();}};return controls;},
     canOpen:()=>!!ports.deliverCommitted,
     submit:async mode=>{if(!session.controller.state.draft.pending)assertSubmittable();await session.save(mode,async original=>{if(!ports.deliverCommitted)throw new UiError(message("capture.pending"));await ports.deliverCommitted(original);},requestClose);},
-    confirmOriginal:async()=>{const fact=await session.confirmOriginal();if(fact)setUiText(targetStatus,()=>`${fact.operationId} · ${fact.status}`);},requestClose});
+    confirmOriginal:async()=>{
+      const before=session.controller.state.draft,fact=await session.confirmOriginal(),current=session.controller.state.draft;
+      if(!live||!fact?.operationId||before.pending?.operationId!==fact.operationId||current.draftId!==before.draftId||current.pending?.operationId!==fact.operationId)return null;
+      setUiText(targetStatus,()=>`${fact.operationId} · ${fact.status}`);return fact.operationId;
+    },requestClose});
   guard=new CaptureCloseGuard(session.controller,inputs,{assertResolved:()=>session.assertRecovered(),collectOwnedRaw:()=>form!.collectOwnedRaw(),freeze:()=>{if(pendingActions)throw new UiError(message("desktop.unsavedClose"));closeFrozen=true;form!.freeze();},thaw:()=>{closeFrozen=false;form!.thaw();}});
   replaceUiChildren(host,form.element);
   await loadFields(advancedHost!);
