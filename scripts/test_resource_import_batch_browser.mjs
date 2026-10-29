@@ -36,19 +36,35 @@ const currentLocator = (target = page) => target.evaluate(() => {
 
 async function install(options = {}, target = page) {
   await target.evaluate(async options => {
-    const [{ ResourceImportBatch }, state, { SourceEditor }, { writingRange }] = await Promise.all([
-      import('/src/resource-import-batch.ts'), import('/src/resource-import-batch-state.ts'), import('/src/editor.ts'), import('/src/writing.ts'),
+    const [{ ResourceImportBatch }, state, { SourceEditor }, { writingRange }, { DocumentSession }] = await Promise.all([
+      import('/src/resource-import-batch.ts'), import('/src/resource-import-batch-state.ts'), import('/src/editor.ts'), import('/src/writing.ts'), import('/src/session.ts'),
     ]);
     if (options.clear !== false) localStorage.clear();
     const root = 'D:/Owned/ResourceBatch', source = 'Owned author 😀\n#endnotes()';
-    const f = window.resourceFixture = { original: source, requests: options.restore?.requests ?? [], storageEvents: [], notifications: [], applies: [], applyAttempts: 0, changed: 0,
+    const f = window.resourceFixture = { original: source, requests: options.restore?.requests ?? [], storageEvents: [], notifications: [], applies: [], applyAttempts: 0, changed: 0, acknowledgements: [], prepareActions: 0,
       editable: options.editable !== false, storageFault: options.storageFault ?? null, afterWrite: false,
       losePrepare: !!options.losePrepare, prepareMissing: !!options.prepareMissing, changedFail: !!options.changedFail, statusFail: !!options.statusFail,
       ackFail: false, rejectCommit: !!options.rejectCommit, hold: null, held: [], heldDigests: [], opensResolved: 0, openErrors: [], operations: new Map(options.restore?.operations ?? []),
       basis: { inputId: 'owned-input', sessionId: options.sessionId ?? 'owned-session', source, serial: 7, baseId: 'owned-base', inputRevision: 11,
         path: options.path ?? root + '/Note/Note.typ', root, workspaceId: '11111111-1111-4111-8111-111111111111', nodeId: '22222222-2222-4222-8222-222222222222' } };
     f.key = state.localResourceKey(state.resourceOwner(f.basis));
-    const editor = f.editor = new SourceEditor(source, (next, inputId) => { f.basis = { ...f.basis, source: next, inputId, serial: f.basis.serial + 1, inputRevision: f.basis.inputRevision + 1 }; }, () => {});
+    f.session = options.ackPreparation ? new DocumentSession({ sessionId: f.basis.sessionId, source, baseId: f.basis.baseId, path: f.basis.path, root,
+      kind: 'node', nodeId: f.basis.nodeId, workspaceId: f.basis.workspaceId, viewInputId: f.basis.inputId }) : null;
+    f.ackSession = reason => {
+      if (!f.session) throw Error('The real DocumentSession is required for ACK checks');
+      const session = f.session, revision = session.issueDraftRevision();
+      session.acknowledgeDraft(session.source, session.serial, revision, session.inputId);
+      f.acknowledgements.push({ reason, revision: session.acknowledgedInputRevision, source: session.source, inputId: session.inputId, serial: session.serial, baseId: session.baseId, path: session.path });
+      return session.acknowledgedInputRevision;
+    };
+    if (f.session) f.ackSession('initial');
+    const editor = f.editor = new SourceEditor(source, (next, inputId) => {
+      f.basis = { ...f.basis, source: next, inputId, serial: f.basis.serial + 1, inputRevision: f.basis.inputRevision + 1 };
+      f.session?.edit(next, inputId);
+    }, () => {}, undefined, f.session?.inputId ?? f.basis.inputId);
+    f.currentBasis = () => f.session ? { ...f.basis, inputId: f.session.inputId, sessionId: f.session.opened.sessionId, source: f.session.source,
+      serial: f.session.serial, baseId: f.session.baseId, path: f.session.path, inputRevision: f.session.acknowledgedInputRevision ?? undefined }
+      : { ...f.basis, source: editor.source };
     document.querySelector('#editor').replaceChildren(editor.view.dom);
     f.files = [new File([new Uint8Array([137, 80, 78, 71])], 'original.png', { type: 'image/png' }), new File(['owned-text'], 'original.txt', { type: 'text/plain' })];
     const storage = {
@@ -77,7 +93,7 @@ async function install(options = {}, target = page) {
         headingNumbering: { sourceHash, settings: null, editable: true, frozenEndnotesRequired: false, reason: null }, bodyBlocks: [] };
     };
     const request = async (route, body) => {
-      const recorded = { route, body: structuredClone(body), locatorBeforeRequest: localStorage.getItem(f.key) };
+      const recorded = { route, body: structuredClone(body), locatorBeforeRequest: localStorage.getItem(f.key), basisAtRequest: structuredClone(f.currentBasis()) };
       f.requests.push(recorded);
       let answer;
       if (route === '/api/resources/prepare-import-batch') {
@@ -116,15 +132,16 @@ async function install(options = {}, target = page) {
       return structuredClone(answer);
     };
     const host = {
-      request, getDocument: () => ({ ...f.basis, source: editor.source }), canEdit: () => f.editable,
+      request, getDocument: f.currentBasis, canEdit: () => f.editable,
       applyPatch: async (patch, basis) => {
         f.applyAttempts++;
-        if (!f.editable || state.resourceBasisKey({ ...f.basis, source: editor.source }) !== state.resourceBasisKey(basis)) throw Error('Harness refused stale source delivery');
+        const current = f.currentBasis(), sourceCutFields = ['inputId', 'sessionId', 'source', 'serial', 'baseId', 'path', 'root', 'workspaceId', 'nodeId'];
+        if (!f.editable || sourceCutFields.some(key => current[key] !== basis[key])) throw Error('Harness refused stale source delivery');
         f.applies.push({ patch: structuredClone(patch), basis: structuredClone(basis) });
         editor.applyPatches(basis.source, [{ from: patch.from, to: patch.to, expected: basis.source.slice(patch.from, patch.to), insert: patch.text }], { from: patch.from + patch.text.length, to: patch.from + patch.text.length });
         if (f.ackFail) throw Error('Owned editor changed before persistence ACK rejection');
       },
-      prepareAction: async () => {}, changed: async () => { f.changed++; if (f.changedFail) throw Error('Owned resource environment refresh failure'); },
+      prepareAction: async () => { f.prepareActions++; if (f.session) f.ackSession('prepareAction'); }, changed: async () => { f.changed++; if (f.changedFail) throw Error('Owned resource environment refresh failure'); },
       notify: (text, error) => f.notifications.push({ text, error }), run: async operation => operation(), storage,
     };
     f.controller = new ResourceImportBatch(host);
@@ -145,6 +162,14 @@ async function install(options = {}, target = page) {
     };
     f.mutate = kind => {
       if (kind === 'source') editor.applyPatches(editor.source, [{ from: 0, to: 0, expected: '', insert: 'Later author input\n' }]);
+      else if (kind === 'inputABA') {
+        const original = editor.source;
+        editor.applyPatches(original, [{ from: 0, to: 0, expected: '', insert: 'Temporary writer\n' }]);
+        editor.undo();
+        if (editor.source !== original) throw Error('The real SourceEditor Undo did not complete the intended ABA');
+      }
+      else if (kind === 'inputId' && f.session) f.session.edit(f.session.source, editor.markAuthorInput());
+      else if (kind === 'baseId' && f.session) f.session.acknowledgeSave(f.session.source, f.session.baseId + '-changed', f.session.path);
       else if (kind === 'permission') f.editable = false;
       else if (kind === 'owner') f.basis = { ...f.basis, nodeId: '44444444-4444-4444-8444-444444444444', path: root + '/Other/Other.typ', sessionId: 'other-session' };
       else { const value = f.basis[kind]; f.basis = { ...f.basis, [kind]: typeof value === 'number' ? value + 1 : value + '-changed' }; }
@@ -168,8 +193,9 @@ async function prepare(mode = 'importOnly', options = {}) {
 async function snapshot(target = page) {
   return target.evaluate(() => {
     const f = window.resourceFixture;
-    return { source: f.editor.source, original: f.original, applies: f.applies.length, applyAttempts: f.applyAttempts, requests: f.requests, changed: f.changed,
-      operations: [...f.operations], raw: localStorage.getItem(f.key), pending: f.controller.hasPending(), notices: f.notifications };
+    return { source: f.editor.source, original: f.original, applies: f.applies.length, applyAttempts: f.applyAttempts, applyBases: f.applies.map(item => item.basis), requests: f.requests, changed: f.changed,
+      operations: [...f.operations], raw: localStorage.getItem(f.key), pending: f.controller.hasPending(), notices: f.notifications,
+      acknowledgements: f.acknowledgements, prepareActions: f.prepareActions, currentBasis: f.currentBasis() };
   });
 }
 async function holdRealStorageLock(target) {
@@ -240,6 +266,61 @@ async function assignedLoopbackPort() {
   }
   return port;
 }
+async function checkRealSessionAcknowledgements() {
+  const sourceCutFields = ['inputId', 'sessionId', 'source', 'serial', 'baseId', 'path', 'root', 'workspaceId', 'nodeId'];
+  await prepare('autoAppend', { ackPreparation: true });
+  await control('confirm').click(); await idle();
+  let actual = await snapshot();
+  assert.equal(actual.applyAttempts, 1, 'Repeated prepareAction ACKs on the same real DocumentSession source cut must not retire automatic insertion');
+  assert.equal(actual.applies, 1); assert.equal((await calls('/api/editor-map')).length, 1); assert.equal((await calls('/api/resources/import-batch/insert')).length, 1);
+  const confirmation = (await calls('/api/operations/commit'))[0].basisAtRequest, mapped = (await calls('/api/editor-map'))[0].basisAtRequest;
+  assert.ok(Number.isSafeInteger(confirmation.inputRevision), 'The real Session must still expose its current acknowledged revision');
+  assert.equal(mapped.inputRevision, confirmation.inputRevision + 1, 'Insertion prepareAction must really advance the acknowledged revision');
+  assert.deepEqual(sourceCutFields.map(key => mapped[key]), sourceCutFields.map(key => confirmation[key]), 'An ACK-only advance must preserve every source-cut field');
+  assert.equal(Object.hasOwn(actual.applyBases[0], 'inputRevision'), false, 'The delivered insertion cut must omit its transport ACK field');
+  assert.deepEqual(sourceCutFields.map(key => actual.applyBases[0][key]), sourceCutFields.map(key => confirmation[key]), 'The delivered source cut must remain the captured confirmation source and writer');
+  assert.ok(actual.acknowledgements.length >= 3); assert.equal(actual.source.endsWith('#endnotes()'), true);
+  assert.equal((await currentLocator()).value.insertion, 'inserted');
+  await page.evaluate(() => window.resourceFixture.editor.undo()); assert.equal((await snapshot()).source, actual.original);
+  result.realSessionAckChecks = [{ stage: 'automatic insertion preparation', confirmationRevision: confirmation.inputRevision, mapRevision: mapped.inputRevision, applyAttempts: actual.applyAttempts }];
+  pass('Real DocumentSession prepareAction acknowledgements advance N→N+1 on the identical nine-field source cut while one automatic insertion and one Undo preserve the complete author source.');
+
+  for (const stage of ['/api/editor-map', '/api/resources/import-batch/insert']) {
+    await prepare('autoAppend', { ackPreparation: true });
+    await page.evaluate(stage => { window.resourceFixture.hold = stage; }, stage); await control('confirm').click();
+    await page.waitForFunction(() => window.resourceFixture.held.length === 1);
+    const before = (await snapshot()).currentBasis;
+    await page.evaluate(() => { const f = window.resourceFixture; f.ackSession('await first ACK'); f.ackSession('await second ACK'); f.release(); });
+    await idle(); actual = await snapshot();
+    const acknowledged = actual.acknowledgements.at(-1);
+    assert.equal(acknowledged.revision, before.inputRevision + 2);
+    assert.deepEqual(['source', 'serial', 'inputId', 'baseId', 'path'].map(key => acknowledged[key]), ['source', 'serial', 'inputId', 'baseId', 'path'].map(key => before[key]));
+    assert.equal(actual.applyAttempts, 1, `${stage}: same-cut ACK-only refreshes must not retire an awaited insertion`); assert.equal(actual.applies, 1);
+    assert.equal(Object.hasOwn(actual.applyBases[0], 'inputRevision'), false);
+    assert.deepEqual(sourceCutFields.map(key => actual.applyBases[0][key]), sourceCutFields.map(key => before[key]));
+    assert.equal((await calls('/api/editor-map')).length, 1); assert.equal((await calls('/api/resources/import-batch/insert')).length, 1);
+    await page.evaluate(() => window.resourceFixture.editor.undo()); assert.equal((await snapshot()).source, actual.original);
+    result.realSessionAckChecks.push({ stage, beforeRevision: before.inputRevision, afterRevision: acknowledged.revision, applyAttempts: actual.applyAttempts });
+  }
+  pass('Two real same-source DocumentSession ACKs during either editor-map or insertion await preserve one qualified proposal delivery and a complete single Undo.');
+
+  for (const stage of ['/api/editor-map', '/api/resources/import-batch/insert']) for (const mutation of ['inputId', 'inputABA', 'source', 'baseId', 'permission']) {
+    await prepare('linksAppend', { ackPreparation: true });
+    await page.evaluate(stage => { window.resourceFixture.hold = stage; }, stage); await control('confirm').click();
+    await page.waitForFunction(() => window.resourceFixture.held.length === 1);
+    const before = (await snapshot()).currentBasis;
+    await page.evaluate(mutation => { const f = window.resourceFixture; f.mutate(mutation); f.ackSession('changed source-cut ACK'); f.release(); }, mutation);
+    await idle(); actual = await snapshot();
+    assert.equal(actual.applyAttempts, 0, `${stage}/${mutation}: the controller delivered a changed real Session cut`); assert.equal(actual.applies, 0);
+    assert.equal((await calls('/api/resources/prepare-import-batch')).length, 1); assert.ok(actual.raw);
+    if (mutation === 'inputId') assert.notEqual(actual.currentBasis.inputId, before.inputId);
+    if (mutation === 'inputABA') { assert.equal(actual.source, actual.original); assert.ok(actual.currentBasis.serial > before.serial); }
+    else if (mutation === 'source') assert.equal(actual.source, 'Later author input\n' + actual.original);
+    else assert.equal(actual.source, actual.original);
+    if (mutation === 'baseId') assert.notEqual(actual.currentBasis.baseId, before.baseId);
+  }
+  pass('Real Session new writers, same-bytes writer ABA, later source, changed save base and lost permission still reject both awaited delivery stages before any apply attempt.');
+}
 
 try {
   const assignedPort = await assignedLoopbackPort();
@@ -257,6 +338,8 @@ try {
   const context = await browser.newContext({ viewport: { width: 1100, height: 900 } });
   page = await context.newPage(); page.setDefaultTimeout(15000);
   page.on('pageerror', error => result.pageErrors.push(String(error.stack || error)));
+
+  await checkRealSessionAcknowledgements();
 
   await reset(); await open('linksAppend');
   await page.locator('[data-resource-import-name="0"]').fill('renamed-image.png');
@@ -390,7 +473,7 @@ try {
   assert.equal(JSON.parse(actual.raw).owner.nodeId, '22222222-2222-4222-8222-222222222222');
   pass('A→B navigation while a native map is pending cannot apply an old proposal and retains the original A locator.');
 
-  for (const stage of ['/api/editor-map', '/api/resources/import-batch/insert']) for (const mutation of ['source', 'inputId', 'baseId', 'serial', 'inputRevision', 'permission']) {
+  for (const stage of ['/api/editor-map', '/api/resources/import-batch/insert']) for (const mutation of ['source', 'inputId', 'baseId', 'serial', 'permission']) {
     await prepare('linksAppend'); await page.evaluate(stage => { window.resourceFixture.hold = stage; }, stage); await control('confirm').click();
     await page.waitForFunction(() => window.resourceFixture.held.length === 1);
     await page.evaluate(mutation => { const f = window.resourceFixture; f.mutate(mutation); f.release(); }, mutation); await idle();
@@ -399,7 +482,7 @@ try {
     if (mutation !== 'source') assert.equal(actual.source, actual.original);
     else assert.equal(actual.source, 'Later author input\n' + actual.original);
   }
-  pass('Later source, input ID, base, serial, input revision and permission changes retire both pending-map and pending-insertion deliveries without altering later input or repeating import.');
+  pass('Later source, input ID, base, serial and permission changes retire both pending-map and pending-insertion deliveries without altering later input or repeating import.');
 
   await prepare('importOnly', { changedFail: true }); await control('confirm').click(); await idle();
   assert.equal((await calls('/api/operations/commit')).length, 1); assert.equal((await calls('/api/resources/prepare-import-batch')).length, 1); assert.ok(await currentLocator());

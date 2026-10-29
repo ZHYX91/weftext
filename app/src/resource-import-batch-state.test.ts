@@ -2,13 +2,14 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { history, isolateHistory, undo, undoDepth } from "@codemirror/commands";
 import { createSourceState } from "./editor";
+import { DocumentSession } from "./session";
 import type { DocumentBasis } from "./native-value-form";
 import { message, UiError } from "./ui-locale";
 import { writingRange, type WritingMap } from "./writing";
 import {
     checkLocalResourceSizes, decodeLocalResourceInsertion, decodeLocalResourceLocator, decodeLocalResourcePlan,
     localResourceBatchBytes, localResourceKey, readLocalResourceLocator, removeLocalResourceLocator,
-    resourceBasisKey, resourceDigest, resourceOwner, sameResourceOwner, writeLocalResourceLocator,
+    resourceBasisKey, resourceDigest, resourceOwner, resourceSourceBasis, sameResourceOwner, writeLocalResourceLocator,
     type LocalResourceLocator, type LocalResourceMode, type LocalResourcePlan, type LocalResourceStorage,
 } from "./resource-import-batch-state";
 
@@ -46,7 +47,7 @@ async function insertionFixture() {
     return { locator, document, sourceHash, at, insert, next, value, plan, originalMap, decode };
 }
 
-test("resource owner and basis keys retain the complete input and exact owner identity", () => {
+test("resource source cuts retain the author identity separately from Draft ACKs", () => {
     const original = basis(), owner = resourceOwner(original);
     assert.deepEqual(owner, { workspaceId: original.workspaceId, nodeId: original.nodeId, root: original.root, path: original.path });
     assert.equal(sameResourceOwner(owner, { ...owner }), true);
@@ -58,11 +59,57 @@ test("resource owner and basis keys retain the complete input and exact owner id
     }
     assert.equal(sameResourceOwner(owner, null), false);
     for (const patch of [{ workspaceId: undefined }, { nodeId: undefined }, { workspaceId: "" }, { path: "" }]) assert.throws(() => resourceOwner({ ...original, ...patch }), UiError);
-    for (const key of ["inputId", "sessionId", "source", "serial", "baseId", "path", "root", "workspaceId", "nodeId", "inputRevision"] as const) {
+    for (const key of ["inputId", "sessionId", "source", "serial", "baseId", "path", "root", "workspaceId", "nodeId"] as const) {
         const current = original[key], changed = typeof current === "number" ? current + 1 : `${current} changed`;
         assert.notEqual(resourceBasisKey(original), resourceBasisKey({ ...original, [key]: changed }));
     }
-    assert.notEqual(resourceBasisKey(original), resourceBasisKey({ ...original, inputRevision: undefined }));
+    for (const inputRevision of [undefined, original.inputRevision! + 1]) {
+        const acknowledged = { ...original, inputRevision };
+        assert.equal(resourceBasisKey(original), resourceBasisKey(acknowledged));
+        assert.deepEqual(resourceSourceBasis(original), resourceSourceBasis(acknowledged));
+    }
+    assert.equal(Object.hasOwn(resourceSourceBasis(original), "inputRevision"), false);
+    assert.equal(original.inputRevision, 7, "the acknowledged basis is not mutated or treated as a source-edit grant");
+});
+
+test("real session repeated Draft acknowledgements leave the captured resource author cut intact", () => {
+    const original = basis();
+    const session = new DocumentSession({ sessionId: original.sessionId, path: original.path, root: original.root,
+        source: original.source, baseId: original.baseId, kind: "managed", nodeId: original.nodeId, workspaceId: original.workspaceId,
+        viewInputId: original.inputId });
+    const current = (): DocumentBasis => ({ ...original, inputId: session.inputId, source: session.source, serial: session.serial,
+        baseId: session.baseId, path: session.path, inputRevision: session.acknowledgedInputRevision ?? undefined });
+    const captured = resourceSourceBasis(current()), key = resourceBasisKey(captured);
+    for (let count = 0; count < 3; count++) {
+        const revision = session.issueDraftRevision();
+        session.acknowledgeDraft(session.source, session.serial, revision, session.inputId);
+        assert.equal(session.acknowledgedInputRevision, revision);
+        assert.equal(resourceBasisKey(current()), key);
+        assert.deepEqual(resourceSourceBasis(current()), captured);
+        assert.equal(Object.hasOwn(captured, "inputRevision"), false);
+    }
+    assert.equal(session.acknowledgedInputRevision, 3, "source proposals do not erase or acquire Save ACK authority");
+});
+
+test("real same-text replacement and edit-Undo ABA cannot revive an earlier resource author cut", () => {
+    const original = basis();
+    const session = new DocumentSession({ sessionId: original.sessionId, path: original.path, root: original.root,
+        source: original.source, baseId: original.baseId, kind: "managed", nodeId: original.nodeId, workspaceId: original.workspaceId,
+        viewInputId: original.inputId });
+    const current = (): DocumentBasis => ({ ...original, inputId: session.inputId, source: session.source, serial: session.serial,
+        baseId: session.baseId, path: session.path, inputRevision: session.acknowledgedInputRevision ?? undefined });
+    const captured = resourceSourceBasis(current()), key = resourceBasisKey(captured);
+    session.edit(session.source, "another-same-text-writer");
+    assert.equal(session.source, captured.source);
+    assert.equal(session.serial, captured.serial);
+    assert.notEqual(resourceBasisKey(current()), key, "equal bytes cannot substitute for the original writer");
+    session.edit(`${original.source}\nLater author input`, "later-input");
+    session.edit(original.source, original.inputId);
+    session.acknowledgeDraft(session.source, session.serial, session.issueDraftRevision(), session.inputId);
+    assert.equal(session.source, captured.source);
+    assert.equal(session.inputId, captured.inputId);
+    assert.notEqual(session.serial, captured.serial);
+    assert.notEqual(resourceBasisKey(current()), key, "even the old input ID plus equal bytes cannot erase a changed author serial");
 });
 
 test("local import sizes use the existing 64-file and cumulative 64 MiB boundaries", () => {

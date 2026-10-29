@@ -3,7 +3,7 @@ import { ProposalCloseGuard } from "./proposal-close-guard";
 import { decodeEditorMapResponse, exactWritingRange } from "./writing";
 import { message, setUiText, setUiAttr, replaceUiChildren, errorUiText, UiError, type UiText } from "./ui-locale";
 import { checkLocalResourceSizes, decodeLocalResourceInsertion, decodeLocalResourceLocator, decodeLocalResourcePlan, localResourceKey,
-    removeLocalResourceLocator, resourceBasisKey, resourceDigest, resourceOwner, sameResourceOwner, writeLocalResourceLocator,
+    removeLocalResourceLocator, resourceBasisKey, resourceDigest, resourceOwner, resourceSourceBasis, sameResourceOwner, writeLocalResourceLocator,
     type LocalResourceLocator, type LocalResourceMode, type LocalResourceOwner, type LocalResourcePlan, type LocalResourceRecord } from "./resource-import-batch-state";
 
 export interface ResourceImportBatchHost {
@@ -255,7 +255,7 @@ export class ResourceImportBatch {
         const wire = JSON.stringify({ sessionId: basis.sessionId, operationId, files: uploads });
         const wireDigest = await resourceDigest(wire);
         if (!sameRoute()) throw new UiError(message("localResourceBatch.sourceChanged"));
-        this.insertionBasis = { ...basis };
+        this.insertionBasis = resourceSourceBasis(basis);
         await this.retain({ version: 1, owner, operationId, requestKind: "operation", wireDigest, files: info, mode, insertion: "pending", phase: "original" }, sameRoute);
         if (!sameRoute()) throw new UiError(message("localResourceBatch.sourceChanged"));
         this.originalWire = wire; this.originalRoute = route; this.draft = null; this.status = "unknown";
@@ -321,7 +321,7 @@ export class ResourceImportBatch {
         if (!plan || plan.status !== "prepared" || this.knownCommitted) return;
         // Keep the visible source at confirmation as the sole automatic insert
         // basis. Later input can never be adopted from a resource receipt.
-        this.insertionBasis = { ...this.requireOwner() };
+        this.insertionBasis = resourceSourceBasis(this.requireOwner());
         try {
             const fact = this.fact(await this.host.request("/api/operations/commit", { operationId: record.locator.operationId, planId: plan.planId }));
             this.status = fact.status;
@@ -344,7 +344,7 @@ export class ResourceImportBatch {
         await this.requireQualifiedRoute();
         const plan = this.plan;
         if (!plan || plan.status !== "committed") throw new UiError(message("error.invalidResponse"));
-        const basis = { ...(captured ?? this.requireOwner()) }, key = resourceBasisKey(basis);
+        const basis = resourceSourceBasis(captured ?? this.requireOwner()), key = resourceBasisKey(basis);
         const basisCurrent = () => this.plan === plan && this.host.canEdit() && !!this.currentOwner()
             && resourceBasisKey(this.requireOwner()) === key && !this.guard.frozen;
         const current = () => this.record === record && basisCurrent();

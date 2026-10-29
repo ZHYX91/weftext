@@ -62,9 +62,15 @@ export function resourceOwner(basis: DocumentBasis): LocalResourceOwner {
 export function sameResourceOwner(a: LocalResourceOwner | null | undefined, b: LocalResourceOwner | null | undefined): boolean {
     return !!a && !!b && a.workspaceId === b.workspaceId && a.nodeId === b.nodeId && a.root === b.root && a.path === b.path;
 }
+/** Resource insertion proposes a source edit, not a Save/read grant. A Draft
+ * ACK can advance for this same author input without changing its identity. */
+export function resourceSourceBasis(basis: DocumentBasis): DocumentBasis {
+    const { inputRevision: _acknowledgedRevision, ...sourceBasis } = basis;
+    return sourceBasis;
+}
 export function resourceBasisKey(basis: DocumentBasis): string {
     resourceOwner(basis);
-    return JSON.stringify([basis.inputId, basis.sessionId, basis.source, basis.serial, basis.baseId, basis.path, basis.root, basis.workspaceId, basis.nodeId, basis.inputRevision]);
+    return JSON.stringify([basis.inputId, basis.sessionId, basis.source, basis.serial, basis.baseId, basis.path, basis.root, basis.workspaceId, basis.nodeId]);
 }
 export function localResourceKey(owner: LocalResourceOwner): string {
     const checked = decodeOwner(owner);
