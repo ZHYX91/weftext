@@ -476,7 +476,12 @@ try {
   assert.deepEqual(new Set(freshOrder.orderedRefs), new Set([parentRef, siblingRef]));
   const initialAuthorOrder = [...freshOrder.orderedRefs];
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: new URL(page.url()).origin });
-  await selectDisplayedNodes().click();
+  if (await clearNodes().isEnabled()) await clearNodes().click();
+  // The admitted root also displays its ordinary directory marker file.
+  // Copy this explicit two-note selection rather than every displayed object.
+  const rootNoteChecks = nodes().locator('[data-contents-section="nodes"] .node-content-row input[type="checkbox"]');
+  assert.equal(await rootNoteChecks.count(), 2);
+  await rootNoteChecks.nth(0).click(); await rootNoteChecks.nth(1).click();
   assert.equal(await nodes().locator('.node-content-row input:checked').count(), 2);
   const copyStart = result.requests.length;
   await nodes().getByRole('button', { name: '已显示选中项操作', exact: true }).click();
