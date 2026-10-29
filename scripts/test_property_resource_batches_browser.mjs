@@ -280,7 +280,14 @@ try {
   assert.equal(patch.utf16From, patch.utf16To); assert.equal(patch.expected, '');
   assert.equal(patch.utf16From, afterTransfer.length); assert.equal(patch.from, Buffer.byteLength(afterTransfer));
   assert.equal(insertion.edit.source, afterTransfer.slice(0, patch.utf16From) + patch.insert + afterTransfer.slice(patch.utf16To));
-  assert.equal(insertion.edit.sourceHash, sha(insertion.edit.source)); assert.ok(patch.insert.includes(names[0])); assert.ok(patch.insert.includes(names[1]));
+  assert.equal(insertion.edit.sourceHash, sha(insertion.edit.source)); assert.ok(patch.insert.includes(names[0]));
+  const textLabels = insertion.edit.map.literalRegions.filter(region => region.role === 'link' && region.text === names[1]);
+  assert.equal(textLabels.length, 1, 'The native link has the exact decoded resource name');
+  const labelRange = textLabels[0].range, linkPrefix = `#link(${JSON.stringify(insertion.imports[1].resourceRef)})[`;
+  assert.ok(labelRange.utf16From >= patch.utf16From);
+  assert.equal(insertion.edit.source.slice(labelRange.utf16From, labelRange.utf16To), labelRange.raw);
+  assert.equal(insertion.edit.source.slice(labelRange.utf16From - linkPrefix.length, labelRange.utf16From), linkPrefix);
+  assert.equal(insertion.edit.source.slice(labelRange.utf16To, labelRange.utf16To + 1), ']');
   assert.ok(patch.insert.includes(insertion.imports[1].resourceRef)); assert.ok(insertion.edit.source.includes(unknown));
   const afterInsert = insertion.edit.source; await waitSource(afterInsert); result.sources.insert = await snapshot('source-insert', afterInsert);
   await control('finish').waitFor(); assert.ok(await control('finish').isEnabled());
