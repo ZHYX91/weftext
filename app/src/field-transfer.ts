@@ -1,4 +1,5 @@
-import { action, fieldNames, formatNativeValue, labelFor, ui, type PanelHost } from "./native-value-form";
+import { schemaFieldLabel } from "./builtin-property-labels";
+import { action, formatNativeValue, labelFor, ui, type PanelHost } from "./native-value-form";
 import { replaceUiChildren, setUiText, displayMessage, message, errorUiText, uiDisplayParameter, UiError } from "./ui-locale";
 import { decodeFieldTransferPatch, fieldTransferSelection, fieldTransferSourceHash, transferContextKey, transferLists,
     type FieldTransferContext, type FieldTransferInputs } from "./field-transfer-state";
@@ -67,7 +68,7 @@ export class FieldTransfer {
         };
         for (const field of lists) for (const [select, allowed] of [[from, field.cell.value.value.length > 0], [to, true]] as const) {
             if (!allowed) continue;
-            const option = ui("option", "", displayMessage("fieldTransfer.fieldChoice", { p0: uiDisplayParameter(fieldNames[field.key] ?? field.key), p1: field.cell.value.value.length }));
+            const option = ui("option", "", displayMessage("fieldTransfer.fieldChoice", { p0: uiDisplayParameter(schemaFieldLabel(context.schemaRead.schema, context.schemaRead.schema.fields.find(item => item.id === field.fieldId)!)), p1: field.cell.value.value.length }));
             option.value = field.fieldId; select.append(option);
         }
         from.value = this.inputs.fromField; to.value = this.inputs.toField;

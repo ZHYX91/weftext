@@ -1,3 +1,5 @@
+import { schemaPropertyPresentation } from "./builtin-property-labels";
+export { schemaFieldLabel } from "./builtin-property-labels";
 import {textareaSourceDraft} from "./writing";
 import {decodeCoreDescription,coreDescriptionUiText} from "./ui-diagnostics";
 /** Single native schema form implementation, shared by DataPanel, queries and Capture. */
@@ -178,7 +180,7 @@ export interface PanelHost {
     /** Reconcile one committed original Core operation without replacing later input. */
     applyOperationReceipt?(receipt: unknown, basis: DocumentBasis): Promise<void>;
 }
-export const fieldNames: Record<string, UiText> = { reminder: uiMessage("reminder.label"), status: uiMessage("field.status"), due: uiMessage("field.due"), start: uiMessage("field.start"), priority: uiMessage("field.priority"), project: uiMessage("field.project"), completed_at: uiMessage("field.completedAt"), title: uiMessage("queryColumn.title"), names: uiMessage("field.names"), phones: uiMessage("field.phones"), emails: uiMessage("field.emails"), addresses: uiMessage("field.addresses"), websites: uiMessage("field.websites"), accounts: uiMessage("field.accounts"), tags: uiMessage("field.tags"), publication: uiMessage("field.publication"), contributors: uiMessage("field.contributors"), resources: uiMessage("field.resources"), note: uiMessage("field.note"), notes: uiMessage("field.note"), label: uiMessage("field.tags"), number: uiMessage("field.number"), value: uiMessage("field.value"), text: uiMessage("field.text"), ref: uiMessage("field.nodeReference"), kind: uiMessage("field.kind"), role: uiMessage("field.role"), agent: uiMessage("field.agent"), credited_as: uiMessage("field.creditedAs"), date: uiMessage("field.date"), amount: uiMessage("field.amount"), currency: uiMessage("field.currency"), unit: uiMessage("field.unit"), during: uiMessage("field.validity"), source: uiMessage("field.source"), validity: uiMessage("field.validity"), period: uiMessage("field.period"), range: uiMessage("field.range"), event: uiMessage("field.event"), dependency: uiMessage("field.dependency") };
+export const fieldNames: Record<string, UiText> = { reminder: uiMessage("reminder.label"), status: uiMessage("field.status"), due: uiMessage("field.due"), start: uiMessage("field.start"), priority: uiMessage("field.priority"), project: uiMessage("field.project"), completed_at: uiMessage("field.completedAt"), title: uiMessage("queryColumn.title"), names: uiMessage("field.names"), phones: uiMessage("field.phones"), emails: uiMessage("field.emails"), addresses: uiMessage("field.addresses"), websites: uiMessage("field.websites"), accounts: uiMessage("field.accounts"), tags: uiMessage("field.tags"), publication: uiMessage("field.publication"), contributors: uiMessage("field.contributors"), resources: uiMessage("field.resources"), note: uiMessage("field.note"), notes: uiMessage("field.note"), number: uiMessage("field.number"), value: uiMessage("field.value"), text: uiMessage("field.text"), ref: uiMessage("field.nodeReference"), kind: uiMessage("field.kind"), role: uiMessage("field.role"), agent: uiMessage("field.agent"), credited_as: uiMessage("field.creditedAs"), date: uiMessage("field.date"), amount: uiMessage("field.amount"), currency: uiMessage("field.currency"), unit: uiMessage("field.unit"), during: uiMessage("field.validity"), source: uiMessage("field.source"), validity: uiMessage("field.validity"), period: uiMessage("field.period"), range: uiMessage("field.range"), event: uiMessage("field.event"), dependency: uiMessage("field.dependency") };
 export const typeNames: Record<string, UiText> = { person: uiMessage("type.person"), organization: uiMessage("type.organization"), org: uiMessage("type.organization"), task: uiMessage("type.task"), project: uiMessage("field.project"), work: uiMessage("type.work"), paper: uiMessage("type.paper"), event: uiMessage("field.event"), period: uiMessage("type.periodNote"), "period-note": uiMessage("type.periodNote"), range: uiMessage("type.rangeNote"), "range-note": uiMessage("type.rangeNote") };
 export const cellLabels = { value: uiMessage("nativeValue.hasValue"), absent: uiMessage("queryValue.absent"), null: uiMessage("nativeValue.explicitNone"), invalid: uiMessage("queryValue.invalid"), unavailable: uiMessage("nativeValue.unavailableComputed") };
 export const commonFields = new Set(["title", "names", "status", "due", "reminder", "project", "priority", "phones", "emails", "tags", "publication", "period", "range"]);
@@ -494,7 +496,7 @@ function canRestructureNative(container: HTMLElement, status: HTMLElement, compo
     }
     setUiText(status, ""); return true;
 }
-export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSchema, changed: (value: NativeValue) => void, label: UiText, identity: NativeControlIdentity, depth = 0, references?: FormReferences, binding?: NativeControlBinding, lifetime = new Set<BoundNativeControl>()): HTMLElement {
+export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSchema, changed: (value: NativeValue) => void, label: UiText, identity: NativeControlIdentity, depth = 0, references?: FormReferences, binding?: NativeControlBinding, lifetime = new Set<BoundNativeControl>(), presentation = schemaPropertyPresentation(schema, identity)): HTMLElement {
     const retire = () => {
         for (const entry of lifetime)
             if (identity.path.every((part, index) => JSON.stringify(part) === JSON.stringify(entry.path[index]))) {
@@ -517,7 +519,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
         return host;
     }
     if (value.kind === "none") {
-        host.append(ui("span", "data-empty", uiMessage("nativeValue.explicitNone")), action(uiMessage("nativeEditor.fillValue"), () => { retire(); value = emptyNativeValue(resolved, schema); changed(value); host.replaceChildren(valueEditor(resolved, value, schema, changed, label, identity, depth, references, binding, lifetime)); }));
+        host.append(ui("span", "data-empty", uiMessage("nativeValue.explicitNone")), action(uiMessage("nativeEditor.fillValue"), () => { retire(); value = emptyNativeValue(resolved, schema); changed(value); host.replaceChildren(valueEditor(resolved, value, schema, changed, label, identity, depth, references, binding, lifetime, presentation)); }));
         return host;
     }
     if (resolved.kind === "union") {
@@ -527,7 +529,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
         const absent = ui("option", "", uiMessage("nativeEditor.chooseBranch"));
         absent.value = "-1";
         select.append(absent);
-        resolved.variants.forEach((variant, index) => { const candidate = resolveShape(variant, schema); const description = candidate.kind === "record" ? joinUiText(Object.keys(candidate.members).slice(0, 3).map(key => fieldNames[key] ?? key), " / ") : candidate.kind === "scalar" ? candidate.semantic : candidate.kind; const option = ui("option", "", () => `${index + 1}. ${uiTextValue(description)}`); option.value = String(index); select.append(option); });
+        resolved.variants.forEach((variant, index) => { const candidate = resolveShape(variant, schema); const description = candidate.kind === "record" ? joinUiText(Object.keys(candidate.members).slice(0, 3).map(key => presentation.memberLabel(key)), " / ") : candidate.kind === "scalar" ? candidate.semantic : candidate.kind; const option = ui("option", "", () => `${index + 1}. ${uiTextValue(description)}`); option.value = String(index); select.append(option); });
         select.value = String(branch);
         host.append(labelFor(() => displayMessage("nativeEditor.branchLabel", { p0: uiDisplayParameter(uiTextValue(label)) }), select), select);
         const body = ui("div", "native-union-body");
@@ -535,7 +537,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
         const show = (): void => {
             body.replaceChildren();
             if (branch >= 0)
-                body.append(valueEditor(resolved.variants[branch], value, schema, next => { value = next; changed(next); }, label, { ...identity, variants: [...identity.variants ?? [], branch] }, depth + 1, references, binding, lifetime));
+                body.append(valueEditor(resolved.variants[branch], value, schema, next => { value = next; changed(next); }, label, { ...identity, variants: [...identity.variants ?? [], branch] }, depth + 1, references, binding, lifetime, presentation));
             else
                 body.append(ui("p", "data-warning", uiMessage("nativeEditor.ambiguousBranch")));
         };
@@ -578,7 +580,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                 const present = nativeMember(value, key);
                 const row = ui("div", "native-member");
                 const heading = ui("div", "native-member-heading");
-                heading.append(ui("span", "", () => `${uiTextValue(fieldNames[key] ?? key)}${uiTextValue(member.required ? " *" : "")}`));
+                heading.append(ui("span", "", () => `${uiTextValue(presentation.memberLabel(key))}${uiTextValue(member.required ? " *" : "")}`));
                 row.append(heading);
                 if (!present) {
                     heading.append(ui("span", "data-empty", uiMessage("queryValue.absent")), action(uiMessage("nativeEditor.addMember"), () => { if (!canRestructure()) return; retire(); value = replaceNativeMember(value, key, emptyNativeValue(member.shape, schema)); changed(value); render(); }, "data-button compact"));
@@ -588,7 +590,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                         heading.append(action(uiMessage("nativeEditor.removeMember"), () => { if (!canRestructure()) return; retire(); value = replaceNativeMember(value, key, undefined); changed(value); render(); }, "data-button compact"));
                     if (member.nullable && present.kind !== "none")
                         heading.append(action(uiMessage("nativeEditor.setNone"), () => { if (!canRestructure()) return; retire(); value = replaceNativeMember(value, key, { kind: "none" }); changed(value); render(); }, "data-button compact"));
-                    row.append(valueEditor(member.shape, present, schema, next => { value = replaceNativeMember(value, key, next); changed(value); }, () => `${uiTextValue(label)} · ${uiTextValue(fieldNames[key] ?? key)}`, { ...identity, path: [...identity.path, { kind: "member", key }] }, depth + 1, references, binding, lifetime));
+                    row.append(valueEditor(member.shape, present, schema, next => { value = replaceNativeMember(value, key, next); changed(value); }, () => `${uiTextValue(label)} · ${uiTextValue(presentation.memberLabel(key))}`, { ...identity, path: [...identity.path, { kind: "member", key }] }, depth + 1, references, binding, lifetime, presentation));
                 }
                 record.append(row);
             }
@@ -808,7 +810,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                     nextItems[index] = next;
                     value = { kind: "array", value: nextItems };
                     changed(value);
-                }, () => displayMessage("nativeEditor.itemLabel", { p0: uiDisplayParameter(uiTextValue(label)), p1: index + 1 }), { ...identity, path: [...identity.path, { kind: "index", index }] }, depth + 1, references, binding, lifetime));
+                }, () => displayMessage("nativeEditor.itemLabel", { p0: uiDisplayParameter(uiTextValue(label)), p1: index + 1 }), { ...identity, path: [...identity.path, { kind: "index", index }] }, depth + 1, references, binding, lifetime, presentation));
                 items.append(row);
                 if (index === focusIndex) {
                     const requested = [handle, up, down, first, last, position].find(control => control.dataset.orderAction === focusRole && !("disabled" in control && control.disabled));
@@ -847,23 +849,59 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
         };
         return host;
     }
-    if (resolved.kind === "enum" && !resolved.open) {
+    if (resolved.kind === "enum") {
         const input = ui("select", "data-input");
         bindNativeControl(input, identity, "value:enum");
-        resolved.values.forEach(optionValue => { const option = ui("option", "", "fieldId" in identity && identity.fieldId === "tasks/status" ? ({ open: uiMessage("queryEdit.openStatus"), done: uiMessage("queryEdit.doneStatus"), cancelled: uiMessage("nativeEditor.cancelledStatus") } as Record<string, UiText>)[optionValue] ?? optionValue : optionValue); option.value = optionValue; input.append(option); });
-        if (value.kind === "text" && !resolved.values.includes(value.value)) {
+        resolved.values.forEach(optionValue => { const option = ui("option", "", presentation.enumLabel(resolved, optionValue)); option.value = optionValue; input.append(option); });
+        if (resolved.open) {
+            const custom = ui("option", "", uiMessage("nativeEditor.customEnumValue"));
+            custom.value = "";
+            input.append(custom);
+        }
+        if (!resolved.open && value.kind === "text" && !resolved.values.includes(value.value)) {
             const originalText = value.value;
             const unknown = ui("option", "", displayMessage("nativeEditor.unregisteredEnumChoice", { p0: originalText }));
             unknown.value = value.value;
             input.append(unknown);
         }
-        input.value = nativeInputValue(value);
+        input.value = resolved.open && !resolved.values.includes(nativeInputValue(value)) ? "" : nativeInputValue(value);
         setUiAttr(input, "aria-label", label);
         host.append(input);
+        const customInput = resolved.open ? ui("textarea", "data-input") : undefined;
+        let customValue = nativeInputValue(value);
+        if (customInput) {
+            bindNativeControl(customInput, identity, "value:enum-custom");
+            customInput.rows = 2;
+            customInput.value = customValue;
+            customInput.hidden = input.value !== "";
+            setUiAttr(customInput, "aria-label", () => displayMessage("nativeEditor.customEnumLabel", { label: uiDisplayParameter(label) }));
+            if (binding) {
+                const slot = JSON.stringify([binding.slot, "value:enum-custom", identity.variants ?? []]);
+                binding.session.bind(customInput, slot, identity.path);
+                lifetime.add({ slot, path: identity.path });
+            }
+            customInput.oninput = () => {
+                if (customInput.isConnected === false) return;
+                customValue = textareaSourceDraft(customValue, customInput.value);
+                // Raw restoration also visits hidden controls. Retain that custom
+                // draft without replacing the currently selected registered value.
+                if (input.value !== "" || customInput.hidden) return;
+                value = { kind: "text", value: customValue }; changed(value);
+            };
+            host.append(customInput);
+            input.oninput = () => { customInput.hidden = input.value !== ""; };
+        }
         input.onchange = () => {
-            if (input.isConnected === false)
-                return;
-            changed({ kind: "text", value: input.value });
+            if (input.isConnected === false) return;
+            if (customInput) {
+                customInput.hidden = input.value !== "";
+                if (input.value === "") {
+                    if (value.kind !== "text" || value.value !== customValue) { value = { kind: "text", value: customValue }; changed(value); }
+                    customInput.focus(); return;
+                }
+            }
+            value = { kind: "text", value: input.value };
+            changed(value);
         };
         return host;
     }

@@ -1,7 +1,8 @@
+import { schemaFieldLabel } from "./builtin-property-labels";
 import { uiDisplayParameter } from "./ui-locale";
 import { displayMessage } from "./ui-locale";
 import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
-import { action, diagnosticText, formatNativeValue, ui, fieldNames, type Cell, type DataSchema } from "./data-panel";
+import { action, diagnosticText, formatNativeValue, ui, type Cell, type DataSchema } from "./data-panel";
 import { queryPlanControls } from "./query-plan-controls";
 import { initialOccurrenceView, occurrenceViewControls, renderOccurrenceCards } from "./query-result-view";
 import { directQueryField, parseQueryJson, parseQueryParameters, parseQueryPlan, queryResultState, type QueryPlan } from "./query-panel";
@@ -747,7 +748,7 @@ export class HostedQuery {
                 for (const column of result.columns) {
                     const field = directQueryField(plan, this.catalog.formSchema ?? null, column);
                     if (field && this.fieldActions.canEdit(row.resource, field.id))
-                        this.results.append(action(displayMessage("hostedQuery.editField", { p0: uiDisplayParameter(row.resource), p1: uiDisplayParameter(fieldNames[field.key] ?? field.key) }), () => this.fieldActions!.open(row.resource!, field.id)));
+                        this.results.append(action(displayMessage("hostedQuery.editField", { p0: uiDisplayParameter(row.resource), p1: uiDisplayParameter(schemaFieldLabel(this.catalog.formSchema!, field)) }), () => this.fieldActions!.open(row.resource!, field.id)));
                 }
             }
         }

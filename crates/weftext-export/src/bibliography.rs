@@ -1913,6 +1913,95 @@ mod tests {
         assert_eq!(rows[0]["author"][1]["literal"], "Native Research Group");
     }
     #[test]
+    fn rich_workflow_same_name_roles_survive_import_reorder_and_all_citation_formats() {
+        let original = br#"[{"type":"article-journal","title":"Owned paper","author":[{"literal":"Same Name"}],"editor":[{"literal":"Same Name"}]}]"#;
+        let imported = import_bibliography(BibliographyFormat::CslJson, original).unwrap();
+        assert_eq!(imported.original, original);
+        let mut publication = imported.records[0].publication.clone();
+        let contributors = publication.member("contributors").unwrap().array().unwrap();
+        assert_eq!(contributors.len(), 2);
+        assert_eq!(
+            contributors[0].member("roles").unwrap().array().unwrap()[0].text(),
+            Some("author")
+        );
+        assert_eq!(
+            contributors[1].member("roles").unwrap().array().unwrap()[0].text(),
+            Some("editor")
+        );
+        let mut reordered = vec![];
+        for (index, role) in ["editor", "author"].into_iter().enumerate() {
+            let id = if index == 0 {
+                "12d7c4f3-9ee6-4c36-920d-ec6af27bc654"
+            } else {
+                "8aa10c08-3e7d-4d10-9488-92bc7f393050"
+            };
+            reordered.push(record([
+                (
+                    "agent",
+                    record([(
+                        "ref",
+                        txt(&format!(
+                            "weftext-node://58c47256-bfce-4d29-a037-b83a3a644fb0/{id}"
+                        )),
+                    )]),
+                ),
+                ("credited_as", txt("Same Name")),
+                ("roles", NativeValue::Array(vec![txt(role)])),
+            ]));
+        }
+        if let NativeValue::Record(members) = &mut publication {
+            members
+                .iter_mut()
+                .find(|member| member.key == "contributors")
+                .unwrap()
+                .value = NativeValue::Array(reordered);
+        }
+        let mut work = work();
+        work.work.publication = publication.clone();
+        for format in [
+            BibliographyFormat::CslJson,
+            BibliographyFormat::Bibtex,
+            BibliographyFormat::Ris,
+        ] {
+            let artifact = project_bibliography(std::slice::from_ref(&work), format).unwrap();
+            assert_eq!(artifact.dependencies[0].key, "boundKey");
+            let restored = import_bibliography(format, &artifact.bytes).unwrap();
+            assert_eq!(restored.records[0].publication, publication, "{format:?}");
+            assert!(restored.records[0].conflicts.is_empty());
+        }
+        let csl =
+            project_bibliography(std::slice::from_ref(&work), BibliographyFormat::CslJson).unwrap();
+        let rows: Value = serde_json::from_slice(&csl.bytes).unwrap();
+        assert_eq!(rows[0]["author"][0]["literal"], "Same Name");
+        assert_eq!(rows[0]["editor"][0]["literal"], "Same Name");
+        // An unresolved double target is invalid, never silently mapped to either person.
+        if let NativeValue::Record(members) = &mut work.work.publication {
+            let values = &mut members
+                .iter_mut()
+                .find(|member| member.key == "contributors")
+                .unwrap()
+                .value;
+            if let NativeValue::Array(contributors) = values {
+                if let NativeValue::Record(members) = &mut contributors[0] {
+                    members
+                        .iter_mut()
+                        .find(|member| member.key == "agent")
+                        .unwrap()
+                        .value = record([
+                        (
+                            "ref",
+                            txt(
+                                "weftext-node://58c47256-bfce-4d29-a037-b83a3a644fb0/12d7c4f3-9ee6-4c36-920d-ec6af27bc654",
+                            ),
+                        ),
+                        ("text", txt("Same Name")),
+                    ]);
+                }
+            }
+        }
+        assert!(project_bibliography(&[work], BibliographyFormat::CslJson).is_err());
+    }
+    #[test]
     fn collision_incomplete_and_unknown_role_cannot_fake_success() {
         let work = work();
         assert!(
