@@ -690,8 +690,18 @@ fn serialize(table: &NativeTable) -> String {
     )
 }
 
-fn axis_insert(table: &mut NativeTable, index: usize, column: bool) -> Result<(), EngineError> {
+fn axis_insert(
+    table: &mut NativeTable,
+    index: usize,
+    count: usize,
+    column: bool,
+) -> Result<(), EngineError> {
     let length = if column { table.columns } else { table.rows };
+    if count == 0 {
+        return Err(fail(
+            weftext_messages::UiMessage::error_engine_table_editor_insertion_count_invalid(),
+        ));
+    }
     if index > length {
         return Err(fail(
             weftext_messages::UiMessage::error_engine_table_editor_insertion_outside(),
@@ -699,13 +709,13 @@ fn axis_insert(table: &mut NativeTable, index: usize, column: bool) -> Result<()
     }
     let rows = table
         .rows
-        .checked_add(usize::from(!column))
+        .checked_add(if column { 0 } else { count })
         .ok_or_else(|| {
             fail(weftext_messages::UiMessage::error_engine_table_editor_table_budget())
         })?;
     let columns = table
         .columns
-        .checked_add(usize::from(column))
+        .checked_add(if column { count } else { 0 })
         .ok_or_else(|| {
             fail(weftext_messages::UiMessage::error_engine_table_editor_table_budget())
         })?;
@@ -740,37 +750,47 @@ fn axis_insert(table: &mut NativeTable, index: usize, column: bool) -> Result<()
             &mut cell.info.row
         };
         if *coordinate >= index {
-            *coordinate += 1;
+            *coordinate += count;
         }
     }
     if column {
-        table.columns += 1;
+        table.columns = columns;
         for row in 0..table.rows {
-            table.cells.push(blank(row, index, row < table.header_rows));
+            for column in index..index + count {
+                table
+                    .cells
+                    .push(blank(row, column, row < table.header_rows));
+            }
         }
     } else {
-        table.rows += 1;
-        if index < table.header_rows {
-            table.header_rows += 1;
+        let header = index < table.header_rows;
+        table.rows = rows;
+        if header {
+            table.header_rows += count;
         }
-        for column in 0..table.columns {
-            table
-                .cells
-                .push(blank(index, column, index < table.header_rows));
+        for row in index..index + count {
+            for column in 0..table.columns {
+                table.cells.push(blank(row, column, header));
+            }
         }
     }
     Ok(())
 }
 
-fn axis_remove(table: &mut NativeTable, index: usize, column: bool) -> Result<(), EngineError> {
+fn axis_remove(
+    table: &mut NativeTable,
+    start: usize,
+    end: usize,
+    column: bool,
+) -> Result<(), EngineError> {
     let length = if column { table.columns } else { table.rows };
-    if index >= length || length == 1 {
+    if start > end || end >= length || end - start + 1 == length {
         return Err(fail(
             weftext_messages::UiMessage::error_engine_table_editor_deletion_invalid(),
         ));
     }
     for cell in &table.cells {
-        let start = if column {
+        let first = if column {
             cell.info.column
         } else {
             cell.info.row
@@ -780,7 +800,8 @@ fn axis_remove(table: &mut NativeTable, index: usize, column: bool) -> Result<()
         } else {
             cell.info.rowspan
         };
-        if start <= index && index < start + span && span != 1 {
+        let last = first + span - 1;
+        if first <= end && last >= start && (first < start || last > end) {
             return Err(fail(
                 weftext_messages::UiMessage::error_engine_table_editor_deletion_splits_merged_cell(
                 ),
@@ -788,58 +809,61 @@ fn axis_remove(table: &mut NativeTable, index: usize, column: bool) -> Result<()
         }
     }
     table.cells.retain(|cell| {
-        (if column {
+        let coordinate = if column {
             cell.info.column
         } else {
             cell.info.row
-        }) != index
+        };
+        coordinate < start || coordinate > end
     });
+    let count = end - start + 1;
     for cell in &mut table.cells {
         let coordinate = if column {
             &mut cell.info.column
         } else {
             &mut cell.info.row
         };
-        if *coordinate > index {
-            *coordinate -= 1;
+        if *coordinate > end {
+            *coordinate -= count;
         }
     }
     if column {
-        table.columns -= 1;
+        table.columns -= count;
     } else {
-        table.rows -= 1;
-        if index < table.header_rows {
-            table.header_rows -= 1;
-        }
+        table.rows -= count;
+        table.header_rows -= (end + 1).min(table.header_rows) - start.min(table.header_rows);
     }
     Ok(())
 }
 
 fn axis_move(
     table: &mut NativeTable,
-    from: usize,
+    start: usize,
+    end: usize,
     to: usize,
     column: bool,
 ) -> Result<(), EngineError> {
     let length = if column { table.columns } else { table.rows };
-    if from >= length || to >= length {
+    if start > end || end >= length || to > length - (end - start + 1) {
         return Err(fail(
             weftext_messages::UiMessage::error_engine_table_editor_movement_outside(),
         ));
     }
+    let count = end - start + 1;
     let map = |index: usize| {
-        if index == from {
-            to
-        } else if from < to && index > from && index <= to {
-            index - 1
-        } else if to < from && index >= to && index < from {
-            index + 1
+        if (start..=end).contains(&index) {
+            to + index - start
+        } else if start < to && index > end && index < to + count {
+            index - count
+        } else if to < start && index >= to && index < start {
+            index + count
         } else {
             index
         }
     };
-    for cell in &mut table.cells {
-        let start = if column {
+    let mut coordinates = Vec::with_capacity(table.cells.len());
+    for cell in &table.cells {
+        let first = if column {
             cell.info.column
         } else {
             cell.info.row
@@ -849,10 +873,17 @@ fn axis_move(
         } else {
             cell.info.rowspan
         };
-        let positions: Vec<_> = (start..start + span).map(map).collect();
-        let minimum = *positions.iter().min().unwrap();
-        let maximum = *positions.iter().max().unwrap();
-        if maximum - minimum + 1 != span {
+        let last = first + span - 1;
+        // A selected group owns complete logical cells. Even a permutation that
+        // happens to keep a partial span contiguous cannot authorize moving it.
+        if first <= end && last >= start && (first < start || last > end) {
+            return Err(fail(
+                weftext_messages::UiMessage::error_engine_table_editor_movement_splits_merged_cell(
+                ),
+            ));
+        }
+        let positions: Vec<_> = (first..first + span).map(map).collect();
+        if positions.windows(2).any(|pair| pair[1] != pair[0] + 1) {
             return Err(fail(
                 weftext_messages::UiMessage::error_engine_table_editor_movement_splits_merged_cell(
                 ),
@@ -867,10 +898,13 @@ fn axis_move(
                 weftext_messages::UiMessage::error_engine_table_editor_movement_changes_header(),
             ));
         }
+        coordinates.push(positions[0]);
+    }
+    for (cell, coordinate) in table.cells.iter_mut().zip(coordinates) {
         if column {
-            cell.info.column = minimum;
+            cell.info.column = coordinate;
         } else {
-            cell.info.row = minimum;
+            cell.info.row = coordinate;
         }
     }
     Ok(())
@@ -1144,13 +1178,24 @@ pub(super) fn edit(
     let mut table = parse(&node, call, source, &parsed)?;
     let original_cells = table.cells.clone();
     let original_dimensions = (table.rows, table.columns, table.header_rows);
+    let moving_axis = matches!(
+        action,
+        TableAction::MoveRows { start, to, .. } | TableAction::MoveColumns { start, to, .. }
+            if start != to
+    );
     match action {
-        TableAction::InsertRow { index } => axis_insert(&mut table, *index, false)?,
-        TableAction::RemoveRow { index } => axis_remove(&mut table, *index, false)?,
-        TableAction::InsertColumn { index } => axis_insert(&mut table, *index, true)?,
-        TableAction::RemoveColumn { index } => axis_remove(&mut table, *index, true)?,
-        TableAction::MoveRow { from, to } => axis_move(&mut table, *from, *to, false)?,
-        TableAction::MoveColumn { from, to } => axis_move(&mut table, *from, *to, true)?,
+        TableAction::InsertRows { index, count } => axis_insert(&mut table, *index, *count, false)?,
+        TableAction::RemoveRows { start, end } => axis_remove(&mut table, *start, *end, false)?,
+        TableAction::InsertColumns { index, count } => {
+            axis_insert(&mut table, *index, *count, true)?
+        }
+        TableAction::RemoveColumns { start, end } => axis_remove(&mut table, *start, *end, true)?,
+        TableAction::MoveRows { start, end, to } => {
+            axis_move(&mut table, *start, *end, *to, false)?
+        }
+        TableAction::MoveColumns { start, end, to } => {
+            axis_move(&mut table, *start, *end, *to, true)?
+        }
         TableAction::ClearRange {
             top,
             left,
@@ -1326,7 +1371,10 @@ pub(super) fn edit(
         }
     }
     complete(&mut table)?;
-    if original_dimensions == (table.rows, table.columns, table.header_rows)
+    // A group move owns the complete native cells, even when identical wrappers
+    // would make the resulting permutation look like independent body edits.
+    if !moving_axis
+        && original_dimensions == (table.rows, table.columns, table.header_rows)
         && original_cells.len() == table.cells.len()
         && original_cells.iter().zip(&table.cells).all(|(old, new)| {
             (

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { contentsActionEntry, contentsPreferenceKey, contentsSection, directContentsEntries, decodeAuthoredOrder, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, isTerminalOrderStatus, movedSibling } from "./node-contents-state";
+import { changedContentsSelection, contentsActionEntry, contentsBatchSelectable, contentsPreferenceKey, contentsSection, directContentsEntries, decodeAuthoredOrder, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, isTerminalOrderStatus, movedSibling } from "./node-contents-state";
 import { canonicalNodeSources } from "./file-tree";
 import type { InventoryEntry } from "./types";
 test("author reordering is explicit and preserves exact stable identities", () => {
@@ -105,4 +105,36 @@ test("fresh order retirement requires an exact, internally consistent parent pro
   ]) assert.throws(() => decodeAuthoredOrder(malformed, "parent"));
   for (const status of ["committed", "resolved", "cancelled"]) assert.equal(isTerminalOrderStatus(status), true);
   for (const status of ["unknown", "prepared", "preparing", "failed", ""]) assert.equal(isTerminalOrderStatus(status), false);
+});
+
+test("range selection follows only the current displayed sequence and excludes unresolved identities", () => {
+  const rows = [{ path: "node/z", eligible: true }, { path: "node/conflict", eligible: false }, { path: "album/a", eligible: true }, { path: "file/b", eligible: true }];
+  const initial = new Set(["retained/not-displayed"]);
+  const range = changedContentsSelection(initial, rows, "album/a", "node/z", { range: true });
+  assert.deepEqual([...range.selected], ["node/z", "album/a"]);
+  assert.equal(range.anchor, "node/z");
+  assert.deepEqual([...initial], ["retained/not-displayed"]);
+  const extended = changedContentsSelection(initial, rows, "album/a", "node/z", { range: true, additive: true });
+  assert.deepEqual([...extended.selected], ["retained/not-displayed", "node/z", "album/a"]);
+  assert.deepEqual([...changedContentsSelection(initial, rows, "file/b", "old/filtered-anchor", { range: true }).selected], ["file/b"]);
+  assert.deepEqual([...changedContentsSelection(initial, rows, "file/b", "node/conflict", { range: true }).selected], ["file/b"]);
+  assert.deepEqual([...changedContentsSelection(initial, rows, "retired/target", "node/z", { range: true }).selected], [...initial]);
+  assert.deepEqual([...changedContentsSelection(initial, rows, "node/conflict", "node/z", { range: true }).selected], ["node/z"]);
+});
+
+test("point selection toggles without opening or upgrading a diagnostic item, and eligibility is explicit", () => {
+  const rows = [{ path: "a", eligible: true }, { path: "conflict", eligible: false }];
+  const point = changedContentsSelection(new Set(["other"]), rows, "a", undefined);
+  assert.deepEqual([...point.selected], ["a"]);
+  const toggled = changedContentsSelection(point.selected, rows, "a", point.anchor, { toggle: true });
+  assert.deepEqual([...toggled.selected], []);
+  assert.deepEqual([...changedContentsSelection(new Set(["a"]), rows, "conflict", "a", { additive: true, toggle: true }).selected], ["a", "conflict"]);
+  const base: InventoryEntry = { path: "A", parentPath: "root", relativePath: "A", name: "A", kind: "file", identityStatus: "ordinary" };
+  assert.equal(contentsBatchSelectable(base), true);
+  assert.equal(contentsBatchSelectable({ ...base, kind: "directory", identityStatus: "unmanaged" }), true);
+  assert.equal(contentsBatchSelectable({ ...base, kind: "node", identityStatus: "admitted", nodeId: "exact-admitted-id" }), true);
+  assert.equal(contentsBatchSelectable({ ...base, kind: "node", identityStatus: "admitted" }), false);
+  for (const identityStatus of ["bindingConflict", "boundaryConflict", "unadmitted", "duplicate", "missing", "recoveryPending", "unsupportedRules", "future-state"])
+    assert.equal(contentsBatchSelectable({ ...base, kind: "node", identityStatus, nodeId: "not-authority" }), false);
+  assert.equal(contentsBatchSelectable({ ...base, kind: "blocked" }), false);
 });

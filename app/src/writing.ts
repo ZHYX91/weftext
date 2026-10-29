@@ -173,11 +173,17 @@ export type WritingBlock = {
     block: boolean;
 };
 export type TableAction = {
-    kind: "insertRow" | "removeRow" | "insertColumn" | "removeColumn";
+    kind: "insertRows" | "insertColumns";
     index: number;
+    count: number;
 } | {
-    kind: "moveRow" | "moveColumn";
-    from: number;
+    kind: "removeRows" | "removeColumns";
+    start: number;
+    end: number;
+} | {
+    kind: "moveRows" | "moveColumns";
+    start: number;
+    end: number;
     to: number;
 } | {
     kind: "paste";

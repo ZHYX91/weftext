@@ -265,24 +265,32 @@ pub struct TermEntry {
     rename_all_fields = "camelCase"
 )]
 pub enum TableAction {
-    InsertRow {
+    InsertRows {
         index: usize,
+        count: usize,
     },
-    RemoveRow {
+    RemoveRows {
+        start: usize,
+        end: usize,
+    },
+    InsertColumns {
         index: usize,
+        count: usize,
     },
-    InsertColumn {
-        index: usize,
+    RemoveColumns {
+        start: usize,
+        end: usize,
     },
-    RemoveColumn {
-        index: usize,
-    },
-    MoveRow {
-        from: usize,
+    /// Move an inclusive range; `to` is its first index after the move.
+    MoveRows {
+        start: usize,
+        end: usize,
         to: usize,
     },
-    MoveColumn {
-        from: usize,
+    /// Move an inclusive range; `to` is its first index after the move.
+    MoveColumns {
+        start: usize,
+        end: usize,
         to: usize,
     },
     ClearRange {

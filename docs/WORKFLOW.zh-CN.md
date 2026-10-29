@@ -27,6 +27,8 @@ translation_status: source
 
 无损表格操作和托管个人关系规则的受控浏览器组件回归分别为 `node scripts/test_table_actions_components_browser.mjs NEW_ABSOLUTE_OUTPUT`、`node scripts/test_hosted_relation_preferences_browser.mjs NEW_ABSOLUTE_OUTPUT`。它们运行当前前端和受控端口，不替代真实 Core／宿主验收；节点连续排序及托管规则刷新持久化另由既有 `test_workspace_layout_browser.mjs`、`test_hosted_knowledge_links_browser.mjs` 对同批合格 CLI 的嵌入界面验证。CLI 必须取同批 catalog／构建回执旁的角色产物，不以 target 下的中间程序或 GUI 角色替代。
 
+批量操作的受控组件回归为 `test_node_selection_browser.mjs`、`test_property_value_drag_browser.mjs`、`test_table_groups_components_browser.mjs`，均用 `node scripts/脚本名 NEW_ABSOLUTE_OUTPUT`。它们分别验证已显示选择范围、真实指针拖排及共享编辑器撤销、表格组命令与手势退休；不授予真实 Core 或原生宿主通过。`node scripts/test_table_groups_browser.mjs ABSOLUTE_CLI NEW_ABSOLUTE_OUTPUT [--hosted]` 另对同批嵌入前端和真实 Core 验成组插入／删除／移动、单次变更、准确范围及 Undo／Redo，`--dev` 只表明当前开发前端。主界面的范围选择和整批稳定链接复制也进入既有 `test_workspace_layout_browser.mjs`；所有检查保留原件与各自 owner 正常停机回执，复用同一候选记录。
+
 `python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 40 个 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由完整 Rust 组逐项执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。
 
 Rust 组保留原 workspace／all-targets Clippy，随后依次运行：

@@ -1,5 +1,31 @@
 // Generated from assets/ui-messages.json. Run node scripts/generate_ui_messages.mjs.
 export const zhCN = {
+  "nodeLinks.copyStableLinks": "复制所选笔记的稳定链接",
+  "nodeLinks.libraryUnavailable": "请先打开身份明确的笔记库。",
+  "nodeLinks.libraryIncomplete": "笔记库扫描尚未完整，无法确认整批笔记身份。",
+  "nodeLinks.selectionUnsupported": "请选择已接纳的笔记；普通文件、目录及身份异常项不能批量复制稳定链接。",
+  "nodeLinks.duplicateSelection": "所选项包含重复笔记身份，请刷新并重新选择。",
+  "nodeLinks.selectionChanged": "笔记库或选择已变化，本次未复制。请重新选择。",
+  "nodeLinks.resolutionChanged": "无法确认所选笔记的当前身份，本次未复制。请刷新后重试。",
+  "nodeLinks.copied": "已复制 {count} 个笔记的稳定链接。",
+  "nativeEditor.dragValue": "拖动第 {index} 项",
+  "nativeEditor.dragKeyboardHelp": "拖动把手调整本列表；也可使用上移、下移或目标位置。",
+  "nativeEditor.dragTarget": "将第 {from} 项移到第 {to} 项；松开调整列表，Esc 取消。",
+  "nativeEditor.dragMoved": "已把第 {from} 项移到第 {to} 项。",
+  "nativeEditor.dragCancelled": "已取消拖动，列表顺序未改变。",
+  "nodeContents.selectDisplayed": "选择全部已显示合格项",
+  "nodeContents.clearSelection": "清除选择",
+  "nodeContents.displayedSelectionActions": "已显示选中项操作",
+  "nodeContents.selectionSummary": "已显示 {shown} 项，选中 {selected} 项，其中 {eligible} 项可批量操作；另保留 {retained} 个未显示的选择。",
+  "nodeContents.selectionScopeHelp": "范围选择和批量操作仅包括当前筛选、已展开分区及已显示页中的合格项；未显示选择保留。Shift 扩选，Ctrl／⌘ 切换，Shift+空格可用键盘扩选。",
+  "nodeContents.selectionHelpTitle": "选择范围与快捷键",
+  "nodeContents.selectionPartialScope": "当前清单扫描不完整；这里只显示和选择已获准呈现的项目，不代表完整目录或全库。操作仍须逐项检查当前身份和权限。",
+  "error.engine.tableEditor.insertionCountInvalid": "新增行列数量必须是正整数",
+  "tableGrid.axisHandleHelp": "单击行／列把手选择整行／列，按住 Shift 再单击可扩展成组；拖动已选把手会移动整组。",
+  "tableGrid.rowGroupScope": "行操作范围：第 {p0}–{p1} 行，共 {p2} 行。新增命令在所选组的边界插入同样数量的空行；删除包含这些行的内容。",
+  "tableGrid.columnGroupScope": "列操作范围：第 {p0}–{p1} 列，共 {p2} 列。新增命令在所选组的边界插入同样数量的空列；删除包含这些列的内容。",
+  "tableGrid.dragRowGroup": "移动第 {p0}–{p1} 行至第 {p2}–{p3} 行；松开执行，Esc 取消。合并格、表头或来源不合格时整次拒绝。",
+  "tableGrid.dragColumnGroup": "移动第 {p0}–{p1} 列至第 {p2}–{p3} 列；松开执行，Esc 取消。合并格或来源不合格时整次拒绝。",
   "capture.originalStatusChecked": "本次保存状态已查询，具体结果见上方。",
   "hostedLinks.personalRulesReadFailed": "个人链接规则未能读取，浏览器中的原记录已保留。本次未加载规则，也未应用偏好修改；请重新读取链接后重试。",
   "hostedLinks.personalRulesBrowserScope": "个人关系规则保存在此浏览器，按服务器、账号和笔记库分别保存。只显示当前获权范围内适用的规则。",
@@ -3133,9 +3159,7 @@ export const zhCN = {
   "tableGrid.insertColumnLeft": "左侧加列",
   "tableGrid.insertColumnRight": "右侧加列",
   "tableGrid.deleteSelectedRow": "删除所选行",
-  "tableGrid.deleteRequiresOneRow": "请用行把手选择一行，再执行删除；未拆分为多项操作。",
   "tableGrid.deleteSelectedColumn": "删除所选列",
-  "tableGrid.deleteRequiresOneColumn": "请用列把手选择一列，再执行删除；未拆分为多项操作。",
   "tableGrid.moveRowUp": "行上移",
   "tableGrid.moveRowDown": "行下移",
   "tableGrid.moveColumnLeft": "列左移",
@@ -10447,6 +10471,32 @@ export const zhCN = {
 
 export type MessageKey = keyof typeof zhCN;
 export interface MessageParamsMap {
+  "nodeLinks.copyStableLinks": {  };
+  "nodeLinks.libraryUnavailable": {  };
+  "nodeLinks.libraryIncomplete": {  };
+  "nodeLinks.selectionUnsupported": {  };
+  "nodeLinks.duplicateSelection": {  };
+  "nodeLinks.selectionChanged": {  };
+  "nodeLinks.resolutionChanged": {  };
+  "nodeLinks.copied": { count: number };
+  "nativeEditor.dragValue": { index: number };
+  "nativeEditor.dragKeyboardHelp": {  };
+  "nativeEditor.dragTarget": { from: number; to: number };
+  "nativeEditor.dragMoved": { from: number; to: number };
+  "nativeEditor.dragCancelled": {  };
+  "nodeContents.selectDisplayed": {  };
+  "nodeContents.clearSelection": {  };
+  "nodeContents.displayedSelectionActions": {  };
+  "nodeContents.selectionSummary": { shown: number; selected: number; eligible: number; retained: number };
+  "nodeContents.selectionScopeHelp": {  };
+  "nodeContents.selectionHelpTitle": {  };
+  "nodeContents.selectionPartialScope": {  };
+  "error.engine.tableEditor.insertionCountInvalid": {  };
+  "tableGrid.axisHandleHelp": {  };
+  "tableGrid.rowGroupScope": { p0: number; p1: number; p2: number };
+  "tableGrid.columnGroupScope": { p0: number; p1: number; p2: number };
+  "tableGrid.dragRowGroup": { p0: number; p1: number; p2: number; p3: number };
+  "tableGrid.dragColumnGroup": { p0: number; p1: number; p2: number; p3: number };
   "capture.originalStatusChecked": {  };
   "hostedLinks.personalRulesReadFailed": {  };
   "hostedLinks.personalRulesBrowserScope": {  };
@@ -13580,9 +13630,7 @@ export interface MessageParamsMap {
   "tableGrid.insertColumnLeft": {  };
   "tableGrid.insertColumnRight": {  };
   "tableGrid.deleteSelectedRow": {  };
-  "tableGrid.deleteRequiresOneRow": {  };
   "tableGrid.deleteSelectedColumn": {  };
-  "tableGrid.deleteRequiresOneColumn": {  };
   "tableGrid.moveRowUp": {  };
   "tableGrid.moveRowDown": {  };
   "tableGrid.moveColumnLeft": {  };
@@ -20892,6 +20940,65 @@ export interface MessageParamsMap {
   "error.api.data.periodSelectionRequired": {  };
 }
 export const messageParamTypes = {
+  "nodeLinks.copyStableLinks": {},
+  "nodeLinks.libraryUnavailable": {},
+  "nodeLinks.libraryIncomplete": {},
+  "nodeLinks.selectionUnsupported": {},
+  "nodeLinks.duplicateSelection": {},
+  "nodeLinks.selectionChanged": {},
+  "nodeLinks.resolutionChanged": {},
+  "nodeLinks.copied": {
+    "count": "integer"
+  },
+  "nativeEditor.dragValue": {
+    "index": "integer"
+  },
+  "nativeEditor.dragKeyboardHelp": {},
+  "nativeEditor.dragTarget": {
+    "from": "integer",
+    "to": "integer"
+  },
+  "nativeEditor.dragMoved": {
+    "from": "integer",
+    "to": "integer"
+  },
+  "nativeEditor.dragCancelled": {},
+  "nodeContents.selectDisplayed": {},
+  "nodeContents.clearSelection": {},
+  "nodeContents.displayedSelectionActions": {},
+  "nodeContents.selectionSummary": {
+    "shown": "integer",
+    "selected": "integer",
+    "eligible": "integer",
+    "retained": "integer"
+  },
+  "nodeContents.selectionScopeHelp": {},
+  "nodeContents.selectionHelpTitle": {},
+  "nodeContents.selectionPartialScope": {},
+  "error.engine.tableEditor.insertionCountInvalid": {},
+  "tableGrid.axisHandleHelp": {},
+  "tableGrid.rowGroupScope": {
+    "p0": "integer",
+    "p1": "integer",
+    "p2": "integer"
+  },
+  "tableGrid.columnGroupScope": {
+    "p0": "integer",
+    "p1": "integer",
+    "p2": "integer"
+  },
+  "tableGrid.dragRowGroup": {
+    "p0": "integer",
+    "p1": "integer",
+    "p2": "integer",
+    "p3": "integer"
+  },
+  "tableGrid.dragColumnGroup": {
+    "p0": "integer",
+    "p1": "integer",
+    "p2": "integer",
+    "p3": "integer"
+  },
   "capture.originalStatusChecked": {},
   "hostedLinks.personalRulesReadFailed": {},
   "hostedLinks.personalRulesBrowserScope": {},
@@ -24939,9 +25046,7 @@ export const messageParamTypes = {
   "tableGrid.insertColumnLeft": {},
   "tableGrid.insertColumnRight": {},
   "tableGrid.deleteSelectedRow": {},
-  "tableGrid.deleteRequiresOneRow": {},
   "tableGrid.deleteSelectedColumn": {},
-  "tableGrid.deleteRequiresOneColumn": {},
   "tableGrid.moveRowUp": {},
   "tableGrid.moveRowDown": {},
   "tableGrid.moveColumnLeft": {},
@@ -33244,6 +33349,32 @@ export const messageParamTypes = {
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
+  "nodeLinks.copyStableLinks": "Copy stable links to selected notes",
+  "nodeLinks.libraryUnavailable": "Open a library with a confirmed identity first.",
+  "nodeLinks.libraryIncomplete": "The library scan is incomplete; identities for the entire selection cannot be confirmed.",
+  "nodeLinks.selectionUnsupported": "Select admitted notes. Ordinary files, directories and items with identity problems cannot be copied as stable note links.",
+  "nodeLinks.duplicateSelection": "The selection contains duplicate note identities. Refresh and select again.",
+  "nodeLinks.selectionChanged": "The library or selection changed. Nothing was copied; select again.",
+  "nodeLinks.resolutionChanged": "A selected note's current identity could not be confirmed. Nothing was copied; refresh and retry.",
+  "nodeLinks.copied": "Copied stable links to {count} notes.",
+  "nativeEditor.dragValue": "Drag item {index}",
+  "nativeEditor.dragKeyboardHelp": "Drag the handle within this list, or use Move up, Move down or Target position.",
+  "nativeEditor.dragTarget": "Move item {from} to position {to}; release to reorder the list, or press Esc to cancel.",
+  "nativeEditor.dragMoved": "Moved item {from} to position {to}.",
+  "nativeEditor.dragCancelled": "Drag cancelled; the list order is unchanged.",
+  "nodeContents.selectDisplayed": "Select all eligible displayed items",
+  "nodeContents.clearSelection": "Clear selection",
+  "nodeContents.displayedSelectionActions": "Actions for selected displayed items",
+  "nodeContents.selectionSummary": "{shown} items displayed; {selected} selected, including {eligible} eligible for bulk actions. {retained} other selections are retained outside the display.",
+  "nodeContents.selectionScopeHelp": "Range selection and bulk actions use only eligible items in the current filter, expanded sections and displayed pages. Other selections are retained. Shift extends a range, Ctrl/⌘ toggles, and Shift+Space extends a range from the keyboard.",
+  "nodeContents.selectionHelpTitle": "Selection scope and shortcuts",
+  "nodeContents.selectionPartialScope": "This inventory scan is incomplete. Only items admitted to the current display can be shown or selected; this is not the complete folder or library. Actions still check each current identity and permission.",
+  "error.engine.tableEditor.insertionCountInvalid": "The number of rows or columns to insert must be a positive integer.",
+  "tableGrid.axisHandleHelp": "Click a row or column handle to select it; Shift-click another handle to extend the group. Drag a selected handle to move the whole group.",
+  "tableGrid.rowGroupScope": "Row operation scope: rows {p0}–{p1}, {p2} rows. Insert commands add the same number of blank rows at the group's boundary; delete removes these rows and their content.",
+  "tableGrid.columnGroupScope": "Column operation scope: columns {p0}–{p1}, {p2} columns. Insert commands add the same number of blank columns at the group's boundary; delete removes these columns and their content.",
+  "tableGrid.dragRowGroup": "Move rows {p0}–{p1} to rows {p2}–{p3}. Drop to apply or press Esc to cancel. Invalid merge, header or source boundaries reject the whole operation.",
+  "tableGrid.dragColumnGroup": "Move columns {p0}–{p1} to columns {p2}–{p3}. Drop to apply or press Esc to cancel. Invalid merge or source boundaries reject the whole operation.",
   "capture.originalStatusChecked": "This save’s status has been queried; see the result above.",
   "hostedLinks.personalRulesReadFailed": "Personal link rules could not be read. The browser's original record is retained. No rules or preference changes were applied; read the links again to retry.",
   "hostedLinks.personalRulesBrowserScope": "Personal relationship rules are saved in this browser separately for each server, account and library. Only rules applicable to the currently authorized scope are shown.",
@@ -36377,9 +36508,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "tableGrid.insertColumnLeft": "Insert column left",
   "tableGrid.insertColumnRight": "Insert column right",
   "tableGrid.deleteSelectedRow": "Delete selected row",
-  "tableGrid.deleteRequiresOneRow": "Select one row with its handle before deleting. The request was not split into multiple operations.",
   "tableGrid.deleteSelectedColumn": "Delete selected column",
-  "tableGrid.deleteRequiresOneColumn": "Select one column with its handle before deleting. The request was not split into multiple operations.",
   "tableGrid.moveRowUp": "Move row up",
   "tableGrid.moveRowDown": "Move row down",
   "tableGrid.moveColumnLeft": "Move column left",

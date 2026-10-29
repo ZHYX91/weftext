@@ -6,6 +6,169 @@
     "en-US"
   ],
   "messages": {
+    "nodeLinks.copyStableLinks": {
+      "zh-CN": "复制所选笔记的稳定链接",
+      "en-US": "Copy stable links to selected notes",
+      "params": {}
+    },
+    "nodeLinks.libraryUnavailable": {
+      "zh-CN": "请先打开身份明确的笔记库。",
+      "en-US": "Open a library with a confirmed identity first.",
+      "params": {}
+    },
+    "nodeLinks.libraryIncomplete": {
+      "zh-CN": "笔记库扫描尚未完整，无法确认整批笔记身份。",
+      "en-US": "The library scan is incomplete; identities for the entire selection cannot be confirmed.",
+      "params": {}
+    },
+    "nodeLinks.selectionUnsupported": {
+      "zh-CN": "请选择已接纳的笔记；普通文件、目录及身份异常项不能批量复制稳定链接。",
+      "en-US": "Select admitted notes. Ordinary files, directories and items with identity problems cannot be copied as stable note links.",
+      "params": {}
+    },
+    "nodeLinks.duplicateSelection": {
+      "zh-CN": "所选项包含重复笔记身份，请刷新并重新选择。",
+      "en-US": "The selection contains duplicate note identities. Refresh and select again.",
+      "params": {}
+    },
+    "nodeLinks.selectionChanged": {
+      "zh-CN": "笔记库或选择已变化，本次未复制。请重新选择。",
+      "en-US": "The library or selection changed. Nothing was copied; select again.",
+      "params": {}
+    },
+    "nodeLinks.resolutionChanged": {
+      "zh-CN": "无法确认所选笔记的当前身份，本次未复制。请刷新后重试。",
+      "en-US": "A selected note's current identity could not be confirmed. Nothing was copied; refresh and retry.",
+      "params": {}
+    },
+    "nodeLinks.copied": {
+      "zh-CN": "已复制 {count} 个笔记的稳定链接。",
+      "en-US": "Copied stable links to {count} notes.",
+      "params": {
+        "count": "integer"
+      }
+    },
+    "nativeEditor.dragValue": {
+      "zh-CN": "拖动第 {index} 项",
+      "en-US": "Drag item {index}",
+      "params": {
+        "index": "integer"
+      }
+    },
+    "nativeEditor.dragKeyboardHelp": {
+      "zh-CN": "拖动把手调整本列表；也可使用上移、下移或目标位置。",
+      "en-US": "Drag the handle within this list, or use Move up, Move down or Target position.",
+      "params": {}
+    },
+    "nativeEditor.dragTarget": {
+      "zh-CN": "将第 {from} 项移到第 {to} 项；松开调整列表，Esc 取消。",
+      "en-US": "Move item {from} to position {to}; release to reorder the list, or press Esc to cancel.",
+      "params": {
+        "from": "integer",
+        "to": "integer"
+      }
+    },
+    "nativeEditor.dragMoved": {
+      "zh-CN": "已把第 {from} 项移到第 {to} 项。",
+      "en-US": "Moved item {from} to position {to}.",
+      "params": {
+        "from": "integer",
+        "to": "integer"
+      }
+    },
+    "nativeEditor.dragCancelled": {
+      "zh-CN": "已取消拖动，列表顺序未改变。",
+      "en-US": "Drag cancelled; the list order is unchanged.",
+      "params": {}
+    },
+    "nodeContents.selectDisplayed": {
+      "zh-CN": "选择全部已显示合格项",
+      "en-US": "Select all eligible displayed items",
+      "params": {}
+    },
+    "nodeContents.clearSelection": {
+      "zh-CN": "清除选择",
+      "en-US": "Clear selection",
+      "params": {}
+    },
+    "nodeContents.displayedSelectionActions": {
+      "zh-CN": "已显示选中项操作",
+      "en-US": "Actions for selected displayed items",
+      "params": {}
+    },
+    "nodeContents.selectionSummary": {
+      "zh-CN": "已显示 {shown} 项，选中 {selected} 项，其中 {eligible} 项可批量操作；另保留 {retained} 个未显示的选择。",
+      "en-US": "{shown} items displayed; {selected} selected, including {eligible} eligible for bulk actions. {retained} other selections are retained outside the display.",
+      "params": {
+        "shown": "integer",
+        "selected": "integer",
+        "eligible": "integer",
+        "retained": "integer"
+      }
+    },
+    "nodeContents.selectionScopeHelp": {
+      "zh-CN": "范围选择和批量操作仅包括当前筛选、已展开分区及已显示页中的合格项；未显示选择保留。Shift 扩选，Ctrl／⌘ 切换，Shift+空格可用键盘扩选。",
+      "en-US": "Range selection and bulk actions use only eligible items in the current filter, expanded sections and displayed pages. Other selections are retained. Shift extends a range, Ctrl/⌘ toggles, and Shift+Space extends a range from the keyboard.",
+      "params": {}
+    },
+    "nodeContents.selectionHelpTitle": {
+      "zh-CN": "选择范围与快捷键",
+      "en-US": "Selection scope and shortcuts",
+      "params": {}
+    },
+    "nodeContents.selectionPartialScope": {
+      "zh-CN": "当前清单扫描不完整；这里只显示和选择已获准呈现的项目，不代表完整目录或全库。操作仍须逐项检查当前身份和权限。",
+      "en-US": "This inventory scan is incomplete. Only items admitted to the current display can be shown or selected; this is not the complete folder or library. Actions still check each current identity and permission.",
+      "params": {}
+    },
+    "error.engine.tableEditor.insertionCountInvalid": {
+      "zh-CN": "新增行列数量必须是正整数",
+      "en-US": "The number of rows or columns to insert must be a positive integer.",
+      "params": {}
+    },
+    "tableGrid.axisHandleHelp": {
+      "zh-CN": "单击行／列把手选择整行／列，按住 Shift 再单击可扩展成组；拖动已选把手会移动整组。",
+      "en-US": "Click a row or column handle to select it; Shift-click another handle to extend the group. Drag a selected handle to move the whole group.",
+      "params": {}
+    },
+    "tableGrid.rowGroupScope": {
+      "zh-CN": "行操作范围：第 {p0}–{p1} 行，共 {p2} 行。新增命令在所选组的边界插入同样数量的空行；删除包含这些行的内容。",
+      "en-US": "Row operation scope: rows {p0}–{p1}, {p2} rows. Insert commands add the same number of blank rows at the group's boundary; delete removes these rows and their content.",
+      "params": {
+        "p0": "integer",
+        "p1": "integer",
+        "p2": "integer"
+      }
+    },
+    "tableGrid.columnGroupScope": {
+      "zh-CN": "列操作范围：第 {p0}–{p1} 列，共 {p2} 列。新增命令在所选组的边界插入同样数量的空列；删除包含这些列的内容。",
+      "en-US": "Column operation scope: columns {p0}–{p1}, {p2} columns. Insert commands add the same number of blank columns at the group's boundary; delete removes these columns and their content.",
+      "params": {
+        "p0": "integer",
+        "p1": "integer",
+        "p2": "integer"
+      }
+    },
+    "tableGrid.dragRowGroup": {
+      "zh-CN": "移动第 {p0}–{p1} 行至第 {p2}–{p3} 行；松开执行，Esc 取消。合并格、表头或来源不合格时整次拒绝。",
+      "en-US": "Move rows {p0}–{p1} to rows {p2}–{p3}. Drop to apply or press Esc to cancel. Invalid merge, header or source boundaries reject the whole operation.",
+      "params": {
+        "p0": "integer",
+        "p1": "integer",
+        "p2": "integer",
+        "p3": "integer"
+      }
+    },
+    "tableGrid.dragColumnGroup": {
+      "zh-CN": "移动第 {p0}–{p1} 列至第 {p2}–{p3} 列；松开执行，Esc 取消。合并格或来源不合格时整次拒绝。",
+      "en-US": "Move columns {p0}–{p1} to columns {p2}–{p3}. Drop to apply or press Esc to cancel. Invalid merge or source boundaries reject the whole operation.",
+      "params": {
+        "p0": "integer",
+        "p1": "integer",
+        "p2": "integer",
+        "p3": "integer"
+      }
+    },
     "capture.originalStatusChecked": {
       "zh-CN": "本次保存状态已查询，具体结果见上方。",
       "en-US": "This save’s status has been queried; see the result above.",
@@ -16585,19 +16748,9 @@
       "en-US": "Delete selected row",
       "params": {}
     },
-    "tableGrid.deleteRequiresOneRow": {
-      "zh-CN": "请用行把手选择一行，再执行删除；未拆分为多项操作。",
-      "en-US": "Select one row with its handle before deleting. The request was not split into multiple operations.",
-      "params": {}
-    },
     "tableGrid.deleteSelectedColumn": {
       "zh-CN": "删除所选列",
       "en-US": "Delete selected column",
-      "params": {}
-    },
-    "tableGrid.deleteRequiresOneColumn": {
-      "zh-CN": "请用列把手选择一列，再执行删除；未拆分为多项操作。",
-      "en-US": "Select one column with its handle before deleting. The request was not split into multiple operations.",
       "params": {}
     },
     "tableGrid.moveRowUp": {

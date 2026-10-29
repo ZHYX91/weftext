@@ -279,7 +279,7 @@ class LocalFeatures(unittest.TestCase):
         source, mapping = self.edit(doc, source, 9, lambda m: {
             'kind': 'tableEdit', 'range': next(s['range'] for s in m['structures']
                                              if s['kind'] == 'table'),
-            'action': {'kind': 'moveRow', 'from': 0, 'to': 1}})
+            'action': {'kind': 'moveRows', 'start': 0, 'end': 0, 'to': 1}})
         table = next(s for s in mapping['structures'] if s['kind'] == 'table')
         self.assertEqual([c['raw'] for c in table['table']['cells']], ['丙', '丁', '甲', '乙🌿'])
         source, _ = self.edit(doc, source, 10, lambda m: {
@@ -299,7 +299,7 @@ class LocalFeatures(unittest.TestCase):
         self.assertFalse(table['table']['gridWritable'])
         self.assertTrue(table['table']['topologyWritable'])
         inserted = self.api('/api/edit', {**snap, 'intent': {'kind': 'tableEdit', 'range': table['range'],
-                                         'action': {'kind': 'insertRow', 'index': 0}}})
+                                         'action': {'kind': 'insertRows', 'index': 0, 'count': 1}}})
         logical = next(s for s in inserted['map']['structures']
                        if s['kind'] == 'table')['table']['logicalCells']
         self.assertEqual([(c['row'], c['column'], c['colspan']) for c in logical],
@@ -314,7 +314,7 @@ class LocalFeatures(unittest.TestCase):
         mapping = self.api('/api/editor-map', snap)
         table = next(s for s in mapping['structures'] if s['kind'] == 'table')
         self.api('/api/edit', {**snap, 'intent': {'kind': 'tableEdit', 'range': table['range'],
-                              'action': {'kind': 'insertRow', 'index': 0}}}, status=422)
+                              'action': {'kind': 'insertRows', 'index': 0, 'count': 1}}}, status=422)
         compiled = self.api('/api/render', {'sessionId': doc['sessionId'],
                             'source': dynamic_source, 'serial': 14})
         self.assertTrue(compiled['ok'], compiled['diagnostics'])

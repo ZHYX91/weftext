@@ -4,6 +4,7 @@ import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidi
 import { type WritingController, type WritingStructure, type WritingTable, type WritingTableCell, type WritingSnapshot, type TableAction } from "./writing";
 import { delimitedTable, flatClipboard, parseHTMLTable, writeDelimited, writeHTMLTable, type ClipboardTable } from "./table-clipboard";
 import { tableCaretAtPoint, verifiedTableCaretOffset } from "./table-cell-caret";
+import { selectedTableAxis, tableAxisDrop, type TableAxis, type TableAxisGroup } from "./table-axis";
 import { ChangeSet } from "@codemirror/state";
 export interface TableGridOptions {
     onError?(error: Error): void;
@@ -26,10 +27,12 @@ interface ClickCaret {
     text: string;
     offset: number | null;
 }
+interface CommandTarget { basis: WritingSnapshot; selection: number; }
 /** Personal selection only, keyed by a freshly verified native source hash. */
 const selections = new WeakMap<WritingController, Map<string, {
     anchor: Position;
     head: Position;
+    axisAnchor: { axis: TableAxis; index: number } | null;
 }>>();
 function node<K extends keyof HTMLElementTagNameMap>(tag: K, className = "", text?: UiText): HTMLElementTagNameMap[K] {
     const result = document.createElement(tag);
@@ -86,10 +89,10 @@ export function createTableGrid(controller: WritingController, initial: WritingS
     status.setAttribute("aria-live", "polite");
     notice.setAttribute("role", "status");
     const nativeSnapshot = controller.snapshot;
-    let current = initial, snapshot = controller.snapshot, rendered: WritingSnapshot | null = null, anchor: Position = { row: 0, column: 0 }, head = { ...anchor }, editing = false, updating = false, scheduled = false, localBusy = false, stale = false, dragging: {
-        axis: "row" | "column";
-        from: number;
-    } | null = null;
+    let current = initial, snapshot = controller.snapshot, rendered: WritingSnapshot | null = null, anchor: Position = { row: 0, column: 0 }, head = { ...anchor }, editing = false, updating = false, scheduled = false, localBusy = false, stale = false;
+    let axisAnchor: { axis: TableAxis; index: number } | null = null, handleIntent = 0;
+    let dragging: (TableAxisGroup & { target: CommandTarget; range: WritingStructure["range"]; length: number }) | null = null;
+    const axisTools: { button: HTMLButtonElement; axis: TableAxis }[] = [];
     let grid: HTMLTableElement, inputs = new Map<string, HTMLTextAreaElement>(), bindings: (() => void)[] = [];
     let selectionVersion = 0, pointerEngaged = false, disposed = false, wholeCellNotice = false, caretAtEndNotice = false;
     const selectionKey = () => `${controller.snapshot.sessionId}:${controller.map?.sourceHash}:${current.range.utf16From}:${current.range.utf16To}`;
@@ -98,6 +101,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
     if (remembered) {
         anchor = { ...remembered.anchor };
         head = { ...remembered.head };
+        axisAnchor = remembered.axisAnchor ? { ...remembered.axisAnchor } : null;
     }
     else if (sourceCell) {
         anchor = { row: sourceCell.row, column: sourceCell.column };
@@ -111,7 +115,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         }
         const key = selectionKey();
         saved.delete(key);
-        saved.set(key, { anchor: { ...anchor }, head: { ...head } });
+        saved.set(key, { anchor: { ...anchor }, head: { ...head }, axisAnchor: axisAnchor ? { ...axisAnchor } : null });
         if (saved.size > 128)
             saved.delete(saved.keys().next().value!);
     };
@@ -129,6 +133,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
     }, { capture: true });
     surface.addEventListener("click", () => queueMicrotask(() => { pointerEngaged = false; controller.surfaceStateChanged(); }));
     surface.addEventListener("pointercancel", () => { pointerEngaged = false; controller.surfaceStateChanged(); });
+    surface.addEventListener("keydown", event => { if (event.key === "Escape" && dragging && !event.isComposing && !controller.state.composing) { event.preventDefault(); clearDrag(); } }, { capture: true });
     const key = (at: Position) => `${at.row}:${at.column}`;
     const table = () => current.table!;
     const available = () => table().topologyWritable;
@@ -161,6 +166,8 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         return true;
     };
     const selectedRange = () => tableRectangle(table(), anchor, head);
+    const selectedAxis = (axis: TableAxis) => selectedTableAxis(table(), selectedRange(), head, axis);
+    const axisScope = (axis: TableAxis) => { const group = selectedAxis(axis); return displayMessage(axis === "row" ? "tableGrid.rowGroupScope" : "tableGrid.columnGroupScope", { p0: group.start + 1, p1: group.end + 1, p2: group.end - group.start + 1 }); };
     const paintSelection = () => {
         if (!grid)
             return;
@@ -173,8 +180,14 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         }
         const active = tableCellAt(table(), head);
         grid.setAttribute("aria-activedescendant", active ? `${grid.id}-${key(active)}` : "");
+        for (const handle of grid.querySelectorAll<HTMLButtonElement>("[data-table-axis]")) {
+            const axis = handle.dataset.tableAxis as TableAxis, index = Number(handle.dataset.tableIndex), group = selectedAxis(axis);
+            const complete = axis === "row" ? range.left === 0 && range.right === table().columns - 1 : range.top === 0 && range.bottom === table().rows - 1;
+            handle.setAttribute("aria-pressed", String(complete && group.start <= index && index <= group.end));
+        }
+        for (const tool of axisTools) { setUiAttr(tool.button, "title", axisScope(tool.axis)); setUiAttr(tool.button, "aria-description", axisScope(tool.axis)); }
         rememberSelection();
-        setUiText(status, joinUiText([displayMessage("tableGrid.selectionStatus", { p0: table().rows, p1: table().columns, p2: range.top + 1, p3: range.bottom + 1, p4: range.left + 1, p5: range.right + 1, p6: uiDisplayParameter(editing ? uiMessage("tableGrid.cellEditingHelp") : uiMessage("tableGrid.gridNavigationHelp")), p7: uiDisplayParameter(available() ? uiMessage("tableGrid.appendRowHelp") : displayMessage("tableGrid.structureReadOnly", { p0: uiDisplayParameter(tableUnavailableReason(table())) })) }), editing && wholeCellNotice ? uiMessage("tableGrid.explicitWholeCellSelectionNotice") : editing && caretAtEndNotice ? uiMessage("tableGrid.caretAtEndNotice") : ""]));
+        setUiText(status, joinUiText([displayMessage("tableGrid.selectionStatus", { p0: table().rows, p1: table().columns, p2: range.top + 1, p3: range.bottom + 1, p4: range.left + 1, p5: range.right + 1, p6: uiDisplayParameter(editing ? uiMessage("tableGrid.cellEditingHelp") : uiMessage("tableGrid.gridNavigationHelp")), p7: uiDisplayParameter(available() ? uiMessage("tableGrid.appendRowHelp") : displayMessage("tableGrid.structureReadOnly", { p0: uiDisplayParameter(tableUnavailableReason(table())) })) }), !editing ? uiMessage("tableGrid.axisHandleHelp") : "", !editing && axisAnchor ? axisScope(axisAnchor.axis) : "", editing && wholeCellNotice ? uiMessage("tableGrid.explicitWholeCellSelectionNotice") : editing && caretAtEndNotice ? uiMessage("tableGrid.caretAtEndNotice") : ""]));
     };
     const select = (position: Position, extend = false, focus = true) => {
         const cell = tableCellAt(table(), position);
@@ -183,6 +196,8 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         head = { row: cell.row, column: cell.column };
         if (!extend)
             anchor = { ...head };
+        axisAnchor = null;
+        handleIntent++;
         selectionVersion++;
         editing = false;
         wholeCellNotice = false;
@@ -227,7 +242,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
             throw new UiError(uiMessage("tableGrid.proposalExpired"));
         return { basis: controller.snapshot, selection };
     };
-    const command = async (change: TableAction, next: Position = head, expected?: Awaited<ReturnType<typeof prepareCurrent>>) => {
+    const command = async (change: TableAction, next: Position = head, expected?: CommandTarget, restoreAxis?: TableAxisGroup) => {
         const selection = selectionVersion;
         await settle();
         const target = expected ?? { basis: controller.snapshot, selection };
@@ -241,7 +256,6 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         requireTarget();
         if (!available())
             throw new UiError(tableUnavailableReason(table(), uiMessage("tableGrid.structureChangeUnsafe")));
-        const beforeRange = selectedRange(), rowSelected = beforeRange.top === beforeRange.bottom && beforeRange.left === 0 && beforeRange.right === table().columns - 1, columnSelected = beforeRange.left === beforeRange.right && beforeRange.top === 0 && beforeRange.bottom === table().rows - 1;
         editing = false;
         grid.focus({ preventScroll: true });
         await controller.execute(() => { requireTarget(); return { kind: "tableEdit", range: current.range, action: change }; });
@@ -252,16 +266,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         selectionVersion++;
         render(true);
         select(head);
-        if (change.kind === "moveRow" && rowSelected) {
-            anchor = { row: next.row, column: 0 };
-            head = { row: next.row, column: table().columns - 1 };
-            paintSelection();
-        }
-        else if (change.kind === "moveColumn" && columnSelected) {
-            anchor = { row: 0, column: next.column };
-            head = { row: table().rows - 1, column: next.column };
-            paintSelection();
-        }
+        if (restoreAxis) selectAxis(restoreAxis.axis, restoreAxis.start, restoreAxis.end);
     };
     const edit = async (position = head, selectWhole = false, click?: ClickCaret) => {
         await settle();
@@ -276,6 +281,8 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         }
         anchor = { row: cell.row, column: cell.column };
         head = { ...anchor };
+        axisAnchor = null;
+        handleIntent++;
         selectionVersion++;
         editing = true;
         wholeCellNotice = selectWhole;
@@ -293,6 +300,43 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         paintSelection();
     };
     const finishText = async () => { await settle(); editing = false; grid.focus({ preventScroll: true }); render(true); paintSelection(); };
+    function selectAxis(axis: TableAxis, start: number, end: number, focusHandle = false): void {
+        const length = axis === "row" ? table().rows : table().columns;
+        if (start < 0 || end < 0 || start >= length || end >= length) return;
+        axisAnchor = { axis, index: start };
+        anchor = axis === "row" ? { row: start, column: 0 } : { row: 0, column: start };
+        head = axis === "row" ? { row: end, column: table().columns - 1 } : { row: table().rows - 1, column: end };
+        selectionVersion++;
+        handleIntent++;
+        const cell = tableCellAt(table(), head);
+        if (cell) controller.selectRange(cell.body);
+        paintSelection();
+        if (focusHandle) grid.querySelector<HTMLButtonElement>(`[data-table-axis="${axis}"][data-table-index="${end}"]`)?.focus({ preventScroll: true });
+        else grid.focus({ preventScroll: true });
+        grid.querySelector<HTMLElement>(`[data-cell-row="${head.row}"][data-cell-column="${head.column}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    }
+    async function selectHandle(axis: TableAxis, index: number, extend: boolean, focusHandle = false): Promise<void> {
+        const intent = ++handleIntent, selection = selectionVersion, origin = extend && axisAnchor?.axis === axis ? axisAnchor.index : index;
+        await finishText();
+        if (intent !== handleIntent || selection !== selectionVersion) return;
+        requireCurrent();
+        selectAxis(axis, origin, index, focusHandle);
+    }
+    function setupHandle(button: HTMLButtonElement, axis: TableAxis, index: number): void {
+        button.dataset.tableAxis = axis;
+        button.dataset.tableIndex = String(index);
+        setUiAttr(button, "title", uiMessage("tableGrid.axisHandleHelp"));
+        setUiAttr(button, "aria-description", uiMessage("tableGrid.axisHandleHelp"));
+        button.onclick = event => run(() => selectHandle(axis, index, event.shiftKey));
+        button.onkeydown = event => {
+            if (event.isComposing || event.keyCode === 229 || controller.state.composing) return;
+            const delta = axis === "row" ? event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : 0 : event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : 0;
+            if (!event.shiftKey || !delta) return;
+            event.preventDefault();
+            run(() => selectHandle(axis, index + delta, true, true));
+        };
+        setupDrag(button, axis, index);
+    }
     const go = async (direction: "previous" | "next" | "up" | "down", enter = false) => {
         await finishText();
         const target = adjacentTableCell(table(), head, direction);
@@ -304,7 +348,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         }
         if (enter && direction === "down") {
             const next = { row: table().rows, column: head.column };
-            await command({ kind: "insertRow", index: table().rows }, next);
+            await command({ kind: "insertRows", index: table().rows, count: 1 }, next);
             await edit(next);
         }
         else if (direction === "next" || direction === "previous") {
@@ -342,19 +386,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
             const th = node("th", "table-handle"), button = node("button", "writing-button", `${column + 1}`);
             button.type = "button";
             setUiAttr(button, "aria-label", displayMessage("tableGrid.selectColumn", { p0: column + 1 }));
-            button.onclick = () => {
-                void finishText().then(() => {
-                    anchor = { row: 0, column };
-                    head = { row: table().rows - 1, column };
-                    selectionVersion++;
-                    const cell = tableCellAt(table(), head);
-                    if (cell)
-                        controller.selectRange(cell.body);
-                    paintSelection();
-                    grid.focus();
-                }).catch(report);
-            };
-            setupDrag(button, "column", column);
+            setupHandle(button, "column", column);
             th.append(button);
             header.append(th);
         }
@@ -363,19 +395,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
             const tr = node("tr"), handle = node("th", "table-handle"), button = node("button", "writing-button", `${row + 1}`);
             button.type = "button";
             setUiAttr(button, "aria-label", displayMessage("tableGrid.selectRow", { p0: row + 1 }));
-            button.onclick = () => {
-                void finishText().then(() => {
-                    anchor = { row, column: 0 };
-                    head = { row, column: table().columns - 1 };
-                    selectionVersion++;
-                    const cell = tableCellAt(table(), head);
-                    if (cell)
-                        controller.selectRange(cell.body);
-                    paintSelection();
-                    grid.focus();
-                }).catch(report);
-            };
-            setupDrag(button, "row", row);
+            setupHandle(button, "row", row);
             handle.append(button);
             tr.append(handle);
             for (const cell of cells.filter(item => item.row === row).sort((a, b) => a.column - b.column)) {
@@ -495,8 +515,7 @@ export function createTableGrid(controller: WritingController, initial: WritingS
                 run(() => command({ kind: "clearRange", ...selectedRange() }));
             }
             else if (event.key === "Escape") {
-                dragging = null;
-                surface.querySelectorAll(".table-drop-target").forEach(item => item.classList.remove("table-drop-target"));
+                clearDrag();
             }
             else if ((event.ctrlKey || event.metaKey) && ["z", "y"].includes(event.key.toLowerCase())) {
                 event.preventDefault();
@@ -533,35 +552,64 @@ export function createTableGrid(controller: WritingController, initial: WritingS
             run(() => pastePreview(html ? parseHTMLTable(html) : delimitedTable(text ?? "", "\t")));
         };
     }
-    function setupDrag(button: HTMLButtonElement, axis: "row" | "column", index: number): void {
+    function clearDropTargets(): void {
+        surface.querySelectorAll<HTMLElement>(".table-drop-target").forEach(item => { item.classList.remove("table-drop-target"); delete item.dataset.tableDropEdge; });
+    }
+    function clearDrag(): void { dragging = null; clearDropTargets(); setUiText(notice, ""); }
+    function dragCurrent(origin: NonNullable<typeof dragging>): boolean {
+        return surface.isConnected && !stale && !controller.state.composing && !controller.state.busy
+            && controller.isSnapshotCurrent(origin.target.basis) && selectionVersion === origin.target.selection
+            && current.range.utf16From === origin.range.utf16From && current.range.utf16To === origin.range.utf16To && current.range.raw === origin.range.raw;
+    }
+    function setupDrag(button: HTMLButtonElement, axis: TableAxis, index: number): void {
         button.draggable = true;
         button.ondragstart = event => {
-            if (controller.state.composing || !available()) {
+            if (editing || localBusy || controller.state.pending || controller.state.busy || controller.state.composing || !available()) {
                 event.preventDefault();
                 return;
             }
-            dragging = { axis, from: index };
-            event.dataTransfer?.setData("text/plain", `${axis}:${index}`);
+            try { requireCurrent(); }
+            catch (failure) { event.preventDefault(); report(failure); return; }
+            let group = selectedAxis(axis);
+            const range = selectedRange(), whole = axis === "row" ? range.left === 0 && range.right === table().columns - 1 : range.top === 0 && range.bottom === table().rows - 1;
+            if (!whole || index < group.start || index > group.end) {
+                selectAxis(axis, index, index);
+                group = selectedAxis(axis);
+            }
+            dragging = { ...group, target: { basis: controller.snapshot, selection: selectionVersion }, range: { ...current.range }, length: axis === "row" ? table().rows : table().columns };
+            event.dataTransfer?.setData("text/plain", `${axis}:${group.start}:${group.end}`);
             if (event.dataTransfer)
                 event.dataTransfer.effectAllowed = "move";
         };
         button.ondragover = event => {
-            if (dragging?.axis !== axis)
+            const origin = dragging;
+            if (!origin || origin.axis !== axis)
                 return;
+            if (!dragCurrent(origin)) { clearDrag(); report(new UiError(uiMessage("tableGrid.sourceChanged"))); return; }
+            const destination = tableAxisDrop(origin, index, origin.length);
+            clearDropTargets();
+            if (!destination) return;
             event.preventDefault();
             button.classList.add("table-drop-target");
+            button.dataset.tableDropEdge = destination.edge;
+            setUiText(notice, displayMessage(axis === "row" ? "tableGrid.dragRowGroup" : "tableGrid.dragColumnGroup", { p0: origin.start + 1, p1: origin.end + 1, p2: destination.to + 1, p3: destination.to + origin.end - origin.start + 1 }));
         };
-        button.ondragleave = () => button.classList.remove("table-drop-target");
+        button.ondragleave = () => { button.classList.remove("table-drop-target"); delete button.dataset.tableDropEdge; };
         button.ondrop = event => {
             event.preventDefault();
-            button.classList.remove("table-drop-target");
             const origin = dragging;
-            dragging = null;
-            if (!origin || origin.axis !== axis || origin.from === index)
+            clearDrag();
+            if (!origin || origin.axis !== axis)
                 return;
-            run(() => command({ kind: axis === "row" ? "moveRow" : "moveColumn", from: origin.from, to: index }, axis === "row" ? { row: index, column: head.column } : { row: head.row, column: index }));
+            run(async () => {
+                if (!dragCurrent(origin)) throw new UiError(uiMessage("tableGrid.sourceChanged"));
+                const destination = tableAxisDrop(origin, index, origin.length);
+                if (!destination) return;
+                const restored = { axis, start: destination.to, end: destination.to + origin.end - origin.start };
+                await command({ kind: axis === "row" ? "moveRows" : "moveColumns", start: origin.start, end: origin.end, to: destination.to }, axis === "row" ? { row: restored.start, column: head.column } : { row: head.row, column: restored.start }, origin.target, restored);
+            });
         };
-        button.ondragend = () => { dragging = null; surface.querySelectorAll(".table-drop-target").forEach(item => item.classList.remove("table-drop-target")); };
+        button.ondragend = clearDrag;
     }
     function exportSelection(whole: boolean): ClipboardTable {
         const range = whole ? { top: 0, left: 0, bottom: table().rows - 1, right: table().columns - 1 } : selectedRange();
@@ -646,30 +694,29 @@ export function createTableGrid(controller: WritingController, initial: WritingS
         await pastePreview(delimitedTable(text, "\t"));
     }
     const tool = (label: UiText, operation: () => Promise<void> | void, description?: UiText) => { const button = node("button", "writing-button", label); button.type = "button"; if (description) { setUiAttr(button, "title", description); setUiAttr(button, "aria-description", description); } button.onclick = () => run(operation); tools.append(button); return button; };
+    const axisTool = (label: UiText, axis: TableAxis, operation: () => Promise<void>) => { const button = tool(label, operation); axisTools.push({ button, axis }); return button; };
+    const insertAxis = async (axis: TableAxis, after: boolean) => {
+        const target = await prepareCurrent(), group = selectedAxis(axis), count = group.end - group.start + 1, index = after ? group.end + 1 : group.start;
+        await command({ kind: axis === "row" ? "insertRows" : "insertColumns", index, count }, axis === "row" ? { row: index, column: head.column } : { row: head.row, column: index }, target, { axis, start: index, end: index + count - 1 });
+    };
+    const removeAxis = async (axis: TableAxis) => {
+        const target = await prepareCurrent(), group = selectedAxis(axis), length = axis === "row" ? table().rows : table().columns, next = Math.max(0, Math.min(group.start, length - (group.end - group.start + 1) - 1));
+        await command({ kind: axis === "row" ? "removeRows" : "removeColumns", start: group.start, end: group.end }, axis === "row" ? { row: next, column: head.column } : { row: head.row, column: next }, target, { axis, start: next, end: next });
+    };
+    const moveAxis = async (axis: TableAxis, delta: number) => {
+        const target = await prepareCurrent(), group = selectedAxis(axis), to = group.start + delta, length = axis === "row" ? table().rows : table().columns;
+        if (to < 0 || to + group.end - group.start >= length) throw new UiError(uiMessage("tableGrid.moveAtBoundary"));
+        await command({ kind: axis === "row" ? "moveRows" : "moveColumns", start: group.start, end: group.end, to }, axis === "row" ? { row: to, column: head.column } : { row: head.row, column: to }, target, { axis, start: to, end: to + group.end - group.start });
+    };
     tool(uiMessage("tableGrid.selectCellText"), () => edit(head, true));
-    tool(uiMessage("tableGrid.insertRowAbove"), () => command({ kind: "insertRow", index: selectedRange().top }));
-    tool(uiMessage("tableGrid.insertRowBelow"), () => command({ kind: "insertRow", index: selectedRange().bottom + 1 }));
-    tool(uiMessage("tableGrid.insertColumnLeft"), () => command({ kind: "insertColumn", index: selectedRange().left }));
-    tool(uiMessage("tableGrid.insertColumnRight"), () => command({ kind: "insertColumn", index: selectedRange().right + 1 }));
-    tool(uiMessage("tableGrid.deleteSelectedRow"), async () => {
-        const range = selectedRange();
-        if (range.top !== range.bottom)
-            throw new UiError(uiMessage("tableGrid.deleteRequiresOneRow"));
-        await command({ kind: "removeRow", index: range.top }, { row: Math.max(0, range.top - 1), column: head.column });
-    });
-    tool(uiMessage("tableGrid.deleteSelectedColumn"), async () => {
-        const range = selectedRange();
-        if (range.left !== range.right)
-            throw new UiError(uiMessage("tableGrid.deleteRequiresOneColumn"));
-        await command({ kind: "removeColumn", index: range.left }, { row: head.row, column: Math.max(0, range.left - 1) });
-    });
+    axisTool(uiMessage("tableGrid.insertRowAbove"), "row", () => insertAxis("row", false));
+    axisTool(uiMessage("tableGrid.insertRowBelow"), "row", () => insertAxis("row", true));
+    axisTool(uiMessage("tableGrid.insertColumnLeft"), "column", () => insertAxis("column", false));
+    axisTool(uiMessage("tableGrid.insertColumnRight"), "column", () => insertAxis("column", true));
+    axisTool(uiMessage("tableGrid.deleteSelectedRow"), "row", () => removeAxis("row"));
+    axisTool(uiMessage("tableGrid.deleteSelectedColumn"), "column", () => removeAxis("column"));
     for (const [label, axis, delta] of [[uiMessage("tableGrid.moveRowUp"), "row", -1], [uiMessage("tableGrid.moveRowDown"), "row", 1], [uiMessage("tableGrid.moveColumnLeft"), "column", -1], [uiMessage("tableGrid.moveColumnRight"), "column", 1]] as const)
-        tool(label, async () => {
-            const from = axis === "row" ? head.row : head.column, to = from + delta, bound = axis === "row" ? table().rows : table().columns;
-            if (to < 0 || to >= bound)
-                throw new UiError(uiMessage("tableGrid.moveAtBoundary"));
-            await command({ kind: axis === "row" ? "moveRow" : "moveColumn", from, to }, axis === "row" ? { row: to, column: head.column } : { row: head.row, column: to });
-        });
+        axisTool(label, axis, () => moveAxis(axis, delta));
     tool(uiMessage("tableGrid.mergeSelectedCells"), async () => {
         const target = await prepareCurrent();
         const range = selectedRange();

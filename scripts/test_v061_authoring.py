@@ -235,14 +235,14 @@ class RetainedHTTP(unittest.TestCase):
             basis, mapped = self.observe(server, doc, source, serial, token)
             return self.topology(mapped, rows, columns)
 
-        info = action({'kind': 'moveRow', 'from': 0, 'to': 1}, 2, 2)
+        info = action({'kind': 'moveRows', 'start': 0, 'end': 0, 'to': 1}, 2, 2)
         self.assertEqual([cell['body']['raw'] for cell in info['logicalCells']], ['中文😀', '', 'same', 'same'])
-        info = action({'kind': 'moveColumn', 'from': 0, 'to': 1}, 2, 2)
+        info = action({'kind': 'moveColumns', 'start': 0, 'end': 0, 'to': 1}, 2, 2)
         self.assertEqual([cell['body']['raw'] for cell in info['logicalCells']], ['', '中文😀', 'same', 'same'])
-        action({'kind': 'insertRow', 'index': 1}, 3, 2)
-        action({'kind': 'insertColumn', 'index': 1}, 3, 3)
-        action({'kind': 'removeRow', 'index': 1}, 2, 3)
-        action({'kind': 'removeColumn', 'index': 1}, 2, 2)
+        action({'kind': 'insertRows', 'index': 1, 'count': 1}, 3, 2)
+        action({'kind': 'insertColumns', 'index': 1, 'count': 1}, 3, 3)
+        action({'kind': 'removeRows', 'start': 1, 'end': 1}, 2, 3)
+        action({'kind': 'removeColumns', 'start': 1, 'end': 1}, 2, 2)
         info = action({'kind': 'clearRange', 'top': 1, 'left': 0, 'bottom': 1, 'right': 1}, 2, 2)
         self.assertEqual([cell['body']['raw'] for cell in info['logicalCells']][2:], ['', ''])
         info = action({'kind': 'pasteRange', 'row': 0, 'column': 0,
@@ -655,7 +655,7 @@ class RetainedHTTP(unittest.TestCase):
         raw_identity = physical_identity(raw)
         sender_basis, sender_map = self.observe(a, sender, source, 1)
         updated = self.propose(a, sender_basis, sender_map, {'kind': 'tableEdit', 'range': self.table(sender_map)['range'],
-                               'action': {'kind': 'moveRow', 'from': 0, 'to': 1}})['source']
+                               'action': {'kind': 'moveRows', 'start': 0, 'end': 0, 'to': 1}})['source']
         updated = updated.replace('\n#table(', '\nSynchronized prefix moves the exact source range\n\n#table(', 1)
         self.observe(a, sender, updated, 2)
         self.save_exact(a, sender, updated)

@@ -5,7 +5,7 @@ import type { Inventory, InventoryEntry } from "./types";
 import { nodeSourceHash } from "./hosted-navigation-state";
 import { mountListThumbnail, type ListPreview } from "./list-thumbnail";
 import type { MediaResource } from "./media-viewer";
-import { contentsActionEntry, contentsPreferenceKey, contentsSection, directContentsEntries, decodeAuthoredOrder, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, isTerminalOrderStatus, movedSibling, type AuthoredOrder, type ContentsPreference, type ContentsSection, type OrderPlan, type PendingOrder } from "./node-contents-state";
+import { changedContentsSelection, contentsActionEntry, contentsBatchSelectable, contentsPreferenceKey, contentsSection, directContentsEntries, decodeAuthoredOrder, decodeContentsPreference, decodePendingOrder, defaultContentsPreference, insertedSibling, isTerminalOrderStatus, movedSibling, type AuthoredOrder, type ContentsPreference, type ContentsSection, type OrderPlan, type PendingOrder } from "./node-contents-state";
 import { canonicalNodeSources } from "./file-tree";
 import "./node-contents.css";
 type Request = <T>(path: string, body?: unknown) => Promise<T>;
@@ -20,7 +20,7 @@ export interface ContentsHost {
     readBlob(path: string, body: unknown): Promise<Blob>;
     open(entry: InventoryEntry): void | Promise<void>;
     browse(path: string | null): void;
-    menu(entries: InventoryEntry[], folder?: string): void;
+    menu(entries: InventoryEntry[], folder?: string, isSelectionCurrent?: () => boolean): void;
     preview(entries: InventoryEntry[]): void | Promise<void>;
     resource?(entry: InventoryEntry): Promise<ContentsResource | null>;
     changed(): Promise<void>;
@@ -36,6 +36,8 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
 } {
     let disposed = false, busy = false, order: AuthoredOrder | undefined, pending: PendingOrder | undefined, parentRef: string | undefined;
     let preference = defaultContentsPreference(), persistenceError: UiText = "", dragging: string | undefined, recoveryBlocked = false;
+    let displayed: InventoryEntry[] = [], selectionAnchor: string | undefined;
+    let selectionVersion = 0, displayVersion = 0, displayFingerprint = "";
     const dialogs = new Set<HTMLDialogElement>();
     let thumbnails: {
         dispose(): void;
@@ -149,11 +151,47 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
     controls.append(density);
     controls.append(button(uiMessage("nodeContents.resetPreferences"), () => { preference = defaultContentsPreference(); retainPreference(); renderRows(false); renderOrder(); }));
     const actionEntry = (entry: InventoryEntry) => contentsActionEntry(entry, canonicalSources);
-    const selectedAction = button(uiMessage("nodeContents.selectedActions"), () => host.menu(visible.filter(entry => selections.has(entry.path)).map(actionEntry)));
-    panel.replaceChildren(header, controls, notice, selectedAction, orderHost, rows);
+    const eligible = (entry: InventoryEntry) => contentsBatchSelectable(actionEntry(entry));
+    const selectedDisplayed = () => displayed.filter(entry => selections.has(entry.path) && eligible(entry));
+    const selectionControls = el("div", "", "node-contents-controls node-selection-controls");
+    const selectionFingerprint = () => JSON.stringify([...selections].sort());
+    const captureSelectionScope = (): (() => boolean) => {
+        const selection = selectionVersion, display = displayVersion, paths = selectionFingerprint();
+        return () => !disposed && selectionVersion === selection && displayVersion === display && selectionFingerprint() === paths;
+    };
+    const selectedAction = button(uiMessage("nodeContents.displayedSelectionActions"), () => host.menu(selectedDisplayed().map(actionEntry), undefined, captureSelectionScope()));
+    const selectDisplayed = button(uiMessage("nodeContents.selectDisplayed"), () => {
+        selectionVersion++;
+        for (const entry of displayed) if (eligible(entry)) selections.add(entry.path);
+        selectionAnchor = displayed.find(eligible)?.path;
+        updateSelection();
+    });
+    const clearSelection = button(uiMessage("nodeContents.clearSelection"), () => { selectionVersion++; selections.clear(); selectionAnchor = undefined; updateSelection(); });
+    const selectionSummary = el("p", "", "node-contents-notice");
+    selectionSummary.dataset.controlRole = "selection-summary";
+    selectionSummary.setAttribute("role", "status");
+    selectionSummary.setAttribute("aria-live", "polite");
+    const selectionHelp = el("details", "", "node-selection-help");
+    selectionHelp.append(el("summary", uiMessage("nodeContents.selectionHelpTitle")), el("p", uiMessage("nodeContents.selectionScopeHelp"), "node-contents-notice"));
+    selectionControls.append(selectDisplayed, clearSelection, selectedAction, selectionSummary, selectionHelp);
+    if (!inventory.complete) selectionControls.append(el("p", uiMessage("nodeContents.selectionPartialScope"), "node-contents-notice"));
+    panel.replaceChildren(header, controls, notice, selectionControls, orderHost, rows);
     function updateSelection() {
         rows.querySelectorAll<HTMLElement>("[data-entry-path]").forEach(row => { const selected = selections.has(row.dataset.entryPath!); row.setAttribute("aria-selected", String(selected)); row.querySelector<HTMLInputElement>("input")!.checked = selected; });
-        selectedAction.disabled = !visible.some(entry => selections.has(entry.path));
+        const shown = new Set(displayed.map(entry => entry.path)), selected = displayed.filter(entry => selections.has(entry.path)).length;
+        selectedAction.disabled = !selectedDisplayed().length;
+        selectDisplayed.disabled = !displayed.some(eligible);
+        clearSelection.disabled = selections.size === 0;
+        setUiText(selectionSummary, displayMessage("nodeContents.selectionSummary", { shown: displayed.length, selected, eligible: selectedDisplayed().length, retained: [...selections].filter(path => !shown.has(path)).length }));
+    }
+    function select(entry: InventoryEntry, event: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }, checkbox = false): void {
+        selectionVersion++;
+        const changed = changedContentsSelection(selections, displayed.map(row => ({ path: row.path, eligible: eligible(row) })), entry.path, selectionAnchor,
+            { range: event.shiftKey, additive: event.ctrlKey || event.metaKey || checkbox && !event.shiftKey, toggle: !event.shiftKey && (checkbox || event.ctrlKey || event.metaKey) });
+        selections.clear();
+        changed.selected.forEach(path => selections.add(path));
+        selectionAnchor = changed.anchor;
+        updateSelection();
     }
     function renderRows(preserveScroll = true) {
         if (disposed)
@@ -166,6 +204,7 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
         if (preserveScroll) for (const body of rows.querySelectorAll<HTMLElement>("[data-section-body]"))
             preference.sections[body.dataset.sectionBody as ContentsSection].scroll = body.scrollTop;
         rows.replaceChildren();
+        displayed = [];
         sorting.value = preference.sort;
         density.value = preference.density;
         controls.querySelectorAll<HTMLInputElement>("input[type=checkbox]").forEach(check => { check.checked = preference[check.dataset.preference as "thumbnails" | "summaries"]; });
@@ -202,6 +241,7 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
         for (const entry of entries) {
             const section = contentsSection(entry);
             if (++sectionSeen[section] > preference.sections[section].limit) continue;
+            if (!preference.sections[section].collapsed) displayed.push(entry);
             const row = el("div", "", "node-content-row");
             row.tabIndex = 0;
             row.dataset.entryPath = entry.path;
@@ -209,7 +249,7 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
             check.dataset.controlRole = "selection";
             check.type = "checkbox";
             setUiAttr(check, "aria-label", displayMessage("nodeContents.selectEntryLabel", { p0: uiDisplayParameter(entry.name) }));
-            check.onchange = () => { check.checked ? selections.add(entry.path) : selections.delete(entry.path); updateSelection(); };
+            check.onclick = event => select(entry, event, true);
             const actionTarget = actionEntry(entry), paired = actionTarget !== entry;
             const open = () => {
                 if (entry.kind !== "directory" && !entry.path.toLowerCase().endsWith(".typ")) {
@@ -217,29 +257,46 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
                 }
                 return host.open(actionTarget);
             }, identityLabel = entry.identityStatus === "bindingConflict" ? uiMessage("shell.fileStatusInvalidIdentity") : entry.identityStatus,
-                title = button(() => `${uiTextValue(entry.title || entry.name)} · ${uiTextValue(paired || entry.identityStatus === "admitted" ? uiMessage("queryColumn.note") : entry.kind === "directory" ? uiMessage("nodeContents.directoryKind") : identityLabel)}`, () => { selections.clear(); selections.add(entry.path); updateSelection(); });
+                title = button(() => `${uiTextValue(entry.title || entry.name)} · ${uiTextValue(paired || entry.identityStatus === "admitted" ? uiMessage("queryColumn.note") : entry.kind === "directory" ? uiMessage("nodeContents.directoryKind") : identityLabel)}`, () => {});
             title.dataset.controlRole = "title";
+            title.onclick = event => select(entry, event);
             if (paired) {
                 // A healthy node opens its note in one click. The second click
                 // of a native double-click must not dispatch a second open.
                 title.onclick = event => {
-                    if (event.detail > 1) return;
-                    selections.clear(); selections.add(entry.path); updateSelection();
+                    if (event.detail > 1 && !event.shiftKey && !event.ctrlKey && !event.metaKey) return;
+                    select(entry, event);
+                    if (event.shiftKey || event.ctrlKey || event.metaKey) return;
                     void Promise.resolve().then(open).catch(error => host.notify(error instanceof Error ? errorUiText(error) : String(error)));
                 };
-            } else title.ondblclick = () => { void Promise.resolve(open()).catch(error => host.notify(String(error))); };
+            } else title.ondblclick = event => { if (!event.shiftKey && !event.ctrlKey && !event.metaKey) void Promise.resolve(open()).catch(error => host.notify(String(error))); };
             const menu = () => {
                 if (!selections.has(entry.path)) {
+                    selectionVersion++;
                     selections.clear();
                     selections.add(entry.path);
+                    selectionAnchor = entry.path;
                     updateSelection();
                 }
-                host.menu(visible.filter(item => selections.has(item.path)).map(actionEntry), entry.kind === "directory" ? entry.path : undefined);
+                // An explicit anomalous item can still open its diagnostic
+                // menu; it never joins a qualified bulk-selection payload.
+                const selected = eligible(entry) ? selectedDisplayed() : [entry];
+                host.menu(selected.map(actionEntry), entry.kind === "directory" ? entry.path : undefined, captureSelectionScope());
             };
             row.oncontextmenu = event => { event.preventDefault(); menu(); };
             row.onkeydown = event => {
-                if (event.isComposing)
+                if (event.isComposing || event.keyCode === 229)
                     return;
+                if ((event.target === row || event.target === title || event.target === check) && event.key === " ") {
+                    event.preventDefault();
+                    select(entry, event, true);
+                    return;
+                }
+                if ((event.target === row || event.target === title || event.target === check) && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a") {
+                    event.preventDefault();
+                    selectDisplayed.click();
+                    return;
+                }
                 if (event.key === "Enter" && event.target === row) {
                     event.preventDefault();
                     void Promise.resolve(open()).catch(error => host.notify(String(error)));
@@ -345,6 +402,14 @@ export function mountNodeContents(panel: HTMLElement, inventory: Inventory, fold
             }
             body.scrollTop = preference.sections[id].scroll;
         }
+        // The render loop distributes globally sorted entries into fixed
+        // sections; selection must follow the resulting DOM, not loop order.
+        displayed = (["nodes", "album", "files"] as const).flatMap(section => displayed.filter(entry => contentsSection(entry) === section));
+        const fingerprint = JSON.stringify(displayed.map(entry => {
+            const target = actionEntry(entry);
+            return [entry.path, eligible(entry), target.path, target.kind, target.identityStatus, target.nodeId ?? null];
+        }));
+        if (fingerprint !== displayFingerprint) { displayFingerprint = fingerprint; displayVersion++; }
         updateSelection();
         panel.scrollTop = scroll;
         if (focusedPath && focusedRole !== undefined) {

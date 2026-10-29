@@ -75,7 +75,7 @@ try{
   await nodeA.press('Shift+F10');
   assert.deepEqual(await page.evaluate(()=>window.fixture.menus.at(-1).entries.map(entry=>entry.path)),[await page.evaluate(()=>window.fixture.folder+'/A/A.typ')]);
   assert.equal(await page.evaluate(()=>window.fixture.menus.at(-1).folder),await page.evaluate(()=>window.fixture.folder+'/A'));
-  await nodeB.getByRole('checkbox').check();await page.getByRole('button',{name:'所选项目操作',exact:true}).click();
+  await nodeB.getByRole('checkbox').check();await page.getByRole('button',{name:'已显示选中项操作',exact:true}).click();
   assert.deepEqual(await page.evaluate(()=>window.fixture.menus.at(-1).entries.map(entry=>entry.path)),await page.evaluate(()=>[window.fixture.folder+'/A/A.typ',window.fixture.folder+'/B/B.typ']));
   assert.equal(await page.evaluate(()=>window.fixture.requests.some(item=>item.route==='/api/navigation/order/prepare')),false);
   pass('Healthy child nodes open their exact admitted source by one click or keyboard, double-click opens once, browsing stays separate and all menus retain exact source identities.');

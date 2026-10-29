@@ -55,6 +55,32 @@ export function directContentsEntries(entries: readonly InventoryEntry[], folder
 export function contentsActionEntry(entry: InventoryEntry, canonicalSources: ReadonlyMap<string, InventoryEntry>): InventoryEntry {
     return entry.kind === "directory" ? canonicalSources.get(normalizeContentsPath(entry.path)) ?? entry : entry;
 }
+/** Selection is presentation state, never write permission. Bulk selection
+ * excludes blocked and unresolved identities; explicit single selection can
+ * still expose their existing diagnostics without inventing a healthy node. */
+export function contentsBatchSelectable(entry: InventoryEntry): boolean {
+    return entry.kind === "node" ? entry.identityStatus === "admitted" && !!entry.nodeId
+        : entry.kind !== "blocked" && ["ordinary", "unmanaged", "admitted"].includes(entry.identityStatus);
+}
+export interface ContentsSelectionRow { path: string; eligible: boolean }
+export interface ContentsSelectionIntent { range?: boolean; additive?: boolean; toggle?: boolean }
+/** The caller supplies exactly the expanded, rendered rows in display order.
+ * Hidden pages/sections/filter results must never extend a range implicitly. */
+export function changedContentsSelection(current: ReadonlySet<string>, displayed: readonly ContentsSelectionRow[], target: string, anchor: string | undefined, intent: ContentsSelectionIntent = {}): { selected: Set<string>; anchor: string | undefined } {
+    const end = displayed.findIndex(row => row.path === target);
+    if (end < 0) return { selected: new Set(current), anchor };
+    if (intent.range) {
+        const found = displayed.findIndex(row => row.path === anchor && row.eligible), start = found < 0 ? end : found;
+        const selected = intent.additive ? new Set(current) : new Set<string>();
+        for (const row of displayed.slice(Math.min(start, end), Math.max(start, end) + 1))
+            if (row.eligible) selected.add(row.path);
+        return { selected, anchor: found < 0 ? target : anchor };
+    }
+    const selected = intent.additive || intent.toggle ? new Set(current) : new Set<string>();
+    if (intent.toggle && selected.has(target)) selected.delete(target);
+    else selected.add(target);
+    return { selected, anchor: target };
+}
 /** Preferences belong to an exact library and browsing folder, including ordinary folders. */
 export function contentsPreferenceKey(root: string, workspaceId: string | undefined, folder: string): string {
     return `weftext-node-contents:v2:${encodeURIComponent(JSON.stringify([workspaceId ?? normalizeContentsPath(root), normalizeContentsPath(folder)]))}`;

@@ -105,19 +105,408 @@ fn clear_and_quoted_paste_touch_only_selected_bodies_and_keep_styles() {
 #[test]
 fn rows_columns_reorder_preserve_native_content_and_outer_source() {
     let source = "前\n#table(columns: 2,\n  [*甲*],\t[乙],\n  [$x$],  [#link(\"https://example.org\")[丁]])\n后";
-    let moved = apply(source, TableAction::MoveColumn { from: 0, to: 1 }).unwrap();
+    let moved = apply(
+        source,
+        TableAction::MoveColumns {
+            start: 0,
+            end: 0,
+            to: 1,
+        },
+    )
+    .unwrap();
     assert!(moved.source.starts_with(
         "前\n#table(columns: 2,\n  [乙],\t[*甲*],\n  [#link(\"https://example.org\")[丁]],  [$x$])"
     ));
-    let inserted = apply(&moved.source, TableAction::InsertColumn { index: 1 }).unwrap();
+    let inserted = apply(
+        &moved.source,
+        TableAction::InsertColumns { index: 1, count: 1 },
+    )
+    .unwrap();
     assert_eq!(table(&inserted.source).table.unwrap().columns, 3);
-    let removed = apply(&inserted.source, TableAction::RemoveColumn { index: 1 }).unwrap();
+    let removed = apply(
+        &inserted.source,
+        TableAction::RemoveColumns { start: 1, end: 1 },
+    )
+    .unwrap();
     assert_eq!(table(&removed.source).table.unwrap().columns, 2);
-    let moved_row = apply(&removed.source, TableAction::MoveRow { from: 0, to: 1 }).unwrap();
+    let moved_row = apply(
+        &removed.source,
+        TableAction::MoveRows {
+            start: 0,
+            end: 0,
+            to: 1,
+        },
+    )
+    .unwrap();
     assert!(moved_row.source.contains("[*甲*]"));
     assert!(moved_row.source.contains("[$x$]"));
     assert!(moved_row.source.ends_with("\n后"));
     native(&moved_row.source);
+}
+
+fn assert_single_table_patch(source: &str, out: &EditOutput) {
+    let range = table(source).range;
+    assert_eq!(out.patches.len(), 1, "{:#?}", out.patches);
+    let patch = &out.patches[0];
+    assert_eq!((patch.from, patch.to), (range.from, range.to));
+    assert_eq!(patch.expected, source[range.from..range.to]);
+    assert!(out.source.starts_with(&source[..range.from]));
+    assert!(out.source.ends_with(&source[range.to..]));
+    let mut restored = out.source.clone();
+    restored.replace_range(patch.from..patch.from + patch.insert.len(), &patch.expected);
+    assert_eq!(
+        restored, source,
+        "one inverse patch restores the exact source"
+    );
+}
+
+fn table_bodies(source: &str) -> Vec<String> {
+    table(source)
+        .table
+        .unwrap()
+        .logical_cells
+        .into_iter()
+        .map(|cell| cell.body.raw)
+        .collect()
+}
+
+#[test]
+fn row_groups_insert_remove_and_move_with_one_bounded_patch() {
+    let source = "前😀\n#table(columns: 2, inset: 2pt,\n [头甲], [头乙],\n [甲], [乙],\n [丙], [丁],\n [尾甲], [尾乙])\n#table(columns: 1, [另一表])\n后😀";
+    let inserted = apply(source, TableAction::InsertRows { index: 1, count: 2 }).unwrap();
+    assert_single_table_patch(source, &inserted);
+    assert_eq!(table(&inserted.source).table.unwrap().rows, 6);
+    assert_eq!(
+        table_bodies(&inserted.source),
+        [
+            "头甲", "头乙", "", "", "", "", "甲", "乙", "丙", "丁", "尾甲", "尾乙"
+        ]
+    );
+    let removed = apply(
+        &inserted.source,
+        TableAction::RemoveRows { start: 1, end: 2 },
+    )
+    .unwrap();
+    assert_single_table_patch(&inserted.source, &removed);
+    assert_eq!(table_bodies(&removed.source), table_bodies(source));
+
+    let moved = apply(
+        source,
+        TableAction::MoveRows {
+            start: 1,
+            end: 2,
+            to: 2,
+        },
+    )
+    .unwrap();
+    assert_single_table_patch(source, &moved);
+    assert_eq!(
+        table_bodies(&moved.source),
+        ["头甲", "头乙", "尾甲", "尾乙", "甲", "乙", "丙", "丁"]
+    );
+    native(&moved.source);
+    let moved_forward = apply(
+        source,
+        TableAction::MoveRows {
+            start: 2,
+            end: 3,
+            to: 0,
+        },
+    )
+    .unwrap();
+    assert_single_table_patch(source, &moved_forward);
+    assert_eq!(
+        table_bodies(&moved_forward.source),
+        ["丙", "丁", "尾甲", "尾乙", "头甲", "头乙", "甲", "乙"]
+    );
+    let deleted = apply(source, TableAction::RemoveRows { start: 1, end: 2 }).unwrap();
+    assert_single_table_patch(source, &deleted);
+    assert_eq!(
+        table_bodies(&deleted.source),
+        ["头甲", "头乙", "尾甲", "尾乙"]
+    );
+}
+
+#[test]
+fn column_groups_keep_styles_and_cell_order_in_one_patch() {
+    let source = "前\n#table(columns: 4,\n [甲], table.cell(fill: red)[*乙*], [$x$], [丁],\n [A], [B], [C], [D])\n后";
+    let inserted = apply(source, TableAction::InsertColumns { index: 1, count: 2 }).unwrap();
+    assert_single_table_patch(source, &inserted);
+    assert_eq!(table(&inserted.source).table.unwrap().columns, 6);
+    assert_eq!(
+        table_bodies(&inserted.source),
+        [
+            "甲", "", "", "*乙*", "$x$", "丁", "A", "", "", "B", "C", "D"
+        ]
+    );
+    let removed = apply(
+        &inserted.source,
+        TableAction::RemoveColumns { start: 1, end: 2 },
+    )
+    .unwrap();
+    assert_single_table_patch(&inserted.source, &removed);
+    assert_eq!(table_bodies(&removed.source), table_bodies(source));
+
+    let moved = apply(
+        source,
+        TableAction::MoveColumns {
+            start: 1,
+            end: 2,
+            to: 2,
+        },
+    )
+    .unwrap();
+    assert_single_table_patch(source, &moved);
+    assert_eq!(
+        table_bodies(&moved.source),
+        ["甲", "丁", "*乙*", "$x$", "A", "D", "B", "C"]
+    );
+    assert!(moved.source.contains("table.cell(fill: red)[*乙*]"));
+    native(&moved.source);
+    let moved_forward = apply(
+        source,
+        TableAction::MoveColumns {
+            start: 2,
+            end: 3,
+            to: 0,
+        },
+    )
+    .unwrap();
+    assert_single_table_patch(source, &moved_forward);
+    assert_eq!(
+        table_bodies(&moved_forward.source),
+        ["$x$", "丁", "甲", "*乙*", "C", "D", "A", "B"]
+    );
+    let deleted = apply(source, TableAction::RemoveColumns { start: 1, end: 2 }).unwrap();
+    assert_single_table_patch(source, &deleted);
+    assert_eq!(table_bodies(&deleted.source), ["甲", "丁", "A", "D"]);
+}
+
+#[test]
+fn group_boundaries_protect_complete_merged_cell_ownership() {
+    let rows = "#table(columns: 2, table.cell(rowspan: 2)[纵], [上], [下], [尾甲], [尾乙])";
+    // Moving just one half must refuse even if the old min/max check would
+    // consider the reversed covered slots contiguous.
+    assert!(
+        apply(
+            rows,
+            TableAction::MoveRows {
+                start: 0,
+                end: 0,
+                to: 1
+            }
+        )
+        .is_err()
+    );
+    assert!(apply(rows, TableAction::RemoveRows { start: 0, end: 0 }).is_err());
+    assert!(apply(rows, TableAction::InsertRows { index: 1, count: 2 }).is_err());
+    let inserted = apply(rows, TableAction::InsertRows { index: 2, count: 2 }).unwrap();
+    assert_single_table_patch(rows, &inserted);
+    assert_eq!(table(&inserted.source).table.unwrap().rows, 5);
+    let moved = apply(
+        rows,
+        TableAction::MoveRows {
+            start: 0,
+            end: 1,
+            to: 1,
+        },
+    )
+    .unwrap();
+    assert_single_table_patch(rows, &moved);
+    let info = table(&moved.source).table.unwrap();
+    let span = info
+        .logical_cells
+        .iter()
+        .find(|cell| cell.body.raw == "纵")
+        .unwrap();
+    assert_eq!((span.row, span.column, span.rowspan), (1, 0, 2));
+    native(&moved.source);
+    let removed = apply(rows, TableAction::RemoveRows { start: 0, end: 1 }).unwrap();
+    assert_single_table_patch(rows, &removed);
+    assert_eq!(table_bodies(&removed.source), ["尾甲", "尾乙"]);
+
+    let columns = "#table(columns: 3, table.cell(colspan: 2)[横], [尾])";
+    assert!(
+        apply(
+            columns,
+            TableAction::MoveColumns {
+                start: 0,
+                end: 0,
+                to: 1
+            }
+        )
+        .is_err()
+    );
+    assert!(apply(columns, TableAction::RemoveColumns { start: 0, end: 0 }).is_err());
+    assert!(apply(columns, TableAction::InsertColumns { index: 1, count: 2 }).is_err());
+    let inserted = apply(columns, TableAction::InsertColumns { index: 2, count: 2 }).unwrap();
+    assert_single_table_patch(columns, &inserted);
+    assert_eq!(table(&inserted.source).table.unwrap().columns, 5);
+    let moved = apply(
+        columns,
+        TableAction::MoveColumns {
+            start: 0,
+            end: 1,
+            to: 1,
+        },
+    )
+    .unwrap();
+    assert_single_table_patch(columns, &moved);
+    let info = table(&moved.source).table.unwrap();
+    let span = info
+        .logical_cells
+        .iter()
+        .find(|cell| cell.body.raw == "横")
+        .unwrap();
+    assert_eq!((span.row, span.column, span.colspan), (0, 1, 2));
+    native(&moved.source);
+    let removed = apply(columns, TableAction::RemoveColumns { start: 0, end: 1 }).unwrap();
+    assert_single_table_patch(columns, &removed);
+    assert_eq!(table_bodies(&removed.source), ["尾"]);
+
+    // A destination inside a different unselected merge is equally unsafe.
+    let target = "#table(columns: 1, [先], table.cell(rowspan: 2)[纵], [后])";
+    assert!(
+        apply(
+            target,
+            TableAction::MoveRows {
+                start: 0,
+                end: 0,
+                to: 1
+            }
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn group_rows_keep_header_roles_and_explicit_header_options() {
+    let source = "#table(columns: 2, table.header(repeat: false, level: 1, [H0], [H1], [H2], [H3]), [甲], [乙], [丙], [丁])";
+    assert!(
+        apply(
+            source,
+            TableAction::MoveRows {
+                start: 0,
+                end: 1,
+                to: 2
+            }
+        )
+        .is_err()
+    );
+    assert!(
+        apply(
+            source,
+            TableAction::MoveRows {
+                start: 2,
+                end: 3,
+                to: 1
+            }
+        )
+        .is_err()
+    );
+    let inserted_header = apply(source, TableAction::InsertRows { index: 1, count: 2 }).unwrap();
+    assert_single_table_patch(source, &inserted_header);
+    assert_eq!(table(&inserted_header.source).table.unwrap().header_rows, 4);
+    assert!(
+        inserted_header
+            .source
+            .contains("table.header(repeat: false, level: 1,")
+    );
+    let inserted_body = apply(source, TableAction::InsertRows { index: 2, count: 2 }).unwrap();
+    assert_single_table_patch(source, &inserted_body);
+    assert_eq!(table(&inserted_body.source).table.unwrap().header_rows, 2);
+    let removed = apply(source, TableAction::RemoveRows { start: 0, end: 1 }).unwrap();
+    assert_single_table_patch(source, &removed);
+    assert_eq!(table(&removed.source).table.unwrap().header_rows, 0);
+    assert_eq!(table_bodies(&removed.source), ["甲", "乙", "丙", "丁"]);
+    native(&inserted_header.source);
+    let body = "#table(columns: 1, table.header([H]), [甲], [乙], [尾])";
+    let moved_body = apply(
+        body,
+        TableAction::MoveRows {
+            start: 1,
+            end: 2,
+            to: 2,
+        },
+    )
+    .unwrap();
+    assert_single_table_patch(body, &moved_body);
+    assert_eq!(table(&moved_body.source).table.unwrap().header_rows, 1);
+    assert_eq!(table_bodies(&moved_body.source), ["H", "尾", "甲", "乙"]);
+}
+
+#[test]
+fn group_axis_contract_rejects_invalid_ranges_and_final_budgets() {
+    let source = "#table(columns: 1, [甲])";
+    for action in [
+        TableAction::InsertRows { index: 0, count: 0 },
+        TableAction::InsertColumns { index: 0, count: 0 },
+        TableAction::InsertRows { index: 2, count: 2 },
+        TableAction::InsertRows {
+            index: 0,
+            count: usize::MAX,
+        },
+        TableAction::InsertRows {
+            index: 0,
+            count: 100_000,
+        },
+        TableAction::InsertColumns {
+            index: 0,
+            count: 1000,
+        },
+        TableAction::RemoveRows { start: 0, end: 0 },
+        TableAction::RemoveColumns { start: 0, end: 0 },
+        TableAction::RemoveRows { start: 1, end: 0 },
+        TableAction::RemoveColumns {
+            start: 0,
+            end: usize::MAX,
+        },
+        TableAction::MoveRows {
+            start: 0,
+            end: 0,
+            to: 1,
+        },
+        TableAction::MoveRows {
+            start: 1,
+            end: 0,
+            to: 0,
+        },
+        TableAction::MoveColumns {
+            start: 0,
+            end: usize::MAX,
+            to: 0,
+        },
+    ] {
+        assert!(apply(source, action.clone()).is_err(), "{action:?}");
+    }
+    let unchanged = apply(
+        source,
+        TableAction::MoveRows {
+            start: 0,
+            end: 0,
+            to: 0,
+        },
+    )
+    .unwrap();
+    assert_eq!(unchanged.source, source);
+    assert!(unchanged.patches.is_empty());
+    let request: TableAction =
+        serde_json::from_value(serde_json::json!({"kind":"moveRows","start":1,"end":2,"to":0}))
+            .unwrap();
+    assert!(matches!(
+        request,
+        TableAction::MoveRows {
+            start: 1,
+            end: 2,
+            to: 0
+        }
+    ));
+    assert!(
+        serde_json::from_value::<TableAction>(
+            serde_json::json!({"kind":"moveRow","from":1,"to":0})
+        )
+        .is_err()
+    );
 }
 
 #[test]
@@ -209,7 +598,15 @@ fn header_changes_are_native_and_direction_loss_is_never_implicit() {
     native(&transposed.source);
     let source =
         "#table(columns: 2, table.header(repeat: false, level: 1,\n [甲],\t[乙],),\n [丙], [丁])";
-    let moved = apply(source, TableAction::MoveColumn { from: 0, to: 1 }).unwrap();
+    let moved = apply(
+        source,
+        TableAction::MoveColumns {
+            start: 0,
+            end: 0,
+            to: 1,
+        },
+    )
+    .unwrap();
     assert!(
         moved
             .source
@@ -280,7 +677,13 @@ fn clipboard_expansion_and_spans_validate_atomically() {
         )
         .is_err()
     );
-    assert!(apply(&pasted.source, TableAction::InsertRow { index: 1 }).is_err());
+    assert!(
+        apply(
+            &pasted.source,
+            TableAction::InsertRows { index: 1, count: 1 }
+        )
+        .is_err()
+    );
     assert!(
         apply(
             source,
@@ -549,6 +952,20 @@ fn dynamic_trivia_partial_topology_and_stale_requests_are_refused() {
         let info = table(source).table.unwrap();
         assert!(!info.topology_writable, "{source}");
         assert!(apply(source, TableAction::Transpose).is_err(), "{source}");
+        for action in [
+            TableAction::InsertRows { index: 0, count: 2 },
+            TableAction::RemoveColumns { start: 0, end: 0 },
+            TableAction::MoveRows {
+                start: 0,
+                end: 0,
+                to: 0,
+            },
+        ] {
+            assert!(
+                apply(source, action.clone()).is_err(),
+                "{source}: {action:?}"
+            );
+        }
     }
     let source = "#table(columns: 1, [甲])";
     let request = EditRequest {

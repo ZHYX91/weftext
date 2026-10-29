@@ -1,12 +1,26 @@
 import test, { type TestContext } from "node:test";
 import assert from "node:assert/strict";
 import { TestDocument, TestElement } from "./dom.test-support";
-import { moveOrderedValue, orderedMoveTarget, valueEditor, nativeFormControls, type DataSchema, type NativeValue, type Shape } from "./native-value-form";
+import { moveOrderedValue, orderedMoveTarget, orderedDropTarget, valueEditor, nativeFormControls, type DataSchema, type NativeValue, type Shape } from "./native-value-form";
 import { locale } from "./ui-locale";
 
 const schema: DataSchema = { definitions: {}, fields: [], types: [], aliases: {} };
 const text = (value: string): NativeValue => ({ kind: "text", value });
 const texts: Shape = { kind: "list", items: { kind: "scalar", semantic: "text" }, min: 0, max: null };
+
+test("drop gaps preserve the removal coordinate and never duplicate a no-op move", () => {
+    assert.equal(orderedDropTarget(0, 3, 3), 2);
+    assert.equal(orderedDropTarget(2, 0, 3), 0);
+    assert.equal(orderedDropTarget(1, 0, 3), 0);
+    assert.equal(orderedDropTarget(1, 3, 3), 2);
+    for (const gap of [1, 2]) assert.equal(orderedDropTarget(1, gap, 3), null);
+    for (const gap of [-1, 0.5, NaN, Infinity, 4]) assert.equal(orderedDropTarget(1, gap, 3), null);
+    for (const from of [-1, 0.5, NaN, 3]) assert.equal(orderedDropTarget(from, 0, 3), null);
+    assert.equal(orderedDropTarget(0, 0, 0), null);
+    const duplicate = { kind: "array", value: [text("same"), text("same"), text("tail")] } as NativeValue;
+    const moved = moveOrderedValue(duplicate, 1, orderedDropTarget(1, 3, 3)!);
+    assert.deepEqual(moved, { kind: "array", value: [text("same"), text("tail"), text("same")] });
+});
 
 test("display positions accept only complete in-range decimal ordinals", () => {
     assert.equal(orderedMoveTarget("1", 3000), 0);

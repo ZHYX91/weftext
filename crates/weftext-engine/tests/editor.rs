@@ -275,7 +275,7 @@ fn math_table_inline_and_duplicate_cells_keep_exact_ownership() {
         &a.source,
         EditIntent::TableEdit {
             range: table.range.clone(),
-            action: TableAction::InsertRow { index: 1 },
+            action: TableAction::InsertRows { index: 1, count: 1 },
         },
     );
     native(&b.source);

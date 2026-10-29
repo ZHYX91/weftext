@@ -249,6 +249,13 @@ export function orderedMoveTarget(raw: string, length: number): number | null {
     const position = Number(raw);
     return Number.isSafeInteger(position) && position <= length ? position - 1 : null;
 }
+/** A drop gap addresses this exact ordered list, before removing its source item. */
+export function orderedDropTarget(from: number, gap: number, length: number): number | null {
+    if (!Number.isSafeInteger(length) || length < 1 || !Number.isSafeInteger(from) || from < 0 || from >= length
+        || !Number.isSafeInteger(gap) || gap < 0 || gap > length) return null;
+    const to = gap > from ? gap - 1 : gap;
+    return to === from ? null : to;
+}
 export function unionVariant(shape: Extract<Shape, {
     kind: "union";
 }>, value: NativeValue, schema: DataSchema): number {
@@ -593,6 +600,63 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
         host.addEventListener("compositionstart", event => { if (event.target) composing.add(event.target); });
         host.addEventListener("compositionend", event => { if (event.target) composing.delete(event.target); });
         host.append(items, status);
+        host.setAttribute("style", "position:relative");
+        const line = ui("div", "native-list-drop-line");
+        line.hidden = true;
+        line.setAttribute("aria-hidden", "true");
+        const lineStyle = "position:absolute;left:0;right:0;height:3px;background:var(--accent,#526b4d);pointer-events:none;z-index:1";
+        line.setAttribute("style", lineStyle);
+        host.append(line);
+        type Drag = { handle: HTMLButtonElement; pointerId: number; from: number; value: NativeValue; x: number; y: number; latestX: number; latestY: number; gap: number | null; started: boolean; observer?: MutationObserver };
+        let drag: Drag | null = null;
+        const stopDrag = (cancelled = false): void => {
+            const prior = drag;
+            drag = null;
+            line.hidden = true;
+            delete host.dataset.valueDragging;
+            if (prior) {
+                prior.observer?.disconnect();
+                prior.handle.setAttribute("style", "touch-action:none;cursor:grab");
+                host.ownerDocument.defaultView?.removeEventListener("blur", blurDrag);
+                host.ownerDocument.defaultView?.removeEventListener("scroll", refreshDrag, true);
+                host.ownerDocument.defaultView?.removeEventListener("resize", refreshDrag);
+                if (prior.handle.hasPointerCapture?.(prior.pointerId)) prior.handle.releasePointerCapture(prior.pointerId);
+                if (cancelled && prior.started) setUiText(status, uiMessage("nativeEditor.dragCancelled"));
+            }
+        };
+        const currentDrag = (): Drag | null => {
+            if (!drag) return null;
+            if (drag.value !== value || !drag.handle.isConnected || drag.handle.disabled || host.closest?.("[inert],[hidden]")) {
+                stopDrag(true);
+                return null;
+            }
+            return drag;
+        };
+        const locateDrag = (): void => {
+            const current = currentDrag();
+            if (!current?.started) return;
+            let row = host.ownerDocument.elementFromPoint(current.latestX, current.latestY)?.closest<HTMLElement>(".native-list-item") ?? null;
+            while (row && row.parentElement !== items) row = row.parentElement?.closest<HTMLElement>(".native-list-item") ?? null;
+            current.gap = null;
+            line.hidden = true;
+            if (!row) return;
+            const index = Number(row.dataset.valueOrderIndex), rect = row.getBoundingClientRect();
+            const after = current.latestY >= rect.top + rect.height / 2;
+            const gap = index + (after ? 1 : 0);
+            if (value.kind !== "array" || orderedDropTarget(current.from, gap, value.value.length) === null) return;
+            current.gap = gap;
+            line.setAttribute("style", `${lineStyle};top:${(after ? rect.bottom : rect.top) - host.getBoundingClientRect().top + host.scrollTop}px`);
+            line.hidden = false;
+            const to = orderedDropTarget(current.from, gap, value.value.length)!;
+            setUiText(status, displayMessage("nativeEditor.dragTarget", { from: current.from + 1, to: to + 1 }));
+        };
+        const refreshDrag = (): void => locateDrag();
+        const blurDrag = (): void => stopDrag(true);
+        host.addEventListener("keydown", event => {
+            if (event.key !== "Escape" || !drag || event.isComposing || event.keyCode === 229) return;
+            event.preventDefault(); event.stopPropagation(); stopDrag(true);
+        });
+        host.addEventListener("compositionstart", () => stopDrag(true));
         const canRestructure = (): boolean => {
             if (composing.size) { setUiText(status, uiMessage("dataPanel.compositionPending")); return false; }
             const invalid = items.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input:invalid,select:invalid,textarea:invalid");
@@ -606,6 +670,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
             return true;
         };
         const render = (focusIndex?: number, focusRole = "position"): void => {
+            stopDrag();
             items.replaceChildren();
             if (value.kind !== "array")
                 return;
@@ -614,21 +679,23 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
             const length = value.value.length;
             value.value.forEach((item, index) => {
                 const row = ui("fieldset", "native-list-item");
+                row.dataset.valueOrderIndex = String(index);
                 row.append(ui("legend", "", displayMessage("nativeEditor.itemLegend", { p0: index + 1 })));
                 const controls = ui("div", "native-list-controls");
-                const move = (to: number, role: string): void => {
-                    if (!canRestructure()) return;
+                const move = (to: number, role: string): boolean => {
+                    if (!canRestructure()) return false;
                     const next = moveOrderedValue(value, index, to);
-                    if (next === value) return;
+                    if (next === value) return false;
                     retire();
                     value = next;
                     changed(value);
                     render(to, role);
+                    return true;
                 };
-                const up = action(uiMessage("queryShortcut.moveUp"), () => move(index - 1, "up"), "data-button compact");
+                const up = action(uiMessage("queryShortcut.moveUp"), () => { move(index - 1, "up"); }, "data-button compact");
                 up.dataset.orderAction = "up";
                 up.disabled = index === 0;
-                const down = action(uiMessage("nodeContents.moveDown"), () => move(index + 1, "down"), "data-button compact");
+                const down = action(uiMessage("nodeContents.moveDown"), () => { move(index + 1, "down"); }, "data-button compact");
                 down.dataset.orderAction = "down";
                 down.disabled = value.kind !== "array" || index === value.value.length - 1;
                 const remove = action(uiMessage("nativeEditor.removeMember"), () => {
@@ -641,10 +708,63 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                     render();
                 }, "data-button compact");
                 remove.disabled = value.kind !== "array" || value.value.length <= resolved.min;
-                controls.append(up, down, remove);
+                const handle = action(displayMessage("nativeEditor.dragValue", { index: index + 1 }), () => { setUiText(status, uiMessage("nativeEditor.dragKeyboardHelp")); }, "data-button compact native-value-drag-handle");
+                handle.dataset.orderAction = "drag";
+                handle.setAttribute("style", "touch-action:none;cursor:grab");
+                handle.disabled = length < 2;
+                let suppressPointerClick = false;
+                handle.addEventListener("click", event => {
+                    if (suppressPointerClick && event.detail > 0) { event.preventDefault(); event.stopImmediatePropagation(); }
+                }, true);
+                handle.addEventListener("pointerdown", event => {
+                    if (event.button !== 0 || !event.isPrimary || handle.disabled || !handle.isConnected || host.closest?.("[inert],[hidden]")) return;
+                    stopDrag();
+                    suppressPointerClick = true;
+                    event.preventDefault();
+                    if (!canRestructure()) return;
+                    suppressPointerClick = false;
+                    drag = { handle, pointerId: event.pointerId, from: index, value, x: event.clientX, y: event.clientY, latestX: event.clientX, latestY: event.clientY, gap: null, started: false };
+                    try { handle.setPointerCapture(event.pointerId); }
+                    catch { stopDrag(); return; }
+                    const observer = new MutationObserver(() => { currentDrag(); });
+                    drag.observer = observer;
+                    observer.observe(host.ownerDocument, { childList: true, subtree: true, attributes: true, attributeFilter: ["inert", "hidden", "disabled"] });
+                    host.ownerDocument.defaultView?.addEventListener("blur", blurDrag);
+                    host.ownerDocument.defaultView?.addEventListener("scroll", refreshDrag, true);
+                    host.ownerDocument.defaultView?.addEventListener("resize", refreshDrag);
+                    handle.focus({ preventScroll: true });
+                    event.preventDefault();
+                });
+                handle.addEventListener("pointermove", event => {
+                    const current = currentDrag();
+                    if (!current || current.handle !== handle || current.pointerId !== event.pointerId) return;
+                    if (!(event.buttons & 1)) { stopDrag(true); return; }
+                    current.latestX = event.clientX; current.latestY = event.clientY;
+                    if (!current.started && Math.hypot(event.clientX - current.x, event.clientY - current.y) >= 4) {
+                        current.started = true; suppressPointerClick = true; host.dataset.valueDragging = "true"; handle.setAttribute("style", "touch-action:none;cursor:grabbing");
+                    }
+                    locateDrag();
+                    event.preventDefault();
+                });
+                handle.addEventListener("pointerup", event => {
+                    const current = currentDrag();
+                    if (!current || current.handle !== handle || current.pointerId !== event.pointerId) return;
+                    current.latestX = event.clientX; current.latestY = event.clientY;
+                    locateDrag();
+                    const to = value.kind === "array" && current.gap !== null ? orderedDropTarget(current.from, current.gap, value.value.length) : null;
+                    const started = current.started;
+                    stopDrag();
+                    if (started && to !== null) { if (move(to, "drag")) setUiText(status, displayMessage("nativeEditor.dragMoved", { from: index + 1, to: to + 1 })); }
+                    else if (started) setUiText(status, uiMessage("nativeEditor.dragCancelled"));
+                    event.preventDefault();
+                });
+                const cancelPointer = (event: PointerEvent): void => { if (drag?.handle === handle && drag.pointerId === event.pointerId) stopDrag(true); };
+                handle.addEventListener("pointercancel", cancelPointer);
+                handle.addEventListener("lostpointercapture", cancelPointer);
+                controls.append(handle, up, down, remove);
                 const order = ui("details", "native-list-order");
                 order.append(ui("summary", "", uiMessage("nativeEditor.movePosition")));
-                const first = action(uiMessage("nativeEditor.moveFirst"), () => move(0, "first"), "data-button compact");
+                const first = action(uiMessage("nativeEditor.moveFirst"), () => { move(0, "first"); }, "data-button compact");
                 first.dataset.orderAction = "first";
                 first.disabled = index === 0;
                 const last = action(uiMessage("nativeEditor.moveLast"), () => { if (value.kind === "array") move(value.value.length - 1, "last"); }, "data-button compact");
@@ -676,7 +796,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                 order.append(first, last, labelFor(uiMessage("nativeEditor.movePosition"), position), position,
                     action(uiMessage("nativeEditor.moveToPosition"), atPosition, "data-button compact"),
                     ui("p", "data-help", displayMessage("nativeEditor.movePositionHelp", { count: length })));
-                if (index === focusIndex && !["up", "down"].includes(focusRole)) order.open = true;
+                if (index === focusIndex && !["up", "down", "drag"].includes(focusRole)) order.open = true;
                 row.append(controls, order, valueEditor(resolved.items, item, schema, next => {
                     if (value.kind !== "array")
                         return;
@@ -687,7 +807,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                 }, () => displayMessage("nativeEditor.itemLabel", { p0: uiDisplayParameter(uiTextValue(label)), p1: index + 1 }), { ...identity, path: [...identity.path, { kind: "index", index }] }, depth + 1, references, binding, lifetime));
                 items.append(row);
                 if (index === focusIndex) {
-                    const requested = [up, down, first, last, position].find(control => control.dataset.orderAction === focusRole && !("disabled" in control && control.disabled));
+                    const requested = [handle, up, down, first, last, position].find(control => control.dataset.orderAction === focusRole && !("disabled" in control && control.disabled));
                     const fallback = !up.disabled ? up : !down.disabled ? down : position;
                     (requested ?? fallback).focus({ preventScroll: true });
                 }

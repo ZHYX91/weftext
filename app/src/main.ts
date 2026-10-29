@@ -20,6 +20,7 @@ import { fileSaveReceipt, fileSaveFailure } from "./file-save-result";
 import { RecognitionPanel } from "./recognition-panel";
 import { api, apiBlob, ApiError, operationId } from "./api";
 import { mountNodeContents } from "./node-contents";
+import { nodeLinkCopyUnavailable, qualifyNodeLinks } from "./node-links";
 import { SourceEditor, applySourcePatches } from "./editor";
 import { countSourceCodePoints } from "./source-statistics";
 import { DeferredPaint } from "./deferred-paint";
@@ -1438,8 +1439,9 @@ function browseFolder(path: string | null): void {
     renderNodeBrowser();
     dock.reveal("nodes");
 }
-function nodeMenu(entries: InventoryEntry[], folder?: string): void {
-    const selected = entries.filter(entry => entry.path.toLowerCase().endsWith(".typ")), root = inventory?.root, workspaceId = inventory?.workspaceId;
+function nodeMenu(entries: InventoryEntry[], folder?: string, isSelectionCurrent?: () => boolean): void {
+    const selectedInventory = inventory;
+    const selected = entries.filter(entry => entry.path.toLowerCase().endsWith(".typ")), root = selectedInventory?.root, workspaceId = selectedInventory?.workspaceId;
     const commands: EverydayCommand[] = [
         { id: "node-open", label: uiMessage("shell.openSelectedNote"), unavailable: !selected.length || !root ? uiMessage("shell.selectedItemMainFileUnavailable") : undefined, run: async () => libraryCloseActivity.run(async () => {
 
@@ -1448,6 +1450,14 @@ function nodeMenu(entries: InventoryEntry[], folder?: string): void {
 
             }) },
         { id: "node-preview", label: uiMessage("shell.previewSelectedItem"), run: () => previewNodes(entries) },
+        { id: "node-copy-stable-links", label: uiMessage("nodeLinks.copyStableLinks"), unavailable: nodeLinkCopyUnavailable(selectedInventory, entries), run: async () => libraryCloseActivity.run(async () => {
+            if (!selectedInventory) throw new UiError(uiMessage("nodeLinks.libraryUnavailable"));
+            const isCurrent = () => inventory === selectedInventory && !bodyCloseFrozen && (isSelectionCurrent?.() ?? true);
+            const links = await qualifyNodeLinks(selectedInventory, entries, api, isCurrent);
+            if (!isCurrent()) throw new UiError(uiMessage("nodeLinks.selectionChanged"));
+            await navigator.clipboard.writeText(links.join("\n"));
+            toast(displayMessage("nodeLinks.copied", { count: links.length }));
+        }) },
         { id: "node-copy-path", label: uiMessage("shell.copySelectedFullPath"), run: () => navigator.clipboard.writeText(entries.map(entry => entry.path).join("\n")) },
         { id: "node-operations", label: uiMessage("shell.wholeNodeFileActions"), detail: uiMessage("shell.openExactNoteBeforeFileImpact"), unavailable: selected.length !== 1 || !root ? uiMessage("shell.oneExactNodePerOperation") : undefined, run: async () => libraryCloseActivity.run(async () => {
                 await openInventoryEntry(selected[0], root!, workspaceId); await workspaceTools.show("knowledge"); workspaceTools.selectKnowledgeTab("files");
