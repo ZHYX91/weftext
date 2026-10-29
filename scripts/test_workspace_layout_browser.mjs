@@ -1,6 +1,8 @@
 // Real local workspace tasks in an owned, headless Chrome profile.
 // --dev deliberately combines the selected CLI with the current Vite frontend;
 // it is visual/development evidence, never an embedded candidate acceptance.
+// WEFTEXT_LAYOUT_COPY_DIAGNOSTIC=1 transparently observes the real copy path;
+// a diagnostic run keeps its harness identity separate from the chosen binary.
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -17,6 +19,7 @@ assert.ok(args.length === 2 || args.length === 3 && args[2] === '--dev',
   'Usage: node scripts/test_workspace_layout_browser.mjs ABSOLUTE_CLI ABSOLUTE_NEW_OUTPUT [--dev]');
 assert.ok(path.isAbsolute(args[0]) && path.isAbsolute(args[1]), 'Executable and new output paths must be absolute');
 const exe = path.resolve(args[0]), out = path.resolve(args[1]), dev = args[2] === '--dev';
+const copyDiagnostic = process.env.WEFTEXT_LAYOUT_COPY_DIAGNOSTIC === '1';
 const repo = path.resolve(import.meta.dirname, '..');
 assert.ok(path.relative(repo, out).startsWith('..' + path.sep), 'Keep private test evidence outside the public repository');
 await mkdir(out, { recursive: false });
@@ -26,7 +29,7 @@ const result = {
   schemaVersion: 1, startedUtc: new Date().toISOString(), exe,
   executableSha256: hash(await readFile(exe)),
   frontend: dev ? 'current Vite development source' : 'selected executable embedded frontend',
-  developmentOnly: dev, cases: [], pageErrors: [], consoleErrors: [], requests: [], requestFailures: [], httpErrors: [],
+  developmentOnly: dev, diagnosticOnly: copyDiagnostic, cases: [], pageErrors: [], consoleErrors: [], requests: [], requestFailures: [], httpErrors: [],
   ownerLifecycles: [], layouts: [], completed: false,
   limits: [
     'Owned headless Chrome only; no user browser, native window, real OS IME or assistive-technology acceptance.',
@@ -76,7 +79,82 @@ const { chromium } = require(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwrigh
 const root = path.join(out, 'TEST-library'), data = path.join(out, 'state');
 const originals = new Map(), responseTasks = new Set(), allOwners = [];
 let owner, base, token, browser, page, vite, apiOrdinal = 0, navigationCount = 0, browserClosing = false, expectedSource;
+let copyProbeSaved = false;
 const pass = name => { result.cases.push(name); console.log('PASS', name); };
+
+async function installCopyProbe(references) {
+  if (!copyDiagnostic) return;
+  await page.evaluate(({ references, root }) => {
+    const clipboard = navigator.clipboard, original = clipboard.writeText, descriptor = Object.getOwnPropertyDescriptor(clipboard, 'writeText');
+    const panel = document.querySelector('#workspace-view-nodes .node-contents');
+    const ownRoot = root.replaceAll('\\', '/').toLowerCase() + '/';
+    const data = { expectedText: references.join('\n'), writes: [], reads: [], toasts: [], restored: false };
+    const context = () => ({ at: performance.now(), focused: document.hasFocus(), visibility: document.visibilityState,
+      activeElement: { tag: document.activeElement?.tagName, role: document.activeElement?.getAttribute('role'), className: document.activeElement?.className },
+      originalNodesConnected: panel?.isConnected ?? false,
+      selectedPaths: [...document.querySelectorAll('#workspace-view-nodes .node-content-row[aria-selected="true"]')].map(row => {
+        const value = row.getAttribute('data-entry-path') || '';
+        return value.replaceAll('\\', '/').toLowerCase().startsWith(ownRoot) ? value : { length: value.length, owned: false };
+      }) });
+    const textEvidence = text => {
+      const parts = text.split(/[\r\n]+/), ownText = parts.some(Boolean) && parts.every(part => !part || references.includes(part));
+      return { length: text.length, matchesExpected: text === data.expectedText,
+        ...(ownText ? { text, containsCRLF: text.includes('\r\n') } : {}) };
+    };
+    const errorEvidence = error => ({ name: typeof error?.name === 'string' ? error.name : 'Error', message: typeof error?.message === 'string' ? error.message : 'Unknown clipboard error' });
+    Object.defineProperty(clipboard, 'writeText', { configurable: true, writable: true, value: async function (text) {
+      const record = { start: context(), input: textEvidence(String(text)), state: 'pending' }; data.writes.push(record);
+      try { const answer = await original.call(clipboard, text); record.state = 'fulfilled'; record.settled = context(); return answer; }
+      catch (error) { record.state = 'rejected'; record.error = errorEvidence(error); record.settled = context(); throw error; }
+    } });
+    const seen = new WeakMap();
+    const toast = element => {
+      if (!(element instanceof Element)) return;
+      for (const item of [element, ...element.querySelectorAll('.toast')]) {
+        if (!item.matches('.toast')) continue;
+        const text = item.textContent || ''; if (seen.get(item) === text) continue;
+        seen.set(item, text); data.toasts.push({ ...context(), text, className: item.className });
+      }
+    };
+    const observer = new MutationObserver(records => { for (const record of records) {
+      if (record.type === 'childList') for (const added of record.addedNodes) toast(added);
+      else toast(record.target.parentElement?.closest('.toast'));
+    } });
+    const host = document.querySelector('.toast-host'); if (host) observer.observe(host, { childList: true, subtree: true, characterData: true });
+    data.installed = context();
+    window.__weftextLayoutCopyProbe = { data, context, textEvidence, errorEvidence, stop() {
+      observer.disconnect();
+      try { if (descriptor) Object.defineProperty(clipboard, 'writeText', descriptor); else delete clipboard.writeText; data.restored = true; }
+      catch (error) { data.restoreError = errorEvidence(error); }
+      data.stopped = context();
+    } };
+  }, { references, root });
+}
+async function readExactCopyClipboard(expected) {
+  return page.evaluate(async ({ expected, diagnostic }) => {
+    const probe = diagnostic ? window.__weftextLayoutCopyProbe : undefined;
+    try {
+      const text = await navigator.clipboard.readText();
+      if (probe) probe.data.reads.push({ ...probe.context(), state: 'fulfilled', actual: probe.textEvidence(text) });
+      // Windows clipboard text uses CRLF. Normalize only that platform line
+      // ending; preserve every URI byte, line and the original display order.
+      return text.replaceAll('\r\n', '\n') === expected;
+    } catch (error) {
+      if (probe) probe.data.reads.push({ ...probe.context(), state: 'rejected', error: probe.errorEvidence(error) });
+      throw error;
+    }
+  }, { expected, diagnostic: copyDiagnostic });
+}
+async function persistCopyProbe() {
+  if (!copyDiagnostic || copyProbeSaved || !page || page.isClosed()) return;
+  try {
+    const probe = await page.evaluate(() => { const probe = window.__weftextLayoutCopyProbe; if (!probe) return null; probe.stop(); return probe.data; });
+    if (!probe) return;
+    result.copyProbe = probe;
+    await writeFile(path.join(out, 'copy-probe.json'), JSON.stringify(probe, null, 2), { flag: 'wx' });
+    copyProbeSaved = true;
+  } catch (error) { result.copyProbeCollectionFailure = String(error); }
+}
 
 async function until(check, message, milliseconds = 30000) {
   const end = Date.now() + milliseconds;
@@ -262,6 +340,11 @@ try {
     method: request.method(), error: request.failure()?.errorText, retired: browserClosing }));
   page.on('response', response => {
     const route = new URL(response.url()).pathname;
+    if (copyDiagnostic && route === '/api/data/resolve-batch') {
+      const task = response.text().then(body => (result.copyBatchResponses ??= []).push({ route, status: response.status(), request: response.request().postDataJSON(), body }))
+        .catch(error => (result.copyBatchResponseFailures ??= []).push({ route, retired: browserClosing, error: String(error) }));
+      responseTasks.add(task); void task.then(() => responseTasks.delete(task), () => responseTasks.delete(task));
+    }
     if (!route.startsWith('/api/') || response.status() < 400) return;
     const task = response.text().then(body => result.httpErrors.push({ route, status: response.status(), body }))
       .catch(error => (result.responseReadFailures ??= []).push({ route, retired: browserClosing, error: String(error) }));
@@ -484,16 +567,19 @@ try {
   await rootNoteChecks.nth(0).click(); await rootNoteChecks.nth(1).click();
   assert.equal(await nodes().locator('.node-content-row input:checked').count(), 2);
   const copyStart = result.requests.length;
+  await installCopyProbe([parentRef, siblingRef]);
+  try {
   await nodes().getByRole('button', { name: '已显示选中项操作', exact: true }).click();
   const copyMenu = page.getByRole('dialog', { name: '所选 2 项操作', exact: true });
   await copyMenu.waitFor();
   assert.equal(await copyMenu.locator('[data-action="node-copy-stable-links"]').getAttribute('aria-disabled'), 'false');
   await copyMenu.locator('[data-action="node-copy-stable-links"]').click();
-  await until(async () => await page.evaluate(() => navigator.clipboard.readText()) === [parentRef, siblingRef].join('\n'), 'The complete selected note batch did not deliver its stable links in displayed order');
+  await until(() => readExactCopyClipboard([parentRef, siblingRef].join('\n')), 'The complete selected note batch did not deliver its stable links in displayed order');
   assert.equal(result.requests.slice(copyStart).filter(request => request.route === '/api/data/resolve-batch').length, 1, 'The entire copied selection must be resolved against one current Core inventory');
   assert.equal(result.requests.slice(copyStart).filter(request => request.route === '/api/data/resolve').length, 0, 'Batch copying repeated individual whole-library reads');
   assert.equal(await nodes().locator('.node-content-row input:checked').count(), 2, 'Copying links discarded the selection');
   await assertSameEditor(sortingEditor, sortingSelection);
+  } finally { await persistCopyProbe(); }
   await clearNodes().click();
   pass('Actual main menu resolves the entire selected note batch before one stable-link clipboard delivery and retains the current author, selection and Undo basis');
   await nodes().getByLabel('节点内容个人排序', { exact: true }).selectOption('authored');
@@ -867,6 +953,7 @@ try {
   result.failure = String(error.stack || error);
   result.expectedSource = expectedSource ?? null;
   if (page && !page.isClosed()) {
+    await persistCopyProbe();
     result.actualEditor = await editorSnapshot().catch(snapshotError => ({ unavailable: String(snapshotError) }));
     result.lastInputEvents = await page.evaluate(() => window.__weftextLayoutInputEvents ?? [])
       .catch(eventError => [{ unavailable: String(eventError) }]);
@@ -874,6 +961,7 @@ try {
     await writeFile(path.join(out, 'failure.html'), await page.content().catch(() => ''), { flag: 'wx' });
   }
 } finally {
+  await persistCopyProbe();
   browserClosing = true;
   try { await browser?.close(); } catch (error) { result.browserCloseFailure = String(error); }
   await Promise.all([...responseTasks]);
