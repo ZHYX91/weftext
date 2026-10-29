@@ -1,5 +1,107 @@
 // Generated from assets/ui-messages.json. Run node scripts/generate_ui_messages.mjs.
 export const zhCN = {
+  "localResourceBatch.title": "导入资源",
+  "localResourceBatch.help": "按下列顺序一次导入所有文件。目标名称可修改，原始文件保持不变；库内已有资源与清单容量由准备结果核定。",
+  "localResourceBatch.targetName": "目标名称",
+  "localResourceBatch.originalName": "原始文件",
+  "localResourceBatch.bytes": "字节",
+  "localResourceBatch.mode": "导入后",
+  "localResourceBatch.importOnly": "仅导入资源",
+  "localResourceBatch.autoAppend": "导入并追加到正文（可靠图片显示为图片，其余为链接）",
+  "localResourceBatch.linksAppend": "导入并全部作为链接追加到正文",
+  "localResourceBatch.modeHelp": "正文使用当前原生可写正文末尾，可能位于尾注之前；不替换选区。插入只进入草稿，一次撤销可移除整批正文内容，资源仍保留。",
+  "localResourceBatch.prepare": "准备整批导入",
+  "localResourceBatch.confirm": "确认导入以上全部文件",
+  "localResourceBatch.recover": "核查原操作",
+  "localResourceBatch.retryOriginal": "重发同一原准备请求",
+  "localResourceBatch.cancelPlan": "取消原准备计划",
+  "localResourceBatch.insert": "追加已导入资源到当前正文",
+  "localResourceBatch.finishOnly": "结束，仅保留已导入资源",
+  "localResourceBatch.finishInserted": "结束本批次",
+  "localResourceBatch.finishUncertain": "已核对正文，结束并保留资源",
+  "localResourceBatch.draft": "尚未准备；可调整目标名称和导入方式。",
+  "localResourceBatch.prepared": "已准备；请核对全部文件、顺序及下方实际变更，再明确确认。",
+  "localResourceBatch.unknown": "原操作结果待核查。保留原操作号，不会新建导入或更换文件。",
+  "localResourceBatch.committed": "资源已导入；正文尚未插入。可继续插入，或结束并仅保留资源。",
+  "localResourceBatch.inserted": "资源已导入，整批正文已进入草稿。保存沿用原笔记流程。",
+  "localResourceBatch.uncertain": "资源已导入；正文交付结果需核对。请先检查当前草稿，不会再次自动插入或重新导入。",
+  "localResourceBatch.resolved": "原操作已明确结束，未在此继续导入。",
+  "localResourceBatch.sourceChanged": "正文或当前笔记已变化；资源原操作保留，未向新稿写入。需要时请在原笔记明确追加已导入资源。",
+  "localResourceBatch.scopeChanged": "请回到本批次所属笔记继续处理。当前笔记不会被此批次修改。",
+  "localResourceBatch.storageFailed": "无法验证本机原请求定位记录；保留原件，未开始新的请求。",
+  "localResourceBatch.noDocument": "请先打开可编辑的已登记笔记。",
+  "localResourceBatch.sizeLimit": "每批选择 1–64 个文件，累计不超过 64 MiB。",
+  "localResourceBatch.refreshFailed": "资源已导入，资源列表刷新尚未完成；可核查原操作后重试刷新，不会再次导入。",
+  "localResourceBatch.busy": "正在处理本批次，请保留原窗口等待结果。",
+  "localResourceBatch.retained": "原操作定位已保留；重新打开资源导入可继续核查。",
+  "dataPanel.valuePresetTitle": "{field}：值预设",
+  "dataPanel.valuePresetStageHelp": "使用预设只调整本字段的表单值；关闭此窗口后，仍需点击字段的“应用到草稿”。",
+  "dataPanel.valuePresetUnavailable": "当前字段缺少完整库身份或 Schema 资格，值预设暂不可用。",
+  "dataPanel.valuePresetRetired": "字段来源已变化；未保存的预设输入仍保留在本次会话，重新打开后可继续。",
+  "hostedMediaImport.batchDescription": "选择一个或多个本机文件，按下方顺序准备同一批资源导入。导入只加入获准集合，不修改正文。",
+  "hostedMediaImportState.resourceNameOrBytesIncomplete": "请核对每个文件的目标名称和原始字节；当前批次尚未完整。",
+  "hostedMediaImport.originalReadRequestPersistenceRequired": "所选原件已完整读取；准备前先保留同批原操作定位信息，文件字节仅在本页。",
+  "hostedMediaImport.batchLimits": "每个文件最多 16 MiB。本次与已有资源及关联内容合计最多 32 MiB，集合最多 64 个资源；最终可用容量由服务端核对，超限整批不导入。",
+  "hostedMediaImport.batchName": "托管资源导入名称 {p0}",
+  "hostedMediaImport.batchSummary": "已选择 {p0} 项，共 {p1} 字节；下方顺序即本次导入顺序。",
+  "hostedMediaImport.batchCountLimit": "请选择 1–64 个文件；已有集合成员也占用可用数量。原文件选择保留。",
+  "hostedMediaImport.batchTotalLimit": "所选文件总量超过托管上传的 32 MiB 预算；未导入任何文件，原文件选择保留。",
+  "hostedMediaImport.locatorOnlySuffix": "（仅恢复名称与大小，文件字节未缓存）",
+  "hostedMediaImport.originalUploadUnavailable": "本页未保留原上传字节。请先查询或结束同一原操作；不能用新文件替换原请求或自动再导入。",
+  "hostedMediaImport.batchCommittedBodyUnchanged": "原资源导入已提交；本批资源尚未插入正文。资源读取、下载及正文修改仍需各自独立资格。",
+  "valuePresets.title": "值预设",
+  "valuePresets.help": "命名预设仅保存在此浏览器，按当前库、字段和 Schema 语义分区；应用后仍沿所在表单的原流程处理。",
+  "valuePresets.replaceHelp": "本位置仅支持替换一个标量值；不会删除字段或设为空。",
+  "valuePresets.appendHelp": "本位置仅支持向当前列表追加一项；保留已有项、重复值及其顺序。",
+  "valuePresets.name": "预设名称",
+  "valuePresets.value": "预设值",
+  "valuePresets.available": "已保存的预设",
+  "valuePresets.choose": "选择一个预设",
+  "valuePresets.save": "命名并保存预设",
+  "valuePresets.replace": "用预设替换此值",
+  "valuePresets.append": "追加预设项",
+  "valuePresets.delete": "删除所选预设",
+  "valuePresets.saved": "预设已保存在此浏览器。",
+  "valuePresets.removed": "所选预设已删除。",
+  "valuePresets.appliedReplace": "当前值已替换。",
+  "valuePresets.appliedAppend": "已向当前列表追加一项。",
+  "valuePresets.guard": "请先完成当前输入，并确认此字段仍可编辑；原输入保留。",
+  "valuePresets.badStorage": "预设记录无法完整读取，未采用或覆盖旧记录；当前输入保留。",
+  "valuePresets.storageFailed": "浏览器未确认预设存储成功；当前输入保留，请重新读取后核对。",
+  "valuePresets.storageChanged": "另一页面已更改这些预设；未覆盖该记录，当前输入保留。",
+  "valuePresets.unsupported": "此位置或引用类型暂不支持值预设；请沿原字段控件输入。",
+  "valuePresets.invalidValue": "预设值不符合当前类型；请完成或修正输入。最终字段约束仍由原应用流程校验。",
+  "valuePresets.nameInvalid": "请输入 1–80 个字符的预设名称。",
+  "valuePresets.nameExists": "已有同名预设；请使用另一个名称，旧记录未覆盖。",
+  "valuePresets.limit": "预设数量或内容超过本机存储预算；当前输入和旧记录保留。",
+  "valuePresets.maxItems": "当前列表已达到允许的最大项数，未追加。",
+  "valuePresets.targetUnavailable": "当前值、成员位置或 Schema 已变化，未采用旧预设；原输入保留。",
+  "error.data.fieldTransfer.differentFieldsRequired": "请选择两个不同字段",
+  "error.data.fieldTransfer.existingListsRequired": "仅可在两个已有、有效且可写的静态列表字段间移动",
+  "error.data.fieldTransfer.itemShapesDiffer": "两个列表的项类型与语义不一致，不能直接移动",
+  "error.data.fieldTransfer.ordinalInvalid": "所选连续序号或目标插入位置已无效",
+  "error.data.fieldTransfer.triviaUncertified": "列表项之间包含无法确认归属的注释或语法，请编辑源码",
+  "error.data.fieldTransfer.readbackMismatch": "移动后的字段值、顺序或控制信息未通过原生复验，未生成修改",
+  "fieldTransfer.title": "在字段之间移动列表项",
+  "fieldTransfer.help": "选择源列表中的连续序号和目标列表的插入位置。两边一起更新为一次可撤销的草稿修改；不会自动保存笔记。",
+  "fieldTransfer.unapplied": "请先将当前属性、类型和架构表单的修改应用到草稿，或明确放弃这些修改，再移动列表项；无需先保存文件。",
+  "fieldTransfer.empty": "当前没有两个可用于移动的已有静态列表字段。缺值、none、无效、计算或含未绑定成员的字段不能用于此操作。",
+  "fieldTransfer.fromField": "源列表字段",
+  "fieldTransfer.toField": "目标列表字段",
+  "fieldTransfer.first": "起始序号（从 1 开始）",
+  "fieldTransfer.last": "结束序号（包含此项）",
+  "fieldTransfer.position": "插入到目标列表的第几项之前（末尾用项数加 1）",
+  "fieldTransfer.apply": "移动到目标字段",
+  "fieldTransfer.fieldChoice": "{p0}（{p1} 项）",
+  "fieldTransfer.preview": "将第 {p0}–{p1} 项移动到目标第 {p2} 项之前；保留所选项的原始顺序。",
+  "fieldTransfer.item": "第 {p0} 项：{p1}",
+  "fieldTransfer.sourceChanged": "文档、架构、权限或所选范围已变化，未应用旧的移动结果。请按当前内容重新选择。",
+  "fieldTransfer.applied": "两字段已在同一次草稿修改中更新，可一次撤销；笔记尚未自动保存。",
+  "error.core.operations.resourceBatchEmpty": "请至少选择一个要导入的资源。",
+  "error.core.operations.resourceBatchNamesConflict": "本批资源有重复或指向同一文件名的名称，请修改后重新预览。",
+  "error.core.operations.resourceBatchResultUnavailable": "此原操作没有完整的资源批次结果。",
+  "error.core.operations.resourceBatchCommittedRequired": "资源批次尚未确认提交，请先查明原操作状态。",
+  "error.core.operations.resourceBatchDestinationChanged": "目的笔记、资源登记或资源版本已改变。已导入资源保留，请重新核对后插入。",
   "nodeLinks.copyStableLinks": "复制所选笔记的稳定链接",
   "nodeLinks.libraryUnavailable": "请先打开身份明确的笔记库。",
   "nodeLinks.libraryIncomplete": "笔记库扫描尚未完整，无法确认整批笔记身份。",
@@ -1992,7 +2094,7 @@ export const zhCN = {
   "media.registeredResourceAria": "选择已登记资源",
   "media.refreshResources": "刷新资源",
   "media.importFileAria": "导入资源文件",
-  "media.importBudgetExceeded": "导入资源超过 64 MiB 上限。",
+  "media.importBudgetExceeded": "所选资源合计超过64MiB，请减少本批文件。",
   "media.importResource": "导入资源…",
   "media.resourceReadIncomplete": "资源读取未完成，请重新打开；批注草稿已保留。",
   "media.readOnlyExactVersion": "只读查看准确资源版本。",
@@ -8409,7 +8511,6 @@ export const zhCN = {
   "hostedMediaImportState.sizeLimitExceeded": "资源导入超过 16 MiB 上限，原件仍保留。",
   "hostedMediaImportState.collectionImportNotPermitted": "此集合当前没有独立导入资格；原输入保留。",
   "hostedMediaImportState.originalOperationMustBeResolved": "请先核对或明确结束原资源导入，不会换编号重放。",
-  "hostedMediaImportState.resourceNameOrBytesIncomplete": "请保留原件并输入单个资源名称，字节或名称尚未完整。",
   "hostedMediaImportState.receiptMismatch": "资源导入回执不对应原编号或集合，请查询原操作。",
   "hostedMediaImportState.originalFactsChanged": "原资源导入事实或计划改变，未执行替代操作。",
   "hostedMediaImportState.previewOriginalMissing": "导入计划缺少准确原件预览，未允许提交。",
@@ -9306,7 +9407,6 @@ export const zhCN = {
   "hostedMediaImport.storageUnavailable": "浏览器恢复缓存容量不足或不可写；原件 File 和输入仍在本页，未发送新的资源写入。",
   "hostedMediaImport.originalSizeLimit": "资源导入超过 16 MiB 上限，原件仍在本页，未发起写入。",
   "hostedMediaImport.inputChangedDuringRead": "读取期间的新名称或集合输入保留，原件已取得；尚未准备写入。",
-  "hostedMediaImport.originalReadRequestPersistenceRequired": "原件已完整读取；准备和提交均须先可靠保留原请求。",
   "hostedMediaImport.resultUnconfirmed": "资源导入结果未确认，原请求保留，请查询原编号。",
   "hostedMediaImport.readingKeepInput": "原件仍在读取，请保留当前输入。",
   "hostedMediaImport.committedLocatorNotAuthority": "原资源导入已提交；新定位符不授予读取权限，正文草稿与撤销历史保留。",
@@ -10466,11 +10566,117 @@ export const zhCN = {
   "tableGrid.selectCellText": "全选格内文字",
   "tableGrid.explicitWholeCellSelectionNotice": "已明确选择本格全部文字；输入将替换所选文字。",
   "tableGrid.caretAtEndNotice": "无法确认点击字符位置，光标已放在格内文字末尾；可在输入框内重新定位或使用“全选格内文字”。",
-  "error.api.data.periodSelectionRequired": "请选择一个有效日期，或提供一个准确周期 key；两者不能同时提交。"
+  "error.api.data.periodSelectionRequired": "请选择一个有效日期，或提供一个准确周期 key；两者不能同时提交。",
+  "localResourceBatch.chooseFiles": "选择要批量导入的资源文件",
+  "localResourceBatch.noPending": "当前笔记没有待确认的资源批次。",
+  "valuePresets.lockUnavailable": "当前浏览器不支持预设写入锁，命名保存和删除已停用；仍可读取并采用已有预设，当前输入保留。",
+  "nativeEditor.finishInvalidBeforeStructure": "先完成记录中的无效输入，再添加、移除或清空成员；原输入已保留。"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
 export interface MessageParamsMap {
+  "localResourceBatch.title": {  };
+  "localResourceBatch.help": {  };
+  "localResourceBatch.targetName": {  };
+  "localResourceBatch.originalName": {  };
+  "localResourceBatch.bytes": {  };
+  "localResourceBatch.mode": {  };
+  "localResourceBatch.importOnly": {  };
+  "localResourceBatch.autoAppend": {  };
+  "localResourceBatch.linksAppend": {  };
+  "localResourceBatch.modeHelp": {  };
+  "localResourceBatch.prepare": {  };
+  "localResourceBatch.confirm": {  };
+  "localResourceBatch.recover": {  };
+  "localResourceBatch.retryOriginal": {  };
+  "localResourceBatch.cancelPlan": {  };
+  "localResourceBatch.insert": {  };
+  "localResourceBatch.finishOnly": {  };
+  "localResourceBatch.finishInserted": {  };
+  "localResourceBatch.finishUncertain": {  };
+  "localResourceBatch.draft": {  };
+  "localResourceBatch.prepared": {  };
+  "localResourceBatch.unknown": {  };
+  "localResourceBatch.committed": {  };
+  "localResourceBatch.inserted": {  };
+  "localResourceBatch.uncertain": {  };
+  "localResourceBatch.resolved": {  };
+  "localResourceBatch.sourceChanged": {  };
+  "localResourceBatch.scopeChanged": {  };
+  "localResourceBatch.storageFailed": {  };
+  "localResourceBatch.noDocument": {  };
+  "localResourceBatch.sizeLimit": {  };
+  "localResourceBatch.refreshFailed": {  };
+  "localResourceBatch.busy": {  };
+  "localResourceBatch.retained": {  };
+  "dataPanel.valuePresetTitle": { field: string };
+  "dataPanel.valuePresetStageHelp": {  };
+  "dataPanel.valuePresetUnavailable": {  };
+  "dataPanel.valuePresetRetired": {  };
+  "hostedMediaImport.batchDescription": {  };
+  "hostedMediaImportState.resourceNameOrBytesIncomplete": {  };
+  "hostedMediaImport.originalReadRequestPersistenceRequired": {  };
+  "hostedMediaImport.batchLimits": {  };
+  "hostedMediaImport.batchName": { p0: string };
+  "hostedMediaImport.batchSummary": { p0: string; p1: string };
+  "hostedMediaImport.batchCountLimit": {  };
+  "hostedMediaImport.batchTotalLimit": {  };
+  "hostedMediaImport.locatorOnlySuffix": {  };
+  "hostedMediaImport.originalUploadUnavailable": {  };
+  "hostedMediaImport.batchCommittedBodyUnchanged": {  };
+  "valuePresets.title": {  };
+  "valuePresets.help": {  };
+  "valuePresets.replaceHelp": {  };
+  "valuePresets.appendHelp": {  };
+  "valuePresets.name": {  };
+  "valuePresets.value": {  };
+  "valuePresets.available": {  };
+  "valuePresets.choose": {  };
+  "valuePresets.save": {  };
+  "valuePresets.replace": {  };
+  "valuePresets.append": {  };
+  "valuePresets.delete": {  };
+  "valuePresets.saved": {  };
+  "valuePresets.removed": {  };
+  "valuePresets.appliedReplace": {  };
+  "valuePresets.appliedAppend": {  };
+  "valuePresets.guard": {  };
+  "valuePresets.badStorage": {  };
+  "valuePresets.storageFailed": {  };
+  "valuePresets.storageChanged": {  };
+  "valuePresets.unsupported": {  };
+  "valuePresets.invalidValue": {  };
+  "valuePresets.nameInvalid": {  };
+  "valuePresets.nameExists": {  };
+  "valuePresets.limit": {  };
+  "valuePresets.maxItems": {  };
+  "valuePresets.targetUnavailable": {  };
+  "error.data.fieldTransfer.differentFieldsRequired": {  };
+  "error.data.fieldTransfer.existingListsRequired": {  };
+  "error.data.fieldTransfer.itemShapesDiffer": {  };
+  "error.data.fieldTransfer.ordinalInvalid": {  };
+  "error.data.fieldTransfer.triviaUncertified": {  };
+  "error.data.fieldTransfer.readbackMismatch": {  };
+  "fieldTransfer.title": {  };
+  "fieldTransfer.help": {  };
+  "fieldTransfer.unapplied": {  };
+  "fieldTransfer.empty": {  };
+  "fieldTransfer.fromField": {  };
+  "fieldTransfer.toField": {  };
+  "fieldTransfer.first": {  };
+  "fieldTransfer.last": {  };
+  "fieldTransfer.position": {  };
+  "fieldTransfer.apply": {  };
+  "fieldTransfer.fieldChoice": { p0: string; p1: number };
+  "fieldTransfer.preview": { p0: number; p1: number; p2: number };
+  "fieldTransfer.item": { p0: number; p1: string };
+  "fieldTransfer.sourceChanged": {  };
+  "fieldTransfer.applied": {  };
+  "error.core.operations.resourceBatchEmpty": {  };
+  "error.core.operations.resourceBatchNamesConflict": {  };
+  "error.core.operations.resourceBatchResultUnavailable": {  };
+  "error.core.operations.resourceBatchCommittedRequired": {  };
+  "error.core.operations.resourceBatchDestinationChanged": {  };
   "nodeLinks.copyStableLinks": {  };
   "nodeLinks.libraryUnavailable": {  };
   "nodeLinks.libraryIncomplete": {  };
@@ -18880,7 +19086,6 @@ export interface MessageParamsMap {
   "hostedMediaImportState.sizeLimitExceeded": {  };
   "hostedMediaImportState.collectionImportNotPermitted": {  };
   "hostedMediaImportState.originalOperationMustBeResolved": {  };
-  "hostedMediaImportState.resourceNameOrBytesIncomplete": {  };
   "hostedMediaImportState.receiptMismatch": {  };
   "hostedMediaImportState.originalFactsChanged": {  };
   "hostedMediaImportState.previewOriginalMissing": {  };
@@ -19777,7 +19982,6 @@ export interface MessageParamsMap {
   "hostedMediaImport.storageUnavailable": {  };
   "hostedMediaImport.originalSizeLimit": {  };
   "hostedMediaImport.inputChangedDuringRead": {  };
-  "hostedMediaImport.originalReadRequestPersistenceRequired": {  };
   "hostedMediaImport.resultUnconfirmed": {  };
   "hostedMediaImport.readingKeepInput": {  };
   "hostedMediaImport.committedLocatorNotAuthority": {  };
@@ -20938,8 +21142,131 @@ export interface MessageParamsMap {
   "tableGrid.explicitWholeCellSelectionNotice": {  };
   "tableGrid.caretAtEndNotice": {  };
   "error.api.data.periodSelectionRequired": {  };
+  "localResourceBatch.chooseFiles": {  };
+  "localResourceBatch.noPending": {  };
+  "valuePresets.lockUnavailable": {  };
+  "nativeEditor.finishInvalidBeforeStructure": {  };
 }
 export const messageParamTypes = {
+  "localResourceBatch.title": {},
+  "localResourceBatch.help": {},
+  "localResourceBatch.targetName": {},
+  "localResourceBatch.originalName": {},
+  "localResourceBatch.bytes": {},
+  "localResourceBatch.mode": {},
+  "localResourceBatch.importOnly": {},
+  "localResourceBatch.autoAppend": {},
+  "localResourceBatch.linksAppend": {},
+  "localResourceBatch.modeHelp": {},
+  "localResourceBatch.prepare": {},
+  "localResourceBatch.confirm": {},
+  "localResourceBatch.recover": {},
+  "localResourceBatch.retryOriginal": {},
+  "localResourceBatch.cancelPlan": {},
+  "localResourceBatch.insert": {},
+  "localResourceBatch.finishOnly": {},
+  "localResourceBatch.finishInserted": {},
+  "localResourceBatch.finishUncertain": {},
+  "localResourceBatch.draft": {},
+  "localResourceBatch.prepared": {},
+  "localResourceBatch.unknown": {},
+  "localResourceBatch.committed": {},
+  "localResourceBatch.inserted": {},
+  "localResourceBatch.uncertain": {},
+  "localResourceBatch.resolved": {},
+  "localResourceBatch.sourceChanged": {},
+  "localResourceBatch.scopeChanged": {},
+  "localResourceBatch.storageFailed": {},
+  "localResourceBatch.noDocument": {},
+  "localResourceBatch.sizeLimit": {},
+  "localResourceBatch.refreshFailed": {},
+  "localResourceBatch.busy": {},
+  "localResourceBatch.retained": {},
+  "dataPanel.valuePresetTitle": {
+    "field": "text"
+  },
+  "dataPanel.valuePresetStageHelp": {},
+  "dataPanel.valuePresetUnavailable": {},
+  "dataPanel.valuePresetRetired": {},
+  "hostedMediaImport.batchDescription": {},
+  "hostedMediaImportState.resourceNameOrBytesIncomplete": {},
+  "hostedMediaImport.originalReadRequestPersistenceRequired": {},
+  "hostedMediaImport.batchLimits": {},
+  "hostedMediaImport.batchName": {
+    "p0": "text"
+  },
+  "hostedMediaImport.batchSummary": {
+    "p0": "text",
+    "p1": "text"
+  },
+  "hostedMediaImport.batchCountLimit": {},
+  "hostedMediaImport.batchTotalLimit": {},
+  "hostedMediaImport.locatorOnlySuffix": {},
+  "hostedMediaImport.originalUploadUnavailable": {},
+  "hostedMediaImport.batchCommittedBodyUnchanged": {},
+  "valuePresets.title": {},
+  "valuePresets.help": {},
+  "valuePresets.replaceHelp": {},
+  "valuePresets.appendHelp": {},
+  "valuePresets.name": {},
+  "valuePresets.value": {},
+  "valuePresets.available": {},
+  "valuePresets.choose": {},
+  "valuePresets.save": {},
+  "valuePresets.replace": {},
+  "valuePresets.append": {},
+  "valuePresets.delete": {},
+  "valuePresets.saved": {},
+  "valuePresets.removed": {},
+  "valuePresets.appliedReplace": {},
+  "valuePresets.appliedAppend": {},
+  "valuePresets.guard": {},
+  "valuePresets.badStorage": {},
+  "valuePresets.storageFailed": {},
+  "valuePresets.storageChanged": {},
+  "valuePresets.unsupported": {},
+  "valuePresets.invalidValue": {},
+  "valuePresets.nameInvalid": {},
+  "valuePresets.nameExists": {},
+  "valuePresets.limit": {},
+  "valuePresets.maxItems": {},
+  "valuePresets.targetUnavailable": {},
+  "error.data.fieldTransfer.differentFieldsRequired": {},
+  "error.data.fieldTransfer.existingListsRequired": {},
+  "error.data.fieldTransfer.itemShapesDiffer": {},
+  "error.data.fieldTransfer.ordinalInvalid": {},
+  "error.data.fieldTransfer.triviaUncertified": {},
+  "error.data.fieldTransfer.readbackMismatch": {},
+  "fieldTransfer.title": {},
+  "fieldTransfer.help": {},
+  "fieldTransfer.unapplied": {},
+  "fieldTransfer.empty": {},
+  "fieldTransfer.fromField": {},
+  "fieldTransfer.toField": {},
+  "fieldTransfer.first": {},
+  "fieldTransfer.last": {},
+  "fieldTransfer.position": {},
+  "fieldTransfer.apply": {},
+  "fieldTransfer.fieldChoice": {
+    "p0": "text",
+    "p1": "integer"
+  },
+  "fieldTransfer.preview": {
+    "p0": "integer",
+    "p1": "integer",
+    "p2": "integer"
+  },
+  "fieldTransfer.item": {
+    "p0": "integer",
+    "p1": "text"
+  },
+  "fieldTransfer.sourceChanged": {},
+  "fieldTransfer.applied": {},
+  "error.core.operations.resourceBatchEmpty": {},
+  "error.core.operations.resourceBatchNamesConflict": {},
+  "error.core.operations.resourceBatchResultUnavailable": {},
+  "error.core.operations.resourceBatchCommittedRequired": {},
+  "error.core.operations.resourceBatchDestinationChanged": {},
   "nodeLinks.copyStableLinks": {},
   "nodeLinks.libraryUnavailable": {},
   "nodeLinks.libraryIncomplete": {},
@@ -30954,7 +31281,6 @@ export const messageParamTypes = {
   "hostedMediaImportState.sizeLimitExceeded": {},
   "hostedMediaImportState.collectionImportNotPermitted": {},
   "hostedMediaImportState.originalOperationMustBeResolved": {},
-  "hostedMediaImportState.resourceNameOrBytesIncomplete": {},
   "hostedMediaImportState.receiptMismatch": {},
   "hostedMediaImportState.originalFactsChanged": {},
   "hostedMediaImportState.previewOriginalMissing": {},
@@ -32000,7 +32326,6 @@ export const messageParamTypes = {
   "hostedMediaImport.storageUnavailable": {},
   "hostedMediaImport.originalSizeLimit": {},
   "hostedMediaImport.inputChangedDuringRead": {},
-  "hostedMediaImport.originalReadRequestPersistenceRequired": {},
   "hostedMediaImport.resultUnconfirmed": {},
   "hostedMediaImport.readingKeepInput": {},
   "hostedMediaImport.committedLocatorNotAuthority": {},
@@ -33345,10 +33670,116 @@ export const messageParamTypes = {
   "tableGrid.selectCellText": {},
   "tableGrid.explicitWholeCellSelectionNotice": {},
   "tableGrid.caretAtEndNotice": {},
-  "error.api.data.periodSelectionRequired": {}
+  "error.api.data.periodSelectionRequired": {},
+  "localResourceBatch.chooseFiles": {},
+  "localResourceBatch.noPending": {},
+  "valuePresets.lockUnavailable": {},
+  "nativeEditor.finishInvalidBeforeStructure": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
+  "localResourceBatch.title": "Import resources",
+  "localResourceBatch.help": "Import all files once in the order below. Target names are editable; originals remain unchanged. Preparation checks existing resources and manifest capacity.",
+  "localResourceBatch.targetName": "Target name",
+  "localResourceBatch.originalName": "Original file",
+  "localResourceBatch.bytes": "Bytes",
+  "localResourceBatch.mode": "After import",
+  "localResourceBatch.importOnly": "Import resources only",
+  "localResourceBatch.autoAppend": "Import and append to body (reliable images as images, others as links)",
+  "localResourceBatch.linksAppend": "Import and append all as links",
+  "localResourceBatch.modeHelp": "Body insertion uses the proved native body end, which may precede endnotes. It does not replace a selection. One Undo removes the batch from the Draft; imported resources remain.",
+  "localResourceBatch.prepare": "Prepare batch import",
+  "localResourceBatch.confirm": "Confirm import of all files above",
+  "localResourceBatch.recover": "Check original operation",
+  "localResourceBatch.retryOriginal": "Resend the same original preparation",
+  "localResourceBatch.cancelPlan": "Cancel original prepared plan",
+  "localResourceBatch.insert": "Append imported resources to current body",
+  "localResourceBatch.finishOnly": "Finish, keeping imported resources only",
+  "localResourceBatch.finishInserted": "Finish this batch",
+  "localResourceBatch.finishUncertain": "I checked the body; finish and keep resources",
+  "localResourceBatch.draft": "Not prepared. Adjust target names and the import mode.",
+  "localResourceBatch.prepared": "Prepared. Review all files, their order and the actual changes below before confirming.",
+  "localResourceBatch.unknown": "The original outcome needs checking. Its ID is retained; no new import or replacement files will be created.",
+  "localResourceBatch.committed": "Resources are imported; body content is not inserted. Continue insertion or finish with resources only.",
+  "localResourceBatch.inserted": "Resources are imported and the batch is in the Draft. Save through the note’s normal workflow.",
+  "localResourceBatch.uncertain": "Resources are imported; body delivery needs checking. Inspect the current Draft. It will not be inserted or imported again automatically.",
+  "localResourceBatch.resolved": "The original operation has ended; no further import is performed here.",
+  "localResourceBatch.sourceChanged": "The body or current note changed. The original resource operation is retained and no new Draft was changed. Explicitly append imported resources in the original note if needed.",
+  "localResourceBatch.scopeChanged": "Return to this batch’s original note to continue. This batch will not change the current note.",
+  "localResourceBatch.storageFailed": "The local original-request locator could not be verified. The original is retained and no new request was started.",
+  "localResourceBatch.noDocument": "Open an editable admitted note first.",
+  "localResourceBatch.sizeLimit": "Select 1–64 files with a combined size of at most 64 MiB.",
+  "localResourceBatch.refreshFailed": "Resources are imported; refreshing the resource list is incomplete. Check the original operation to retry the refresh without importing again.",
+  "localResourceBatch.busy": "This batch is being processed. Keep this window open while it settles.",
+  "localResourceBatch.retained": "The original-operation locator is retained. Reopen resource import to continue checking.",
+  "dataPanel.valuePresetTitle": "{field}: value presets",
+  "dataPanel.valuePresetStageHelp": "Using a preset only changes this field’s form value. After closing this window, use the field’s Apply to draft action.",
+  "dataPanel.valuePresetUnavailable": "This field lacks a complete library identity or Schema qualification. Value presets are unavailable.",
+  "dataPanel.valuePresetRetired": "The field source changed. Unsaved preset input is retained in this session and can be continued after reopening.",
+  "hostedMediaImport.batchDescription": "Choose one or more local files for one import, in the order shown below. Import adds them to the permitted collection without editing document text.",
+  "hostedMediaImportState.resourceNameOrBytesIncomplete": "Check every file’s target name and original bytes. The current batch is incomplete.",
+  "hostedMediaImport.originalReadRequestPersistenceRequired": "The selected originals have been read. The original batch locator must be retained before preparing; file bytes stay only in this page.",
+  "hostedMediaImport.batchLimits": "Up to 16 MiB per file, 32 MiB including existing resources and related content, and 64 resources per collection. The server checks remaining capacity and rejects an over-budget batch as a whole.",
+  "hostedMediaImport.batchName": "Hosted resource import name {p0}",
+  "hostedMediaImport.batchSummary": "Selected {p0} files, {p1} bytes in total. The list order is the import order.",
+  "hostedMediaImport.batchCountLimit": "Choose 1–64 files. Existing collection members also count toward the limit. The original file selection is retained.",
+  "hostedMediaImport.batchTotalLimit": "The selected files exceed the hosted upload budget of 32 MiB. No files were imported; the original selection is retained.",
+  "hostedMediaImport.locatorOnlySuffix": " (names and sizes restored; file bytes are not cached)",
+  "hostedMediaImport.originalUploadUnavailable": "This page does not retain the original upload bytes. Query or settle that original operation first; new files cannot replace its request or trigger another import automatically.",
+  "hostedMediaImport.batchCommittedBodyUnchanged": "The original resource import is committed. These resources have not been inserted into the document. Reading, downloading and document edits each require independent permission.",
+  "valuePresets.title": "Value presets",
+  "valuePresets.help": "Named presets stay in this browser, partitioned by this library, field and Schema semantics. Applying one follows this form’s existing workflow.",
+  "valuePresets.replaceHelp": "This position supports replacing one scalar value. It does not remove the field or set it to none.",
+  "valuePresets.appendHelp": "This position supports appending one item to the current list, preserving existing items, duplicates and order.",
+  "valuePresets.name": "Preset name",
+  "valuePresets.value": "Preset value",
+  "valuePresets.available": "Saved presets",
+  "valuePresets.choose": "Choose a preset",
+  "valuePresets.save": "Name and save preset",
+  "valuePresets.replace": "Replace this value with preset",
+  "valuePresets.append": "Append preset item",
+  "valuePresets.delete": "Delete selected preset",
+  "valuePresets.saved": "Preset saved in this browser.",
+  "valuePresets.removed": "Selected preset deleted.",
+  "valuePresets.appliedReplace": "Current value replaced.",
+  "valuePresets.appliedAppend": "One item appended to the current list.",
+  "valuePresets.guard": "Finish the current input and ensure this field remains editable. Existing input is retained.",
+  "valuePresets.badStorage": "Preset records cannot be read completely. Old records are neither adopted nor overwritten; current input is retained.",
+  "valuePresets.storageFailed": "The browser did not confirm preset storage. Current input is retained; reload the records to check the outcome.",
+  "valuePresets.storageChanged": "Another page changed these presets. Its record was not overwritten; current input is retained.",
+  "valuePresets.unsupported": "This position or reference type does not support value presets yet. Use the existing field controls.",
+  "valuePresets.invalidValue": "The preset value does not match the current type. Complete or correct the input; final field constraints are still checked by the existing apply workflow.",
+  "valuePresets.nameInvalid": "Enter a preset name of 1–80 characters.",
+  "valuePresets.nameExists": "A preset already has this name. Use another name; the old record was not overwritten.",
+  "valuePresets.limit": "Preset count or content exceeds the local storage budget. Current input and old records are retained.",
+  "valuePresets.maxItems": "The current list has reached its maximum item count. Nothing was appended.",
+  "valuePresets.targetUnavailable": "The current value, member position or Schema has changed. The old preset was not applied; existing input is retained.",
+  "error.data.fieldTransfer.differentFieldsRequired": "Select two different fields.",
+  "error.data.fieldTransfer.existingListsRequired": "Only existing, valid, writable static list fields can transfer items.",
+  "error.data.fieldTransfer.itemShapesDiffer": "The lists have different item types or semantics; direct transfer is unavailable.",
+  "error.data.fieldTransfer.ordinalInvalid": "The selected ordinal range or destination insertion position is invalid.",
+  "error.data.fieldTransfer.triviaUncertified": "Comments or syntax between list items have no proven transfer ownership; edit the source.",
+  "error.data.fieldTransfer.readbackMismatch": "Native verification of transferred values, order or controls failed; no edit was produced.",
+  "fieldTransfer.title": "Move list items between fields",
+  "fieldTransfer.help": "Choose a consecutive range in the source list and an insertion position in the destination list. Both fields change together in one undoable draft edit; the note is not saved automatically.",
+  "fieldTransfer.unapplied": "Apply the current property, type and schema form changes to the draft, or explicitly discard them, before moving list items. Saving the file is not required.",
+  "fieldTransfer.empty": "There are not two existing static list fields available for transfer. Absent, none, invalid, computed or unbound fields cannot be used.",
+  "fieldTransfer.fromField": "Source list field",
+  "fieldTransfer.toField": "Destination list field",
+  "fieldTransfer.first": "First position (starting at 1)",
+  "fieldTransfer.last": "Last position (inclusive)",
+  "fieldTransfer.position": "Insert before destination position (item count plus 1 appends)",
+  "fieldTransfer.apply": "Move to destination field",
+  "fieldTransfer.fieldChoice": "{p0} ({p1} items)",
+  "fieldTransfer.preview": "Move items {p0}–{p1} before destination position {p2}, retaining their order.",
+  "fieldTransfer.item": "Item {p0}: {p1}",
+  "fieldTransfer.sourceChanged": "The document, schema, authority or selection changed. The old transfer was not applied; select again against the current content.",
+  "fieldTransfer.applied": "Both fields were updated in one draft edit and can be undone together. The note was not saved automatically.",
+  "error.core.operations.resourceBatchEmpty": "Select at least one resource to import.",
+  "error.core.operations.resourceBatchNamesConflict": "Resource names in this batch are duplicated or refer to the same filename. Rename them before previewing again.",
+  "error.core.operations.resourceBatchResultUnavailable": "This original operation has no complete resource batch result.",
+  "error.core.operations.resourceBatchCommittedRequired": "The resource batch is not confirmed committed. Check the original operation first.",
+  "error.core.operations.resourceBatchDestinationChanged": "The destination note, registration or resource version changed. Imported resources are retained; review them before inserting.",
   "nodeLinks.copyStableLinks": "Copy stable links to selected notes",
   "nodeLinks.libraryUnavailable": "Open a library with a confirmed identity first.",
   "nodeLinks.libraryIncomplete": "The library scan is incomplete; identities for the entire selection cannot be confirmed.",
@@ -35340,8 +35771,8 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "media.saveExactCopy": "Save an exact resource copy",
   "media.registeredResourceAria": "Choose a registered resource",
   "media.refreshResources": "Refresh resources",
-  "media.importFileAria": "Import resource file",
-  "media.importBudgetExceeded": "The imported resource exceeds the 64 MiB limit.",
+  "media.importFileAria": "Choose resource files to import",
+  "media.importBudgetExceeded": "The selected resources total more than 64 MiB. Choose fewer files for this batch.",
   "media.importResource": "Import resource…",
   "media.resourceReadIncomplete": "The resource read did not complete. Reopen it; the annotation draft is retained.",
   "media.readOnlyExactVersion": "Read-only view of the exact resource version.",
@@ -41758,7 +42189,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "hostedMediaImportState.sizeLimitExceeded": "Resource import exceeds the 16 MiB limit. The original is still retained.",
   "hostedMediaImportState.collectionImportNotPermitted": "This collection currently has no independent import eligibility. Original input is retained.",
   "hostedMediaImportState.originalOperationMustBeResolved": "Check or explicitly end the original resource import first. It will not be replayed under a new ID.",
-  "hostedMediaImportState.resourceNameOrBytesIncomplete": "Keep the original and enter a single resource name. The bytes or name are incomplete.",
   "hostedMediaImportState.receiptMismatch": "The resource import receipt does not match the original ID or collection. Query the original operation.",
   "hostedMediaImportState.originalFactsChanged": "The original resource import facts or plan changed. No substitute operation was performed.",
   "hostedMediaImportState.previewOriginalMissing": "The import plan lacks an exact original preview. Commit was not allowed.",
@@ -42655,7 +43085,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "hostedMediaImport.storageUnavailable": "The browser recovery cache is full or not writable. The original File and input remain on this page; no new resource write was sent.",
   "hostedMediaImport.originalSizeLimit": "Resource import exceeds the 16 MiB limit. The original remains on this page; no write was started.",
   "hostedMediaImport.inputChangedDuringRead": "New name or collection input made during reading is retained, and the original was obtained. No write has been prepared.",
-  "hostedMediaImport.originalReadRequestPersistenceRequired": "The original was read completely. Preparation and commit both require reliable retention of the original request first.",
   "hostedMediaImport.resultUnconfirmed": "The resource import result is unconfirmed. The original request is retained; query the original ID.",
   "hostedMediaImport.readingKeepInput": "The original is still being read. Keep the current input.",
   "hostedMediaImport.committedLocatorNotAuthority": "The original resource import was committed. The new locator does not grant read permission; the body draft and Undo history are retained.",
@@ -43815,5 +44244,9 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "tableGrid.selectCellText": "Select all cell text",
   "tableGrid.explicitWholeCellSelectionNotice": "All text in this cell is explicitly selected; typing replaces the selection.",
   "tableGrid.caretAtEndNotice": "The clicked character position could not be verified. The cursor is at the end of this cell; place it in the input or choose Select all cell text.",
-  "error.api.data.periodSelectionRequired": "Choose one valid date or provide one exact period key; do not submit both."
+  "error.api.data.periodSelectionRequired": "Choose one valid date or provide one exact period key; do not submit both.",
+  "localResourceBatch.chooseFiles": "Choose resource files to import as one batch",
+  "localResourceBatch.noPending": "This note has no resource batch awaiting confirmation.",
+  "valuePresets.lockUnavailable": "This browser does not support the preset write lock. Saving and deletion are disabled; existing presets remain readable and usable, and current input is retained.",
+  "nativeEditor.finishInvalidBeforeStructure": "Complete invalid record input before adding, removing or clearing members; your input is retained."
 };

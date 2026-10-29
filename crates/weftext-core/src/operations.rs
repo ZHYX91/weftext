@@ -16,6 +16,8 @@ mod namespace_tests;
 mod observation_tests;
 mod owner_backup;
 mod pending;
+mod resource_import;
+pub use resource_import::{ResourceImportFile, ResourceImportResult, ResourceImportUpload};
 #[cfg(all(test, windows))]
 mod pending_tests;
 mod trash;
@@ -338,6 +340,11 @@ pub enum OperationIntent {
         bytes: Vec<u8>,
         manifest_base_id: String,
         resource_base_id: String,
+    },
+    ImportResources {
+        node: String,
+        files: Vec<ResourceImportFile>,
+        manifest_base_id: String,
     },
     ImportNative {
         parent: String,
@@ -2513,7 +2520,9 @@ impl Core {
             return Ok((vec![], vec![]));
         }
         paths.push(display(&manifest_path));
-        let (cut, bindings) = self.capture_bounded_snapshot(root, &paths, 64, Some(facts))?;
+        // The resource budget counts descriptors; their one owning manifest is
+        // a dependency in addition to those 64 resource leaves.
+        let (cut, bindings) = self.capture_bounded_snapshot(root, &paths, 64 + 1, Some(facts))?;
         let current_manifest = cut.files.last().unwrap();
         if current_manifest.bytes != manifest.bytes {
             return Err(CoreError::new(
@@ -5504,138 +5513,30 @@ impl Core {
                 bytes,
                 manifest_base_id,
                 resource_base_id,
-            } => {
-                valid_name(name)?;
-                if bytes.len() > MAX_OPERATION_BYTES {
-                    return Err(CoreError::new(
-                        "budget",
-                        UiMessage::error_core_operations_resource_exceeds64_mi_b(),
-                    ));
-                }
-                let node_path = absolute_path(Path::new(node))?;
-                let directory = node_path.parent().ok_or_else(|| {
-                    CoreError::new(
-                        "invalidPath",
-                        UiMessage::error_core_operations_missing_resource_owner(),
-                    )
-                })?;
-                let canonical = self.managed_node(&root, directory, false)?;
-                if Path::new(&canonical.path) != node_path {
-                    return Err(CoreError::new(
-                        "unsupportedRole",
-                        UiMessage::error_core_operations_select_canonical_admitted_node_source(),
-                    ));
-                }
-                let owner = self.admitted_binding(&canonical.stamp.identity)?.unwrap();
-                let target = directory.join(name);
-                let manifest_path = directory.join("weftext.resources.json");
-                if target == node_path
-                    || target == manifest_path
-                    || name == "weftext.annotations.json"
-                {
-                    return Err(CoreError::new(
-                        "resourceConflict",
-                        UiMessage::error_core_operations_resource_cannot_replace_node_control_file(
-                        ),
-                    ));
-                }
-                let manifest = capture_optional(&self.backend, &manifest_path)?;
-                self.verify_snapshot(&manifest_path, manifest_base_id, manifest.as_ref())?;
-                if manifest
-                    .as_ref()
-                    .is_some_and(|file| file.bytes.len() > MAX_SOURCE_BYTES)
-                {
-                    return Err(CoreError::new(
-                        "budget",
-                        UiMessage::error_core_operations_owned_resource_manifest_exceeds2_mi_b(),
-                    ));
-                }
-                if manifest.is_none() {
-                    self.require_resource_collection_uninitialized(&owner)?;
-                }
-                let current = capture_optional(&self.backend, &target)?;
-                self.verify_snapshot(&target, resource_base_id, current.as_ref())?;
-                if current.is_some() {
-                    return Err(CoreError::new(
-                        "exists",
-                        UiMessage::error_core_operations_resource_import_create_only(),
-                    ));
-                }
-                let mut value: serde_json::Value = manifest
-                    .as_ref()
-                    .map(|f| serde_json::from_slice(&f.bytes))
-                    .transpose()?
-                    .unwrap_or_else(|| serde_json::json!({"version":1,"resources":[]}));
-                if value["version"] != 1 || !value["resources"].is_array() {
-                    return Err(CoreError::new(
-                        "resourceManifest",
-                        UiMessage::error_core_operations_unsupported_resource_manifest(),
-                    ));
-                }
-                if value["resources"].as_array().unwrap().len() >= 64 {
-                    return Err(CoreError::new(
-                        "budget",
-                        UiMessage::error_core_operations_at_most64_registered_resource_descriptors(
-                        ),
-                    ));
-                }
-                if value["resources"]
-                    .as_array()
-                    .unwrap()
-                    .iter()
-                    .any(|r| r["path"] == name.as_str())
-                {
-                    return Err(CoreError::new(
-                        "resourceConflict",
-                        UiMessage::error_core_operations_manifest_already_has_path(),
-                    ));
-                }
-                let resource_id = fresh();
-                let resource_ref = format!(
-                    "weftext-resource://{}/{resource_id}",
-                    workspace.workspace_id
-                );
-                value["resources"]
-                    .as_array_mut()
-                    .unwrap()
-                    .push(serde_json::json!({"resourceId":resource_id,"path":name}));
-                let manifest_after = serde_json::to_vec_pretty(&value)?;
-                if manifest_after.len() > MAX_SOURCE_BYTES {
-                    return Err(CoreError::new(
-                        "budget",
-                        UiMessage::error_core_operations_owned_resource_manifest_exceeds2_mi_b(),
-                    ));
-                }
-                let changes = vec![
-                    FileChange {
-                        path: display(&target),
-                        base_id: Some(resource_base_id.clone()),
-                        before: None,
-                        after: bytes.clone(),
-                    },
-                    FileChange {
-                        path: display(&manifest_path),
-                        base_id: Some(manifest_base_id.clone()),
-                        before: manifest.as_ref().map(|f| f.bytes.clone()),
-                        after: manifest_after,
-                    },
-                ];
-                if let Some(f) = manifest {
-                    files.push(f);
-                }
-                files.push(canonical);
-                for c in &changes {
-                    preview
-                        .changes
-                        .push(change(Path::new(&c.path), "import", c.after.len()));
-                    preview.revisions.insert(c.path.clone(), fresh());
-                }
-                preview
-                    .node_map
-                    .insert(owner.node_id.clone(), owner.node_id);
-                preview.resource_map.insert(display(&target), resource_ref);
-                Mutation::Update { files: changes }
-            }
+            } => self.plan_resource_import(
+                &root,
+                node,
+                &[ResourceImportFile {
+                    name: name.clone(),
+                    bytes: bytes.clone(),
+                    resource_base_id: resource_base_id.clone(),
+                }],
+                manifest_base_id,
+                &mut preview,
+                &mut files,
+            )?,
+            OperationIntent::ImportResources {
+                node,
+                files: imports,
+                manifest_base_id,
+            } => self.plan_resource_import(
+                &root,
+                node,
+                imports,
+                manifest_base_id,
+                &mut preview,
+                &mut files,
+            )?,
         };
         self.validate_tag_mutation_changes(
             &root,
@@ -5979,6 +5880,7 @@ impl Core {
             && !matches!(
                 t.request.intent,
                 OperationIntent::ImportResource { .. }
+                    | OperationIntent::ImportResources { .. }
                     | OperationIntent::ConfigureStyle { .. }
                     | OperationIntent::ApplySync { .. }
                     | OperationIntent::MergeSync { .. }
@@ -7497,6 +7399,7 @@ pub(crate) fn intent_kind(intent: &OperationIntent) -> &'static str {
         OperationIntent::BackupLibrary { .. } => "backupLibrary",
         OperationIntent::ConfigureStyle { .. } => "configureStyle",
         OperationIntent::ImportResource { .. } => "importResource",
+        OperationIntent::ImportResources { .. } => "importResources",
         OperationIntent::ImportNative { .. } => "importNative",
         OperationIntent::ImportRecognized { .. } => "importRecognized",
         OperationIntent::ImportBibliography { .. } => "importBibliography",

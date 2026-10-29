@@ -746,11 +746,27 @@ pub fn standard_binding_available(source: &str, name: &str) -> bool {
     if !parsed.root().errors_and_warnings().0.is_empty() {
         return false;
     }
+    fn import_preserves_binding(import: ast::ModuleImport<'_>, name: &str) -> bool {
+        // A module alias and named items can both bind caller names. Typst's
+        // bound_name accounts for item renames and nested import paths.
+        if import.new_name().is_some_and(|alias| alias.get() == name) {
+            return false;
+        }
+        match import.imports() {
+            Some(ast::Imports::Wildcard) => false,
+            Some(ast::Imports::Items(items)) => {
+                items.iter().all(|item| item.bound_name().get() != name)
+            }
+            // Keep bare imports conservative without guessing a module name.
+            None => import.new_name().is_some(),
+        }
+    }
     fn safe(node: &SyntaxNode, name: &str) -> bool {
-        if matches!(
-            node.kind(),
-            SyntaxKind::ModuleImport | SyntaxKind::ModuleInclude
-        ) {
+        if node.kind() == SyntaxKind::ModuleInclude
+            || node
+                .cast::<ast::ModuleImport>()
+                .is_some_and(|import| !import_preserves_binding(import, name))
+        {
             return false;
         }
         if node
@@ -1314,7 +1330,7 @@ fn encode_block(block: &BlockInsert) -> Result<String, EngineError> {
                 ));
             }
             format!(
-                "#image({}, alt: {})",
+                "#image({}, format: auto, alt: {})",
                 encode_string(path)?,
                 encode_string(alt)?
             )

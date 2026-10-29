@@ -17,6 +17,8 @@ use weftext_messages::UiMessage;
 
 const BUNDLED_SCHEMA_SOURCE: &str =
     include_str!("../../../docs/design/examples/schema.authoring.json");
+#[path = "field_transfer_api.rs"]
+mod field_transfer_api;
 #[path = "reminder_api.rs"]
 mod reminder_api;
 
@@ -29,6 +31,7 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/api/data/schema/install", post(install_schema))
         .route("/api/data/project", post(project))
         .route("/api/data/edit", post(edit))
+        .route("/api/data/transfer", post(field_transfer_api::transfer))
         .route("/api/data/types", post(types))
         .route("/api/data/capture", post(capture))
         .route("/api/data/resolve", post(resolve))
@@ -524,7 +527,7 @@ async fn edit(
         relation_schema,
         req.source.clone(),
         patch.source.clone(),
-        Some(field_id),
+        Some(vec![field_id]),
     )
     .await?;
     schema_still_current(&state, root, &config).await?;
@@ -650,7 +653,7 @@ async fn check_relation_proposal(
     schema: Schema,
     before: String,
     after: String,
-    selected_field: Option<String>,
+    selected_fields: Option<Vec<String>>,
 ) -> Result<(), ApiError> {
     core_call(state, move |core| {
         let frozen = match query_snapshot(
@@ -735,10 +738,19 @@ async fn check_relation_proposal(
                     })
                     .collect();
             }
-            let validation = match selected_field {
-                Some(field_id) => weftext_data::validate_field_change(
-                    &before, &after, &schema, &field_id, &context,
-                ),
+            let validation = match selected_fields {
+                Some(field_ids) => {
+                    let mut validation = weftext_data::Validation::valid();
+                    for field_id in field_ids {
+                        let checked = weftext_data::validate_field_change(
+                            &before, &after, &schema, &field_id, &context,
+                        );
+                        validation.diagnostics.extend(checked.diagnostics);
+                        validation.unavailable.extend(checked.unavailable);
+                        validation.unbound.extend(checked.unbound);
+                    }
+                    validation
+                }
                 None => weftext_data::validate_note(&after, &schema, &context),
             };
             if !validation.is_valid() {

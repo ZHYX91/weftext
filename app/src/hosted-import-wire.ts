@@ -101,13 +101,18 @@ export function decodeImportCollection(value: unknown): HostedResourceCollection
     return result;
 }
 export function decodeResourceImportReceipt(value: unknown): ResourceImportReceipt {
-    const item = importKeys(value, ["collection", "owner", "operationId", "status", "planId", "preview", "resourceRefs", "assets", "commitAllowed"]), preview = importRecord(item.preview);
+    const item = importKeys(value, ["collection", "owner", "operationId", "status", "planId", "preview", "resourceRefs", "assets", "results", "commitAllowed"]), preview = importRecord(item.preview);
     let decoded: ResourceImportReceipt["preview"] = {};
     if (Object.keys(preview).length) {
-        importKeys(preview, ["summary", "name", "bytes", "contentType", "metadata"]);
-        decoded = { summary: summary(preview.summary), name: importText(preview.name), bytes: importInteger(preview.bytes), contentType: importText(preview.contentType), metadata: decodeResourceMetadata(preview.metadata) };
+        importKeys(preview, ["summary", "files", "totalBytes"]);
+        const files = array(preview.files, value => { const file = importKeys(value, ["name", "bytes", "contentType", "metadata"]); return { name: importText(file.name), bytes: importInteger(file.bytes), contentType: importText(file.contentType), metadata: decodeResourceMetadata(file.metadata) }; }), totalBytes = importInteger(preview.totalBytes);
+        if (!files.length || files.length > 64 || files.some(file => file.bytes > 16 * 1024 * 1024) || files.reduce((total, file) => total + file.bytes, 0) !== totalBytes || totalBytes > 32 * 1024 * 1024) return invalidImportResponse();
+        decoded = { summary: summary(preview.summary), files, totalBytes };
     }
     const commitAllowed = bool(item.commitAllowed), operationStatus = status(item.status), planId = item.planId === null ? null : importText(item.planId, true);
     if (commitAllowed ? operationStatus !== "prepared" || !planId || !decoded.summary : planId !== null) return invalidImportResponse();
-    return { collection: importText(item.collection, true), owner: importText(item.owner, true), operationId: importText(item.operationId, true), status: operationStatus, planId, preview: decoded, resourceRefs: array(item.resourceRefs, value => { const ref = importText(value, true); return /^weftext-resource:\/\//.test(ref) ? ref : invalidImportResponse(); }), assets: array(item.assets, value => importText(value, true)), commitAllowed };
+    const resourceRef = (value: unknown): string => { const ref = importText(value, true); return /^weftext-resource:\/\//.test(ref) ? ref : invalidImportResponse(); };
+    const results = array(item.results, value => { const result = importKeys(value, ["name", "resourceRef", "exactRevision"]); return { name: importText(result.name), resourceRef: resourceRef(result.resourceRef), exactRevision: importText(result.exactRevision, true) }; });
+    if (results.length > 64 || results.length && operationStatus !== "committed") return invalidImportResponse();
+    return { collection: importText(item.collection, true), owner: importText(item.owner, true), operationId: importText(item.operationId, true), status: operationStatus, planId, preview: decoded, resourceRefs: array(item.resourceRefs, resourceRef), assets: array(item.assets, value => importText(value, true)), results, commitAllowed };
 }

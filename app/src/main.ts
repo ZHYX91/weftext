@@ -937,9 +937,9 @@ const workspaceTools = new WorkspaceTools({
         } finally { retireUnownedSessions(...returned.map(document => document?.sessionId)); }
 
     }),
-    stylesChanged: async (root) => libraryCloseActivity.run(async () => {
+    assetsChanged: async (root) => libraryCloseActivity.run(async () => {
 
-        pagedPreview?.invalidate(uiMessage("shell.libraryStyleRecompiling"));
+        pagedPreview?.invalidate();
         for (const doc of documents.filter(item => normalize(item.session.opened.root) === normalize(root))) {
             doc.session.projection = null;
             doc.editor.clearTokens();

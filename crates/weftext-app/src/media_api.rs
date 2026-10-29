@@ -23,11 +23,26 @@ use weftext_core::{Core, CoreError, ManagedResource, SnapshotFile};
 use weftext_knowledge::{PdfPageFacts, ResourceFacts, Timebase};
 use weftext_messages::{DiagnosticOrigin, ErrorDescription, UiMessage};
 
+#[path = "resource_import_api.rs"]
+mod resource_import_api;
+
 pub(crate) fn router() -> Router<AppState> {
     Router::new()
         .route("/api/resources/list", post(list))
         .route("/api/resources/read", post(read))
         .route("/api/resources/prepare-import", post(prepare_import))
+        .route(
+            "/api/resources/prepare-import-batch",
+            post(prepare_import_batch),
+        )
+        .route(
+            "/api/resources/import-batch/status",
+            post(import_batch_status),
+        )
+        .route(
+            "/api/resources/import-batch/insert",
+            post(resource_import_api::prepare_insert),
+        )
         .route("/api/query/preview", post(query_preview))
         .route("/api/query/preview-resource", post(query_preview_resource))
         .route("/api/navigation/preview", post(navigation_preview))
@@ -546,6 +561,84 @@ async fn prepare_import(
         })
         .await?,
     )?))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BatchImportFile {
+    name: String,
+    bytes: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BatchImportRequest {
+    session_id: String,
+    operation_id: String,
+    files: Vec<BatchImportFile>,
+}
+async fn prepare_import_batch(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<BatchImportRequest>,
+) -> ApiResult {
+    // The budget is cumulative. No client path is opened, and there is one
+    // Core prepare with the entire decoded upload, never per-file mutation.
+    if request.files.len() > 64
+        || request
+            .files
+            .iter()
+            .try_fold(0usize, |total, file| total.checked_add(file.bytes.len()))
+            .is_none_or(|total| total > 86 * 1024 * 1024)
+    {
+        return Err(ApiError::bad(UiMessage::error_api_media_import_budget()));
+    }
+    let mut total = 0usize;
+    let files = request
+        .files
+        .into_iter()
+        .map(|file| {
+            let bytes = base64::engine::general_purpose::STANDARD
+                .decode(file.bytes)
+                .map_err(|_| ApiError::bad(UiMessage::error_api_media_upload_base64_invalid()))?;
+            total = total.saturating_add(bytes.len());
+            if total > 64 * 1024 * 1024 {
+                return Err(ApiError::bad(UiMessage::error_api_media_import_budget()));
+            }
+            Ok(weftext_core::ResourceImportUpload {
+                name: file.name,
+                bytes,
+            })
+        })
+        .collect::<Result<Vec<_>, ApiError>>()?;
+    let loc = location(&state, &request.session_id)?;
+    let (operation, imports) = core_call(&state, move |core| {
+        let operation =
+            core.prepare_import_resources(loc.root, loc.path, files, &request.operation_id)?;
+        let imports = core.resource_import_results(&request.operation_id)?;
+        Ok((operation, imports))
+    })
+    .await?;
+    Ok(Json(json!({"operation": operation, "imports": imports})))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BatchImportStatusRequest {
+    session_id: String,
+    operation_id: String,
+}
+async fn import_batch_status(
+    State(state): State<AppState>,
+    RequestJson(request): RequestJson<BatchImportStatusRequest>,
+) -> ApiResult {
+    let loc = location(&state, &request.session_id)?;
+    let (operation, imports) = core_call(&state, move |core| {
+        let operation =
+            core.resource_import_preview_at(loc.root, loc.path, &request.operation_id)?;
+        let imports = core.resource_import_results(&request.operation_id)?;
+        Ok((operation, imports))
+    })
+    .await?;
+    Ok(Json(json!({"operation": operation, "imports": imports})))
 }
 
 pub(crate) fn metadata_facts(

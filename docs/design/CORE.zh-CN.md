@@ -191,6 +191,10 @@ SOURCE 以官方 AST 和原字节产生 narrow edits；EDITOR 负责 Draft 序�
 
 operationId 在工作区的当前操作来源域内唯一；完整 canonical Intent 指纹固定。相同 ID/相同请求返回原状态或结果，换输入同 ID 冲突。prepare/stage 不是 saved。规划失败后保 Draft；新提案使用新操作 ID 并链接原稿，不让重试私下变换源、目标或分配。
 
+单文件与批量资源导入共用同一 planner。整批名称、当前 manifest、目标基线及 create-only 条件先一起资格化；全部资源文件和更新后的 `weftext.resources.json` 作为一个原操作进入同一 journal 决定，按输入顺序返回稳定资源引用。最后一项冲突也不先接纳前几项。这里是 Core 逻辑原子性，不承诺外部工具看不到文件安装中间态；结果未知沿原 operationId 检查／恢复，已知提交不另建导入。已有加新增 manifest 条目最多 64；本地新增字节加最终 manifest 最多 64 MiB。Hosted 另限制单上传 16 MiB，当前集合保留字节、节点见证及新上传合计 32 MiB，集合仍最多 64 资源，并重验 live collection 的 import 资格，不授正文／字段写权限。资源提交与随后的安全正文末端 Draft 追加是两个效果阶段，正文 Undo 不删除已提交资源。
+
+本地跨字段移动是同一完整作者输入的源提案，不是磁盘提交或 Hosted 窄字段授权。请求绑定当前 session、source hash／serial、Schema revision／semanticDigest、两个永久 FieldId 及准确出现序号；同形状的两个现存静态列表共同生成一个 after。字段、Type 和关系约束按同一最终状态核验，原项字节及范围外内容保全，注释归属不明时拒绝。只有回读仍属原输入后交付一个 UTF-16 补丁给同一 Draft／Undo；既有保存 Plan 继续负责原件持久化。浏览器个人值预设和资源恢复 locator 不成为 Core 身份、Schema 或提交权威；其 key 锁与原 token 检查只串行支持的同源 producer，不替代 Core 原操作恢复或承诺外部手改的原子性。
+
 ## 5. 本地默认保存与后端合同
 
 默认 Desktop 不要求每次 checkout。首发选择 Windows 本地 NTFS 的短时排他内容写入路径；后端能力必须按 volume/filter/path 实际验证，云占位、网络盘和别名不因同 API 名称而自动合格。现有文件内容更新与目录 namespace 操作使用不同保护方法。

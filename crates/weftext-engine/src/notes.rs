@@ -503,6 +503,14 @@ fn edit_notes_qualified(
     frozen_module: bool,
 ) -> Result<String, crate::EngineError> {
     use NotesIntent::*;
+    // Lexical proof of an unchanged builtin is not the module/producer proof
+    // required by mixed-note relations. Keep this explicit when the shared
+    // binding certificate can admit unrelated named imports.
+    if !frozen_module && intent.requires_frozen_module(source) {
+        return Err(crate::EngineError::new(
+            weftext_messages::UiMessage::error_engine_notes_endnotes_frozen_input_required(),
+        ));
+    }
     let mut map = inspect_notes_source(source);
     if frozen_module {
         for entry in &mut map.entries {

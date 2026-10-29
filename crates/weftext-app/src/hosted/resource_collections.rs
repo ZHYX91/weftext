@@ -4,6 +4,7 @@ use super::*;
 use axum::extract::DefaultBodyLimit;
 use weftext_core::{
     ActorFeatureStatus, OperationIntent, OperationRequest, QualifiedResourceCollection,
+    ResourceImportFile, ResourceImportUpload,
 };
 use weftext_knowledge::NodeRef;
 
@@ -420,6 +421,19 @@ struct Prepare {
 }
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct BatchUpload {
+    name: String,
+    bytes_base64: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct PrepareBatch {
+    collection: String,
+    files: Vec<BatchUpload>,
+    operation_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Operation {
     collection: String,
     operation_id: String,
@@ -445,6 +459,16 @@ pub(super) fn router() -> Router<HostedState> {
         .route("/api/hosted/media/import/commit", post(commit))
         .route("/api/hosted/media/import/operation", post(operation))
         .route("/api/hosted/media/import/settle", post(settle))
+        .route(
+            "/api/hosted/media/import-batch/prepare",
+            post(prepare_batch).layer(DefaultBodyLimit::max(MAX_BYTES * 2)),
+        )
+        .route("/api/hosted/media/import-batch/commit", post(commit_batch))
+        .route(
+            "/api/hosted/media/import-batch/operation",
+            post(operation_batch),
+        )
+        .route("/api/hosted/media/import-batch/settle", post(settle_batch))
         .layer(DefaultBodyLimit::max(24 * 1024 * 1024))
 }
 pub(super) fn import_access(
@@ -502,9 +526,25 @@ fn safe_status(
     status: ActorFeatureStatus,
 ) -> Result<Value, ApiError> {
     let same = original_allowed(inner, actor, id, &status);
+    safe_status_with_decision(inner, id, status, same)
+}
+fn safe_status_with_decision(
+    inner: &HostedInner,
+    id: &str,
+    status: ActorFeatureStatus,
+    same: bool,
+) -> Result<Value, ApiError> {
     let mut preview = json!({});
     if same {
-        for key in ["summary", "name", "bytes", "contentType", "metadata"] {
+        for key in [
+            "summary",
+            "name",
+            "bytes",
+            "contentType",
+            "metadata",
+            "files",
+            "totalBytes",
+        ] {
             if let Some(v) = status.preview.get(key) {
                 preview[key] = v.clone();
             }
@@ -528,6 +568,29 @@ fn safe_status(
         json!({"collection":id,"owner":configured(inner,id)?.owner,"operationId":status.operation_id,"status":status.status,"planId":status.plan_id.filter(|_|allowed),"preview":preview,"resourceRefs":refs,"assets":assets,"commitAllowed":allowed}),
     )
 }
+fn require_batch_status(status: &ActorFeatureStatus) -> Result<(), ApiError> {
+    if status.intent_kind != "importResources" && status.intent_kind != "unknown" {
+        return Err(changed());
+    }
+    Ok(())
+}
+fn safe_batch_status(
+    inner: &HostedInner,
+    actor: &str,
+    collection: &str,
+    status: ActorFeatureStatus,
+) -> Result<Value, ApiError> {
+    require_batch_status(&status)?;
+    let same = original_allowed(inner, actor, collection, &status);
+    let results = if status.status == "committed" && same {
+        serde_json::to_value(&status.resource_import_results).map_err(|_| changed())?
+    } else {
+        json!([])
+    };
+    let mut response = safe_status_with_decision(inner, collection, status, same)?;
+    response["results"] = results;
+    Ok(response)
+}
 fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 240
@@ -546,6 +609,192 @@ fn member_import_fingerprint(
         "uploadDigest":digest(bytes)}))
         .map_err(|_| changed())?,
     ))
+}
+fn batch_import_fingerprint(
+    collection: &str,
+    files: &[ResourceImportUpload],
+) -> Result<String, ApiError> {
+    let files = files
+        .iter()
+        .map(|file| json!({"name":file.name,"uploadDigest":digest(&file.bytes)}))
+        .collect::<Vec<_>>();
+    Ok(digest(
+        &serde_json::to_vec(&json!({"collection":collection,"files":files}))
+            .map_err(|_| changed())?,
+    ))
+}
+fn validate_batch_count(count: usize) -> Result<(), ApiError> {
+    if count == 0 {
+        return Err(ApiError::bad(
+            UiMessage::error_core_operations_resource_batch_empty(),
+        ));
+    }
+    if count > 64 {
+        return Err(ApiError::bad(
+            UiMessage::error_core_operations_at_most64_registered_resource_descriptors(),
+        ));
+    }
+    Ok(())
+}
+async fn prepare_batch(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    RequestJson(req): RequestJson<PrepareBatch>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            import_access(inner, &actor, &req.collection)?;
+            validate_batch_count(req.files.len())?;
+            let mut files = Vec::with_capacity(req.files.len());
+            let mut total = 0usize;
+            for file in req.files {
+                if file.bytes_base64.len() > MAX_UPLOAD.div_ceil(3) * 4 {
+                    return Err(ApiError::bad(UiMessage::error_api_hosted_resource_collections_resource_original_size_limit()));
+                }
+                let bytes = base64::engine::general_purpose::STANDARD
+                    .decode(&file.bytes_base64)
+                    .map_err(|_| ApiError::bad(UiMessage::error_api_hosted_resource_collections_resource_original_encoding_invalid()))?;
+                total = total.saturating_add(bytes.len());
+                if total > MAX_BYTES {
+                    return Err(ApiError::bad(UiMessage::error_api_hosted_resource_collections_resource_import_basis_budget()));
+                }
+                files.push(ResourceImportUpload { name: file.name, bytes });
+            }
+            prepare_batch_import(inner, &actor, &req.collection, files, &req.operation_id)
+        })
+        .await?,
+    ))
+}
+fn prepare_batch_import(
+    inner: &mut HostedInner,
+    actor: &str,
+    collection: &str,
+    files: Vec<ResourceImportUpload>,
+    operation_id: &str,
+) -> Result<Value, ApiError> {
+    let config = import_access(inner, actor, collection)?;
+    validate_batch_count(files.len())?;
+    for file in &files {
+        if !valid_name(&file.name) {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_resource_collections_resource_filename_invalid(),
+            ));
+        }
+        if file.bytes.len() > MAX_UPLOAD {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_resource_collections_resource_original_size_limit(),
+            ));
+        }
+    }
+    let fp = batch_import_fingerprint(collection, &files)?;
+    let actor_scope = scope(inner, actor);
+    if let Some(old) = inner
+        .core
+        .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
+            core.actor_feature_retry(collection, operation_id, &fp)
+        })
+        .map_err(core_error)?
+    {
+        return safe_batch_status(inner, actor, collection, old);
+    }
+    let captured = qualify(inner, collection)?;
+    let root = inner.config.root.clone();
+    let owner_path = root.join(&inner.file(&config.owner)?.path);
+    let node = inner
+        .core
+        .qualified_query_node_at(&root, &owner_path, &captured.owner, "live")
+        .map_err(core_error)?;
+    let names = files
+        .iter()
+        .map(|file| file.name.clone())
+        .collect::<Vec<_>>();
+    let cut = inner
+        .core
+        .read_resource_import_snapshot(&root, &owner_path, &names)
+        .map_err(core_error)?;
+    let ids = cut
+        .files
+        .iter()
+        .map(|file| file.base_id.clone())
+        .collect::<Vec<_>>();
+    let result = (|| {
+        if cut.files.len() != files.len() + 1 {
+            return Err(changed());
+        }
+        let mut pool = vec![];
+        Core::merge_query_node_witness(&mut pool, &node.witness).map_err(core_error)?;
+        if captured.initialized {
+            Core::merge_resource_collection_witness(&mut pool, &captured.witness)
+                .map_err(core_error)?;
+        }
+        inner
+            .core
+            .validate_resource_collection_witness(&root, &captured.witness)
+            .map_err(core_error)?;
+        let total = files
+            .iter()
+            .fold(0usize, |total, file| total.saturating_add(file.bytes.len()));
+        if captured
+            .retained_bytes()
+            .saturating_add(node.witness.retained_bytes())
+            .saturating_add(total)
+            > MAX_BYTES
+        {
+            return Err(ApiError::bad(
+                UiMessage::error_api_hosted_resource_collections_resource_import_basis_budget(),
+            ));
+        }
+        let preview_files = files.iter().map(|file| {
+            let (metadata, content_type) = crate::media_api::inspect_media(&file.bytes);
+            json!({"name":file.name,"bytes":file.bytes.len(),"contentType":content_type,"metadata":metadata})
+        }).collect::<Vec<_>>();
+        let decision = Decision {
+            epoch: inner.actor_generation(actor),
+            expires: now_ms().saturating_add(TTL_MS),
+            binding: binding(inner, collection)?,
+            owner: captured.owner,
+        };
+        let preview = json!({"summary":UiMessage::error_api_hosted_resource_collections_import_plan_summary(),"files":preview_files,"totalBytes":total,"_resourceImport":decision});
+        let files = files
+            .into_iter()
+            .zip(cut.files.iter().skip(1))
+            .map(|(file, snapshot)| ResourceImportFile {
+                name: file.name,
+                bytes: file.bytes,
+                resource_base_id: snapshot.base_id.clone(),
+            })
+            .collect();
+        let request = OperationRequest {
+            operation_id: operation_id.into(),
+            root: root.to_string_lossy().into_owned(),
+            intent: OperationIntent::ImportResources {
+                node: owner_path.to_string_lossy().into_owned(),
+                files,
+                manifest_base_id: cut.files[0].base_id.clone(),
+            },
+        };
+        let refs = pool.iter().collect::<Vec<_>>();
+        let status = inner
+            .core
+            .with_actor_for_root(&actor_scope, &inner.config.root, |core| {
+                core.actor_feature_prepare_with_witnesses(
+                    collection,
+                    operation_id,
+                    &fp,
+                    request,
+                    preview,
+                    &[],
+                    &refs,
+                )
+            })
+            .map_err(core_error)?;
+        safe_batch_status(inner, actor, collection, status)
+    })();
+    for id in ids {
+        let _ = inner.core.take_snapshot_witness(&id);
+    }
+    result
 }
 async fn prepare(
     State(state): State<HostedState>,
@@ -844,6 +1093,80 @@ pub(super) fn settle_member_import(
     safe_status(inner, actor, collection, status)
 }
 
+fn batch_import_status(
+    inner: &mut HostedInner,
+    actor: &str,
+    collection: &str,
+    operation_id: &str,
+) -> Result<Value, ApiError> {
+    let config = import_access(inner, actor, collection)?;
+    match inner
+        .core
+        .with_actor_for_root(&scope(inner, actor), &inner.config.root, |core| {
+            core.actor_feature_status(collection, operation_id)
+        })
+        .map_err(core_error)?
+    {
+        Some(status) => safe_batch_status(inner, actor, collection, status),
+        None => Ok(
+            json!({"collection":collection,"owner":config.owner,"operationId":operation_id,"status":"notRegistered","planId":null,"preview":{},"resourceRefs":[],"assets":[],"results":[],"commitAllowed":false}),
+        ),
+    }
+}
+async fn operation_batch(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    RequestJson(req): RequestJson<Operation>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            batch_import_status(inner, &actor, &req.collection, &req.operation_id)
+        })
+        .await?,
+    ))
+}
+async fn commit_batch(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    RequestJson(req): RequestJson<Commit>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            // Qualify the original intent before invoking any operation effect.
+            // The member helper keeps the existing Decision/expiry/plan checks.
+            batch_import_status(inner, &actor, &req.collection, &req.operation_id)?;
+            commit_member_import(
+                inner,
+                &actor,
+                &req.collection,
+                &req.operation_id,
+                &req.plan_id,
+            )?;
+            batch_import_status(inner, &actor, &req.collection, &req.operation_id)
+        })
+        .await?,
+    ))
+}
+async fn settle_batch(
+    State(state): State<HostedState>,
+    Extension(auth): Extension<Auth>,
+    RequestJson(req): RequestJson<Operation>,
+) -> ApiResult {
+    Ok(Json(
+        locked(&state, move |inner| {
+            let actor = inner.actor(&auth)?;
+            batch_import_status(inner, &actor, &req.collection, &req.operation_id)?;
+            // This settles that original actor record, including a durable fence
+            // for an unknown id. It never prepares a replacement import.
+            settle_member_import(inner, &actor, &req.collection, &req.operation_id)?;
+            batch_import_status(inner, &actor, &req.collection, &req.operation_id)
+        })
+        .await?,
+    ))
+}
+
 #[cfg(test)]
 mod diagnostic_tests {
     use super::*;
@@ -997,6 +1320,465 @@ mod tests {
         )
         .await
         .map(|r| r.0)
+    }
+    async fn propose_batch(
+        state: &HostedState,
+        auth: &Auth,
+        id: &str,
+        files: &[(&str, &[u8])],
+    ) -> Result<Value, ApiError> {
+        prepare_batch(
+            State(state.clone()),
+            Extension(auth.clone()),
+            crate::RequestJson(PrepareBatch {
+                collection: "Owned".into(),
+                files: files
+                    .iter()
+                    .map(|(name, bytes)| BatchUpload {
+                        name: (*name).into(),
+                        bytes_base64: base64::engine::general_purpose::STANDARD.encode(bytes),
+                    })
+                    .collect(),
+                operation_id: id.into(),
+            }),
+        )
+        .await
+        .map(|r| r.0)
+    }
+    async fn commit_proposed_batch(
+        state: &HostedState,
+        auth: &Auth,
+        id: &str,
+        proposal: &Value,
+    ) -> Result<Value, ApiError> {
+        commit_batch(
+            State(state.clone()),
+            Extension(auth.clone()),
+            crate::RequestJson(Commit {
+                collection: "Owned".into(),
+                operation_id: id.into(),
+                plan_id: proposal["planId"].as_str().unwrap().into(),
+            }),
+        )
+        .await
+        .map(|r| r.0)
+    }
+    async fn batch_status(state: &HostedState, auth: &Auth, id: &str) -> Result<Value, ApiError> {
+        operation_batch(
+            State(state.clone()),
+            Extension(auth.clone()),
+            crate::RequestJson(Operation {
+                collection: "Owned".into(),
+                operation_id: id.into(),
+            }),
+        )
+        .await
+        .map(|r| r.0)
+    }
+    #[tokio::test]
+    async fn batch_import_returns_original_upload_order_without_body_or_read_authority() {
+        let (_temp, state, auth, _asset) = fixture(false, true);
+        let root = state.inner.lock().unwrap().config.root.clone();
+        let source = std::fs::read(root.join("Shared/Shared.typ")).unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        let files: &[(&str, &[u8])] = &[
+            ("z-upload.bin", b"LAST_NAME_FIRST"),
+            ("a-upload.bin", b"FIRST_NAME_LAST"),
+        ];
+        let proposal = propose_batch(&state, &auth, &id, files).await.unwrap();
+        assert_eq!(proposal["status"], "prepared");
+        assert_eq!(proposal["results"], json!([]));
+        assert_eq!(proposal["preview"]["files"][0]["name"], "z-upload.bin");
+        assert_eq!(proposal["preview"]["files"][1]["name"], "a-upload.bin");
+        assert_eq!(proposal["preview"]["totalBytes"], 30);
+        assert_eq!(
+            proposal,
+            propose_batch(&state, &auth, &id, files).await.unwrap()
+        );
+        let result = commit_proposed_batch(&state, &auth, &id, &proposal)
+            .await
+            .unwrap();
+        assert_eq!(result["status"], "committed");
+        assert_eq!(result["results"][0]["name"], "z-upload.bin");
+        assert_eq!(result["results"][1]["name"], "a-upload.bin");
+        assert_eq!(result["results"].as_array().unwrap().len(), 2);
+        {
+            let inner = state.inner.lock().unwrap();
+            for (index, (name, bytes)) in files.iter().enumerate() {
+                let result = &result["results"][index];
+                assert!(
+                    result["resourceRef"]
+                        .as_str()
+                        .unwrap()
+                        .starts_with("weftext-resource:")
+                );
+                assert!(!result["exactRevision"].as_str().unwrap().is_empty());
+                assert_eq!(
+                    std::fs::read(root.join("Shared").join(name)).unwrap(),
+                    *bytes
+                );
+                let reference = result["resourceRef"].as_str().unwrap();
+                let asset = format!("Owned/{}", reference.rsplit('/').next().unwrap());
+                assert!(media::resolve_asset(&inner, "alice", &asset).is_err());
+            }
+            assert!(inner.rights("alice", "Shared").is_err());
+        }
+        assert_eq!(
+            std::fs::read(root.join("Shared/Shared.typ")).unwrap(),
+            source
+        );
+        let serialized = result.to_string();
+        let root_path = root.to_string_lossy();
+        let root_json = serde_json::to_string(root_path.as_ref()).unwrap();
+        for private in [
+            root_path.as_ref(),
+            &root_json[1..root_json.len() - 1],
+            "private-locator",
+            "_resourceImport",
+            "baseId",
+            "Saved B",
+        ] {
+            assert!(!serialized.contains(private));
+        }
+        assert_eq!(result, batch_status(&state, &auth, &id).await.unwrap());
+        assert_eq!(
+            result,
+            commit_proposed_batch(&state, &auth, &id, &proposal)
+                .await
+                .unwrap()
+        );
+    }
+    #[tokio::test]
+    async fn batch_original_fingerprint_freezes_members_order_and_bytes() {
+        let (_temp, state, auth, _asset) = fixture(true, true);
+        let id = uuid::Uuid::new_v4().to_string();
+        let original = propose_batch(
+            &state,
+            &auth,
+            &id,
+            &[("first.bin", b"one"), ("second.bin", b"two")],
+        )
+        .await
+        .unwrap();
+        for changed_files in [
+            vec![
+                ("second.bin", b"two".as_slice()),
+                ("first.bin", b"one".as_slice()),
+            ],
+            vec![
+                ("first.bin", b"changed".as_slice()),
+                ("second.bin", b"two".as_slice()),
+            ],
+            vec![("first.bin", b"one".as_slice())],
+        ] {
+            assert_eq!(
+                propose_batch(&state, &auth, &id, &changed_files)
+                    .await
+                    .unwrap_err()
+                    .status,
+                StatusCode::CONFLICT
+            );
+        }
+        assert_eq!(original, batch_status(&state, &auth, &id).await.unwrap());
+    }
+    #[tokio::test]
+    async fn batch_member_conflict_or_duplicate_never_installs_any_member() {
+        let (_temp, state, auth, _asset) = fixture(true, true);
+        let root = state.inner.lock().unwrap().config.root.clone();
+        let manifest = std::fs::read(root.join("Shared/weftext.resources.json")).unwrap();
+        std::fs::write(root.join("Shared/conflict.bin"), b"keep external original").unwrap();
+        for files in [
+            vec![
+                ("new.bin", b"new".as_slice()),
+                ("conflict.bin", b"replace".as_slice()),
+            ],
+            vec![
+                ("new.bin", b"one".as_slice()),
+                ("NEW.bin", b"two".as_slice()),
+            ],
+            vec![],
+        ] {
+            let id = uuid::Uuid::new_v4().to_string();
+            assert!(propose_batch(&state, &auth, &id, &files).await.is_err());
+            assert!(!root.join("Shared/new.bin").exists());
+            assert_eq!(
+                std::fs::read(root.join("Shared/weftext.resources.json")).unwrap(),
+                manifest
+            );
+        }
+        assert_eq!(
+            std::fs::read(root.join("Shared/conflict.bin")).unwrap(),
+            b"keep external original"
+        );
+    }
+    #[tokio::test]
+    async fn batch_changed_basis_fails_entire_original_commit() {
+        let (_temp, state, auth, _asset) = fixture(true, true);
+        let root = state.inner.lock().unwrap().config.root.clone();
+        let manifest = std::fs::read(root.join("Shared/weftext.resources.json")).unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        let proposal = propose_batch(
+            &state,
+            &auth,
+            &id,
+            &[("fresh.bin", b"fresh"), ("late.bin", b"late")],
+        )
+        .await
+        .unwrap();
+        std::fs::write(root.join("Shared/late.bin"), b"external after preview").unwrap();
+        assert!(
+            commit_proposed_batch(&state, &auth, &id, &proposal)
+                .await
+                .is_err()
+        );
+        assert!(!root.join("Shared/fresh.bin").exists());
+        assert_eq!(
+            std::fs::read(root.join("Shared/late.bin")).unwrap(),
+            b"external after preview"
+        );
+        assert_eq!(
+            std::fs::read(root.join("Shared/weftext.resources.json")).unwrap(),
+            manifest
+        );
+    }
+    #[tokio::test]
+    async fn batch_owner_remap_hides_prepared_and_committed_original_mapping() {
+        for committed in [false, true] {
+            let (_temp, state, auth, _asset) = fixture(true, true);
+            let id = uuid::Uuid::new_v4().to_string();
+            let proposal = propose_batch(
+                &state,
+                &auth,
+                &id,
+                &[("one.bin", b"one"), ("two.bin", b"two")],
+            )
+            .await
+            .unwrap();
+            if committed {
+                commit_proposed_batch(&state, &auth, &id, &proposal)
+                    .await
+                    .unwrap();
+            }
+            {
+                let mut inner = state.inner.lock().unwrap();
+                let root = inner.config.root.clone();
+                let owner = inner
+                    .core
+                    .qualified_node_at(&root, &root.join("Target/Target.typ"))
+                    .unwrap()
+                    .owner;
+                let collection = inner.config.resource_collections.get_mut("Owned").unwrap();
+                collection.owner = "Target".into();
+                collection.expected_owner = Some(owner);
+            }
+            let stale = batch_status(&state, &auth, &id).await.unwrap();
+            assert_eq!(stale["preview"], json!({}));
+            assert_eq!(stale["results"], json!([]));
+            assert_eq!(stale["resourceRefs"], json!([]));
+            assert_eq!(stale["commitAllowed"], false);
+            if !committed {
+                assert_eq!(
+                    commit_proposed_batch(&state, &auth, &id, &proposal)
+                        .await
+                        .unwrap_err()
+                        .status,
+                    StatusCode::CONFLICT
+                );
+            }
+        }
+    }
+    #[tokio::test]
+    async fn batch_requires_current_import_right_and_cannot_settle_single_intent() {
+        let (_temp, state, auth, _asset) = fixture(true, true);
+        let single_id = uuid::Uuid::new_v4().to_string();
+        let single = propose(&state, &auth, &single_id, "single.bin", b"single")
+            .await
+            .unwrap();
+        assert_eq!(
+            commit_proposed_batch(&state, &auth, &single_id, &single)
+                .await
+                .unwrap_err()
+                .status,
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            settle_batch(
+                State(state.clone()),
+                Extension(auth.clone()),
+                crate::RequestJson(Operation {
+                    collection: "Owned".into(),
+                    operation_id: single_id.clone()
+                })
+            )
+            .await
+            .unwrap_err()
+            .status,
+            StatusCode::CONFLICT
+        );
+        assert_eq!(
+            operation(
+                State(state.clone()),
+                Extension(auth.clone()),
+                crate::RequestJson(Operation {
+                    collection: "Owned".into(),
+                    operation_id: single_id
+                })
+            )
+            .await
+            .unwrap()
+            .0["status"],
+            "prepared"
+        );
+        let id = uuid::Uuid::new_v4().to_string();
+        let proposal = propose_batch(
+            &state,
+            &auth,
+            &id,
+            &[("one.bin", b"one"), ("two.bin", b"two")],
+        )
+        .await
+        .unwrap();
+        state
+            .inner
+            .lock()
+            .unwrap()
+            .policy
+            .users
+            .get_mut("alice")
+            .unwrap()
+            .resource_collections
+            .get_mut("Owned")
+            .unwrap()
+            .r#import = false;
+        assert_eq!(
+            batch_status(&state, &auth, &id).await.unwrap_err().status,
+            StatusCode::NOT_FOUND
+        );
+        assert_eq!(
+            commit_proposed_batch(&state, &auth, &id, &proposal)
+                .await
+                .unwrap_err()
+                .status,
+            StatusCode::NOT_FOUND
+        );
+        let inner = state.inner.lock().unwrap();
+        assert!(!inner.config.root.join("Shared/one.bin").exists());
+        assert!(!inner.config.root.join("Shared/two.bin").exists());
+    }
+    #[tokio::test]
+    async fn batch_unknown_settlement_fences_late_original_prepare() {
+        let (_temp, state, auth, _asset) = fixture(true, true);
+        let id = uuid::Uuid::new_v4().to_string();
+        assert_eq!(
+            batch_status(&state, &auth, &id).await.unwrap()["status"],
+            "notRegistered"
+        );
+        let settled = settle_batch(
+            State(state.clone()),
+            Extension(auth.clone()),
+            crate::RequestJson(Operation {
+                collection: "Owned".into(),
+                operation_id: id.clone(),
+            }),
+        )
+        .await
+        .unwrap()
+        .0;
+        assert_eq!(settled["status"], "cancelled");
+        assert_eq!(settled["results"], json!([]));
+        let late = propose_batch(
+            &state,
+            &auth,
+            &id,
+            &[("one.bin", b"one"), ("two.bin", b"two")],
+        )
+        .await
+        .unwrap();
+        assert_eq!(late["status"], "cancelled");
+        assert_eq!(late["results"], json!([]));
+        let inner = state.inner.lock().unwrap();
+        assert!(!inner.config.root.join("Shared/one.bin").exists());
+        assert!(!inner.config.root.join("Shared/two.bin").exists());
+    }
+    #[test]
+    fn batch_budget_includes_every_upload_and_existing_frozen_basis() {
+        let (_temp, state, _auth, _asset) = fixture(true, true);
+        let mut inner = state.inner.lock().unwrap();
+        let root = inner.config.root.clone();
+        let manifest = std::fs::read(root.join("Shared/weftext.resources.json")).unwrap();
+        let id = uuid::Uuid::new_v4().to_string();
+        // Both files individually fit the original upload cap, but together
+        // leave no room for the nonempty node and collection witness.
+        let files = vec![
+            ResourceImportUpload {
+                name: "one.bin".into(),
+                bytes: vec![1; MAX_UPLOAD],
+            },
+            ResourceImportUpload {
+                name: "two.bin".into(),
+                bytes: vec![2; MAX_UPLOAD],
+            },
+        ];
+        assert_eq!(
+            prepare_batch_import(&mut inner, "alice", "Owned", files, &id)
+                .unwrap_err()
+                .status,
+            StatusCode::BAD_REQUEST
+        );
+        assert_eq!(
+            batch_import_status(&mut inner, "alice", "Owned", &id).unwrap()["status"],
+            "notRegistered"
+        );
+        assert!(!root.join("Shared/one.bin").exists());
+        assert!(!root.join("Shared/two.bin").exists());
+        assert_eq!(
+            std::fs::read(root.join("Shared/weftext.resources.json")).unwrap(),
+            manifest
+        );
+    }
+    #[tokio::test]
+    async fn batch_route_rejects_count_before_decoding_and_registers_no_operation() {
+        let (_temp, state, auth, _asset) = fixture(true, true);
+        let root = state.inner.lock().unwrap().config.root.clone();
+        let manifest = std::fs::read(root.join("Shared/weftext.resources.json")).unwrap();
+        for count in [0, 65] {
+            let id = uuid::Uuid::new_v4().to_string();
+            let error = prepare_batch(
+                State(state.clone()),
+                Extension(auth.clone()),
+                crate::RequestJson(PrepareBatch {
+                    collection: "Owned".into(),
+                    operation_id: id.clone(),
+                    files: (0..count)
+                        .map(|index| BatchUpload {
+                            name: format!("file-{index}.bin"),
+                            // A count error must win over this invalid encoding.
+                            bytes_base64: "not base64".into(),
+                        })
+                        .collect(),
+                }),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(error.status, StatusCode::BAD_REQUEST);
+            assert_eq!(
+                error.explanation,
+                if count == 0 {
+                    UiMessage::error_core_operations_resource_batch_empty()
+                } else {
+                    UiMessage::error_core_operations_at_most64_registered_resource_descriptors()
+                }
+            );
+            assert_eq!(
+                batch_status(&state, &auth, &id).await.unwrap()["status"],
+                "notRegistered"
+            );
+            assert!(!root.join("Shared/file-0.bin").exists());
+            assert_eq!(
+                std::fs::read(root.join("Shared/weftext.resources.json")).unwrap(),
+                manifest
+            );
+        }
     }
     #[test]
     fn selection_and_policy_do_not_infer_filesystem_members_or_write_trash() {

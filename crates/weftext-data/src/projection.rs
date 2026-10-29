@@ -9,6 +9,10 @@ use typst_syntax::{
     ast::{self, AstNode},
 };
 
+#[path = "field_transfer.rs"]
+mod field_transfer;
+pub use field_transfer::patch_list_transfer;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "state", rename_all = "camelCase", deny_unknown_fields)]
 pub enum Cell {

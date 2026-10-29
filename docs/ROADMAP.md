@@ -317,10 +317,10 @@ The 2026-10-29 source comparison of seven plugins fills existing user tasks with
 
 | Reference | Current implementation slice | Remaining gaps |
 | --- | --- | --- |
-| Folder Nodes | Separate exact opening from browsing; retain anomalous same-name sources; select eligible displayed ranges, clear selections and copy whole batches of revalidated stable note links | Qualified bulk resource import/insertion, a separate structural tree graph and icon-inheritance UI |
+| Folder Nodes | Separate exact opening from browsing; retain anomalous same-name sources; select eligible displayed ranges, clear selections and copy complete stable-link batches; local batch resource import and separate safe body-end insertion | A separate structural tree graph and icon-inheritance UI |
 | Number Suite | Keyboard search traversal and viewport reveal; native numbering, direct-child counts and branch folding on heading cards | Legal/official-document presets, per-level templates/start/skip and subtree-exclusion convenience |
 | Link Integrity | Sorting, source-directory grouping and 100-entry paging over the current authorized projection; accurate expected-isolation classification | Path/date/glob rule editing with examples and source-mode issue markers |
-| Property Order | First/last/position moves and direct dragging within a value list; local field top/bottom/hidden/name order while protecting unapplied and unknown content | Atomic cross-field moves, value presets and learning after durable save confirmation; the reference plugin does not reorder note property fields |
+| Property Order | First/last/position moves and same-list dragging; local field presentation; named personal value presets and one-patch local transfer between two existing lists, preserving unapplied/unknown content | Learning after durable save confirmation; the reference plugin does not reorder note property fields |
 | Chrono Notes | One-owner right-side five-period navigation, actual series, date/Today selection and explicit creation | Month/week/year grids with batched date state, heatmaps, range notes, read-only ICS and full calendar interaction |
 | Structural Tables | Proven click carets, safe end fallback, explicit whole-cell text selection and multi-row/column group insertion/deletion/movement | Row headers and qualified header transpose, table-image output |
 | DocWen Assistant | Stable incremental proofreading results, bounded annotation selection, actual scan tasks and qualified report access | Actual native save-location and reveal-output-folder delivery |

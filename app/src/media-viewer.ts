@@ -38,7 +38,7 @@ export interface MediaViewerHost {
     } | null;
     list(sessionId: string): Promise<ResourceList>;
     read(sessionId: string, resource: string, revision: string): Promise<Blob>;
-    importResource?(file: File, sessionId: string): Promise<void>;
+    importResources?(files: readonly File[], sessionId: string): Promise<void>;
     notify(message: UiText, error?: boolean): void;
 }
 export interface MediaViewer {
@@ -183,23 +183,26 @@ export function mountMediaViewer(container: HTMLElement, host: MediaViewerHost, 
     }
     choose.hidden = !!options.readOnly || !!options.fixedResource;
     container.append(toolbar, status, controls, preview, details);
-    if (host.importResource && sessionId && !options.readOnly) {
+    if (host.importResources && sessionId && !options.readOnly) {
         const picker = el("input", "media-file");
         picker.type = "file";
+        picker.multiple = true;
         setUiAttr(picker, "aria-label", uiMessage("media.importFileAria"));
         picker.hidden = true;
         picker.onchange = () => {
-            const file = picker.files?.[0];
+            const files = Array.from(picker.files ?? []);
             picker.value = "";
-            if (!file)
+            if (disposed || currentLifetime() !== lifetime || !files.length)
                 return;
-            if (file.size > 64 * 1024 * 1024) {
+            if (files.reduce((sum, file) => sum + file.size, 0) > 64 * 1024 * 1024) {
                 report(uiMessage("media.importBudgetExceeded"), true);
                 return;
             }
-            void host.importResource!(file, sessionId).then(refresh).catch(error => report(message(error), true));
+            void host.importResources!(files, sessionId).then(refresh).catch(error => {
+                if (!disposed && currentLifetime() === lifetime) report(message(error), true);
+            });
         };
-        toolbar.append(button(uiMessage("media.importResource"), () => picker.click()), picker);
+        toolbar.append(button(uiMessage("media.importResource"), () => { if (!disposed && currentLifetime() === lifetime) picker.click(); }), picker);
     }
     function message(error: unknown): UiText { return error instanceof Error ? errorUiText(error) : uiMessage("media.resourceReadIncomplete"); }
     function report(text: UiText, error = false): void {
@@ -265,6 +268,7 @@ export function mountMediaViewer(container: HTMLElement, host: MediaViewerHost, 
         preview.replaceChildren();
     }
     async function refresh(): Promise<void> {
+        if (disposed) return;
         if (!lifetime || currentLifetime() !== lifetime) {
             report(uiMessage("media.viewAuthorizationChanged"));
             return;

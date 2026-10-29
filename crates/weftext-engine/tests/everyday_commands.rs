@@ -141,7 +141,7 @@ fn image_path_is_encoded_as_one_native_string_and_shadowed_binding_refuses() {
     .unwrap();
     assert!(
         out.source
-            .contains("#image(\"assets/中文\\\"#图片.png\", alt: \"图片\")")
+            .contains("#image(\"assets/中文\\\"#图片.png\", format: auto, alt: \"图片\")")
     );
     let source = "#let image = text\n\n正文";
     assert!(

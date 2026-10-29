@@ -1912,11 +1912,21 @@ mod tests {
         for import in [
             "#import \"weftext-endnotes.typ\": endnote, endnote-ref, endnotes",
             "#import \"untrusted.typ\": other as isolated",
+            "#import \"untrusted.typ\" as isolated",
         ] {
             let combined = format!("{declaration}\n{import}");
             let role = inspect_citation_declaration(&combined).unwrap().unwrap();
             assert_eq!(role.entries[0].work, WORK);
-            assert!(proven_static_cites(&combined).is_empty());
+            // A direct cite's lexical binding is independent of full-owner
+            // coverage. Unrelated explicit imports cannot replace `cite`.
+            assert_eq!(
+                proven_static_cites(&combined)
+                    .iter()
+                    .map(|cite| cite.key.as_str())
+                    .collect::<Vec<_>>(),
+                ["chen2026"]
+            );
+            assert!(!native_citation_owner_complete(&combined));
             assert!(!inspect_native_citation_editor(&combined).rename_available);
             assert!(inspect_citation_declaration(&format!("{import}\n{declaration}")).is_err());
         }
@@ -1937,6 +1947,100 @@ mod tests {
             );
         }
         assert!(inspect_citation_declaration(&format!("{declaration}\n{declaration}")).is_err());
+    }
+
+    #[test]
+    fn explicit_nonshadowing_imports_preserve_native_cite_evaluation_and_local_edits() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let engine = crate::Engine::new_with_system_fonts(false).unwrap();
+        let files = std::collections::BTreeMap::from([
+            ("helpers.typ".into(), b"#let other = 1\n#let cite = 2\n#let ref = 3\n#let link = 4\n".to_vec()),
+            ("weftext-endnotes.typ".into(), include_bytes!("../../weftext-export/assets/weftext-endnotes.typ").to_vec()),
+            ("weftext.citations.bib".into(), b"@article{chen2026, author={Chen, Lin}, title={Native Citation Import Proof}, year={2026}, journal={Example Journal}}\n".to_vec()),
+        ]);
+        for (import, note) in [
+            ("#import \"helpers.typ\": other as isolated", ""),
+            ("#import \"helpers.typ\" as isolated", ""),
+            (
+                "#import \"weftext-endnotes.typ\": endnote, endnote-ref, endnotes",
+                "#endnote(id: \"local-note\")[Authored note]\n#endnotes()",
+            ),
+        ] {
+            let source = bound_source(&format!(
+                "#let original-cite = cite\n#let original-ref = ref\n#let original-link = link\n{import}\n#assert(cite == original-cite)\n#assert(ref == original-ref)\n#assert(link == original-link)\n#cite(<chen2026>)\n{note}"
+            ));
+            let editor = inspect_native_citation_editor(&source);
+            assert_eq!(editor.citations.len(), 1, "{import}");
+            assert!(
+                editor.citations[0].binding_proven && editor.citations[0].editable,
+                "{import}"
+            );
+            // Imported code is outside the bounded complete-owner profile;
+            // binding proof must not silently grant whole-owner key rename.
+            assert!(!editor.rename_available, "{import}");
+            assert!(!native_citation_owner_complete(&source));
+            assert_eq!(proven_static_cites(&source)[0].key, "chen2026");
+            let edited = update_native_citation(
+                &source,
+                &editor.source_hash,
+                &editor.citations[0].range,
+                CitationForm::Prose,
+                "42",
+            )
+            .unwrap();
+            assert_exact_patch_contract(&source, &edited);
+            assert!(
+                rename_native_citation_key(&source, &editor.source_hash, "chen2026", "renamed2026")
+                    .is_err()
+            );
+            let rendered = engine
+                .render_frozen(&crate::FrozenRenderRequest {
+                    source: edited.source,
+                    path: dir.path().join("citation.typ"),
+                    root: dir.path().into(),
+                    files: files.clone(),
+                    style: None,
+                })
+                .unwrap();
+            assert!(rendered.ok, "{import}: {:?}", rendered.diagnostics);
+            assert!(
+                rendered.html.contains("Native Citation Import Proof"),
+                "{import}"
+            );
+            assert!(rendered.html.contains("42"), "{import}");
+        }
+    }
+
+    #[test]
+    fn wildcard_shadow_and_include_cannot_certify_or_edit_a_native_cite() {
+        for import in [
+            "#import \"helpers.typ\": *",
+            "#import \"helpers.typ\": cite",
+            "#import \"helpers.typ\": other as cite",
+            "#import \"helpers.typ\" as cite",
+            "#include \"helpers.typ\"",
+        ] {
+            let source = bound_source(&format!("{import}\n#cite(<chen2026>)"));
+            assert!(proven_static_cites(&source).is_empty(), "{import}");
+            let editor = inspect_native_citation_editor(&source);
+            assert_eq!(editor.citations.len(), 1, "{import}");
+            assert!(
+                !editor.citations[0].binding_proven && !editor.citations[0].editable,
+                "{import}"
+            );
+            assert!(!editor.rename_available, "{import}");
+            assert!(
+                update_native_citation(
+                    &source,
+                    &editor.source_hash,
+                    &editor.citations[0].range,
+                    CitationForm::Prose,
+                    "42"
+                )
+                .is_err(),
+                "{import}"
+            );
+        }
     }
 
     #[test]

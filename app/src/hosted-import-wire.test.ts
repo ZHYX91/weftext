@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { decodeContentInspection, decodeContentImportReceipt, decodeContentMembers, decodeContentTargets, decodePublicImportLoss, decodeResourceImportReceipt, importLossUiText } from "./hosted-import-wire";
 import { canCommitContent, contentReceipt, decodeContentDraft, type ContentDraft } from "./hosted-content-import-state";
-import { canCommitResourceImport, decodeResourceImportDraft, resourceImportInput, resourceImportReceipt, type ResourceImportDraft } from "./hosted-media-import-state";
+import { canCommitResourceImport, decodeResourceImportDraft, encodeResourceImportDraft, resourceImportInput, resourceImportReceipt, type ResourceImportDraft } from "./hosted-media-import-state";
 import { descriptionUiText } from "./ui-diagnostics";
 import { locale, message, uiTextValue } from "./ui-locale";
 
@@ -12,7 +12,7 @@ const explanation = () => ({ explanation: message("common.unavailable"), diagnos
 const loss = () => ({ code: "producer-native-code", ...explanation(), productDiagnostics: Array.from({ length: 48 }, (_, index) => ({ ...explanation(), diagnostics: [{ origin: "dependency", text: `parallel-original-${index}` }] })), location: "作者原路径/第1条" });
 const publicLoss = () => ({ code: "generatedBibliographyNotInstalled", explanation: message("loss.core.hostedFeature.generatedBibliography"), diagnostics: [], causes: [], productDiagnostics: [] });
 const content = () => ({ slot: "approved-slot", operationId: "original-operation", status: "prepared", planId: "original-plan", preview: { summary: message("error.api.hostedContentImport.planSummary"), losses: [publicLoss()], recordCount: 1, sharedWrites: ["schema.write", "tags.create"] }, nodeRefs: [{ workspaceId: "workspace", nodeId: "node" }], commitAllowed: true });
-const resource = () => ({ collection: "attachments", owner: "original-owner", operationId: "resource-operation", status: "prepared", planId: "resource-plan", preview: { summary: message("error.api.hostedResourceCollections.importPlanSummary"), name: "原图 العربية 😀.png", bytes: 3, contentType: "application/octet-stream", metadata: { kind: "unsupported", ...explanation() } }, resourceRefs: ["weftext-resource://workspace/core-id"], assets: ["attachments/core-id"], commitAllowed: true });
+const resource = () => ({ collection: "attachments", owner: "original-owner", operationId: "resource-operation", status: "prepared", planId: "resource-plan", preview: { summary: message("error.api.hostedResourceCollections.importPlanSummary"), files: [{ name: "原图 العربية 😀.png", bytes: 3, contentType: "application/octet-stream", metadata: { kind: "unsupported", ...explanation() } }], totalBytes: 3 }, resourceRefs: [], assets: [], results: [], commitAllowed: true });
 const collection = () => ({ collection: "attachments", owner: "original-owner", title: "作者配置标题", lifecycle: "live" as const, read: false, download: false, import: true, status: "ready" as const });
 
 test("bibliography inspection decodes only declared reasons and losses, preserving original author objects", () => {
@@ -73,27 +73,28 @@ test("content receipt cache rebrands messages and keeps original operation facts
     assert.throws(() => decodeContentDraft(JSON.stringify({ ...draft, job: { ...draft.job, phase: "retry-with-new-id" } })));
 });
 
-test("resource receipt cache retains exact original bytes, nullable PDF facts and dynamic unsupported metadata", () => {
-    const incoming = raw(resource()), request = { collection: incoming.collection, operationId: incoming.operationId, name: incoming.preview.name, bytesBase64: "AQID" };
-    const draft: ResourceImportDraft = { collection: request.collection, name: request.name, fileName: "原件.png", bytes: 3, bytesBase64: request.bytesBase64, revision: 4 };
+test("resource locator cache retains original file identity, nullable PDF facts and dynamic unsupported metadata without upload bytes", () => {
+    const incoming = raw(resource()), request = { collection: incoming.collection, operationId: incoming.operationId, files: [{ name: incoming.preview.files[0].name, bytes: 3, sha256: digest }], wireDigest: digest };
+    const draft: ResourceImportDraft = { version: 2, collection: request.collection, files: [{ ...request.files[0], fileName: "原件.png", bytesBase64: "AQID" }], revision: 4 };
     draft.pending = { request, owner: incoming.owner, input: resourceImportInput(draft), revision: 4, receipt: resourceImportReceipt(request, incoming) };
-    const restored = decodeResourceImportDraft(JSON.stringify(draft));
-    assert.equal(restored.pending!.receipt!.preview.metadata!.kind, "unsupported");
-    const metadata = restored.pending!.receipt!.preview.metadata!;
+    const restored = decodeResourceImportDraft(encodeResourceImportDraft(draft));
+    assert.equal(restored.files[0].bytesBase64, undefined);
+    assert.equal(restored.pending!.receipt!.preview.files![0].metadata.kind, "unsupported");
+    const metadata = restored.pending!.receipt!.preview.files![0].metadata;
     if (metadata.kind !== "unsupported") return;
     assert.ok(uiTextValue(descriptionUiText(metadata)).includes(original));
     assert.equal(canCommitResourceImport(restored, collection(), false), false);
     assert.equal(canCommitResourceImport(restored, collection(), true), true);
     assert.equal(canCommitResourceImport(restored, { ...collection(), import: false }, true), false);
-    const pdf = decodeResourceImportReceipt({ ...incoming, preview: { ...incoming.preview, metadata: { kind: "pdf", pages: [{ width: 100, height: 200, rotation: 0, extractionId: null, extractedScalars: null }] } } });
-    assert.equal(pdf.preview.metadata!.kind, "pdf");
+    const pdf = decodeResourceImportReceipt({ ...incoming, preview: { ...incoming.preview, files: [{ ...incoming.preview.files[0], metadata: { kind: "pdf", pages: [{ width: 100, height: 200, rotation: 0, extractionId: null, extractedScalars: null }] } }] } });
+    assert.equal(pdf.preview.files![0].metadata.kind, "pdf");
     assert.throws(() => decodeResourceImportReceipt({ ...incoming, preview: { ...incoming.preview, summary: "legacy" } }));
-    assert.throws(() => decodeResourceImportReceipt({ ...incoming, preview: { ...incoming.preview, metadata: { kind: "unsupported", message: "legacy" } } }));
+    assert.throws(() => decodeResourceImportReceipt({ ...incoming, preview: { ...incoming.preview, files: [{ ...incoming.preview.files[0], metadata: { kind: "unsupported", message: "legacy" } }] } }));
     assert.throws(() => decodeResourceImportDraft(JSON.stringify({ ...draft, pending: { ...draft.pending, request: { ...request, bytesBase64: "YR==" } } })));
 });
 
 test("filtered resource status replaces stale preview and terminal journal facts cannot become another outcome", () => {
-    const incoming = resource(), request = { collection: incoming.collection, operationId: incoming.operationId, name: incoming.preview.name, bytesBase64: "AQID" }, first = resourceImportReceipt(request, incoming);
+    const incoming = resource(), request = { collection: incoming.collection, operationId: incoming.operationId, files: [{ name: incoming.preview.files[0].name, bytes: 3, sha256: digest }], wireDigest: digest }, first = resourceImportReceipt(request, incoming);
     const committed = resourceImportReceipt(request, { ...incoming, owner: "remapped-owner", status: "committed", planId: null, preview: {}, resourceRefs: [], assets: [], commitAllowed: false }, first);
     assert.equal(committed.status, "committed"); assert.deepEqual(committed.preview, {}); assert.deepEqual(committed.assets, []);
     assert.throws(() => resourceImportReceipt(request, { ...committed, status: "resolved" }, committed));

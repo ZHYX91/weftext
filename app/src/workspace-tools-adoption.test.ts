@@ -70,6 +70,7 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
     const state = { current: null as DocumentBasis | null }, requests: { route: string; body: unknown }[] = [], notices: unknown[] = [];
     const host = {
         getDocument: () => state.current, canEdit: () => true, selection: () => undefined,
+        applyPatch: async () => { throw new Error("Read-only adoption fixture must never patch author content"); },
         request: async (route: string, body?: unknown) => {
             requests.push({ route, body });
             if (custom) return custom(route, body);
@@ -103,7 +104,8 @@ function fixture(t: TestContext, custom?: (route: string, body?: unknown) => Pro
         outlinePanel: { refresh: () => { outline.refreshes++; refreshed.push("outline"); }, invalidate: () => { outline.invalidations++; } },
         outputPanel: { assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
         libraryTrash: { assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
-        styles: new Map(), pendingImport: null,
+        resourceImports: { recover: async () => {}, assertCloseReady() {}, freezeForClose: () => true, thawAfterClose() {} },
+        styles: new Map(),
     }) as SelectedTools;
     tools.attachDock(presentation);
     const select = async (next: DocumentBasis | null) => {

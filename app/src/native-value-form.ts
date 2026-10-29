@@ -111,6 +111,8 @@ export interface SourcePatch {
 export interface SchemaRead {
     schema: DataSchema;
     source: string;
+    /** Core digest of the complete installed schema semantics, including constraints. */
+    semanticDigest: string;
     roleRef?: string;
     revision: string | null;
     builtinDefault: boolean;
@@ -484,6 +486,14 @@ interface BoundNativeControl {
     slot: string;
     path: readonly ValuePath[];
 }
+function canRestructureNative(container: HTMLElement, status: HTMLElement, composing: ReadonlySet<EventTarget>, warning: UiText): boolean {
+    if (composing.size) { setUiText(status, uiMessage("dataPanel.compositionPending")); return false; }
+    const invalid = container.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input:invalid,select:invalid,textarea:invalid");
+    if (invalid) {
+        setUiText(status, warning); invalid.reportValidity(); invalid.focus({ preventScroll: true }); return false;
+    }
+    setUiText(status, ""); return true;
+}
 export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSchema, changed: (value: NativeValue) => void, label: UiText, identity: NativeControlIdentity, depth = 0, references?: FormReferences, binding?: NativeControlBinding, lifetime = new Set<BoundNativeControl>()): HTMLElement {
     const retire = () => {
         for (const entry of lifetime)
@@ -556,7 +566,12 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
             return host;
         }
         const record = ui("div", "native-record");
-        host.append(record);
+        const status = ui("p", "data-help"), composing = new Set<EventTarget>();
+        status.setAttribute("role", "status");
+        host.addEventListener("compositionstart", event => { if (event.target) composing.add(event.target); });
+        host.addEventListener("compositionend", event => { if (event.target) composing.delete(event.target); });
+        const canRestructure = (): boolean => canRestructureNative(record, status, composing, uiMessage("nativeEditor.finishInvalidBeforeStructure"));
+        host.append(record, status);
         const render = (): void => {
             record.replaceChildren();
             for (const [key, member] of Object.entries(resolved.members)) {
@@ -566,13 +581,13 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                 heading.append(ui("span", "", () => `${uiTextValue(fieldNames[key] ?? key)}${uiTextValue(member.required ? " *" : "")}`));
                 row.append(heading);
                 if (!present) {
-                    heading.append(ui("span", "data-empty", uiMessage("queryValue.absent")), action(uiMessage("nativeEditor.addMember"), () => { retire(); value = replaceNativeMember(value, key, emptyNativeValue(member.shape, schema)); changed(value); render(); }, "data-button compact"));
+                    heading.append(ui("span", "data-empty", uiMessage("queryValue.absent")), action(uiMessage("nativeEditor.addMember"), () => { if (!canRestructure()) return; retire(); value = replaceNativeMember(value, key, emptyNativeValue(member.shape, schema)); changed(value); render(); }, "data-button compact"));
                 }
                 else {
                     if (!member.required)
-                        heading.append(action(uiMessage("nativeEditor.removeMember"), () => { retire(); value = replaceNativeMember(value, key, undefined); changed(value); render(); }, "data-button compact"));
+                        heading.append(action(uiMessage("nativeEditor.removeMember"), () => { if (!canRestructure()) return; retire(); value = replaceNativeMember(value, key, undefined); changed(value); render(); }, "data-button compact"));
                     if (member.nullable && present.kind !== "none")
-                        heading.append(action(uiMessage("nativeEditor.setNone"), () => { retire(); value = replaceNativeMember(value, key, { kind: "none" }); changed(value); render(); }, "data-button compact"));
+                        heading.append(action(uiMessage("nativeEditor.setNone"), () => { if (!canRestructure()) return; retire(); value = replaceNativeMember(value, key, { kind: "none" }); changed(value); render(); }, "data-button compact"));
                     row.append(valueEditor(member.shape, present, schema, next => { value = replaceNativeMember(value, key, next); changed(value); }, () => `${uiTextValue(label)} · ${uiTextValue(fieldNames[key] ?? key)}`, { ...identity, path: [...identity.path, { kind: "member", key }] }, depth + 1, references, binding, lifetime));
                 }
                 record.append(row);
@@ -657,18 +672,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
             event.preventDefault(); event.stopPropagation(); stopDrag(true);
         });
         host.addEventListener("compositionstart", () => stopDrag(true));
-        const canRestructure = (): boolean => {
-            if (composing.size) { setUiText(status, uiMessage("dataPanel.compositionPending")); return false; }
-            const invalid = items.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>("input:invalid,select:invalid,textarea:invalid");
-            if (invalid) {
-                setUiText(status, uiMessage("nativeEditor.finishInvalidBeforeReorder"));
-                invalid.reportValidity();
-                invalid.focus({ preventScroll: true });
-                return false;
-            }
-            setUiText(status, "");
-            return true;
-        };
+        const canRestructure = (): boolean => canRestructureNative(items, status, composing, uiMessage("nativeEditor.finishInvalidBeforeReorder"));
         const render = (focusIndex?: number, focusRole = "position"): void => {
             stopDrag();
             items.replaceChildren();

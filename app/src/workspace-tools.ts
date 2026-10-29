@@ -15,6 +15,7 @@ import { api, apiBlob, operationId } from "./api";
 import { openSyncPanel } from "./sync-panel";
 import { createLibraryTrashController } from "./library-trash";
 import { mountMediaViewer, mountResourceViewer } from "./media-viewer";
+import { ResourceImportBatch } from "./resource-import-batch";
 import { decodeResourceList } from "./media-wire";
 import type { ResourceOpenTarget } from "./media-selection";
 import "./media-viewer.css";
@@ -55,7 +56,7 @@ export interface WorkspaceToolsHost {
     beforeAction(): Promise<void>;
     canEditSource(): boolean;
     notify(message: UiText, error?: boolean): void;
-    stylesChanged(root: string): Promise<void>;
+    assetsChanged(root: string): Promise<void>;
     refreshLibrary?(root: string): Promise<void>;
     revealCalendar?(): void;
     syncApplied(root: string): Promise<void>;
@@ -70,10 +71,11 @@ export interface WorkspaceToolsPresentation {
 export class WorkspaceTools {
     private readonly closeGuard = new ProposalCloseGuard();
     private readonly dataHost: PanelHost;
+    private readonly resourceImports: ResourceImportBatch;
     private closeOwners(): { assertCloseReady(): void; freezeForClose(): boolean; thawAfterClose(): void }[] {
-        return [this.propertyPanel, this.queryPanel, this.calendarPanel, this.outputPanel, this.knowledgePanel, this.libraryTrash, ...this.styles.values()];
+        return [this.propertyPanel, this.queryPanel, this.calendarPanel, this.outputPanel, this.knowledgePanel, this.libraryTrash, this.resourceImports, ...this.styles.values()];
     }
-    assertCloseReady(): void { this.closeGuard.assertReady(this.pendingImport !== null); for (const owner of this.closeOwners()) owner.assertCloseReady(); }
+    assertCloseReady(): void { this.closeGuard.assertReady(false); for (const owner of this.closeOwners()) owner.assertCloseReady(); }
     freezeForClose(): boolean {
         try { this.assertCloseReady(); } catch { return false; }
         const frozen: ReturnType<WorkspaceTools["closeOwners"]> = [];
@@ -82,7 +84,7 @@ export class WorkspaceTools {
                 frozen.push(owner);
                 if (!owner.freezeForClose()) throw new Error("Workspace proposal owner refused close");
             }
-            if (!this.closeGuard.freeze(this.pendingImport !== null)) throw new Error("Workspace proposal changed during close");
+            if (!this.closeGuard.freeze(false)) throw new Error("Workspace proposal changed during close");
         }
         catch {
             for (const owner of frozen.reverse()) owner.thawAfterClose();
@@ -114,13 +116,12 @@ export class WorkspaceTools {
     private presentation: WorkspaceToolsPresentation | null = null;
     private readonly styles = new Map<string, NativeStyleController>();
     private refreshTimer?: ReturnType<typeof setTimeout>;
-    private pendingImport: {
-        plan: KnowledgePlan;
-        context: KnowledgeContext;
-        receipt?: KnowledgeReceipt;
-    } | null = null;
     constructor(private readonly host: WorkspaceToolsHost) {
         this.libraryTrash = createLibraryTrashController({ request: api, created: host.created, notify: host.notify, environmentChanged: root => this.invalidateLibraryEnvironment(root) });
+        this.resourceImports = new ResourceImportBatch({ request: api, getDocument: host.getDocument, canEdit: host.canEditSource,
+            applyPatch: host.applyPatch, prepareAction: host.beforeAction, notify: host.notify,
+            changed: async root => { this.invalidateLibraryEnvironment(root); await host.assetsChanged(root); },
+            run: work => this.closeGuard.run(work) });
         const dataHost: PanelHost = {
             canEdit: host.canEditSource,
             request: api, requestBlob: apiBlob, getDocument: host.getDocument, applyPatch: host.applyPatch,
@@ -195,7 +196,7 @@ export class WorkspaceTools {
             mountMedia: (container, selected, initial) => mountMediaViewer(container, {
                 context: () => this.context(), list: async (sessionId) => decodeResourceList(await api("/api/resources/list", { sessionId })),
                 read: (sessionId, resource, revision) => apiBlob("/api/resources/read", { sessionId, resource, revision }),
-                importResource: (file, sessionId) => this.importResource(file, sessionId), notify: host.notify,
+                importResources: (files, sessionId) => this.importResources(files, sessionId), notify: host.notify,
             }, selected, initial),
         });
         const outline = document.createElement("section");
@@ -230,6 +231,7 @@ export class WorkspaceTools {
         add("insert", "objects", uiMessage("localChrome.objects"), [
             this.button(uiMessage("hostedShell.latexEquation"), () => latex.open()),
             this.button(uiMessage("hostedShell.mermaidDiagram"), () => diagrams.open()),
+            ...this.resourceImportCommands(),
         ]);
         add("review", "review", uiMessage("localChrome.review"), [
             this.button(uiMessage("localChrome.annotations"), async () => { await this.show("knowledge"); this.selectKnowledgeTab("annotations"); }),
@@ -393,6 +395,7 @@ export class WorkspaceTools {
         if (this.closeGuard.frozen) return;
         return this.closeGuard.run(async () => {
             this.knowledgePanel.contextChanged();
+            void this.resourceImports.recover().catch(error => this.host.notify(errorUiText(error), true));
             this.outlinePanel.refresh();
             if (this.viewVisible("data")) {
                 clearTimeout(this.refreshTimer);
@@ -461,79 +464,34 @@ export class WorkspaceTools {
         });
     }
     attachSurface(surface: HTMLElement | null, mappings: KnowledgeTextMapping[] = []): void { if (this.closeGuard.frozen) return; this.knowledgePanel.attachSurface(surface, mappings); }
-    private async importResource(file: File, sessionId: string): Promise<void> {
-        return this.closeGuard.run(async () => {
-            if (this.pendingImport) {
-                const pending = this.pendingImport;
-                const status = decodeKnowledgeDelivery(await api<KnowledgeReceipt>("/api/operations/status", { operationId: pending.plan.operationId, context: pending.context }));
-                if (status.operationId !== pending.plan.operationId)
-                    throw new UiError(uiMessage("error.invalidResponse"));
-                if (pending.receipt && originalCommitted(pending.receipt) && !originalCommitted(status))
-                    throw new UiError(uiMessage("workspaceTools.importCommittedStatusMismatch"));
-                pending.receipt = status;
-                if (originalCommitted(status)) {
-                    if (!committedDeliveryComplete(status)) this.invalidateLibraryEnvironment(pending.context.root);
-                    const delivered = await deliverCommitted(status, value => this.host.applyReceipt(value, pending.context));
-                    pending.receipt = delivered;
-                    if (!committedDeliveryComplete(delivered))
-                        throw new UiError(originalDeliveryErrors(delivered).length ? joinUiText(originalDeliveryErrors(delivered), "\n") : uiMessage("workspaceTools.resourceImportDeliveryPending"));
-                    this.pendingImport = null;
-                    this.host.notify(uiMessage("workspaceTools.previousResourceImportConfirmed"));
-                    return;
-                }
-                if (status.status === "resolved") {
-                    this.pendingImport = null;
-                    throw new UiError(uiMessage("workspaceTools.originalImportEnded"));
-                }
-                throw new UiError(uiMessage("workspaceTools.originalImportPending"));
-            }
-            if (file.size > 64 * 1024 * 1024)
-                throw new UiError(uiMessage("workspaceTools.resourceSizeLimit"));
-            await this.host.beforeAction();
-            const context = this.context();
-            if (!context || context.sessionId !== sessionId)
-                throw new UiError(uiMessage("workspaceTools.noteChangedSelectResourceAgain"));
-            const array = new Uint8Array(await file.arrayBuffer());
-            let binary = "";
-            for (let index = 0; index < array.length; index += 8192)
-                binary += String.fromCharCode(...array.subarray(index, index + 8192));
-            const plan = await api<KnowledgePlan>("/api/resources/prepare-import", { sessionId, name: file.name, bytes: btoa(binary), operationId: operationId() });
-            const dialog = document.createElement("dialog");
-            dialog.className = "modal";
-            const title = document.createElement("h2");
-            setUiText(title, uiMessage("workspaceTools.importResource"));
-            const description = document.createElement("p");
-            setUiText(description, displayMessage("workspaceTools.resourceCopyDescription", { p0: uiDisplayParameter(file.name), p1: uiDisplayParameter(file.size.toLocaleString()) }));
-            const list = document.createElement("ul");
-            for (const change of plan.changes ?? []) {
-                const item = document.createElement("li");
-                setUiText(item, change.path ?? uiMessage("workspaceTools.currentResourceManifest"));
-                list.append(item);
-            }
-            dialog.append(title, description, list);
-            document.body.append(dialog);
-            const accepted = await new Promise<boolean>(resolve => {
-                const finish = (result: boolean): void => { dialog.close(); dialog.remove(); resolve(result); };
-                dialog.append(this.button(uiMessage("common.cancel"), () => finish(false)), this.button(uiMessage("workspaceTools.import"), () => finish(true)));
-                dialog.oncancel = event => { event.preventDefault(); finish(false); };
-                dialog.showModal();
-            });
-            if (!accepted)
-                return;
-            this.pendingImport = { plan, context };
-            try {
-                const result = await this.commit(plan, context);
-                this.pendingImport.receipt = result;
-                if (committedDeliveryComplete(result))
-                    this.pendingImport = null;
-                else
-                    throw new UiError(originalDeliveryErrors(result).length ? joinUiText(originalDeliveryErrors(result), "\n") : uiMessage("workspaceTools.originalImportResultPending"));
-            }
-            catch (error) {
-                this.host.notify(uiMessage("workspaceTools.resourceImportUnconfirmed"), true);
-                throw error;
-            }
+    private resourceImportCommands(): HTMLElement[] {
+        const picker = document.createElement("input");
+        picker.type = "file"; picker.multiple = true; picker.hidden = true;
+        picker.className = "resource-batch-picker";
+        setUiAttr(picker, "aria-label", uiMessage("localResourceBatch.chooseFiles"));
+        let sessionId: string | null = null;
+        const choose = this.button(uiMessage("localResourceBatch.title"), () => {
+            const document = this.host.getDocument();
+            if (!document) throw new UiError(uiMessage("localResourceBatch.noDocument"));
+            sessionId = document.sessionId; picker.click();
         });
+        picker.onchange = () => {
+            const files = Array.from(picker.files ?? []), originalSession = sessionId;
+            picker.value = ""; sessionId = null;
+            if (!files.length) return;
+            void this.importResources(files, originalSession ?? "").catch(error => this.host.notify(errorUiText(error), true));
+        };
+        const recover = this.button(uiMessage("localResourceBatch.recover"), async () => {
+            const document = this.host.getDocument();
+            if (!document) throw new UiError(uiMessage("localResourceBatch.noDocument"));
+            await this.resourceImports.recover();
+            if (!this.resourceImports.hasPending()) { this.host.notify(uiMessage("localResourceBatch.noPending")); return; }
+            await this.importResources([], document.sessionId);
+        });
+        return [choose, picker, recover];
+    }
+    private async importResources(files: readonly File[], sessionId: string): Promise<void> {
+        return this.closeGuard.run(() => this.resourceImports.open(files, sessionId));
     }
     private async commit(plan: KnowledgePlan, context: KnowledgeContext): Promise<KnowledgeReceipt> {
         return this.closeGuard.run(async () => {
@@ -574,7 +532,7 @@ export class WorkspaceTools {
                 apply: request => api("/api/styles/apply", { root, ...request }),
                 committed: () => this.invalidateLibraryEnvironment(root),
                 openSource: path => this.host.openDocument(path, root),
-                onApplied: () => this.host.stylesChanged(root), operationId,
+                onApplied: () => this.host.assetsChanged(root), operationId,
             }, this.styles.get(root));
             this.styles.set(root, controller);
         });

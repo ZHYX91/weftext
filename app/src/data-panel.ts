@@ -10,6 +10,9 @@ import { uiDisplayParameter, message as uiMessage, displayMessage, setUiText, se
 import { type Cell, type NoteProjection } from "./data-projection";
 import { readNoteProjection, sameProjectionInput } from "./data-projection-read";
 import { comparePresentedFields, decodeFieldPresentation, defaultFieldPresentation, effectiveFieldPlacement, setFieldPlacement } from "./data-field-preference";
+import { FieldTransfer, type FieldTransferContext } from "./field-transfer";
+import { transferContextKey } from "./field-transfer-state";
+import { createValuePresetState, mountValuePresets, valuePresetContext, type ValuePresetState } from "./value-presets";
 export { decodeProjection, decodeCell, type Cell, type FieldProjection, type NoteProjection } from "./data-projection";
 import { descriptionUiText, coreDescriptionUiText } from "./ui-diagnostics";
 import { submitOriginal, TerminatedAttempt, type OriginalFact } from "./original-operation";
@@ -29,6 +32,10 @@ interface SchemaProposal {
     plan?: { planId: string; operationId: string };
     preview?: unknown;
 }
+function samePanelInput(current: DocumentBasis | null, original: DocumentBasis): boolean {
+    return sameProjectionInput(current, original) && current!.workspaceId === original.workspaceId
+        && current!.nodeId === original.nodeId && current!.inputRevision === original.inputRevision;
+}
 export class DataPanel {
     readonly element = ui("aside", "data-panel");
     private schema: DataSchema | null = null;
@@ -40,6 +47,9 @@ export class DataPanel {
     private fieldPresentation = defaultFieldPresentation();
     private showHiddenFields = false;
     private schemaRead: SchemaRead | null = null;
+    /** Only a successfully bound projection may supply author field authority. */
+    private projectionBasis: DocumentBasis | null = null;
+    private readingProjection = false;
     private draftCache = new Map<string, Map<string, FieldDraft>>();
     private readonly closeGuard = new ProposalCloseGuard();
     private readonly typeDrafts = new Map<string, string[]>();
@@ -49,25 +59,37 @@ export class DataPanel {
     private references = emptyReferences();
     private referencesRoot = "";
     private composing = false;
+    private readonly compositionTargets = new Set<EventTarget>();
     private pendingRender = false;
     private advancedOpen = false;
     private renderedIdentity: string | null = null;
     private draftIdentity: string | null = null;
     private reminderDisposers: (() => void)[] = [];
     private readonly reminderDevice: ReminderDeviceControl;
+    private readonly fieldTransfer: FieldTransfer;
+    private readonly presetStates = new Map<string, ValuePresetState>();
+    private presetDialog: { retire(): void; current(): boolean } | null = null;
     constructor(private readonly host: PanelHost) {
         this.closeGuard.bind(this.element);
         this.reminderDevice = new ReminderDeviceControl(host);
+        this.fieldTransfer = new FieldTransfer({
+            getContext: () => this.transferContext(),
+            isCurrent: context => this.isTransferCurrent(context),
+            canTransfer: () => this.canTransferFields(),
+            request: host.request.bind(host), applyPatch: host.applyPatch.bind(host), notify: host.notify.bind(host),
+            run: operation => this.closeGuard.run(async () => { try { await operation(); } finally { await this.refreshOwned(); } }),
+        });
         setUiAttr(this.element, "aria-label", uiMessage("dataPanel.regionLabel"));
         this.element.append(ui("p", "data-empty", uiMessage("dataPanel.openNoteHelp")));
         // Invalid raw text never reaches the typed changed callback. Record it
         // on its owning input event; close proof reads only the retained owners.
         for (const event of ["input", "change"]) this.element.addEventListener(event, () => {
-            if (!this.closeGuard.frozen) this.rememberInputs();
+            if (!this.closeGuard.frozen) { this.rememberInputs(); this.refreshTransfer(); }
         });
-        this.element.addEventListener("compositionstart", () => { this.composing = true; });
-        this.element.addEventListener("compositionend", () => {
-            this.composing = false;
+        this.element.addEventListener("compositionstart", event => { if (event.target) this.compositionTargets.add(event.target); this.composing = true; });
+        this.element.addEventListener("compositionend", event => {
+            if (event.target) this.compositionTargets.delete(event.target);
+            this.composing = this.compositionTargets.size !== 0;
             requestAnimationFrame(() => {
                 if (this.closeGuard.frozen) return;
                 if (!this.composing && this.pendingRender) {
@@ -76,6 +98,117 @@ export class DataPanel {
                 }
             });
         });
+    }
+    private retireComposition(root: HTMLElement): void {
+        for (const target of this.compositionTargets ?? []) if (target instanceof Node && root.contains(target)) {
+            this.closeGuard.retireComposition(target); this.compositionTargets.delete(target);
+        }
+        this.composing = !!this.compositionTargets?.size;
+        this.pendingRender = false;
+    }
+    private retireInputOwners(): void {
+        this.presetDialog?.retire();
+        this.fieldTransfer?.retire();
+        this.retireComposition(this.element);
+        this.projectionBasis = null;
+    }
+    private refreshTransfer(): void {
+        const transfer = this.fieldTransfer;
+        if (!transfer) return;
+        const previous = [...this.compositionTargets ?? []].filter((target): target is Node => target instanceof Node && transfer.element.contains(target));
+        transfer.refresh();
+        for (const target of previous) if (!transfer.element.contains(target)) {
+            this.closeGuard.retireComposition(target); this.compositionTargets.delete(target);
+        }
+        if (previous.length) this.composing = !!this.compositionTargets.size;
+    }
+    /** Lifecycle retirement preserves every retained proposal and personal preset input. */
+    dispose(): void {
+        this.rememberInputs(); this.generation++; this.retireInputOwners();
+        this.reminderDisposers.splice(0).forEach(dispose => dispose()); this.reminderDevice.retire();
+    }
+    private acceptedBasis(): DocumentBasis | null {
+        const basis = this.projectionBasis;
+        return !this.readingProjection && basis && this.basis && samePanelInput(this.basis, basis)
+            && samePanelInput(this.host.getDocument(), basis) ? basis : null;
+    }
+    private transferContext(): FieldTransferContext | null {
+        const basis = this.acceptedBasis(), schemaRead = this.schemaRead, projection = this.projection;
+        if (!basis?.workspaceId || !schemaRead || !/^[a-f0-9]{64}$/.test(schemaRead.semanticDigest) || !projection) return null;
+        return { basis: { ...basis }, schemaRead, projection };
+    }
+    private isTransferCurrent(context: FieldTransferContext): boolean {
+        const actual = this.transferContext();
+        return !!actual && transferContextKey(actual) === transferContextKey(context);
+    }
+    private hasCurrentProposals(): boolean {
+        return [...this.drafts.values()].some(draft => draft.changed || !!Object.keys(draft.rawInputs ?? {}).length)
+            || !!this.draftIdentity && (this.typeDrafts.has(this.draftIdentity) || this.typeInstalling.has(this.draftIdentity))
+            || !!this.basis && (this.schemaDrafts.has(this.basis.root) || this.schemaInstalling.has(this.basis.root));
+    }
+    private canTransferFields(): boolean {
+        if (this.closeGuard.frozen || this.composing || this.host.canEdit?.() === false || this.projection?.readOnly || !this.transferContext()) return false;
+        this.rememberInputs();
+        return !this.hasCurrentProposals();
+    }
+    private async openValuePresets(field: SchemaField): Promise<void> {
+        const basis = this.acceptedBasis(), read = this.schemaRead, schema = this.schema;
+        if (this.closeGuard.frozen || !basis?.workspaceId || !read || !schema || !/^[a-f0-9]{64}$/.test(read.semanticDigest)) return;
+        this.presetDialog?.retire();
+        await this.closeGuard.run(async () => new Promise<void>(resolve => {
+            const dialog = ui("dialog", "data-confirm-dialog data-value-preset-dialog"), body = ui("section");
+            const scope = { libraryId: basis.workspaceId!, schemaDigest: read.semanticDigest };
+            const stateKey = JSON.stringify([scope.libraryId, field.id, scope.schemaDigest]);
+            const state = this.presetStates.get(stateKey) ?? createValuePresetState(); this.presetStates.set(stateKey, state);
+            let draft = this.drafts.get(field.key), revision = draft?.revision ?? 0;
+            const binding = JSON.stringify([field.id, field.shape, schema.definitions]);
+            const original = JSON.stringify(this.projection?.fields.find(item => item.fieldId === field.id)?.cell ?? { state: "absent" });
+            let live = true, component: ReturnType<typeof mountValuePresets> | undefined;
+            const current = (): boolean => live && this.presetDialog === owner && !!this.acceptedBasis()
+                && samePanelInput(this.acceptedBasis(), basis) && this.schemaRead?.semanticDigest === read.semanticDigest
+                && this.schemaRead.revision === read.revision && this.schemaRead.source === read.source
+                && this.schema?.fields.some(item => item.id === field.id && JSON.stringify([item.id, item.shape, this.schema!.definitions]) === binding) === true;
+            const value = (): NativeValue => this.drafts.get(field.key)?.value
+                ?? this.projection?.fields.find(item => item.fieldId === field.id)?.cell.value ?? { kind: "none" };
+            const canApply = (): boolean => {
+                if (!current() || this.closeGuard.frozen || this.composing || this.host.canEdit?.() === false || this.projection?.readOnly) return false;
+                this.rememberInputs();
+                const actual = this.drafts.get(field.key), projected = this.projection?.fields.find(item => item.fieldId === field.id);
+                if (actual !== draft || (actual?.revision ?? 0) !== revision || projected?.writable === false
+                    || projected?.cell.state === "invalid" || projected?.cell.state === "unavailable"
+                    || JSON.stringify(projected?.cell ?? { state: "absent" }) !== original
+                    || actual?.changed && (actual.original !== original || actual.binding !== binding)
+                    || !!Object.keys(actual?.rawInputs ?? {}).length) return false;
+                const wrapper = [...this.element.querySelectorAll<HTMLElement>(".data-property[data-field-key]")].find(item => item.dataset.fieldId === field.id);
+                return !!wrapper && this.formInputs(wrapper).every(([, control]) => control.validity.valid);
+            };
+            const finish = (retired = false): void => {
+                if (!live) return; live = false; component?.dispose();
+                if (this.presetDialog === owner) this.presetDialog = null;
+                if (dialog.open) dialog.close(); dialog.remove(); resolve();
+                if (retired) this.host.notify(uiMessage("dataPanel.valuePresetRetired"));
+            };
+            const owner = { retire: () => finish(true), current }; this.presetDialog = owner;
+            dialog.append(ui("h2", "", displayMessage("dataPanel.valuePresetTitle", { field: uiDisplayParameter(fieldNames[field.key] ?? field.key) })), ui("p", "data-help", uiMessage("dataPanel.valuePresetStageHelp")), body,
+                action(uiMessage("common.close"), () => finish()));
+            dialog.addEventListener("cancel", event => { event.preventDefault(); finish(); });
+            dialog.addEventListener("close", () => finish());
+            document.body.append(dialog);
+            try {
+                component = mountValuePresets(body, { scope, schema, field, state, getDraft: value, isCurrent: current, canApply,
+                    setDraft: next => {
+                        if (!canApply()) throw new UiError(uiMessage("valuePresets.targetUnavailable"));
+                        this.rememberInputs();
+                        draft ??= { value: value(), changed: false, original, binding };
+                        draft.value = next; draft.changed = true; draft.revision = (draft.revision ?? 0) + 1;
+                        this.drafts.set(field.key, draft); revision = draft.revision;
+                        this.renderFields(); component?.refresh(); this.refreshTransfer();
+                    },
+                });
+                body.querySelector<HTMLDetailsElement>("details")?.setAttribute("open", "");
+                dialog.showModal();
+            } catch (error) { finish(); this.host.notify(errorUiText(error), true); }
+        }));
     }
     private hasUnresolved(): boolean {
         return this.typeDrafts.size > 0 || this.schemaDrafts.size > 0 ||
@@ -111,10 +244,12 @@ export class DataPanel {
         this.rememberInputs();
         const selected = this.host.getDocument();
         const basis = selected && { ...selected };
+        if (!basis || !this.projectionBasis || !samePanelInput(basis, this.projectionBasis)) this.retireInputOwners();
         const generation = ++this.generation;
-        const current = () => generation === this.generation && !!basis && sameProjectionInput(this.host.getDocument(), basis);
+        const current = () => generation === this.generation && !!basis && samePanelInput(this.host.getDocument(), basis);
         const identity = (doc: DocumentBasis) => JSON.stringify([doc.workspaceId, doc.nodeId ?? doc.path]);
         if (!basis) {
+            this.readingProjection = false;
             if (this.basis)
                 this.draftCache.set(identity(this.basis), this.drafts);
             this.basis = null;
@@ -134,6 +269,7 @@ export class DataPanel {
         }
         this.draftIdentity = identity(basis);
         this.basis = { ...basis };
+        this.readingProjection = true;
         this.element.setAttribute("aria-busy", "true");
         try {
             const schemaResult = await this.host.request<SchemaRead>("/api/data/schema", { root: basis.root });
@@ -141,9 +277,14 @@ export class DataPanel {
             const projection = await readNoteProjection(this.host.request.bind(this.host), basis, schemaResult);
             if (!current())
                 return;
+            if (this.schemaRead && (this.schemaRead.source !== schemaResult.source || this.schemaRead.revision !== schemaResult.revision || this.schemaRead.semanticDigest !== schemaResult.semanticDigest)) {
+                this.rememberInputs(); this.retireInputOwners();
+            }
             this.schema = schemaResult.schema;
             this.projection = { ...projection, readOnly: projection.readOnly || this.host.canEdit?.() === false };
             this.schemaRead = schemaResult;
+            this.projectionBasis = { ...basis };
+            this.readingProjection = false;
             try {
                 this.fieldPresentation = decodeFieldPresentation(localStorage.getItem(this.presentationStorageKey()), new Set(this.schema.fields.map(field => field.id)));
             }
@@ -160,6 +301,7 @@ export class DataPanel {
         }
         catch (error) {
             if (current()) {
+                this.retireInputOwners();
                 const discard = this.discardAllButton(() => discard.remove());
                 this.element.replaceChildren(ui("h2", "", uiMessage("dataPanel.title")), ui("p", "data-warning", error instanceof Error ? errorUiText(error) : uiMessage("error.invalidResponse")), action(uiMessage("dataPanel.retryRead"), () => this.refresh()), discard);
                 this.reminderDevice.retire();
@@ -167,16 +309,19 @@ export class DataPanel {
             }
         }
         finally {
-            if (generation === this.generation)
+            if (generation === this.generation) {
+                this.readingProjection = false;
                 this.element.removeAttribute("aria-busy");
+            }
         }
     }
     private render(): void {
         if (this.closeGuard.frozen) return;
-        if (this.composing) {
+        if (this.composing || this.readingProjection) {
             this.pendingRender = true;
             return;
         }
+        this.pendingRender = false;
         if (!this.schema || !this.projection || !this.basis)
             return;
         const schema = this.schema;
@@ -247,6 +392,7 @@ export class DataPanel {
             this.element.append(diagnostics);
         }
         this.element.append(ui("p", "data-help", uiMessage("dataPanel.draftApplyHelp")));
+        if (this.fieldTransfer) { this.element.append(this.fieldTransfer.element); this.refreshTransfer(); }
         if (oldFocus)
             this.element.querySelector<HTMLElement>(`#${CSS.escape(oldFocus)}`)?.focus({ preventScroll: true });
         if (fieldKey) {
@@ -299,7 +445,7 @@ export class DataPanel {
     }
     private renderFields(): void {
         if (this.closeGuard.frozen) return;
-        if (this.composing) {
+        if (this.composing || this.readingProjection) {
             this.pendingRender = true;
             return;
         }
@@ -369,6 +515,14 @@ export class DataPanel {
                 fieldMenu.append(choose);
             }
             title.append(pin, fieldMenu);
+            const presets = action(uiMessage("valuePresets.title"), () => this.openValuePresets(field), "data-button compact");
+            presets.dataset.fieldPreset = field.id;
+            try {
+                const accepted = this.acceptedBasis();
+                if (!accepted?.workspaceId || !this.schemaRead) throw new Error();
+                valuePresetContext({ libraryId: accepted.workspaceId, schemaDigest: this.schemaRead.semanticDigest }, schema, field, this.drafts.get(field.key)?.value ?? cell.value ?? { kind: "none" });
+            } catch { presets.disabled = true; setUiAttr(presets, "title", uiMessage("dataPanel.valuePresetUnavailable")); }
+            title.append(presets);
             wrapper.append(title, ui("p", `data-cell-state ${cell.state}`, cellLabels[cell.state]));
             if (this.projection.readOnly || cell.state === "unavailable" || cell.state === "invalid" || projected?.writable === false) {
                 wrapper.append(ui("p", "data-help", cell.reason ? descriptionUiText(cell.reason) : uiMessage("dataPanel.fieldWriteUnavailable")));
@@ -440,6 +594,7 @@ export class DataPanel {
         target.append(groups.pinned, groups.common, groups.advanced, groups.bottom, groups.hidden);
         this.applyFieldPresentation();
         this.renderedIdentity = this.draftIdentity;
+        this.refreshTransfer();
     }
     private presentationStorageKey(): string { return `weftext-field-presentation:${this.basis!.workspaceId ?? this.basis!.root}`; }
     private canChangePresentation(scope: string): boolean { return !this.closeGuard.frozen && !!this.basis && this.presentationStorageKey() === scope; }

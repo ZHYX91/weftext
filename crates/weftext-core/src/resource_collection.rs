@@ -576,7 +576,8 @@ impl Core {
         &self,
         operation: &operations::FrozenOperation,
     ) -> Result<()> {
-        if let OperationIntent::ImportResource { node, .. } = &operation.request.intent
+        if let OperationIntent::ImportResource { node, .. }
+        | OperationIntent::ImportResources { node, .. } = &operation.request.intent
             && let Mutation::Update { files } = &operation.mutation
             && files.iter().any(|file| {
                 file.before.is_none()

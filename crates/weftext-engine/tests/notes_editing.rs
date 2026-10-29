@@ -666,6 +666,77 @@ fn native_reference_family_partial_ranges_and_nested_math_targets_are_kept_disti
 }
 
 #[test]
+fn pure_note_entry_points_do_not_substitute_lexical_binding_for_frozen_module_proof() {
+    let source = "#import \"weftext-endnotes.typ\": endnote,endnote-ref,endnotes\n正文#footnote[脚注] <f> 再引#footnote(<f>) 尾#endnote(id:\"tail\")[尾注]\n#endnotes()";
+    assert!(standard_binding_available(source, "footnote"));
+    let footnote = definition(source);
+    let endnote = inspect_notes_source(source)
+        .entries
+        .into_iter()
+        .find(|entry| entry.kind == "endnote-definition")
+        .unwrap()
+        .construct;
+    let at = end(source);
+    for action in [
+        NotesIntent::RepeatFootnote {
+            at: at.clone(),
+            definition: footnote.clone(),
+        },
+        NotesIntent::RemoveNote {
+            construct: footnote.clone(),
+            all_references: false,
+        },
+        NotesIntent::RemoveNote {
+            construct: footnote,
+            all_references: true,
+        },
+        NotesIntent::InsertEndnote {
+            at: at.clone(),
+            body: literal("新增尾注"),
+        },
+        NotesIntent::RepeatEndnote {
+            at,
+            definition: endnote.clone(),
+        },
+        NotesIntent::SetNoteBody {
+            construct: endnote.clone(),
+            body: literal("更新尾注"),
+        },
+        NotesIntent::RemoveNote {
+            construct: endnote.clone(),
+            all_references: false,
+        },
+        NotesIntent::RemoveNote {
+            construct: endnote,
+            all_references: true,
+        },
+    ] {
+        assert!(action.requires_frozen_module(source), "{action:?}");
+        let direct = edit_notes(source, &action).unwrap_err();
+        assert_eq!(
+            direct.description().explanation.key(),
+            "error.engine.notes.endnotesFrozenInputRequired",
+            "{action:?}"
+        );
+        let generic = edit(
+            source,
+            &EditRequest {
+                source_hash: source_hash(source),
+                intent: EditIntent::NativeNote {
+                    action: action.clone(),
+                },
+            },
+        )
+        .unwrap_err();
+        assert_eq!(
+            generic.description().explanation.key(),
+            "error.engine.notes.endnotesFrozenInputRequired",
+            "{action:?}"
+        );
+    }
+}
+
+#[test]
 fn frozen_mixed_notes_repeat_and_migrate_footnote_definition_with_exact_module_only() {
     let dir = TempDir::new().unwrap();
     let engine = Engine::new_with_system_fonts(false).unwrap();
@@ -691,6 +762,18 @@ fn frozen_mixed_notes_repeat_and_migrate_footnote_definition_with_exact_module_o
     };
     assert!(repeated_action.requires_frozen_module(source));
     assert!(edit_notes(source, &repeated_action).is_err());
+    assert!(
+        edit(
+            source,
+            &EditRequest {
+                source_hash: source_hash(source),
+                intent: EditIntent::NativeNote {
+                    action: repeated_action.clone()
+                },
+            }
+        )
+        .is_err()
+    );
     let repeated = engine
         .edit_notes_frozen(
             &input,
@@ -710,6 +793,18 @@ fn frozen_mixed_notes_repeat_and_migrate_footnote_definition_with_exact_module_o
     };
     assert!(remove.requires_frozen_module(&input.source));
     assert!(edit_notes(&input.source, &remove).is_err());
+    assert!(
+        edit(
+            &input.source,
+            &EditRequest {
+                source_hash: source_hash(&input.source),
+                intent: EditIntent::NativeNote {
+                    action: remove.clone()
+                },
+            }
+        )
+        .is_err()
+    );
     let migrated = engine
         .edit_notes_frozen_with_dependencies(
             &input,
@@ -767,6 +862,24 @@ fn frozen_mixed_notes_repeat_and_migrate_footnote_definition_with_exact_module_o
     assert_eq!(count_role(tree, "footnote-body"), 1);
     assert_eq!(count_role(tree, "endnote-reference"), 2);
     assert_eq!(count_role(tree, "endnote-body"), 1);
+    let mut denied = input.clone();
+    denied.files.clear();
+    assert!(
+        engine
+            .edit_notes_frozen(
+                &denied,
+                &EditRequest {
+                    source_hash: source_hash(&denied.source),
+                    intent: EditIntent::NativeNote {
+                        action: NotesIntent::RepeatFootnote {
+                            at: end(&denied.source),
+                            definition: definition(&denied.source),
+                        }
+                    },
+                }
+            )
+            .is_err()
+    );
     let mut denied = input.clone();
     denied
         .files

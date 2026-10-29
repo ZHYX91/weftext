@@ -29,6 +29,10 @@ translation_status: source
 
 批量操作的受控组件回归为 `test_node_selection_browser.mjs`、`test_property_value_drag_browser.mjs`、`test_table_groups_components_browser.mjs`，均用 `node scripts/脚本名 NEW_ABSOLUTE_OUTPUT`。它们分别验证已显示选择范围、真实指针拖排及共享编辑器撤销、表格组命令与手势退休；不授予真实 Core 或原生宿主通过。`node scripts/test_table_groups_browser.mjs ABSOLUTE_CLI NEW_ABSOLUTE_OUTPUT [--hosted]` 另对同批嵌入前端和真实 Core 验成组插入／删除／移动、单次变更、准确范围及 Undo／Redo，`--dev` 只表明当前开发前端。主界面的范围选择和整批稳定链接复制也进入既有 `test_workspace_layout_browser.mjs`；所有检查保留原件与各自 owner 正常停机回执，复用同一候选记录。
 
+本批新增的预设、跨字段与资源组件脚本包括 `test_value_presets_browser.mjs`、`test_field_transfer_components_browser.mjs`、`test_data_panel_workflows_browser.mjs` 和 `test_resource_import_batch_browser.mjs`，均以 `node scripts/脚本名 NEW_ABSOLUTE_OUTPUT` 运行当前前端及受控传输。它们分别核个人配置／原始输入保护、准确 occurrence 与坏回包、真实 DataPanel 独立对话框／staged→显式 Apply／共享 SourceEditor Undo，以及资源原操作恢复与独立正文追加；受控操作账本和 DTO 不能冒充真实 Core 文件提交。`test_hosted_resource_batch_components_browser.mjs` 另通过新的绝对 `WEFTEXT_BROWSER_REPORT` 目录及明确的 `WEFTEXT_BROWSER_EXECUTABLE`／`WEFTEXT_PLAYWRIGHT_MODULE` 运行实际 Hosted 导入控件，核批次、来源退休与个人 locator，不核真实 ACL／HTTP／导入效果。对应纯 TS 与 Rust Data／App／Core 用例仍从原产品检查入口执行。保留各次失败、准确源码图、实际退出码和自有进程正常关闭结果；这些定向结果不授予全 v0.7、原生窗口或真实系统 IME 通过。
+
+`node scripts/test_property_resource_batches_browser.mjs` 另用于真实 Core／本地主界面链：设置同一构建批次 CLI 的绝对 `WEFTEXT_TEST_EXECUTABLE` 和全新绝对 `WEFTEXT_BROWSER_REPORT`，可用 `WEFTEXT_TEST_EXECUTABLE_SHA256` 限定程序摘要。脚本核相邻 catalog／receipt、物理 CLI 角色及受影响源码，直接消费内嵌 workspace，不接受 `--dev` 或 Vite 替代。范围是个人预设 staged 后显式 Apply、两个列表的准确移动与共享 Undo／Redo，以及一次资源批次提交后独立正文追加、撤销后资源／清单保留；夹具设置后不保存作者源。它保留同批实际请求和正常停机原件，结果须按实际候选执行记录，不能从脚本存在或语法检查推断通过。
+
 `python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 40 个 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由完整 Rust 组逐项执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。
 
 Rust 组保留原 workspace／all-targets Clippy，随后依次运行：

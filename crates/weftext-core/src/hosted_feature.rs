@@ -25,6 +25,9 @@ pub struct ActorFeatureStatus {
     pub intent_kind: String,
     /// Stable refs allocated by the original Core plan, never filesystem paths.
     pub resource_refs: Vec<String>,
+    /// Exact original batch mapping, kept in upload order rather than ref order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub resource_import_results: Vec<crate::ResourceImportResult>,
     /// Original allocated or continued identities, never guessed from a title.
     pub node_refs: Vec<weftext_knowledge::NodeRef>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -41,6 +44,7 @@ enum FeatureIntentKind {
     ImportRecognized,
     ConfigureStyle,
     ImportResource,
+    ImportResources,
     NewNode,
     RenameNode,
     MoveNode,
@@ -65,6 +69,7 @@ impl FeatureIntentKind {
             OperationIntent::ImportRecognized { .. } => Ok(Self::ImportRecognized),
             OperationIntent::ConfigureStyle { .. } => Ok(Self::ConfigureStyle),
             OperationIntent::ImportResource { .. } => Ok(Self::ImportResource),
+            OperationIntent::ImportResources { .. } => Ok(Self::ImportResources),
             OperationIntent::NewNode { .. } => Ok(Self::NewNode),
             OperationIntent::RenameNode { .. } => Ok(Self::RenameNode),
             OperationIntent::MoveNode { .. } => Ok(Self::MoveNode),
@@ -87,6 +92,7 @@ impl FeatureIntentKind {
             Self::ImportRecognized => "importRecognized",
             Self::ConfigureStyle => "configureStyle",
             Self::ImportResource => "importResource",
+            Self::ImportResources => "importResources",
             Self::NewNode => "newNode",
             Self::RenameNode => "renameNode",
             Self::MoveNode => "moveNode",
@@ -670,6 +676,7 @@ impl Core {
         let resource_refs = if matches!(
             kind,
             FeatureIntentKind::ImportResource
+                | FeatureIntentKind::ImportResources
                 | FeatureIntentKind::ConfigureStyle
                 | FeatureIntentKind::ImportRecognized
         ) && matches!(status, "prepared" | "committed" | "recoveryPending")
@@ -688,6 +695,12 @@ impl Core {
         } else {
             vec![]
         };
+        let resource_import_results =
+            if kind == FeatureIntentKind::ImportResources && status == "committed" {
+                self.resource_import_results(&record.core_operation_id)?
+            } else {
+                vec![]
+            };
         let navigation_ref = if detail.is_some() {
             feature
                 .navigation
@@ -739,6 +752,7 @@ impl Core {
                 kind.name().into()
             },
             resource_refs,
+            resource_import_results,
             node_refs,
             navigation_ref,
         }))
@@ -1060,6 +1074,20 @@ impl Core {
                 valid_operation_id(manifest_base_id)?;
                 valid_operation_id(resource_base_id)?;
                 node.len() > 64 * 1024 || bytes.len() > 32 * 1024 * 1024
+            }
+            OperationIntent::ImportResources {
+                node,
+                files,
+                manifest_base_id,
+            } => {
+                valid_operation_id(manifest_base_id)?;
+                let mut bytes = 0usize;
+                for file in files.iter() {
+                    valid_name(&file.name)?;
+                    valid_operation_id(&file.resource_base_id)?;
+                    bytes = bytes.saturating_add(file.bytes.len());
+                }
+                node.len() > 64 * 1024 || bytes > 32 * 1024 * 1024
             }
             OperationIntent::NewNode {
                 parent,
