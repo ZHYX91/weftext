@@ -12,7 +12,6 @@
 .data-button:focus-visible,.data-input:focus-visible,.query-chip:focus-visible,.query-facet:focus-visible,.query-row-title:focus-visible,.query-recent:focus-visible { outline: 2px solid var(--accent,#526b4d); outline-offset: 2px; }
 .data-input { display: block; box-sizing: border-box; width: 100%; font: inherit; color: inherit; background: var(--background,#fff); border: 1px solid var(--border,#d9ddd5); border-radius: 5px; padding: 7px 8px; min-height: 32px; }
 textarea.data-input { resize: vertical; }
-.native-value-editor > .data-input[hidden] { display: none; }
 .data-label { display: block; font-size: 12px; margin: 5px 0; }
 .data-label:has(input[type=checkbox]) { display: inline-flex; align-items: center; gap: 5px; }
 .data-help { font-size: 11px; color: var(--muted,#687166); overflow-wrap: anywhere; margin: 7px 0; }

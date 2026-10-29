@@ -10808,9 +10808,7 @@ export const zhCN = {
   "builtinProperty.choice.low": "低",
   "builtinProperty.choice.normal": "普通",
   "builtinProperty.choice.high": "高",
-  "builtinProperty.choice.urgent": "紧急",
-  "nativeEditor.customEnumValue": "自定义值",
-  "nativeEditor.customEnumLabel": "{label} · 自定义值"
+  "builtinProperty.choice.urgent": "紧急"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -21624,8 +21622,6 @@ export interface MessageParamsMap {
   "builtinProperty.choice.normal": {  };
   "builtinProperty.choice.high": {  };
   "builtinProperty.choice.urgent": {  };
-  "nativeEditor.customEnumValue": {  };
-  "nativeEditor.customEnumLabel": { label: string };
 }
 export const messageParamTypes = {
   "localResourceBatch.title": {},
@@ -34392,11 +34388,7 @@ export const messageParamTypes = {
   "builtinProperty.choice.low": {},
   "builtinProperty.choice.normal": {},
   "builtinProperty.choice.high": {},
-  "builtinProperty.choice.urgent": {},
-  "nativeEditor.customEnumValue": {},
-  "nativeEditor.customEnumLabel": {
-    "label": "text"
-  }
+  "builtinProperty.choice.urgent": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -45208,7 +45200,5 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "builtinProperty.choice.low": "Low",
   "builtinProperty.choice.normal": "Normal",
   "builtinProperty.choice.high": "High",
-  "builtinProperty.choice.urgent": "Urgent",
-  "nativeEditor.customEnumValue": "Custom value",
-  "nativeEditor.customEnumLabel": "{label} · Custom value"
+  "builtinProperty.choice.urgent": "Urgent"
 };

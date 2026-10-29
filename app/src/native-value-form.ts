@@ -840,63 +840,28 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
         };
         return host;
     }
-    if (resolved.kind === "enum") {
+    if (resolved.kind === "enum" && !resolved.open) {
         const input = ui("select", "data-input");
         bindNativeControl(input, identity, "value:enum");
         resolved.values.forEach(optionValue => { const option = ui("option", "", presentation.enumLabel(resolved, optionValue)); option.value = optionValue; input.append(option); });
-        if (resolved.open) {
-            const custom = ui("option", "", uiMessage("nativeEditor.customEnumValue"));
-            custom.value = "";
-            input.append(custom);
-        }
-        if (!resolved.open && value.kind === "text" && !resolved.values.includes(value.value)) {
+        if (value.kind === "text" && !resolved.values.includes(value.value)) {
             const originalText = value.value;
             const unknown = ui("option", "", displayMessage("nativeEditor.unregisteredEnumChoice", { p0: originalText }));
             unknown.value = value.value;
             input.append(unknown);
         }
-        input.value = resolved.open && !resolved.values.includes(nativeInputValue(value)) ? "" : nativeInputValue(value);
+        input.value = nativeInputValue(value);
         setUiAttr(input, "aria-label", label);
         host.append(input);
-        const customInput = resolved.open ? ui("textarea", "data-input") : undefined;
-        let customValue = nativeInputValue(value);
-        if (customInput) {
-            bindNativeControl(customInput, identity, "value:enum-custom");
-            customInput.rows = 2;
-            customInput.value = customValue;
-            customInput.hidden = input.value !== "";
-            setUiAttr(customInput, "aria-label", () => displayMessage("nativeEditor.customEnumLabel", { label: uiDisplayParameter(label) }));
-            if (binding) {
-                const slot = JSON.stringify([binding.slot, "value:enum-custom", identity.variants ?? []]);
-                binding.session.bind(customInput, slot, identity.path);
-                lifetime.add({ slot, path: identity.path });
-            }
-            customInput.oninput = () => {
-                if (customInput.isConnected === false) return;
-                customValue = textareaSourceDraft(customValue, customInput.value);
-                // Raw restoration also visits hidden controls. Retain that custom
-                // draft without replacing the currently selected registered value.
-                if (input.value !== "" || customInput.hidden) return;
-                value = { kind: "text", value: customValue }; changed(value);
-            };
-            host.append(customInput);
-            input.oninput = () => { customInput.hidden = input.value !== ""; };
-        }
         input.onchange = () => {
             if (input.isConnected === false) return;
-            if (customInput) {
-                customInput.hidden = input.value !== "";
-                if (input.value === "") {
-                    if (value.kind !== "text" || value.value !== customValue) { value = { kind: "text", value: customValue }; changed(value); }
-                    customInput.focus(); return;
-                }
-            }
-            value = { kind: "text", value: input.value };
-            changed(value);
+            changed({ kind: "text", value: input.value });
         };
         return host;
     }
-    const input = scalar === "text" || scalar === "nonempty_text" ? ui("textarea", "data-input") : ui("input", "data-input");
+    // Open enums are authored text, with one visible value and the same raw/IME
+    // owner as other text fields. Registered codes never create a second draft.
+    const input = scalar === "text" || scalar === "nonempty_text" || resolved.kind === "enum" ? ui("textarea", "data-input") : ui("input", "data-input");
     bindNativeControl(input, identity, `value:${scalar}`);
     if (input instanceof HTMLTextAreaElement)
         input.rows = 2;

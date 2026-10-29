@@ -180,14 +180,38 @@ fn rich_workflow_employment_matches_organization_position_and_precision_in_one_r
         Cell::Unavailable { .. }
     ));
     let before = source("person", "");
-    let wrong_domain = RelationTarget {
+    // Engagements admit ordinary nodes. A Person target is legal; the negative
+    // below proves only that the newly referenced B is missing from admission.
+    let admitted_a = RelationTarget {
         entity_key: reference(A),
         types: vec!["person".into()],
         lifecycle: "live".into(),
     };
-    assert!(
-        !validate_relation_change(&before, &original, &schema, &[wrong_domain], true).is_valid()
+    let missing_b = validate_relation_change(
+        &before,
+        &original,
+        &schema,
+        std::slice::from_ref(&admitted_a),
+        true,
     );
+    assert!(missing_b.unavailable.is_empty());
+    assert_eq!(missing_b.diagnostics.len(), 1);
+    assert_eq!(
+        missing_b.diagnostics[0].explanation,
+        UiMessage::error_data_relations_new_target_requires_exact_live_admitted_node(
+            weftext_messages::params::ErrorDataRelationsNewTargetRequiresExactLiveAdmittedNode {
+                relation_id: "people/engagement".into(),
+            },
+        )
+    );
+    let admitted_b = RelationTarget {
+        entity_key: reference(B),
+        types: vec!["organization".into()],
+        lifecycle: "live".into(),
+    };
+    let qualified =
+        validate_relation_change(&before, &original, &schema, &[admitted_a, admitted_b], true);
+    assert!(qualified.is_valid(), "{qualified:?}");
 }
 #[test]
 fn rich_workflow_same_name_contributors_reorder_without_merging_identity_or_role() {

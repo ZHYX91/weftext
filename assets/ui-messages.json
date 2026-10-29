@@ -56006,18 +56006,6 @@
       "zh-CN": "紧急",
       "en-US": "Urgent",
       "params": {}
-    },
-    "nativeEditor.customEnumValue": {
-      "zh-CN": "自定义值",
-      "en-US": "Custom value",
-      "params": {}
-    },
-    "nativeEditor.customEnumLabel": {
-      "zh-CN": "{label} · 自定义值",
-      "en-US": "{label} · Custom value",
-      "params": {
-        "label": "text"
-      }
     }
   }
 }

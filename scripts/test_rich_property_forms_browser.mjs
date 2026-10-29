@@ -63,14 +63,6 @@ try {
                     nativeFormControls(section);
                 }
             },
-            replayRaw() {
-                const raw = new Map(nativeFormControls(document.querySelector("#forms")).map(([key, control]) => [key, control.value]));
-                this.renderForms();
-                for (const [key, control] of nativeFormControls(document.querySelector("#forms"))) {
-                    if (!raw.has(key)) continue;
-                    control.value = raw.get(key); control.dispatchEvent(new Event("input", { bubbles: true }));
-                }
-            },
             control(fieldId, path, role) {
                 const matches = [...document.querySelectorAll("#forms [data-control-key]")].filter(control => {
                     const address = nativeControlAddress(control);
@@ -122,7 +114,7 @@ try {
         assert.deepEqual(contributors.map(record => read(record, "roles").value[0].value), ["editor", "author"]);
         assert.deepEqual(contributors.map(record => read(read(record, "agent"), "ref").value), await page.evaluate(() => [window.fixture.b, window.fixture.a]));
     });
-    await check("locale changes captions without replacing focused author input or modifying source; open enums keep explicit custom text", async () => {
+    await check("locale changes captions without replacing focused author input or modifying source; open enums retain one authored text value", async () => {
         const note = await control("contacts/phones", [index(0), member("note")], "value:text"); await note.focus();
         const before = await page.evaluate(() => ({ source: window.fixture.editor.source, changes: window.fixture.changes.length }));
         await page.evaluate(() => window.fixture.locale.set("en-US"));
@@ -130,30 +122,12 @@ try {
         assert.match(await page.locator("#phones").innerText(), /Usage label/);
         assert.deepEqual(await page.evaluate(() => ({ source: window.fixture.editor.source, changes: window.fixture.changes.length })), before);
         const kind = await control("library/publication", [member("kind")], "value:enum");
-        assert.equal(await kind.locator('option[value="article"]').innerText(), "Article");
-        await kind.selectOption("");
-        const custom = await control("library/publication", [member("kind")], "value:enum-custom");
-        await custom.fill("作者自定义\nsecond line😀");
+        assert.equal(await kind.evaluate(control => control.tagName), "TEXTAREA");
+        await kind.fill("作者自定义\nsecond line😀");
         assert.equal(read((await values()).publication, "kind").value, "作者自定义\nsecond line😀");
-        await kind.selectOption("book"); assert.equal(read((await values()).publication, "kind").value, "book");
-        await kind.selectOption(""); assert.equal(read((await values()).publication, "kind").value, "作者自定义\nsecond line😀");
+        await kind.fill("book"); assert.equal(read((await values()).publication, "kind").value, "book");
+        assert.equal(await page.locator('#publication [data-control-key]').evaluateAll(controls => controls.some(control => JSON.parse(control.dataset.controlKey)[2][0] === "value:enum-custom")), false);
         await page.locator("#phones").screenshot({ path: path.join(out, "builtin-contact-en.png") });
-    });
-    await check("raw replay cannot apply hidden custom text over a registered enum, and explicitly choosing custom restores that text", async () => {
-        const kind = await control("library/publication", [member("kind")], "value:enum");
-        await kind.selectOption("book");
-        const before = await page.evaluate(() => window.fixture.editor.source);
-        await page.evaluate(() => window.fixture.replayRaw());
-        assert.equal(read((await values()).publication, "kind").value, "book");
-        assert.equal(await page.evaluate(() => window.fixture.editor.source), before);
-        const custom = await control("library/publication", [member("kind")], "value:enum-custom");
-        assert.equal(await custom.isVisible(), false);
-        await (await control("library/publication", [member("kind")], "value:enum")).selectOption("");
-        assert.equal(read((await values()).publication, "kind").value, "作者自定义\nsecond line😀");
-        assert.equal(await custom.isVisible(), true);
-        await page.evaluate(() => window.fixture.replayRaw());
-        assert.equal(read((await values()).publication, "kind").value, "作者自定义\nsecond line😀");
-        assert.equal(await (await control("library/publication", [member("kind")], "value:enum-custom")).isVisible(), true);
     });
     await check("a custom schema with the same phones/label keys keeps literal names and enum codes", async () => {
         await page.evaluate(() => window.fixture.mount(true));
