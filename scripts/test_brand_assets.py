@@ -64,8 +64,48 @@ class BrandAssets(unittest.TestCase):
         self.assertEqual(brand.decoded_png(original), brand.decoded_png(alternative))
         damaged = bytearray(alternative)
         damaged[50] ^= 1
-        with self.assertRaises(AssertionError):
+        with self.assertRaises(ValueError):
             brand.decoded_png(damaged)
+
+    def test_png_requires_complete_supported_chunk_sequence_and_rows(self):
+        original = brand.image(16)
+        header, rows = brand.decoded_png(original)
+        signature = original[:8]
+        def chunk(kind, data):
+            return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+        ihdr = chunk(b'IHDR', header)
+        idat = chunk(b'IDAT', zlib.compress(rows))
+        iend = chunk(b'IEND', b'')
+        def png(info=header, pixels=rows, compressed=None):
+            return signature + chunk(b'IHDR', info) + chunk(b'IDAT', zlib.compress(pixels) if compressed is None else compressed) + iend
+        variants = {
+            'missing IEND': original[:-12],
+            'truncated chunk': original[:-1],
+            'missing IHDR': signature + idat + iend,
+            'IHDR after IDAT': signature + idat + ihdr + iend,
+            'duplicate IHDR': signature + ihdr + ihdr + idat + iend,
+            'missing IDAT': signature + ihdr + iend,
+            'IEND before IDAT': signature + ihdr + iend + idat,
+            'duplicate IEND': original + iend,
+            'trailing bytes': original + b'ignored',
+            'nonempty IEND': signature + ihdr + idat + chunk(b'IEND', b'x'),
+            'noncontiguous IDAT': signature + ihdr + idat + chunk(b'tEXt', b'key\0value') + idat + iend,
+            'wrong IHDR size': png(info=header[:-1]),
+            'zero width': png(info=bytes(4) + header[4:]),
+            'unsupported color format': png(info=header[:9] + bytes((2,)) + header[10:]),
+            'wrong row length': png(pixels=rows[:-1]),
+            'extra decoded rows': png(pixels=rows + bytes(65)),
+            'unsupported filter': png(pixels=bytes((1,)) + rows[1:]),
+            'truncated zlib stream': png(compressed=zlib.compress(rows)[:-1]),
+            'trailing zlib data': png(compressed=zlib.compress(rows) + b'ignored'),
+        }
+        for case, data in variants.items():
+            with self.subTest(case=case), self.assertRaises(ValueError):
+                brand.decoded_png(data)
+        # Adjacent IDAT chunks remain a valid representation of the same image.
+        compressed = zlib.compress(rows, level=0)
+        split = signature + ihdr + chunk(b'IDAT', compressed[:7]) + chunk(b'IDAT', compressed[7:]) + iend
+        self.assertEqual(brand.decoded_png(original), brand.decoded_png(split))
 
     def test_actual_consumer_bindings(self):
         for name in ('index.html', 'hosted.html', 'capture.html'):

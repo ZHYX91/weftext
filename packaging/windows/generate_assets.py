@@ -101,22 +101,49 @@ def image(size):
 
 
 def decoded_png(data):
-    assert data[:8] == b'\x89PNG\r\n\x1a\n'
-    offset, compressed, header = 8, b'', None
+    """Validate the complete supported PNG format before comparing pixels.
+
+    Only non-interlaced 8-bit RGBA with unfiltered rows is emitted here. IDAT
+    may be split into adjacent chunks, with any equivalent zlib compression.
+    """
+    def require(condition):
+        if not condition:
+            raise ValueError('Incomplete or unsupported generated PNG')
+    require(data[:8] == b'\x89PNG\r\n\x1a\n')
+    offset, compressed, header = 8, bytearray(), None
+    saw_data, ended = False, False
     while offset < len(data):
+        require(not ended and len(data) - offset >= 12)
         length = struct.unpack_from('>I', data, offset)[0]
+        require(length <= len(data) - offset - 12)
         kind, body = data[offset + 4:offset + 8], data[offset + 8:offset + 8 + length]
         crc = struct.unpack_from('>I', data, offset + 8 + length)[0]
-        assert crc == zlib.crc32(kind + body)
+        require(crc == zlib.crc32(kind + body))
         if kind == b'IHDR':
+            require(offset == 8 and header is None and length == 13)
             header = body
+            width, height, depth, color, compression, filtering, interlace = struct.unpack('>IIBBBBB', header)
+            require(0 < width < 2 ** 31 and 0 < height < 2 ** 31)
+            require((depth, color, compression, filtering, interlace) == (8, 6, 0, 0, 0))
         elif kind == b'IDAT':
-            compressed += body
+            require(header is not None)
+            saw_data = True
+            compressed.extend(body)
+        elif kind == b'IEND':
+            require(header is not None and saw_data and length == 0)
+            ended = True
         else:
-            assert kind == b'IEND' and not body
+            require(False)
         offset += length + 12
-    assert offset == len(data)
-    return header, zlib.decompress(compressed)
+    require(ended)
+    row_length = 1 + width * 4
+    expected_length = height * row_length
+    decoder = zlib.decompressobj()
+    rows = decoder.decompress(compressed, expected_length + 1)
+    require(decoder.eof and not decoder.unused_data and not decoder.unconsumed_tail)
+    require(len(rows) == expected_length)
+    require(all(rows[y * row_length] == 0 for y in range(height)))
+    return header, rows
 
 
 def decoded_ico(data):

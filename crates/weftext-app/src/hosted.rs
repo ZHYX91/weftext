@@ -1231,7 +1231,8 @@ async fn hosted_assets(request: Request) -> Response {
         )
             .into_response();
     }
-    if path.starts_with("/assets/") || path.starts_with("/fonts/") {
+    if path == "/brand/app-icon.svg" || path.starts_with("/assets/") || path.starts_with("/fonts/")
+    {
         return super::assets(request).await;
     }
     StatusCode::NOT_FOUND.into_response()
@@ -1422,56 +1423,7 @@ impl HostedService {
             render_gate: Arc::new(tokio::sync::Semaphore::new(1)),
         };
         let admitting = Arc::new(std::sync::atomic::AtomicBool::new(true));
-        let app = Router::new()
-            .merge(builtin_module::router())
-            .merge(sync_transport::router())
-            .merge(editor::router())
-            .merge(fields::router())
-            .merge(history_api::router())
-            .merge(navigation::router())
-            .merge(navigation_registry::router())
-            .merge(content_import::router())
-            .merge(recognition::router())
-            .merge(owner_backup::router())
-            .merge(library::router())
-            .merge(knowledge_links::router())
-            .merge(citations::router())
-            .merge(media::router())
-            .merge(resource_collections::router())
-            .merge(structure::router())
-            .merge(query::router())
-            .merge(definition::router())
-            .merge(embedded_query::router())
-            .merge(review::router())
-            .merge(office::router())
-            .merge(office_import::router())
-            .route("/api/hosted/me", get(me))
-            .route("/api/hosted/documents", get(list))
-            .route("/api/hosted/open", post(open))
-            .route("/api/hosted/close", post(close))
-            .route("/api/hosted/session/keepalive", post(keepalive))
-            .route("/api/hosted/save", post(save))
-            .route("/api/hosted/draft", post(draft))
-            .route("/api/hosted/draft/resolve", post(resolve_draft))
-            .route("/api/hosted/draft/resume", post(resume_draft))
-            .route("/api/hosted/operation", post(status))
-            .route("/api/hosted/operation/settle", post(settle))
-            .route("/api/hosted/search", post(search))
-            .route("/api/hosted/preview", post(preview))
-            .route("/api/hosted/download/prepare", post(prepare_download))
-            .route("/api/hosted/download/chunk", post(chunk))
-            .route(
-                "/api/hosted/admin/policy",
-                get(policy_read).post(update_policy),
-            )
-            .fallback(hosted_assets)
-            .layer(DefaultBodyLimit::max(3 * 1024 * 1024))
-            .layer(middleware::from_fn_with_state(state.clone(), boundary))
-            .with_state(state.clone())
-            .layer(middleware::from_fn_with_state(
-                admitting.clone(),
-                crate::local_service::admit_request,
-            ));
+        let app = hosted_router(state.clone(), admitting.clone());
         Ok(Self {
             listener,
             router: app,
@@ -1534,6 +1486,59 @@ impl HostedService {
     }
 }
 
+fn hosted_router(state: HostedState, admitting: Arc<std::sync::atomic::AtomicBool>) -> Router {
+    Router::new()
+        .merge(builtin_module::router())
+        .merge(sync_transport::router())
+        .merge(editor::router())
+        .merge(fields::router())
+        .merge(history_api::router())
+        .merge(navigation::router())
+        .merge(navigation_registry::router())
+        .merge(content_import::router())
+        .merge(recognition::router())
+        .merge(owner_backup::router())
+        .merge(library::router())
+        .merge(knowledge_links::router())
+        .merge(citations::router())
+        .merge(media::router())
+        .merge(resource_collections::router())
+        .merge(structure::router())
+        .merge(query::router())
+        .merge(definition::router())
+        .merge(embedded_query::router())
+        .merge(review::router())
+        .merge(office::router())
+        .merge(office_import::router())
+        .route("/api/hosted/me", get(me))
+        .route("/api/hosted/documents", get(list))
+        .route("/api/hosted/open", post(open))
+        .route("/api/hosted/close", post(close))
+        .route("/api/hosted/session/keepalive", post(keepalive))
+        .route("/api/hosted/save", post(save))
+        .route("/api/hosted/draft", post(draft))
+        .route("/api/hosted/draft/resolve", post(resolve_draft))
+        .route("/api/hosted/draft/resume", post(resume_draft))
+        .route("/api/hosted/operation", post(status))
+        .route("/api/hosted/operation/settle", post(settle))
+        .route("/api/hosted/search", post(search))
+        .route("/api/hosted/preview", post(preview))
+        .route("/api/hosted/download/prepare", post(prepare_download))
+        .route("/api/hosted/download/chunk", post(chunk))
+        .route(
+            "/api/hosted/admin/policy",
+            get(policy_read).post(update_policy),
+        )
+        .fallback(hosted_assets)
+        .layer(DefaultBodyLimit::max(3 * 1024 * 1024))
+        .layer(middleware::from_fn_with_state(state.clone(), boundary))
+        .with_state(state.clone())
+        .layer(middleware::from_fn_with_state(
+            admitting.clone(),
+            crate::local_service::admit_request,
+        ))
+}
+
 async fn close_hosted_jobs(state: &HostedState) {
     if locked(state, |inner| {
         inner.office.close();
@@ -1572,6 +1577,50 @@ mod worker_diagnostic_contract_tests {
                 UiMessage::error_api_hosted_preview_incomplete(),
             )
             .await;
+        }
+    }
+}
+
+#[cfg(all(test, windows))]
+mod brand_asset_router_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn hosted_router_serves_only_the_public_brand_icon_with_exact_bytes_and_mime() {
+        let (_temp, state, _auth, _doc, _version, _original) = history_api::test_fixture();
+        let host = state.host.clone();
+        let mut router = hosted_router(state, Arc::new(std::sync::atomic::AtomicBool::new(true)));
+        let request = Request::builder()
+            .uri("/brand/app-icon.svg")
+            .header(header::HOST, host.as_ref())
+            .body(Body::empty())
+            .unwrap();
+        let response = tower::Service::call(&mut router, request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "image/svg+xml");
+        let bytes = axum::body::to_bytes(response.into_body(), 64 * 1024)
+            .await
+            .unwrap();
+        assert_eq!(
+            bytes.as_ref(),
+            include_bytes!("../../../brand/app-icon.svg")
+        );
+        // Existing local entry files must stay private even when present in ASSETS.
+        for path in [
+            "/index.html",
+            "/capture.html",
+            "/brand/logo-mark.svg",
+            "/brand/other.svg",
+            "/brand/app-icon.svg.bak",
+            "/brand/app-icon.svg/extra",
+        ] {
+            let request = Request::builder()
+                .uri(path)
+                .header(header::HOST, host.as_ref())
+                .body(Body::empty())
+                .unwrap();
+            let response = tower::Service::call(&mut router, request).await.unwrap();
+            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{path}");
         }
     }
 }
