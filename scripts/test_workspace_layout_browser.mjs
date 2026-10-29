@@ -276,7 +276,7 @@ async function observeEditorInput() {
     const records = window.__weftextLayoutInputEvents = [];
     for (const type of ['keydown', 'keyup', 'beforeinput', 'input']) element.addEventListener(type, event => {
       const view = element.cmTile?.root?.view, selection = view?.state.selection.main;
-      records.push({ type, key: event.key ?? null, code: event.code ?? null,
+      records.push({ type, observedAt: performance.now(), eventTimeStamp: event.timeStamp, key: event.key ?? null, code: event.code ?? null,
         inputType: event.inputType ?? null, data: event.data ?? null,
         ctrlKey: event.ctrlKey ?? false, shiftKey: event.shiftKey ?? false,
         isTrusted: event.isTrusted, isComposing: event.isComposing ?? false,
@@ -834,7 +834,9 @@ try {
   assert.equal(await workPanel.getAttribute('hidden'), '');
   await source().focus(); await page.keyboard.press('Control+End');
   const invalidSuffix = '#layout_test_missing(';
-  await page.keyboard.type(invalidSuffix); await expectSource(parentSource + invalidSuffix);
+  // This case tests compiler diagnostics, navigation and withdrawing its
+  // fixture input as one unit. Other cases retain real per-key input checks.
+  await page.keyboard.insertText(invalidSuffix); await expectSource(parentSource + invalidSuffix);
   await until(async () => await workPanel.locator('.work-panel-item[data-state="error"]').count() > 0, 'Actual invalid native source did not report a bottom-panel problem');
   assert.equal(await workPanel.getAttribute('hidden'), '', 'Automatic compiler reports opened the work panel');
   assert.equal(await source().evaluate(element => document.activeElement === element), true, 'Automatic diagnostics stole author focus');
