@@ -32,6 +32,7 @@ pub(crate) fn router() -> Router<AppState> {
         .route("/api/data/types", post(types))
         .route("/api/data/capture", post(capture))
         .route("/api/data/resolve", post(resolve))
+        .route("/api/data/resolve-batch", post(resolve_batch))
         .route("/api/data/open", post(open_entity))
         .route("/api/data/references", post(references))
         .route("/api/data/period/resolve", post(resolve_period))
@@ -57,6 +58,13 @@ struct ResolveRequest {
     entity_key: String,
     lifecycle: Option<String>,
     revision: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ResolveBatchRequest {
+    root: String,
+    entity_keys: Vec<String>,
 }
 
 #[derive(Deserialize, Default)]
@@ -1303,6 +1311,82 @@ pub(crate) fn resolve_entity(
         ));
     }
     Ok(entry.clone())
+}
+
+/// Resolve the entire selection against one current inventory. Building the
+/// selected identity counts once avoids rescanning the library for every note.
+fn resolve_entities(
+    inventory: &weftext_core::Inventory,
+    entity_keys: &[String],
+) -> Result<Vec<String>, CoreError> {
+    if entity_keys.is_empty() {
+        return Err(CoreError::new(
+            "invalidSelection",
+            UiMessage::node_links_selection_unsupported(),
+        ));
+    }
+    let mut counts: BTreeMap<_, usize> = entity_keys.iter().map(|key| (key.as_str(), 0)).collect();
+    if counts.len() != entity_keys.len() {
+        return Err(CoreError::new(
+            "invalidSelection",
+            UiMessage::node_links_duplicate_selection(),
+        ));
+    }
+    if !inventory.complete {
+        return Err(CoreError::new(
+            "coverageIncomplete",
+            UiMessage::error_api_data_unique_live_identity_unproved(),
+        ));
+    }
+    let workspace = inventory.workspace_id.as_ref().ok_or_else(|| {
+        CoreError::new(
+            "unadmittedLibrary",
+            UiMessage::error_api_data_stable_node_library_required(),
+        )
+    })?;
+    for entry in inventory
+        .entries
+        .iter()
+        .filter(|entry| entry.kind == "node" && entry.identity_status == "admitted")
+    {
+        if let Some(id) = &entry.node_id {
+            let reference = format!("weftext-node://{workspace}/{id}");
+            if let Some(count) = counts.get_mut(reference.as_str()) {
+                *count += 1;
+            }
+        }
+    }
+    for key in entity_keys {
+        match counts[key.as_str()] {
+            0 => {
+                return Err(CoreError::new(
+                    "nodeUnavailable",
+                    UiMessage::error_api_data_stable_node_unavailable(),
+                ));
+            }
+            1 => {}
+            _ => {
+                return Err(CoreError::new(
+                    "identityConflict",
+                    UiMessage::error_api_data_stable_node_ambiguous(),
+                ));
+            }
+        }
+    }
+    Ok(entity_keys.to_vec())
+}
+
+async fn resolve_batch(
+    State(state): State<AppState>,
+    RequestJson(req): RequestJson<ResolveBatchRequest>,
+) -> ApiResult {
+    let (root, entity_keys) = core_call(&state, move |core| {
+        let inventory = core.inventory(&req.root)?;
+        let resolved = resolve_entities(&inventory, &req.entity_keys)?;
+        Ok((inventory.root, resolved))
+    })
+    .await?;
+    Ok(Json(json!({"root":root,"entityKeys":entity_keys})))
 }
 
 async fn resolve(
@@ -3337,6 +3421,198 @@ async fn run_definition(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn resolve_batch_inventory() -> weftext_core::Inventory {
+        let entries = (1..=3)
+            .map(|index| weftext_core::InventoryEntry {
+                path: format!("D:/synthetic/Note{index}/Note{index}.typ"),
+                relative_path: format!("Note{index}/Note{index}.typ"),
+                parent_path: format!("D:/synthetic/Note{index}"),
+                name: format!("Note{index}.typ"),
+                kind: "node".into(),
+                node_id: Some(format!("019a2b3c-4d5e-7def-9234-{index:012x}")),
+                identity_status: "admitted".into(),
+                title: None,
+                excerpt: None,
+                source: None,
+            })
+            .collect();
+        weftext_core::Inventory {
+            root: "D:/synthetic".into(),
+            workspace_id: Some("019a2b3c-4d5e-7abc-8123-456789abcdef".into()),
+            status: "ready".into(),
+            entries,
+            warnings: vec![],
+            complete: true,
+        }
+    }
+
+    #[test]
+    fn resolve_batch_keeps_complete_selection_order_and_canonical_non_v4_identities() {
+        let mut inventory = resolve_batch_inventory();
+        let keys: Vec<_> = [2, 0, 1]
+            .map(|index| {
+                format!(
+                    "weftext-node://{}/{}",
+                    inventory.workspace_id.as_ref().unwrap(),
+                    inventory.entries[index].node_id.as_ref().unwrap()
+                )
+            })
+            .into();
+        assert_eq!(resolve_entities(&inventory, &keys).unwrap(), keys);
+        // A path relocation does not change the selected stable identities.
+        inventory.entries[0].path = "D:/synthetic/Relocated/Relocated.typ".into();
+        let before = serde_json::to_value(&inventory).unwrap();
+        assert_eq!(resolve_entities(&inventory, &keys).unwrap(), keys);
+        assert_eq!(serde_json::to_value(&inventory).unwrap(), before);
+    }
+
+    #[test]
+    fn resolve_batch_rejects_empty_duplicate_partial_missing_foreign_and_conflicting_selections() {
+        let mut inventory = resolve_batch_inventory();
+        let key = |index: usize| {
+            format!(
+                "weftext-node://{}/{}",
+                inventory.workspace_id.as_ref().unwrap(),
+                inventory.entries[index].node_id.as_ref().unwrap()
+            )
+        };
+        let first = key(0);
+        let second = key(1);
+        assert_eq!(
+            resolve_entities(&inventory, &[]).unwrap_err().code,
+            "invalidSelection"
+        );
+        assert_eq!(
+            resolve_entities(&inventory, &[first.clone(), first.clone()])
+                .unwrap_err()
+                .code,
+            "invalidSelection"
+        );
+        for missing in [
+            "weftext-node://019a2b3c-4d5e-7abc-8123-456789abcdef/019a2b3c-4d5e-7def-9234-ffffffffffff",
+            "weftext-node://019a2b3c-4d5e-7abc-8123-ffffffffffff/019a2b3c-4d5e-7def-9234-000000000001",
+            "D:/synthetic/Note1/Note1.typ",
+        ] {
+            assert_eq!(
+                resolve_entities(&inventory, &[first.clone(), missing.into()])
+                    .unwrap_err()
+                    .code,
+                "nodeUnavailable"
+            );
+        }
+        inventory.complete = false;
+        assert_eq!(
+            resolve_entities(&inventory, std::slice::from_ref(&first))
+                .unwrap_err()
+                .code,
+            "coverageIncomplete"
+        );
+        inventory.complete = true;
+        inventory.workspace_id = None;
+        assert_eq!(
+            resolve_entities(&inventory, std::slice::from_ref(&first))
+                .unwrap_err()
+                .code,
+            "unadmittedLibrary"
+        );
+        inventory = resolve_batch_inventory();
+        for status in ["duplicate", "bindingConflict", "unadmitted", "invalid"] {
+            inventory.entries[1].identity_status = status.into();
+            assert_eq!(
+                resolve_entities(&inventory, &[first.clone(), second.clone()])
+                    .unwrap_err()
+                    .code,
+                "nodeUnavailable"
+            );
+        }
+        inventory.entries[1].identity_status = "admitted".into();
+        inventory.entries[1].kind = "file".into();
+        assert!(resolve_entities(&inventory, &[first.clone(), second.clone()]).is_err());
+        inventory = resolve_batch_inventory();
+        inventory.entries.push(inventory.entries[1].clone());
+        assert_eq!(
+            resolve_entities(&inventory, &[first, second])
+                .unwrap_err()
+                .code,
+            "identityConflict"
+        );
+    }
+
+    #[test]
+    fn resolve_batch_request_accepts_only_root_and_a_complete_string_selection() {
+        assert!(
+            serde_json::from_value::<ResolveBatchRequest>(
+                json!({"root":"owned","entityKeys":["candidate"]})
+            )
+            .is_ok()
+        );
+        for invalid in [
+            json!({"root":"owned"}),
+            json!({"root":"owned","entityKeys":"candidate"}),
+            json!({"root":"owned","entityKeys":[null]}),
+            json!({"root":"owned","entityKeys":[],"lifecycle":"trash"}),
+            json!({"root":"owned","entityKeys":[],"revision":"old"}),
+        ] {
+            assert!(serde_json::from_value::<ResolveBatchRequest>(invalid).is_err());
+        }
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn resolve_batch_handler_reads_current_inventory_without_opening_or_writing_notes() {
+        let (_directory, state, root) = fixture();
+        let (first, second) = {
+            let mut core = state.core.lock().unwrap();
+            (
+                core.create_note_fixture(&root, &root, "First").unwrap(),
+                core.create_note_fixture(&root, &root, "Second").unwrap(),
+            )
+        };
+        let reference = |document: &weftext_core::OpenedDocument| {
+            format!(
+                "weftext-node://{}/{}",
+                document.workspace_id.as_ref().unwrap(),
+                document.node_id.as_ref().unwrap()
+            )
+        };
+        let keys = vec![reference(&second), reference(&first)];
+        let before = [
+            std::fs::read(&first.path).unwrap(),
+            std::fs::read(&second.path).unwrap(),
+        ];
+        let registered = state.locations.lock().unwrap().len();
+        let Json(response) = ok(resolve_batch(
+            State(state.clone()),
+            crate::RequestJson(ResolveBatchRequest {
+                root: root.clone(),
+                entity_keys: keys.clone(),
+            }),
+        )
+        .await);
+        assert_eq!(response, json!({"root":root,"entityKeys":keys}));
+        assert_eq!(state.locations.lock().unwrap().len(), registered);
+        assert_eq!(std::fs::read(&first.path).unwrap(), before[0]);
+        assert_eq!(std::fs::read(&second.path).unwrap(), before[1]);
+        let missing = format!(
+            "weftext-node://{}/{}",
+            first.workspace_id.as_ref().unwrap(),
+            uuid::Uuid::new_v4()
+        );
+        let error = resolve_batch(
+            State(state.clone()),
+            crate::RequestJson(ResolveBatchRequest {
+                root,
+                entity_keys: vec![reference(&first), missing],
+            }),
+        )
+        .await
+        .unwrap_err();
+        assert_eq!(error.code, "nodeUnavailable");
+        assert_eq!(state.locations.lock().unwrap().len(), registered);
+        assert_eq!(std::fs::read(&first.path).unwrap(), before[0]);
+        assert_eq!(std::fs::read(&second.path).unwrap(), before[1]);
+    }
 
     #[test]
     fn capture_exact_id_preflight_ignores_an_earlier_matching_native_key() {

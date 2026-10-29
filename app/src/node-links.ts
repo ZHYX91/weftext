@@ -20,7 +20,7 @@ export function nodeLinkCopyUnavailable(inventory: NodeLinkInventory | null | un
     return undefined;
 }
 
-/** Read-only qualification of the complete captured selection, in displayed order.
+/** One read-only qualification of the complete captured selection, in displayed order.
  * No clipboard or author edit occurs here. Paths never become the copied identity. */
 export async function qualifyNodeLinks(inventory: NodeLinkInventory, entries: readonly InventoryEntry[], request: NodeLinkRequest,
     isCurrent: () => boolean): Promise<string[]> {
@@ -33,25 +33,23 @@ export async function qualifyNodeLinks(inventory: NodeLinkInventory, entries: re
     current();
     const unavailable = nodeLinkCopyUnavailable(captured, selected);
     if (unavailable) throw new UiError(unavailable);
-    const references: string[] = [];
-    for (const entry of selected) {
-        current();
-        const entityKey = `weftext-node://${captured.workspaceId}/${entry.nodeId}`;
-        let result: unknown;
-        try {
-            result = await request<unknown>("/api/data/resolve", { root: captured.root, entityKey });
-        }
-        finally {
-            // Reject a late result or error from a retired library/selection.
-            current();
-        }
-        if (!result || typeof result !== "object" || Array.isArray(result))
-            throw new UiError(message("nodeLinks.resolutionChanged"));
-        const resolved = result as Record<string, unknown>;
-        if (resolved.root !== captured.root || resolved.nodeId !== entry.nodeId || typeof resolved.path !== "string" || !resolved.path)
-            throw new UiError(message("nodeLinks.resolutionChanged"));
-        references.push(entityKey);
+    const references = selected.map(entry => `weftext-node://${captured.workspaceId}/${entry.nodeId}`);
+    current();
+    let result: unknown;
+    try {
+        result = await request<unknown>("/api/data/resolve-batch", { root: captured.root, entityKeys: [...references] });
     }
+    finally {
+        // Reject a late result or error from a retired library/selection.
+        current();
+    }
+    if (!result || typeof result !== "object" || Array.isArray(result))
+        throw new UiError(message("nodeLinks.resolutionChanged"));
+    const resolved = result as Record<string, unknown>;
+    if (Object.keys(resolved).sort().join(",") !== "entityKeys,root" || resolved.root !== captured.root
+        || !Array.isArray(resolved.entityKeys) || resolved.entityKeys.length !== references.length
+        || resolved.entityKeys.some((value: unknown, index: number) => value !== references[index]))
+        throw new UiError(message("nodeLinks.resolutionChanged"));
     current();
     return references;
 }

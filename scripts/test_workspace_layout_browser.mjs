@@ -485,7 +485,8 @@ try {
   assert.equal(await copyMenu.locator('[data-action="node-copy-stable-links"]').getAttribute('aria-disabled'), 'false');
   await copyMenu.locator('[data-action="node-copy-stable-links"]').click();
   await until(async () => await page.evaluate(() => navigator.clipboard.readText()) === [parentRef, siblingRef].join('\n'), 'The complete selected note batch did not deliver its stable links in displayed order');
-  assert.equal(result.requests.slice(copyStart).filter(request => request.route === '/api/data/resolve').length, 2, 'Every copied note must be resolved against the real current Core inventory');
+  assert.equal(result.requests.slice(copyStart).filter(request => request.route === '/api/data/resolve-batch').length, 1, 'The entire copied selection must be resolved against one current Core inventory');
+  assert.equal(result.requests.slice(copyStart).filter(request => request.route === '/api/data/resolve').length, 0, 'Batch copying repeated individual whole-library reads');
   assert.equal(await nodes().locator('.node-content-row input:checked').count(), 2, 'Copying links discarded the selection');
   await assertSameEditor(sortingEditor, sortingSelection);
   await clearNodes().click();
