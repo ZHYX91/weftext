@@ -1981,22 +1981,22 @@ mod tests {
                 .find(|member| member.key == "contributors")
                 .unwrap()
                 .value;
-            if let NativeValue::Array(contributors) = values {
-                if let NativeValue::Record(members) = &mut contributors[0] {
-                    members
-                        .iter_mut()
-                        .find(|member| member.key == "agent")
-                        .unwrap()
-                        .value = record([
-                        (
-                            "ref",
-                            txt(
-                                "weftext-node://58c47256-bfce-4d29-a037-b83a3a644fb0/12d7c4f3-9ee6-4c36-920d-ec6af27bc654",
-                            ),
+            if let NativeValue::Array(contributors) = values
+                && let NativeValue::Record(members) = &mut contributors[0]
+            {
+                members
+                    .iter_mut()
+                    .find(|member| member.key == "agent")
+                    .unwrap()
+                    .value = record([
+                    (
+                        "ref",
+                        txt(
+                            "weftext-node://58c47256-bfce-4d29-a037-b83a3a644fb0/12d7c4f3-9ee6-4c36-920d-ec6af27bc654",
                         ),
-                        ("text", txt("Same Name")),
-                    ]);
-                }
+                    ),
+                    ("text", txt("Same Name")),
+                ]);
             }
         }
         assert!(project_bibliography(&[work], BibliographyFormat::CslJson).is_err());
