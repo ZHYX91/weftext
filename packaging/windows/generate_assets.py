@@ -18,14 +18,35 @@ SAMPLES = 4
 
 
 def geometry(path):
-    svg = ET.parse(path).getroot()
-    assert svg.attrib == {'viewBox': '0 0 1254 1254', 'role': 'img', 'aria-labelledby': 'title desc'}
-    paths = svg.findall('{http://www.w3.org/2000/svg}path')
-    assert len(paths) == 1
-    node = paths[0]
-    assert node.attrib['fill-rule'] == 'evenodd'
-    assert set(node.attrib) == {'d', 'fill', 'fill-rule'}
-    assert all(child.tag.rsplit('}', 1)[-1] in {'title', 'desc', 'rect', 'path'} for child in svg)
+    # This is a renderer for the two retained assets, not a general SVG engine.
+    # Validate the whole document before selecting shapes: ignored siblings,
+    # animation, CSS or nested elements could otherwise change browser output.
+    source = path.read_text(encoding='utf-8')
+    def require(condition):
+        if not condition:
+            raise ValueError(f'Unsupported brand SVG structure: {path.name}')
+    require('<?' not in source and '<!' not in source)
+    svg = ET.fromstring(source)
+    ns = '{http://www.w3.org/2000/svg}'
+    require(svg.tag == ns + 'svg')
+    require(svg.attrib == {'viewBox': '0 0 1254 1254', 'role': 'img', 'aria-labelledby': 'title desc'})
+    require(path.name in ('app-icon.svg', 'logo-mark.svg'))
+    application = path.name == 'app-icon.svg'
+    expected = ['title', 'desc', 'rect', 'path'] if application else ['title', 'desc', 'path']
+    require([child.tag for child in svg] == [ns + tag for tag in expected])
+    require(not (svg.text or '').strip())
+    for child, tag in zip(svg, expected):
+        require(len(child) == 0 and not (child.tail or '').strip())
+        if tag in ('title', 'desc'):
+            require(child.attrib == {'id': tag} and bool((child.text or '').strip()))
+        else:
+            require(not (child.text or '').strip())
+    if application:
+        require(svg[2].attrib == dict(x='0', y='0', width='1254', height='1254', rx='220', fill='#07172D'))
+    node = svg[-1]
+    require(set(node.attrib) == {'d', 'fill', 'fill-rule'})
+    require(node.attrib['fill-rule'] == 'evenodd')
+    require(node.attrib['fill'] == ('#F4EFE4' if application else 'currentColor'))
     assert not re.sub(r'[A-Za-z]|-?\d+(?:\.\d+)?|\s+', '', node.attrib['d'])
     tokens = re.findall(r'[A-Za-z]|-?\d+(?:\.\d+)?', node.attrib['d'])
     polygons, points = [], []
