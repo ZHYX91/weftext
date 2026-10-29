@@ -400,7 +400,7 @@ Table PNG/record conversion, bulk literal-prefix rewriting, plugin-specific URIs
 
 Preserve the established ancient-Chinese 文-inspired mark and blue-black/warm-paper application icon; it is not a strict reproduction of one oracle-bone glyph. Technical restructuring must not replace the brand with W or a generic placeholder. Restore by checking the retained original geometry and explicitly importing brand assets, without copying private historical records into the product repository. Actually delivered entry points derive resources from one source, covering executable/tray, installer and WebUI surfaces that use the mark; check small sizes, transparency/light/dark backgrounds and resource references. A new principal mark is a separate product decision; small-size adaptation must retain its identifying features.
 
-Current Windows resources still use W, an open omission. This requirement does not claim restored icons or completed acceptance.
+Brand SVGs have been explicitly imported from the retained originals. Executable/tray, package and WebUI marks and favicons now use resources derived from that source, with generation and reference checks. Resource restoration does not establish actual installation or whole-version acceptance. See [brand assets](BRAND.md) for provenance, generation and verification boundaries.
 
 ## 6. Bringing the original 21 findings into the new design
 

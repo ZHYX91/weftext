@@ -1,76 +1,144 @@
-"""Maintain native/package icons from the repository's simple vector geometry."""
+"""Rasterize the retained brand's M/L/Z, even-odd artwork (stdlib only).
+
+Fail closed on unsupported SVG features. Output uses 4x4 area sampling; --check
+compares decoded pixels, not the runtime-dependent zlib representation.
+"""
 import argparse
+import math
 from pathlib import Path
+import re
 import struct
 import xml.etree.ElementTree as ET
 import zlib
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[2]
+BRAND = ROOT / 'brand'
+WINDOWS = ROOT / 'packaging/windows/assets'
+SAMPLES = 4
+
+
+def geometry(path):
+    svg = ET.parse(path).getroot()
+    assert svg.attrib == {'viewBox': '0 0 1254 1254', 'role': 'img', 'aria-labelledby': 'title desc'}
+    paths = svg.findall('{http://www.w3.org/2000/svg}path')
+    assert len(paths) == 1
+    node = paths[0]
+    assert node.attrib['fill-rule'] == 'evenodd'
+    assert set(node.attrib) == {'d', 'fill', 'fill-rule'}
+    assert all(child.tag.rsplit('}', 1)[-1] in {'title', 'desc', 'rect', 'path'} for child in svg)
+    assert not re.sub(r'[A-Za-z]|-?\d+(?:\.\d+)?|\s+', '', node.attrib['d'])
+    tokens = re.findall(r'[A-Za-z]|-?\d+(?:\.\d+)?', node.attrib['d'])
+    polygons, points = [], []
+    while tokens:
+        command = tokens.pop(0)
+        if command in ('M', 'L'):
+            points.append((float(tokens.pop(0)), float(tokens.pop(0))))
+        elif command == 'Z':
+            polygons.append(points)
+            points = []
+        else:
+            raise ValueError(f'Unsupported brand path command: {command}')
+    assert not points and len(polygons) == 3
+    return svg, polygons, bytes.fromhex(node.attrib['fill'][1:]) if node.attrib['fill'].startswith('#') else None
 
 
 def image(size):
-    svg = ET.parse(ROOT / 'icon.svg').getroot()
-    shapes = []
-    for node in svg:
-        color = bytes.fromhex(node.attrib['fill'][1:])
-        if node.tag.endswith('rect'):
-            x, y, width, height = (float(node.attrib[name]) for name in ('x', 'y', 'width', 'height'))
-            points = [(x, y), (x + width, y), (x + width, y + height), (x, y + height)]
-        else:
-            points = [tuple(map(float, point.split(','))) for point in node.attrib['points'].split()]
-        shapes.append((points, color))
-    def inside(x, y, points):
-        hit = False
-        previous = points[-1]
-        for current in points:
-            if (current[1] > y) != (previous[1] > y) and x < (previous[0] - current[0]) * (y - current[1]) / (previous[1] - current[1]) + current[0]:
-                hit = not hit
-            previous = current
-        return hit
-    pixels = bytearray()
-    for y in range(size):
-        pixels.append(0)
-        for x in range(size):
-            totals = [0, 0, 0, 0]
-            for sy in range(3):
-                for sx in range(3):
-                    color = None
-                    for points, fill in shapes:
-                        if inside((x + (sx + .5) / 3) * 100 / size, (y + (sy + .5) / 3) * 100 / size, points):
-                            color = fill
-                    if color is not None:
-                        for channel in range(3):
-                            totals[channel] += color[channel]
-                        totals[3] += 255
-            alpha = totals[3] // 9
-            pixels.extend(bytes([round(total * 255 / totals[3]) if totals[3] else 0 for total in totals[:3]] + [alpha]))
+    svg, polygons, ink = geometry(BRAND / 'app-icon.svg')
+    rect = svg.find('{http://www.w3.org/2000/svg}rect')
+    assert rect.attrib == dict(x='0', y='0', width='1254', height='1254', rx='220', fill='#07172D')
+    background = bytes.fromhex(rect.attrib['fill'][1:])
+    scale = size * SAMPLES / 1254
+    width = size * SAMPLES
+    totals = [[0, 0, 0, 0] for _ in range(size * size)]
+    for y in range(width):
+        sy = (y + .5) / scale
+        corner = max(220 - sy, sy - (1254 - 220), 0)
+        edge = 220 - math.sqrt(220 ** 2 - corner ** 2) if corner else 0
+        intersections = sorted(a[0] + (sy - a[1]) * (b[0] - a[0]) / (b[1] - a[1])
+                               for polygon in polygons for a, b in zip(polygon, polygon[1:] + polygon[:1])
+                               if (a[1] > sy) != (b[1] > sy))
+        assert len(intersections) % 2 == 0
+        spans = list(zip(intersections[::2], intersections[1::2]))
+        for x in range(width):
+            sx = (x + .5) / scale
+            if not edge <= sx < 1254 - edge:
+                continue
+            color = ink if any(left <= sx < right for left, right in spans) else background
+            pixel = totals[(y // SAMPLES) * size + x // SAMPLES]
+            for channel in range(3):
+                pixel[channel] += color[channel]
+            pixel[3] += 1
+    rows = bytearray()
+    for index, pixel in enumerate(totals):
+        if index % size == 0:
+            rows.append(0)
+        count = pixel[3]
+        rows.extend([round(value / count) if count else 0 for value in pixel[:3]] + [round(count * 255 / SAMPLES ** 2)])
     def chunk(kind, data):
         return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
-    return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', size, size, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(pixels)) + chunk(b'IEND', b'')
+    return b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', struct.pack('>IIBBBBB', size, size, 8, 6, 0, 0, 0)) + chunk(b'IDAT', zlib.compress(rows)) + chunk(b'IEND', b'')
+
+
+def decoded_png(data):
+    assert data[:8] == b'\x89PNG\r\n\x1a\n'
+    offset, compressed, header = 8, b'', None
+    while offset < len(data):
+        length = struct.unpack_from('>I', data, offset)[0]
+        kind, body = data[offset + 4:offset + 8], data[offset + 8:offset + 8 + length]
+        crc = struct.unpack_from('>I', data, offset + 8 + length)[0]
+        assert crc == zlib.crc32(kind + body)
+        if kind == b'IHDR':
+            header = body
+        elif kind == b'IDAT':
+            compressed += body
+        else:
+            assert kind == b'IEND' and not body
+        offset += length + 12
+    assert offset == len(data)
+    return header, zlib.decompress(compressed)
+
+
+def decoded_ico(data):
+    assert struct.unpack_from('<HHH', data) == (0, 1, 4)
+    images = []
+    offset = 70
+    for index, size in enumerate((32, 16, 48, 256)):
+        w, h, colors, reserved, planes, bits, length, start = struct.unpack_from('<BBBBHHII', data, 6 + 16 * index)
+        assert (w, h, colors, reserved, planes, bits, start) == (size % 256, size % 256, 0, 0, 1, 32, offset)
+        images.append(decoded_png(data[start:start + length]))
+        offset += length
+    assert offset == len(data)
+    return images
 
 
 def assets():
-    result = {name: image(size) for name, size in (('StoreLogo.png', 50), ('Square150x150Logo.png', 150), ('Square44x44Logo.png', 44))}
-    images = [(size, image(size)) for size in (16, 32, 48, 256)]
-    offset = 6 + 16 * len(images)
-    headers = []
+    # Both retained SVG originals carry the identical principal path.
+    assert geometry(BRAND / 'logo-mark.svg')[1] == geometry(BRAND / 'app-icon.svg')[1]
+    result = {WINDOWS / name: image(size) for name, size in
+              (('StoreLogo.png', 50), ('Square150x150Logo.png', 150), ('Square44x44Logo.png', 44))}
+    images = [(size, image(size)) for size in (32, 16, 48, 256)]
+    offset, headers = 70, []
     for size, data in images:
         headers.append(struct.pack('<BBBBHHII', size % 256, size % 256, 0, 0, 1, 32, len(data), offset))
         offset += len(data)
-    result['weftext.ico'] = struct.pack('<HHH', 0, 1, len(images)) + b''.join(headers) + b''.join(data for _, data in images)
+    result[WINDOWS / 'weftext.ico'] = struct.pack('<HHH', 0, 1, 4) + b''.join(headers) + b''.join(data for _, data in images)
+    result[ROOT / 'app/public/brand/app-icon.svg'] = (BRAND / 'app-icon.svg').read_bytes()
     return result
+
+
+def maintain(check=False):
+    for path, data in assets().items():
+        if check:
+            actual = path.read_bytes()
+            decode = {'.ico': decoded_ico, '.png': decoded_png}.get(path.suffix, lambda value: value)
+            assert decode(actual) == decode(data), f'Generated brand asset differs: {path.relative_to(ROOT)}'
+        else:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+    print('PASS: brand geometry and generated native/package/WebUI assets' if check else 'Generated native/package/WebUI brand assets')
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--check', action='store_true')
-    args = parser.parse_args()
-    for name, data in assets().items():
-        path = ROOT / 'assets' / name
-        if args.check:
-            if path.read_bytes() != data:
-                raise ValueError(f'Generated icon differs from vector source: {name}')
-        else:
-            path.parent.mkdir(exist_ok=True)
-            with path.open('xb') as stream:
-                stream.write(data)
+    maintain(parser.parse_args().check)

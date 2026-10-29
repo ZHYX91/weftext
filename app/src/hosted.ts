@@ -92,7 +92,7 @@ function checkedSaveStatus(result: SaveStatus, operationId: string, resource: st
 }
 const root = document.querySelector<HTMLElement>("#hosted")!;
 root.classList.add("hosted-shell");
-root.innerHTML = `<header><span class="brand">Weftext</span><span><span data-ui-message="hostedShell.remotePreviewEdition"></span></span><button id="logout" hidden><span data-ui-message="hostedShell.logoutClearCache"></span></button></header>
+root.innerHTML = `<header><span class="brand"><img src="/brand/app-icon.svg" alt="">Weftext</span><span><span data-ui-message="hostedShell.remotePreviewEdition"></span></span><button id="logout" hidden><span data-ui-message="hostedShell.logoutClearCache"></span></button></header>
 <form id="login"><h1><span data-ui-message="hostedShell.connectSpace"></span></h1><p><span data-ui-message="hostedShell.credentialsDescription"></span></p><label><span data-ui-message="hostedShell.accessCredentials"></span><input id="token" type="password" autocomplete="off" required minlength="32"></label><button><span data-ui-message="hostedShell.connect"></span></button></form>
 <p id="status" role="status" aria-live="polite"><span data-ui-message="hostedShell.notConnected"></span></p>
 <section id="workspace" hidden><aside><h2><span data-ui-message="hostedShell.accessibleDocuments"></span></h2><form id="search"><input id="term" data-ui-aria-label="hostedShell.searchAuthorizedDocuments" aria-label="" data-ui-placeholder="hostedShell.searchDocumentsPlaceholder" placeholder=""><button><span data-ui-message="hostedShell.search"></span></button></form><button id="refresh"><span data-ui-message="hostedShell.allDocuments"></span></button><nav id="documents" data-ui-aria-label="hostedShell.documents" aria-label=""></nav></aside>

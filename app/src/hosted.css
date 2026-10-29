@@ -189,3 +189,6 @@ body:has(> .hosted-shell) { margin: 0; font: 14px/1.5 system-ui, "Microsoft YaHe
   .hosted-app-header, .hosted-document-bar, .hosted-navigation, .hosted-inspector, .hosted-shell > #status { color: CanvasText; background: Canvas; }
   .hosted-document-tabs button[aria-selected="true"], .hosted-navigation #documents button[aria-current="page"] { color: HighlightText; background: Highlight; }
 }
+
+.hosted-app-header .brand { display: inline-flex; align-items: center; gap: 8px; }
+.hosted-app-header .brand img { width: 28px; height: 28px; }

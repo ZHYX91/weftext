@@ -30,3 +30,7 @@ packaging/windows/licenses/wasmparser/LICENSE-MIT -text -whitespace
 packaging/windows/licenses/webview2-rust/LICENSE -text -whitespace
 packaging/windows/licenses/webview2-sdk/LICENSE.txt -text -whitespace
 packaging/windows/licenses/webview2-sdk/NOTICE.txt -text -whitespace
+
+# Retained brand originals are imported byte-for-byte.
+brand/*.svg -text
+app/public/brand/*.svg -text

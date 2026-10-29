@@ -13,6 +13,7 @@ from urllib.parse import unquote
 ROOT = Path(__file__).resolve().parents[1]
 
 def check():
+    subprocess.run([sys.executable, str(ROOT / "packaging/windows/generate_assets.py"), "--check"], check=True)
     count=0
     files = []
     for directory, children, names in os.walk(ROOT):

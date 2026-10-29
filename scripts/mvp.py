@@ -205,6 +205,7 @@ def check(artifacts=None, groups=None):
         checked(sys.executable, 'scripts/test_ci_windows_package.py')
         checked(sys.executable, 'scripts/test_build_receipt.py')
         checked(sys.executable, 'scripts/test_mvp_entry.py')
+        checked(sys.executable, 'scripts/test_brand_assets.py')
         checked(sys.executable, 'scripts/test_cli_contract_support.py')
         checked(sys.executable, 'scripts/test_cli_serve.py')
         checked(sys.executable, 'scripts/test_owned_worker_observer.py')

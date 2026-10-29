@@ -46,7 +46,7 @@ svg { width: 19px; height: 19px; flex-shrink: 0; vertical-align: middle; }
 .shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); height: 100dvh; min-height: 0; overflow: hidden; }
 .sidebar { display: flex; flex-direction: column; background: #f2f4ee; border-right: 1px solid #e2e6dc; padding: 14px 12px 12px; overflow: hidden; }
 .brand { display: flex; align-items: center; gap: 9px; padding: 0 9px 13px; }
-.brand-mark { width: 29px; height: 31px; display: grid; place-content: center; color: #eef5ea; border-radius: 9px 9px 9px 3px; background: var(--accent-dark); font: italic 26px Georgia, serif; padding-right: 3px; }
+.brand-mark { width: 31px; height: 31px; display: block; }
 .brand-name { font-size: 18px; letter-spacing: -.5px; font-weight: 650; }
 .local-badge { margin-left: auto; font-size: 12px; color: #758273; border: 1px solid #d8dfd2; border-radius: 4px; padding: 1px 4px; }
 .library-button { padding: 11px 10px; display: flex; align-items: center; gap: 10px; border-radius: 7px; text-align: left; font-size: 14px; font-weight: 600; min-height: 42px; }
@@ -332,3 +332,6 @@ strong > .literal-input, em > .literal-input, a > .literal-input { width: auto; 
 .workspace-ribbon .document-notes-summary { flex-wrap: nowrap; gap: 6px; }
 .workspace-ribbon .document-notes-status { margin: 0; white-space: nowrap; }
 .source-history-controls { display: flex; align-items: center; gap: 4px; }
+
+.home-label { display: inline-flex; align-items: center; gap: 6px; }
+.home-label img { width: 24px; height: 24px; }
