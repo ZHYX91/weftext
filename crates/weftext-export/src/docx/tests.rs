@@ -2303,7 +2303,11 @@ fn readonly_native_literal_discussions_keep_escaped_and_wrapped_display_scopes()
         include_bytes!("../../assets/weftext-endnotes.typ"),
     )
     .unwrap();
+    // A let-bound content value stays outside the editor's literal regions.
+    // Ordinary native wrappers are now editable; keep this discussion fixture
+    // genuinely read-only without changing the render output or its assertions.
     let source = r#"#import "weftext-endnotes.typ": endnote, endnote-ref, endnotes
+#let readonly_body = [
 #table(columns: 1, [#text(lang: "en", region: "US")[WORD\_TABLE\_CELL\_EDIT\u{20}tail]])
 
 #link("https://example.invalid/readonly-review")[#text(lang: "en", region: "US")[LINK\_TEXT\u{20}]#text(lang: "zh", region: "CN")[链接尾部]]
@@ -2311,6 +2315,8 @@ fn readonly_native_literal_discussions_keep_escaped_and_wrapped_display_scopes()
 - #text(lang: "en", region: "US")[LIST\_TEXT\u{20}]#text(lang: "zh", region: "CN")[列表尾部]
 
 + #text(lang: "en", region: "US")[NUMBERED\_TEXT\u{20}]#text(lang: "zh", region: "CN")[有序尾部]
+]
+#readonly_body
 "#;
     let out = render(source, &dir);
     assert!(out.dependencies.iter().any(|dependency| {
