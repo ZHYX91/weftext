@@ -38,7 +38,10 @@ use windows::{
 const LIMIT: usize = 16 * 1024 * 1024;
 const LEAF: &str = "host-routing.json";
 const LOCK_WAIT: Duration = Duration::from_secs(5);
-const MAX_ORIGINS: usize = 4096;
+// Historical nonzero u16 ports are never reassigned. The actual namespace
+// and the independent 16 MiB serialized budget bound this lifetime catalog;
+// temporary test profiles belong in an isolated OS guest, not this user root.
+const MAX_ORIGINS: usize = u16::MAX as usize;
 fn invalid() -> io::Error {
     io::Error::new(
         io::ErrorKind::PermissionDenied,
@@ -989,6 +992,43 @@ mod tests {
                 "phase": "requestedPortReserved", "ioKind": "PermissionDenied", "osCode": null,
             })
         );
+    }
+
+    #[test]
+    fn old_4096_record_catalog_admits_new_profile_without_changing_old_bindings() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = Root::at(temp.path().join("host-state"), true).unwrap();
+        let profile = weftext_core::qualify_profile(temp.path().join("existing")).unwrap();
+        let listener = bind(&root, &profile, 0).unwrap();
+        let retained = listener.local_addr().unwrap().port();
+        drop(listener);
+        let mut locked = root.locked().unwrap();
+        let mut catalog = locked.read().unwrap().unwrap();
+        for port in (1..=u16::MAX).filter(|port| *port != retained).take(4095) {
+            catalog.origins.push(Origin {
+                physical_identity: format!("fixture-{port}"),
+                locator: temp
+                    .path()
+                    .join(format!("unused-{port}"))
+                    .to_string_lossy()
+                    .into_owned(),
+                port,
+            });
+        }
+        catalog.revision += 1;
+        locked.publish(&catalog).unwrap();
+        let old = serde_json::to_value(&catalog.origins).unwrap();
+        let ports: BTreeSet<_> = catalog.origins.iter().map(|origin| origin.port).collect();
+        drop(locked);
+        let new_profile = weftext_core::qualify_profile(temp.path().join("new")).unwrap();
+        let listener = bind(&root, &new_profile, 0).unwrap();
+        assert!(!ports.contains(&listener.local_addr().unwrap().port()));
+        let current = root.locked().unwrap().read().unwrap().unwrap();
+        assert_eq!(current.origins.len(), 4097);
+        assert_eq!(serde_json::to_value(&current.origins[..4096]).unwrap(), old);
+        drop(listener);
+        let reopened = bind(&root, &profile, 0).unwrap();
+        assert_eq!(reopened.local_addr().unwrap().port(), retained);
     }
 
     #[test]
