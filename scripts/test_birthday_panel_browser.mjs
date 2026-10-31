@@ -73,7 +73,7 @@ try {
             if (route === "/api/data/schema") return read;
             if (route === "/api/data/references") return { nodes: [], complete: true, diagnostics: [] };
             if (route === "/api/navigation/tags") return { tags: [], complete: true, warnings: [] };
-            if (route === "/api/data/project") return { serial: body.serial, sourceHash: await hash(body.source), schemaHash: await hash(schemaSource), schemaRevision: read.revision, readOnly: false, projection: { qualification: "qualified", id: fixture.basis.nodeId, types: [typeAlias], resolvedTypes: [typeId], unknownFields: [], diagnostics: [], budgetExhausted: false, fields: [{ fieldId: field.id, key: field.key, cell: { state: "value", value: decode(body.source) }, sourceRange: { from: 0, to: body.source.length }, raw: JSON.stringify(decode(body.source)), writable: true, required: false, unbound: [] }] } };
+            if (route === "/api/data/project") { if (fixture.projectGate) { fixture.projectWaiting = true; await fixture.projectGate; fixture.projectGate = null; fixture.projectWaiting = false; } return { serial: body.serial, sourceHash: await hash(body.source), schemaHash: await hash(schemaSource), schemaRevision: read.revision, readOnly: false, projection: { qualification: "qualified", id: fixture.basis.nodeId, types: [typeAlias], resolvedTypes: [typeId], unknownFields: [], diagnostics: [], budgetExhausted: false, fields: [{ fieldId: field.id, key: field.key, cell: { state: "value", value: decode(body.source) }, sourceRange: { from: 0, to: body.source.length }, raw: JSON.stringify(decode(body.source)), writable: true, required: false, unbound: [] }] } }; }
             if (route === "/api/data/edit") return { from: 0, to: body.source.length, text: encode(body.value) };
             throw new Error("Unexpected local route " + route);
         } }); document.querySelector("#data").append(fixture.data.element); await fixture.data.refresh();
@@ -92,6 +92,7 @@ try {
         // unrelated operation false. The real field registry is its only dirty input.
         new Function("personalInputs", "personalControls", "structures", "media", "library", "history", "draft", beforeUnloadHook)({ pending: () => false }, personalControls, { hasPending: false }, { hasPending: false }, { hasPending: false }, { hasPending: () => false }, { source: "clean body", baseSource: "clean body", pending: null });
         fixture.beforeUnload = () => { const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; };
+        fixture.projectionCurrent = () => !fixture.data.readingProjection && ["inputId","sessionId","source","serial","baseId","path","root","nodeId","workspaceId"].every(key => fixture.data.projectionBasis?.[key] === fixture.basis[key]);
         fixture.readData = () => kind(fixture.data.drafts.get(field.key).value);
         fixture.readHosted = () => kind(fixture.hosted.draft.value);
         fixture.readSource = () => kind(decode(fixture.editor.source));
@@ -173,13 +174,18 @@ try {
         assert.deepEqual(await read("#data"),expected);
         assert.deepEqual(await page.evaluate(()=>window.fixture.readSource()),initial);
         const property=page.locator('#data .data-property[data-field-id="people/life_events"]');
+        await page.evaluate(()=>{window.fixture.projectGate=new Promise(resolve=>window.fixture.releaseProject=resolve);});
         await property.getByRole("button",{name:labels.apply,exact:true}).click();
+        await page.waitForFunction(()=>window.fixture.projectWaiting);
+        assert.equal(await page.evaluate(()=>window.fixture.projectionCurrent()),false,"delayed projection has not completed Apply");
+        await page.evaluate(()=>window.fixture.releaseProject());
         await page.waitForFunction(()=>window.fixture.readSource().value[0].value.find(item=>item.key==="selected").value.value===false);
-        await page.waitForFunction(()=>!window.fixture.data.readingProjection&&window.fixture.data.projectionBasis?.source===window.fixture.editor.source);
+        await page.waitForFunction(()=>window.fixture.projectionCurrent());
         assert.deepEqual(await page.evaluate(()=>window.fixture.readSource()),expected);
         await page.evaluate(()=>window.fixture.editor.undo());assert.deepEqual(await page.evaluate(()=>window.fixture.readSource()),initial);
         await page.evaluate(()=>window.fixture.editor.redo());assert.deepEqual(await page.evaluate(()=>window.fixture.readSource()),expected);
         await page.evaluate(()=>window.fixture.data.refresh());
+        assert.equal(await page.evaluate(()=>window.fixture.projectionCurrent()),true);
     });
     await check("Real event_time branch and month/day inputs edit the selected original record without creating a birthday mirror or year",async()=>{
         await (await control("#data",eventPath(2),"variant")).selectOption("3");
@@ -195,9 +201,13 @@ try {
         assert.equal(JSON.stringify(edited).includes('"key":"birthday"'),false);
         await page.locator('#data .data-property[data-field-id="people/life_events"]').getByRole("button",{name:labels.apply,exact:true}).click();
         await page.waitForFunction(()=>window.fixture.readSource().value[2].value.find(item=>item.key==="event_time").value.value.some(item=>item.key==="day"));
+        await page.waitForFunction(()=>window.fixture.projectionCurrent());
         assert.deepEqual(await page.evaluate(()=>window.fixture.readSource()),edited);
         await page.evaluate(()=>window.fixture.editor.undo());assert.deepEqual(await page.evaluate(()=>window.fixture.readSource()),expected);
         await page.evaluate(()=>window.fixture.editor.redo());assert.deepEqual(await page.evaluate(()=>window.fixture.readSource()),edited);
+        await page.evaluate(()=>window.fixture.data.refresh());
+        assert.equal(await page.evaluate(()=>window.fixture.projectionCurrent()),true);
+        assert.deepEqual(await read("#data"),edited);
         result.observations.monthDay=edited;
     });
     await check("Invalid raw date input survives blocked source choice/add and a real Capture rebuild, without silent normalization",async()=>{
