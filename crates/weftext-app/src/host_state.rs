@@ -859,7 +859,7 @@ mod tests {
 
     #[test]
     fn new_origin_crosses_long_retained_ranges_and_retires_collisions_before_return() {
-        let reserved = (50000..50041).collect();
+        let reserved = (50000..54097).collect();
         let retired = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
         let calls = std::cell::Cell::new(0_u16);
         let selected = select_new_origin(
@@ -881,21 +881,20 @@ mod tests {
             |candidate| Ok(candidate.port),
         )
         .unwrap();
-        assert_eq!(calls.get(), 42);
-        assert_eq!(selected.port, 50041);
+        assert_eq!(calls.get(), 4098);
+        assert_eq!(selected.port, 54097);
         let mut actual = retired.borrow().clone();
         actual.sort_unstable();
-        assert_eq!(actual, (50000..50041).collect::<Vec<_>>());
+        assert_eq!(actual, (50000..54097).collect::<Vec<_>>());
         drop(selected);
-        assert_eq!(retired.borrow().len(), 42);
+        assert_eq!(retired.borrow().len(), 4098);
     }
 
     #[test]
     fn new_origin_preserves_os_failures_and_retires_all_held_candidates() {
-        for address_fails in [false, true] {
+        for (address_fails, os_code) in [(false, 10055), (false, 10013), (true, 87)] {
             let retired = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
             let calls = std::cell::Cell::new(0_u16);
-            let os_code = if address_fails { 87 } else { 10055 };
             let error = select_new_origin(
                 &[50000].into_iter().collect(),
                 0,
