@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { appendBirthEvent, birthEvents, birthTimePrecision, birthTimeText, selectBirthEvent } from "./birthday";
+import { appendBirthEvent, birthEvents, birthTimeIsLeapMonth, birthTimePrecision, birthTimeText, selectBirthEvent } from "./birthday";
 import type { NativeValue } from "./native-values";
 const text = (value: string): NativeValue => ({ kind: "text", value });
 const record = (value: Record<string, NativeValue>): NativeValue => ({ kind: "record", value: Object.entries(value).map(([key, value]) => ({ key, value })) });
@@ -40,4 +40,14 @@ test("birthday precision is projected without converting calendar, timezone or m
     assert.equal(birthTimeText(undefined), undefined);
     assert.equal(birthTimeText(record({ month: { kind: "int", value: "2" }, day: { kind: "int", value: "29" } })), "2 / 29");
     assert.equal(birthTimePrecision({ kind: "text", value: "2000-01-01T00:30:00+14:00" }), "exact");
+});
+
+test("birthday leap-month marker preserves the supplied calendar distinction", () => {
+    const value = record({ calendar: text("chinese"), leap_month: { kind: "bool", value: true } });
+    const before = structuredClone(value);
+    assert.equal(birthTimeIsLeapMonth(value), true);
+    assert.equal(birthTimeIsLeapMonth(record({ leap_month: { kind: "bool", value: false } })), false);
+    assert.equal(birthTimeIsLeapMonth(record({})), false);
+    assert.equal(birthTimeIsLeapMonth(undefined), false);
+    assert.deepEqual(value, before);
 });

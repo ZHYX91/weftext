@@ -1,5 +1,5 @@
 import { isBuiltinField, schemaPropertyPresentation } from "./builtin-property-labels";
-import { appendBirthEvent, birthEvents, birthTimePrecision, birthTimeText, selectBirthEvent } from "./birthday";
+import { appendBirthEvent, birthEvents, birthTimeIsLeapMonth, birthTimePrecision, birthTimeText, selectBirthEvent } from "./birthday";
 export { schemaFieldLabel } from "./builtin-property-labels";
 import {textareaSourceDraft} from "./writing";
 import {decodeCoreDescription,coreDescriptionUiText} from "./ui-diagnostics";
@@ -676,7 +676,11 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
             const row = items.children.item(index);
             const time = row?.querySelector<HTMLElement>(":scope > .native-value-editor > .native-record > [data-member-key='event_time']");
             time?.scrollIntoView({ block: "nearest" });
-            time?.querySelector<HTMLElement>("input,textarea,select,button")?.focus({ preventScroll: true });
+            const editor = time?.querySelector<HTMLElement>(":scope > .native-value-editor");
+            const control = editor
+                ? editor.querySelector<HTMLElement>("input:not(:disabled),textarea:not(:disabled),select:not(:disabled),button:not(:disabled)")
+                : time?.querySelector<HTMLElement>(":scope > .native-member-heading button:not(:disabled)");
+            control?.focus({ preventScroll: true });
         };
         const renderBirthday = (): void => {
             if (!birthday) return;
@@ -691,6 +695,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                 entry.append(ui("span", "", displayMessage("nativeEditor.itemLegend", { p0: event.index + 1 })),
                     ui("span", "birthday-time", birthTimeText(event.time) ?? uiMessage("birthday.unknown")));
                 if (precision !== "unknown") entry.append(ui("span", "data-help", precisionLabels[precision]));
+                if (birthTimeIsLeapMonth(event.time)) entry.append(ui("span", "birthday-leap-month", uiMessage("builtinProperty.member.leapMonth")));
                 if (event.selected) entry.append(ui("span", "data-help", uiMessage("birthday.chosen")));
                 if (!(event.selected && selected.length === 1)) entry.append(action(uiMessage("birthday.choose"), () => {
                     if (!canRestructure()) return;

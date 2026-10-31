@@ -44,6 +44,11 @@ export function birthTimePrecision(value: NativeValue | undefined): "unknown" | 
     return precision === "year" || precision === "month" || precision === "day" ? precision : "unknown";
 }
 
+export function birthTimeIsLeapMonth(value: NativeValue | undefined): boolean {
+    const leap = member(value, "leap_month");
+    return leap?.kind === "bool" && leap.value;
+}
+
 /** Display only supplied date parts. In particular a year never becomes Jan 1. */
 export function birthTimeText(value: NativeValue | undefined): string | undefined {
     if (!value || value.kind === "none") return;

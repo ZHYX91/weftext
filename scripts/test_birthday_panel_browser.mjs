@@ -41,7 +41,7 @@ try {
         const initial = {kind:"array",value:[
             record({kind:text("birth"),event_time:calendar(2001),selected:bool(true),note:text("Original birth A 😀"),sources:evidence("a"),unknownEvidence:record({code:text("retain-a")})}),
             record({kind:text("death"),event_time:calendar(2090,9),selected:bool(true),note:text("Selected death is independent"),sources:evidence("death")}),
-            record({kind:text("birth"),event_time:calendar(2004,7),selected:bool(true),note:text("Original birth B"),sources:evidence("b"),unknownEvidence:record({code:text("retain-b")})}),
+            record({kind:text("birth"),event_time:record({calendar:text("chinese"),version:text("original"),precision:text("month"),year:int(2004),month:int(7),leap_month:bool(true)}),selected:bool(true),note:text("Original birth B"),sources:evidence("b"),unknownEvidence:record({code:text("retain-b")})}),
         ]};
         const member=(value,key)=>value?.kind==="record"?value.value.find(item=>item.key===key)?.value:undefined;
         const kind = value => value;
@@ -129,6 +129,27 @@ try {
         }
         result.observations.initial=initial;
     });
+    await check("Edit date focuses the original union control; Enter cannot activate the member Remove action in any consumer",async()=>{
+        for(const root of ["#capture","#data","#hosted"]){
+            const before=await read(root);
+            await page.locator(`${root} .native-birthday [data-birth-index="0"]`).getByRole("button",{name:labels.edit,exact:true}).click();
+            const variant=await control(root,eventPath(0),"variant");
+            assert.equal(await variant.evaluate(node=>document.activeElement===node),true);
+            await page.keyboard.press("Enter");await page.keyboard.press("Escape");
+            assert.deepEqual(await read(root),before,"keyboard editing must not remove event_time");
+        }
+    });
+    await check("Leap month is explicit in every birthday summary and follows the current UI language",async()=>{
+        for(const [language,label] of [["en-US","Leap month"],["zh-CN","闰月"]]){
+            await page.evaluate(language=>window.fixture.locale.set(language),language);
+            for(const root of ["#capture","#data","#hosted"]){
+                assert.equal(await page.locator(`${root} .native-birthday [data-birth-index="2"] .birthday-leap-month`).textContent(),label);
+                assert.equal(await page.locator(`${root} .native-birthday [data-birth-index="0"] .birthday-leap-month`).count(),0);
+                assert.deepEqual(await read(root),initial);
+            }
+        }
+        await page.evaluate(()=>window.fixture.locale.set("en-US"));
+    });
     await check("Hosted clicking only a birthday source marks the real field producer unapplied and blocks the unchanged clean-body beforeunload",async()=>{
         assert.equal(await page.evaluate(()=>window.fixture.beforeUnload()),false);
         await choose("#hosted",2);
@@ -154,9 +175,11 @@ try {
         const property=page.locator('#data .data-property[data-field-id="people/life_events"]');
         await property.getByRole("button",{name:labels.apply,exact:true}).click();
         await page.waitForFunction(()=>window.fixture.readSource().value[0].value.find(item=>item.key==="selected").value.value===false);
+        await page.waitForFunction(()=>!window.fixture.data.readingProjection&&window.fixture.data.projectionBasis?.source===window.fixture.editor.source);
         assert.deepEqual(await page.evaluate(()=>window.fixture.readSource()),expected);
         await page.evaluate(()=>window.fixture.editor.undo());assert.deepEqual(await page.evaluate(()=>window.fixture.readSource()),initial);
         await page.evaluate(()=>window.fixture.editor.redo());assert.deepEqual(await page.evaluate(()=>window.fixture.readSource()),expected);
+        await page.evaluate(()=>window.fixture.data.refresh());
     });
     await check("Real event_time branch and month/day inputs edit the selected original record without creating a birthday mirror or year",async()=>{
         await (await control("#data",eventPath(2),"variant")).selectOption("3");
@@ -202,6 +225,7 @@ try {
         await page.evaluate(()=>window.fixture.capture.controller.drain());
         const after=await read("#capture");assert.deepEqual(after.value.slice(0,before.value.length),before.value);
         assert.deepEqual(after.value.at(-1),{kind:"record",value:[{key:"kind",value:{kind:"text",value:"birth"}},{key:"selected",value:{kind:"bool",value:false}}]});
+        assert.equal(await page.evaluate(()=>document.activeElement?.closest('[data-member-key="event_time"]')?.querySelector('.native-member-heading button')===document.activeElement),true,"absent date focuses its explicit Add control");
         await page.evaluate(()=>window.fixture.capture.rebuild());assert.deepEqual(await read("#capture"),after);
         assert.deepEqual(await page.evaluate(()=>window.fixture.capture.gate()),after);
         result.observations.captureFinal=after;
