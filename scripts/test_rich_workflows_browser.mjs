@@ -11,7 +11,8 @@ import { workspaceCommand, workspaceMode } from './_workspace_browser.mjs';
 import { richArtifact, fileSha256, verifyEmbeddedFrontend } from './_rich_test_artifact.mjs';
 const repo = path.resolve(import.meta.dirname, '..'), exe = process.env.WEFTEXT_TEST_EXECUTABLE, out = process.env.WEFTEXT_BROWSER_REPORT;
 assert.ok(exe && path.isAbsolute(exe) && out && path.isAbsolute(out));
-assert.ok(path.relative(repo, out).startsWith('..' + path.sep));
+const relativeOut = path.relative(repo, out);
+assert.ok(path.isAbsolute(relativeOut) || relativeOut.startsWith('..' + path.sep));
 await mkdir(out, { recursive: false });
 const sha = value => createHash('sha256').update(value).digest('hex'), pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const artifact = await richArtifact(exe, repo, process.env.WEFTEXT_TEST_SOURCE_REF ?? 'HEAD');
@@ -131,7 +132,7 @@ async function localTask(doc, edit, positive, negative, expected) {
     assert.equal(original.operationId, saved.request.operationId);
     const projected = await api('/api/data/project', { sessionId: reopened.sessionId, source: reopened.source, serial: 1, sourceHash: sha(reopened.source) });
     assert.deepEqual(projected.projection.fields.find(f => f.key === doc.fieldKey).cell.value, expected);
-    // A fresh browser and Core process must reopen the same authored records.
+    // A new Core process and isolated BrowserContext must reopen the same authored records.
     const reopenedContext = await browser.newContext({ viewport: { width: 1480, height: 1100 } });
     page = await reopenedContext.newPage();
     observe(page);

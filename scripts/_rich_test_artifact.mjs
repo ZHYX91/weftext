@@ -9,7 +9,10 @@ import path from 'node:path';
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 export async function fileSha256(file) { const hash = createHash('sha256'); for await (const chunk of createReadStream(file))
     hash.update(chunk); return hash.digest('hex'); }
-const runtime = name => name.startsWith('app/') || name.startsWith('assets/') || name.startsWith('crates/') || name.startsWith('resources/') || name.startsWith('platforms/') || name === 'docs/design/examples/schema.json' || ['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml'].includes(name);
+// Bind every packaged source, including embedded resources outside code folders.
+// Select the artifact's original commit explicitly; the current harness is recorded separately.
+const ignored = new Set(['.git', 'node_modules', 'target', 'dist', '.workspace', '__pycache__']);
+const packagedSource = name => !name.split('/').some(part => ignored.has(part)) && !/\.py[co]$/.test(name);
 export async function richArtifact(exe, repo, sourceRef = 'HEAD') {
     assert.ok(path.isAbsolute(exe));
     assert.match(path.basename(exe), /^weftext-cli\.exe$/i);
@@ -66,10 +69,10 @@ export async function richArtifact(exe, repo, sourceRef = 'HEAD') {
         } else assert.equal(blob.length, entry.bytes, entry.path);
     }
     assert.equal(at, output.length);
-    assert.deepEqual(differences.filter(entry => runtime(entry.path)), [], 'Selected CLI runtime source must equal the selected Git snapshot');
+    assert.deepEqual(differences, [], 'Every packaged source must equal the selected Git snapshot');
     const names = execFileSync('git', ['ls-tree', '-r', '--name-only', commit], { cwd: repo, encoding: 'utf8', windowsHide: true }).trim().split('\n'), known = new Set(receipt.source.map(entry => entry.path));
-    assert.deepEqual(names.filter(name => runtime(name) && !known.has(name)), [], 'New runtime sources require a new artifact');
-    return { exe, executableSha256, batch, batchId: receipt.batchId, receiptSha256: sha(receiptBytes), catalogSha256: sha(catalogBytes), sourceRef: commit, receiptSourceRoot: receipt.sourceRoot, sourceFilesVerified: receipt.source.length, checkoutNewlines, nonRuntimeDifferences: differences, frontend: receipt.frontend, scope: 'Physical CLI and original receipt/catalog; selected Git runtime blobs or their exact uniform CRLF checkout bytes match, newline mappings and nonruntime differences listed. Independent current harness, no old PASS transfer or current-checkout build claim.' };
+    assert.deepEqual(names.filter(name => packagedSource(name) && !known.has(name)), [], 'Selected Git source inventory must be present in the artifact');
+    return { exe, executableSha256, batch, batchId: receipt.batchId, receiptSha256: sha(receiptBytes), catalogSha256: sha(catalogBytes), sourceRef: commit, receiptSourceRoot: receipt.sourceRoot, sourceFilesVerified: receipt.source.length, checkoutNewlines, frontend: receipt.frontend, scope: 'Physical CLI and original receipt/catalog; all packaged Git source blobs or their exact uniform CRLF checkout bytes match, newline mappings listed. Independent current harness, no old PASS transfer or current-checkout build claim.' };
 }
 export async function verifyEmbeddedFrontend(base, entries) {
     const result = [];
