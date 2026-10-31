@@ -87,7 +87,7 @@ test("retired structure raw is preserved unbound rather than attached to the rep
   input.rawInputs = [{ fieldId: "tasks/amount", valuePath: [{ kind: "index", index: 0 }], controlRole: "decimal", text: captureText("-\ud800"), binding: "exact", author: null }];
   f.controller.edit(input);
   let invalidated = false;
-  const session = f.controller.wrapSession({ bind: () => () => {}, bindChoice: () => () => {}, capture: () => undefined, inspect: () => { throw new Error("Not part of this raw-retirement test"); }, acknowledge: () => false, freeze: () => false, thaw: () => {}, retire: () => {}, invalidate: () => { invalidated = true; } }, "tasks/amount");
+  const session = f.controller.wrapSession({ bind: () => () => {}, bindChoice: () => () => {}, recordAction: () => {}, capture: () => undefined, inspect: () => { throw new Error("Not part of this raw-retirement test"); }, acknowledge: () => false, freeze: () => false, thaw: () => {}, retire: () => {}, invalidate: () => { invalidated = true; } }, "tasks/amount");
   session.invalidate("field", []);
   assert.equal(invalidated, true);
   await f.controller.drain();

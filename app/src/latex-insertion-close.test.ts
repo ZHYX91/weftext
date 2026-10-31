@@ -143,7 +143,7 @@ test("native close covers asynchronous dialog opening and refuses new proposals 
 test("LaTeX cannot apply pending native composition and explicit discard acknowledges after retirement", async () => {
     let retired = false, nativePending = true;
     const session: AuthorInputSession = {
-        bind: () => () => {}, bindChoice: () => () => {}, invalidate: () => {}, capture: () => undefined,
+        bind: () => () => {}, bindChoice: () => () => {}, recordAction: () => {}, invalidate: () => {}, capture: () => undefined,
         inspect: () => ({ producerId: "formula", revision: 1, ackRevision: 0, audience: "owner", epoch: 1,
             owner: { kind: "body", resource: "note" }, retired, nativePending, hasObservedChanges: true,
             unapplied: nativePending, pendingDeliveries: 0, frozen: false }),

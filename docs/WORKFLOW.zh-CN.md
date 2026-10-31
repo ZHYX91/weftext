@@ -37,6 +37,8 @@ translation_status: source
 
 作者输入／Draft ACK 分离沿这些原入口回归：纯 TS 核九成员身份、同输入连续 ACK、同字节新输入与 Undo／Redo、换 session／对象、撤权、原设置请求及关闭障碍；完整前端测试继续核原保存／未知操作。DataPanel 浏览器组件同时核等待中的字段 Apply 在 ACK 前进时继续、在作者／Base／库／节点／权限变化时保留提案并拒绝交付；资源组件继续核原操作恢复及真实 DocumentSession 的 ACK／ABA。受影响组件的源码清单包含共用 `source-input-basis.ts`，记录前后摘要和自有浏览器／Vite 的正常关闭结果；没有实际 Core／原生保存的受控结果不能证明其通过。
 
+`node scripts/test_birthday_panel_browser.mjs NEW_ABSOLUTE_OUTPUT` 核真实 CaptureFields／Controller、DataPanel、HostedFields／PersonalControlInput 及原 Hosted 离页 handler。覆盖出生事件多选冲突、年／月精度、保来源与未知成员、明确选择与日期定位、同一 event_time 的 MonthDay 编辑、刷新／重挂、显式 Apply 与共享 Undo／Redo、invalid raw／IME 阻止结构动作、新增未知日期及自定义 schema 回退。按钮操作沿准确作者 producer 记录非文字意图，Capture 只交原 typed 草稿 owner，不进入通用个人文字库；冻结／退休／失效上下文拒绝操作，动作本身不是 ACK。此脚本使用受控传输，不能代替 Core 保存／原操作恢复、完整 Hosted 页面或原生窗口验收，也不证明保存后所有历史 producer 已结算。
+
 `node scripts/test_property_resource_batches_browser.mjs` 另用于真实 Core／本地主界面链：设置同一构建批次 CLI 的绝对 `WEFTEXT_TEST_EXECUTABLE` 和全新绝对 `WEFTEXT_BROWSER_REPORT`，可用 `WEFTEXT_TEST_EXECUTABLE_SHA256` 限定程序摘要。脚本核相邻 catalog／receipt、物理 CLI 角色及受影响源码，直接消费内嵌 workspace，不接受 `--dev` 或 Vite 替代。范围是个人预设 staged 后显式 Apply、两个列表的准确移动与共享 Undo／Redo，以及一次资源批次提交后独立正文追加、撤销后资源／清单保留；夹具设置后不保存作者源。它保留同批实际请求和正常停机原件，结果须按实际候选执行记录，不能从脚本存在或语法检查推断通过。
 
 `python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 40 个 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由完整 Rust 组逐项执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。

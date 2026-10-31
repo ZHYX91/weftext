@@ -274,7 +274,7 @@ function shapeMeaning(shape: Shape, schema: DataSchema, seen = new Set<string>()
 const builtinFields = new Map(builtin.fields.map(field => [field.id, {
     key: field.key, shape: JSON.stringify(shapeMeaning(field.shape, builtin)),
 }]));
-function isBuiltinField(schema: DataSchema, field: Pick<SchemaField, "id" | "key" | "shape">): boolean {
+export function isBuiltinField(schema: DataSchema, field: Pick<SchemaField, "id" | "key" | "shape">): boolean {
     const expected = builtinFields.get(field.id);
     if (!expected || field.key !== expected.key) return false;
     try { return JSON.stringify(shapeMeaning(field.shape, schema)) === expected.shape; }

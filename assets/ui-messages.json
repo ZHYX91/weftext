@@ -56006,6 +56006,81 @@
       "zh-CN": "紧急",
       "en-US": "Urgent",
       "params": {}
+    },
+    "birthday.title": {
+      "zh-CN": "生日",
+      "en-US": "Birthday",
+      "params": {}
+    },
+    "birthday.conflict": {
+      "zh-CN": "有多个选中的出生事件。请选择具体一项；其他记录及其来源会保留。",
+      "en-US": "Multiple birth events are selected. Choose one; the other records and their sources will be retained.",
+      "params": {}
+    },
+    "birthday.unselected": {
+      "zh-CN": "尚未选择出生事件。请选择具体记录，或明确添加一项。",
+      "en-US": "No birth event is selected. Choose a specific record or explicitly add one.",
+      "params": {}
+    },
+    "birthday.selected": {
+      "zh-CN": "生日来自选中的出生事件。编辑日期会修改下方同一条记录。",
+      "en-US": "The birthday comes from the selected birth event. Date editing uses that same record below.",
+      "params": {}
+    },
+    "birthday.unknown": {
+      "zh-CN": "日期未知",
+      "en-US": "Date unknown",
+      "params": {}
+    },
+    "birthday.monthDay": {
+      "zh-CN": "月日；年份未知",
+      "en-US": "Month and day; year unknown",
+      "params": {}
+    },
+    "birthday.year": {
+      "zh-CN": "年精度；不推定月日",
+      "en-US": "Year precision; no month or day inferred",
+      "params": {}
+    },
+    "birthday.month": {
+      "zh-CN": "月精度；不推定日",
+      "en-US": "Month precision; no day inferred",
+      "params": {}
+    },
+    "birthday.day": {
+      "zh-CN": "日精度；保留原历法",
+      "en-US": "Day precision; original calendar retained",
+      "params": {}
+    },
+    "birthday.exact": {
+      "zh-CN": "原日期或时刻",
+      "en-US": "Original date or instant",
+      "params": {}
+    },
+    "birthday.chosen": {
+      "zh-CN": "已选中",
+      "en-US": "Selected",
+      "params": {}
+    },
+    "birthday.choose": {
+      "zh-CN": "选为生日来源",
+      "en-US": "Use as birthday source",
+      "params": {}
+    },
+    "birthday.edit": {
+      "zh-CN": "编辑这项日期",
+      "en-US": "Edit this date",
+      "params": {}
+    },
+    "birthday.add": {
+      "zh-CN": "添加出生记录（日期待填）",
+      "en-US": "Add a birth record (date unknown)",
+      "params": {}
+    },
+    "birthday.help": {
+      "zh-CN": "在同一事件的日期控件填写日期；不知道年份时选择“月／日”类型。新记录不会自动替换已选事件。来源、备注和其他事件仍保留；应用／保存沿用原表单操作。",
+      "en-US": "Enter the date in the same event’s date control; choose the month/day variant when the year is unknown. A new record does not replace the selected event. Sources, notes and other events are retained; use the form’s existing Apply/Save actions.",
+      "params": {}
     }
   }
 }

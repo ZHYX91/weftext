@@ -192,7 +192,7 @@ export class CaptureController<R extends CaptureMutableRecord = CaptureDraftReco
     this.edit(next);
   }
   wrapSession(session: AuthorInputSession, fieldId: string): AuthorInputSession {
-    return { bind: (...args) => session.bind(...args), bindChoice: (...args) => session.bindChoice(...args), capture: control => session.capture(control), inspect: () => session.inspect(), acknowledge: (...args) => session.acknowledge(...args), freeze: checkpoint => session.freeze(checkpoint), thaw: () => session.thaw(), retire: () => session.retire(), invalidate: (slot, path = []) => { this.retireRaw(fieldId, path, "structure"); session.invalidate(slot, path); } };
+    return { bind: (...args) => session.bind(...args), bindChoice: (...args) => session.bindChoice(...args), recordAction: (...args) => session.recordAction(...args), capture: control => session.capture(control), inspect: () => session.inspect(), acknowledge: (...args) => session.acknowledge(...args), freeze: checkpoint => session.freeze(checkpoint), thaw: () => session.thaw(), retire: () => session.retire(), invalidate: (slot, path = []) => { this.retireRaw(fieldId, path, "structure"); session.invalidate(slot, path); } };
   }
   /** The participant must first synchronously collect every live owned control.
    * The native outer barrier binds this receipt to its surface/epoch/attempt. */

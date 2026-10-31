@@ -10808,7 +10808,22 @@ export const zhCN = {
   "builtinProperty.choice.low": "低",
   "builtinProperty.choice.normal": "普通",
   "builtinProperty.choice.high": "高",
-  "builtinProperty.choice.urgent": "紧急"
+  "builtinProperty.choice.urgent": "紧急",
+  "birthday.title": "生日",
+  "birthday.conflict": "有多个选中的出生事件。请选择具体一项；其他记录及其来源会保留。",
+  "birthday.unselected": "尚未选择出生事件。请选择具体记录，或明确添加一项。",
+  "birthday.selected": "生日来自选中的出生事件。编辑日期会修改下方同一条记录。",
+  "birthday.unknown": "日期未知",
+  "birthday.monthDay": "月日；年份未知",
+  "birthday.year": "年精度；不推定月日",
+  "birthday.month": "月精度；不推定日",
+  "birthday.day": "日精度；保留原历法",
+  "birthday.exact": "原日期或时刻",
+  "birthday.chosen": "已选中",
+  "birthday.choose": "选为生日来源",
+  "birthday.edit": "编辑这项日期",
+  "birthday.add": "添加出生记录（日期待填）",
+  "birthday.help": "在同一事件的日期控件填写日期；不知道年份时选择“月／日”类型。新记录不会自动替换已选事件。来源、备注和其他事件仍保留；应用／保存沿用原表单操作。"
 } as const;
 
 export type MessageKey = keyof typeof zhCN;
@@ -21622,6 +21637,21 @@ export interface MessageParamsMap {
   "builtinProperty.choice.normal": {  };
   "builtinProperty.choice.high": {  };
   "builtinProperty.choice.urgent": {  };
+  "birthday.title": {  };
+  "birthday.conflict": {  };
+  "birthday.unselected": {  };
+  "birthday.selected": {  };
+  "birthday.unknown": {  };
+  "birthday.monthDay": {  };
+  "birthday.year": {  };
+  "birthday.month": {  };
+  "birthday.day": {  };
+  "birthday.exact": {  };
+  "birthday.chosen": {  };
+  "birthday.choose": {  };
+  "birthday.edit": {  };
+  "birthday.add": {  };
+  "birthday.help": {  };
 }
 export const messageParamTypes = {
   "localResourceBatch.title": {},
@@ -34388,7 +34418,22 @@ export const messageParamTypes = {
   "builtinProperty.choice.low": {},
   "builtinProperty.choice.normal": {},
   "builtinProperty.choice.high": {},
-  "builtinProperty.choice.urgent": {}
+  "builtinProperty.choice.urgent": {},
+  "birthday.title": {},
+  "birthday.conflict": {},
+  "birthday.unselected": {},
+  "birthday.selected": {},
+  "birthday.unknown": {},
+  "birthday.monthDay": {},
+  "birthday.year": {},
+  "birthday.month": {},
+  "birthday.day": {},
+  "birthday.exact": {},
+  "birthday.chosen": {},
+  "birthday.choose": {},
+  "birthday.edit": {},
+  "birthday.add": {},
+  "birthday.help": {}
 } as const;
 
 export const enUS: Readonly<Record<MessageKey, string>> = {
@@ -45200,5 +45245,20 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "builtinProperty.choice.low": "Low",
   "builtinProperty.choice.normal": "Normal",
   "builtinProperty.choice.high": "High",
-  "builtinProperty.choice.urgent": "Urgent"
+  "builtinProperty.choice.urgent": "Urgent",
+  "birthday.title": "Birthday",
+  "birthday.conflict": "Multiple birth events are selected. Choose one; the other records and their sources will be retained.",
+  "birthday.unselected": "No birth event is selected. Choose a specific record or explicitly add one.",
+  "birthday.selected": "The birthday comes from the selected birth event. Date editing uses that same record below.",
+  "birthday.unknown": "Date unknown",
+  "birthday.monthDay": "Month and day; year unknown",
+  "birthday.year": "Year precision; no month or day inferred",
+  "birthday.month": "Month precision; no day inferred",
+  "birthday.day": "Day precision; original calendar retained",
+  "birthday.exact": "Original date or instant",
+  "birthday.chosen": "Selected",
+  "birthday.choose": "Use as birthday source",
+  "birthday.edit": "Edit this date",
+  "birthday.add": "Add a birth record (date unknown)",
+  "birthday.help": "Enter the date in the same event’s date control; choose the month/day variant when the year is unknown. A new record does not replace the selected event. Sources, notes and other events are retained; use the form’s existing Apply/Save actions."
 };

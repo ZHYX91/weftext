@@ -158,3 +158,6 @@ textarea.data-input { resize: vertical; }
 .data-confirm-dialog button { margin: 7px 7px 0 0; }
 @media(max-width:900px) { .data-panel { width: 290px; } .query-controls { max-height: 45vh; } }
 @media(max-width:640px) { .data-panel { width: 100%; border-left: 0; border-top: 1px solid var(--border,#e3e5df); max-height: 50vh; } .query-panel { min-width: 0; width: 100%; } .query-controls { max-height: none; } .query-scope-row,.query-presentation { gap: 8px; } .data-button { min-height: 36px; } .capture-dialog { padding: 16px; max-height: 90vh; } }
+.native-birthday { border: 1px solid var(--border,#b8c2b4); border-radius: .5rem; padding: .75rem; margin-block: .5rem; }
+.birthday-entry { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; margin-block: .5rem; }
+.birthday-time { overflow-wrap: anywhere; min-width: 0; }

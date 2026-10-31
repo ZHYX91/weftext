@@ -37,6 +37,9 @@ export interface AuthorInputSession {
   /** Positive choice registration tracks unapplied intent without treating an
    * untouched protected option as personally typed text. */
   bindChoice(control: HTMLInputElement | HTMLSelectElement, slot: string, path?: readonly ValuePath[]): () => void;
+  /** Record an explicit non-text edit after its guards, before publishing its typed
+   * value. Throws if this exact producer is no longer writable; never a save ACK. */
+  recordAction(slot: string, path?: readonly ValuePath[]): void;
   /** Structure/branch/reorder changes retire previous slot identities. */
   invalidate(slot: string, path?: readonly ValuePath[]): void;
   capture(control: HTMLInputElement | HTMLTextAreaElement): AuthorInputLease | undefined;

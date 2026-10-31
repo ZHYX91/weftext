@@ -1,4 +1,5 @@
-import { schemaPropertyPresentation } from "./builtin-property-labels";
+import { isBuiltinField, schemaPropertyPresentation } from "./builtin-property-labels";
+import { appendBirthEvent, birthEvents, birthTimePrecision, birthTimeText, selectBirthEvent } from "./birthday";
 export { schemaFieldLabel } from "./builtin-property-labels";
 import {textareaSourceDraft} from "./writing";
 import {decodeCoreDescription,coreDescriptionUiText} from "./ui-diagnostics";
@@ -174,7 +175,7 @@ export interface PanelHost {
 export const fieldNames: Record<string, UiText> = { reminder: uiMessage("reminder.label"), status: uiMessage("field.status"), due: uiMessage("field.due"), start: uiMessage("field.start"), priority: uiMessage("field.priority"), project: uiMessage("field.project"), completed_at: uiMessage("field.completedAt"), title: uiMessage("queryColumn.title"), names: uiMessage("field.names"), phones: uiMessage("field.phones"), emails: uiMessage("field.emails"), addresses: uiMessage("field.addresses"), websites: uiMessage("field.websites"), accounts: uiMessage("field.accounts"), tags: uiMessage("field.tags"), publication: uiMessage("field.publication"), contributors: uiMessage("field.contributors"), resources: uiMessage("field.resources"), note: uiMessage("field.note"), notes: uiMessage("field.note"), number: uiMessage("field.number"), value: uiMessage("field.value"), text: uiMessage("field.text"), ref: uiMessage("field.nodeReference"), kind: uiMessage("field.kind"), role: uiMessage("field.role"), agent: uiMessage("field.agent"), credited_as: uiMessage("field.creditedAs"), date: uiMessage("field.date"), amount: uiMessage("field.amount"), currency: uiMessage("field.currency"), unit: uiMessage("field.unit"), during: uiMessage("field.validity"), source: uiMessage("field.source"), validity: uiMessage("field.validity"), period: uiMessage("field.period"), range: uiMessage("field.range"), event: uiMessage("field.event"), dependency: uiMessage("field.dependency") };
 export const typeNames: Record<string, UiText> = { person: uiMessage("type.person"), organization: uiMessage("type.organization"), org: uiMessage("type.organization"), task: uiMessage("type.task"), project: uiMessage("field.project"), work: uiMessage("type.work"), paper: uiMessage("type.paper"), event: uiMessage("field.event"), period: uiMessage("type.periodNote"), "period-note": uiMessage("type.periodNote"), range: uiMessage("type.rangeNote"), "range-note": uiMessage("type.rangeNote") };
 export const cellLabels = { value: uiMessage("nativeValue.hasValue"), absent: uiMessage("queryValue.absent"), null: uiMessage("nativeValue.explicitNone"), invalid: uiMessage("queryValue.invalid"), unavailable: uiMessage("nativeValue.unavailableComputed") };
-export const commonFields = new Set(["title", "names", "status", "due", "reminder", "project", "priority", "phones", "emails", "tags", "publication", "period", "range"]);
+export const commonFields = new Set(["title", "names", "status", "due", "reminder", "project", "priority", "phones", "emails", "life_events", "tags", "publication", "period", "range"]);
 export function resolveShape(shape: Shape, schema: DataSchema, seen = new Set<string>()): Shape {
     if (shape.kind !== "use")
         return shape;
@@ -487,12 +488,12 @@ function canRestructureNative(container: HTMLElement, status: HTMLElement, compo
     }
     setUiText(status, ""); return true;
 }
-export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSchema, changed: (value: NativeValue) => void, label: UiText, identity: NativeControlIdentity, depth = 0, references?: FormReferences, binding?: NativeControlBinding, lifetime = new Set<BoundNativeControl>(), presentation = schemaPropertyPresentation(schema, identity)): HTMLElement {
+export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSchema, changed: (value: NativeValue) => void, label: UiText, identity: NativeControlIdentity, depth = 0, references?: FormReferences, binding?: NativeControlBinding, lifetime = new Map<string, BoundNativeControl>(), presentation = schemaPropertyPresentation(schema, identity)): HTMLElement {
     const retire = () => {
-        for (const entry of lifetime)
+        for (const [key, entry] of lifetime)
             if (identity.path.every((part, index) => JSON.stringify(part) === JSON.stringify(entry.path[index]))) {
                 binding?.session.invalidate(entry.slot, entry.path);
-                lifetime.delete(entry);
+                lifetime.delete(key);
             }
     };
     const host = ui("div", "native-value-editor");
@@ -570,6 +571,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
             for (const [key, member] of Object.entries(resolved.members)) {
                 const present = nativeMember(value, key);
                 const row = ui("div", "native-member");
+                row.dataset.memberKey = key;
                 const heading = ui("div", "native-member-heading");
                 heading.append(ui("span", "", () => `${uiTextValue(presentation.memberLabel(key))}${uiTextValue(member.required ? " *" : "")}`));
                 row.append(heading);
@@ -666,8 +668,50 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
         });
         host.addEventListener("compositionstart", () => stopDrag(true));
         const canRestructure = (): boolean => canRestructureNative(items, status, composing, uiMessage("nativeEditor.finishInvalidBeforeReorder"));
+        const birthdayField = identity.fieldId === "people/life_events" && identity.path.length === 0
+            ? schema.fields.find(field => field.id === identity.fieldId) : undefined;
+        const birthday = birthdayField && isBuiltinField(schema, birthdayField) ? ui("section", "native-birthday") : undefined;
+        if (birthday) { setUiAttr(birthday, "aria-label", uiMessage("birthday.title")); host.prepend(birthday); }
+        const focusBirthTime = (index: number): void => {
+            const row = items.children.item(index);
+            const time = row?.querySelector<HTMLElement>(":scope > .native-value-editor > .native-record > [data-member-key='event_time']");
+            time?.scrollIntoView({ block: "nearest" });
+            time?.querySelector<HTMLElement>("input,textarea,select,button")?.focus({ preventScroll: true });
+        };
+        const renderBirthday = (): void => {
+            if (!birthday) return;
+            birthday.replaceChildren(ui("strong", "", uiMessage("birthday.title")));
+            const events = birthEvents(value), selected = events.filter(event => event.selected);
+            birthday.append(ui("p", "data-help", uiMessage(selected.length > 1 ? "birthday.conflict" : selected.length === 0 ? "birthday.unselected" : "birthday.selected")));
+            for (const event of events) {
+                const entry = ui("div", "birthday-entry");
+                entry.dataset.birthIndex = String(event.index);
+                const precision = birthTimePrecision(event.time);
+                const precisionLabels = { unknown: uiMessage("birthday.unknown"), monthDay: uiMessage("birthday.monthDay"), year: uiMessage("birthday.year"), month: uiMessage("birthday.month"), day: uiMessage("birthday.day"), exact: uiMessage("birthday.exact") };
+                entry.append(ui("span", "", displayMessage("nativeEditor.itemLegend", { p0: event.index + 1 })),
+                    ui("span", "birthday-time", birthTimeText(event.time) ?? uiMessage("birthday.unknown")));
+                if (precision !== "unknown") entry.append(ui("span", "data-help", precisionLabels[precision]));
+                if (event.selected) entry.append(ui("span", "data-help", uiMessage("birthday.chosen")));
+                if (!(event.selected && selected.length === 1)) entry.append(action(uiMessage("birthday.choose"), () => {
+                    if (!canRestructure()) return;
+                    binding?.session.recordAction(`${binding.slot}:birthday-selection`, identity.path);
+                    value = selectBirthEvent(value, event.index); changed(value); render(); focusBirthTime(event.index);
+                }, "data-button compact"));
+                entry.append(action(uiMessage("birthday.edit"), () => focusBirthTime(event.index), "data-button compact"));
+                birthday.append(entry);
+            }
+            const add = action(uiMessage("birthday.add"), () => {
+                if (value.kind !== "array" || !canRestructure()) return;
+                const index = value.value.length;
+                binding?.session.recordAction(`${binding.slot}:birthday-add`, identity.path);
+                value = appendBirthEvent(value); changed(value); render(); focusBirthTime(index);
+            }, "data-button compact");
+            add.disabled = resolved.max != null && value.kind === "array" && value.value.length >= resolved.max;
+            birthday.append(add, ui("p", "data-help", uiMessage("birthday.help")));
+        };
         const render = (focusIndex?: number, focusRole = "position"): void => {
             stopDrag();
+            renderBirthday();
             items.replaceChildren();
             if (value.kind !== "array")
                 return;
@@ -801,6 +845,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                     nextItems[index] = next;
                     value = { kind: "array", value: nextItems };
                     changed(value);
+                    renderBirthday();
                 }, () => displayMessage("nativeEditor.itemLabel", { p0: uiDisplayParameter(uiTextValue(label)), p1: index + 1 }), { ...identity, path: [...identity.path, { kind: "index", index }] }, depth + 1, references, binding, lifetime, presentation));
                 items.append(row);
                 if (index === focusIndex) {
@@ -874,7 +919,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
     if (binding) {
         const slot = JSON.stringify([binding.slot, `value:${scalar}`, identity.variants ?? []]);
         binding.session.bind(input, slot, identity.path);
-        lifetime.add({ slot, path: identity.path });
+        lifetime.set(JSON.stringify([slot, identity.path]), { slot, path: identity.path });
     }
     setUiAttr(input, "placeholder", ({ date: "2026-10-13", time: "12:30:00", local_datetime: "2026-10-13T12:30:00", instant: "2026-10-13T12:30:00+08:00", node_ref: uiMessage("nativeEditor.nodeAddressPlaceholder"), phone: uiMessage("nativeEditor.phonePlaceholder"), exact_decimal: uiMessage("nativeEditor.exactDecimalPlaceholder") } as Record<string, UiText>)[scalar] ?? "");
     input.oninput = () => {

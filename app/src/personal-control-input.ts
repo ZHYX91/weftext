@@ -173,6 +173,15 @@ export class PersonalControlInput {
         producer.choices.set(key, state); this.choices.set(control, state); guard(control); this.revision++;
         return () => { if (this.choices.get(control) === state) { this.choices.delete(control); this.revision++; } };
       },
+      recordAction: (slotName, path = []) => {
+        const context = immutable({ audience, epoch, owner: capturedOwner, slot: slotName, path: immutable(structuredClone(path)) });
+        if (!live() || !this.isCurrent(context)) throw new Error("作者输入目标已退休、冻结或不再获准，不能记录结构操作。");
+        this.touch(producer, true);
+        // Capture has its own typed draft sink. An action contains no proved
+        // personal text and must never enter the generic text-recovery store.
+        if (owner.kind === "capture") suppliedSink!({ kind: "choice", context, id: personalInputId(), revision: 1,
+          text: "", rawValue: "", producerId: producer.id, producerRevision: producer.revision });
+      },
       invalidate: (name, path = []) => {
         if (producer.frozen || this.frozen) throw new Error("作者集合已冻结。");
         for (const [key, slot] of slots) if (slot.slot === name && samePath(path, slot.path)) { if (slot.state) retireState(slot.state); slots.delete(key); }

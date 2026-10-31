@@ -20,6 +20,37 @@ function fixture(run: (f: ReturnType<typeof setup>) => void) {
   try { run(setup()); } finally { Object.assign(globalThis, { HTMLInputElement: previous[0], HTMLTextAreaElement: previous[1] }); }
 }
 test("unregistered document search, filters and temporary parameters never enter personal recovery", () => fixture(f => { const search = f.control("PRIVATE"); f.type(search, "query"); assert.deepEqual(f.saved, []); }));
+
+test("explicit non-text actions remain unapplied until their exact owner cut is acknowledged, without retaining text", () => fixture(f => {
+  const session = f.session({ kind: "field", resource: "other", fieldId: "people/life_events" });
+  const before = session.inspect(); session.recordAction("birthday-selection");
+  const first = session.inspect(); assert.equal(first.hasObservedChanges, true); assert.equal(first.unapplied, true);
+  assert.equal(session.acknowledge(before, "applied"), true); assert.equal(session.inspect().unapplied, true);
+  session.recordAction("birthday-add"); assert.equal(session.acknowledge(first, "applied"), true); assert.equal(session.inspect().unapplied, true);
+  assert.equal(session.acknowledge(session.inspect(), "applied"), true); assert.equal(session.inspect().unapplied, false);
+  assert.deepEqual(f.saved, []);
+}));
+test("actions reject frozen, retired, changed audience and replaced owner producers before any typed mutation", () => fixture(f => {
+  const first = f.session(); const checkpoint = first.inspect(); assert.equal(first.freeze(checkpoint), true);
+  assert.throws(() => first.recordAction("frozen")); assert.equal(first.inspect().revision, checkpoint.revision);
+  first.thaw(); assert.equal(f.collector.freeze(f.collector.inspect()), true); assert.throws(() => first.recordAction("global frozen")); f.collector.thaw();
+  first.retire(); assert.throws(() => first.recordAction("retired"));
+  const oldOwner = f.session(); f.resource("two"); assert.throws(() => oldOwner.recordAction("old owner"));
+  const oldActor = f.session(); f.actor("bob"); assert.throws(() => oldActor.recordAction("old actor"));
+  assert.deepEqual(f.saved, []);
+}));
+test("Capture actions send only their exact empty choice checkpoint to the explicit owner sink", () => fixture(f => {
+  const observed: AuthorInputSnapshot[] = [], path = [{ kind: "index" as const, index: 2 }];
+  const owner = { kind: "capture" as const, draftId: crypto.randomUUID() };
+  const session = f.collector.session("alice", 1, owner, () => true, value => observed.push(value));
+  session.recordAction("birthday-selection", path); path[0].index = 9;
+  assert.equal(observed.length, 1); assert.equal(observed[0].kind, "choice");
+  assert.deepEqual(observed[0].context.owner, owner); assert.deepEqual(observed[0].context.path, [{ kind: "index", index: 2 }]);
+  assert.equal(observed[0].producerRevision, session.inspect().revision); assert.equal(observed[0].text, ""); assert.equal(observed[0].rawValue, "");
+  assert.deepEqual(f.saved, []);
+  const failed = f.collector.session("alice", 1, owner, () => true, () => { throw new Error("sink failed"); });
+  assert.throws(() => failed.recordAction("birthday-add"), /sink failed/); assert.equal(failed.inspect().unapplied, true);
+}));
 test("only positive actual field owner is retained even when another body is selected", () => fixture(f => { const input = f.control("PRIVATE"); f.session({ kind: "field", resource: "field-B", fieldId: "actual" }).bind(input, "value", [{ kind: "member", key: "name" }]); f.type(input, "X"); assert.equal(f.saved[0].text, "X"); assert.deepEqual(f.saved[0].context.owner, { kind: "field", resource: "field-B", fieldId: "actual" }); assert.ok(!f.saved[0].text.includes("PRIVATE")); }));
 test("programmatic reset protects new baseline while retaining only proved old A and new X", () => fixture(f => { const input = f.control(""); f.session().bind(input, "body"); f.type(input, "A"); input.value = "ASECRET"; input.selectionStart = input.selectionEnd = 7; f.type(input, "X"); assert.equal(f.saved.at(-1)?.text, "A\nX"); }));
 test("first input without beforeinput retains event payload only", () => fixture(f => { const input = f.control("BASE"); f.session().bind(input, "body"); input.value = "BASEX"; f.fire(input, "input", "X"); assert.equal(f.saved.at(-1)?.text, "X"); }));
