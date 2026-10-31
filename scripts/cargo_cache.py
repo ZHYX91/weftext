@@ -29,7 +29,7 @@ EXTRA_INPUTS = {
                      'app/src/capture-author-wire.fixture.json'),
     'weftext-engine': ('resources/fonts', 'crates/weftext-export/assets'),
     'weftext-export': ('docs/design/examples/schema.authoring.json',),
-    'weftext-app': ('app/dist', 'packaging/windows/host-contract.json',
+    'weftext-app': ('app/dist', 'brand/app-icon.svg', 'packaging/windows/host-contract.json',
                     'packaging/windows/application.manifest', 'packaging/windows/assets/weftext.ico',
                     'scripts/recognition/worker.py', 'scripts/recognition/engine.py',
                     'scripts/recognition/install.py', 'scripts/recognition/schemes.py',
