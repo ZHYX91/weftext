@@ -41,6 +41,8 @@ translation_status: source
 
 `node scripts/test_rich_workflows_browser.mjs` 和 `node scripts/test_birthday_persistence_browser.mjs` 使用实际 CLI 内嵌页面与 Core；设置绝对 `WEFTEXT_TEST_EXECUTABLE`、新的绝对 `WEFTEXT_BROWSER_REPORT`，以及分别对应冻结源码的 `WEFTEXT_TEST_SOURCE_REF`／`WEFTEXT_TEST_SOURCE_COMMIT`。前者覆盖联系方式、任职、贡献者和两种 UUID 方向的独立关系声明，经真实 DataPanel／Query、共享 Undo／Redo、保存后丢响应、原操作确认、Core 与浏览器重开；后者覆盖生日来源选择及完整字段保真。它们记录测试脚本与产物各自来源，只注入响应交付丢失，不模拟 Core 提交。Hosted 窄字段关系即使配置 write grant，目前仍按 SERVER 的授权依赖边界只读；拒写断言不是关系写入通过。原生窗口、真实 IME／辅助技术、引用／Office 输出及物理故障仍需另验；实际通过以对应候选运行记录为准。
 
+`node scripts/test_birthday_capture_recovery_browser.mjs NEW_ABSOLUTE_OUTPUT` 使用真实生日按钮、Capture Fields／LocalSession／Controller、完整输入 outbox、IndexedDB 和关闭守卫，在同页销毁并重建全部前端 owner。Core 传输受控，分别验证未应用失败、已应用丢回包、未知结果和错误指纹；原 mutation 身份与关闭障碍不能被同字节或新 controller 消除。未确认的纯点击不伪造成通用文字恢复稿，此脚本不证明真实 Core、浏览器进程崩溃或原生关闭。
+
 `node scripts/test_property_resource_batches_browser.mjs` 另用于真实 Core／本地主界面链：设置同一构建批次 CLI 的绝对 `WEFTEXT_TEST_EXECUTABLE` 和全新绝对 `WEFTEXT_BROWSER_REPORT`，可用 `WEFTEXT_TEST_EXECUTABLE_SHA256` 限定程序摘要。脚本核相邻 catalog／receipt、物理 CLI 角色及受影响源码，直接消费内嵌 workspace，不接受 `--dev` 或 Vite 替代。范围是个人预设 staged 后显式 Apply、两个列表的准确移动与共享 Undo／Redo，以及一次资源批次提交后独立正文追加、撤销后资源／清单保留；夹具设置后不保存作者源。它保留同批实际请求和正常停机原件，结果须按实际候选执行记录，不能从脚本存在或语法检查推断通过。
 
 `python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 40 个 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由完整 Rust 组逐项执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。

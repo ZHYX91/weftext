@@ -45,6 +45,8 @@ export function birthTimePrecision(value: NativeValue | undefined): "unknown" | 
 }
 
 export function birthTimeIsLeapMonth(value: NativeValue | undefined): boolean {
+    const precision = birthTimePrecision(value);
+    if (precision !== "month" && precision !== "day") return false;
     const leap = member(value, "leap_month");
     return leap?.kind === "bool" && leap.value;
 }

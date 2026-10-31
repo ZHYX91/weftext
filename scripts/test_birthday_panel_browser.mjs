@@ -42,6 +42,7 @@ try {
             record({kind:text("birth"),event_time:calendar(2001),selected:bool(true),note:text("Original birth A 😀"),sources:evidence("a"),unknownEvidence:record({code:text("retain-a")})}),
             record({kind:text("death"),event_time:calendar(2090,9),selected:bool(true),note:text("Selected death is independent"),sources:evidence("death")}),
             record({kind:text("birth"),event_time:record({calendar:text("chinese"),version:text("original"),precision:text("month"),year:int(2004),month:int(7),leap_month:bool(true)}),selected:bool(true),note:text("Original birth B"),sources:evidence("b"),unknownEvidence:record({code:text("retain-b")})}),
+            record({kind:text("birth"),event_time:record({month:int(2),day:int(29),leap_month:bool(true)}),selected:bool(false),note:text("MonthDay preserves unbound leap_month without interpreting it")}),
         ]};
         const member=(value,key)=>value?.kind==="record"?value.value.find(item=>item.key===key)?.value:undefined;
         const kind = value => value;
@@ -146,6 +147,7 @@ try {
             for(const root of ["#capture","#data","#hosted"]){
                 assert.equal(await page.locator(`${root} .native-birthday [data-birth-index="2"] .birthday-leap-month`).textContent(),label);
                 assert.equal(await page.locator(`${root} .native-birthday [data-birth-index="0"] .birthday-leap-month`).count(),0);
+                assert.equal(await page.locator(`${root} .native-birthday [data-birth-index="3"] .birthday-leap-month`).count(),0,"MonthDay unbound leap_month is not a calendar flag");
                 assert.deepEqual(await read(root),initial);
             }
         }

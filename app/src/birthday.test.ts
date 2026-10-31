@@ -43,11 +43,20 @@ test("birthday precision is projected without converting calendar, timezone or m
 });
 
 test("birthday leap-month marker preserves the supplied calendar distinction", () => {
-    const value = record({ calendar: text("chinese"), leap_month: { kind: "bool", value: true } });
+    const value = record({ calendar: text("chinese"), precision: text("month"), leap_month: { kind: "bool", value: true } });
     const before = structuredClone(value);
     assert.equal(birthTimeIsLeapMonth(value), true);
     assert.equal(birthTimeIsLeapMonth(record({ leap_month: { kind: "bool", value: false } })), false);
     assert.equal(birthTimeIsLeapMonth(record({})), false);
     assert.equal(birthTimeIsLeapMonth(undefined), false);
+    const monthDay = record({ month: { kind: "int", value: "2" }, day: { kind: "int", value: "29" }, leap_month: { kind: "bool", value: true } });
+    assert.equal(birthTimePrecision(monthDay), "monthDay");
+    assert.equal(birthTimeIsLeapMonth(monthDay), false, "unbound MonthDay members have no CalendarDate meaning");
+    for (const precision of ["month", "day"]) {
+        for (const flag of [true, false, undefined]) {
+            const calendarDate = record({ calendar: text("chinese"), precision: text(precision), ...(flag === undefined ? {} : { leap_month: { kind: "bool" as const, value: flag } }) });
+            assert.equal(birthTimeIsLeapMonth(calendarDate), flag === true);
+        }
+    }
     assert.deepEqual(value, before);
 });

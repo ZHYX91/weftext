@@ -26,7 +26,9 @@ const executableBytes = await readFile(exe), catalogBytes = await readFile(catal
 const executableSha256 = sha(executableBytes), catalog = JSON.parse(catalogBytes), receipt = JSON.parse(receiptBytes);
 assert.equal(catalog.schemaVersion, 1); assert.equal(receipt.schemaVersion, 1);
 assert.equal(receipt.scope, 'same-checkout-frozen-artifacts-not-reproducible-build-or-check-results');
-assert.equal(path.resolve(receipt.sourceRoot).toLowerCase(), repo.toLowerCase());
+// A package build owns a separate frozen source root. Bind its selected source
+// entries below; do not relabel that build as one from the harness checkout.
+assert.ok(path.isAbsolute(receipt.sourceRoot));
 assert.equal(receipt.batchId, path.basename(batch));
 assert.equal(path.resolve(receipt.targetRoot, 'weftext-build-artifacts', receipt.batchId).toLowerCase(), path.resolve(batch).toLowerCase());
 assert.equal(receipt.target, 'x86_64-pc-windows-msvc');
@@ -45,7 +47,7 @@ assert.equal(executableBytes.readUInt16LE(peOffset + 4), 0x8664);
 assert.equal(executableBytes.readUInt16LE(peOffset + 24), 0x20b);
 assert.equal(executableBytes.readUInt16LE(peOffset + 92), 3, 'The executable itself must be a console-subsystem PE');
 if (process.env.WEFTEXT_TEST_EXECUTABLE_SHA256) assert.equal(executableSha256, process.env.WEFTEXT_TEST_EXECUTABLE_SHA256.toLowerCase());
-const productionCommit = process.env.WEFTEXT_TEST_SOURCE_COMMIT || '7423588';
+const productionCommit = execFileSync('git', ['rev-parse', `${process.env.WEFTEXT_TEST_SOURCE_COMMIT || 'HEAD'}^{commit}`], { cwd: repo, encoding: 'utf8', windowsHide: true }).trim();
 const inputs = [
   'app/src/birthday.ts', 'app/src/native-value-form.ts', 'app/src/author-input.ts', 'app/src/personal-control-input.ts',
   'app/src/capture-controller.ts', 'app/src/builtin-property-labels.ts', 'app/src/data-panel.ts', 'app/src/data-view.css',
@@ -70,7 +72,7 @@ for (const file of inputs) {
 }
 const result = {
   schemaVersion: 1, startedUtc: new Date().toISOString(), exe, executableSha256,
-  artifacts: { batch, buildId: catalog.buildId, batchId: receipt.batchId, catalogSha256: sha(catalogBytes), receiptSha256: sha(receiptBytes) },
+  artifacts: { batch, buildId: catalog.buildId, batchId: receipt.batchId, receiptSourceRoot: receipt.sourceRoot, catalogSha256: sha(catalogBytes), receiptSha256: sha(receiptBytes) },
   productionCommit, receiptSourceBindings, sourceInputs: hashes, knownIssues: productionCommit.startsWith("7423588") ? ["The fixed 7423588 UI focus helper can focus Remove instead of date input; this test does not activate that shortcut.", "The fixed 7423588 birthday summary does not distinguish leap_month; this fixture uses Gregorian year/month records, not leap-month claims."] : [], frontend: 'selected CLI embedded workspace', cases: [], requests: [], pageErrors: [], services: [], completed: false,
   limits: ['Owned synthetic library and headless Chrome only; no native desktop, real OS IME or assistive-technology acceptance.', 'Only an owned synthetic library is used. Save response loss is deliberately injected after a real Core commit; this is not an internal IO fault or physical crash.'],
 };
@@ -241,12 +243,22 @@ try {
   const saveButton = page.locator('.top-actions [data-command="save"]');
   const recoveryResponsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/operations/status' && droppedRequest && response.request().postDataJSON().operationId === droppedRequest.operationId);
   const requestFailed = page.waitForEvent('requestfailed', request => new URL(request.url()).pathname === '/api/save');
-  await saveButton.click(); await lost; await requestFailed;
+  // Attach every rejection handler before the click. A pre-save failure must
+  // reach catch/finally even when the save route is never entered.
+  let deadline;
+  const timeout = new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Save response-loss/recovery did not complete within 30 seconds')), 30000); });
+  let recoveryResponse;
+  try {
+    [recoveryResponse] = await Promise.race([
+      Promise.all([recoveryResponsePromise, requestFailed, lost, saveButton.click()]),
+      timeout,
+    ]);
+  } finally { clearTimeout(deadline); }
   await page.waitForFunction(() => { const button = document.querySelector('.top-actions [data-command="save"]'); return button && !button.disabled; });
   assert.equal(deliveryError, undefined);
   assert.deepEqual(await readFile(doc.path), Buffer.from(applied), 'Original real Core save committed before its response was deliberately lost');
   await waitSource(applied); await page.unroute('**/api/save');
-  const recoveryResponse = await recoveryResponsePromise, recoveryRequest = recoveryResponse.request().postDataJSON(), recovery = await recoveryResponse.json();
+  const recoveryRequest = recoveryResponse.request().postDataJSON(), recovery = await recoveryResponse.json();
   assert.equal(recoveryResponse.status(), 200); assert.equal(recoveryRequest.operationId, droppedRequest.operationId);
   assert.equal(recovery.operationId, droppedRequest.operationId); assert.ok(['saved', 'committed'].includes(recovery.status));
   await page.waitForFunction(() => { const button = document.querySelector('.top-actions [data-command="save"]'); return button && !button.disabled; });

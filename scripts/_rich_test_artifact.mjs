@@ -47,7 +47,7 @@ export async function richArtifact(exe, repo, sourceRef = 'HEAD') {
     const input = Buffer.from(receipt.source.map(entry => `${commit}:${entry.path}\n`).join(''));
     const output = execFileSync('git', ['cat-file', '--batch'], { cwd: repo, input, maxBuffer: 512 * 1024 * 1024, windowsHide: true });
     let at = 0;
-    const differences = [];
+    const differences = [], checkoutNewlines = [];
     for (const entry of receipt.source) {
         const end = output.indexOf(10, at);
         assert.ok(end >= at);
@@ -57,14 +57,19 @@ export async function richArtifact(exe, repo, sourceRef = 'HEAD') {
         const size = Number(header.split(' ').at(-1)), blob = output.subarray(at, at + size);
         at += size + 1;
         const actual = sha(blob);
-        if (actual !== entry.sha256)
-            differences.push({ path: entry.path, receiptSha256: entry.sha256, sourceBlobSha256: actual });
+        if (actual !== entry.sha256) {
+            const text = blob.toString('utf8');
+            const windows = Buffer.from(text.replace(/\r?\n/g, '\r\n'));
+            if (!blob.includes(0) && Buffer.from(text).equals(blob) && windows.length === entry.bytes && sha(windows) === entry.sha256)
+                checkoutNewlines.push({ path: entry.path, gitBlobSha256: actual, receiptSha256: entry.sha256, transformation: 'uniform CRLF checkout bytes' });
+            else differences.push({ path: entry.path, receiptSha256: entry.sha256, sourceBlobSha256: actual });
+        } else assert.equal(blob.length, entry.bytes, entry.path);
     }
     assert.equal(at, output.length);
     assert.deepEqual(differences.filter(entry => runtime(entry.path)), [], 'Selected CLI runtime source must equal the selected Git snapshot');
     const names = execFileSync('git', ['ls-tree', '-r', '--name-only', commit], { cwd: repo, encoding: 'utf8', windowsHide: true }).trim().split('\n'), known = new Set(receipt.source.map(entry => entry.path));
     assert.deepEqual(names.filter(name => runtime(name) && !known.has(name)), [], 'New runtime sources require a new artifact');
-    return { exe, executableSha256, batch, batchId: receipt.batchId, receiptSha256: sha(receiptBytes), catalogSha256: sha(catalogBytes), sourceRef: commit, receiptSourceRoot: receipt.sourceRoot, sourceFilesVerified: receipt.source.length, nonRuntimeDifferences: differences, frontend: receipt.frontend, scope: 'Physical CLI and original receipt/catalog; selected Git runtime blobs match, nonruntime differences listed. Independent current harness, no old PASS transfer or current-checkout build claim.' };
+    return { exe, executableSha256, batch, batchId: receipt.batchId, receiptSha256: sha(receiptBytes), catalogSha256: sha(catalogBytes), sourceRef: commit, receiptSourceRoot: receipt.sourceRoot, sourceFilesVerified: receipt.source.length, checkoutNewlines, nonRuntimeDifferences: differences, frontend: receipt.frontend, scope: 'Physical CLI and original receipt/catalog; selected Git runtime blobs or their exact uniform CRLF checkout bytes match, newline mappings and nonruntime differences listed. Independent current harness, no old PASS transfer or current-checkout build claim.' };
 }
 export async function verifyEmbeddedFrontend(base, entries) {
     const result = [];
