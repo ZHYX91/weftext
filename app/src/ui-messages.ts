@@ -107,8 +107,9 @@ export const zhCN = {
   "locale.label": "界面语言",
   "locale.zhCN": "简体中文",
   "locale.enUS": "English",
-  "locale.unsaved": "本次界面语言尚未可靠保存；当前稿和原操作未改变。",
-  "locale.unavailable": "界面语言偏好暂不可读取，使用默认语言；当前稿和原操作未改变。",
+  "locale.unsaved": "尚无法确认界面语言是否已保存。可重新读取已保存的语言；这会替换当前显示语言，不会重新提交更改。",
+  "locale.unavailable": "暂时无法读取已保存的界面语言，继续使用当前显示语言。请重新读取已保存的语言后再选择。",
+  "locale.reloadSaved": "重新读取已保存的语言",
   "common.save": "保存",
   "common.cancel": "取消",
   "common.close": "关闭",
@@ -10479,6 +10480,7 @@ export interface MessageParamsMap {
   "locale.enUS": {  };
   "locale.unsaved": {  };
   "locale.unavailable": {  };
+  "locale.reloadSaved": {  };
   "common.save": {  };
   "common.cancel": {  };
   "common.close": {  };
@@ -20864,6 +20866,7 @@ export const messageParamTypes = {
   "locale.enUS": {},
   "locale.unsaved": {},
   "locale.unavailable": {},
+  "locale.reloadSaved": {},
   "common.save": {},
   "common.cancel": {},
   "common.close": {},
@@ -33081,8 +33084,9 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "locale.label": "Interface language",
   "locale.zhCN": "简体中文",
   "locale.enUS": "English",
-  "locale.unsaved": "The interface language has not been durably saved. Your draft and original operation are unchanged.",
-  "locale.unavailable": "The interface language preference is unavailable. Using the default language; your draft and original operation are unchanged.",
+  "locale.unsaved": "We cannot confirm whether the interface language was saved. Reload the saved language to replace the current display language without submitting the change again.",
+  "locale.unavailable": "We cannot read the saved interface language. The current display language is unchanged. Reload the saved language before choosing again.",
+  "locale.reloadSaved": "Reload saved language",
   "common.save": "Save",
   "common.cancel": "Cancel",
   "common.close": "Close",

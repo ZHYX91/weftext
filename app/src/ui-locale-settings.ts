@@ -82,7 +82,7 @@ export class InterfaceLocaleControl {
     this.scope.bindAttr(this.select, "aria-label", message("locale.label"));
     for (const [value, key] of [["zh-CN", "locale.zhCN"], ["en-US", "locale.enUS"]] as const) { const option = document.createElement("option"); option.value = value; this.scope.bindText(option, message(key)); this.select.append(option); }
     this.select.value = locale.current; this.status.setAttribute("role", "status");
-    this.retry.type = "button"; this.scope.bindText(this.retry, message("common.retry")); this.retry.hidden = true;
+    this.retry.type = "button"; this.scope.bindText(this.retry, message("locale.reloadSaved")); this.retry.hidden = true;
     this.retry.onclick = () => { void this.refresh(true); };
     this.element.append(label, this.status, this.retry);
     this.unsubscribe = locale.subscribe(value => { this.select.value = value; });

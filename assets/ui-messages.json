@@ -497,13 +497,18 @@
       "params": {}
     },
     "locale.unsaved": {
-      "zh-CN": "本次界面语言尚未可靠保存；当前稿和原操作未改变。",
-      "en-US": "The interface language has not been durably saved. Your draft and original operation are unchanged.",
+      "zh-CN": "尚无法确认界面语言是否已保存。可重新读取已保存的语言；这会替换当前显示语言，不会重新提交更改。",
+      "en-US": "We cannot confirm whether the interface language was saved. Reload the saved language to replace the current display language without submitting the change again.",
       "params": {}
     },
     "locale.unavailable": {
-      "zh-CN": "界面语言偏好暂不可读取，使用默认语言；当前稿和原操作未改变。",
-      "en-US": "The interface language preference is unavailable. Using the default language; your draft and original operation are unchanged.",
+      "zh-CN": "暂时无法读取已保存的界面语言，继续使用当前显示语言。请重新读取已保存的语言后再选择。",
+      "en-US": "We cannot read the saved interface language. The current display language is unchanged. Reload the saved language before choosing again.",
+      "params": {}
+    },
+    "locale.reloadSaved": {
+      "zh-CN": "重新读取已保存的语言",
+      "en-US": "Reload saved language",
       "params": {}
     },
     "common.save": {
