@@ -62,6 +62,7 @@ class PreferenceNode {
   dataset: Record<string, string> = {};
   value = ""; textContent = ""; hidden = false;
   onchange?: () => void;
+  onclick?: () => void;
   append(...nodes: PreferenceNode[]) { this.childNodes.push(...nodes); }
   replaceChildren(...nodes: PreferenceNode[]) { this.childNodes = nodes; }
   setAttribute() {}
@@ -117,5 +118,38 @@ test("late initial reads cannot confirm a retired control and unchanged polls ar
   });
   await preferenceControl({ read: async () => preference("zh-CN"), write: async () => preference("en-US") }, async (control, _choose, confirmations, tick) => {
     await tick(); await control.refresh(); await control.refresh(); assert.deepEqual(confirmations, ["zh-CN"]);
+  });
+});
+
+
+test("unavailable language keeps the current display and labels recovery as a read", async () => {
+  locale.set("en-US");
+  let readable = false, writes = 0;
+  await preferenceControl({ read: async () => { if (!readable) throw new Error("offline"); return preference("zh-CN"); }, write: async () => { writes++; return preference("en-US"); } }, async (control, _choose, _confirmations, tick) => {
+    await tick();
+    const [, status, reload] = (control.element as unknown as PreferenceNode).childNodes;
+    assert.equal(locale.current, "en-US");
+    assert.match(status.textContent, /current display language is unchanged/);
+    assert.equal(reload.textContent, "Reload saved language");
+    assert.equal(reload.hidden, false);
+    readable = true; reload.onclick!(); await tick();
+    assert.equal(locale.current, "zh-CN");
+    assert.equal(writes, 0);
+    assert.equal(status.hidden, true);
+  });
+});
+
+test("uncertain preference save does not claim failure or repeat writes on reload", async () => {
+  let reads = 0, writes = 0;
+  await preferenceControl({ read: async () => { if (++reads === 2) throw new Error("readback unavailable"); return preference("zh-CN"); }, write: async () => { writes++; throw new Error("reply lost"); } }, async (control, choose, _confirmations, tick) => {
+    await tick(); choose("en-US"); await tick();
+    const [, status, reload] = (control.element as unknown as PreferenceNode).childNodes;
+    assert.match(status.textContent, /cannot confirm whether.*was saved/);
+    assert.equal(reload.textContent, "Reload saved language");
+    assert.equal(locale.current, "en-US");
+    reload.onclick!(); await tick();
+    assert.equal(locale.current, "zh-CN");
+    assert.equal(writes, 1);
+    assert.equal(reload.textContent, "重新读取已保存的语言");
   });
 });
