@@ -32,6 +32,31 @@ jobs:
           import datetime, hashlib, importlib.util, os, re, signal, sys, time, uuid
           from pathlib import Path
 
+          def planned_timeout(label, original):
+              caps = {"simulator-boot-status": (600, 540), "simulator-after-boot": (30, 90)}
+              if label not in caps:
+                  return original
+              expected, actual = caps[label]
+              if original != expected:
+                  raise RuntimeError("Original stage timeout drifted before new frozen intent: " + label)
+              return actual
+
+          def check_budget_mapping():
+              assert planned_timeout("simulator-boot-status", 600) == 540
+              assert planned_timeout("simulator-after-boot", 30) == 90
+              for label, cap in [("ios-simulator-tests", 600), ("simulator-shutdown", 60),
+                                 ("simulator-before-cleanup", 30), ("simulator-after-cleanup", 30),
+                                 ("simulator-boot", 60), ("simulator-after-boot-owned-process", 3)]:
+                  assert planned_timeout(label, cap) == cap
+              for label, wrong in [("simulator-boot-status", 540), ("simulator-boot-status", 601),
+                                   ("simulator-after-boot", 90), ("simulator-after-boot", 31)]:
+                  try:
+                      planned_timeout(label, wrong)
+                  except RuntimeError:
+                      continue
+                  raise AssertionError("Original timeout drift was accepted: " + label)
+              print("New setup intent checks passed: 2 remaps, 6 unchanged caps, 4 rejected timeout drifts.")
+
           def exercise(api, run, base_env, record, package, state_root):
               original_command, original_observation = api.run_command, api.observe_retired_command
               callback_count = 0
@@ -49,6 +74,12 @@ jobs:
 
               def command(argv, directory, label, environment, timeout, result, cwd=run, **kwargs):
                   nonlocal callback_count
+                  actual_timeout = planned_timeout(label, timeout)
+                  if label in {"simulator-boot-status", "simulator-after-boot"}:
+                      record["setupBudgetIntent"]["applied"].append({"label": label,
+                          "originalTimeoutAsserted": timeout, "effectiveTimeout": actual_timeout})
+                      api.save(run, record)
+                  timeout = actual_timeout
                   if label in {"memory-before-boot", "memory-after-boot"}:
                       load(label)
                   if label != "ios-simulator-tests":
@@ -57,6 +88,12 @@ jobs:
                   if callback_count != 1 or timeout != 600 or cwd != package or kwargs:
                       raise RuntimeError("Unexpected XCTest callback identity or repeated callback")
                   simulator = record["simulator"]
+                  applied = record["setupBudgetIntent"]["applied"]
+                  for budget_label, cap in [("simulator-boot-status", 540), ("simulator-after-boot", 90)]:
+                      entries = [item for item in record["commands"] if item["label"] == budget_label]
+                      if (sum(item["label"] == budget_label for item in applied) != 1 or len(entries) != 1
+                              or entries[0].get("deadlineSeconds") != cap):
+                          raise RuntimeError("New frozen stage budget was not actually applied exactly once")
                   selected_scheme = argv[argv.index("-scheme") + 1]
                   if (argv.count("-scheme") != 1 or selected_scheme != "WeftextAppleHost"
                           or argv[argv.index("-destination") + 1] != "platform=iOS Simulator,id=" + simulator["udid"]
@@ -181,6 +218,7 @@ jobs:
               spec.loader.exec_module(api)
               if sys.platform != "darwin":
                   raise ValueError("Actual macOS SDK/runtime required")
+              check_budget_mapping()
               api.static_check()
               env = dict(os.environ)
               developer_dir = Path(env["DEVELOPER_DIR"])
@@ -210,6 +248,13 @@ jobs:
                   "sourceCommit": env["GITHUB_SHA"], "sources": before, "sourceSnapshot": str(package),
                   "developerDirectory": str(developer_dir), "commands": [], "simulatorTestsRequested": True,
                   "runtimeValidated": False, "productValidated": False, "productAcceptance": False,
+                  "setupBudgetIntent": {"plan": "new-boot540-afterBoot90-20261116", "applied": [],
+                      "originalStageCaps": {"simulator-boot-status": 600, "simulator-after-boot": 30},
+                      "newStageCaps": {"simulator-boot-status": 540, "simulator-after-boot": 90},
+                      "originalNominalCreateThroughGateSeconds": 840, "newNominalCreateThroughGateSeconds": 840,
+                      "scope": "New environment-readiness allocation; not a product performance SLA",
+                      "wallClockLimit": "No old or new shared wall-clock envelope is claimed; ordinary owner timing/cleanup unchanged",
+                      "priorFailedRun": 43746439041, "priorFailedCases": "All original30s failures retain failed outcomes"},
                   "mechanismValidation": {"macosWebKitTestsPassed": [], "iOSSimulatorRuntime": "not run", "product": "not validated"},
                   "image": {"label": "macos-15-intel", "ImageOS": env.get("ImageOS"), "ImageVersion": env.get("ImageVersion"),
                       "priorImageVersion": "20260824.0482.1", "exactVersionMatched": env.get("ImageVersion") == "20260824.0482.1"},
