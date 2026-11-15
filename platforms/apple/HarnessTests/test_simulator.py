@@ -305,7 +305,7 @@ class CommandSupervisionTests(unittest.TestCase):
                        {"ownedGroupGone": False}, {"ownedLeaderReaped": False}):
             with self.subTest(change=change):
                 record = {"commands": []}
-                def fail(*_args):
+                def fail(*_args, **_kwargs):
                     record["commands"].append({**exact, **change})
                     raise RuntimeError("TEST unqualified failure")
                 with patch.object(ENTRY, "run_command", side_effect=fail), self.assertRaises(RuntimeError):
@@ -314,6 +314,123 @@ class CommandSupervisionTests(unittest.TestCase):
         with patch.object(ENTRY, "run_command", side_effect=RuntimeError("TEST no new record")), \
                 self.assertRaises(RuntimeError):
             ENTRY.observe_processes(Path("TEST-run"), {}, record, "processes-after-boot")
+
+
+class AfterBootSamplingTests(unittest.TestCase):
+    def wait_case(self, waits, sample_seconds=0, sample_failure=None):
+        now = [0.0]
+        process = CommandProcess([])
+        calls = []
+        outcomes = list(waits)
+        def wait(timeout):
+            calls.append(timeout)
+            outcome, elapsed = outcomes.pop(0)
+            now[0] += elapsed
+            if isinstance(outcome, BaseException):
+                raise outcome
+            return outcome
+        process.wait = wait
+        record = {"commands": [{}]}
+        def sample(argv, run, env, observed, label, timeout, cwd, **kwargs):
+            self.assertEqual(argv, ["/usr/bin/sample", str(process.pid), "1", "10", "-mayDie"])
+            self.assertEqual((label, timeout, kwargs), ("simulator-after-boot-sample", 3, {"retire_by": 30}))
+            self.assertIs(observed, record)
+            now[0] += sample_seconds
+            if sample_failure:
+                raise sample_failure
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            with patch.object(ENTRY.time, "monotonic", side_effect=lambda: now[0]), \
+                    patch.object(ENTRY, "observe_retired_command", side_effect=sample) as sampled:
+                try:
+                    result = ENTRY.wait_after_boot(process, ["TEST simctl"], run, {}, 30,
+                                                  record, run, record["commands"][0], 0)
+                except BaseException as error:
+                    result = error
+            self.assertEqual(json.loads((run / "result.json").read_text(encoding="utf8")), record)
+        return result, calls, sampled.call_count, record["commands"][0]
+
+    def test_fast_command_never_samples_and_slow_command_keeps_absolute_deadline(self):
+        result, calls, sampled, entry = self.wait_case([(0, 2)])
+        self.assertEqual((result, calls, sampled), (0, [10], 0))
+        self.assertNotIn("profiled", entry)
+        result, calls, sampled, entry = self.wait_case(
+            [(subprocess.TimeoutExpired("TEST simctl", 10), 10), (0, 5)], sample_seconds=2)
+        self.assertEqual((result, calls, sampled), (0, [10, 18], 1))
+        self.assertTrue(entry["profiled"])
+        self.assertNotIn("terminationReason", entry)
+
+    def test_sample_budget_exhaustion_and_interruption_never_grant_command_success(self):
+        result, calls, sampled, _ = self.wait_case(
+            [(subprocess.TimeoutExpired("TEST simctl", 10), 10)], sample_seconds=20)
+        self.assertIsInstance(result, subprocess.TimeoutExpired)
+        self.assertEqual((calls, sampled), ([10], 1))
+        for error in (RuntimeError("TEST sample cleanup unknown"), KeyboardInterrupt(), SystemExit(2)):
+            with self.subTest(error=type(error).__name__):
+                result, calls, sampled, _ = self.wait_case(
+                    [(subprocess.TimeoutExpired("TEST simctl", 10), 10)], sample_failure=error)
+                self.assertIs(result, error)
+                self.assertEqual((calls, sampled), ([10], 1))
+
+    def test_unknown_sample_error_still_retires_the_original_simctl(self):
+        process = CommandProcess([0])
+        record = {"commands": []}
+        failure = RuntimeError("TEST sample process cleanup unknown")
+        with tempfile.TemporaryDirectory() as directory:
+            run = Path(directory)
+            with patch.object(ENTRY.subprocess, "Popen", return_value=process), \
+                    patch.object(ENTRY, "wait_after_boot", side_effect=failure), \
+                    patch.object(ENTRY.os, "killpg", side_effect=ProcessLookupError(), create=True) as group:
+                with self.assertRaises(RuntimeError) as raised:
+                    ENTRY.run_command(["TEST simctl"], run, "simulator-after-boot", {}, 30, record, run)
+            self.assertIs(raised.exception, failure)
+            self.assertEqual(group.call_args_list, [call(process.pid, 0)])
+            self.assertEqual(process.wait_timeouts, [10])
+            self.assertEqual(record["commands"][0]["state"], "failed")
+            self.assertTrue(record["commands"][0]["ownedLeaderReaped"])
+
+    def test_sample_group_and_leader_cleanup_share_the_outer_deadline(self):
+        for deadline in (15.0, 13.01):
+            with self.subTest(deadline=deadline):
+                now, pauses = [10.0], []
+                process = CommandProcess([])
+                def wait(timeout):
+                    process.wait_timeouts.append(timeout)
+                    now[0] += timeout
+                    raise subprocess.TimeoutExpired("TEST sample", timeout)
+                def sleep(seconds):
+                    pauses.append(seconds)
+                    now[0] = deadline
+                process.wait = wait
+                record = {"commands": []}
+                with tempfile.TemporaryDirectory() as directory:
+                    run = Path(directory)
+                    with patch.object(ENTRY.subprocess, "Popen", return_value=process), \
+                            patch.object(ENTRY.os, "killpg", return_value=None, create=True), \
+                            patch.object(ENTRY.signal, "SIGKILL", 9, create=True), \
+                            patch.object(ENTRY.time, "monotonic", side_effect=lambda: now[0]), \
+                            patch.object(ENTRY.time, "sleep", side_effect=sleep):
+                        with self.assertRaises(RuntimeError):
+                            ENTRY.run_command(["TEST sample"], run, "sample", {}, 3, record, run, retire_by=deadline)
+                    self.assertEqual(now[0], deadline)
+                    self.assertEqual(process.wait_timeouts, [3, 0])
+                    self.assertLessEqual(max(pauses), min(0.05, deadline - 13))
+                    self.assertTrue(record["commands"][0]["cleanupUnknown"])
+                    self.assertEqual(record["commands"][0]["terminationReason"], "deadline")
+
+    def test_small_tool_script_bytes_are_recorded_without_execution(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "simctl"
+            raw = b"#!/bin/sh\nexit 73\n"
+            path.write_bytes(raw)
+            observed = ENTRY.selected_tool_record(path, path.resolve())
+            self.assertEqual(observed["kind"], "script")
+            self.assertEqual(observed["boundedScriptText"], raw.decode())
+            self.assertEqual(observed["sha256"], hashlib.sha256(raw).hexdigest())
+            self.assertEqual(observed["fileIdentity"]["bytes"], len(raw))
+            self.assertFalse(observed["reportedIsSymlink"])
+            path.write_bytes(b"#!" + b"x" * 4096)
+            self.assertNotIn("boundedScriptText", ENTRY.selected_tool_record(path, path.resolve()))
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ import plistlib
 import re
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -53,11 +54,13 @@ def static_check() -> None:
 
 
 def run_command(argv: list[str], run: Path, label: str, env: dict[str, str], timeout: int,
-                record: dict, cwd: Path = PACKAGE) -> str:
+                record: dict, cwd: Path = PACKAGE, *, retire_by: float | None = None) -> str:
     log = run / f"{label}.log"
     started = time.monotonic()
     entry = {"label": label, "argv": argv, "log": log.name, "deadlineSeconds": timeout,
              "state": "starting"}
+    if retire_by is not None:
+        entry["retirementDeadlineMonotonic"] = retire_by
     record["commands"].append(entry)
     save(run, record)
     with log.open("xb") as output:
@@ -80,9 +83,16 @@ def run_command(argv: list[str], run: Path, label: str, env: dict[str, str], tim
         try:
             entry.update(pid=process.pid, processGroup=process.pid, state="running")
             save(run, record)
-            code = process.wait(timeout=timeout)
+            if label == "simulator-after-boot":
+                code = wait_after_boot(process, argv, run, env, timeout, record, cwd, entry, started)
+            else:
+                limit = timeout if retire_by is None else max(0, min(timeout, retire_by - time.monotonic()))
+                code = process.wait(timeout=limit)
         except subprocess.TimeoutExpired:
             entry["terminationReason"] = "deadline"
+            if label == "simulator-after-boot":
+                entry.setdefault("diagnosticStages", []).append({"phase": "owned-command-deadline",
+                    "elapsedSeconds": round(time.monotonic() - started, 3)})
         except BaseException as error:
             caught = error
             entry["terminationReason"] = type(error).__name__
@@ -103,6 +113,8 @@ def run_command(argv: list[str], run: Path, label: str, env: dict[str, str], tim
                     phase = "groupSignal"
                     os.killpg(process.pid, signal.SIGKILL)
                     deadline = time.monotonic() + 10
+                    if retire_by is not None:
+                        deadline = min(deadline, retire_by)
                     while time.monotonic() < deadline:
                         phase = "leaderPoll"
                         process.poll()
@@ -112,14 +124,16 @@ def run_command(argv: list[str], run: Path, label: str, env: dict[str, str], tim
                         except ProcessLookupError:
                             entry["ownedGroupGone"] = True
                             break
-                        time.sleep(0.05)
+                        pause = 0.05 if retire_by is None else min(0.05, max(0, deadline - time.monotonic()))
+                        time.sleep(pause)
             except BaseException as error:
                 cleanup_failure(phase, error)
             finally:
                 # Even failed group probing/signalling must observe the held
                 # original Popen; no numeric-PID reopen or replacement process.
                 try:
-                    code = process.wait(timeout=10)
+                    limit = 10 if retire_by is None else max(0, min(10, retire_by - time.monotonic()))
+                    code = process.wait(timeout=limit)
                     entry["ownedLeaderReaped"] = True
                 except BaseException as error:
                     cleanup_failure("leaderWait", error)
@@ -154,6 +168,41 @@ def save(run: Path, record: dict) -> None:
                                      encoding="utf-8")
 
 
+def wait_after_boot(process, argv: list[str], run: Path, env: dict[str, str], timeout: int,
+                    record: dict, cwd: Path, entry: dict, started: float) -> int:
+    """Sample one still-unreaped owned command without extending its deadline."""
+    deadline = started + timeout
+    entry["executionDeadlineMonotonic"] = deadline
+    stages = entry["diagnosticStages"] = []
+
+    def stage(name):
+        stages.append({"phase": name, "elapsedSeconds": round(time.monotonic() - started, 3)})
+        save(run, record)
+
+    stage("owned-command-started")
+    try:
+        code = process.wait(timeout=max(0, min(10, deadline - time.monotonic())))
+    except subprocess.TimeoutExpired:
+        # wait timed out without reaping this child. Do not poll/reopen the PID:
+        # an exit during sampling stays an unreaped child, preventing PID reuse.
+        stage("owned-command-still-unreaped")
+        if time.monotonic() < deadline:
+            entry["profiled"] = True  # Instrumented observation, not a performance baseline.
+            stage("sample-requested")
+            observe_retired_command(["/usr/bin/sample", str(process.pid), "1", "10", "-mayDie"],
+                                    run, env, record, "simulator-after-boot-sample", 3, cwd,
+                                    retire_by=deadline)
+        stage("sample-returned")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise subprocess.TimeoutExpired(argv, timeout) from None
+        code = process.wait(timeout=remaining)
+    if time.monotonic() >= deadline:
+        raise subprocess.TimeoutExpired(argv, timeout)
+    stage("owned-command-exit-observed")
+    return code
+
+
 def qualified_tool_path(reply: str, developer_dir: Path, name: str) -> Path:
     if name not in {"simctl", "lipo", "otool"}:
         raise ValueError("Unsupported selected Xcode tool")
@@ -172,17 +221,39 @@ def resolve_tools(run: Path, env: dict[str, str], record: dict) -> None:
     for name in ("simctl", "lipo", "otool"):
         reply = run_command(["/usr/bin/xcrun", "--find", name], run, "resolve-" + name, env, 30, record)
         path = qualified_tool_path(reply, Path(env["DEVELOPER_DIR"]), name)
-        record["selectedTools"][name] = {"path": str(path), "bytes": path.stat().st_size,
-            "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+        record["selectedTools"][name] = selected_tool_record(Path(reply.strip()), path)
     save(run, record)
 
 
-def observe_processes(run: Path, env: dict[str, str], record: dict, label: str) -> None:
-    # No environment or command arguments: retain only process/resource facts.
-    argv = ["/bin/ps", "-axo", "pid,ppid,pgid,%cpu,rss,stat,comm"]
+def selected_tool_record(reported: Path, actual: Path) -> dict:
+    reported_before = reported.lstat()
+    before = actual.stat()
+    raw = actual.read_bytes()
+    after = actual.stat()
+    reported_after = reported.lstat()
+    identity = lambda value: (value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns)
+    if (identity(before) != identity(after) or len(raw) != after.st_size
+            or identity(reported_before) != identity(reported_after)
+            or reported_before.st_mode != reported_after.st_mode or reported.resolve() != actual):
+        raise ValueError("Selected tool changed while recording its original bytes")
+    record = {"path": str(actual), "reportedPath": str(reported), "actualPath": str(actual),
+              "reportedIsSymlink": stat.S_ISLNK(reported_after.st_mode), "bytes": len(raw),
+              "sha256": hashlib.sha256(raw).hexdigest(), "kind": "script" if raw.startswith(b"#!") else "binary",
+              "reportedEntryIdentity": {"device": reported_after.st_dev, "inode": reported_after.st_ino,
+                                        "bytes": reported_after.st_size, "mtimeNs": reported_after.st_mtime_ns,
+                                        "mode": reported_after.st_mode},
+              "fileIdentity": {"device": after.st_dev, "inode": after.st_ino,
+                               "bytes": after.st_size, "mtimeNs": after.st_mtime_ns}}
+    if raw.startswith(b"#!") and len(raw) <= 4096:
+        record["boundedScriptText"] = raw.decode("utf-8", errors="backslashreplace")
+    return record
+
+
+def observe_retired_command(argv: list[str], run: Path, env: dict[str, str], record: dict,
+                            label: str, timeout: int, cwd: Path = PACKAGE, *, retire_by: float | None = None) -> None:
     before = len(record["commands"])
     try:
-        run_command(argv, run, label, env, 15, record)
+        run_command(argv, run, label, env, timeout, record, cwd, retire_by=retire_by)
     except RuntimeError:
         # A diagnostic deadline/nonzero exit is not an SDK or XCTest result.
         # Keep its original failed record; only confirmed process retirement
@@ -195,6 +266,12 @@ def observe_processes(run: Path, env: dict[str, str], record: dict, label: str) 
                 or entry.get("state") != "failed" or entry.get("cleanupUnknown") is not False
                 or entry.get("ownedGroupGone") is not True or entry.get("ownedLeaderReaped") is not True):
             raise
+
+
+def observe_processes(run: Path, env: dict[str, str], record: dict, label: str) -> None:
+    # No environment or command arguments: retain only process/resource facts.
+    observe_retired_command(["/bin/ps", "-axo", "pid,ppid,pgid,%cpu,rss,stat,comm"],
+                            run, env, record, label, 15)
 
 
 def strict_inventory(text: str) -> dict:
