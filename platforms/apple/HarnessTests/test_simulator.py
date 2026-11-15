@@ -2,6 +2,7 @@
 from pathlib import Path
 from contextlib import nullcontext
 import errno
+import hashlib
 import importlib.util
 import json
 import subprocess
@@ -64,6 +65,44 @@ class SimulatorOwnershipTests(unittest.TestCase):
     def test_duplicate_inventory_keys_are_not_silently_rebound(self):
         with self.assertRaises(ValueError):
             ENTRY.strict_inventory('{"devices":{},"devices":{"different":[]}}')
+
+
+class SimulatorTestEnvironmentTests(unittest.TestCase):
+    def fixture(self, directory):
+        bundle = Path(directory) / "iOS 18.5.simruntime"
+        library = bundle / "Contents/Resources/RuntimeRoot/System/Cryptexes/OS/usr/lib/swift/libswiftWebKit.dylib"
+        library.parent.mkdir(parents=True)
+        library.write_bytes(b"TEST original runtime overlay; not a native qualification")
+        runtime = {"identifier": ENTRY.SIMULATOR_RUNTIME, "version": "18.5", "bundlePath": str(bundle)}
+        return runtime, library
+
+    def test_uses_original_runtime_and_only_changes_child_test_environment(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime, library = self.fixture(directory)
+            inherited = {"DEVELOPER_DIR": "TEST selected Xcode"}
+            test_env, evidence = ENTRY.simulator_test_environment(runtime, inherited)
+            self.assertEqual(inherited, {"DEVELOPER_DIR": "TEST selected Xcode"})
+            self.assertEqual(test_env, {**inherited, "TEST_RUNNER_DYLD_FALLBACK_LIBRARY_PATH": str(library.parent)})
+            self.assertEqual(evidence["sha256"], hashlib.sha256(library.read_bytes()).hexdigest())
+            self.assertEqual(evidence["bytes"], library.stat().st_size)
+            self.assertEqual(evidence["runtimeBundle"], runtime["bundlePath"])
+
+    def test_missing_overlay_does_not_download_or_select_another_runtime(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime = {"identifier": ENTRY.SIMULATOR_RUNTIME, "version": "18.5", "bundlePath": directory}
+            with self.assertRaisesRegex(ValueError, "no original WebKit"):
+                ENTRY.simulator_test_environment(runtime, {})
+            self.assertEqual(list(Path(directory).iterdir()), [])
+
+    def test_foreign_runtime_relative_bundle_and_inherited_override_are_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            runtime, _ = self.fixture(directory)
+            for change in [{"identifier": "other"}, {"version": "18.6"},
+                           {"bundlePath": "relative.simruntime"}, {"bundlePath": None}]:
+                with self.subTest(change=change), self.assertRaises(ValueError):
+                    ENTRY.simulator_test_environment({**runtime, **change}, {})
+            with self.assertRaisesRegex(ValueError, "inherited"):
+                ENTRY.simulator_test_environment(runtime, {"TEST_RUNNER_DYLD_FALLBACK_LIBRARY_PATH": "other"})
 
 
 class CommandProcess:

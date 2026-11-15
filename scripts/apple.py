@@ -207,6 +207,30 @@ def reconcile_created_device(inventory: dict, before: dict, name: str) -> str:
     return udid
 
 
+def simulator_test_environment(runtime: dict, env: dict[str, str]) -> tuple[dict[str, str], dict]:
+    """Scope WebKit's iOS18.5 overlay workaround to this XCTest runner only."""
+    # https://bugs.webkit.org/show_bug.cgi?id=293831, workaround 2. Keep the
+    # product's iOS16 deployment target and exercise the real WebKit APIs.
+    if runtime.get("identifier") != SIMULATOR_RUNTIME or runtime.get("version") != "18.5":
+        raise ValueError("Swift overlay workaround requires the qualified iOS18.5 runtime")
+    bundle = runtime.get("bundlePath")
+    if not isinstance(bundle, str) or not Path(bundle).is_absolute():
+        raise ValueError("The original simulator inventory has no absolute runtime bundle")
+    directory = Path(bundle) / "Contents/Resources/RuntimeRoot/System/Cryptexes/OS/usr/lib/swift"
+    library = directory / "libswiftWebKit.dylib"
+    if not library.is_file():
+        raise ValueError("The installed iOS18.5 runtime has no original WebKit Swift overlay")
+    key = "TEST_RUNNER_DYLD_FALLBACK_LIBRARY_PATH"
+    if key in env:
+        raise ValueError("An inherited XCTest Swift library override is already configured")
+    test_env = dict(env)
+    test_env[key] = str(directory)
+    return test_env, {"issue": "https://bugs.webkit.org/show_bug.cgi?id=293831",
+        "runtimeBundle": bundle, "testRunnerVariable": "DYLD_FALLBACK_LIBRARY_PATH",
+        "libraryDirectory": str(directory), "library": str(library),
+        "bytes": library.stat().st_size, "sha256": hashlib.sha256(library.read_bytes()).hexdigest()}
+
+
 def archive_test_result(run: Path, record: dict) -> None:
     source = run / "ios-simulator.xcresult"
     if not source.is_dir():
@@ -256,6 +280,8 @@ def run_simulator_tests(run: Path, package: Path, scheme: str, env: dict[str, st
                     for item in matches[0].get("supportedDeviceTypes", []) if isinstance(item, dict))):
         raise ValueError("The installed iOS18.5 runtime/device/architecture is not qualified")
     original["runtimeBuild"] = matches[0]["buildversion"]
+    test_env, original["swiftWebKitOverlay"] = simulator_test_environment(matches[0], env)
+    save(run, record)
     types = strict_inventory(run_command(base + ["list", "devicetypes", "--json"], run,
                             "simulator-device-types", env, 30, record, package))
     if sum(isinstance(item, dict) and item.get("identifier") == SIMULATOR_DEVICE_TYPE
@@ -291,7 +317,7 @@ def run_simulator_tests(run: Path, package: Path, scheme: str, env: dict[str, st
             "-parallel-testing-enabled", "NO", "-maximum-concurrent-test-simulator-destinations", "1",
             "-derivedDataPath", str(run / "ios-tests"), "-resultBundlePath", str(run / "ios-simulator.xcresult"),
             "-clonedSourcePackagesDirPath", str(run / "packages"), "CODE_SIGNING_ALLOWED=NO", "test"],
-            run, "ios-simulator-tests", env, 600, record, package)
+            run, "ios-simulator-tests", test_env, 600, record, package)
         planned = [name for source in sorted((package / "Tests").rglob("*.swift"))
                    for name in re.findall(r"\bfunc\s+(test[A-Za-z0-9_]+)\(", source.read_text(encoding="utf-8"))]
         if not planned or len(planned) != len(set(planned)) or not all(

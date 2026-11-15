@@ -32,10 +32,12 @@ python scripts/apple.py build --state-root <绝对独占输出目录> --develope
 
 `--run-simulator-tests` 是默认关闭的额外 OS 机制步骤。它重新核已安装 iOS 18.5 runtime、iPhone 16 类型和实际工具帮助，使用本次唯一 UUID 名称创建一次设备；原清单中已有的 UDID 不能接管。创建原回执先保存，再校原 UDID／名称／类型／runtime，全部 boot、测试和 shutdown 只用这个 UDID。创建结果未知时仅沿原唯一 tuple 查询，不重新创建或猜现有设备。
 
-启动完成最多等 180 秒，实际 iOS XCTest 最多 600 秒，shutdown 最多 60 秒；结束必须重新观察原 tuple 的 `Shutdown`。失败或未知不标清理成功，不 erase、全局关闭、下载 runtime、接受许可、设置 team 或签名补救。额外步骤编译并运行同一套十二项 Swift／WebKit 用例，iOS 分支使用实际 UIKit XCTest runner，不能 skip 或用零项替代。原 `.xcresult` 有界归档及实际 iOS 测试 bundle 二进制也固定到 `roles/`。当前这套 Simulator 步骤尚未执行；即使通过也只证明该模拟器的宿主库机制，不证明 Core／Engine、真机、IME／AT 或完整产品。
+启动完成最多等 180 秒，实际 iOS XCTest 最多 600 秒，shutdown 最多 60 秒；结束必须重新观察原 tuple 的 `Shutdown`。失败或未知不标清理成功，不 erase、全局关闭、下载 runtime、接受许可、设置 team 或签名补救。额外步骤编译并运行同一套十二项 Swift／WebKit 用例，iOS 分支使用实际 UIKit XCTest runner，不能 skip 或用零项替代。原 `.xcresult` 有界归档及实际 iOS 测试 bundle 二进制也固定到 `roles/`。完整 Simulator 步骤是否通过以原运行回执为准；即使通过也只证明该模拟器的宿主库机制，不证明 Core／Engine、真机、IME／AT 或完整产品。
 
 普通跨平台 ownership guard 单测可独立运行：`python platforms/apple/HarnessTests/test_simulator.py`；这些纯 JSON／原 tuple 反例不启动 Apple 工具，也不代替 OS 回执。
 
 正式 Core 的 Darwin／iOS 存储资格、共同 Host C ABI、系统文件能力、macOS sandbox XPC frozen worker、iOS WebContent／Wasm Engine、应用生命周期与输入保全、通知及安装流程仍未接齐。外部 picker／bookmark 只能授予具体文件能力，不能冒充 Core 的物理文件身份或事务后端；原件必须保留，导入／导出需原操作记录。未交付能力不显示为可用。
 
 依据：[WebKit 带回复消息](https://developer.apple.com/documentation/webkit/wkscriptmessagehandlerwithreply)、[页面来源](https://developer.apple.com/documentation/webkit/wkframeinfo)、[Apple 目录能力](https://developer.apple.com/documentation/uikit/providing-access-to-directories)、[Xcode 的 Swift package](https://developer.apple.com/documentation/xcode/creating-a-standalone-swift-package-with-xcode)。
+
+iOS 18.5 Simulator 对早于 iOS 18.4 的部署目标存在已知 [WebKit Swift overlay 加载缺陷](https://bugs.webkit.org/show_bug.cgi?id=293831)。入口从原清单读取已核定 runtime bundle，要求其中已有 `System/Cryptexes/OS/usr/lib/swift/libswiftWebKit.dylib`，记录原库，并仅通过 `TEST_RUNNER_DYLD_FALLBACK_LIBRARY_PATH` 将其目录传给 XCTest runner。库缺失或已继承其他覆盖配置时拒绝执行。iOS 16 最低部署目标和全部真实 WebKit 用例保留，不修改已安装 runtime 或下载替代库。Xcode 的[测试进程环境前缀说明](https://developer.apple.com/documentation/xcode/environment-variable-reference)定义该传递方式。
