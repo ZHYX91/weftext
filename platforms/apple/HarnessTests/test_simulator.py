@@ -75,6 +75,22 @@ class SimulatorOwnershipTests(unittest.TestCase):
 
 
 class SimulatorTestEnvironmentTests(unittest.TestCase):
+    def test_resolved_tools_must_exist_inside_selected_xcode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            xcode = root / "Xcode.app/Contents/Developer"
+            tool = xcode / "usr/bin/simctl"
+            tool.parent.mkdir(parents=True)
+            tool.write_bytes(b"TEST tool only")
+            self.assertEqual(ENTRY.qualified_tool_path(str(tool) + "\n", xcode, "simctl"), tool.resolve())
+            foreign = root / "simctl"
+            foreign.write_bytes(b"TEST foreign tool")
+            for path, name in [(foreign, "simctl"), ("relative/simctl", "simctl"),
+                               (tool, "lipo"), (tool, "unknown"),
+                               (xcode / "usr/bin/lipo", "lipo")]:
+                with self.subTest(path=path, name=name), self.assertRaises(ValueError):
+                    ENTRY.qualified_tool_path(str(path), xcode, name)
+
     def fixture(self, directory):
         bundle = Path(directory) / "iOS 18.5.simruntime"
         library = bundle / "Contents/Resources/RuntimeRoot/System/Cryptexes/OS/usr/lib/swift/libswiftWebKit.dylib"

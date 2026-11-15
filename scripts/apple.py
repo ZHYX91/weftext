@@ -153,6 +153,35 @@ def save(run: Path, record: dict) -> None:
                                      encoding="utf-8")
 
 
+def qualified_tool_path(reply: str, developer_dir: Path, name: str) -> Path:
+    if name not in {"simctl", "lipo", "otool"}:
+        raise ValueError("Unsupported selected Xcode tool")
+    path = Path(reply.strip())
+    if (not path.is_absolute() or "\n" in reply.strip() or path.name != name or
+            not path.is_file() or not path.resolve().is_relative_to(developer_dir.resolve())):
+        raise ValueError("Resolved tool is not inside the selected installed Xcode")
+    return path.resolve()
+
+
+def resolve_tools(run: Path, env: dict[str, str], record: dict) -> None:
+    # Resolve once before Simulator boot. Both simctl and an unrelated lipo
+    # invocation have stalled through xcrun after boot; this records and uses the
+    # actual selected binaries without mutating Xcode or its lookup cache.
+    record["selectedTools"] = {}
+    for name in ("simctl", "lipo", "otool"):
+        reply = run_command(["/usr/bin/xcrun", "--find", name], run, "resolve-" + name, env, 30, record)
+        path = qualified_tool_path(reply, Path(env["DEVELOPER_DIR"]), name)
+        record["selectedTools"][name] = {"path": str(path), "bytes": path.stat().st_size,
+            "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+    save(run, record)
+
+
+def observe_processes(run: Path, env: dict[str, str], record: dict, label: str) -> None:
+    # No environment or command arguments: retain only process/resource facts.
+    run_command(["/bin/ps", "-axo", "pid,ppid,pgid,%cpu,rss,stat,comm"],
+                run, label, env, 15, record)
+
+
 def strict_inventory(text: str) -> dict:
     def unique(items):
         result = {}
@@ -273,7 +302,7 @@ def run_simulator_tests(run: Path, package: Path, scheme: str, env: dict[str, st
         "cleanupUnknown": False, "testsPassed": False}
     record["simulator"] = original
     save(run, record)
-    base = ["/usr/bin/xcrun", "simctl"]
+    base = [record["selectedTools"]["simctl"]["path"]]
     for command in ("create", "bootstatus", "shutdown"):
         run_command(base + ["help", command], run, "simulator-help-" + command, env, 30, record, package)
     runtimes = strict_inventory(run_command(base + ["list", "runtimes", "--json"], run,
@@ -317,12 +346,15 @@ def run_simulator_tests(run: Path, package: Path, scheme: str, env: dict[str, st
             raise ValueError("New owned simulator was not observed Shutdown before boot")
         save(run, record)
         run_command(["/usr/bin/vm_stat"], run, "memory-before-boot", env, 15, record, package)
+        observe_processes(run, env, record, "processes-before-boot")
         run_command(base + ["boot", udid], run, "simulator-boot", env, 60, record, package)
         run_command(base + ["bootstatus", udid, "-b"], run, "simulator-boot-status", env, SIMULATOR_BOOT_SECONDS, record, package)
         run_command(["/usr/bin/vm_stat"], run, "memory-after-boot", env, 15, record, package)
+        observe_processes(run, env, record, "processes-after-boot")
         if owned_device(devices("simulator-after-boot"), udid, original["name"]).get("state") != "Booted":
             raise ValueError("Original simulator did not produce a Booted observation")
-        output = run_command(["/usr/bin/xcodebuild", "-jobs", "2", "-scheme", scheme, "-sdk", "iphonesimulator",
+        output = run_command([str(Path(env["DEVELOPER_DIR"]) / "usr/bin/xcodebuild"),
+            "-jobs", "2", "-scheme", scheme, "-sdk", "iphonesimulator",
             "-destination", "platform=iOS Simulator,id=" + udid, "-destination-timeout", "60",
             "-parallel-testing-enabled", "NO", "-maximum-concurrent-test-simulator-destinations", "1",
             "-derivedDataPath", str(run / "ios-tests"), "-resultBundlePath", str(run / "ios-simulator.xcresult"),
@@ -419,9 +451,9 @@ def freeze_roles(run: Path, package: Path, env: dict[str, str], record: dict,
             raise ValueError(f"Expected a bounded actual Mach-O role: {name}")
         description = run_command(["/usr/bin/file", "-b", str(source)], run,
                                   "role-" + name + "-file", env, 15, record, package).strip()
-        architectures = set(run_command(["/usr/bin/xcrun", "lipo", "-archs", str(source)], run,
+        architectures = set(run_command([record["selectedTools"]["lipo"]["path"], "-archs", str(source)], run,
                                        "role-" + name + "-architectures", env, 15, record, package).split())
-        headers = run_command(["/usr/bin/xcrun", "otool", "-hv", str(source)], run,
+        headers = run_command([record["selectedTools"]["otool"]["path"], "-hv", str(source)], run,
                               "role-" + name + "-headers", env, 15, record, package)
         if not architectures or (required_architectures is not None and architectures != required_architectures):
             raise ValueError(f"Unexpected architecture qualification for {name}")
@@ -489,6 +521,7 @@ def build(state_root: Path, developer_dir: Path, simulator_tests: bool = False) 
     save(run, record)
     print(run, flush=True)
     try:
+        resolve_tools(run, env, record)
         for label, argv in [
             ("os", ["/usr/bin/sw_vers"]), ("architecture", ["/usr/bin/uname", "-m"]),
             ("host-resources", ["/usr/sbin/sysctl", "hw.memsize", "hw.logicalcpu"]),
