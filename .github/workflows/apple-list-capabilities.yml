@@ -36,6 +36,9 @@ jobs:
           record = {"kind": "read-only-simctl-list-capabilities", "state": "running", "commands": [],
               "sourceCommit": env["GITHUB_SHA"], "startedUtc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
               "developerDirectory": env["DEVELOPER_DIR"], "ownerSha256": hashlib.sha256(Path("scripts/apple.py").read_bytes()).hexdigest(),
+              "firstHelpIntent": {"plan": "new-read-only-first-help-180s", "timeoutSeconds": 180,
+                  "priorFailedRun": 43749165768, "priorFailureRetained": "30.104s deadline with empty help; unchanged",
+                  "scope": "New helper-only budget; no product afterBoot deadline change"},
               "image": {"label": "macos-15-intel", "ImageOS": env.get("ImageOS"), "ImageVersion": env.get("ImageVersion")},
               "deviceCreationRequested": False, "simulatorTestsRequested": False,
               "testsPassed": False, "runtimeValidated": False, "productValidated": False, "productAcceptance": False}
@@ -59,7 +62,7 @@ jobs:
                       or candidates[0].get("wrapperSource", {}).get("sha256") != selected.get("sha256")
                       or selected.get("sha256") != "8e4ed565409890f1fd518099f98bb6ccac7419605574d802ac7356fd34f63a5b"):
                   raise RuntimeError("Read-only matching-wrapper precondition unconfirmed; no tool repair")
-              api.run_command([str(actual), "help", "list"], run, "simctl-help-list", env, 30, record, run)
+              api.run_command([str(actual), "help", "list"], run, "simctl-help-list", env, 180, record, run)
               record["state"] = "read-only-help-captured"
           except BaseException as error:
               record.update(state="failed", failure=f"{type(error).__name__}: {error}")
