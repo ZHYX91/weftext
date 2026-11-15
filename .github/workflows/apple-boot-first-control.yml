@@ -1,0 +1,239 @@
+# One-time ordering experiment; do not merge as a permanent product gate.
+name: Apple boot-first full control
+
+on:
+  push:
+    branches: [diag/apple-boot-first-control-20261116]
+    paths: ['.github/workflows/apple-boot-first-control.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-boot-first-control-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  boot-first-control:
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Original owned lifecycle with real build work after Booted
+        run: |
+          python - <<'PY'
+          import datetime, hashlib, importlib.util, os, re, signal, sys, time, uuid
+          from pathlib import Path
+
+          def exercise(api, run, base_env, record, package, state_root):
+              original_command, original_observation = api.run_command, api.observe_retired_command
+              callback_count = 0
+              primary_failure = None
+
+              def load(phase):
+                  observation = {"phase": phase, "utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                                 "monotonic": time.monotonic()}
+                  try:
+                      observation["loadAverage1_5_15Minutes"] = list(os.getloadavg())
+                  except OSError as error:
+                      observation["unavailable"] = str(error)
+                  record.setdefault("loadObservations", []).append(observation)
+                  api.save(run, record)
+
+              def command(argv, directory, label, environment, timeout, result, cwd=run, **kwargs):
+                  nonlocal callback_count
+                  if label in {"memory-before-boot", "memory-after-boot"}:
+                      load(label)
+                  if label != "ios-simulator-tests":
+                      return original_command(argv, directory, label, environment, timeout, result, cwd, **kwargs)
+                  callback_count += 1
+                  if callback_count != 1 or timeout != 600 or cwd != package or kwargs:
+                      raise RuntimeError("Unexpected XCTest callback identity or repeated callback")
+                  simulator = record["simulator"]
+                  selected_scheme = argv[argv.index("-scheme") + 1]
+                  if (argv.count("-scheme") != 1 or selected_scheme != "WeftextAppleHost"
+                          or argv[argv.index("-destination") + 1] != "platform=iOS Simulator,id=" + simulator["udid"]
+                          or "TEST_RUNNER_DYLD_FALLBACK_LIBRARY_PATH" in base_env
+                          or environment.get("TEST_RUNNER_DYLD_FALLBACK_LIBRARY_PATH") is None):
+                      raise RuntimeError("Original scheme/UDID or iOS-only test environment changed")
+                  booted = api.owned_device(api.strict_inventory((run / "simulator-after-boot.log").read_text("utf8")),
+                                            simulator["udid"], simulator["name"])
+                  if booted.get("state") != "Booted":
+                      raise RuntimeError("No original accurate Booted checkpoint")
+                  record["bootFirstCallback"] = {"calls": callback_count, "ownedUdid": simulator["udid"],
+                      "originalXCTestArgv": list(argv), "originalXCTestTimeout": timeout,
+                      "originalXCTestCwd": str(cwd), "baseEnvironmentUsedForBuilds": True,
+                      "iOSOverlayRestrictedToOriginalXCTest": True, "phase": "build-work-after-Booted"}
+                  load("booted-before-real-build-work")
+                  schemes_text = original_command(["/usr/bin/xcodebuild", "-list", "-json"], run,
+                                                  "schemes", base_env, 90, record, package)
+                  schemes = api.json.loads(schemes_text[schemes_text.index("{"):])
+                  actual = [name for section in schemes.values() if isinstance(section, dict)
+                            for name in section.get("schemes", []) if name == selected_scheme]
+                  if len(actual) != 1:
+                      raise ValueError("Expected one actual WeftextAppleHost scheme matching the original XCTest argv")
+                  macos_output = original_command(["/usr/bin/xcrun", "swift", "test", "--package-path", str(package),
+                      "--scratch-path", str(run / "swift"), "--cache-path", str(state_root / "cache"), "--jobs", "2"],
+                      run, "macos-tests", base_env, 600, record, package)
+                  mechanism_source = package / "Tests/WeftextAppleHostTests/NativeWebSurfaceTests.swift"
+                  planned = re.findall(r"\bfunc\s+(test[A-Za-z0-9_]+)\(\)", mechanism_source.read_text("utf8"))
+                  if not planned or not all(re.search(r"Test Case .*" + re.escape(name) + r"[^\n]* passed", macos_output)
+                                            for name in planned):
+                      raise ValueError("The planned actual macOS WebKit tests did not all pass")
+                  record["mechanismValidation"]["macosWebKitTestsPassed"] = planned
+                  original_command(["/usr/bin/xcodebuild", "-jobs", "2", "-scheme", actual[0], "-sdk", "iphonesimulator",
+                      "-destination", "generic/platform=iOS Simulator", "-derivedDataPath", str(run / "ios"),
+                      "-clonedSourcePackagesDirPath", str(run / "packages"), "CODE_SIGNING_ALLOWED=NO", "build"],
+                      run, "ios-sdk-build", base_env, 600, record, package)
+                  load("real-build-work-complete-before-original-XCTest")
+                  record["bootFirstCallback"]["phase"] = "delegating-untouched-original-XCTest"
+                  api.save(run, record)
+                  # Same original argv object, environment, cwd, timeout and still-owned UDID.
+                  return original_command(argv, directory, label, environment, timeout, result, cwd, **kwargs)
+
+              def observation(argv, directory, environment, result, label, timeout, cwd=run, **kwargs):
+                  if label == "simulator-after-boot-sample":
+                      owned = [item for item in result["commands"] if item["label"] == "simulator-after-boot"]
+                      if (len(owned) != 1 or argv != ["/usr/bin/sample", str(owned[0]["pid"]), "1", "10", "-mayDie"]
+                              or owned[0]["state"] != "running" or timeout != 3):
+                          raise RuntimeError("Owned process observation identity changed")
+                      load("owned-after-boot-command-still-unreaped")
+                      record["ownedProcessObservation"] = {"pid": owned[0]["pid"],
+                          "purpose": "Process name/state/wait point, not an IPC stack",
+                          "sharesOriginalAfterBootDeadline": True}
+                      return original_observation(["/bin/ps", "-p", argv[1], "-o",
+                          "pid=,ppid=,pgid=,stat=,wchan=,comm="], directory, environment, result,
+                          "simulator-after-boot-owned-process", timeout, cwd, **kwargs)
+                  return original_observation(argv, directory, environment, result, label, timeout, cwd, **kwargs)
+
+              api.run_command, api.observe_retired_command = command, observation
+              try:
+                  api.resolve_tools(run, base_env, record)
+                  core = record.get("coreSimulatorMetadata", {})
+                  selected = record["selectedTools"]["simctl"]
+                  candidates = [item for item in record.get("installedXcodeMetadata", {}).get("entries", [])
+                      if item.get("actualPath") == str(Path(base_env["DEVELOPER_DIR"]).parents[1])]
+                  if (core.get("status") != "observed" or len(candidates) != 1
+                          or not isinstance(core.get("cfBundleVersion"), str)
+                          or candidates[0].get("expectedCoreSimulatorVersion") != core["cfBundleVersion"]
+                          or candidates[0].get("wrapperSource", {}).get("sha256") != selected.get("sha256")):
+                      raise RuntimeError("Experiment-only matching-wrapper precondition unconfirmed; no repair")
+                  api.observe_processes(run, base_env, record, "processes-before-build")
+                  for label, argv in [
+                      ("os", ["/usr/bin/sw_vers"]), ("architecture", ["/usr/bin/uname", "-m"]),
+                      ("host-resources", ["/usr/sbin/sysctl", "hw.memsize", "hw.logicalcpu"]),
+                      ("xcode", ["/usr/bin/xcodebuild", "-version"]),
+                      ("first-launch", ["/usr/bin/xcodebuild", "-checkFirstLaunchStatus"]),
+                      ("sdks", ["/usr/bin/xcodebuild", "-showsdks"]),
+                      ("swift", ["/usr/bin/xcrun", "swift", "--version"]),
+                      ("runtimes", [selected["path"], "list", "runtimes", "--json"]),
+                  ]:
+                      limit = api.SIMULATOR_INITIAL_INVENTORY_SECONDS if label == "runtimes" else 60
+                      output = command(argv, run, label, base_env, limit, record, run)
+                      if label == "architecture":
+                          record["hostArchitecture"] = api.host_architecture(output)
+                  # Existing controller, entered exactly once; it owns all callback work and cleanup.
+                  api.run_simulator_tests(run, package, "WeftextAppleHost", base_env, record)
+                  simulator = record["simulator"]
+                  if (callback_count != 1 or simulator.get("testsPassed") is not True
+                          or simulator.get("cleanupUnknown") is not False or simulator.get("finalState") != "Shutdown"
+                          or any(key in simulator for key in ("cleanupFailure", "shutdownCommandFailure", "resultArchiveFailure"))):
+                      raise RuntimeError("Original XCTest or continuous owned lifecycle did not complete")
+                  record["state"] = "passed"
+              except BaseException as error:
+                  primary_failure = error
+                  record.update(state="failed", failure=f"{type(error).__name__}: {error}")
+                  try:
+                      api.observe_processes(run, base_env, record, "processes-after-build-failure")
+                  except Exception as diagnostic_error:
+                      record["failureObservationError"] = str(diagnostic_error)
+                  raise
+              finally:
+                  api.run_command, api.observe_retired_command = original_command, original_observation
+                  closeout_errors = []
+                  try:
+                      record["sourcesUnchanged"] = api.sources() == record["sources"]
+                      if not record["sourcesUnchanged"]:
+                          raise ValueError("Apple source changed during the ordering experiment")
+                  except BaseException as error:
+                      record.update(state="failed", sourceCheckError=f"{type(error).__name__}: {error}")
+                      closeout_errors.append(error)
+                  try:
+                      api.freeze_roles(run, package, base_env, record, require_complete=record["state"] == "passed")
+                  except BaseException as error:
+                      record.update(state="failed", roleCollectionError=f"{type(error).__name__}: {error}")
+                      closeout_errors.append(error)
+                  finally:
+                      api.save(run, record)
+                  if primary_failure is None and closeout_errors:
+                      raise closeout_errors[0]
+
+          if __name__ == "__main__":
+              spec = importlib.util.spec_from_file_location("apple_boot_first_owner", "scripts/apple.py")
+              api = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(api)
+              if sys.platform != "darwin":
+                  raise ValueError("Actual macOS SDK/runtime required")
+              api.static_check()
+              env = dict(os.environ)
+              developer_dir = Path(env["DEVELOPER_DIR"])
+              if not developer_dir.is_absolute() or not (developer_dir / "usr/bin/xcodebuild").is_file():
+                  raise ValueError("Selected installed Xcode unavailable; no installation fallback")
+              state_root = Path(env["RUNNER_TEMP"]) / ("weftext-apple-boot-first-" + env["GITHUB_RUN_ID"] + "-" + env["GITHUB_RUN_ATTEMPT"])
+              state_root.mkdir()
+              run = state_root / str(uuid.uuid4())
+              run.mkdir()
+              env["TMPDIR"] = str(run / "tmp")
+              Path(env["TMPDIR"]).mkdir()
+              env["CLANG_MODULE_CACHE_PATH"] = str(run / "clang-modules")
+              before = api.sources()
+              package = run / "source"
+              package.mkdir()
+              for relative, expected in before.items():
+                  source = api.ROOT / relative
+                  if source.is_relative_to(api.PACKAGE):
+                      data = source.read_bytes()
+                      if hashlib.sha256(data).hexdigest() != expected:
+                          raise ValueError("Apple source changed before input freeze")
+                      target = package / source.relative_to(api.PACKAGE)
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      target.write_bytes(data)
+              record = {"schemaVersion": 1, "kind": "appleHostLibraryBootFirstExperiment", "state": "running",
+                  "startedUtc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                  "sourceCommit": env["GITHUB_SHA"], "sources": before, "sourceSnapshot": str(package),
+                  "developerDirectory": str(developer_dir), "commands": [], "simulatorTestsRequested": True,
+                  "runtimeValidated": False, "productValidated": False, "productAcceptance": False,
+                  "mechanismValidation": {"macosWebKitTestsPassed": [], "iOSSimulatorRuntime": "not run", "product": "not validated"},
+                  "image": {"label": "macos-15-intel", "ImageOS": env.get("ImageOS"), "ImageVersion": env.get("ImageVersion"),
+                      "priorImageVersion": "20260824.0482.1", "exactVersionMatched": env.get("ImageVersion") == "20260824.0482.1"},
+                  "comparisonLimits": ["New VM and uptime/cache variation; no precise causal claim",
+                      "Frozen product input and isolated TMPDIR/module cache restored from original build",
+                      "Resolve/metadata cwd is owned run; simulator/build cwd is frozen source",
+                      "Same light owned-PID probe as platform control, instead of original sample",
+                      "All original metadata restored; scheme and real build work deferred until Booted"]}
+              api.save(run, record)
+              def terminate(signum, _frame):
+                  signal.signal(signum, signal.SIG_IGN)
+                  raise SystemExit(128 + signum)
+              for name in ("SIGTERM", "SIGHUP"):
+                  signal.signal(getattr(signal, name), terminate)
+              exercise(api, run, env, record, package, state_root)
+          PY
+      - name: Preserve original complete experiment records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: apple-boot-first-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/weftext-apple-boot-first-${{ github.run_id }}-${{ github.run_attempt }}/**/result.json
+            ${{ runner.temp }}/weftext-apple-boot-first-${{ github.run_id }}-${{ github.run_attempt }}/**/*.log
+            ${{ runner.temp }}/weftext-apple-boot-first-${{ github.run_id }}-${{ github.run_attempt }}/**/roles/*
+          if-no-files-found: error
+          retention-days: 7
