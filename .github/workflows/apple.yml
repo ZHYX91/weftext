@@ -24,9 +24,9 @@ concurrency:
 
 jobs:
   apple-host:
-    name: macOS host tests and iOS SDK build
+    name: macOS and iOS Simulator host tests
     runs-on: macos-15
-    timeout-minutes: 35
+    timeout-minutes: 60
     env:
       DEVELOPER_DIR: /Applications/Xcode_16.4.app/Contents/Developer
     steps:
@@ -37,7 +37,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Check native sources and compile with installed SDKs
-        run: python scripts/apple.py build --state-root "$RUNNER_TEMP/weftext-apple-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --developer-dir "$DEVELOPER_DIR"
+        run: python scripts/apple.py build --state-root "$RUNNER_TEMP/weftext-apple-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT" --developer-dir "$DEVELOPER_DIR" --run-simulator-tests
       - run: git diff --exit-code
       - name: Preserve original Apple build records
         if: always()
