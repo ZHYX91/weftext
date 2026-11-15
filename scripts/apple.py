@@ -23,6 +23,7 @@ PACKAGE = ROOT / "platforms" / "apple"
 SIMULATOR_RUNTIME = "com.apple.CoreSimulator.SimRuntime.iOS-18-5"
 SIMULATOR_DEVICE_TYPE = "com.apple.CoreSimulator.SimDeviceType.iPhone-16"
 SIMULATOR_BOOT_SECONDS = 600
+SIMULATOR_INITIAL_INVENTORY_SECONDS = 180
 
 
 def sources() -> dict[str, str]:
@@ -166,7 +167,7 @@ def qualified_tool_path(reply: str, developer_dir: Path, name: str) -> Path:
 def resolve_tools(run: Path, env: dict[str, str], record: dict) -> None:
     # Resolve once before Simulator boot. Both simctl and an unrelated lipo
     # invocation have stalled through xcrun after boot; this records and uses the
-    # actual selected binaries without mutating Xcode or its lookup cache.
+    # actual selected tool entries without mutating Xcode or its lookup cache.
     record["selectedTools"] = {}
     for name in ("simctl", "lipo", "otool"):
         reply = run_command(["/usr/bin/xcrun", "--find", name], run, "resolve-" + name, env, 30, record)
@@ -522,6 +523,7 @@ def build(state_root: Path, developer_dir: Path, simulator_tests: bool = False) 
     print(run, flush=True)
     try:
         resolve_tools(run, env, record)
+        observe_processes(run, env, record, "processes-before-build")
         for label, argv in [
             ("os", ["/usr/bin/sw_vers"]), ("architecture", ["/usr/bin/uname", "-m"]),
             ("host-resources", ["/usr/sbin/sysctl", "hw.memsize", "hw.logicalcpu"]),
@@ -529,9 +531,10 @@ def build(state_root: Path, developer_dir: Path, simulator_tests: bool = False) 
             ("first-launch", ["/usr/bin/xcodebuild", "-checkFirstLaunchStatus"]),
             ("sdks", ["/usr/bin/xcodebuild", "-showsdks"]),
             ("swift", ["/usr/bin/xcrun", "swift", "--version"]),
-            ("runtimes", ["/usr/bin/xcrun", "simctl", "list", "runtimes", "--json"]),
+            ("runtimes", [record["selectedTools"]["simctl"]["path"], "list", "runtimes", "--json"]),
         ]:
-            output = run_command(argv, run, label, env, 60, record)
+            timeout = SIMULATOR_INITIAL_INVENTORY_SECONDS if label == "runtimes" else 60
+            output = run_command(argv, run, label, env, timeout, record)
             if label == "architecture":
                 record["hostArchitecture"] = host_architecture(output)
         macos_output = run_command(["/usr/bin/xcrun", "swift", "test", "--package-path", str(package_input),
@@ -565,6 +568,10 @@ def build(state_root: Path, developer_dir: Path, simulator_tests: bool = False) 
         return 0
     except BaseException as error:
         record.update(state="failed", failure=f"{type(error).__name__}: {error}", sourcesUnchanged=sources() == before)
+        try:
+            observe_processes(run, env, record, "processes-after-build-failure")
+        except Exception as diagnostic_error:
+            record["failureObservationError"] = f"{type(diagnostic_error).__name__}: {diagnostic_error}"
         raise
     finally:
         failed_before_role_collection = record["state"] != "passed"
