@@ -172,6 +172,13 @@ def simulator_udid(value: str) -> str:
     return value.upper()
 
 
+def host_architecture(output: str) -> str:
+    value = output.strip()
+    if value not in {"arm64", "x86_64"}:
+        raise ValueError("Expected an actual supported Apple host architecture")
+    return value
+
+
 def inventory_devices(inventory: dict) -> list[tuple[str, dict]]:
     groups = inventory.get("devices")
     if not isinstance(groups, dict) or not all(isinstance(items, list) for items in groups.values()):
@@ -275,7 +282,7 @@ def run_simulator_tests(run: Path, package: Path, scheme: str, env: dict[str, st
     if (len(matches) != 1 or matches[0].get("isAvailable") is not True or
             matches[0].get("version") != "18.5" or not isinstance(matches[0].get("buildversion"), str) or
             not isinstance(matches[0].get("supportedArchitectures"), list) or
-            "arm64" not in matches[0].get("supportedArchitectures", []) or
+            record["hostArchitecture"] not in matches[0].get("supportedArchitectures", []) or
             not any(item.get("identifier") == SIMULATOR_DEVICE_TYPE
                     for item in matches[0].get("supportedDeviceTypes", []) if isinstance(item, dict))):
         raise ValueError("The installed iOS18.5 runtime/device/architecture is not qualified")
@@ -308,8 +315,10 @@ def run_simulator_tests(run: Path, package: Path, scheme: str, env: dict[str, st
         if owned_device(created, udid, original["name"]).get("state") != "Shutdown":
             raise ValueError("New owned simulator was not observed Shutdown before boot")
         save(run, record)
+        run_command(["/usr/bin/vm_stat"], run, "memory-before-boot", env, 15, record, package)
         run_command(base + ["boot", udid], run, "simulator-boot", env, 60, record, package)
         run_command(base + ["bootstatus", udid, "-b"], run, "simulator-boot-status", env, 180, record, package)
+        run_command(["/usr/bin/vm_stat"], run, "memory-after-boot", env, 15, record, package)
         if owned_device(devices("simulator-after-boot"), udid, original["name"]).get("state") != "Booted":
             raise ValueError("Original simulator did not produce a Booted observation")
         output = run_command(["/usr/bin/xcodebuild", "-jobs", "2", "-scheme", scheme, "-sdk", "iphonesimulator",
@@ -392,7 +401,8 @@ def freeze_roles(run: Path, package: Path, env: dict[str, str], record: dict,
             if not isinstance(executable, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", executable) or executable in {".", ".."}:
                 raise ValueError("Unsupported original iOS test-bundle executable metadata")
             test_executables.append(bundle / executable)
-        selections.append(("ios-simulator-test-bundle", test_executables, {"BUNDLE", "EXECUTE"}, {"arm64"}))
+        architecture = host_architecture(record.get("hostArchitecture", ""))
+        selections.append(("ios-simulator-test-bundle", test_executables, {"BUNDLE", "EXECUTE"}, {architecture}))
     magic_values = {"feedface", "cefaedfe", "feedfacf", "cffaedfe", "cafebabe", "bebafeca",
                     "cafebabf", "bfbafeca"}
     for name, candidates, file_types, required_architectures in selections:
@@ -480,13 +490,16 @@ def build(state_root: Path, developer_dir: Path, simulator_tests: bool = False) 
     try:
         for label, argv in [
             ("os", ["/usr/bin/sw_vers"]), ("architecture", ["/usr/bin/uname", "-m"]),
+            ("host-resources", ["/usr/sbin/sysctl", "hw.memsize", "hw.logicalcpu"]),
             ("xcode", ["/usr/bin/xcodebuild", "-version"]),
             ("first-launch", ["/usr/bin/xcodebuild", "-checkFirstLaunchStatus"]),
             ("sdks", ["/usr/bin/xcodebuild", "-showsdks"]),
             ("swift", ["/usr/bin/xcrun", "swift", "--version"]),
             ("runtimes", ["/usr/bin/xcrun", "simctl", "list", "runtimes", "--json"]),
         ]:
-            run_command(argv, run, label, env, 60, record)
+            output = run_command(argv, run, label, env, 60, record)
+            if label == "architecture":
+                record["hostArchitecture"] = host_architecture(output)
         macos_output = run_command(["/usr/bin/xcrun", "swift", "test", "--package-path", str(package_input),
                      "--scratch-path", str(run / "swift"), "--cache-path", str(state_root / "cache"),
                      "--jobs", "2"], run, "macos-tests", env, 600, record, package_input)

@@ -41,3 +41,5 @@ python scripts/apple.py build --state-root <绝对独占输出目录> --develope
 依据：[WebKit 带回复消息](https://developer.apple.com/documentation/webkit/wkscriptmessagehandlerwithreply)、[页面来源](https://developer.apple.com/documentation/webkit/wkframeinfo)、[Apple 目录能力](https://developer.apple.com/documentation/uikit/providing-access-to-directories)、[Xcode 的 Swift package](https://developer.apple.com/documentation/xcode/creating-a-standalone-swift-package-with-xcode)。
 
 iOS 18.5 Simulator 对早于 iOS 18.4 的部署目标存在已知 [WebKit Swift overlay 加载缺陷](https://bugs.webkit.org/show_bug.cgi?id=293831)。入口从原清单读取已核定 runtime bundle，要求其中已有 `System/Cryptexes/OS/usr/lib/swift/libswiftWebKit.dylib`，记录原库，并仅通过 `TEST_RUNNER_DYLD_FALLBACK_LIBRARY_PATH` 将其目录传给 XCTest runner。库缺失或已继承其他覆盖配置时拒绝执行。iOS 16 最低部署目标和全部真实 WebKit 用例保留，不修改已安装 runtime 或下载替代库。Xcode 的[测试进程环境前缀说明](https://developer.apple.com/documentation/xcode/environment-variable-reference)定义该传递方式。
+
+CI workflow 使用标准 `macos-15-intel` runner 与 Xcode 16.4。入口记录实际 `uname` 架构与硬件资源，在 Simulator 启动前后收集虚拟内存统计。runtime 准入和 iOS 测试 bundle 角色必须匹配所观察的架构（`arm64` 或 `x86_64`）；generic SDK 构建仍要求双架构。Intel Simulator 通过不代表 ARM64 Simulator 或真机通过。

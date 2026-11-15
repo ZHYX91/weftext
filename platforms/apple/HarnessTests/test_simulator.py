@@ -66,6 +66,13 @@ class SimulatorOwnershipTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             ENTRY.strict_inventory('{"devices":{},"devices":{"different":[]}}')
 
+    def test_actual_host_architecture_is_not_assumed_from_the_workflow_label(self):
+        for architecture in ["arm64", "x86_64"]:
+            self.assertEqual(ENTRY.host_architecture(architecture + "\n"), architecture)
+        for invalid in ["", "amd64", "arm64 x86_64", "aarch64"]:
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                ENTRY.host_architecture(invalid)
+
 
 class SimulatorTestEnvironmentTests(unittest.TestCase):
     def fixture(self, directory):
