@@ -179,8 +179,22 @@ def resolve_tools(run: Path, env: dict[str, str], record: dict) -> None:
 
 def observe_processes(run: Path, env: dict[str, str], record: dict, label: str) -> None:
     # No environment or command arguments: retain only process/resource facts.
-    run_command(["/bin/ps", "-axo", "pid,ppid,pgid,%cpu,rss,stat,comm"],
-                run, label, env, 15, record)
+    argv = ["/bin/ps", "-axo", "pid,ppid,pgid,%cpu,rss,stat,comm"]
+    before = len(record["commands"])
+    try:
+        run_command(argv, run, label, env, 15, record)
+    except RuntimeError:
+        # A diagnostic deadline/nonzero exit is not an SDK or XCTest result.
+        # Keep its original failed record; only confirmed process retirement
+        # permits continuing. Cancellation and unknown cleanup still propagate.
+        commands = record["commands"]
+        if len(commands) != before + 1:
+            raise
+        entry = commands[-1]
+        if (entry.get("label") != label or entry.get("argv") != argv
+                or entry.get("state") != "failed" or entry.get("cleanupUnknown") is not False
+                or entry.get("ownedGroupGone") is not True or entry.get("ownedLeaderReaped") is not True):
+            raise
 
 
 def strict_inventory(text: str) -> dict:

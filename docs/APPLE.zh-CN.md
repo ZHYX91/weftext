@@ -46,4 +46,4 @@ CI workflow 使用标准 `macos-15-intel` runner 与 Xcode 16.4。入口记录�
 
 启动前通过所选 Xcode 解析一次 `simctl`、`lipo` 与 `otool`，核实工具位于该 Xcode 内并记录字节数与 SHA-256；后续模拟器和产物检查直接调用这些准确工具，不修改 SDK 或 `xcrun` 缓存。启动前后保留有时限的进程快照，只记录进程名与资源字段，不含参数或环境。工具选择不改变测试期限或原设备收尾要求。
 
-首次 runtime 清单单独允许 180 秒冷启动预算，后续清单仍限 30 秒。runner-image 项目的 [issue 15247](https://github.com/actions/runner-images/issues/15247)记录了首次发现 runtime 可能耗时数分钟；该报告不证明任意单次运行的具体原因。启动与失败时的进程快照保留诊断事实，缺失或失败的观察仍然是失败。
+首次 runtime 清单单独允许 180 秒冷启动预算，后续清单仍限 30 秒。runner-image 项目的 [issue 15247](https://github.com/actions/runner-images/issues/15247)记录了首次发现 runtime 可能耗时数分钟；该报告不证明任意单次运行的具体原因。每份进程快照仍限 15 秒，不可用时保留原失败命令和日志。仅在精确原进程组消失且 leader 已回收后，诊断失败才不阻断实际验证；清理未知或中断继续拒绝。SDK、Simulator 身份、XCTest 和最终 Shutdown 检查仍必须完成，不从诊断继承通过。

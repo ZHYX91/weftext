@@ -149,13 +149,15 @@ class CommandProcess:
 
 
 class CommandSupervisionTests(unittest.TestCase):
-    def exercise(self, waits, signals, expected=None, clock=None):
+    def exercise(self, waits, signals, expected=None, clock=None, observation=False):
         process = CommandProcess(waits)
         record = {"commands": []}
         output = b"TEST original command bytes\n"
+        argv = ["/bin/ps", "-axo", "pid,ppid,pgid,%cpu,rss,stat,comm"] if observation else ["TEST-owned-command"]
+        label, timeout = ("processes-after-boot", 15) if observation else ("runtimes", 60)
 
         def spawn(argv, **options):
-            self.assertEqual(argv, ["TEST-owned-command"])
+            self.assertEqual(argv, expected_argv)
             self.assertTrue(options["start_new_session"])
             options["stdout"].write(output)
             options["stdout"].flush()
@@ -163,6 +165,11 @@ class CommandSupervisionTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as directory:
             run = Path(directory)
+            expected_argv = argv
+            def invoke():
+                if observation:
+                    return ENTRY.observe_processes(run, {}, record, label)
+                return ENTRY.run_command(argv, run, label, {}, timeout, record, run)
             with patch.object(ENTRY.subprocess, "Popen", side_effect=spawn), \
                     patch.object(ENTRY.os, "killpg", side_effect=signals, create=True) as group, \
                     patch.object(ENTRY.signal, "SIGKILL", 9, create=True), \
@@ -171,15 +178,15 @@ class CommandSupervisionTests(unittest.TestCase):
                 failure = None
                 if expected:
                     with self.assertRaises(expected) as raised:
-                        ENTRY.run_command(["TEST-owned-command"], run, "runtimes", {}, 60, record, run)
+                        invoke()
                     failure = raised.exception
                 else:
-                    self.assertEqual(ENTRY.run_command(["TEST-owned-command"], run, "runtimes", {}, 60, record, run), output.decode())
+                    self.assertEqual(invoke(), None if observation else output.decode())
                 signals_sent = list(group.call_args_list)
             saved = json.loads((run / "result.json").read_text(encoding="utf-8"))
             self.assertEqual(saved, record)
-            self.assertEqual((run / "runtimes.log").read_bytes(), output)
-        self.assertEqual(process.wait_timeouts, [60, 10])
+            self.assertEqual((run / (label + ".log")).read_bytes(), output)
+        self.assertEqual(process.wait_timeouts, [timeout, 10])
         return process, record["commands"][0], signals_sent, failure
 
     def test_deadline_and_denied_signal_keep_original_cause_and_reap_original_leader(self):
@@ -267,6 +274,46 @@ class CommandSupervisionTests(unittest.TestCase):
         self.assertEqual(entry["exitCode"], 7)
         self.assertEqual(entry["state"], "failed")
         self.assertIn("exit 7", str(failure))
+
+    def test_process_snapshot_failure_continues_only_after_exact_process_retirement(self):
+        for waits, signals in [([0, 0], [ProcessLookupError()]),
+                ([7, 7], [ProcessLookupError()]),
+                ([subprocess.TimeoutExpired("TEST ps", 15), -9], [None, None, ProcessLookupError()])]:
+            with self.subTest(waits=waits):
+                _, entry, _, failure = self.exercise(waits, signals, observation=True)
+                self.assertIsNone(failure)
+                self.assertFalse(entry["cleanupUnknown"])
+                self.assertEqual(entry["state"], "passed" if waits[0] == 0 else "failed")
+                if isinstance(waits[0], subprocess.TimeoutExpired):
+                    self.assertEqual(entry["terminationReason"], "deadline")
+                    self.assertEqual(entry["exitCode"], -9)
+
+    def test_process_snapshot_unknown_cleanup_and_cancellation_still_propagate(self):
+        self.exercise([subprocess.TimeoutExpired("TEST ps", 15), 0],
+                      [PermissionError(errno.EPERM, "TEST probe denied")], RuntimeError, observation=True)
+        for interrupted in (KeyboardInterrupt(), SystemExit(2)):
+            with self.subTest(interrupted=type(interrupted).__name__):
+                _, _, _, failure = self.exercise([interrupted, 0], [ProcessLookupError()],
+                                                type(interrupted), observation=True)
+                self.assertIs(failure, interrupted)
+
+    def test_process_snapshot_cannot_swallow_unbound_or_incomplete_failure(self):
+        exact = {"label": "processes-after-boot", "argv": ["/bin/ps", "-axo", "pid,ppid,pgid,%cpu,rss,stat,comm"],
+                 "state": "failed", "cleanupUnknown": False, "ownedGroupGone": True, "ownedLeaderReaped": True}
+        for change in ({"label": "simulator-after-boot"}, {"argv": ["xcodebuild"]},
+                       {"state": "running"}, {"cleanupUnknown": None},
+                       {"ownedGroupGone": False}, {"ownedLeaderReaped": False}):
+            with self.subTest(change=change):
+                record = {"commands": []}
+                def fail(*_args):
+                    record["commands"].append({**exact, **change})
+                    raise RuntimeError("TEST unqualified failure")
+                with patch.object(ENTRY, "run_command", side_effect=fail), self.assertRaises(RuntimeError):
+                    ENTRY.observe_processes(Path("TEST-run"), {}, record, "processes-after-boot")
+        record = {"commands": [exact]}
+        with patch.object(ENTRY, "run_command", side_effect=RuntimeError("TEST no new record")), \
+                self.assertRaises(RuntimeError):
+            ENTRY.observe_processes(Path("TEST-run"), {}, record, "processes-after-boot")
 
 
 if __name__ == "__main__":
