@@ -1,0 +1,79 @@
+# One-time read-only tool inspection, not a product entry or acceptance gate.
+name: Apple simctl list capabilities
+
+on:
+  push:
+    branches: [diag/apple-list-capabilities-20261116]
+    paths: ['.github/workflows/apple-list-capabilities.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  list-capabilities:
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Resolve one original tool and retain its help list
+        run: |
+          python - <<'PY'
+          import datetime, hashlib, importlib.util, os, signal, uuid
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("apple_list_owner", "scripts/apple.py")
+          api = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(api)
+          env = dict(os.environ)
+          run = Path(env["RUNNER_TEMP"]) / ("weftext-apple-list-" + env["GITHUB_RUN_ID"] + "-" + env["GITHUB_RUN_ATTEMPT"]) / str(uuid.uuid4())
+          run.mkdir(parents=True)
+          record = {"kind": "read-only-simctl-list-capabilities", "state": "running", "commands": [],
+              "sourceCommit": env["GITHUB_SHA"], "startedUtc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "developerDirectory": env["DEVELOPER_DIR"], "ownerSha256": hashlib.sha256(Path("scripts/apple.py").read_bytes()).hexdigest(),
+              "image": {"label": "macos-15-intel", "ImageOS": env.get("ImageOS"), "ImageVersion": env.get("ImageVersion")},
+              "deviceCreationRequested": False, "simulatorTestsRequested": False,
+              "testsPassed": False, "runtimeValidated": False, "productValidated": False, "productAcceptance": False}
+          def terminate(signum, _frame):
+              signal.signal(signum, signal.SIG_IGN)
+              raise SystemExit(128 + signum)
+          for name in ("SIGTERM", "SIGHUP"):
+              signal.signal(getattr(signal, name), terminate)
+          try:
+              reply = api.run_command(["/usr/bin/xcrun", "--find", "simctl"], run, "resolve-simctl", env, 30, record, run)
+              actual = api.qualified_tool_path(reply, Path(env["DEVELOPER_DIR"]), "simctl")
+              selected = api.selected_tool_record(Path(reply.strip()), actual)
+              record["selectedTools"] = {"simctl": selected}
+              api.record_platform_versions(record)
+              core = record.get("coreSimulatorMetadata", {})
+              candidates = [item for item in record.get("installedXcodeMetadata", {}).get("entries", [])
+                  if item.get("actualPath") == str(Path(env["DEVELOPER_DIR"]).parents[1])]
+              if (core.get("status") != "observed" or len(candidates) != 1
+                      or not isinstance(core.get("cfBundleVersion"), str)
+                      or candidates[0].get("expectedCoreSimulatorVersion") != core["cfBundleVersion"]
+                      or candidates[0].get("wrapperSource", {}).get("sha256") != selected.get("sha256")
+                      or selected.get("sha256") != "8e4ed565409890f1fd518099f98bb6ccac7419605574d802ac7356fd34f63a5b"):
+                  raise RuntimeError("Read-only matching-wrapper precondition unconfirmed; no tool repair")
+              api.run_command([str(actual), "help", "list"], run, "simctl-help-list", env, 30, record, run)
+              record["state"] = "read-only-help-captured"
+          except BaseException as error:
+              record.update(state="failed", failure=f"{type(error).__name__}: {error}")
+              raise
+          finally:
+              api.save(run, record)
+          PY
+      - name: Preserve exact help and command cleanup records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: apple-list-capabilities-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/weftext-apple-list-${{ github.run_id }}-${{ github.run_attempt }}/**/result.json
+            ${{ runner.temp }}/weftext-apple-list-${{ github.run_id }}-${{ github.run_attempt }}/**/*.log
+          if-no-files-found: error
+          retention-days: 7
