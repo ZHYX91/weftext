@@ -4,7 +4,9 @@ name: Apple original build with frozen setup
 on:
   push:
     branches: [diag/apple-original-54090-20261116]
-    paths: ['.github/workflows/apple-original-budget.yml']
+    paths:
+      - '.github/workflows/apple-original-budget.yml'
+      - 'platforms/apple/Tests/**'
 
 permissions:
   contents: read

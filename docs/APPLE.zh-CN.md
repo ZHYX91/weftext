@@ -32,7 +32,9 @@ python scripts/apple.py build --state-root <绝对独占输出目录> --develope
 
 `--run-simulator-tests` 是默认关闭的额外 OS 机制步骤。它重新核已安装 iOS 18.5 runtime、iPhone 16 类型和实际工具帮助，使用本次唯一 UUID 名称创建一次设备；原清单中已有的 UDID 不能接管。创建原回执先保存，再校原 UDID／名称／类型／runtime，全部 boot、测试和 shutdown 只用这个 UDID。创建结果未知时仅沿原唯一 tuple 查询，不重新创建或猜现有设备。
 
-首次数据迁移与启动完成最多等 600 秒，实际 iOS XCTest 最多 600 秒，shutdown 最多 60 秒；结束必须重新观察原 tuple 的 `Shutdown`。失败或未知不标清理成功，不 erase、全局关闭、下载 runtime、接受许可、设置 team 或签名补救。额外步骤编译并运行同一套十二项 Swift／WebKit 用例，iOS 分支使用实际 UIKit XCTest runner，不能 skip 或用零项替代。原 `.xcresult` 有界归档及实际 iOS 测试 bundle 二进制也固定到 `roles/`。完整 Simulator 步骤是否通过以原运行回执为准；即使通过也只证明该模拟器的宿主库机制，不证明 Core／Engine、真机、IME／AT 或完整产品。
+首次数据迁移与启动完成最多等 600 秒，实际 iOS XCTest 最多 600 秒，shutdown 最多 60 秒；结束必须重新观察原 tuple 的 `Shutdown`。失败或未知不标清理成功，不 erase、全局关闭、下载 runtime、接受许可、设置 team 或签名补救。额外步骤编译并运行全部十五项 Swift／XCTest 用例，iOS 分支使用实际 UIKit XCTest runner：原七项 WebKit、五项纯 native gate，加三项回调等待 API 回归，不能 skip 或用零项替代。原 `.xcresult` 有界归档及实际 iOS 测试 bundle 二进制也固定到 `roles/`。完整 Simulator 步骤是否通过以原运行回执为准；即使通过也只证明该模拟器的宿主库机制，不证明 Core／Engine、真机、IME／AT 或完整产品。
+
+各 WebKit fixture 独立持有真实可见的 AppKit／UIKit window 与根控制器，非零 bounds 挂载原 WebView，保留生产导航 delegate 和调度 policy。窗口托管、实际可信加载状态（URL／loading／progress）与 bridge ready 共同受一个十二秒期限约束，随后动作回调仍最多八秒。key window／app／scene 状态只作诊断，不增加通过门禁。独立 `XCTestExpectation`／`XCTWaiter` 结果把超时作为错误交回调用方，不让可轮询探针先永久记录 testcase failure；只有正常返回 not-ready 才允许继续轮询，回调受外层剩余时间约束，回调超时立即终止。直接超时、可捕获探针和外层期限耗尽均有真实 XCTest API 回归。收尾先 retire delivery，再 detach 并关闭本 fixture 的 window。Apple 在 [inactiveSchedulingPolicy](https://developer.apple.com/documentation/webkit/wkpreferences/inactiveschedulingpolicy-swift.property) 说明 window 外 WebView 的默认暂停策略。
 
 普通跨平台 ownership guard 单测可独立运行：`python platforms/apple/HarnessTests/test_simulator.py`；这些纯 JSON／原 tuple 反例不启动 Apple 工具，也不代替 OS 回执。
 
