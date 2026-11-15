@@ -437,7 +437,7 @@ class AfterBootSamplingTests(unittest.TestCase):
 class PlatformVersionMetadataTests(unittest.TestCase):
     def test_aliases_share_one_bounded_bundle_read_and_keep_their_mapping(self):
         with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             apps = root / "Applications"
             actual, alias = apps / "Xcode_26.3.app", apps / "Xcode.app"
             (actual / "Contents/Developer/usr/bin").mkdir(parents=True)
