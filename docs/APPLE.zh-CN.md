@@ -32,7 +32,7 @@ python scripts/apple.py build --state-root <绝对独占输出目录> --develope
 
 `--run-simulator-tests` 是默认关闭的额外 OS 机制步骤。它重新核已安装 iOS 18.5 runtime、iPhone 16 类型和实际工具帮助，使用本次唯一 UUID 名称创建一次设备；原清单中已有的 UDID 不能接管。创建原回执先保存，再校原 UDID／名称／类型／runtime，全部 boot、测试和 shutdown 只用这个 UDID。创建结果未知时仅沿原唯一 tuple 查询，不重新创建或猜现有设备。
 
-启动完成最多等 180 秒，实际 iOS XCTest 最多 600 秒，shutdown 最多 60 秒；结束必须重新观察原 tuple 的 `Shutdown`。失败或未知不标清理成功，不 erase、全局关闭、下载 runtime、接受许可、设置 team 或签名补救。额外步骤编译并运行同一套十二项 Swift／WebKit 用例，iOS 分支使用实际 UIKit XCTest runner，不能 skip 或用零项替代。原 `.xcresult` 有界归档及实际 iOS 测试 bundle 二进制也固定到 `roles/`。完整 Simulator 步骤是否通过以原运行回执为准；即使通过也只证明该模拟器的宿主库机制，不证明 Core／Engine、真机、IME／AT 或完整产品。
+首次数据迁移与启动完成最多等 600 秒，实际 iOS XCTest 最多 600 秒，shutdown 最多 60 秒；结束必须重新观察原 tuple 的 `Shutdown`。失败或未知不标清理成功，不 erase、全局关闭、下载 runtime、接受许可、设置 team 或签名补救。额外步骤编译并运行同一套十二项 Swift／WebKit 用例，iOS 分支使用实际 UIKit XCTest runner，不能 skip 或用零项替代。原 `.xcresult` 有界归档及实际 iOS 测试 bundle 二进制也固定到 `roles/`。完整 Simulator 步骤是否通过以原运行回执为准；即使通过也只证明该模拟器的宿主库机制，不证明 Core／Engine、真机、IME／AT 或完整产品。
 
 普通跨平台 ownership guard 单测可独立运行：`python platforms/apple/HarnessTests/test_simulator.py`；这些纯 JSON／原 tuple 反例不启动 Apple 工具，也不代替 OS 回执。
 

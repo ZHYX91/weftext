@@ -22,6 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PACKAGE = ROOT / "platforms" / "apple"
 SIMULATOR_RUNTIME = "com.apple.CoreSimulator.SimRuntime.iOS-18-5"
 SIMULATOR_DEVICE_TYPE = "com.apple.CoreSimulator.SimDeviceType.iPhone-16"
+SIMULATOR_BOOT_SECONDS = 600
 
 
 def sources() -> dict[str, str]:
@@ -317,7 +318,7 @@ def run_simulator_tests(run: Path, package: Path, scheme: str, env: dict[str, st
         save(run, record)
         run_command(["/usr/bin/vm_stat"], run, "memory-before-boot", env, 15, record, package)
         run_command(base + ["boot", udid], run, "simulator-boot", env, 60, record, package)
-        run_command(base + ["bootstatus", udid, "-b"], run, "simulator-boot-status", env, 180, record, package)
+        run_command(base + ["bootstatus", udid, "-b"], run, "simulator-boot-status", env, SIMULATOR_BOOT_SECONDS, record, package)
         run_command(["/usr/bin/vm_stat"], run, "memory-after-boot", env, 15, record, package)
         if owned_device(devices("simulator-after-boot"), udid, original["name"]).get("state") != "Booted":
             raise ValueError("Original simulator did not produce a Booted observation")
