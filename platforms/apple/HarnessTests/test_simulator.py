@@ -435,6 +435,32 @@ class AfterBootSamplingTests(unittest.TestCase):
 
 
 class PlatformVersionMetadataTests(unittest.TestCase):
+    def test_aliases_share_one_bounded_bundle_read_and_keep_their_mapping(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            apps = root / "Applications"
+            actual, alias = apps / "Xcode_26.3.app", apps / "Xcode.app"
+            (actual / "Contents/Developer/usr/bin").mkdir(parents=True)
+            alias.mkdir()
+            (actual / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleShortVersionString": "26.3"}))
+            (actual / "Contents/Developer/usr/bin/simctl").write_bytes(b'#!/bin/bash\nEXPECTED_VERSION="1051.17.8"\n')
+            core = root / "CoreSimulator.framework/Versions/A/Resources/Info.plist"
+            core.parent.mkdir(parents=True)
+            core.write_bytes(plistlib.dumps({"CFBundleVersion": "1051.17.8"}))
+            original_resolve = Path.resolve
+            def resolve(path, *args, **kwargs):
+                return actual / path.relative_to(alias) if path == alias or alias in path.parents else original_resolve(path, *args, **kwargs)
+            record = {}
+            with patch.object(Path, "resolve", autospec=True, side_effect=resolve), \
+                    patch.object(ENTRY, "metadata_bytes", wraps=ENTRY.metadata_bytes) as reads:
+                ENTRY.record_platform_versions(record, apps, core)
+            inventory = record["installedXcodeMetadata"]
+            self.assertEqual((inventory["candidateCount"], inventory["resolvedCandidateCount"]), (2, 1))
+            self.assertEqual(len(inventory["entries"]), 1)
+            self.assertEqual(set(inventory["entries"][0]["reportedPaths"]), {str(actual), str(alias)})
+            self.assertEqual(reads.call_count, 3)  # Core plist, one Xcode plist, one wrapper.
+            self.assertFalse(inventory["truncated"])
+
     def test_records_real_file_versions_and_comparisons_without_executing_tools(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

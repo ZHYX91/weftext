@@ -22,8 +22,8 @@ WebKit XCTest 直接创建真实 WKWebView，经实际脚本消息验证准确�
 
 ```text
 python scripts/apple.py check
-python scripts/apple.py build --state-root <绝对独占输出目录> --developer-dir /Applications/Xcode_16.4.app/Contents/Developer
-python scripts/apple.py build --state-root <绝对独占输出目录> --developer-dir /Applications/Xcode_16.4.app/Contents/Developer --run-simulator-tests
+python scripts/apple.py build --state-root <绝对独占输出目录> --developer-dir /Applications/Xcode_26.3.app/Contents/Developer
+python scripts/apple.py build --state-root <绝对独占输出目录> --developer-dir /Applications/Xcode_26.3.app/Contents/Developer --run-simulator-tests
 ```
 
 `check` 核源库存并运行纯 ownership guard 单测，不执行 Apple 工具。`build` 必须在真实 macOS 上使用已安装的明确 Xcode；保存系统、架构、Xcode／SDK／Swift／Simulator 清单，然后实际执行 macOS Swift／WebKit 单测和 iOS Simulator SDK 编译。源码冻结到本次输入目录，SwiftPM 的 `.swiftpm` 状态不写回检出。默认构建不下载 SDK、不接受许可、不改全局 Xcode 选择、不启动已有 Simulator，也不签名或发布。每个子命令有期限，仅停止本次独占 process group，保存原日志、源与产物摘要。构建和单测不表示 Simulator 产品运行或安装验收。
@@ -42,7 +42,7 @@ python scripts/apple.py build --state-root <绝对独占输出目录> --develope
 
 iOS 18.5 Simulator 对早于 iOS 18.4 的部署目标存在已知 [WebKit Swift overlay 加载缺陷](https://bugs.webkit.org/show_bug.cgi?id=293831)。入口从原清单读取已核定 runtime bundle，要求其中已有 `System/Cryptexes/OS/usr/lib/swift/libswiftWebKit.dylib`，记录原库，并仅通过 `TEST_RUNNER_DYLD_FALLBACK_LIBRARY_PATH` 将其目录传给 XCTest runner。库缺失或已继承其他覆盖配置时拒绝执行。iOS 16 最低部署目标和全部真实 WebKit 用例保留，不修改已安装 runtime 或下载替代库。Xcode 的[测试进程环境前缀说明](https://developer.apple.com/documentation/xcode/environment-variable-reference)定义该传递方式。
 
-CI workflow 使用标准 `macos-15-intel` runner 与 Xcode 16.4。入口记录实际 `uname` 架构与硬件资源，在 Simulator 启动前后收集虚拟内存统计。runtime 准入和 iOS 测试 bundle 角色必须匹配所观察的架构（`arm64` 或 `x86_64`）；generic SDK 构建仍要求双架构。Intel Simulator 通过不代表 ARM64 Simulator 或真机通过。
+CI workflow 使用标准 `macos-15-intel` runner 与已安装的 Xcode 26.3。实际工具版本、runtime 兼容与机制验收仍按本轮真实记录授予，源码 pin 本身不证明资格。入口记录实际 `uname` 架构与硬件资源，在 Simulator 启动前后收集虚拟内存统计。runtime 准入和 iOS 测试 bundle 角色必须匹配所观察的架构（`arm64` 或 `x86_64`）；generic SDK 构建仍要求双架构。Intel Simulator 通过不代表 ARM64 Simulator 或真机通过。
 
 启动前通过所选 Xcode 解析一次 `simctl`、`lipo` 与 `otool`，核实工具位于该 Xcode 内并记录字节数与 SHA-256；后续模拟器和产物检查直接调用这些准确工具，不修改 SDK 或 `xcrun` 缓存。启动前后保留有时限的进程快照，只记录进程名与资源字段，不含参数或环境。工具选择不改变测试期限或原设备收尾要求。
 
@@ -50,4 +50,4 @@ CI workflow 使用标准 `macos-15-intel` runner 与 Xcode 16.4。入口记录�
 
 功能性的 boot 后设备清单仍须在原 30 秒命令期限内证明准确原 tuple 为 `Booted`。原子进程十秒后仍未回收时，仅对它的准确 PID 请求一次一秒、10 毫秒间隔且带 `-mayDie` 的 `sample`；采样器执行最多三秒，其进程组和 leader 的收尾共同受原清单的绝对期限约束。采样原日志和命令结果单独保留，采样清理未知或中断仍使本轮失败，清单 owner 始终收尾自身命令。单调阶段和 `profiled` 标记明确这是一轮诊断，不能用作无采样性能基线。参数依据为 [Apple 采样说明](https://developer.apple.com/library/archive/documentation/Performance/Conceptual/LaunchTime/Articles/MeasuringLaunch.html)。选定工具记录保留报告／实际路径、符号链接状态和文件身份；至多 4 KiB 的原始脚本另保留只读原字节对应的有限文本，不为检查而执行该文本。
 
-工具解析另记录已安装 CoreSimulator framework 原 `Info.plist` 的版本、摘要和身份，以及最多十六个顶层已安装 Xcode 的有限元数据。plist 最多读取 64 KiB、wrapper 最多 4 KiB；只读脚本中唯一明确的 `EXPECTED_VERSION` 做比较，不执行脚本来探测。缺失、歧义和版本不等均保留为观察，不成为运行通过或新增失败门禁；不切换 Xcode、不安装 first-launch 包、不修改 wrapper，也不放宽 Simulator 资格。
+工具解析另记录已安装 CoreSimulator framework 原 `Info.plist` 的版本、摘要和身份，以及由顶层名称解析出的最多十六个不同 Xcode bundle 的有限元数据。别名保留映射并共用一次 bundle 读取，不再各占一个名额。plist 最多读取 64 KiB、wrapper 最多 4 KiB；只读脚本中唯一明确的 `EXPECTED_VERSION` 做比较，不执行脚本来探测。缺失、歧义和版本不等均保留为观察，不成为运行通过或新增失败门禁；这一只读清单不切换 Xcode、不安装 first-launch 包、不修改 wrapper，也不放宽 Simulator 资格。

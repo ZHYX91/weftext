@@ -292,13 +292,21 @@ def record_platform_versions(record: dict, applications: Path = Path("/Applicati
     inventory = record["installedXcodeMetadata"] = {"entries": [], "selectionChanged": False}
     try:
         candidates = sorted(applications.glob("Xcode*.app"))
-        inventory.update(candidateCount=len(candidates), truncated=len(candidates) > 16)
-        for app in candidates[:16]:
-            entry = {"reportedPath": str(app), "status": "unavailable"}
+        bundles = {}
+        for app in candidates:
+            try:
+                actual = app.resolve(strict=True)
+            except Exception:
+                actual = app
+            bundles.setdefault(actual, []).append(app)
+        inventory.update(candidateCount=len(candidates), resolvedCandidateCount=len(bundles), truncated=len(bundles) > 16)
+        for resolved, aliases in list(bundles.items())[:16]:
+            app = next((alias for alias in aliases if alias == resolved), aliases[0])
+            entry = {"reportedPath": str(app), "reportedPaths": [str(alias) for alias in aliases], "status": "unavailable"}
             inventory["entries"].append(entry)
             try:
                 actual = app.resolve(strict=True)
-                if not actual.is_relative_to(applications.resolve()):
+                if actual != resolved or not actual.is_relative_to(applications.resolve()):
                     raise ValueError("Installed Xcode metadata points outside Applications")
                 raw, source = metadata_bytes(app / "Contents/Info.plist", 65536, actual)
                 entry["infoSource"] = source
