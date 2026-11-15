@@ -1,0 +1,183 @@
+# One-time platform experiment branch. Do not merge as a product gate.
+name: Apple platform-only control
+
+on:
+  push:
+    branches: [diag/apple-platform-control-20261116]
+    paths: ['.github/workflows/apple-platform-control.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-platform-control-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  platform-control:
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Original Simulator lifecycle without product build or execution
+        run: |
+          python - <<'PY'
+          import datetime, importlib.util, os, signal, time, uuid
+          from pathlib import Path
+
+          def control(api, run, env, record):
+              class PlatformCheckpointReached(Exception):
+                  pass
+
+              original_command = api.run_command
+              original_observation = api.observe_retired_command
+              allowed = {
+                  "resolve-simctl", "resolve-lipo", "resolve-otool", "os", "architecture",
+                  "host-resources", "xcode", "first-launch", "runtimes",
+                  "simulator-help-create", "simulator-help-bootstatus", "simulator-help-shutdown",
+                  "simulator-runtimes", "simulator-device-types", "simulator-before-create",
+                  "simulator-create", "simulator-after-create", "memory-before-boot",
+                  "processes-before-boot", "simulator-boot", "simulator-boot-status",
+                  "memory-after-boot", "processes-after-boot", "simulator-after-boot",
+                  "simulator-after-boot-owned-process", "simulator-before-cleanup",
+                  "simulator-shutdown", "simulator-after-cleanup",
+              }
+
+              def load(phase):
+                  observation = {"phase": phase, "monotonic": time.monotonic(),
+                                 "utc": datetime.datetime.now(datetime.timezone.utc).isoformat()}
+                  try:
+                      observation["loadAverage1_5_15Minutes"] = list(os.getloadavg())
+                  except OSError as error:
+                      observation["unavailable"] = str(error)
+                  record.setdefault("loadObservations", []).append(observation)
+                  api.save(run, record)
+
+              def command(argv, directory, label, environment, timeout, result, cwd=run, **kwargs):
+                  if label == "ios-simulator-tests":
+                      # The original controller reaches this only after the exact Booted JSON gate.
+                      record["platformBootedCheckpoint"] = {"reached": True, "xctestCommandExecuted": False}
+                      api.save(run, record)
+                      raise PlatformCheckpointReached("Platform-only stop before any project XCTest command")
+                  if label not in allowed:
+                      raise RuntimeError("Unexpected command in platform-only experiment: " + label)
+                  if label in {"memory-before-boot", "memory-after-boot"}:
+                      load(label)
+                  return original_command(argv, directory, label, environment, timeout, result, cwd, **kwargs)
+
+              def observation(argv, directory, environment, result, label, timeout, cwd=run, **kwargs):
+                  if label == "simulator-after-boot-sample":
+                      # Reuse the original held-child hook and its original shared absolute deadline.
+                      owned = [item for item in result["commands"] if item["label"] == "simulator-after-boot"]
+                      if (len(owned) != 1 or argv != ["/usr/bin/sample", str(owned[0]["pid"]), "1", "10", "-mayDie"]
+                              or owned[0]["state"] != "running" or timeout != 3):
+                          raise RuntimeError("Owned process observation identity changed")
+                      load("owned-after-boot-command-still-unreaped")
+                      record["ownedProcessObservation"] = {"pid": owned[0]["pid"],
+                          "purpose": "Process name/state/wait point only; no stack sampling",
+                          "sharesOriginalAfterBootDeadline": True}
+                      return original_observation(["/bin/ps", "-p", argv[1], "-o",
+                          "pid=,ppid=,pgid=,stat=,wchan=,comm="], directory, environment, result,
+                          "simulator-after-boot-owned-process", timeout, cwd, **kwargs)
+                  return original_observation(argv, directory, environment, result, label, timeout, cwd, **kwargs)
+
+              api.run_command, api.observe_retired_command = command, observation
+              try:
+                  api.resolve_tools(run, env, record)
+                  # One-time experiment precondition, not a new product gate. Avoid a wrapper
+                  # repair branch on a changed image; never install or repair SDK components.
+                  core = record.get("coreSimulatorMetadata", {})
+                  selected = record["selectedTools"]["simctl"]
+                  candidates = [item for item in record.get("installedXcodeMetadata", {}).get("entries", [])
+                      if item.get("actualPath") == str(Path(env["DEVELOPER_DIR"]).parents[1])]
+                  if (core.get("status") != "observed" or len(candidates) != 1
+                          or not isinstance(core.get("cfBundleVersion"), str)
+                          or candidates[0].get("expectedCoreSimulatorVersion") != core["cfBundleVersion"]
+                          or candidates[0].get("wrapperSource", {}).get("sha256") != selected.get("sha256")):
+                      record["platformPrecondition"] = "unconfirmed; no wrapper or repair invoked"
+                      raise RuntimeError("Platform-only matching-wrapper precondition unconfirmed")
+                  record["platformPrecondition"] = "matching selected wrapper observed; no repair requested"
+                  for label, argv in [
+                      ("os", ["/usr/bin/sw_vers"]), ("architecture", ["/usr/bin/uname", "-m"]),
+                      ("host-resources", ["/usr/sbin/sysctl", "hw.memsize", "hw.logicalcpu"]),
+                      ("xcode", ["/usr/bin/xcodebuild", "-version"]),
+                      ("first-launch", ["/usr/bin/xcodebuild", "-checkFirstLaunchStatus"]),
+                      ("runtimes", [record["selectedTools"]["simctl"]["path"], "list", "runtimes", "--json"]),
+                  ]:
+                      timeout = api.SIMULATOR_INITIAL_INVENTORY_SECONDS if label == "runtimes" else 60
+                      output = command(argv, run, label, env, timeout, record, run)
+                      if label == "architecture":
+                          record["hostArchitecture"] = api.host_architecture(output)
+                  try:
+                      # Empty owned cwd, no Package.swift, no project build/test before this call.
+                      api.run_simulator_tests(run, run, "not-executed-platform-control", env, record)
+                  except PlatformCheckpointReached as checkpoint:
+                      record["expectedCheckpoint"] = str(checkpoint)
+                  else:
+                      raise RuntimeError("Original lifecycle returned without the platform-only checkpoint")
+                  simulator = record["simulator"]
+                  required = {"simulator-create", "simulator-after-create", "simulator-boot",
+                      "simulator-boot-status", "simulator-after-boot", "simulator-before-cleanup",
+                      "simulator-shutdown", "simulator-after-cleanup"}
+                  labels = [item["label"] for item in record["commands"]]
+                  if (not record.get("platformBootedCheckpoint", {}).get("reached")
+                          or any(labels.count(label) != 1 for label in required)
+                          or any(item.get("state") != "passed" or item.get("exitCode") != 0
+                                 or item.get("cleanupUnknown") is not False
+                                 or item.get("ownedGroupGone") is not True
+                                 or item.get("ownedLeaderReaped") is not True for item in record["commands"])
+                          or any(key in simulator for key in ("cleanupFailure", "shutdownCommandFailure", "resultArchiveFailure"))
+                          or simulator.get("cleanupUnknown") is not False or simulator.get("finalState") != "Shutdown"
+                          or simulator.get("testsPassed") is not False):
+                      raise RuntimeError("Platform checkpoint or real lifecycle/command cleanup was incomplete")
+                  record["platformControlPassed"] = True
+              finally:
+                  api.run_command, api.observe_retired_command = original_command, original_observation
+
+          if __name__ == "__main__":
+              spec = importlib.util.spec_from_file_location("apple_control_owner", "scripts/apple.py")
+              api = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(api)
+              env = dict(os.environ)
+              run = Path(env["RUNNER_TEMP"]) / ("weftext-apple-platform-" + env["GITHUB_RUN_ID"] + "-" + env["GITHUB_RUN_ATTEMPT"]) / str(uuid.uuid4())
+              run.mkdir(parents=True)
+              record = {"kind": "platform-only-control", "state": "running", "commands": [],
+                  "sourceCommit": env["GITHUB_SHA"], "developerDirectory": env["DEVELOPER_DIR"],
+                  "startedUtc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                  "platformControlPassed": False, "testsPassed": False, "runtimeValidated": False,
+                  "productValidated": False, "productAcceptance": False,
+                  "image": {"label": "macos-15-intel", "ImageOS": env.get("ImageOS"),
+                      "ImageVersion": env.get("ImageVersion"), "priorRunImageVersion": "20260824.0482.1",
+                      "exactVersionMatched": env.get("ImageVersion") == "20260824.0482.1",
+                      "limit": "New VM; equal image versions do not eliminate VM timing variation"}}
+              def terminate(signum, _frame):
+                  signal.signal(signum, signal.SIG_IGN)
+                  raise SystemExit(128 + signum)
+              for name in ("SIGTERM", "SIGHUP"):
+                  signal.signal(getattr(signal, name), terminate)
+              try:
+                  control(api, run, env, record)
+                  record["state"] = "platform-control-passed"
+              except BaseException as error:
+                  record.update(state="failed", failure=f"{type(error).__name__}: {error}")
+                  raise
+              finally:
+                  api.save(run, record)
+          PY
+      - name: Preserve original platform-only records
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: apple-platform-control-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/weftext-apple-platform-${{ github.run_id }}-${{ github.run_attempt }}/**/result.json
+            ${{ runner.temp }}/weftext-apple-platform-${{ github.run_id }}-${{ github.run_attempt }}/**/*.log
+          if-no-files-found: error
+          retention-days: 7
