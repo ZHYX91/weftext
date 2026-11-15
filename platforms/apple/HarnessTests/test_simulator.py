@@ -5,6 +5,7 @@ import errno
 import hashlib
 import importlib.util
 import json
+import plistlib
 import subprocess
 import tempfile
 import unittest
@@ -431,6 +432,74 @@ class AfterBootSamplingTests(unittest.TestCase):
             self.assertFalse(observed["reportedIsSymlink"])
             path.write_bytes(b"#!" + b"x" * 4096)
             self.assertNotIn("boundedScriptText", ENTRY.selected_tool_record(path, path.resolve()))
+
+
+class PlatformVersionMetadataTests(unittest.TestCase):
+    def test_records_real_file_versions_and_comparisons_without_executing_tools(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            apps = root / "Applications"
+            core = root / "CoreSimulator.framework/Versions/A/Resources/Info.plist"
+            core.parent.mkdir(parents=True)
+            core.write_bytes(plistlib.dumps({"CFBundleVersion": "1051.17.8"}))
+            for name, version, expected in [("Xcode_16.4.app", "16.4", "1010.15"),
+                                            ("Xcode-beta.app", "26.3", "1051.17.8")]:
+                app = apps / name
+                (app / "Contents/Developer/usr/bin").mkdir(parents=True)
+                (app / "Contents/Info.plist").write_bytes(plistlib.dumps({"CFBundleShortVersionString": version}))
+                (app / "Contents/Developer/usr/bin/simctl").write_text(
+                    '#!/bin/bash\nEXPECTED_VERSION="' + expected + '"\nexit 73\n', encoding="utf8")
+            record = {"state": "TEST original state"}
+            with patch.object(ENTRY.subprocess, "Popen") as spawn:
+                ENTRY.record_platform_versions(record, apps, core)
+            spawn.assert_not_called()
+            self.assertEqual(record["state"], "TEST original state")
+            self.assertEqual(record["coreSimulatorMetadata"]["cfBundleVersion"], "1051.17.8")
+            self.assertEqual(record["coreSimulatorMetadata"]["source"]["sha256"], hashlib.sha256(core.read_bytes()).hexdigest())
+            entries = {Path(entry["reportedPath"]).name: entry for entry in record["installedXcodeMetadata"]["entries"]}
+            self.assertFalse(entries["Xcode_16.4.app"]["equalsInstalledCoreSimulator"])
+            self.assertTrue(entries["Xcode-beta.app"]["equalsInstalledCoreSimulator"])
+            self.assertEqual(entries["Xcode_16.4.app"]["status"], "observed")
+            self.assertFalse(record["installedXcodeMetadata"]["selectionChanged"])
+
+    def test_unavailable_or_ambiguous_metadata_never_becomes_a_qualification_gate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            apps = root / "Applications"
+            for number in range(17):
+                (apps / f"Xcode_{number}.app").mkdir(parents=True)
+            record = {"state": "TEST unchanged"}
+            ENTRY.record_platform_versions(record, apps, root / "absent.plist")
+            self.assertEqual(record["state"], "TEST unchanged")
+            self.assertEqual(record["coreSimulatorMetadata"]["status"], "unavailable")
+            self.assertEqual(record["installedXcodeMetadata"]["candidateCount"], 17)
+            self.assertEqual(len(record["installedXcodeMetadata"]["entries"]), 16)
+            self.assertTrue(record["installedXcodeMetadata"]["truncated"])
+            self.assertTrue(all(entry["status"] == "unavailable" for entry in record["installedXcodeMetadata"]["entries"]))
+            oversized = root / "large.plist"
+            oversized.write_bytes(b"x" * 65537)
+            with self.assertRaises(ValueError):
+                ENTRY.metadata_bytes(oversized, 65536, root)
+            self.assertIsNone(ENTRY.wrapper_expected_version('EXPECTED_VERSION="1.2"\nEXPECTED_VERSION="3.4"'))
+
+    def test_inner_metadata_link_cannot_read_outside_the_original_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            app = root / "Xcode.app"
+            app.mkdir()
+            foreign = root / "outside.txt"
+            foreign.write_text("TEST outside content must not be read", encoding="utf8")
+            original_resolve = Path.resolve
+            for relative in ("Contents/Info.plist", "Contents/Developer/usr/bin/simctl"):
+                path = app / relative
+                def resolve(current, *args, **kwargs):
+                    return foreign if current == path else original_resolve(current, *args, **kwargs)
+                with self.subTest(relative=relative), \
+                        patch.object(Path, "resolve", autospec=True, side_effect=resolve), \
+                        patch.object(Path, "open", autospec=True) as opened:
+                    with self.assertRaisesRegex(ValueError, "outside its original bundle"):
+                        ENTRY.metadata_bytes(path, 65536, app)
+                opened.assert_not_called()
 
 
 if __name__ == "__main__":

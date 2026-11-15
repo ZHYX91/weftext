@@ -49,3 +49,5 @@ CI workflow 使用标准 `macos-15-intel` runner 与 Xcode 16.4。入口记录�
 首次 runtime 清单单独允许 180 秒冷启动预算，后续清单仍限 30 秒。runner-image 项目的 [issue 15247](https://github.com/actions/runner-images/issues/15247)记录了首次发现 runtime 可能耗时数分钟；该报告不证明任意单次运行的具体原因。每份进程快照仍限 15 秒，不可用时保留原失败命令和日志。仅在精确原进程组消失且 leader 已回收后，诊断失败才不阻断实际验证；清理未知或中断继续拒绝。SDK、Simulator 身份、XCTest 和最终 Shutdown 检查仍必须完成，不从诊断继承通过。
 
 功能性的 boot 后设备清单仍须在原 30 秒命令期限内证明准确原 tuple 为 `Booted`。原子进程十秒后仍未回收时，仅对它的准确 PID 请求一次一秒、10 毫秒间隔且带 `-mayDie` 的 `sample`；采样器执行最多三秒，其进程组和 leader 的收尾共同受原清单的绝对期限约束。采样原日志和命令结果单独保留，采样清理未知或中断仍使本轮失败，清单 owner 始终收尾自身命令。单调阶段和 `profiled` 标记明确这是一轮诊断，不能用作无采样性能基线。参数依据为 [Apple 采样说明](https://developer.apple.com/library/archive/documentation/Performance/Conceptual/LaunchTime/Articles/MeasuringLaunch.html)。选定工具记录保留报告／实际路径、符号链接状态和文件身份；至多 4 KiB 的原始脚本另保留只读原字节对应的有限文本，不为检查而执行该文本。
+
+工具解析另记录已安装 CoreSimulator framework 原 `Info.plist` 的版本、摘要和身份，以及最多十六个顶层已安装 Xcode 的有限元数据。plist 最多读取 64 KiB、wrapper 最多 4 KiB；只读脚本中唯一明确的 `EXPECTED_VERSION` 做比较，不执行脚本来探测。缺失、歧义和版本不等均保留为观察，不成为运行通过或新增失败门禁；不切换 Xcode、不安装 first-launch 包、不修改 wrapper，也不放宽 Simulator 资格。

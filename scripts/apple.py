@@ -222,6 +222,7 @@ def resolve_tools(run: Path, env: dict[str, str], record: dict) -> None:
         reply = run_command(["/usr/bin/xcrun", "--find", name], run, "resolve-" + name, env, 30, record)
         path = qualified_tool_path(reply, Path(env["DEVELOPER_DIR"]), name)
         record["selectedTools"][name] = selected_tool_record(Path(reply.strip()), path)
+    record_platform_versions(record)
     save(run, record)
 
 
@@ -247,6 +248,79 @@ def selected_tool_record(reported: Path, actual: Path) -> dict:
     if raw.startswith(b"#!") and len(raw) <= 4096:
         record["boundedScriptText"] = raw.decode("utf-8", errors="backslashreplace")
     return record
+
+
+def wrapper_expected_version(text: str) -> str | None:
+    values = re.findall(r'^EXPECTED_VERSION="([0-9]+(?:\.[0-9]+)*)"\r?$', text, re.MULTILINE)
+    return values[0] if len(values) == 1 else None
+
+
+def metadata_bytes(path: Path, limit: int, allowed_root: Path) -> tuple[bytes, dict]:
+    actual = path.resolve(strict=True)
+    if not actual.is_relative_to(allowed_root.resolve(strict=True)):
+        raise ValueError("Metadata points outside its original bundle")
+    before = actual.stat()
+    if not actual.is_file() or before.st_size > limit:
+        raise ValueError("Metadata file is not a bounded regular file")
+    with actual.open("rb") as source:
+        raw = source.read(limit + 1)
+    if len(raw) > limit:
+        raise ValueError("Metadata exceeded its read budget")
+    after = actual.stat()
+    identity = lambda value: (value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns)
+    if identity(before) != identity(after) or len(raw) != after.st_size:
+        raise ValueError("Metadata changed while reading its original bytes")
+    return raw, {"reportedPath": str(path), "actualPath": str(actual), "reportedIsSymlink": path.is_symlink(),
+                 "bytes": len(raw), "sha256": hashlib.sha256(raw).hexdigest(),
+                 "fileIdentity": {"device": after.st_dev, "inode": after.st_ino, "mtimeNs": after.st_mtime_ns}}
+
+
+def record_platform_versions(record: dict, applications: Path = Path("/Applications"),
+        core_info: Path = Path("/Library/Developer/PrivateFrameworks/CoreSimulator.framework/Versions/A/Resources/Info.plist")) -> None:
+    """Read finite installed metadata only; comparisons never grant or refuse runtime qualification."""
+    core = record["coreSimulatorMetadata"] = {"status": "unavailable"}
+    try:
+        raw, source = metadata_bytes(core_info, 65536, core_info.parents[3])
+        core["source"] = source
+        info = plistlib.loads(raw)
+        version = info.get("CFBundleVersion") if isinstance(info, dict) else None
+        if not isinstance(version, str) or not 0 < len(version) <= 128:
+            raise ValueError("CoreSimulator CFBundleVersion is absent or unsupported")
+        core.update(status="observed", source=source, cfBundleVersion=version)
+    except Exception as error:
+        core["error"] = {"type": type(error).__name__, "message": str(error)[:512]}
+    inventory = record["installedXcodeMetadata"] = {"entries": [], "selectionChanged": False}
+    try:
+        candidates = sorted(applications.glob("Xcode*.app"))
+        inventory.update(candidateCount=len(candidates), truncated=len(candidates) > 16)
+        for app in candidates[:16]:
+            entry = {"reportedPath": str(app), "status": "unavailable"}
+            inventory["entries"].append(entry)
+            try:
+                actual = app.resolve(strict=True)
+                if not actual.is_relative_to(applications.resolve()):
+                    raise ValueError("Installed Xcode metadata points outside Applications")
+                raw, source = metadata_bytes(app / "Contents/Info.plist", 65536, actual)
+                entry["infoSource"] = source
+                info = plistlib.loads(raw)
+                if not isinstance(info, dict):
+                    raise ValueError("Xcode metadata is not a plist dictionary")
+                entry.update(actualPath=str(actual), reportedIsSymlink=app.is_symlink(), infoSource=source,
+                    versions={key: info[key] for key in ("CFBundleShortVersionString", "CFBundleVersion", "DTXcodeBuild")
+                              if isinstance(info.get(key), str)})
+                wrapper, wrapper_source = metadata_bytes(app / "Contents/Developer/usr/bin/simctl", 4096, actual)
+                entry["wrapperSource"] = wrapper_source
+                if not wrapper.startswith(b"#!"):
+                    raise ValueError("Bounded simctl entry is not a script")
+                text = wrapper.decode("utf-8")
+                expected = wrapper_expected_version(text)
+                entry.update(status="observed", wrapperText=text, expectedCoreSimulatorVersion=expected,
+                    equalsInstalledCoreSimulator=(expected == core["cfBundleVersion"]
+                        if expected is not None and core["status"] == "observed" else None))
+            except Exception as error:
+                entry["error"] = {"type": type(error).__name__, "message": str(error)[:512]}
+    except Exception as error:
+        inventory["error"] = {"type": type(error).__name__, "message": str(error)[:512]}
 
 
 def observe_retired_command(argv: list[str], run: Path, env: dict[str, str], record: dict,
