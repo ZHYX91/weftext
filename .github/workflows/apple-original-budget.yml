@@ -1,0 +1,178 @@
+# One-time original build plus a newly frozen setup allocation; not a permanent gate.
+name: Apple original build with frozen setup
+
+on:
+  push:
+    branches: [diag/apple-original-54090-20261116]
+    paths: ['.github/workflows/apple-original-budget.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apple-original-budget-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  original-build:
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Original complete api.build with only two stage timeout remaps
+        run: |
+          python - <<'PY'
+          import importlib.util, os, signal
+          from pathlib import Path
+
+          def planned_timeout(label, original):
+              caps = {"simulator-boot-status": (600, 540), "simulator-after-boot": (30, 90)}
+              if label not in caps:
+                  return original
+              expected, effective = caps[label]
+              if original != expected:
+                  raise RuntimeError("Original timeout drifted before frozen intent: " + label)
+              return effective
+
+          def dispatcher(api, original_command):
+              def command(argv, run, label, env, timeout, record, cwd=api.PACKAGE, **kwargs):
+                  effective = planned_timeout(label, timeout)
+                  if "setupBudgetIntent" not in record:
+                      record["setupBudgetIntent"] = {"plan": "original-build-new540-90-20261116", "applied": [],
+                          "oldStageCaps": {"simulator-boot-status": 600, "simulator-after-boot": 30},
+                          "newStageCaps": {"simulator-boot-status": 540, "simulator-after-boot": 90},
+                          "nominalCreateThroughGateSeconds": {"old": 840, "new": 840},
+                          "scope": "New environment-readiness intent, not a product performance SLA",
+                          "wallClockStatement": "No existing shared setup wall-clock envelope or unchanged wall time is claimed",
+                          "order": "Unmodified api.build: Mac tests, actual schemes, generic SDK build before Simulator creation",
+                          "observations": "Original api.build observations, including its original bounded sampler; no experimental PID override",
+                          "oldFailures": "All old failures/raw evidence retained; no retrospective pass"}
+                      record["experimentImage"] = {"ImageOS": os.environ.get("ImageOS"),
+                          "ImageVersion": os.environ.get("ImageVersion"), "priorImageVersion": "20260824.0482.1"}
+                      record["experimentSourceCommit"] = os.environ.get("GITHUB_SHA")
+                  if label == "runtimes":
+                      # Preserve the already approved no-repair experiment precondition before first simctl use.
+                      core = record.get("coreSimulatorMetadata", {})
+                      selected = record.get("selectedTools", {}).get("simctl", {})
+                      candidates = [item for item in record.get("installedXcodeMetadata", {}).get("entries", [])
+                          if item.get("actualPath") == str(Path(env["DEVELOPER_DIR"]).parents[1])]
+                      if (core.get("status") != "observed" or len(candidates) != 1
+                              or not isinstance(core.get("cfBundleVersion"), str)
+                              or candidates[0].get("expectedCoreSimulatorVersion") != core["cfBundleVersion"]
+                              or candidates[0].get("wrapperSource", {}).get("sha256") != selected.get("sha256")
+                              or selected.get("sha256") != "8e4ed565409890f1fd518099f98bb6ccac7419605574d802ac7356fd34f63a5b"):
+                          raise RuntimeError("Experiment-only matching-wrapper precondition unconfirmed; no repair")
+                  if label in {"simulator-boot-status", "simulator-after-boot"}:
+                      applied = record["setupBudgetIntent"]["applied"]
+                      if any(item["label"] == label for item in applied):
+                          raise RuntimeError("Repeated frozen-budget stage: " + label)
+                      applied.append({"label": label, "originalTimeoutAsserted": timeout, "effectiveTimeout": effective})
+                      api.save(run, record)
+                      before = len(record["commands"])
+                      output = original_command(argv, run, label, env, effective, record, cwd, **kwargs)
+                      added = [item for item in record["commands"][before:] if item.get("label") == label]
+                      if len(added) != 1 or added[0].get("label") != label or added[0].get("deadlineSeconds") != effective:
+                          raise RuntimeError("Actual owner receipt disagrees with the frozen stage budget")
+                      applied[-1]["actualReceiptVerified"] = True
+                      api.save(run, record)
+                      return output
+                  return original_command(argv, run, label, env, timeout, record, cwd, **kwargs)
+              return command
+
+          def check_dispatch():
+              class FakeOwner:
+                  PACKAGE = Path("TEST-PACKAGE")
+                  def save(self, *_):
+                      pass
+              calls = []
+              def original(argv, run, label, env, timeout, record, cwd, **kwargs):
+                  calls.append((argv, label, env, timeout, cwd, kwargs))
+                  record["commands"].append({"label": label, "deadlineSeconds": timeout})
+                  if label == "simulator-after-boot":
+                      record["commands"].append({"label": "simulator-after-boot-sample", "deadlineSeconds": 3})
+                  return "TEST original output"
+              command = dispatcher(FakeOwner(), original)
+              argv, env, cwd = ["TEST original argv"], {}, Path("TEST frozen input")
+              record = {"commands": []}
+              for label, old, effective in [("simulator-boot-status", 600, 540), ("simulator-after-boot", 30, 90)]:
+                  assert command(argv, Path("TEST-RUN"), label, env, old, record, cwd) == "TEST original output"
+                  assert calls[-1][0] is argv and calls[-1][2] is env and calls[-1][3:5] == (effective, cwd)
+                  assert record["setupBudgetIntent"]["applied"][-1]["actualReceiptVerified"] is True
+              for label, cap in [("ios-simulator-tests", 600), ("simulator-shutdown", 60),
+                                 ("simulator-before-cleanup", 30), ("simulator-after-cleanup", 30),
+                                 ("simulator-boot", 60), ("simulator-after-boot-sample", 3)]:
+                  command(argv, Path("TEST-RUN"), label, env, cap, record, cwd)
+                  assert calls[-1][1] == label and calls[-1][3] == cap
+              for label, wrong in [("simulator-boot-status", 540), ("simulator-boot-status", 601),
+                                   ("simulator-after-boot", 90), ("simulator-after-boot", 31)]:
+                  count = len(calls)
+                  try:
+                      command(argv, Path("TEST-RUN"), label, env, wrong, record, cwd)
+                  except RuntimeError:
+                      assert len(calls) == count
+                      continue
+                  raise AssertionError("Accepted original timeout drift: " + label)
+              count = len(calls)
+              try:
+                  command(argv, Path("TEST-RUN"), "simulator-after-boot", env, 30, record, cwd)
+              except RuntimeError:
+                  assert len(calls) == count
+              else:
+                  raise AssertionError("Accepted repeated frozen-budget stage")
+              def wrong_receipt(argv, run, label, env, timeout, record, cwd, **kwargs):
+                  record["commands"].append({"label": label, "deadlineSeconds": 1})
+                  return "TEST wrong owner receipt"
+              try:
+                  dispatcher(FakeOwner(), wrong_receipt)(argv, Path("TEST-RUN"), "simulator-boot-status", env, 600,
+                                                        {"commands": []}, cwd)
+              except RuntimeError:
+                  pass
+              else:
+                  raise AssertionError("Accepted an owner receipt with the wrong actual timeout")
+              print("Pure dispatcher checks passed: 2 forwarding remaps (including nested observation), 6 unchanged, 4 drift rejections, duplicate and wrong-receipt rejection.")
+
+          if __name__ == "__main__":
+              spec = importlib.util.spec_from_file_location("apple_original_owner", "scripts/apple.py")
+              api = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(api)
+              check_dispatch()
+              api.static_check()
+              original_command = api.run_command
+              previous = {}
+              def terminate(signum, _frame):
+                  signal.signal(signum, signal.SIG_IGN)
+                  raise SystemExit(128 + signum)
+              try:
+                  for name in ("SIGTERM", "SIGHUP"):
+                      value = getattr(signal, name)
+                      previous[value] = signal.signal(value, terminate)
+                  api.run_command = dispatcher(api, original_command)
+                  result = api.build(Path(os.environ["RUNNER_TEMP"]) /
+                      ("weftext-apple-original-" + os.environ["GITHUB_RUN_ID"] + "-" + os.environ["GITHUB_RUN_ATTEMPT"]),
+                      Path(os.environ["DEVELOPER_DIR"]), True)
+                  if result != 0:
+                      raise RuntimeError("Original api.build returned nonzero")
+              finally:
+                  api.run_command = original_command
+                  for value, handler in previous.items():
+                      signal.signal(value, handler)
+          PY
+      - run: git diff --exit-code
+      - name: Preserve the original owner result and artifact roles
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: apple-original-budget-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/weftext-apple-original-${{ github.run_id }}-${{ github.run_attempt }}/**/result.json
+            ${{ runner.temp }}/weftext-apple-original-${{ github.run_id }}-${{ github.run_attempt }}/**/*.log
+            ${{ runner.temp }}/weftext-apple-original-${{ github.run_id }}-${{ github.run_attempt }}/**/roles/*
+          if-no-files-found: error
+          retention-days: 7
