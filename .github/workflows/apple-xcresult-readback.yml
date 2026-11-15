@@ -1,0 +1,136 @@
+# Read only the exact prior failed result; never builds or creates a Simulator.
+name: Apple exact xcresult readback
+
+on:
+  push:
+    branches: [diag/apple-original-54090-20261116]
+    paths: ['.github/workflows/apple-xcresult-readback.yml']
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  readback:
+    runs-on: macos-15-intel
+    timeout-minutes: 10
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.3.app/Contents/Developer
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Decode exact failed xcresult with its installed Apple tool
+        run: |
+          python - <<'PY'
+          import datetime, hashlib, importlib.util, json, os, signal, stat, uuid, zipfile
+          from pathlib import Path, PurePosixPath
+          spec = importlib.util.spec_from_file_location("xcresult_read_owner", "scripts/apple.py")
+          api = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(api)
+          env = dict(os.environ)
+          run = Path(env["RUNNER_TEMP"]) / ("weftext-xcresult-readback-" + env["GITHUB_RUN_ID"]) / str(uuid.uuid4())
+          run.mkdir(parents=True)
+          record = {"kind": "read-only-exact-failed-xcresult", "state": "running", "commands": [],
+              "startedUtc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              "sourceCommit": env["GITHUB_SHA"], "failedRun": 43753132000, "inputArtifactId": 14177408195,
+              "inputArtifactSha256": "41c1d0cc8404c496f514f78f43db2aab8b9d21609b582e9ceaf2a86241b56b23",
+              "deviceCreationRequested": False, "buildRequested": False, "productValidated": False}
+          def terminate(signum, _frame):
+              signal.signal(signum, signal.SIG_IGN)
+              raise SystemExit(128 + signum)
+          for name in ("SIGTERM", "SIGHUP"):
+              signal.signal(getattr(signal, name), terminate)
+          def digest(path):
+              with path.open("rb") as source:
+                  return hashlib.file_digest(source, "sha256").hexdigest()
+          def object_json(text):
+              start = text.index("{")
+              return json.JSONDecoder().raw_decode(text[start:])[0]
+          try:
+              artifact = run / "original-artifact.zip"
+              api.run_command(["/bin/bash", "-c",
+                  'gh api repos/ZHYX91/weftext/actions/artifacts/14177408195/zip > "$1"',
+                  "artifact-output", str(artifact)], run, "download-exact-artifact", env, 120, record, run)
+              if artifact.stat().st_size != 63560867 or digest(artifact) != record["inputArtifactSha256"]:
+                  raise ValueError("Original input artifact bytes do not match the frozen failed run")
+              nested = run / "original-xcresult.zip"
+              with zipfile.ZipFile(artifact) as archive:
+                  candidates = [item for item in archive.infolist()
+                      if item.filename.endswith("/roles/ios-simulator.xcresult.zip")]
+                  if len(candidates) != 1 or candidates[0].file_size != 63046879:
+                      raise ValueError("Original xcresult role is missing or ambiguous")
+                  with archive.open(candidates[0]) as source, nested.open("xb") as target:
+                      while chunk := source.read(1024 * 1024):
+                          target.write(chunk)
+              if digest(nested) != "e8ebe2fa3656570fe07adb0bab9955a84fef8e514a62218d6338ea81c5e8a97d":
+                  raise ValueError("Original xcresult archive identity mismatch")
+              destination = run / "read-only-input-copy"
+              destination.mkdir()
+              with zipfile.ZipFile(nested) as archive:
+                  items = archive.infolist()
+                  if len(items) != 1033 or sum(item.file_size for item in items) != 63253815:
+                      raise ValueError("Unexpected frozen xcresult archive shape")
+                  seen = set()
+                  for item in items:
+                      relative = PurePosixPath(item.filename)
+                      if (relative.is_absolute() or ".." in relative.parts or not relative.parts
+                              or relative.parts[0] != "ios-simulator.xcresult" or item.filename in seen
+                              or stat.S_ISLNK(item.external_attr >> 16)):
+                          raise ValueError("Unsupported original result archive member")
+                      seen.add(item.filename)
+                      target = destination.joinpath(*relative.parts)
+                      if not target.resolve().is_relative_to(destination.resolve()):
+                          raise ValueError("Original archive member escaped the owned reader copy")
+                      target.parent.mkdir(parents=True, exist_ok=True)
+                      with archive.open(item) as source, target.open("xb") as output:
+                          while chunk := source.read(1024 * 1024):
+                              output.write(chunk)
+              tool_reply = api.run_command(["/usr/bin/xcrun", "--find", "xcresulttool"], run,
+                                            "resolve-xcresulttool", env, 30, record, run)
+              reported = Path(tool_reply.strip())
+              tool = reported.resolve(strict=True)
+              if not reported.is_absolute() or tool.name != "xcresulttool" or not tool.is_relative_to(Path(env["DEVELOPER_DIR"]).resolve()):
+                  raise ValueError("Result reader tool is outside the selected Xcode")
+              record["selectedTool"] = api.selected_tool_record(reported, tool)
+              bundle = destination / "ios-simulator.xcresult"
+              summary = api.run_command([str(tool), "get", "test-results", "summary", "--path", str(bundle)],
+                                        run, "xcresult-summary", env, 60, record, run)
+              legacy = api.run_command([str(tool), "get", "object", "--legacy", "--format", "json", "--path", str(bundle)],
+                                       run, "xcresult-original-issues", env, 60, record, run)
+              parsed_summary, parsed_legacy = object_json(summary), object_json(legacy)
+              issues = parsed_legacy.get("issues")
+              failure_summaries = issues.get("testFailureSummaries") if isinstance(issues, dict) else None
+              failures = failure_summaries.get("_values") if isinstance(failure_summaries, dict) else None
+              if not isinstance(failures, list):
+                  raise ValueError("Original failure summary field is unavailable; retain raw reader logs")
+              (run / "actual-failure-summaries.json").write_text(json.dumps({
+                  "failedRun": 43753132000, "inputArtifactSha256": record["inputArtifactSha256"],
+                  "summary": parsed_summary, "legacyRootFailureCount": len(failures),
+                  "originalLegacyFailureObjects": failures}, ensure_ascii=False, indent=2) + "\n", encoding="utf8")
+              record["originalArtifactUnchanged"] = digest(artifact) == record["inputArtifactSha256"]
+              record["originalXcresultArchiveUnchanged"] = digest(nested) == "e8ebe2fa3656570fe07adb0bab9955a84fef8e514a62218d6338ea81c5e8a97d"
+              if not record["originalArtifactUnchanged"] or not record["originalXcresultArchiveUnchanged"]:
+                  raise ValueError("Original reader input archive changed")
+              record.update(state="read-only-decoded", legacyRootFailureCount=len(failures))
+          except BaseException as error:
+              record.update(state="failed", failure=f"{type(error).__name__}: {error}")
+              raise
+          finally:
+              api.save(run, record)
+          PY
+      - name: Preserve only derived reader outputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: apple-xcresult-readback-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/weftext-xcresult-readback-${{ github.run_id }}/**/result.json
+            ${{ runner.temp }}/weftext-xcresult-readback-${{ github.run_id }}/**/*.log
+            ${{ runner.temp }}/weftext-xcresult-readback-${{ github.run_id }}/**/actual-failure-summaries.json
+          if-no-files-found: error
+          retention-days: 7
