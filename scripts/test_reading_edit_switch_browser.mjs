@@ -25,7 +25,11 @@ try {
  const from=source.indexOf(title),to=from+title.length;
  const doc={sessionId:'reading-fixture',viewInputId:'input-one',path:'/tmp/synthetic/reading.typ',root:'/tmp/synthetic',kind:'ordinary',source,baseId:sourceHash};
  const inventory={root:doc.root,status:'ordinary',entries:[],warnings:[],complete:true};
- const text=(key,str)=>({key,kind:'text',tag:null,text:str,children:[],origin:(key==='heading-text'?{path:doc.path,from,to,utf16From:from,utf16To:to,raw:str,syntaxKind:'text',isMain:true}:null),writable:false,attrs:{}});
+ const text=(key,str)=>{
+   const start=source.indexOf(str),end=start+str.length;
+   assert.ok(start>=0 && source.lastIndexOf(str)===start,'rendered fixture text must have one exact source origin');
+   return {key,kind:'text',tag:null,text:str,children:[],origin:{path:doc.path,from:start,to:end,utf16From:start,utf16To:end,raw:str,syntaxKind:'text',isMain:true},writable:false,attrs:{}};
+ };
  const element=(key,tag,children,attrs={})=>({key,tag,kind:'element',text:null,children,attrs,origin:null,writable:false});
  const heading={key:'test-heading',kind:'heading',text:title,level:1,generated:false,range:{utf16From:from,utf16To:to}};
  const tree=element('doc','div',[...filler.split('\n\n').map((s,i)=>element('p'+i,'p',[text('t'+i,s)])),element(heading.key,'h1',[text('heading-text',title)],{'data-weftext-role':'heading','data-weftext-level':'1'}),element('p-last','p',[text('end','The end.')])]);
@@ -92,9 +96,33 @@ try {
  await reader.waitFor();
  await page.waitForFunction(scroll=>Math.abs(document.querySelector('.mode-read .flow-pane').scrollTop-scroll)<2,readScroll);
  assert.equal(await page.locator('.view-caption .read-edit-shortcut').evaluate(e=>e===document.activeElement),true);
+ const paragraphText='Paragraph 45 before the chapter.';
+ const paragraph=reader.getByText(paragraphText,{exact:true});
+ // Scroll using the normal continuous reader, with no outline jump or text selection.
+ await reader.evaluate(e=>{e.scrollTop=0;});
+ await page.waitForFunction(()=>document.querySelector('.mode-read .flow-pane').scrollTop===0);
+ const readerBox=await reader.boundingBox(), paragraphBox=await paragraph.boundingBox();
+ const readingLine=readerBox.y+readerBox.height/3;
+ await page.mouse.move(readerBox.x+readerBox.width/2,readingLine);
+ await page.mouse.wheel(0,Math.round(paragraphBox.y-readingLine));
+ await page.waitForFunction(text=>{
+   const pane=document.querySelector('.mode-read .flow-pane');
+   const p=[...pane.querySelectorAll('p')].find(e=>e.textContent===text);
+   const viewport=pane.getBoundingClientRect();
+   return Math.abs(p.getBoundingClientRect().top-(viewport.top+viewport.height/3))<6;
+ },paragraphText);
+ assert.equal(await paragraph.evaluate(e=>document.activeElement===e || !window.getSelection()?.isCollapsed),false);
+ await edit.click();
+ await page.locator('.mode-source .cm-content').waitFor();
+ position=await sourcePosition();
+ const paragraphStart=source.indexOf(paragraphText);
+ assert.deepEqual([position.from,position.to],[paragraphStart,paragraphStart]);
+ assert.equal(position.active,true);
+ await page.locator('.view-caption .read-edit-shortcut').press('Enter');
+ await reader.waitFor();
  await page.setViewportSize({width:740,height:640});
  assert.equal(await edit.isVisible(),true);
  assert.equal(await edit.evaluate(e=>e.getBoundingClientRect().right<=window.innerWidth),true);
  assert.deepEqual(errors,[]);
- console.log('PASS actual workspace: direct edit uses focused heading or selected reading text; returning restores previous reading scroll');
+ console.log('PASS actual workspace: direct edit uses focused heading, selected text, or the paragraph in the viewport; returning restores previous reading scroll');
 } finally {await browser.close(); await vite.close();}
