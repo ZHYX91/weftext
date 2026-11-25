@@ -16,6 +16,7 @@ export interface DocumentOutlineHost {
     getDocument(): OutlineBasis | null;
     getOutlineSnapshot(): OutlineSnapshot | null;
     selectSource(from: number, to: number): void;
+    isReadingOutline?(): boolean;
     revealHeading?(item: StructureHeading): boolean;
     notify(text: UiText, error?: boolean): void;
     canNavigate?(): boolean;
@@ -77,6 +78,10 @@ export class DocumentOutlineView {
         if (items.length !== 1) { this.host.notify(message("error.invalidResponse"), true); return; }
         const item = items[0];
         try {
+            if (this.host.isReadingOutline?.()) {
+                if (!this.host.revealHeading?.(item)) this.host.notify(message("heading.itemNotVisibleInReading"));
+                return;
+            }
             if (item.range) {
                 const { utf16From: from, utf16To: to } = item.range;
                 if (!Number.isSafeInteger(from) || !Number.isSafeInteger(to) || from < 0 || to < from || to > current!.source.length) {

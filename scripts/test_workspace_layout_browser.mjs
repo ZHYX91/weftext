@@ -363,6 +363,9 @@ try {
   assert.equal(await outline().locator('[data-outline-kind="figure"]').count(), 1);
   assert.ok((await outline().locator('.outline-match-controls').textContent()).includes('1 个大纲项命中'));
   assert.equal(await outline().locator('[data-outline-control="search"]').evaluate(element => document.activeElement === element), true);
+  await page.keyboard.press('Enter');
+  const searchSelection = await editorSnapshot();
+  assert.ok(searchSelection.source.slice(searchSelection.from, searchSelection.to).includes('Layout figure caption'), 'Enter from the Outline search did not navigate to the first exact native result');
   await outline().locator('[data-outline-control="search"]').fill('');
   await outline().locator('[data-outline-control="filter"]').selectOption('caption');
   assert.equal(await outline().locator('[data-outline-kind="heading"]').count(), 0);
@@ -374,8 +377,21 @@ try {
   await outline().locator('svg').first().waitFor();
   await outline().locator('[data-outline-control="list"]').click();
   assert.equal(await source().evaluate((element, original) => element === original, outlineHandle), true);
+  await selectTab('view');
+  await ribbon().getByRole('button', { name: '阅读', exact: true }).click();
+  await page.locator('.document-body.mode-read').waitFor();
+  const readingHeading = fixtureRender.headingStructure.items.find(item => item.kind === 'heading' && item.text === 'Layout child heading');
+  assert.ok(readingHeading?.range, 'The reading regression needs an authored heading with a native range');
+  const readingSearch = outline().locator('[data-outline-control="search"]');
+  await readingSearch.fill('Layout child heading');
+  await readingSearch.press('Enter');
+  const readingTarget = page.locator(`.mode-read .flow-document [data-document-node-key=${JSON.stringify(readingHeading.key)}]`);
+  await until(async () => await readingTarget.count() === 1 && await readingTarget.evaluate(element => document.activeElement === element), 'Outline jump left Reading or failed to focus the rendered target');
+  assert.equal(await source().count(), 0);
+  await readingSearch.fill('');
+  await ribbon().getByRole('button', { name: '源码', exact: true }).click();
   await expectSource(parentSource); await showFiles();
-  pass('Independent Outline lists native headings and captions, preserves filter focus, navigates exact source and offers a heading map');
+  pass('Independent Outline supports keyboard jumps in Reading and exact author ranges in Source without changing the document');
 
   // The ordinary Outline must consume the same accepted native compile rather
   // than opening the whole-library knowledge/relationship discovery path.

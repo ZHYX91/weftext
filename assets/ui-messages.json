@@ -16,6 +16,8 @@
     "heading.outlineEntrySummary": { "zh-CN": "{p0}：{p1} 个直接子项／{p2} 个后代子项", "en-US": "{p0}: {p1} direct items / {p2} descendant items", "params": { "p0": "text", "p1": "integer", "p2": "integer" } },
     "heading.searchOutline": { "zh-CN": "搜索标题与题注", "en-US": "Search headings and captions", "params": {} },
     "heading.outlineSearchPlaceholder": { "zh-CN": "搜索标题或题注", "en-US": "Search heading or caption", "params": {} },
+    "heading.outlineSearchKeys": { "zh-CN": "用 ↑ ↓ 选择结果，按 Enter 跳转。", "en-US": "Use ↑ or ↓ to select a result, then Enter to jump.", "params": {} },
+    "heading.itemNotVisibleInReading": { "zh-CN": "当前阅读布局无法定位此项。可切到连续布局，或在源码视图中查找。", "en-US": "Can't jump to this item in the current reading layout. Try Continuous layout or look for it in Source view.", "params": {} },
     "workPanel.cancelled": { "zh-CN": "已取消", "en-US": "Cancelled", "params": {} },
     "workActivity.details": { "zh-CN": "查看详情", "en-US": "View details", "params": {} },
     "workActivity.originalUnavailable": { "zh-CN": "当前窗口已不再持有这次原操作的详情，请从原恢复入口查看。", "en-US": "This window no longer holds these original operation details. Use the original recovery entry.", "params": {} },

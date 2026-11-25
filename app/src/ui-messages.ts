@@ -10,6 +10,8 @@ export const zhCN = {
   "heading.outlineEntrySummary": "{p0}：{p1} 个直接子项／{p2} 个后代子项",
   "heading.searchOutline": "搜索标题与题注",
   "heading.outlineSearchPlaceholder": "搜索标题或题注",
+  "heading.outlineSearchKeys": "用 ↑ ↓ 选择结果，按 Enter 跳转。",
+  "heading.itemNotVisibleInReading": "当前阅读布局无法定位此项。可切到连续布局，或在源码视图中查找。",
   "workPanel.cancelled": "已取消",
   "workActivity.details": "查看详情",
   "workActivity.originalUnavailable": "当前窗口已不再持有这次原操作的详情，请从原恢复入口查看。",
@@ -10381,6 +10383,8 @@ export interface MessageParamsMap {
   "heading.outlineEntrySummary": { p0: string; p1: number; p2: number };
   "heading.searchOutline": {  };
   "heading.outlineSearchPlaceholder": {  };
+  "heading.outlineSearchKeys": {  };
+  "heading.itemNotVisibleInReading": {  };
   "workPanel.cancelled": {  };
   "workActivity.details": {  };
   "workActivity.originalUnavailable": {  };
@@ -20756,6 +20760,8 @@ export const messageParamTypes = {
   },
   "heading.searchOutline": {},
   "heading.outlineSearchPlaceholder": {},
+  "heading.outlineSearchKeys": {},
+  "heading.itemNotVisibleInReading": {},
   "workPanel.cancelled": {},
   "workActivity.details": {},
   "workActivity.originalUnavailable": {},
@@ -32987,6 +32993,8 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "heading.outlineEntrySummary": "{p0}: {p1} direct items / {p2} descendant items",
   "heading.searchOutline": "Search headings and captions",
   "heading.outlineSearchPlaceholder": "Search heading or caption",
+  "heading.outlineSearchKeys": "Use ↑ or ↓ to select a result, then Enter to jump.",
+  "heading.itemNotVisibleInReading": "Can't jump to this item in the current reading layout. Try Continuous layout or look for it in Source view.",
   "workPanel.cancelled": "Cancelled",
   "workActivity.details": "View details",
   "workActivity.originalUnavailable": "This window no longer holds these original operation details. Use the original recovery entry.",

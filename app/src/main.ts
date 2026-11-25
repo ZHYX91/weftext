@@ -660,6 +660,7 @@ const workspaceTools = new WorkspaceTools({
         const currentBasis: OutlineBasis = { sessionId: doc.session.opened.sessionId, source: doc.session.source, serial: doc.session.serial, inputId: doc.session.inputId, path: doc.session.path, root: doc.session.opened.root };
         return basis && projection.headingStructure && sameOutlineBasis(basis, currentBasis) ? { basis, snapshot: projection.headingStructure } : null;
     },
+    isReadingOutline: () => current?.mode === "read",
     revealHeading: heading => {
         const doc = current;
         if (!doc || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc) || !renderHost || !renderHost.isConnected || !renderHost.getClientRects().length || !headingMatchesDisplay(doc.session.projection?.tree, heading))
