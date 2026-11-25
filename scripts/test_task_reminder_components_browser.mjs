@@ -81,7 +81,7 @@ try {
     const original=await page.evaluate(()=>window.libraryCalls);assert.notEqual(original[0].mutationId,original[1].mutationId);assert.deepEqual(original[2],original[1]);
     await page.evaluate(()=>{window.overview.dispose();window.settlers[2].resolve({});document.querySelector('#test').replaceChildren();});
   });
-  await caseCheck('task device buttons require exact current basis and settle only their original pending', async () => {
+  await caseCheck('task device buttons require the current basis and keep the original in-flight request', async () => {
     await page.evaluate(async () => {
       const { ReminderDeviceControl }=await import('/src/reminder-device-control.ts');
       window.basis={sessionId:'task-session',source:'saved',serial:1,baseId:'base',path:'D:/TEST/Task/Task.typ',root:'D:/TEST',nodeId:'task',workspaceId:'library',dirty:false};
@@ -92,11 +92,25 @@ try {
       window.oldDeviceButton=window.deviceControl.element.querySelector('button[data-control-key]');window.basis={...window.basis,serial:2};window.oldDeviceButton.dispatchEvent(new MouseEvent('click'));
     });
     assert.equal(await page.evaluate(()=>window.libraryCalls.length),0);
-    await clickMessage('reminder.refresh');await clickMessage('reminder.disable');await page.waitForFunction(()=>window.settlers.length===1);await page.evaluate(()=>window.deviceControl.refresh(window.basis));
-    await clickMessage('reminder.discardPending');await clickMessage('reminder.disable');await page.waitForFunction(()=>window.settlers.length===2);await page.evaluate(()=>window.deviceControl.refresh(window.basis));
-    const before=await page.evaluate(()=>{const count=window.calls.length;window.settlers[0].reject(new Error('TEST retired A'));return count;});await page.waitForTimeout(50);assert.equal(await page.evaluate(()=>window.calls.length),before);assert.equal(await page.getByText('TEST retired A',{exact:true}).count(),0);
-    assert.equal(await page.getByText(await translated('reminder.settingsPending'),{exact:true}).count(),1);
-    await page.evaluate(()=>{window.deviceControl.retire();window.settlers[1].resolve({});document.querySelector('#test').replaceChildren();});
+    await clickMessage('reminder.refresh');
+    await clickMessage('reminder.disable');
+    await page.waitForFunction(() => window.settlers.length === 1);
+    await page.evaluate(() => window.deviceControl.refresh(window.basis));
+    const retry = page.getByRole('button', { name: await translated('reminder.retryOriginal'), exact: true });
+    const discard = page.getByRole('button', { name: await translated('reminder.discardPending'), exact: true });
+    assert.equal(await retry.isDisabled(), true);
+    assert.equal(await discard.isDisabled(), true);
+    for (const button of [retry, discard]) await button.dispatchEvent('click');
+    assert.equal(await page.evaluate(() => window.libraryCalls.length), 1);
+    await page.evaluate(() => window.settlers[0].reject(new Error('TEST original response unknown')));
+    await page.getByText('TEST original response unknown', { exact: true }).waitFor();
+    await retry.click();
+    await page.waitForFunction(() => window.settlers.length === 2);
+    const requests = await page.evaluate(() => window.libraryCalls);
+    assert.deepEqual(requests[0], requests[1]);
+    await page.evaluate(() => window.settlers[1].resolve({}));
+    await page.getByText(await translated('reminder.settingsPending'), { exact: true }).waitFor({ state: 'detached' });
+    await page.evaluate(() => { window.deviceControl.retire(); document.querySelector('#test').replaceChildren(); });
   });
   await caseCheck('UiError remains a translated descriptor in the live device error slot', async () => {
     await page.evaluate(async()=>{
