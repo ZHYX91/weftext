@@ -12,8 +12,8 @@ const { chromium } = require(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwrigh
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.resolve(process.argv[2]);
 await mkdir(out, { recursive: false });
-const result = { mode: 'actual reminder settings and overview in a browser; no Core or OS acceptance', sourceHashes: {}, browser: null, cases: [], pageErrors: [], completed: false };
-for (const relative of ['scripts/test_task_reminder_components_browser.mjs', 'app/src/reminder-device-control.ts', 'app/src/reminder-overview.ts', 'app/src/reminder-types.ts', 'app/src/native-control-identity.ts', 'app/src/ui-locale.ts', 'app/src/ui-diagnostics.ts', 'app/src/ui-messages.ts', 'app/src/style.css', 'app/src/data-view.css']) result.sourceHashes[relative] = createHash('sha256').update(await readFile(path.join(repo, relative))).digest('hex');
+const result = { mode: 'actual reminder settings, overview and activation UI in a browser; no Core or OS acceptance', sourceHashes: {}, browser: null, cases: [], pageErrors: [], completed: false };
+for (const relative of ['scripts/test_task_reminder_components_browser.mjs', 'app/src/reminder-activation.ts', 'app/src/reminder-device-control.ts', 'app/src/reminder-overview.ts', 'app/src/reminder-types.ts', 'app/src/native-control-identity.ts', 'app/src/ui-locale.ts', 'app/src/ui-diagnostics.ts', 'app/src/ui-messages.ts', 'app/src/style.css', 'app/src/data-view.css']) result.sourceHashes[relative] = createHash('sha256').update(await readFile(path.join(repo, relative))).digest('hex');
 let vite, browser, page;
 const translated = key => page.evaluate(async key => { const ui = await import('/src/ui-locale.ts'); return ui.t(ui.message(key)); }, key);
 const clickMessage = async key => page.getByRole('button', { name: await translated(key), exact: true }).click();
@@ -81,7 +81,7 @@ try {
     const original=await page.evaluate(()=>window.libraryCalls);assert.notEqual(original[0].mutationId,original[1].mutationId);assert.deepEqual(original[2],original[1]);
     await page.evaluate(()=>{window.overview.dispose();window.settlers[2].resolve({});document.querySelector('#test').replaceChildren();});
   });
-  await caseCheck('task device buttons require exact current basis and settle only their original pending', async () => {
+  await caseCheck('task device buttons require the current basis and keep the original in-flight request', async () => {
     await page.evaluate(async () => {
       const { ReminderDeviceControl }=await import('/src/reminder-device-control.ts');
       window.basis={sessionId:'task-session',source:'saved',serial:1,baseId:'base',path:'D:/TEST/Task/Task.typ',root:'D:/TEST',nodeId:'task',workspaceId:'library',dirty:false};
@@ -92,11 +92,25 @@ try {
       window.oldDeviceButton=window.deviceControl.element.querySelector('button[data-control-key]');window.basis={...window.basis,serial:2};window.oldDeviceButton.dispatchEvent(new MouseEvent('click'));
     });
     assert.equal(await page.evaluate(()=>window.libraryCalls.length),0);
-    await clickMessage('reminder.refresh');await clickMessage('reminder.disable');await page.waitForFunction(()=>window.settlers.length===1);await page.evaluate(()=>window.deviceControl.refresh(window.basis));
-    await clickMessage('reminder.discardPending');await clickMessage('reminder.disable');await page.waitForFunction(()=>window.settlers.length===2);await page.evaluate(()=>window.deviceControl.refresh(window.basis));
-    const before=await page.evaluate(()=>{const count=window.calls.length;window.settlers[0].reject(new Error('TEST retired A'));return count;});await page.waitForTimeout(50);assert.equal(await page.evaluate(()=>window.calls.length),before);assert.equal(await page.getByText('TEST retired A',{exact:true}).count(),0);
-    assert.equal(await page.getByText(await translated('reminder.settingsPending'),{exact:true}).count(),1);
-    await page.evaluate(()=>{window.deviceControl.retire();window.settlers[1].resolve({});document.querySelector('#test').replaceChildren();});
+    await clickMessage('reminder.refresh');
+    await clickMessage('reminder.disable');
+    await page.waitForFunction(() => window.settlers.length === 1);
+    await page.evaluate(() => window.deviceControl.refresh(window.basis));
+    const retry = page.getByRole('button', { name: await translated('reminder.retryOriginal'), exact: true });
+    const discard = page.getByRole('button', { name: await translated('reminder.discardPending'), exact: true });
+    assert.equal(await retry.isDisabled(), true);
+    assert.equal(await discard.isDisabled(), true);
+    for (const button of [retry, discard]) await button.dispatchEvent('click');
+    assert.equal(await page.evaluate(() => window.libraryCalls.length), 1);
+    await page.evaluate(() => window.settlers[0].reject(new Error('TEST original response unknown')));
+    await page.getByText('TEST original response unknown', { exact: true }).waitFor();
+    await retry.click();
+    await page.waitForFunction(() => window.settlers.length === 2);
+    const requests = await page.evaluate(() => window.libraryCalls);
+    assert.deepEqual(requests[0], requests[1]);
+    await page.evaluate(() => window.settlers[1].resolve({}));
+    await page.getByText(await translated('reminder.settingsPending'), { exact: true }).waitFor({ state: 'detached' });
+    await page.evaluate(() => { window.deviceControl.retire(); document.querySelector('#test').replaceChildren(); });
   });
   await caseCheck('UiError remains a translated descriptor in the live device error slot', async () => {
     await page.evaluate(async()=>{
@@ -156,6 +170,44 @@ try {
   await caseCheck('shared overview entry opens a localized modal and closes its owned component',async()=>{
     await page.evaluate(async()=>{const{openReminderOverview}=await import('/src/reminder-overview.ts');window.dialog=openReminderOverview({getDocument:()=>null,notify:()=>{},request:async route=>{if(route.endsWith('/settings'))return{deviceId:'device',settingsRevision:1,libraries:[],subscriptions:[]};if(route.endsWith('/schedule'))return{entries:[],issues:[],complete:true,next:null};if(route.endsWith('/records'))return{records:[],next:null};throw new Error(route);},applyPatch:async()=>{},openDocument:async()=>{}});});
     await page.getByRole('dialog',{name:await translated('reminder.overview'),exact:true}).waitFor();await page.getByText(await translated('reminder.noDeliveryRecords'),{exact:true}).waitFor();await page.screenshot({path:path.join(out,'overview-dialog.png'),fullPage:true});await clickMessage('common.close');await page.waitForFunction(()=>!window.dialog.isConnected);
+  });
+  await caseCheck('activation summary keeps the first choice and keyboard focus until document adoption', async () => {
+    await page.evaluate(async () => {
+      const { activateReminderNotification } = await import('/src/reminder-activation.ts');
+      const key = number => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
+      const candidates = [3, 4].map(number => ({ root: 'D:/TEST', owner: { workspaceId: key(2), nodeId: key(number) }, resolution: { triggerInstant: null } }));
+      window.activationCalls = []; window.activationAdopted = [];
+      await activateReminderNotification({
+        request: async (route, body) => {
+          window.activationCalls.push([route, body]);
+          return route.endsWith('/open') ? { ...body.owner, sessionId: 'TEST document' } : { candidates, issues: [] };
+        },
+        openResolvedConfirmed: document => new Promise(resolve => {
+          window.activationAdopted.push(document.nodeId);
+          window.finishActivation = () => resolve(true);
+        }),
+        notify: error => { throw new Error(String(error)); },
+      }, key(1));
+    });
+    const dialog = page.locator('dialog.reminder-activation-dialog');
+    const choices = dialog.locator('section > section > button');
+    const refresh = dialog.locator(':scope > button').nth(1);
+    await choices.first().focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => typeof window.finishActivation === 'function');
+    assert.equal(await choices.first().evaluate(button => document.activeElement === button), true);
+    assert.equal(await choices.nth(1).getAttribute('aria-disabled'), 'true');
+    assert.equal(await refresh.getAttribute('aria-disabled'), 'true');
+    await choices.nth(1).focus();
+    await page.keyboard.press('Enter');
+    await refresh.focus();
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    assert.deepEqual(await page.evaluate(() => window.activationCalls.map(([route]) => route)), ['/api/reminders/activation', '/api/reminders/activation/open']);
+    assert.equal(await dialog.isVisible(), true);
+    await page.evaluate(() => window.finishActivation());
+    await dialog.waitFor({ state: 'detached' });
+    assert.deepEqual(await page.evaluate(() => window.activationAdopted), ['00000000-0000-4000-8000-000000000003']);
   });
   assert.deepEqual(result.pageErrors, []); result.completed = true;
 } catch (error) { result.error = error.stack || String(error); throw error; }

@@ -98,3 +98,59 @@ test("malformed activation keys and invalid returned members never open document
     await assert.rejects(activateReminderNotification(f.host, "not-original")); assert.equal(f.calls.length, 0);
     await assert.rejects(activateReminderNotification(f.host, activationKey)); assert.equal(f.calls.length, 1); assert.equal(f.adopted.length, 0);
 });
+
+test("summary admits only one choice through actual document adoption", async t => {
+    const document = install(t), f = fixture({ candidates: [member(), member(second)], issues: [] });
+    const ready = deferred<void>();
+    const adopt = f.host.openResolvedConfirmed!;
+    f.host.openResolvedConfirmed = async opened => { await ready.promise; return adopt(opened); };
+    await activateReminderNotification(f.host, activationKey);
+    const dialog = document.body.find("dialog"), [, refresh] = dialog.children;
+    const choices = dialog.all().filter(element => element.tag === "section").flatMap(row => row.children.filter(child => child.tag === "button"));
+    choices[0].onclick?.();
+    await flush();
+    assert.equal(choices[1].getAttribute("aria-disabled"), "true");
+    assert.equal(refresh.getAttribute("aria-disabled"), "true");
+    choices[1].onclick?.(); refresh.onclick?.();
+    await flush();
+    assert.deepEqual(f.calls, [
+        { route: "/api/reminders/activation", body: { activationKey } },
+        { route: "/api/reminders/activation/open", body: { activationKey, owner } },
+    ]);
+    assert.equal(freezeNativeProposalOwnersForClose(), false);
+    assert.equal(dialog.open, true);
+    ready.resolve(); await flush();
+    assert.deepEqual(f.adopted.map(item => item.nodeId), [owner.nodeId]);
+    assert.equal(dialog.isConnected, false);
+});
+
+test("summary refresh blocks choices and retires the old rows; a failed open permits a new choice", async t => {
+    const initial = { candidates: [member(), member(second)], issues: [] };
+    const document = install(t), f = fixture(initial);
+    await activateReminderNotification(f.host, activationKey);
+    const dialog = document.body.find("dialog"), [, refresh] = dialog.children;
+    const choices = () => dialog.all().filter(element => element.tag === "section").flatMap(row => row.children.filter(child => child.tag === "button"));
+    const retired = choices()[0], refreshed = deferred<unknown>();
+    const request = f.host.request, duringRefresh: string[] = [];
+    f.host.request = async <T>(route: string, body?: unknown): Promise<T> => {
+        duringRefresh.push(route);
+        return route === "/api/reminders/activation" ? await refreshed.promise as T : request<T>(route, body);
+    };
+    refresh.onclick?.(); retired.onclick?.();
+    await flush();
+    assert.deepEqual(duringRefresh, ["/api/reminders/activation"]);
+    assert.deepEqual(f.errors, []); assert.equal(f.adopted.length, 0);
+    refreshed.resolve({ candidates: [member(second)], issues: [] }); await flush();
+    f.host.request = request;
+    retired.onclick?.(); await flush();
+    assert.equal(f.calls.length, 1);
+    const adopt = f.host.openResolvedConfirmed!;
+    f.host.openResolvedConfirmed = async () => false;
+    choices()[0].onclick?.(); await flush();
+    assert.equal(f.errors.length, 1); assert.equal(dialog.open, true);
+    assert.equal(choices()[0].getAttribute("aria-disabled"), null);
+    f.host.openResolvedConfirmed = adopt;
+    choices()[0].onclick?.(); await flush();
+    assert.deepEqual(f.adopted.map(item => item.nodeId), [second.nodeId]);
+    assert.equal(dialog.isConnected, false);
+});

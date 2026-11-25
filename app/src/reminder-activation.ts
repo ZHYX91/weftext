@@ -46,7 +46,9 @@ export async function activateReminderNotification(host: PanelHost, activationKe
     dialog.className = "capture-dialog reminder-activation-dialog";
     scope.bindAttr(dialog, "aria-label", message("reminder.activationTitle"));
     guard.bind(dialog);
-    let generation = 0, disposed = false;
+    let generation = 0, disposed = false, busy = false;
+    let rowScope: LocaleScope | undefined;
+    let choices: HTMLButtonElement[] = [];
     const owner = {
         assertCloseReady: () => guard.assertReady(false),
         freezeForClose: () => guard.freeze(false),
@@ -54,42 +56,61 @@ export async function activateReminderNotification(host: PanelHost, activationKe
     };
     const unregister = registerNativeProposalOwner(owner);
     const current = (cut: number): boolean => !disposed && !guard.frozen && generation === cut && dialog.isConnected;
-    const render = (activation: ReminderActivation): void => {
-        const cut = ++generation;
-        body.replaceChildren();
-        const heading = document.createElement("h2"); scope.bindText(heading, message("reminder.activationTitle")); body.append(heading);
-        if (activation.issues.length) { const text = document.createElement("p"); scope.bindText(text, message("reminder.activationLimited")); body.append(text); }
-        if (!activation.candidates.length) { const text = document.createElement("p"); scope.bindText(text, message("reminder.activationEmpty")); body.append(text); }
-        activation.candidates.forEach((member, index) => {
-            const row = document.createElement("section"), label = document.createElement("p"), open = document.createElement("button");
-            label.textContent = [member.root, member.resolution.triggerInstant].filter(Boolean).join(" · ");
-            open.type = "button"; open.className = "data-button"; scope.bindText(open, message("reminder.activationTask", { p0: index + 1 }));
-            open.onclick = () => {
-                if (!current(cut) || open.disabled) return;
-                open.disabled = true;
-                let adopted = false;
-                void guard.run(async () => {
-                    try { await openReminderActivationMember(host, activationKey, member.owner, () => current(cut)); adopted = true; }
-                    catch (error) { if (current(cut)) host.notify(errorUiText(error), true); }
-                    finally { if (current(cut)) open.disabled = false; }
-                }).then(() => { if (adopted && current(cut)) dismiss(); }).catch(error => host.notify(errorUiText(error), true));
-            };
-            row.append(label, open); body.append(row);
-        });
-    };
     const refresh = document.createElement("button"), close = document.createElement("button");
     for (const button of [refresh, close]) { button.type = "button"; button.className = "data-button"; }
     scope.bindText(refresh, message("reminder.refresh")); scope.bindText(close, message("common.close"));
+    const updateAvailability = (): void => {
+        // aria-disabled keeps the focused control in place while admission is suspended.
+        for (const button of [close, refresh, ...choices]) {
+            if (busy) button.setAttribute("aria-disabled", "true");
+            else button.removeAttribute("aria-disabled");
+        }
+    };
+    const run = (cut: number, operation: () => Promise<boolean>): void => {
+        if (busy || !current(cut)) return;
+        busy = true;
+        updateAvailability();
+        void guard.run(operation).then(adopted => {
+            busy = false;
+            updateAvailability();
+            if (adopted && current(cut)) dismiss();
+        }, error => {
+            busy = false;
+            updateAvailability();
+            if (current(cut)) host.notify(errorUiText(error), true);
+        });
+    };
+    const render = (activation: ReminderActivation): void => {
+        const cut = ++generation;
+        rowScope?.dispose();
+        const labels = rowScope = new LocaleScope();
+        choices = [];
+        body.replaceChildren();
+        const heading = document.createElement("h2"); labels.bindText(heading, message("reminder.activationTitle")); body.append(heading);
+        if (activation.issues.length) { const text = document.createElement("p"); labels.bindText(text, message("reminder.activationLimited")); body.append(text); }
+        if (!activation.candidates.length) { const text = document.createElement("p"); labels.bindText(text, message("reminder.activationEmpty")); body.append(text); }
+        activation.candidates.forEach((member, index) => {
+            const row = document.createElement("section"), label = document.createElement("p"), open = document.createElement("button");
+            label.textContent = [member.root, member.resolution.triggerInstant].filter(Boolean).join(" · ");
+            open.type = "button"; open.className = "data-button"; labels.bindText(open, message("reminder.activationTask", { p0: index + 1 }));
+            open.onclick = () => run(cut, async () => {
+                await openReminderActivationMember(host, activationKey, member.owner, () => current(cut));
+                return true;
+            });
+            choices.push(open); row.append(label, open); body.append(row);
+        });
+        updateAvailability();
+    };
     refresh.onclick = () => {
-        if (refresh.disabled || disposed) return;
-        refresh.disabled = true;
-        void guard.run(async () => {
-            try { const fresh = decode(await host.request("/api/reminders/activation", { activationKey })); if (!disposed) render(fresh); }
-            catch (error) { if (!disposed) host.notify(errorUiText(error), true); }
-            finally { if (!disposed) refresh.disabled = false; }
-        }).catch(error => host.notify(errorUiText(error), true));
+        const cut = generation;
+        run(cut, async () => {
+            const fresh = decode(await host.request("/api/reminders/activation", { activationKey }));
+            if (current(cut)) render(fresh);
+            return false;
+        });
     };
     const dismiss = (): void => {
+        if (busy) return;
         try { guard.assertMutable(); guard.assertReady(false); }
         catch (error) { host.notify(errorUiText(error), true); return; }
         dialog.close();
@@ -99,9 +120,9 @@ export async function activateReminderNotification(host: PanelHost, activationKe
     dialog.addEventListener("close", () => {
         try { guard.assertMutable(); guard.assertReady(false); }
         catch (error) { host.notify(errorUiText(error), true); dialog.showModal(); return; }
-        disposed = true; generation++; unregister(); scope.dispose(); dialog.remove();
+        disposed = true; generation++; unregister(); rowScope?.dispose(); scope.dispose(); dialog.remove();
     });
     render(original); dialog.append(close, refresh, body); document.body.append(dialog);
     try { dialog.showModal(); }
-    catch (error) { disposed = true; unregister(); scope.dispose(); dialog.remove(); throw error; }
+    catch (error) { disposed = true; unregister(); rowScope?.dispose(); scope.dispose(); dialog.remove(); throw error; }
 }

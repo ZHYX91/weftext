@@ -8,7 +8,7 @@
 .data-button:hover { border-color: var(--accent,#697d64); background: #edf1ea; }
 .data-button.primary { background: var(--accent,#526b4d); color: white; border-color: var(--accent,#526b4d); }
 .data-button.compact { padding: 3px 7px; font-size: 11px; min-height: 27px; }
-.data-button:disabled { opacity: .48; cursor: default; }
+.data-button:disabled, .reminder-activation-dialog .data-button[aria-disabled=true] { opacity: .48; cursor: default; }
 .data-button:focus-visible,.data-input:focus-visible,.query-chip:focus-visible,.query-facet:focus-visible,.query-row-title:focus-visible,.query-recent:focus-visible { outline: 2px solid var(--accent,#526b4d); outline-offset: 2px; }
 .data-input { display: block; box-sizing: border-box; width: 100%; font: inherit; color: inherit; background: var(--background,#fff); border: 1px solid var(--border,#d9ddd5); border-radius: 5px; padding: 7px 8px; min-height: 32px; }
 textarea.data-input { resize: vertical; }
