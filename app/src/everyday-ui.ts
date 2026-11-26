@@ -1,10 +1,13 @@
 import { uiDisplayParameter } from "./ui-locale";
 import { displayMessage } from "./ui-locale";
 import { disposeUiTree, message, setUiText, setUiAttr, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
-import { matchEveryday, type EverydayEntry, type EverydayCommand } from "./everyday-navigation";
+import { matchEveryday, rankQuickOpen, type EverydayEntry, type EverydayCommand } from "./everyday-navigation";
 import "./everyday.css";
 /** Menus and command search share exact action objects and restore their trigger. */
-export function openEverydayMenu(title: UiText, items: readonly EverydayCommand[], notify: (message: UiText) => void, searchable = true): void {
+export function openEverydayMenu(
+    title: UiText, items: readonly EverydayCommand[], notify: (message: UiText) => void, searchable = true,
+    findMatches: (text: string) => EverydayCommand[] = text => matchEveryday(items, text),
+): void {
     const trigger = document.activeElement as HTMLElement | null;
     const triggerContainer = trigger?.closest<HTMLElement>("nav,[role=toolbar],main,section");
     const dialog = document.createElement("dialog");
@@ -37,7 +40,7 @@ export function openEverydayMenu(title: UiText, items: readonly EverydayCommand[
     const render = () => {
         disposeUiTree(list);
         list.replaceChildren();
-        const matches = matchEveryday(items, search.value);
+        const matches = findMatches(search.value);
         selected = 0;
         for (const item of matches) {
             const button = document.createElement("button");
@@ -111,6 +114,10 @@ export function openEverydayMenu(title: UiText, items: readonly EverydayCommand[
     else
         list.querySelector<HTMLButtonElement>("button")?.focus();
 }
-export function openEverydayPicker(title: UiText, entries: readonly EverydayEntry[], notify: (message: UiText) => void): void {
-    openEverydayMenu(title, entries.map(entry => ({ id: entry.key, label: entry.title, detail: entry.detail, unavailable: entry.unavailable, run: entry.open })), notify);
+export function openEverydayPicker(title: UiText, entries: readonly EverydayEntry[], notify: (message: UiText) => void, recent?: readonly string[]): void {
+    const command = (entry: EverydayEntry): EverydayCommand => ({
+        id: entry.key, label: entry.title, detail: entry.detail, unavailable: entry.unavailable, run: entry.open,
+    });
+    openEverydayMenu(title, entries.map(command), notify, true,
+        recent ? text => rankQuickOpen(entries, text, recent).map(command) : undefined);
 }
