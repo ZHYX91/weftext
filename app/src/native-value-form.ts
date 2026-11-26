@@ -581,27 +581,45 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
         }
         const items = ui("div", "native-list");
         host.append(items);
-        const render = (): void => {
+        type FocusTarget = { index: number; action: "up" | "down" | "remove" | "input" };
+        const validBeforeReshape = (): boolean => {
+            // A redraw starts from typed values, not from invalid raw child inputs.
+            const pending = items.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input:invalid,textarea:invalid,select:invalid");
+            if (!pending) return true;
+            pending.focus();
+            pending.reportValidity();
+            return false;
+        };
+        const render = (focus?: FocusTarget): void => {
             items.replaceChildren();
             if (value.kind !== "array")
                 return;
             if (!value.value.length)
                 items.append(ui("span", "data-empty", uiMessage("nativeEditor.emptyArray")));
+            const rows: { row: HTMLFieldSetElement; up: HTMLButtonElement; down: HTMLButtonElement; remove: HTMLButtonElement }[] = [];
+            const move = (index: number, delta: -1 | 1, action: "up" | "down") => {
+                if (!validBeforeReshape()) return;
+                retire();
+                const target = index + delta;
+                value = moveOrderedValue(value, index, target);
+                changed(value);
+                render({ index: target, action });
+            };
             value.value.forEach((item, index) => {
                 const row = ui("fieldset", "native-list-item");
                 row.append(ui("legend", "", displayMessage("nativeEditor.itemLegend", { p0: index + 1 })));
                 const controls = ui("div", "native-list-controls");
-                const up = action(uiMessage("queryShortcut.moveUp"), () => { retire(); value = moveOrderedValue(value, index, index - 1); changed(value); render(); }, "data-button compact");
+                const up = action(uiMessage("queryShortcut.moveUp"), () => move(index, -1, "up"), "data-button compact");
                 up.disabled = index === 0;
-                const down = action(uiMessage("nodeContents.moveDown"), () => { retire(); value = moveOrderedValue(value, index, index + 1); changed(value); render(); }, "data-button compact");
+                const down = action(uiMessage("nodeContents.moveDown"), () => move(index, 1, "down"), "data-button compact");
                 down.disabled = value.kind !== "array" || index === value.value.length - 1;
                 const remove = action(uiMessage("nativeEditor.removeMember"), () => {
-                    if (value.kind !== "array")
+                    if (value.kind !== "array" || !validBeforeReshape())
                         return;
                     retire();
                     value = { kind: "array", value: value.value.filter((_, ordinal) => ordinal !== index) };
                     changed(value);
-                    render();
+                    render({ index: Math.min(index, value.value.length - 1), action: "remove" });
                 }, "data-button compact");
                 remove.disabled = value.kind !== "array" || value.value.length <= resolved.min;
                 controls.append(up, down, remove);
@@ -613,18 +631,26 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                     value = { kind: "array", value: nextItems };
                     changed(value);
                 }, () => displayMessage("nativeEditor.itemLabel", { p0: uiDisplayParameter(uiTextValue(label)), p1: index + 1 }), { ...identity, path: [...identity.path, { kind: "index", index }] }, depth + 1, references, binding, lifetime));
+                rows.push({ row, up, down, remove });
                 items.append(row);
             });
             const add = action(uiMessage("nativeEditor.addItem"), () => {
-                if (value.kind !== "array")
+                if (value.kind !== "array" || !validBeforeReshape())
                     return;
                 retire();
                 value = { kind: "array", value: [...value.value, emptyNativeValue(resolved.items, schema)] };
                 changed(value);
-                render();
+                render({ index: value.value.length - 1, action: "input" });
             });
             add.disabled = resolved.max != null && value.value.length >= resolved.max;
             items.append(add);
+            if (!focus) return;
+            const current = rows[focus.index];
+            const control = current?.row.querySelector<HTMLElement>(":scope > .native-value-editor :is(input,select,textarea,button):not(:disabled)");
+            const preferred = focus.action === "input" ? control
+                : current?.[focus.action];
+            const inverse = focus.action === "up" ? current?.down : focus.action === "down" ? current?.up : undefined;
+            [preferred, inverse, control, add, current?.remove].find(element => element && !element.matches(":disabled"))?.focus();
         };
         render();
         return host;
