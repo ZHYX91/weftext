@@ -65,7 +65,7 @@ try {
  const existing=page.locator('[data-dock-tab="outline"]');
  if(await existing.isVisible()) await existing.click();
  else {
-   await ribbon.locator('.workspace-dock-view-menu summary').click();
+   await ribbon.locator('[popovertarget="workspace-dock-view-list"]').click();
    await ribbon.locator('[data-show-view="outline"]').click();
  }
  const search=page.locator('[data-outline-control="search"]');

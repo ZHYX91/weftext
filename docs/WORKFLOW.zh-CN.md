@@ -110,6 +110,8 @@ Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust �
 
 `node scripts/test_workspace_layout_browser.mjs ABSOLUTE_CLI ABSOLUTE_NEW_OUTPUT [--dev]` 在自有库和独立无头 Chrome 验证单一树展开、折叠保留父节点、功能区与文档标签、实际编辑器／选区／Undo、格式操作及响应式布局。默认消费程序内嵌前端；`--dev` 仅为当前开发前端诊断。CSS 等效缩放、合成组合键和浏览器结果不替代真实缩放、系统 IME 或读屏验收。功能入口按任务选项卡到达，不通过强制点击隐藏控件维持旧测试。
 
+安装开发前端依赖后，用 `WEFTEXT_PLAYWRIGHT_MODULE` 和 `WEFTEXT_BROWSER_EXECUTABLE` 运行 `node scripts/test_ribbon_dock_view_browser.mjs`，验证五种宽度下“视图布局操作”各选项可点击、键盘焦点和 Escape，以及从阅读模式打开搜索不切换模式。此测试注入 Core 测试数据，不验收打包后的桌面程序。
+
 `scripts/test_everyday_browser.mjs` 的本地及托管日常任务通过实际功能区进入相应命令；托管文档返回检查使用中央画布和源码编辑器各自的非零滚动位置，不以页面的 `window.scrollY` 代替画布位置。
 
 ## 发布

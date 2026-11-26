@@ -110,6 +110,8 @@ Existing workspace browser consumers select the actual task tab through `scripts
 
 `node scripts/test_workspace_layout_browser.mjs ABSOLUTE_CLI ABSOLUTE_NEW_OUTPUT [--dev]` verifies single tree disclosure, retained parents, distinct command/document tabs, the actual editor/selection/Undo, formatting and responsive layout in an owned library and headless Chrome. The default consumes the executable's embedded frontend; `--dev` is current-development-frontend evidence only. CSS zoom-equivalent widths, synthetic composing keys and browser results do not establish native zoom, OS IME or screen-reader acceptance. Tests reach actions through their task tabs rather than forcing clicks on hidden controls to preserve old selectors.
 
+Run `node scripts/test_ribbon_dock_view_browser.mjs` with development app dependencies, `WEFTEXT_PLAYWRIGHT_MODULE` and `WEFTEXT_BROWSER_EXECUTABLE` to check the View layout picker. It checks actual click targets at five widths, keyboard focus and Escape, and opening Search without leaving Reading mode. It uses injected Core fixtures, not a packaged desktop executable.
+
 The local and hosted tasks in `scripts/test_everyday_browser.mjs` reach commands through the actual ribbon. Hosted return-navigation checks use nonzero positions in the central canvas and source editor separately; page `window.scrollY` does not stand in for canvas position.
 
 ## Release
