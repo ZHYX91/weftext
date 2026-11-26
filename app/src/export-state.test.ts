@@ -92,6 +92,33 @@ test("download retries one confirmed artifact without compiling or confirming ag
   await controller.download(); assert.equal(controller.received, true); assert.equal(prepares, 1); assert.deepEqual(ids, ["artifact-a", "artifact-a"]);
 });
 
+test("confirmed receipt fetches the original bytes after changing format without touching the new draft", async () => {
+  const requested: string[] = []; let mode = "exact"; let prepares = 0;
+  const controller = new OutputController(transport({
+    prepare: async request => { prepares++; return prepared(request); },
+    download: async ({ id }) => { requested.push(id); if (mode === "expired") throw Object.assign(new Error("expired"), { code: "outputExpired" }); return new Blob([mode === "exact" ? "abc" : "xyz"]); },
+    digest: async blob => await blob.text() === "abc" ? hash : "b".repeat(64),
+  }), basis());
+  await controller.prepare();
+  assert.equal(controller.captureConfirmedDownload(), null);
+  await controller.confirm(false);
+  const receipt = controller.captureConfirmedDownload();
+  assert.ok(receipt);
+  assert.equal(receipt.filename, "输出.docx");
+  controller.setDraft({ format: "pdf" });
+  assert.equal(await (await receipt.fetch()).text(), "abc");
+  mode = "wrong";
+  await assert.rejects(receipt.fetch(), /字节/);
+  mode = "expired";
+  await assert.rejects(receipt.fetch(), { code: "outputExpired" });
+  assert.deepEqual(requested, ["artifact-a", "artifact-a", "artifact-a"]);
+  assert.equal(prepares, 1);
+  assert.equal(controller.prepared, null);
+  assert.equal(controller.draft.format, "pdf");
+  assert.equal(controller.received, false);
+  assert.equal(controller.uncertain, null);
+});
+
 test("a late template response cannot replace a newer file or format selection", () => {
   const gate = new OutputReadGate(); const first = gate.begin(); const second = gate.begin();
   assert.equal(gate.accepts(first), false); assert.equal(gate.accepts(second), true); gate.invalidate(); assert.equal(gate.accepts(second), false);
