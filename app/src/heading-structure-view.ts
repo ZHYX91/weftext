@@ -3,6 +3,7 @@ import { action, ui } from "./data-panel";
 import { graphCanvas, type CanvasState } from "./knowledge-graph-canvas";
 import { defaultCamera, fitCamera, graphLayout } from "./relationship-graph-state";
 import { DOCUMENT_ROOT, headingTree, visibleHeadings, type HeadingSnapshot, type StructureHeading } from "./heading-structure-state";
+import { readingOutlineRow } from "./reading-outline-location";
 import "./heading-structure.css";
 
 const kindLabels: Record<StructureHeading["kind"], UiText> = {
@@ -25,8 +26,16 @@ export class HeadingStructureView {
     private optionsOpen = false;
     private scroll = 0;
     private element?: HTMLElement;
+    private readingHeading?: string;
+    private updateMarker?: () => void;
     private composing = false;
     private deferred?: { container: HTMLElement; snapshot: HeadingSnapshot; open: (heading: StructureHeading) => void; emptyMessage: UiText };
+
+    setReadingHeading(key: string | undefined): void {
+        if (this.readingHeading === key) return;
+        this.readingHeading = key;
+        this.updateMarker?.();
+    }
 
     /** Retain navigation state without retaining another document's DOM/bindings. */
     detach(): void {
@@ -36,13 +45,13 @@ export class HeadingStructureView {
             if (options) this.optionsOpen = options.open;
             disposeUiTree(this.element); this.element.remove(); this.element = undefined;
         }
-        this.composing = false; this.deferred = undefined;
+        this.composing = false; this.deferred = undefined; this.updateMarker = undefined;
     }
 
     clear(): void {
         this.collapsed.clear(); this.selected = DOCUMENT_ROOT; this.scope = DOCUMENT_ROOT; this.search = ""; this.matchKey = null;
         this.initialized = false; this.canvas = { positions: new Map(), camera: defaultCamera() };
-        this.composing = false; this.deferred = undefined;
+        this.composing = false; this.deferred = undefined; this.readingHeading = undefined;
         this.detach(); this.scroll = 0;
     }
 
@@ -61,7 +70,7 @@ export class HeadingStructureView {
         if (previousOptions) this.optionsOpen = previousOptions.open;
         if (previous) { disposeUiTree(previous); previous.remove(); }
         const parent = ui("section", "knowledge-heading-structure outline-view");
-        this.element = parent;
+        this.element = parent; this.updateMarker = undefined;
         container.append(parent);
         const redraw = () => this.render(container, snapshot, open, emptyMessage);
         const control = (key: string, label: UiText, run: () => void): HTMLButtonElement => {
@@ -197,6 +206,7 @@ export class HeadingStructureView {
         }
         const list = ui("ul", "knowledge-heading-list outline-list");
         setUiAttr(list, "aria-label", message("heading.outlineList"));
+        const readingRows = new Map<string, { row: HTMLElement; button: HTMLButtonElement }>();
         for (const item of shown) {
             if (item.key === DOCUMENT_ROOT) continue;
             const row = ui("li", `outline-row ${highlighted === item.key ? "is-selected" : ""}`);
@@ -214,8 +224,23 @@ export class HeadingStructureView {
             setUiAttr(title, "title", item.generated ? message("heading.generatedNoAuthorAddress") : message("heading.navigateExactNativeRange"));
             const kind = ui("span", "outline-item-kind", kindLabels[item.kind]);
             if (item.kind === "heading") kind.append(ui("span", "", String(item.level)));
+            if (item.kind === "heading") readingRows.set(item.key, { row, button: title });
             row.append(kind, title); list.append(row);
         }
+        let marked: { row: HTMLElement; button: HTMLButtonElement } | undefined;
+        this.updateMarker = () => {
+            if (marked) {
+                delete marked.row.dataset.readingLocation;
+                marked.button.removeAttribute("aria-current");
+            }
+            const location = this.readingHeading && readingOutlineRow(this.readingHeading, byKey, shownKeys);
+            marked = location ? readingRows.get(location.key) : undefined;
+            if (location && marked) {
+                marked.row.dataset.readingLocation = location.exact ? "current" : "contains";
+                if (location.exact) marked.button.setAttribute("aria-current", "location");
+            }
+        };
+        this.updateMarker();
         parent.append(list);
         if (!shown.some(item => item.key !== DOCUMENT_ROOT)) parent.append(ui("p", "knowledge-help", displayMessage("heading.outlineMatchCount", { p0: 0 })));
         parent.scrollTop = scroll;

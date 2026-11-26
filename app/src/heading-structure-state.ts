@@ -35,9 +35,31 @@ export function headingMatchesDisplay(tree: RenderNode | null | undefined, headi
             matches.push(node);
         stack.push(...node.children);
     }
-    if (matches.length !== 1)
-        return false;
-    const node = matches[0];
+    return matches.length === 1 && nativeNodeMatchesHeading(matches[0], heading);
+}
+
+/** Use the same semantic, key, and visible-text checks for a whole reading index. */
+export function readingHeadingKeys(tree: RenderNode, items: readonly StructureHeading[]): ReadonlySet<string> {
+    const headings = new Map<string, StructureHeading | null>();
+    for (const item of items) {
+        if (headings.has(item.key)) headings.set(item.key, null);
+        else headings.set(item.key, item.kind === "heading" && Number.isSafeInteger(item.level) ? item : null);
+    }
+    const seen = new Set<string>(), exact = new Set<string>(), stack = [tree];
+    while (stack.length) {
+        const node = stack.pop()!;
+        const heading = headings.get(node.key);
+        if (heading) {
+            if (seen.has(node.key)) exact.delete(node.key);
+            else if (nativeNodeMatchesHeading(node, heading)) exact.add(node.key);
+            seen.add(node.key);
+        }
+        stack.push(...node.children);
+    }
+    return exact;
+}
+
+function nativeNodeMatchesHeading(node: RenderNode, heading: StructureHeading): boolean {
     const text = (item: RenderNode): string => ["heading-prefix", "caption-prefix", "equation-prefix"].includes(String(item.attrs["data-weftext-role"])) ? "" : item.kind === "text" ? item.text ?? "" : item.children.map(text).join("");
     if (node.kind === "tag")
         return false;

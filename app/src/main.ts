@@ -56,7 +56,8 @@ import { mountDocumentNotes, openDocumentNotes, type DocumentNotesMount } from "
 import { AuthoringAssetsAdapter } from "./authoring-assets-adapter";
 import { documentNotesHost, numberingHost, personalNumberingKeys, personalNumberingVisible, markPersonalHeading, displayPersonalHeadings, type AuthoringPanelsEnvironment } from "./authoring-panels-adapter";
 import { openNumberingPanel } from "./numbering-panel";
-import { headingMatchesDisplay } from "./heading-structure-state";
+import { headingMatchesDisplay, readingHeadingKeys } from "./heading-structure-state";
+import { ReadingOutlineTracker } from "./reading-outline-location";
 import { NoteInputRecovery } from "./note-input-recovery";
 import { openLibraryCreation } from "./library-creation";
 import "./document-notes.css";
@@ -365,6 +366,7 @@ let recoveries: RecoveryInfo[] = [];
 let renderHost: HTMLElement | null = null;
 let flowScroll: HTMLElement | null = null;
 let flowHasProjection = false;
+let readingOutlineTracker: ReadingOutlineTracker | null = null;
 let pendingCreation: {
     route: string;
     payload: Record<string, unknown>;
@@ -2023,7 +2025,14 @@ function sourceToolbar(doc: LiveDocument): HTMLElement {
     toolbar.append(link);
     return toolbar;
 }
+function stopReadingOutline(): void {
+    if (!readingOutlineTracker) return;
+    readingOutlineTracker.dispose();
+    readingOutlineTracker = null;
+    workspaceTools.setReadingHeading(null);
+}
 function renderContent(): void {
+    stopReadingOutline();
     const focusDocument = current, focusGeneration = navigationGeneration;
     const focused = document.activeElement as HTMLElement | null, controlKey = focused?.dataset.documentControl;
     const ownedControl = focused?.closest<HTMLElement>("[data-document-owner]")?.dataset.documentOwner === focusDocument?.navigationKey;
@@ -2145,6 +2154,7 @@ function renderProjection(doc: LiveDocument): void {
     const restoreQuerySourceFocus = doc.mode === "focus" && !!doc.editor.revealed && doc.editor.view.hasFocus && !!doc.editor.view.dom.closest(".embedded-query-source-host");
     const preservedScroll = flowHasProjection ? flowScroll?.scrollTop : doc.scroll[doc.mode];
     const host = renderHost;
+    stopReadingOutline();
     host.replaceChildren();
     flowHasProjection = false;
     if (!sourceConsumersAvailable(doc)) {
@@ -2347,8 +2357,17 @@ function renderProjection(doc: LiveDocument): void {
             doc.scroll[mode] = scroller.scrollTop;
         });
     }
-    if (scroller && mode === "read" && doc.layout === "continuous" && projectionCurrent)
+    if (scroller && mode === "read" && doc.layout === "continuous" && projectionCurrent) {
         restoreReadingReturn(doc, scroller, host, projection);
+        const snapshot = projection.headingStructure;
+        if (snapshot && !snapshot.truncated && snapshot.coverage === "complete") {
+            const eligible = readingHeadingKeys(projection.tree, snapshot.items);
+            if (eligible.size) readingOutlineTracker = new ReadingOutlineTracker(scroller, host, eligible,
+                () => current === doc && doc.mode === "read" && doc.layout === "continuous" && flowScroll === scroller &&
+                    renderHost === host && doc.session.projection === projection && doc.session.projectionCurrent && sourceConsumersAvailable(doc),
+                key => workspaceTools.setReadingHeading(snapshot, key));
+        }
+    }
 }
 /** Read only the live selection in this document's accepted rendering. */
 function readingTextSelection(doc: LiveDocument): (SourceSelection & { visibleExcerpt: string }) | null {
