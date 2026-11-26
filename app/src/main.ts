@@ -20,7 +20,7 @@ import { fileSaveReceipt, fileSaveFailure } from "./file-save-result";
 import { RecognitionPanel } from "./recognition-panel";
 import { api, apiBlob, ApiError, operationId } from "./api";
 import { mountNodeContents } from "./node-contents";
-import { SourceEditor, applySourcePatches } from "./editor";
+import { SourceEditor, applySourcePatches, sourceBoundary, type SourceSelection } from "./editor";
 import { countSourceCodePoints } from "./source-statistics";
 import { DeferredPaint } from "./deferred-paint";
 import { EverydayNavigation, type EverydayEntry, type EverydayCommand } from "./everyday-navigation";
@@ -1844,6 +1844,13 @@ function renderDocument(): void {
     const caption = el("div", "view-caption");
     if (doc.mode === "read" || readOnlySource(doc))
         caption.append(el("span", "readonly-label", readOnlySource(doc) ? uiMessage("shell.recycledReadOnly") : uiMessage("shell.readOnlyCurrentDraft")));
+    if (doc.layout === "continuous" && !readOnlySource(doc) && ["read", "source", "styled"].includes(doc.mode)) {
+        const next = doc.mode === "read" ? "source" : "read";
+        const shortcut = button(uiMessage(next === "source" ? "embeddedQuery.editSource" : "shell.viewReading"), () => changeMode(next, true), "text-button read-edit-shortcut");
+        // Preserve a live rendered-text selection until the click can map it.
+        if (doc.mode === "read") shortcut.addEventListener("mousedown", event => { if (event.button === 0) event.preventDefault(); });
+        caption.append(shortcut);
+    }
     if (doc.session.recovered)
         caption.append(button(uiMessage("shell.recoveredPreviousDraftView"), showDraftComparison, "recovery-caption"));
     if (noteInputRecovery.count(localPersonalAudience()))
@@ -2327,29 +2334,80 @@ function renderProjection(doc: LiveDocument): void {
         });
     }
 }
-function captureReadingSelection(): void {
-    const doc = current;
+/** Read only the live selection in this document's accepted rendering. */
+function readingTextSelection(doc: LiveDocument): (SourceSelection & { visibleExcerpt: string }) | null {
     const selection = window.getSelection();
-    if (!doc || !doc.session.projectionCurrent || !selection || selection.isCollapsed || selection.rangeCount !== 1)
-        return;
+    if (!doc.session.projectionCurrent || !renderHost || !selection || selection.isCollapsed || selection.rangeCount !== 1)
+        return null;
     const range = selection.getRangeAt(0);
-    // This UI path only supplies a direct character map. More complex generated
-    // or escaped appearances remain source-selectable instead of guessing offsets.
+    if (!renderHost.contains(range.startContainer) || !renderHost.contains(range.endContainer))
+        return null;
+    // Only a direct character map can supply edit offsets. Never guess from
+    // repeated or escaped appearances, generated content or included files.
+    const source = doc.session.source;
     const endpoint = (node: Node, offset: number): number | null => {
         const matches = projectionMappings.filter(item => item.node === node || item.node.firstChild === node);
         if (matches.length !== 1)
             return null;
         const item = matches[0], origin = item.origin;
-        if (!origin?.isMain || origin.raw !== item.text || doc.session.source.slice(origin.utf16From, origin.utf16To) !== item.text || offset < 0 || offset > item.text.length)
+        if (!origin?.isMain || origin.raw !== item.text || source.slice(origin.utf16From, origin.utf16To) !== item.text || offset < 0 || offset > item.text.length)
             return null;
-        if (projectionMappings.filter(other => other.origin?.isMain && other.origin.utf16From === origin.utf16From && other.origin.utf16To === origin.utf16To).length !== 1)
+        if (!sourceBoundary(source, origin.utf16From + offset) || projectionMappings.filter(other => other.origin?.isMain && other.origin.utf16From === origin.utf16From && other.origin.utf16To === origin.utf16To).length !== 1)
             return null;
         return origin.utf16From + offset;
     };
     const from = endpoint(range.startContainer, range.startOffset), to = endpoint(range.endContainer, range.endOffset);
-    if (from == null || to == null || from >= to)
-        return;
-    readingSelection = { sessionId: doc.session.opened.sessionId, serial: doc.session.serial, selection: { from, to, visibleExcerpt: selection.toString(), elementRole: "text" } };
+    return from == null || to == null || from >= to ? null : { from, to, visibleExcerpt: selection.toString() };
+}
+function captureReadingSelection(): void {
+    if (!current) return;
+    const selection = readingTextSelection(current);
+    if (selection) readingSelection = { sessionId: current.session.opened.sessionId, serial: current.session.serial, selection: { ...selection, elementRole: "text" } };
+}
+function readingEditLocation(doc: LiveDocument): SourceSelection | null {
+    const projection = doc.session.projection;
+    if (renderedDocument !== doc || renderedMode !== "read" || doc.layout !== "continuous" || !projection || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc) || !flowHasProjection || !renderHost || !flowScroll)
+        return null;
+    const selected = readingTextSelection(doc);
+    const source = doc.session.source;
+    if (selected) {
+        // Cross-node selections may visually omit source syntax. In that
+        // case go to the beginning rather than selecting hidden syntax.
+        return source.slice(selected.from, selected.to) === selected.visibleExcerpt ? selected : { from: selected.from, to: selected.from };
+    }
+    const originCounts = new Map<string, number>();
+    const key = (origin: Origin) => `${origin.utf16From}:${origin.utf16To}`;
+    for (const { origin } of projectionMappings) {
+        if (origin?.isMain) originCounts.set(key(origin), (originCounts.get(key(origin)) ?? 0) + 1);
+    }
+    const viewport = flowScroll.getBoundingClientRect();
+    const referenceY = viewport.top + viewport.height / 3;
+    let best = Infinity, result: SourceSelection | null = null;
+    const consider = (rect: DOMRect, from: number, to: number): void => {
+        if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= viewport.top || rect.top >= viewport.bottom || !Number.isSafeInteger(from) || !Number.isSafeInteger(to) || to <= from || !sourceBoundary(source, from) || !sourceBoundary(source, to))
+            return;
+        const distance = Math.abs(rect.top - referenceY);
+        if (distance < best) { best = distance; result = { from, to: from }; }
+    };
+    // An explicitly focused rendered heading (e.g. via the Outline) should
+    // take precedence over the paragraph nearest the viewport's reading line.
+    const focused = document.activeElement;
+    if (focused instanceof HTMLElement && renderHost.contains(focused)) {
+        const matching = projection.headingStructure?.items.filter(item => item.key === focused.dataset.documentNodeKey) ?? [];
+        const item = matching.length === 1 ? matching[0] : null;
+        if (item?.range && headingMatchesDisplay(projection.tree, item)) {
+            consider(focused.getBoundingClientRect(), item.range.utf16From, item.range.utf16To);
+            if (result) return result;
+        }
+    }
+    const range = document.createRange();
+    for (const { node, text, origin } of projectionMappings) {
+        if (!text.trim() || !origin?.isMain || originCounts.get(key(origin)) !== 1 || origin.raw !== text || source.slice(origin.utf16From, origin.utf16To) !== text || !renderHost.contains(node))
+            continue;
+        range.selectNodeContents(node);
+        consider(range.getBoundingClientRect(), origin.utf16From, origin.utf16To);
+    }
+    return result;
 }
 function renderDiagnostics(doc: LiveDocument): void {
     const projection = doc.session.projectionCurrent ? doc.session.projection : null;
@@ -2366,31 +2424,40 @@ function renderDiagnostics(doc: LiveDocument): void {
         } }],
     })));
 }
-async function changeMode(mode: ViewMode): Promise<void> {
+async function changeMode(mode: ViewMode, shortcut = false): Promise<void> {
     const finishNativeActivity = libraryCloseActivity.begin();
     try {
-        if (!current)
+        const doc = current;
+        if (!doc || doc.editor.composing)
             return;
-        if (current.writing.state.composing) {
-            const doc = current;
+        const previous = doc.mode, generation = navigationGeneration;
+        if (doc.writing.state.composing) {
             await doc.writing.deferUntilCompositionEnds(() => {
-                if (current === doc)
-                    return changeMode(mode);
+                if (current === doc && navigationGeneration === generation && doc.mode === previous)
+                    return changeMode(mode, shortcut);
             });
             return;
         }
+        const projection = doc.session.projection, inputId = doc.session.inputId;
+        const location = previous === "read" && (mode === "source" || mode === "styled") ? readingEditLocation(doc) : null;
         if (mode === "source" || mode === "styled")
-            await current.writing.settleForSessionChange();
+            await doc.writing.settleForSessionChange();
         else
-            await flushLiteral();
-        if (flowScroll && flowHasProjection)
-            current.scroll[current.mode] = flowScroll.scrollTop;
-        current.editor.clearReveal();
-        current.mode = mode;
-        current.queries.modeChanged();
+            await doc.writing.flush();
+        if (current !== doc || navigationGeneration !== generation || doc.mode !== previous || doc.editor.composing)
+            return;
+        doc.editor.clearReveal();
+        doc.mode = mode;
+        doc.queries.modeChanged();
         activeSourceOrigin = null;
         localStorage.setItem("weftext-view", mode);
         renderContent();
+        if (location && doc.session.projection === projection && doc.session.inputId === inputId && doc.session.projectionCurrent && sourceConsumersAvailable(doc) && doc.editor.source === doc.session.source)
+            doc.editor.select(location.from, location.to);
+        else if (shortcut && mode !== "read" && doc.editor.view.dom.isConnected)
+            doc.editor.view.focus();
+        else if (shortcut && mode === "read")
+            content.querySelector<HTMLElement>(".read-edit-shortcut")?.focus({ preventScroll: true });
     } finally { finishNativeActivity(); }
 }
 function revealSource(origin: Origin): void {
