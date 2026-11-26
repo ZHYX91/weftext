@@ -42,6 +42,7 @@ export class WorkspaceDock {
     private persistenceReported = false;
     private draggedId: string | null = null;
     private menu: HTMLElement | null = null;
+    private viewListLifetime: AbortController | null = null;
     private destroyed = false;
     private notifyingActivation = false;
     constructor(private readonly options: WorkspaceDockOptions = {}) {
@@ -206,7 +207,7 @@ export class WorkspaceDock {
         const choices = [...this.left.querySelectorAll<HTMLButtonElement>('[role="tab"][aria-selected="true"]'), ...this.right.querySelectorAll<HTMLButtonElement>('[role="tab"][aria-selected="true"]'), ...this.controls.querySelectorAll<HTMLButtonElement>("button")];
         choices.find(item => !item.closest("[hidden],[inert]") && item.getClientRects().length > 0)?.focus({ preventScroll: true });
     }
-    private button(label: UiText, run: () => void, text?: string): HTMLButtonElement {
+    private button(label: UiText, run: (() => void) | null, text?: string): HTMLButtonElement {
         const button = this.create("button", "workspace-dock-button"); button.type = "button";
         setUiAttr(button, "aria-label", label); setUiAttr(button, "title", label);
         if (text !== undefined) button.textContent = text; else setUiText(button, label);
@@ -341,6 +342,7 @@ export class WorkspaceDock {
         else if (focusSideToggle) this.controls.querySelector<HTMLElement>(`[data-toggle-side="${focusSideToggle}"]`)?.focus({ preventScroll: true });
     }
     private renderControls(): void {
+        this.stopViewListTracking();
         disposeUiTree(this.controls); this.controls.replaceChildren();
         for (const side of sides) {
             const button = this.button(side === "left" ? uiMessage("workspaceDock.leftSidebar") : uiMessage("workspaceDock.rightSidebar"), () => this.toggleSide(side));
@@ -348,14 +350,53 @@ export class WorkspaceDock {
             button.setAttribute("aria-pressed", String(!(side === "left" ? this.state.leftHidden : this.state.rightHidden)));
             this.controls.append(button);
         }
-        const views = this.create("details", "workspace-dock-view-menu"), summary = this.create("summary", "");
-        setUiText(summary, uiMessage("workspaceDock.viewActions")); views.append(summary);
+        const trigger = this.button(uiMessage("workspaceDock.viewActions"), null);
+        trigger.setAttribute("popovertarget", "workspace-dock-view-list");
         const list = this.create("div", "workspace-dock-view-menu-list");
+        list.id = "workspace-dock-view-list";
+        list.setAttribute("popover", "auto");
+        list.setAttribute("role", "group");
+        setUiAttr(list, "aria-label", uiMessage("workspaceDock.viewActions"));
         for (const [id, view] of this.views) {
-            const button = this.button(view.label, () => { this.reveal(id, { focus: true }); views.open = false; });
-            button.dataset.showView = id; button.setAttribute("aria-pressed", String(!this.state.hidden.includes(id))); list.append(button);
+            const button = this.button(view.label, () => {
+                if (list.matches(":popover-open")) list.hidePopover();
+                this.reveal(id, { focus: true });
+            });
+            if (!list.childElementCount) button.autofocus = true;
+            button.dataset.showView = id;
+            button.setAttribute("aria-pressed", String(!this.state.hidden.includes(id)));
+            list.append(button);
         }
-        views.append(list); this.controls.append(views, this.button(uiMessage("workspaceDock.resetLayout"), () => this.reset()));
+        const position = () => {
+            const bounds = trigger.getBoundingClientRect();
+            list.style.setProperty("--view-list-left", `${bounds.left}px`);
+            list.style.setProperty("--view-list-top", `${bounds.bottom + 3}px`);
+        };
+        list.addEventListener("beforetoggle", event => {
+            this.stopViewListTracking();
+            if ((event as ToggleEvent).newState !== "open") return;
+            position();
+            const win = this.document.defaultView;
+            if (!win) return;
+            const lifetime = this.viewListLifetime = new AbortController();
+            win.addEventListener("resize", position, { signal: lifetime.signal });
+            win.addEventListener("scroll", scroll => {
+                if (scroll.target instanceof Node && scroll.target.contains(trigger)) position();
+            }, { capture: true, signal: lifetime.signal });
+            const panel = trigger.closest(".workspace-ribbon-panel");
+            if (panel) {
+                const observer = new MutationObserver(() => {
+                    if (panel.hasAttribute("hidden") && list.matches(":popover-open")) list.hidePopover();
+                });
+                observer.observe(panel, { attributes: true, attributeFilter: ["hidden"] });
+                lifetime.signal.addEventListener("abort", () => observer.disconnect(), { once: true });
+            }
+        });
+        this.controls.append(trigger, list, this.button(uiMessage("workspaceDock.resetLayout"), () => this.reset()));
+    }
+    private stopViewListTracking(): void {
+        this.viewListLifetime?.abort();
+        this.viewListLifetime = null;
     }
     private divider(side: DockSide, index: number): HTMLElement {
         const divider = this.create("div", "workspace-dock-divider"); divider.tabIndex = 0;
@@ -481,7 +522,7 @@ export class WorkspaceDock {
     }
     destroy(): void {
         if (this.destroyed) return;
-        this.persist(); this.lifetime.abort(); this.closeMenu(false); this.endDrag(); this.destroyed = true;
+        this.persist(); this.lifetime.abort(); this.closeMenu(false); this.stopViewListTracking(); this.endDrag(); this.destroyed = true;
         for (const group of this.groups.values()) disposeUiTree(group.header);
         disposeUiTree(this.controls);
         this.left.remove(); this.right.remove(); this.controls.remove(); this.groups.clear();

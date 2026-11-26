@@ -139,9 +139,8 @@ const knowledgeReads = () => result.requests.filter(request => request.route ===
 async function revealView(id) {
   if (!await dockTab(id).isVisible()) {
     await selectTab('view');
-    const menu = ribbon().locator('.workspace-dock-view-menu');
-    await menu.locator('summary').click();
-    await menu.locator(`[data-show-view="${id}"]`).click();
+    await ribbon().locator('[popovertarget="workspace-dock-view-list"]').click();
+    await ribbon().locator(`#workspace-dock-view-list [data-show-view="${id}"]`).click();
   } else await dockTab(id).click();
   await dockView(id).waitFor({ state: 'visible' });
 }
