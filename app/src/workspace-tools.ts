@@ -49,6 +49,7 @@ export interface WorkspaceToolsHost {
     savedDefinition(result: unknown, basis: DocumentBasis): Promise<void>;
     navigate(target: string | KnowledgeNodeRef): Promise<void>;
     selectSource(from: number, to: number): void;
+    isReadingOutline?(): boolean;
     revealHeading?(heading: StructureHeading): boolean;
     beforeAction(): Promise<void>;
     canEditSource(): boolean;
@@ -190,7 +191,7 @@ export class WorkspaceTools {
         const outline = document.createElement("section");
         this.outlinePanel = new DocumentOutlineView(outline, {
             getDocument: host.getDocument, getOutlineSnapshot: host.getOutlineSnapshot,
-            selectSource: host.selectSource, revealHeading: host.revealHeading, notify: host.notify,
+            selectSource: host.selectSource, isReadingOutline: host.isReadingOutline, revealHeading: host.revealHeading, notify: host.notify,
             canNavigate: () => !this.closeGuard.frozen,
         });
         this.views = Object.freeze({ data: this.propertyPanel.element, knowledge: this.knowledgeContainer, query: this.queryPanel.element, outline });

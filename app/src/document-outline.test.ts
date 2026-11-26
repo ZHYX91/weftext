@@ -17,7 +17,7 @@ function fixture(initial: OutlineBasis | null = basis()) {
     let current = initial, accepted: OutlineSnapshot | null = initial ? { basis: { ...initial }, snapshot: snapshot() } : null, available = true;
     const records: { view: View; snapshot?: HeadingSnapshot; open: (item: StructureHeading) => void; emptyMessage: string }[] = [];
     const views: View[] = [], selections: number[][] = [], revealed: StructureHeading[] = [], notices: string[] = [];
-    let requests = 0, clears = 0;
+    let requests = 0, clears = 0, reading = false, visible = true;
     class View {
         state = { search: "", collapsed: new Set<string>() };
         detached = 0; cleared = 0;
@@ -35,7 +35,8 @@ function fixture(initial: OutlineBasis | null = basis()) {
     const host = {
         getDocument: () => current, getOutlineSnapshot: () => accepted, canNavigate: () => available,
         selectSource: (from: number, to: number) => selections.push([from, to]),
-        revealHeading: (item: StructureHeading) => { revealed.push(item); return true; },
+        isReadingOutline: () => reading,
+        revealHeading: (item: StructureHeading) => { revealed.push(item); return visible; },
         notify: (message: string) => notices.push(message),
         request: () => { requests++; throw new Error("Outline cannot read or compile"); },
         beforeAction: () => { requests++; throw new Error("Outline cannot settle author input"); },
@@ -45,6 +46,7 @@ function fixture(initial: OutlineBasis | null = basis()) {
         current: () => current, accepted: () => accepted, requests: () => requests, clears: () => clears,
         setCurrent(next: OutlineBasis | null) { current = next; },
         accept(product: HeadingSnapshot, captured: OutlineBasis = current!) { accepted = { basis: { ...captured }, snapshot: product }; },
+        setReading(canReveal: boolean) { reading = true; visible = canReveal; },
         dropProjection() { accepted = null; }, freeze() { available = false; }, thaw() { available = true; },
     };
 }
@@ -58,6 +60,22 @@ test("local outline consumes the accepted native product without reading, compil
     assert.deepEqual(f.selections, [[9, 14]]);
     assert.equal(f.requests(), 0);
     assert.equal(f.controller.assertCloseReady, undefined);
+});
+
+test("reading jumps stay in the rendered document even for headings with author ranges", () => {
+    const f = fixture(), installed = f.records.at(-1)!;
+    const heading = installed.snapshot!.items[0], caption = installed.snapshot!.items[1];
+    f.setReading(true);
+    installed.open(heading);
+    assert.deepEqual(f.revealed, [heading]);
+    assert.deepEqual(f.selections, []);
+    assert.deepEqual(f.notices, []);
+
+    f.setReading(false);
+    installed.open(caption);
+    assert.deepEqual(f.revealed, [heading, caption]);
+    assert.deepEqual(f.selections, []);
+    assert.deepEqual(f.notices, ["heading.itemNotVisibleInReading"]);
 });
 
 test("source edits invalidate immediately and the next accepted projection renews automatically", () => {

@@ -16,7 +16,7 @@ export class HeadingStructureView {
     private selected = DOCUMENT_ROOT;
     private scope = DOCUMENT_ROOT;
     private search = "";
-    private match = 0;
+    private matchKey: string | null = null;
     private depth = 0;
     private mode: "list" | "map" = "list";
     private filter: "all" | "heading" | "caption" = "all";
@@ -40,7 +40,7 @@ export class HeadingStructureView {
     }
 
     clear(): void {
-        this.collapsed.clear(); this.selected = DOCUMENT_ROOT; this.scope = DOCUMENT_ROOT; this.search = ""; this.match = 0;
+        this.collapsed.clear(); this.selected = DOCUMENT_ROOT; this.scope = DOCUMENT_ROOT; this.search = ""; this.matchKey = null;
         this.initialized = false; this.canvas = { positions: new Map(), camera: defaultCamera() };
         this.composing = false; this.deferred = undefined;
         this.detach(); this.scroll = 0;
@@ -90,28 +90,22 @@ export class HeadingStructureView {
             return;
         }
         const tree = headingTree(snapshot.items), byKey = new Map(tree.map(n => [n.key, n]));
-        const choose = (key: string): void => {
-            this.selected = key || DOCUMENT_ROOT;
-            for (const row of parent.querySelectorAll<HTMLElement>("[data-heading-key]")) row.classList.toggle("is-selected", row.dataset.headingKey === this.selected);
-            for (const row of parent.querySelectorAll<SVGElement>("[data-graph-key]")) row.classList.toggle("is-selected", row.dataset.graphKey === this.selected);
-        };
         if (!byKey.has(this.scope)) this.scope = DOCUMENT_ROOT;
         const controls = ui("div", "outline-controls");
         const search = ui("input");
         search.type = "search"; search.value = this.search; search.dataset.outlineControl = "search";
+        search.setAttribute("aria-keyshortcuts", "ArrowDown ArrowUp Enter");
         setUiAttr(search, "aria-label", message("heading.searchOutline"));
+        setUiAttr(search, "title", message("heading.outlineSearchKeys"));
         setUiAttr(search, "placeholder", message("heading.outlineSearchPlaceholder"));
-        search.oninput = event => { this.search = search.value; this.match = 0; if (!(event as InputEvent).isComposing) redraw(); };
+        search.oninput = event => { this.search = search.value; this.matchKey = null; if (!(event as InputEvent).isComposing) redraw(); };
         search.addEventListener("compositionstart", () => { this.composing = true; });
         search.addEventListener("compositionend", () => {
-            this.composing = false; this.search = search.value; this.match = 0;
+            this.composing = false; this.search = search.value; this.matchKey = null;
             const deferred = this.deferred; this.deferred = undefined;
             if (deferred) this.render(deferred.container, deferred.snapshot, deferred.open, deferred.emptyMessage);
             else redraw();
         });
-        search.onkeydown = event => {
-            if (event.key === "Enter" && !event.isComposing) { event.preventDefault(); this.search = search.value; this.match = 0; redraw(); }
-        };
         controls.append(search);
         const filter = ui("select");
         filter.dataset.outlineControl = "filter";
@@ -148,18 +142,49 @@ export class HeadingStructureView {
         const basis = this.mode === "map" ? headingTree(snapshot.items.filter(item => item.kind === "heading")) : tree;
         const visible = visibleHeadings(basis, this.scope, this.collapsed, this.search, this.depth);
         const shown = visible.items.filter(item => item.key === DOCUMENT_ROOT || this.mode === "map" || this.filter === "all" || (this.filter === "heading") === (item.kind === "heading"));
-        const matches = visible.matches.filter(key => shown.some(item => item.key === key));
+        const shownKeys = new Set(shown.map(item => item.key));
+        const matches = visible.matches.filter(key => shownKeys.has(key));
+        const choose = (key: string): void => {
+            this.selected = key || DOCUMENT_ROOT;
+            this.matchKey = matches.includes(key) ? key : null;
+            for (const row of parent.querySelectorAll<HTMLElement>("[data-heading-key]")) row.classList.toggle("is-selected", row.dataset.headingKey === key);
+            for (const row of parent.querySelectorAll<SVGElement>("[data-graph-key]")) row.classList.toggle("is-selected", row.dataset.graphKey === key);
+        };
         const chooseMatch = (step: number) => {
             if (!matches.length) return;
-            this.match = (this.match + step + matches.length) % matches.length;
-            this.selected = matches[this.match]; redraw();
-            this.element?.querySelector<HTMLElement>(`[data-heading-key="${CSS.escape(this.selected)}"]`)?.scrollIntoView({ block: "nearest" });
+            const index = this.matchKey === null ? -1 : matches.indexOf(this.matchKey);
+            const next = index < 0 ? (step < 0 ? matches.length - 1 : 0) : (index + step + matches.length) % matches.length;
+            const key = matches[next];
+            choose(key);
+            const row = parent.querySelector<HTMLElement>(`[data-heading-key="${CSS.escape(key)}"]`);
+            if (row) {
+                const bounds = parent.getBoundingClientRect(), target = row.getBoundingClientRect();
+                const top = bounds.top + parent.clientTop, bottom = top + parent.clientHeight;
+                if (target.top < top) parent.scrollTop += target.top - top;
+                else if (target.bottom > bottom) parent.scrollTop += target.bottom - bottom;
+            }
+        };
+        search.onkeydown = event => {
+            if (event.isComposing || this.composing || event.keyCode === 229 || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || !matches.length)
+                return;
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                event.preventDefault();
+                chooseMatch(event.key === "ArrowDown" ? 1 : -1);
+            } else if (event.key === "Enter") {
+                const key = this.matchKey !== null && matches.includes(this.matchKey) ? this.matchKey : matches[0];
+                const item = byKey.get(key);
+                if (item) { event.preventDefault(); choose(key); open(item); }
+            }
         };
         if (this.search) {
             const matchControls = ui("div", "outline-match-controls");
-            matchControls.append(control("previous-match", message("heading.previousMatch"), () => chooseMatch(-1)), control("next-match", message("heading.nextMatch"), () => chooseMatch(1)), ui("span", "knowledge-help", displayMessage("heading.outlineMatchCount", { p0: matches.length })));
+            const previousMatch = control("previous-match", message("heading.previousMatch"), () => chooseMatch(-1));
+            const nextMatch = control("next-match", message("heading.nextMatch"), () => chooseMatch(1));
+            previousMatch.disabled = nextMatch.disabled = !matches.length;
+            matchControls.append(previousMatch, nextMatch, ui("span", "knowledge-help", displayMessage("heading.outlineMatchCount", { p0: matches.length })));
             parent.append(matchControls);
         }
+        const highlighted = this.search ? this.matchKey : this.selected;
         if (this.mode === "map") {
             const drawn = shown.slice(0, 200), ids = new Set(drawn.map(n => n.key));
             const edges = drawn.filter(n => ids.has(n.parent)).map(n => ({ key: `heading:${n.key}`, source: n.parent, target: n.key, direction: "directed" as const }));
@@ -168,13 +193,13 @@ export class HeadingStructureView {
             if (!this.initialized && drawn.length) { this.initialized = true; this.canvas.camera = fitCamera([...positions.positions.values()], 700, 420); }
             if (drawn.length < shown.length) parent.append(ui("p", "knowledge-warning", displayMessage("heading.canvasLimit", { p0: drawn.length })));
             parent.append(graphCanvas(drawn.map(n => ({ key: n.key, title: n.key === DOCUMENT_ROOT ? message("heading.documentRoot") : `${n.number ? `${n.number} ` : ""}${n.text}` })), edges.map(e => ({ ...e, directed: true, label: displayMessage("heading.edgeLabel", { p0: uiDisplayParameter(e.source === DOCUMENT_ROOT ? message("heading.documentRootLabel") : byKey.get(e.source)?.text), p1: uiDisplayParameter(byKey.get(e.target)?.text) }) })), this.canvas,
-                key => choose(key), key => { const item = byKey.get(key); if (item && item.key !== DOCUMENT_ROOT) open(item); }, this.selected, message("heading.layoutOnly")));
+                key => choose(key), key => { const item = byKey.get(key); if (item && item.key !== DOCUMENT_ROOT) open(item); }, highlighted ?? DOCUMENT_ROOT, message("heading.layoutOnly")));
         }
         const list = ui("ul", "knowledge-heading-list outline-list");
         setUiAttr(list, "aria-label", message("heading.outlineList"));
         for (const item of shown) {
             if (item.key === DOCUMENT_ROOT) continue;
-            const row = ui("li", `outline-row ${this.selected === item.key ? "is-selected" : ""}`);
+            const row = ui("li", `outline-row ${highlighted === item.key ? "is-selected" : ""}`);
             row.dataset.headingKey = item.key; row.dataset.outlineKind = item.kind;
             row.style.paddingInlineStart = `${Math.min(12, Math.max(0, item.depth - (byKey.get(this.scope)?.depth ?? 0) - 1)) * 12}px`;
             if (item.children.length) {
