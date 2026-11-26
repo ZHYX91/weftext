@@ -20,7 +20,8 @@ function fixture(initial: OutlineBasis | null = basis()) {
     let requests = 0, clears = 0, reading = false, visible = true;
     class View {
         state = { search: "", collapsed: new Set<string>() };
-        detached = 0; cleared = 0;
+        detached = 0; cleared = 0; readingHeading?: string;
+        setReadingHeading(key?: string) { this.readingHeading = key; }
         constructor() { views.push(this); }
         render(_container: HTMLElement, product: HeadingSnapshot | undefined, open: (item: StructureHeading) => void, emptyMessage: string) { records.push({ view: this, snapshot: product, open, emptyMessage }); }
         detach() { this.detached++; }
@@ -198,4 +199,25 @@ test("pending idempotence does not reuse detached, cleared or disposed presentat
     f.setCurrent(firstBasis); f.controller.refresh(); assert.equal(f.records.at(-1)!.view, first.view);
     const count = f.records.length; f.controller.dispose(); f.controller.refresh(); f.controller.invalidate(); assert.equal(f.records.length, count);
     assert.equal(f.views.every(view => view.cleared === 1), true);
+});
+
+
+test("reading badge ignores retired products and is cleared on invalidation", () => {
+    const f = fixture();
+    const old = f.accepted()!.snapshot;
+    const view = f.views.at(-1)!;
+    const initialRenders = f.records.length;
+    f.controller.setReadingHeading(old, "heading");
+    assert.equal(view.readingHeading, "heading");
+    assert.equal(f.records.length, initialRenders);
+    f.setCurrent(basis({ source: "new source", serial: 1, inputId: "new-input" }));
+    f.controller.setReadingHeading(old, "generated");
+    assert.equal(view.readingHeading, "heading");
+    f.controller.invalidate();
+    assert.equal(view.readingHeading, undefined);
+    const fresh = snapshot(); f.accept(fresh); f.controller.refresh();
+    f.controller.setReadingHeading(old, "heading");
+    assert.equal(view.readingHeading, undefined);
+    f.controller.setReadingHeading(fresh, "generated");
+    assert.equal(view.readingHeading, "generated");
 });

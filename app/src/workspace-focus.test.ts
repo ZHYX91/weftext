@@ -17,7 +17,7 @@ const methodNames = ["show", "toggle", "refreshView"];
 const methods = owner.members.filter(node => ts.isMethodDeclaration(node) && methodNames.includes(node.name.getText(workspace)));
 assert.equal(methods.length, methodNames.length);
 const workspaceCode = ts.transpileModule(`class Owner { ${methods.map(node => node.getText(workspace)).join("\n")} } globalThis.Owner = Owner;`, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
-const functions = ["button", "el", "setDocumentGroup", "clearDocumentGroups", "renderContent", "changeMode"].map(name => {
+const functions = ["button", "el", "setDocumentGroup", "clearDocumentGroups", "stopReadingOutline", "renderContent", "changeMode"].map(name => {
     const node = main.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === name);
     assert.ok(node); return node.getText(main);
 });
@@ -126,7 +126,7 @@ function viewFixture(t: TestContext) {
         editor: { composing: false, clearReveal() {}, view: { scrollDOM: { scrollTop: 0 } } }, queries: { detach() {}, modeChanged() {} }, deferredProjection: { clear() {} },
         writing: { state: { composing: false }, flush: async () => {}, settleForSessionChange: async () => {}, deferUntilCompositionEnds: async (run: () => Promise<void>) => run() } };
     const context: any = { document, current: doc, documents: [doc], navigationGeneration: 1, bodyCloseFrozen: false, recognitionSession: "root", recognitionPanel: { retireDisplay() {} },
-        renderedDocument: null, renderedMode: null, flowScroll: null, flowHasProjection: false, pagedPreview: null, workspaceTools: { attachSurface() {} }, projectionMappings: [], renderHost: null,
+        renderedDocument: null, renderedMode: null, flowScroll: null, flowHasProjection: false, readingOutlineTracker: null, pagedPreview: null, workspaceTools: { attachSurface() {}, setReadingHeading() {} }, projectionMappings: [], renderHost: null,
         documentRibbonGroups: [], content, ribbon: { element: ribbon, setGroup: (_tab: string, _id: string, _label: unknown, nodes: Element[]) => ribbon.append(...nodes), clearGroup: () => ribbon.replaceChildren() },
         documentComparisonMessage: () => null, renderWelcome() {}, renderTopbar() {}, renderTabs() {}, renderStatus() {}, renderEverydayBar() {},
         uiMessage, uiTextValue, setUiText, setUiAttr, uiTextNode, disposeUiTree, icon: () => document.createElement("span"), CSS: { escape: (value: string) => value },
@@ -158,6 +158,17 @@ for (const changed of ["document", "generation", "frozen", "composition", "rende
     else f.context.renderEverydayBar = () => f.outside.focus();
     f.context.renderContent(); assert.notEqual(f.document.activeElement, f.control("layout"));
     if (changed === "render-focus") assert.equal(f.document.activeElement, f.outside);
+});
+
+test("document shell rebuild retires the outgoing reading outline without changing restored focus", t => {
+    const f = viewFixture(t), calls: string[] = [];
+    f.context.readingOutlineTracker = { dispose: () => calls.push("disposed") };
+    f.context.workspaceTools.setReadingHeading = (snapshot: unknown) => { assert.equal(snapshot, null); calls.push("cleared"); };
+    f.control("layout").focus();
+    f.context.renderContent();
+    assert.deepEqual(calls, ["disposed", "cleared"]);
+    assert.equal(f.context.readingOutlineTracker, null);
+    assert.equal(f.document.activeElement, f.control("layout"));
 });
 
 const hosted = ts.createSourceFile("hosted.ts", readFileSync(new URL("./hosted.ts", import.meta.url), "utf8"), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);

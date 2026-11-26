@@ -32,6 +32,7 @@ export class DocumentOutlineView {
     private readonly views = new Map<string, HeadingStructureView>();
     private active: HeadingStructureView | null = null;
     private installed: OutlineSnapshot | null = null;
+    private reading?: { snapshot: HeadingSnapshot; key: string };
     private presentation: { view: HeadingStructureView; basis: OutlineBasis | null; snapshot: HeadingSnapshot | null } | null = null;
     private disposed = false;
 
@@ -43,9 +44,19 @@ export class DocumentOutlineView {
         this.display(current, current && accepted && sameOutlineBasis(accepted.basis, current) ? accepted : null);
     }
 
+    setReadingHeading(snapshot: HeadingSnapshot | null, key?: string): void {
+        if (this.disposed) return;
+        if (snapshot) {
+            const accepted = this.host.getOutlineSnapshot();
+            if (!accepted || accepted.snapshot !== snapshot || !sameOutlineBasis(accepted.basis, this.host.getDocument())) return;
+        }
+        this.reading = snapshot && key ? { snapshot, key } : undefined;
+        this.active?.setReadingHeading(this.reading?.snapshot === this.installed?.snapshot ? this.reading?.key : undefined);
+    }
+
     /** Retire navigation immediately while author input or its projection is pending. */
     invalidate(): void {
-        if (!this.disposed) this.display(this.host.getDocument(), null);
+        if (!this.disposed) { this.setReadingHeading(null); this.display(this.host.getDocument(), null); }
     }
 
     private display(current: OutlineBasis | null, accepted: OutlineSnapshot | null): void {
@@ -60,6 +71,7 @@ export class DocumentOutlineView {
         // navigation filter is composing and its presentation update is deferred.
         this.installed = installed;
         this.presentation = { view, basis: installed?.basis ?? (current ? copyBasis(current) : null), snapshot };
+        view.setReadingHeading(this.reading?.snapshot === snapshot ? this.reading?.key : undefined);
         view.render(this.container, installed?.snapshot, item => this.open(installed, item.key),
             message(current ? "heading.waitForCurrentProjection" : "heading.openDocumentForOutline"));
     }
@@ -95,7 +107,7 @@ export class DocumentOutlineView {
 
     dispose(): void {
         if (this.disposed) return;
-        this.disposed = true; this.installed = null; this.presentation = null;
+        this.disposed = true; this.installed = null; this.presentation = null; this.reading = undefined;
         for (const view of this.views.values()) view.clear();
         this.views.clear(); this.active = null; this.container.replaceChildren();
     }

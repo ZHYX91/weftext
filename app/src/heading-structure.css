@@ -17,3 +17,14 @@
 .outline-item-kind { flex: 0 0 auto; font-size: .75em; color: var(--muted, #6f7f75); white-space: nowrap; }
 .outline-row .outline-jump { flex: 1 1 auto; text-align: start; min-width: 0; padding: 5px 2px; border: 0; background: transparent; overflow-wrap: anywhere; }
 .outline-view .knowledge-graph-canvas { max-width: 100%; }
+
+.outline-row[data-reading-location] { position: relative; }
+.outline-row[data-reading-location]::before {
+  content: "";
+  position: absolute;
+  inset-block: 4px;
+  inset-inline-start: 1px;
+  border-inline-start: 2px solid var(--accent, #386b5b);
+  pointer-events: none;
+}
+.outline-row[data-reading-location="contains"]::before { border-inline-start-style: dashed; }

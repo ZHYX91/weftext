@@ -339,6 +339,9 @@ export class WorkspaceTools {
             await this.refreshView(kind);
         });
     }
+    setReadingHeading(snapshot: OutlineSnapshot["snapshot"] | null, key?: string): void {
+        this.outlinePanel.setReadingHeading(snapshot, key);
+    }
     /** Accepted native projections can refresh navigation without a preview surface. */
     refreshOutline(): void {
         if (this.closeGuard.frozen) return;
