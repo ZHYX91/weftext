@@ -2,7 +2,7 @@ import { disposeUiTree } from "./ui-locale";
 import { localizedSourceSearch, localizedGotoLine, sourceSearchPhrases } from "./source-search";
 import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
-import { Annotation, Compartment, EditorState, Prec, StateEffect, StateField, type Extension, type Transaction } from "@codemirror/state";
+import { Annotation, Compartment, EditorState, Prec, StateEffect, StateField, type ChangeDesc, type Extension, type Text, type Transaction } from "@codemirror/state";
 import { Decoration, EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, type DecorationSet } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab, isolateHistory, undo, redo } from "@codemirror/commands";
 import { searchKeymap, highlightSelectionMatches } from "@codemirror/search";
@@ -154,7 +154,7 @@ export class SourceEditor {
     authorInputId: string = crypto.randomUUID();
     markAuthorInput(): string { return this.authorInputId = crypto.randomUUID(); }
     readonly inputId = personalInputId();
-    constructor(source: string, onChange: (source: string, inputId: string) => void, save: () => void, personalInputReady?: () => void, authorInputId?: string) {
+    constructor(source: string, onChange: (source: string, inputId: string, changes: ChangeDesc, previous: Text) => void, save: () => void, personalInputReady?: () => void, authorInputId?: string) {
         if (authorInputId) this.authorInputId = authorInputId;
         this.view = new EditorView({
             state: createSourceState(source, [
@@ -203,7 +203,7 @@ export class SourceEditor {
                         this.pendingTokens = undefined;
                         this.generation++;
                         if (update.transactions.some(transaction => transaction.docChanged && !transaction.isUserEvent("input.commit.result"))) this.markAuthorInput();
-                        onChange(this.source, this.authorInputId);
+                        onChange(this.source, this.authorInputId, update.changes, update.startState.doc);
                         this.emit("source");
                     }
                     if (update.selectionSet)
