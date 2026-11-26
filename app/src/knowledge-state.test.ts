@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { canApplySuggestion, decodeKnowledgeDelivery, isGraphemeRange, KnowledgeReadGate, knowledgeDeliveryErrors, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
+import { applyVerifiedKnowledgeSource, canApplySuggestion, decodeKnowledgeDelivery, isGraphemeRange, KnowledgeReadGate, knowledgeDeliveryErrors, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
 import {locale,message,UiError,uiTextValue} from "./ui-locale";
 import { committedDeliveryComplete, deliverCommitted } from "./original-operation";
 import type { KnowledgeBasis, KnowledgeMention, MediaRegionInput } from "./knowledge-state";
@@ -143,4 +143,36 @@ test("local callback failure survives receipt decoding as presentation without c
  assert.equal(Object.hasOwn(decoded,"deliveryError"),false);assert.equal(Object.hasOwn(decoded,"documentError"),false);
  assert.equal(JSON.stringify(decoded),JSON.stringify({operationId:"original-operation",status:"committed"}));
  try{locale.set("zh-CN");const chinese=uiTextValue(display[0]);locale.set("en-US");assert.notEqual(uiTextValue(display[0]),chinese);}finally{locale.set(previous);}
+});
+
+
+test("a verified link occurrence keeps its exact repeated-text range", async () => {
+    const source = "相同链接 [?]，第二处链接 [?]。";
+    const context = { ...basis, workspaceId: "w", nodeId: "a", inputId: "i", root: "r", source };
+    const from = source.lastIndexOf("[?]"), selected: number[][] = [];
+    assert.equal(await applyVerifiedKnowledgeSource(() => context, "w/a", "digest",
+        async input => input === source ? "digest" : "other", () => selected.push([from, from + 3])), true);
+    assert.deepEqual(selected, [[from, from + 3]]);
+    assert.notEqual(selected[0][0], source.indexOf("[?]"));
+});
+
+test("a late link digest cannot move the caret after switching, editing or reopening the same bytes", async () => {
+    const original = { ...basis, workspaceId: "w", nodeId: "a", inputId: "i", root: "r" };
+    for (const patch of [
+        { sessionId: "other", nodeId: "b" },
+        { serial: 1, source: "编辑后的原文" },
+        { inputId: "another-input" },
+        { root: "other-root" },
+    ]) {
+        const current = { ...original };
+        let digest!: (hash: string) => void;
+        const held = new Promise<string>(resolve => { digest = resolve; });
+        let applied = 0;
+        const pending = applyVerifiedKnowledgeSource(() => current, "w/a", "known",
+            source => { assert.equal(source, original.source); return held; }, () => { applied++; });
+        // Simulate reuse of the host's context object, not just object replacement.
+        Object.assign(current, patch); digest("known");
+        assert.equal(await pending, false);
+        assert.equal(applied, 0);
+    }
 });
