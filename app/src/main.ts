@@ -22,6 +22,7 @@ import { api, apiBlob, ApiError, operationId } from "./api";
 import { mountNodeContents } from "./node-contents";
 import { SourceEditor, applySourcePatches, sourceBoundary, type SourceSelection } from "./editor";
 import { countSourceCodePoints } from "./source-statistics";
+import { mapReadingReturnAnchor, type ReadingReturnAnchor } from "./reading-return-anchor";
 import { DeferredPaint } from "./deferred-paint";
 import { EverydayNavigation, type EverydayEntry, type EverydayCommand } from "./everyday-navigation";
 import { openEverydayMenu, openEverydayPicker } from "./everyday-ui";
@@ -163,6 +164,7 @@ interface LiveDocument {
     pendingFragment?: string;
     scroll: Partial<Record<ViewMode, number>>;
     sourceScroll?: number;
+    readingReturn?: { anchor: ReadingReturnAnchor; sessionId: string; source: string; edited: boolean };
     layout: "continuous" | "paged";
     deferredProjection: DeferredPaint;
     sourceTrashed?: boolean;
@@ -670,6 +672,7 @@ const workspaceTools = new WorkspaceTools({
             return false;
         if (!target.hasAttribute("tabindex"))
             target.tabIndex = -1;
+        doc.readingReturn = undefined;
         target.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
         target.focus({ preventScroll: true });
         return true;
@@ -1765,6 +1768,7 @@ function localAuthoringEnvironment(doc: LiveDocument): AuthoringPanelsEnvironmen
             const target = Array.from(renderHost.querySelectorAll<HTMLElement>("[data-document-node-key]")).find(item => item.dataset.documentNodeKey === key);
             if (!target)
                 return false;
+            doc.readingReturn = undefined;
             target.scrollIntoView({ block: "center", inline: "nearest" });
             target.focus({ preventScroll: true });
             return true;
@@ -1832,7 +1836,7 @@ function renderDocument(): void {
     }
     layout.value = doc.layout;
     layout.onchange = () => { void doc.writing.deferUntilCompositionEnds(async () => libraryCloseActivity.run(async () => {
-            await doc.writing.flush(); doc.layout = layout.value as LiveDocument["layout"]; renderContent();
+            await doc.writing.flush(); doc.readingReturn = undefined; doc.layout = layout.value as LiveDocument["layout"]; renderContent();
         })).catch(showError); };
     controls.append(layout);
     if (doc.mode === "source") {
@@ -1945,6 +1949,14 @@ function renderDocument(): void {
         flow.append(renderHost);
         body.append(flow);
         flowScroll = flow;
+        if (doc.mode === "read") {
+            const cancel = () => { if (current === doc && flowScroll === flow) doc.readingReturn = undefined; };
+            for (const event of ["wheel", "touchstart", "pointerdown"])
+                flow.addEventListener(event, cancel, { capture: true, passive: true });
+            flow.addEventListener("keydown", event => {
+                if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(event.key)) cancel();
+            }, { capture: true });
+        }
         renderProjection(doc);
         if (doc.mode === "write" && !readOnlySource(doc)) {
             const commands = createWritingCommandGroups(doc.writing, { onError: showError, insertLink, revealSource: range => revealWritingSource(doc, range) });
@@ -2024,6 +2036,8 @@ function renderContent(): void {
         renderedDocument.scroll[renderedMode] = flowScroll.scrollTop;
     if (renderedDocument && renderedMode && ["source", "styled"].includes(renderedMode))
         renderedDocument.sourceScroll = renderedDocument.editor.view.scrollDOM.scrollTop;
+    if (renderedDocument && renderedDocument !== current)
+        renderedDocument.readingReturn = undefined;
     renderedDocument = current;
     renderedMode = current?.mode ?? null;
     flowHasProjection = false;
@@ -2333,6 +2347,8 @@ function renderProjection(doc: LiveDocument): void {
             doc.scroll[mode] = scroller.scrollTop;
         });
     }
+    if (scroller && mode === "read" && doc.layout === "continuous" && projectionCurrent)
+        restoreReadingReturn(doc, scroller, host, projection);
 }
 /** Read only the live selection in this document's accepted rendering. */
 function readingTextSelection(doc: LiveDocument): (SourceSelection & { visibleExcerpt: string }) | null {
@@ -2364,7 +2380,7 @@ function captureReadingSelection(): void {
     const selection = readingTextSelection(current);
     if (selection) readingSelection = { sessionId: current.session.opened.sessionId, serial: current.session.serial, selection: { ...selection, elementRole: "text" } };
 }
-function readingEditLocation(doc: LiveDocument): SourceSelection | null {
+function readingEditLocation(doc: LiveDocument, anchor: ReadingReturnAnchor | null): SourceSelection | null {
     const projection = doc.session.projection;
     if (renderedDocument !== doc || renderedMode !== "read" || doc.layout !== "continuous" || !projection || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc) || !flowHasProjection || !renderHost || !flowScroll)
         return null;
@@ -2374,11 +2390,6 @@ function readingEditLocation(doc: LiveDocument): SourceSelection | null {
         // Cross-node selections may visually omit source syntax. In that
         // case go to the beginning rather than selecting hidden syntax.
         return source.slice(selected.from, selected.to) === selected.visibleExcerpt ? selected : { from: selected.from, to: selected.from };
-    }
-    const originCounts = new Map<string, number>();
-    const key = (origin: Origin) => `${origin.utf16From}:${origin.utf16To}`;
-    for (const { origin } of projectionMappings) {
-        if (origin?.isMain) originCounts.set(key(origin), (originCounts.get(key(origin)) ?? 0) + 1);
     }
     const viewport = flowScroll.getBoundingClientRect();
     const referenceY = viewport.top + viewport.height / 3;
@@ -2400,14 +2411,62 @@ function readingEditLocation(doc: LiveDocument): SourceSelection | null {
             if (result) return result;
         }
     }
-    const range = document.createRange();
+    return anchor ? { from: anchor.from, to: anchor.from } : null;
+}
+/** Only map exact, unique rendered main-source text, never generated or included text. */
+function readingTextRuns(doc: LiveDocument, host: HTMLElement) {
+    const runs = new Map<string, { node: Node; text: string; from: number; to: number } | null>();
+    const source = doc.session.source;
     for (const { node, text, origin } of projectionMappings) {
-        if (!text.trim() || !origin?.isMain || originCounts.get(key(origin)) !== 1 || origin.raw !== text || source.slice(origin.utf16From, origin.utf16To) !== text || !renderHost.contains(node))
-            continue;
-        range.selectNodeContents(node);
-        consider(range.getBoundingClientRect(), origin.utf16From, origin.utf16To);
+        if (!origin?.isMain) continue;
+        const from = origin.utf16From, to = origin.utf16To;
+        const key = `${from}:${to}`;
+        const exact = Number.isSafeInteger(from) && Number.isSafeInteger(to) && to > from && text.trim() && origin.raw === text && sourceBoundary(source, from) && sourceBoundary(source, to) && source.slice(from, to) === text && host.contains(node);
+        runs.set(key, !runs.has(key) && exact ? { node, text, from, to } : null);
     }
-    return result;
+    return runs;
+}
+function captureReadingReturn(doc: LiveDocument): ReadingReturnAnchor | null {
+    if (renderedDocument !== doc || renderedMode !== "read" || doc.layout !== "continuous" || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc) || !flowHasProjection || !renderHost || !flowScroll)
+        return null;
+    const viewport = flowScroll.getBoundingClientRect();
+    const line = viewport.height / 3, range = document.createRange();
+    let best = Infinity, anchor: ReadingReturnAnchor | null = null;
+    for (const run of readingTextRuns(doc, renderHost).values()) {
+        if (!run) continue;
+        range.selectNodeContents(run.node);
+        const rect = range.getBoundingClientRect(), top = rect.top - viewport.top;
+        if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= viewport.top || top >= viewport.height)
+            continue;
+        const distance = Math.abs(top - line);
+        if (distance < best) {
+            best = distance;
+            anchor = { from: run.from, to: run.to, text: run.text, top };
+        }
+    }
+    return anchor;
+}
+function restoreReadingReturn(doc: LiveDocument, scroller: HTMLElement, host: HTMLElement, projection: RenderOutput): void {
+    const pending = doc.readingReturn;
+    if (!pending) return;
+    if (!pending.edited || pending.sessionId !== doc.session.opened.sessionId || pending.source !== doc.session.source || doc.pendingFragment) {
+        doc.readingReturn = undefined;
+        return;
+    }
+    requestAnimationFrame(() => {
+        if (doc.readingReturn !== pending || current !== doc || doc.mode !== "read" || doc.layout !== "continuous" || flowScroll !== scroller || renderHost !== host || doc.session.projection !== projection || !doc.session.projectionCurrent || !sourceConsumersAvailable(doc))
+            return;
+        doc.readingReturn = undefined;
+        const { from, to, text, top } = pending.anchor;
+        const run = readingTextRuns(doc, host).get(`${from}:${to}`);
+        if (run?.text !== text) return;
+        const range = document.createRange();
+        range.selectNodeContents(run.node);
+        const rect = range.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return;
+        scroller.scrollTop += rect.top - scroller.getBoundingClientRect().top - top;
+        doc.scroll.read = scroller.scrollTop;
+    });
 }
 function renderDiagnostics(doc: LiveDocument): void {
     const projection = doc.session.projectionCurrent ? doc.session.projection : null;
@@ -2439,13 +2498,20 @@ async function changeMode(mode: ViewMode, shortcut = false): Promise<void> {
             return;
         }
         const projection = doc.session.projection, inputId = doc.session.inputId;
-        const location = previous === "read" && (mode === "source" || mode === "styled") ? readingEditLocation(doc) : null;
+        const entersSource = previous === "read" && (mode === "source" || mode === "styled");
+        const anchor = entersSource ? captureReadingReturn(doc) : null;
+        const location = entersSource ? readingEditLocation(doc, anchor) : null;
         if (mode === "source" || mode === "styled")
             await doc.writing.settleForSessionChange();
         else
             await doc.writing.flush();
         if (current !== doc || navigationGeneration !== generation || doc.mode !== previous || doc.editor.composing)
             return;
+        if (entersSource) {
+            doc.readingReturn = anchor && doc.session.projection === projection && doc.session.inputId === inputId && doc.session.projectionCurrent
+                ? { anchor, sessionId: doc.session.opened.sessionId, source: doc.session.source, edited: false } : undefined;
+        } else if (!["read", "source", "styled"].includes(mode))
+            doc.readingReturn = undefined;
         doc.editor.clearReveal();
         doc.mode = mode;
         doc.queries.modeChanged();
@@ -2760,7 +2826,13 @@ function addDocument(opened: OpenedDocument): void {
     workspaceTools.assertLibraryChange(inventory);
     const session = new DocumentSession(opened);
     let doc!: LiveDocument;
-    const editor = new SourceEditor(session.source, (source, inputId) => {
+    const editor = new SourceEditor(session.source, (source, inputId, changes, previous) => {
+        const pending = doc.readingReturn;
+        if (pending) {
+            const anchor = pending.sessionId === session.opened.sessionId && pending.source === session.source && pending.source === previous.toString() && (doc.mode === "source" || doc.mode === "styled")
+                ? mapReadingReturnAnchor(pending.anchor, changes, source) : null;
+            doc.readingReturn = anchor ? { ...pending, anchor, source, edited: true } : undefined;
+        }
         session.edit(source, inputId);
         doc.queries.invalidate();
         readingSelection = null;
@@ -3463,6 +3535,7 @@ async function navigateLink(target: string): Promise<void> {
         if (target.startsWith("#")) {
             const anchor = renderHost?.querySelector(`#${CSS.escape(`native-${target.slice(1)}`)}`);
             if (anchor) {
+                current.readingReturn = undefined;
                 anchor.scrollIntoView({ block: "center", behavior: "smooth" });
                 return;
             }
@@ -3522,6 +3595,7 @@ function scrollFragment(doc: LiveDocument): void {
     catch { /* Exact invalid escape remains identifiable. */ }
     const target = renderHost.querySelector(`#${CSS.escape(`native-${fragment}`)}`) ?? renderHost.querySelector(`#${CSS.escape(`native-${decoded}`)}`);
     if (target) {
+        doc.readingReturn = undefined;
         target.scrollIntoView({ block: "center" });
         doc.pendingFragment = undefined;
     }
