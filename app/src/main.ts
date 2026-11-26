@@ -391,7 +391,7 @@ function restoreNavigation(doc: LiveDocument): void {
 function everydayEntries(): EverydayEntry[] {
     const entries = new Map<string, EverydayEntry>();
     for (const doc of documents)
-        entries.set(doc.navigationKey, { key: doc.navigationKey, title: basename(doc.session.path), detail: () => `${uiTextValue(doc.session.path)} · ${uiTextValue(saveState(doc))}`, open: () => activateDocument(doc) });
+        entries.set(doc.navigationKey, { key: doc.navigationKey, title: basename(doc.session.path), fileName: basename(doc.session.path), detail: () => `${uiTextValue(doc.session.path)} · ${uiTextValue(saveState(doc))}`, open: () => activateDocument(doc) });
     for (const entry of inventory?.entries ?? []) {
         if (!entry.path.toLowerCase().endsWith(".typ") || entry.kind === "blocked")
             continue;
@@ -399,7 +399,7 @@ function everydayEntries(): EverydayEntry[] {
         if (existing)
             continue;
         const root = inventory!.root, workspaceId = inventory!.workspaceId;
-        entries.set(entry.path, { key: entry.path, title: entry.title || entry.name, detail: () => `${uiTextValue(entry.relativePath)} · ${uiTextValue(labelStatus[entry.identityStatus] ?? entry.identityStatus)}`, unavailable: ["duplicate", "invalid", "missing"].includes(entry.identityStatus) ? uiMessage("shell.identityCannotOpenExactly") : undefined,
+        entries.set(entry.path, { key: entry.path, title: entry.title || entry.name, fileName: entry.name, detail: () => `${uiTextValue(entry.relativePath)} · ${uiTextValue(labelStatus[entry.identityStatus] ?? entry.identityStatus)}`, unavailable: ["duplicate", "invalid", "missing"].includes(entry.identityStatus) ? uiMessage("shell.identityCannotOpenExactly") : undefined,
             open: () => openInventoryEntry(entry, root, workspaceId) });
     }
     return [...entries.values()];
@@ -427,10 +427,13 @@ async function openInventoryEntry(entry: InventoryEntry, root: string, workspace
         await acceptResolvedDocument(opened);
     } finally { finishNativeActivity(); }
 }
+function showQuickOpen(): void {
+    openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), toast, everydayNavigation.recent);
+}
 function everydayCommands(): EverydayCommand[] {
     const doc = current;
     return [
-        { id: "quick-open", label: uiMessage("shell.quickOpen"), detail: uiMessage("shell.quickOpenShortcut"), run: () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), toast) },
+        { id: "quick-open", label: uiMessage("shell.quickOpen"), detail: uiMessage("shell.quickOpenShortcut"), run: showQuickOpen },
         { id: "recent", label: uiMessage("shell.recentVisits"), run: () => showRecent() },
         { id: "new-note", label: uiMessage("shell.newNote"), unavailable: !inventory?.workspaceId ? uiMessage("shell.openLibraryFirst") : undefined, run: createNote },
         { id: "open-file", label: uiMessage("shell.openOutsideTypst"), run: openOutsideFile },
@@ -473,7 +476,7 @@ function renderEverydayBar(): void {
         control.disabled = !everydayNavigation.target(direction);
         everydayBar.append(control);
     }
-    const quick = button("", () => openEverydayPicker(uiMessage("shell.quickOpen"), everydayEntries(), toast), "icon-button", "search");
+    const quick = button("", showQuickOpen, "icon-button", "search");
     setUiAttr(quick, "aria-label", uiMessage("shell.quickOpen"));
     setUiAttr(quick, "title", uiMessage("shell.quickOpenShortcut"));
     const commands = button(uiMessage("cli.commandsHeading"), () => openEverydayMenu(uiMessage("cli.commandsHeading"), everydayCommands(), toast), "text-button command-search");
@@ -3674,7 +3677,10 @@ document.addEventListener("keydown", event => {
         return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "p") {
         event.preventDefault();
-        openEverydayMenu(event.shiftKey ? uiMessage("cli.commandsHeading") : uiMessage("shell.quickOpen"), event.shiftKey ? everydayCommands() : everydayEntries().map(entry => ({ id: entry.key, label: entry.title, detail: entry.detail, unavailable: entry.unavailable, run: entry.open })), toast);
+        if (event.shiftKey)
+            openEverydayMenu(uiMessage("cli.commandsHeading"), everydayCommands(), toast);
+        else
+            showQuickOpen();
         return;
     }
     if (event.altKey && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
