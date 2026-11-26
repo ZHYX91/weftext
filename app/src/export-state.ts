@@ -221,14 +221,25 @@ export class OutputController {
             this.busy = false;
         }
     }
+    /** History holds a confirmed artifact receipt, not the mutable active draft. */
+    captureConfirmedDownload(): Readonly<{ id: string; filename: string; fetch: () => Promise<Blob> }> | null {
+        if (!this.prepared || !this.confirmed) return null;
+        const { id, filename, length, digest } = this.prepared;
+        return Object.freeze({ id, filename, fetch: () => this.fetchExactBytes({ id, length, digest }) });
+    }
+    private async fetchExactBytes(file: Pick<PreparedOutput, "id" | "length" | "digest">): Promise<Blob> {
+        const blob = await this.host.download({ id: file.id });
+        if (blob.size !== file.length || this.host.digest && await this.host.digest(blob) !== file.digest)
+            throw malformed(uiMessage("outputState.downloadBytesMismatch"));
+        return blob;
+    }
     async download(): Promise<Blob> {
-        if (!this.prepared || !this.confirmed || this.busy || this.uncertain === "prepare" || this.uncertain === "confirm")
+        const artifact = this.captureConfirmedDownload();
+        if (!artifact || this.busy || this.uncertain === "prepare" || this.uncertain === "confirm")
             throw new UiError(uiMessage("outputState.confirmSameFileFirst"));
         this.busy = true;
         try {
-            const blob = await this.host.download({ id: this.prepared.id });
-            if (blob.size !== this.prepared.length || this.host.digest && await this.host.digest(blob) !== this.prepared.digest)
-                throw malformed(uiMessage("outputState.downloadBytesMismatch"));
+            const blob = await artifact.fetch();
             this.received = true;
             this.uncertain = null;
             return blob;

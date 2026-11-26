@@ -8,7 +8,7 @@ import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { action, diagnosticText, fieldNames, formatNativeValue, ui, type PanelHost } from "./data-panel";
 import { readNoteProjection } from "./data-projection-read";
-import { bibliographyConflictCount, decodeBibliographyInspection, ExchangeController, OutputController, OutputReadGate, type BibliographyInspection, type DocxImportAnalysis, type ExchangeFormat, type ExchangeReceipt, type ExportFormat, type EmbeddedQuerySelection, type ExportStylePolicy, type FrozenQuery, type LegacyCapabilities, type OutputBinding, type OutputFile, type TemplateInspection } from "./export-state";
+import { bibliographyConflictCount, decodeBibliographyInspection, ExchangeController, OutputController, OutputReadGate, uncertainOutput, type BibliographyInspection, type DocxImportAnalysis, type ExchangeFormat, type ExchangeReceipt, type ExportFormat, type EmbeddedQuerySelection, type ExportStylePolicy, type FrozenQuery, type LegacyCapabilities, type OutputBinding, type OutputFile, type TemplateInspection } from "./export-state";
 import { descriptionUiText } from "./ui-diagnostics";
 import { decodeLegacyCapabilities, decodeTemplateInspection, exportErrorUiText, legacyMetadataUiText, officeLossUiText, officePreviewFacts, officePreviewNotices, type LegacyMetadata, type OfficeLoss, type OfficePreview } from "./office-wire";
 import { backendLabel, captionKinds, kindLabel, legacyBackendChoices, selectedCaptionOptions, templateInspectionFormat, type CaptionChoice } from "./office-import-options";
@@ -225,12 +225,31 @@ class OutputDialog {
     private outputResult(): void {
         const file = this.output.prepared;
         if (!file) return;
+        const download = this.output.captureConfirmedDownload();
+        let receiving = false;
         workActivity.result({ id: file.id, title: file.filename, detail: file.summary,
             actions: [{ id: "details", label: uiMessage("workActivity.details"), run: () => this.showActivityOriginal(file.requestId, "output") },
-                ...(this.output.confirmed ? [{ id: "download", label: uiMessage("export.downloadConfirmedFile"), run: async () => {
-                    this.showActivityOriginal(file.requestId, "output");
-                    if (this.output.prepared?.id !== file.id) throw new UiError(uiMessage("workActivity.originalUnavailable"));
-                    await this.download();
+                ...(download ? [{ id: "download", label: uiMessage("export.downloadConfirmedFile"), run: async () => {
+                    if (receiving) return;
+                    if (this.discarded) throw new UiError(uiMessage("workActivity.originalUnavailable"));
+                    receiving = true;
+                    try {
+                        if (this.output.prepared?.id === download.id && this.output.confirmed) {
+                            this.showActivityOriginal(file.requestId, "output");
+                            await this.download();
+                            return;
+                        }
+                        await this.closeGuard.run(async () => {
+                            this.outputActivity("running", uiMessage("export.receivingVerifyingConfirmedFile"), file.requestId);
+                            try {
+                                this.deliverOutput(await download.fetch(), download.filename);
+                                this.outputActivity("succeeded", uiMessage("export.confirmedBytesHandedToBrowser"), file.requestId);
+                            } catch (error) {
+                                this.outputActivity(uncertainOutput(error) ? "waiting" : "failed", errorUiText(error), file.requestId);
+                                throw error;
+                            }
+                        });
+                    } finally { receiving = false; }
                 } }] : [])] });
     }
     constructor(private readonly host: OutputPanelHost, basis: NonNullable<ReturnType<PanelHost["getDocument"]>>, query?: FrozenQuery, embedded: EmbeddedQuerySelection[] = [], private readonly onDiscard: () => void = () => {}) {
@@ -653,6 +672,16 @@ class OutputDialog {
             }
         } finally { endCloseWork(); }
     }
+    private deliverOutput(blob: Blob, filename: string): void {
+        const url = URL.createObjectURL(blob);
+        const link = ui("a");
+        link.href = url;
+        link.download = filename;
+        document.body.append(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
     private async download(): Promise<void> {
         const endCloseWork = this.closeGuard.begin();
         try {
@@ -663,14 +692,7 @@ class OutputDialog {
             this.drawState();
             try {
                 const blob = await promise;
-                const url = URL.createObjectURL(blob);
-                const link = ui("a");
-                link.href = url;
-                link.download = this.output.prepared!.filename;
-                document.body.append(link);
-                link.click();
-                link.remove();
-                setTimeout(() => URL.revokeObjectURL(url), 60000);
+                this.deliverOutput(blob, this.output.prepared!.filename);
                 this.outputStatus.classList.remove("data-warning");
                 setUiText(this.outputStatus, uiMessage("export.confirmedBytesHandedToBrowser"));
                 this.outputActivity("succeeded", uiMessage("export.confirmedBytesHandedToBrowser"), workId);
