@@ -165,6 +165,27 @@ export interface KnowledgeBasis {
 export function sameKnowledgeBasis(a: KnowledgeBasis | null, b: KnowledgeBasis | null): boolean {
     return a !== null && b !== null && a.sessionId === b.sessionId && a.path === b.path && a.serial === b.serial && a.inputId === b.inputId && a.baseId === b.baseId && a.source === b.source;
 }
+type KnowledgeJumpBasis = KnowledgeBasis & { workspaceId?: string; nodeId?: string; root: string };
+
+/** Apply a read-only jump synchronously with the final document check, not after another await. */
+export async function applyVerifiedKnowledgeSource(
+    current: () => KnowledgeJumpBasis | null,
+    owner: string,
+    sourceHash: string | undefined,
+    hash: (source: string) => Promise<string>,
+    apply: () => void,
+): Promise<boolean> {
+    const context = current();
+    if (!context?.workspaceId || !context.nodeId || !sourceHash || nodeIdentity({ workspaceId: context.workspaceId, nodeId: context.nodeId }) !== owner) return false;
+    const basis = { ...context };
+    if (await hash(basis.source) !== sourceHash) return false;
+    const latest = current();
+    if (!latest || !sameKnowledgeBasis(basis, latest) || latest.root !== basis.root ||
+        latest.workspaceId !== basis.workspaceId || latest.nodeId !== basis.nodeId) return false;
+    apply();
+    return true;
+}
+
 /** A late background read must never replace a newer document or draft. */
 export class KnowledgeReadGate {
     private generation = 0;

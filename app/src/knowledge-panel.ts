@@ -7,7 +7,7 @@ import { coreDescriptionUiText, descriptionUiText, engineDiagnosticUiText, type 
 import "./knowledge-view.css";
 import { committedDeliveryComplete, originalCommitted } from "./original-operation";
 import { ProofreadingPanel, type ProofreadOptions, type ProofreadResult, type ProcessingDefaultsSuggestion } from "./proofreading-panel";
-import { canApplySuggestion, decodeKnowledgeDelivery, decodeKnowledgeDiagnosticFields, decodeKnowledgeLoss, decodeKnowledgeTemplatePreview, isGraphemeRange, KnowledgeReadGate, knowledgeDeliveryErrors, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
+import { applyVerifiedKnowledgeSource, canApplySuggestion, decodeKnowledgeDelivery, decodeKnowledgeDiagnosticFields, decodeKnowledgeLoss, decodeKnowledgeTemplatePreview, isGraphemeRange, KnowledgeReadGate, knowledgeDeliveryErrors, knowledgeLossMessage, layoutMentions, nodeIdentity, retainPendingKnowledgePlan, sameKnowledgeBasis, uncertainKnowledgeOperation, validateMediaRegion } from "./knowledge-state";
 import type { AnnotationResolution, KnowledgeBasis, KnowledgeLoss, KnowledgeMention, KnowledgeNodeRef, MediaRegionInput, KnowledgeReadError, KnowledgeTemplatePreview } from "./knowledge-state";
 import type { Origin, RenderNode } from "./types";
 import { storedMediaSelection } from "./media-selection";
@@ -375,13 +375,10 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
                 host.notify(uiMessage("knowledge.propertyOwnerOpenedNoSource"));
                 return;
             }
-            const target = host.context();
-            if (!target || `${target.workspaceId}/${target.nodeId}` !== issue.source.key || !issue.sourceHash || await nodeSourceHash(target.source) !== issue.sourceHash) {
+            const { from, to } = issue;
+            if (!await applyVerifiedKnowledgeSource(() => disposed ? null : host.context(), issue.source.key, issue.sourceHash, nodeSourceHash,
+                () => { if (from !== undefined && to !== undefined) host.selectSource?.(from, to); }))
                 host.notify(uiMessage("knowledge.sourceOpenedBodyChanged"), true);
-                return;
-            }
-            if (issue.from !== undefined && issue.to !== undefined)
-                host.selectSource?.(issue.from, issue.to);
         }), report);
     }
     let surface: HTMLElement | null = null;
@@ -1779,15 +1776,13 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         if (!sameKnowledgeBasis(snapshotBasis, host.context()))
             throw new UiError(uiMessage("knowledge.graphBasisChanged"));
         await host.navigate(node.reference);
-        const current = host.context();
-        if (!current || `${current.workspaceId}/${current.nodeId}` !== edge.authorSource || await nodeSourceHash(current.source) !== edge.sourceHash) {
-            host.notify(uiMessage("knowledge.authorSourceOpenedBodyChanged"), true);
-            return;
-        }
-        if (edge.range)
-            host.selectSource?.(edge.range.utf16From, edge.range.utf16To);
-        else
-            host.notify(displayMessage("knowledge.authorSourceOpenedEditField", { p0: uiDisplayParameter(edge.fieldId ?? "") }));
+        const { range, fieldId } = edge;
+        if (!await applyVerifiedKnowledgeSource(() => disposed ? null : host.context(), edge.authorSource, edge.sourceHash, nodeSourceHash, () => {
+            if (range)
+                host.selectSource?.(range.utf16From, range.utf16To);
+            else
+                host.notify(displayMessage("knowledge.authorSourceOpenedEditField", { p0: uiDisplayParameter(fieldId ?? "") }));
+        })) host.notify(uiMessage("knowledge.authorSourceOpenedBodyChanged"), true);
     }
     function discardAuthorProposals(): void {
         closeGuard.assertReady(busy || pendingPlan !== null || pendingPreparation !== null || composing);
