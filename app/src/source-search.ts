@@ -33,6 +33,7 @@ class LocalizedSearchPanel implements Panel {
     private readonly matchControls: HTMLButtonElement[] = [];
     private clearPatternError?: () => void;
     private query: SearchQuery;
+    private composingInput: HTMLInputElement | null = null;
     constructor(private readonly view: EditorView) {
         this.query = getSearchQuery(view.state);
         this.dom.className = "cm-search";
@@ -41,6 +42,10 @@ class LocalizedSearchPanel implements Panel {
         for (const [input, key] of [[this.find, "editor.cmFind"], [this.replacement, "editor.cmReplaceInput"]] as const) {
             this.scope.bindAttr(input, "aria-label", message(key)); this.scope.bindAttr(input, "placeholder", message(key));
             input.addEventListener("input", () => this.commit());
+            input.addEventListener("compositionstart", () => { this.composingInput = input; });
+            const endComposition = () => { if (this.composingInput === input) this.composingInput = null; };
+            input.addEventListener("compositionend", endComposition);
+            input.addEventListener("blur", endComposition);
         }
         const button = (name: string, key: keyof typeof phraseKeys, command: (view: EditorView) => boolean, requiresPattern = true) => {
             const element = document.createElement("button"); element.type = "button"; element.name = name; element.className = "cm-button";
@@ -59,8 +64,10 @@ class LocalizedSearchPanel implements Panel {
         this.feedback.setAttribute("role", "status");
         this.dom.append(this.replacementRow, close, this.feedback);
         this.dom.addEventListener("keydown", event => {
+            if (event.isComposing || event.keyCode === 229 || (this.composingInput && event.target === this.composingInput))
+                return;
             if (runScopeHandlers(view, event, "search-panel")) event.preventDefault();
-            else if (event.key === "Enter" && !event.isComposing) {
+            else if (event.key === "Enter") {
                 if (event.target === this.find) { event.preventDefault(); if (!this.clearPatternError) (event.shiftKey ? findPrevious : findNext)(view); }
                 else if (event.target === this.replacement) { event.preventDefault(); if (!this.clearPatternError) replaceNext(view); }
             }
