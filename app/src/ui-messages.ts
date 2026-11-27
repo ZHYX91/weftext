@@ -7613,6 +7613,7 @@ export const zhCN = {
   "editor.cmReplaceAll": "全部替换",
   "editor.cmClose": "关闭",
   "editor.cmGoToLine": "跳转到行",
+  "editor.cmInvalidLine": "请输入有效的行号，例如 12、12:3 或 +5。",
   "editor.cmGo": "跳转",
   "editor.cmReplacedMatchLine": "已替换第 $ 行的匹配",
   "editor.cmReplacedMatchCount": "已替换 $ 个匹配",
@@ -17987,6 +17988,7 @@ export interface MessageParamsMap {
   "editor.cmReplaceAll": {  };
   "editor.cmClose": {  };
   "editor.cmGoToLine": {  };
+  "editor.cmInvalidLine": {  };
   "editor.cmGo": {  };
   "editor.cmReplacedMatchLine": {  };
   "editor.cmReplacedMatchCount": {  };
@@ -29796,6 +29798,7 @@ export const messageParamTypes = {
   "editor.cmReplaceAll": {},
   "editor.cmClose": {},
   "editor.cmGoToLine": {},
+  "editor.cmInvalidLine": {},
   "editor.cmGo": {},
   "editor.cmReplacedMatchLine": {},
   "editor.cmReplacedMatchCount": {},
@@ -40599,6 +40602,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "editor.cmReplaceAll": "replace all",
   "editor.cmClose": "close",
   "editor.cmGoToLine": "Go to line",
+  "editor.cmInvalidLine": "Enter a valid line, such as 12, 12:3, or +5.",
   "editor.cmGo": "go",
   "editor.cmReplacedMatchLine": "replaced match on line $",
   "editor.cmReplacedMatchCount": "replaced $ matches",

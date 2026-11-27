@@ -118,10 +118,12 @@ class LocalizedSearchPanel implements Panel {
 
 export const localizedSourceSearch = [
     search({ createPanel: view => new LocalizedSearchPanel(view) }),
-    EditorView.baseTheme({ ".cm-search-pattern-error": { color: "var(--danger, currentColor)" } }),
+    EditorView.baseTheme({ ".cm-search-pattern-error, .cm-goto-line-error": { color: "var(--danger, currentColor)" } }),
 ];
 
-/** Same public go-to semantics, with a live label around the original input. */
+const gotoLinePattern = /^([+-])?(\d+)?(:\d+)?(%)?$/;
+
+/** Keep CodeMirror’s jump semantics, but retain the dialog on invalid input. */
 export function localizedGotoLine(view: EditorView): boolean {
     const open = getDialog(view, "cm-goto-line");
     if (open) { open.dom.querySelector<HTMLInputElement>('input[name="line"]')?.select(); return true; }
@@ -132,13 +134,47 @@ export function localizedGotoLine(view: EditorView): boolean {
             const form = document.createElement("form"), label = document.createElement("label"), input = document.createElement("input"), submit = document.createElement("button");
             input.type = "text"; input.name = "line"; input.value = String(startState.doc.lineAt(startState.selection.main.head).number);
             scope.bindText(label, message("editor.cmGoToLine")); scope.bindAttr(input, "aria-label", message("editor.cmGoToLine")); label.append(input);
-            submit.type = "submit"; scope.bindText(submit, message("editor.cmGo")); form.append(label, submit); return form;
+            submit.type = "submit"; scope.bindText(submit, message("editor.cmGo"));
+            const feedback = document.createElement("div");
+            feedback.className = "cm-goto-line-error"; feedback.id = `source-goto-line-${crypto.randomUUID()}`;
+            feedback.setAttribute("role", "status");
+            let clearMessage: (() => void) | undefined;
+            let composing = false;
+            const clear = () => {
+                clearMessage?.(); clearMessage = undefined; feedback.textContent = "";
+                input.removeAttribute("aria-invalid"); input.removeAttribute("aria-describedby");
+            };
+            const accept = () => {
+                if (gotoLinePattern.test(input.value)) return true;
+                input.setAttribute("aria-invalid", "true");
+                input.setAttribute("aria-describedby", feedback.id);
+                clearMessage ??= scope.bindText(feedback, message("editor.cmInvalidLine"));
+                input.focus();
+                return false;
+            };
+            input.addEventListener("input", clear);
+            input.addEventListener("compositionstart", () => { composing = true; });
+            input.addEventListener("compositionend", () => { composing = false; });
+            input.addEventListener("blur", () => { composing = false; });
+            // CodeMirror handles Enter directly as well as native form submission.
+            // Intercept both paths before they close the dialog on invalid input.
+            const block = (event: Event) => { event.preventDefault(); event.stopImmediatePropagation(); };
+            form.addEventListener("keydown", event => {
+                if (event.key !== "Enter" && event.key !== "Escape") return;
+                if (composing || event.isComposing || event.keyCode === 229) {
+                    event.stopImmediatePropagation();
+                } else if (event.key === "Enter" && !accept()) {
+                    block(event);
+                }
+            }, true);
+            form.addEventListener("submit", event => { if (composing || !accept()) block(event); }, true);
+            form.append(label, submit, feedback); return form;
         },
     });
     const closeButton = getDialog(view, "cm-goto-line")?.dom.querySelector<HTMLButtonElement>(".cm-dialog-close");
     if (closeButton) scope.bindAttr(closeButton, "aria-label", message("editor.cmClose"));
     void result.then(form => {
-        const input = form?.elements.namedItem("line"), match = input instanceof HTMLInputElement && /^([+-])?(\d+)?(:\d+)?(%)?$/.exec(input.value);
+        const input = form?.elements.namedItem("line"), match = input instanceof HTMLInputElement && gotoLinePattern.exec(input.value);
         if (!match) { view.dispatch({ effects: close }); return; }
         const start = startState.doc.lineAt(startState.selection.main.head), [, sign, number, column, percent] = match;
         let line = number ? Number(number) : start.number;
