@@ -28,6 +28,8 @@ The **original established v0.6 scope is complete for 0.6.0 on Windows/NTFS and 
 
 The existing implementation includes the **local note timeline** and **five-view body-embedded Query**, whose interactions were connected in `0.5.0-alpha.2`, reusing Core save/recovery, shared source/Draft/Undo and the existing Query executor. The [roadmap](ROADMAP.md) records bounded local scope and outstanding platform conditions; implementation does not by itself establish all acceptance conditions.
 
+In local Query, switching among list, table, board, calendar and chart uses the displayed frozen result. Choose board, calendar and chart fields from that result’s output columns. To include another field, select it in the query projection.
+
 The earlier **0.6.2 local delivery candidate with the initial Windows local/self-hosted scope complete** remains the preceding delivery; the 0.6.0 conclusion above applies only to its original accepted baseline. 0.6.1 completed its automated checks, affected browsers and actual Word structural/language-slot roundtrips, retaining these evidence limits: human Windows 11 Microsoft Pinyin input in body, ordinary and merged cells was checked only on a preceding candidate, without final-candidate real-system IME qualification; an earlier cross-view Undo inserting additional source has not been reproduced in the same form. Reproducible composition settlement and history-isolation defects have fixes and automated regressions, without establishing the original anomaly's cause or whole-version IME acceptance. Obsidian/reference plugins are independent interaction references, without runtime dependency, shared vaults or synchronization with Weftext.
 
 ## Existing 0.6.3 candidate and evidence boundaries
