@@ -579,6 +579,70 @@ fn related_forward_inverse_and_partial_do_not_guess_literal_targets() {
     assert_eq!(result.coverage, "partial");
     assert!(!result.aggregate_exact);
 }
+#[test]
+fn two_related_hops_deduplicate_a_cycle_and_keep_unavailable_edges_explicit() {
+    let schema = Schema::bundled().unwrap();
+    let relation = &schema
+        .relations
+        .iter()
+        .find(|relation| relation.field == "people/parents")
+        .unwrap()
+        .id;
+    let people = |include_c: bool| {
+        let mut notes = vec![
+            note(
+                A,
+                "person",
+                &format!(
+                    ", parents: ((target: (ref: \"{}\"),), (target: (ref: \"{}\"),))",
+                    reference(B),
+                    reference(C)
+                ),
+            ),
+            note(
+                B,
+                "person",
+                &format!(", parents: ((target: (ref: \"{}\"),),)", reference(A)),
+            ),
+        ];
+        if include_c {
+            notes.push(note(
+                C,
+                "person",
+                &format!(", parents: ((target: (ref: \"{}\"),),)", reference(A)),
+            ));
+        }
+        input(notes)
+    };
+    let seed = QueryPlan {
+        r#where: Some(format!("self == nodeRef(\"{}\")", reference(A))),
+        select: vec![column("self", "self")],
+        ..Default::default()
+    };
+    let hop = |from| QueryPlan {
+        select: vec![column("self", "self")],
+        advanced: Some(QueryAdvanced {
+            related: Some(QueryRelated {
+                relation: relation.clone(),
+                from: Box::new(from),
+                direction: "forward".into(),
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let two_hops = hop(hop(seed));
+    let result = execute_query(&people(true), &two_hops, &schema).unwrap();
+    assert_eq!(result.coverage, "complete");
+    assert_eq!(result.rows.len(), 1);
+    assert_eq!(result.rows[0].entity_key, Some(reference(A)));
+    let partial = execute_query(&people(false), &two_hops, &schema).unwrap();
+    assert_eq!(partial.coverage, "partial");
+    assert!(!partial.aggregate_exact);
+    assert_eq!(partial.rows.len(), 1);
+    assert_eq!(partial.rows[0].entity_key, Some(reference(A)));
+}
+
 fn saved_source(default: &str, extra: &str) -> String {
     format!(
         "#metadata((kind: \"weftext.query\", key: \"{KEY}\", binding: (schema: \"weftext-config://{WS}/schema\", revision: \"{REV}\", language: \"weftext.query.cel.v1\"), select: ((name: \"n\", expr: \"threshold\"),), parameters: ((name: \"threshold\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false, default: {default}),), {extra})) <weftext-query-count>"

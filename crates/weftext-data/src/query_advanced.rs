@@ -1580,11 +1580,18 @@ impl Runner<'_> {
                 self.metadata,
             )?;
             self.source_bytes = self.source_bytes.saturating_add(consumed);
-            let mut filtered = self.input.clone();
-            filtered.notes = notes;
-            if origin.coverage == "partial" || !gaps.is_empty() {
-                filtered.coverage = "partial".into();
-            }
+            let filtered = FrozenQueryInput {
+                cut_id: self.input.cut_id.clone(),
+                schema_revision: self.input.schema_revision.clone(),
+                coverage: if origin.coverage == "partial" || !gaps.is_empty() {
+                    "partial".into()
+                } else {
+                    self.input.coverage.clone()
+                },
+                freshness: self.input.freshness.clone(),
+                notes,
+                advanced: self.input.advanced.clone(),
+            };
             let mut leaf = plan.clone();
             leaf.advanced = None;
             if advanced.distinct.is_some() {
@@ -1821,6 +1828,12 @@ fn related_notes(
     if seeds.is_empty() {
         return Ok((vec![], gaps, consumed));
     }
+    let mut notes_by_entity = BTreeMap::new();
+    for note in &input.notes {
+        notes_by_entity
+            .entry(note.entity_key.as_str())
+            .or_insert(note);
+    }
     'scan: for note in &input.notes {
         if !matches!(note.lifecycle.as_str(), "live" | "trash") {
             continue;
@@ -1865,9 +1878,7 @@ fn related_notes(
                     }
                     *remaining -= 1;
                     if !targets.contains_key(endpoint) {
-                        let qualified = if let Some(target) =
-                            input.notes.iter().find(|n| n.entity_key == endpoint)
-                        {
+                        let qualified = if let Some(target) = notes_by_entity.get(endpoint) {
                             let target_bytes = query_note_bytes(target, metadata)?;
                             if *remaining == 0
                                 || consumed.saturating_add(target_bytes) > max_source_bytes
