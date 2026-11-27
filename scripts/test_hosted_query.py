@@ -187,6 +187,60 @@ class HostedQuery(HostedFields):
         missing['advanced']['call']['owner'] = 'NotThere'
         self.assertEqual(self.query(hidden, status=404), self.query(missing, status=404))
 
+    def test_saved_query_reuses_typed_parameters_across_run_routes(self):
+        self.prepare_query()
+        declarations = [{'name': 'wanted', 'shape': {'kind': 'scalar', 'semantic': 'text'}}]
+        saved = self.add_definition({
+            'where': 'status == wanted', 'select': [self.column()], 'parameters': declarations,
+        })
+        definition = saved['definition']
+        selection = {'mode': 'current', 'key': definition['key']}
+        self.grant_query(definitions=True)
+        workspace = definition['binding']['schema'].split('://', 1)[1].split('/', 1)[0]
+        owner = f"weftext-node://{workspace}/{self.docs['Other']['nodeId']}"
+        hosted_plan = {
+            'parameters': declarations,
+            'advanced': {'call': {'owner': 'Other', 'selection': selection,
+                                  'arguments': {'wanted': 'wanted'}}},
+        }
+        path = self.root / 'Other' / 'Other.typ'
+        original = path.read_bytes()
+
+        def arguments(value):
+            return {'wanted': {'kind': 'text', 'value': value}}
+
+        def assert_status(result, value, entities):
+            rows = result['rows']
+            self.assertEqual({row['entityKey'] for row in rows}, entities)
+            self.assertEqual(len(rows), len(entities))
+            self.assertTrue(all(row['cells']['status']['value'] == arguments(value)['wanted']
+                                for row in rows))
+
+        def local_runs(api):
+            root = str(self.root)
+            doc = api('/api/open', {'root': root, 'path': str(path)})
+            basis = {'sessionId': doc['sessionId'], 'source': doc['source'], 'serial': 1}
+            occurrences = api('/api/query/embedded/discover', basis)['occurrences']
+            occurrence = next(item for item in occurrences if item['key'] == definition['key'])
+            for status, names in [('open', ('Shared', 'Secret')), ('done', ('Other',))]:
+                parameters = arguments(status)
+                expected = {f"weftext-node://{workspace}/{self.docs[name]['nodeId']}"
+                            for name in names}
+                saved_run = api('/api/query/definition/run', {
+                    'root': root, 'owner': owner, 'selection': selection, 'parameters': parameters,
+                })
+                embedded_run = api('/api/query/embedded/run', {
+                    **basis, 'occurrenceId': occurrence['id'], 'parameters': parameters,
+                })
+                assert_status(saved_run['result'], status, expected)
+                assert_status(embedded_run['result'], status, expected)
+
+        self.local(local_runs)
+        for status, name in [('open', 'Shared'), ('done', 'Other')]:
+            result = self.query(hosted_plan, parameters=arguments(status))['result']
+            assert_status(result, status, {name})
+        self.assertEqual(path.read_bytes(), original)
+
     def test_query_related_uses_granted_fields_types_identity_and_actual_refs(self):
         self.prepare_query()
         library = self.local(lambda api: api('/api/library/open', {'path': str(self.root)}))
