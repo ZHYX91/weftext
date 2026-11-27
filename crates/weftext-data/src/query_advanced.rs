@@ -646,8 +646,7 @@ pub fn query_products(plan: &QueryPlan, owners: &[FrozenDefinitionOwner]) -> Res
                     walk(&c.result, &scope, out)?;
                 }
                 _ => {
-                    let mut clone = ast.clone();
-                    visit_children_mut(&mut clone, |e| walk(e, bound, out))?;
+                    visit_children(ast, |e| walk(e, bound, out))?;
                 }
             }
             Ok(())
@@ -817,8 +816,7 @@ pub fn query_read_requirements(
                 }
                 Expr::Call(c) if c.func_name == "tagInSubtree" => {
                     out.tag_structure = true;
-                    let mut child = ast.clone();
-                    visit_children_mut(&mut child, |e| walk(e, schema, bound, out))?;
+                    visit_children(ast, |e| walk(e, schema, bound, out))?;
                 }
                 Expr::Comprehension(c) => {
                     walk(&c.iter_range, schema, bound, out)?;
@@ -834,8 +832,7 @@ pub fn query_read_requirements(
                     }
                 }
                 _ => {
-                    let mut child = ast.clone();
-                    visit_children_mut(&mut child, |e| walk(e, schema, bound, out))?;
+                    visit_children(ast, |e| walk(e, schema, bound, out))?;
                 }
             }
             Ok(())
@@ -1054,9 +1051,8 @@ fn check_tag_structure(
             if matches!(&ast.expr, Expr::Call(c) if c.func_name == "tagInSubtree") {
                 return Ok(true);
             }
-            let mut child = ast.clone();
             let mut found = false;
-            visit_children_mut(&mut child, |e| {
+            visit_children(ast, |e| {
                 found |= ast_needs(e)?;
                 Ok(())
             })?;
@@ -1175,8 +1171,7 @@ fn check_tag_structure(
             }
             return Ok(());
         }
-        let mut child = ast.clone();
-        visit_children_mut(&mut child, |e| roots(e, parameters, tags, locals, deferred))
+        visit_children(ast, |e| roots(e, parameters, tags, locals, deferred))
     }
     #[allow(clippy::too_many_arguments)]
     fn visit(

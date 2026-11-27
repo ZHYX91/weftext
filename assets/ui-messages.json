@@ -40337,11 +40337,6 @@
       "en-US": "Unsupported CEL result type",
       "params": {}
     },
-    "error.data.query.unknownTypedConstantConstructor": {
-      "zh-CN": "未知的类型化常量构造器。",
-      "en-US": "Unknown typed constant constructor",
-      "params": {}
-    },
     "error.data.query.invalidTypedQueryConstant": {
       "zh-CN": "类型化 Query 常量无效。",
       "en-US": "Invalid typed Query constant",
@@ -42973,11 +42968,6 @@
     "error.data.query.celSyntaxInvalid": {
       "zh-CN": "CEL 查询语法无效",
       "en-US": "The CEL Query syntax is invalid.",
-      "params": {}
-    },
-    "error.data.query.recordCompilationFailed": {
-      "zh-CN": "内部有序记录入口未通过 CEL 编译",
-      "en-US": "The internal ordered-record entry failed CEL compilation.",
       "params": {}
     },
     "error.data.query.functionRegistrationFailed": {
