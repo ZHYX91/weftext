@@ -39438,6 +39438,11 @@
       "en-US": "Go to line",
       "params": {}
     },
+    "editor.cmInvalidLine": {
+      "zh-CN": "请输入有效的行号，例如 12、12:3 或 +5。",
+      "en-US": "Enter a valid line, such as 12, 12:3, or +5.",
+      "params": {}
+    },
     "editor.cmGo": {
       "zh-CN": "跳转",
       "en-US": "go",
