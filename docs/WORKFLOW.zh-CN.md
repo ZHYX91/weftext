@@ -23,6 +23,8 @@ translation_status: source
 
 属性／Query 切片验证预设取消／原操作恢复／不重置、多个出现项独立状态、精确重排／移除及单步撤销、typed 错误输入保留、共享调用 current／pinned、直接字段独立写权与撤权，以及普通根笔记同步双程序往返。`scripts/test_query_organization.py` 接入原完整检查入口；浏览器脚本 `scripts/test_query_organization_browser.mjs` 显式接收同一候选程序和自有证据目录。源码冻结后复用同一优化程序完成 HTTP、实际浏览器及打包核对。
 
+在 Windows 运行 `python scripts/benchmark_query_http.py 候选CLI 新证据目录 --notes 1000 --samples 20`，可测量本地筛选、排序和分组。基准通过 Core 导入合成原生包，核对结果覆盖及计数，并记录程序摘要、各新服务进程的首次请求、后续请求 p50/p95 和服务进程峰值工作集。操作系统文件缓存可能已预热。证据目录放在源码树之外。当前清单中笔记和所在文件夹分别占用条目，此基准允许最多 2,000 篇笔记。
+
 纯文档改动运行 `python scripts/check.py`。涉及 schema、类型/时间算法或模型时运行 `python scripts/check.py --models`。实现切片增加自己的格式、静态分析和必要测试；跨平台、文件故障、权限、编辑和 Office 输出按真实影响选场景。失败记录实际原因；不通过删断言或改期望掩盖问题。
 
 `python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由完整 Rust 组逐项执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。

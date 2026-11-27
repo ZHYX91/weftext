@@ -2518,7 +2518,7 @@ pub(crate) fn execute_query_leaf_traced(
             weftext_messages::UiMessage::error_data_query_where_requires_boolean_result(),
         ));
     }
-    let columns = if plan.select.is_empty() {
+    let columns = if plan.select.is_empty() && plan.group.is_none() {
         vec![
             QueryColumn {
                 name: "title".into(),

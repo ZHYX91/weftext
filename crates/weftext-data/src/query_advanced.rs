@@ -675,7 +675,11 @@ pub fn query_products(plan: &QueryPlan, owners: &[FrozenDefinitionOwner]) -> Res
         }
         let a = plan.advanced.clone().unwrap_or_default();
         a.validate_union()?;
-        if plan.select.is_empty() && a.union_all.is_none() && a.call.is_none() {
+        if plan.select.is_empty()
+            && plan.group.is_none()
+            && a.union_all.is_none()
+            && a.call.is_none()
+        {
             out.insert("title".into());
         }
         for e in plan

@@ -764,6 +764,42 @@ fn native_writer_keeps_domain_defaults_without_transport_literal_records() {
     );
 }
 #[test]
+fn grouped_query_freezes_only_document_products_used_in_its_expressions() {
+    let schema = Schema::bundled().unwrap();
+    let mut plan = QueryPlan {
+        group: Some(QueryGroup {
+            keys: vec![column("status", "status")],
+            aggregates: vec![QueryAggregate {
+                name: "notes".into(),
+                op: "count".into(),
+                expr: None,
+            }],
+        }),
+        ..Default::default()
+    };
+    assert!(query_products(&plan, &[]).unwrap().is_empty());
+    let result = execute_query(
+        &input(vec![note(A, "task", ", status: \"open\"")]),
+        &plan,
+        &schema,
+    )
+    .unwrap();
+    assert_eq!(result.total_known, 1);
+    assert!(matches!(
+        &result.rows[0].cells["notes"],
+        Cell::Value {
+            value: NativeValue::Int(value)
+        } if value == "1"
+    ));
+    plan.group.as_mut().unwrap().keys = vec![column("title", "title")];
+    assert_eq!(query_products(&plan, &[]).unwrap(), vec!["title"]);
+    assert_eq!(
+        query_products(&QueryPlan::default(), &[]).unwrap(),
+        vec!["title"]
+    );
+}
+
+#[test]
 fn products_are_actual_free_symbols_and_html_identity_preserves_absence() {
     let plan = QueryPlan {
         select: vec![column("p", "phones.exists(body, body.number == \"x\")")],
