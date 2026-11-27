@@ -218,6 +218,13 @@ class HostedQuery(HostedFields):
 
         def local_runs(api):
             root = str(self.root)
+            for choice in [selection, {**selection, 'mode': 'pinned',
+                                       'revision': saved['definitionRevision']}]:
+                resolved = api('/api/query/definitions', {
+                    'root': root, 'owner': owner, 'selection': choice,
+                })
+                self.assertEqual(resolved['definitionRevision'], saved['definitionRevision'])
+                self.assertEqual(resolved['definitions'], [definition])
             doc = api('/api/open', {'root': root, 'path': str(path)})
             basis = {'sessionId': doc['sessionId'], 'source': doc['source'], 'serial': 1}
             occurrences = api('/api/query/embedded/discover', basis)['occurrences']

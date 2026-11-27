@@ -33,6 +33,12 @@ try {
         calls.push({route,body:JSON.parse(JSON.stringify(body))});
         if(route==='/api/data/schema')return schema;
         if(route==='/api/navigation/tags')return {baseId:'registry-fixture',complete:true,tags:[{tagRef,tagId:'root',parentTagId:null,displayName:tagLabel},{tagRef:'weftext-tag://query-fixture/child',tagId:'child',parentTagId:'root',displayName:'子级'}]};
+        if(route==='/api/query/definitions' && window.fixture.savedDefinition)
+          return {definitions:[window.fixture.savedDefinition],ownerRevision:'current-revision'};
+        if(route==='/api/query/definition/run' && window.fixture.savedDefinition) {
+          if(!body.parameters.wanted)throw Error('The required parameter is missing');
+          return {definition:window.fixture.savedDefinition,definitionRevision:'retained-revision',result:localQueryResult({cutId:'saved-cut',columns:['title'],rows:[],totalKnown:0})};
+        }
         if(route==='/api/query/run'){const n=calls.filter(call=>call.route===route).length;return localQueryResult({cutId:'component-cut-'+n,columns:['title','count'],rows:[{key:'row',entityKey:null,path:null,revision:null,readOnly:true,cells:{title:{state:'value',value:{kind:'text',value:'Component result'}},count:{state:'value',value:{kind:'int',value:'12'}}}}],totalKnown:1});}
         throw Error('Unexpected component route '+route);
       }};
@@ -197,6 +203,37 @@ try {
     assert.match(await form.getByRole('status').innerText(), /已变化/);
     assert.equal(JSON.parse(await draft.inputValue()).amount.value, '3.20');
     await form.evaluate(element => element.remove());
+  });
+  await check('saved query loads the pinned parameter declaration before the first successful run', async () => {
+    await page.evaluate(async () => {
+      window.fixture.savedDefinition = {
+        key: 'saved-key', label: 'weftext-query-fixture',
+        plan: { scope: { descendants: true, lifecycle: 'live' }, select: [], order: [], types: [],
+          parameters: [{ name: 'wanted', shape: { kind: 'scalar', semantic: 'text' } }] },
+      };
+      await window.fixture.panel.runSaved({
+        owner: 'weftext-node://query-fixture/saved', key: 'saved-key', label: 'Fixture',
+        mode: 'pinned', revision: 'retained-revision',
+      });
+    });
+    const advanced = panel.locator('.query-advanced-plan');
+    await advanced.locator(':scope > summary').click();
+    const args = advanced.locator('.query-argument-controls');
+    await args.locator('summary').click();
+    await args.getByRole('combobox', { name: 'wanted 的实参来源' }).selectOption('value');
+    await args.getByRole('textbox', { name: 'wanted', exact: true }).fill('open');
+    await args.getByRole('button', { name: '采用这些实参' }).click();
+    const routes = await page.evaluate(() => window.fixture.calls.filter(call => call.route.startsWith('/api/query/definition')));
+    assert.deepEqual(routes.map(call => call.route), ['/api/query/definitions', '/api/query/definition/run']);
+    assert.deepEqual(routes[0].body.selection, { key: 'saved-key', mode: 'pinned', revision: 'retained-revision' });
+    const parameters = { wanted: { kind: 'text', value: 'open' } };
+    assert.deepEqual(JSON.parse(await advanced.locator('textarea.query-expression').inputValue()), parameters);
+    await advanced.getByRole('button', { name: '按本次参数重跑' }).click();
+    await panel.locator('.query-basis').filter({ hasText: 'saved-cut' }).first().waitFor();
+    const actual = await page.evaluate(() => window.fixture.calls.at(-1));
+    assert.equal(actual.route, '/api/query/definition/run');
+    assert.deepEqual(actual.body.parameters, parameters);
+    assert.deepEqual(actual.body.selection, routes[0].body.selection);
   });
   result.requests = await page.evaluate(() => window.fixture.calls);
   result.notifications = await page.evaluate(() => window.fixture.notifications);

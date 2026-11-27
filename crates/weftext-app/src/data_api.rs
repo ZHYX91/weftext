@@ -73,6 +73,7 @@ struct QueryRequest {
 struct DefinitionsRequest {
     root: String,
     owner: String,
+    selection: Option<weftext_data::DefinitionSelection>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -2605,6 +2606,12 @@ async fn definitions(
 ) -> ApiResult {
     let output = core_call(&state, move |core| {
         let current = owner_source(core, &req.root, &req.owner)?;
+        if let Some(selection) = &req.selection {
+            let (definition, revision) = select_saved_definition(core, &req.root, &current, selection)?;
+            return Ok(json!({"definitions":[definition],"definitionRevision":revision,
+                "ownerRevision":current.file.revision,"owner":req.owner,
+                "ownerBaseId":current.file.base_id,"unavailable":[],"snapshotMode":"perFileObserved"}));
+        }
         let candidates = weftext_data::saved_queries(&current.source)
             .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))?;
         let mut admitted = Vec::new(); let mut unavailable = Vec::new();
@@ -3195,6 +3202,49 @@ pub(crate) async fn validate_embedded_query_plan(
     .await
 }
 
+fn select_saved_definition(
+    core: &mut Core,
+    root: &str,
+    current: &OwnerSource,
+    selection: &weftext_data::DefinitionSelection,
+) -> Result<(weftext_data::SavedQuery, Option<String>), CoreError> {
+    let node_id = current.entry.node_id.as_deref().unwrap();
+    let (key, revision, source) = match selection {
+        weftext_data::DefinitionSelection::Current { key } => (
+            key,
+            current.file.revision.clone(),
+            std::borrow::Cow::Borrowed(current.source.as_str()),
+        ),
+        weftext_data::DefinitionSelection::Pinned { key, revision } => {
+            let bytes = core.read_source_revision(root, node_id, revision)?;
+            let source = String::from_utf8(bytes).map_err(|_| {
+                CoreError::new(
+                    "definitionUnavailable",
+                    UiMessage::error_api_data_retained_definition_encoding(),
+                )
+            })?;
+            (key, Some(revision.clone()), std::borrow::Cow::Owned(source))
+        }
+    };
+    if !core.is_definition_key_admitted(root, node_id, key)? {
+        return Err(CoreError::new(
+            "definitionUnavailable",
+            UiMessage::error_api_data_definition_key_admission_missing(),
+        ));
+    }
+    let definition = weftext_data::saved_queries(&source)
+        .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))?
+        .into_iter()
+        .find(|definition| &definition.key == key)
+        .ok_or_else(|| {
+            CoreError::new(
+                "definitionUnavailable",
+                UiMessage::error_api_data_definition_key_at_revision_missing(),
+            )
+        })?;
+    Ok((definition, revision))
+}
+
 async fn run_definition(
     State(state): State<AppState>,
     RequestJson(req): RequestJson<DefinitionRunRequest>,
@@ -3202,41 +3252,12 @@ async fn run_definition(
     let (frozen, definition, revision, mode, owner_revision, changed) =
         core_call(&state, move |core| {
             let current = owner_source(core, &req.root, &req.owner)?;
-            let node_id = current.entry.node_id.as_deref().unwrap();
-            let (key, revision, mode, source) = match &req.selection {
-                weftext_data::DefinitionSelection::Current { key } => (
-                    key,
-                    current.file.revision.clone(),
-                    "current",
-                    current.source.clone(),
-                ),
-                weftext_data::DefinitionSelection::Pinned { key, revision } => {
-                    let bytes = core.read_source_revision(&req.root, node_id, revision)?;
-                    let source = String::from_utf8(bytes).map_err(|_| {
-                        CoreError::new(
-                            "definitionUnavailable",
-                            UiMessage::error_api_data_retained_definition_encoding(),
-                        )
-                    })?;
-                    (key, Some(revision.clone()), "pinned", source)
-                }
+            let (definition, revision) =
+                select_saved_definition(core, &req.root, &current, &req.selection)?;
+            let mode = match &req.selection {
+                weftext_data::DefinitionSelection::Current { .. } => "current",
+                weftext_data::DefinitionSelection::Pinned { .. } => "pinned",
             };
-            if !core.is_definition_key_admitted(&req.root, node_id, key)? {
-                return Err(CoreError::new(
-                    "definitionUnavailable",
-                    UiMessage::error_api_data_definition_key_admission_missing(),
-                ));
-            }
-            let definition = weftext_data::saved_queries(&source)
-                .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))?
-                .into_iter()
-                .find(|definition| &definition.key == key)
-                .ok_or_else(|| {
-                    CoreError::new(
-                        "definitionUnavailable",
-                        UiMessage::error_api_data_definition_key_at_revision_missing(),
-                    )
-                })?;
             let current_config = core.read_config(&req.root, ConfigRole::Schema)?;
             if current_config.role_ref != definition.binding.schema {
                 return Err(CoreError::new(
@@ -3287,7 +3308,7 @@ async fn run_definition(
                     .and_then(|definitions| {
                         definitions
                             .into_iter()
-                            .find(|definition| &definition.key == key)
+                            .find(|candidate| candidate.key == definition.key)
                     });
             let changed = latest.as_ref().is_none_or(|latest| {
                 serde_json::to_value(latest).ok() != serde_json::to_value(&definition).ok()

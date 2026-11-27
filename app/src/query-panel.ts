@@ -1410,12 +1410,21 @@ export class QueryPanel {
                 this.renderControls();
                 if (intent.selection) {
                     const selection = intent.selection;
+                    const selectedDefinition = { mode: selection.mode, key: selection.key,
+                        ...(selection.mode === "pinned" ? { revision: selection.revision } : {}) };
+                    if (!this.savedPlan) {
+                        const definitions = await this.host.request<SavedDefinitions>("/api/query/definitions",
+                            { root: intent.root, owner: selection.owner, selection: selectedDefinition });
+                        if (!current())
+                            return;
+                        this.savedPlan = definitions.definitions.find(item => item.key === selection.key)?.plan ?? null;
+                    }
                     const response = await this.host.request<QueryResult & {
                         result?: QueryResult;
                         definitionRevision?: string;
                         definition?: SavedQuery;
                         definitionChanged?: boolean;
-                    }>("/api/query/definition/run", { root: intent.root, owner: selection.owner, parameters: intent.parameters, selection: { mode: selection.mode, key: selection.key, ...(selection.mode === "pinned" ? { revision: selection.revision } : {}) } });
+                    }>("/api/query/definition/run", { root: intent.root, owner: selection.owner, parameters: intent.parameters, selection: selectedDefinition });
                     if (!current())
                         return;
                     const savedPlan = response.definition?.plan ?? null;
@@ -2289,6 +2298,8 @@ export class QueryPanel {
             }
             const prior = this.preferenceKey();
             this.savedSelection = structuredClone(selection);
+            this.savedPlan = null;
+            this.definitionRevision = null;
             this.draftFlags.delete(`saved:${selection.owner}:${selection.key}`);
             if (this.preferenceKey() !== prior)
                 this.loadPreferences();
