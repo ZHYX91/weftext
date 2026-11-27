@@ -3,11 +3,10 @@
 Uses owned libraries and the existing local installer for fixture provisioning;
 all consumer requests use hosted HTTP. No host desktop input or external data.
 """
+from _http_test_suite import run_http_suite
 import copy
 import json
-import sys
 import time
-import unittest
 from concurrent.futures import ThreadPoolExecutor
 from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call, freeze_policy_changes, apply_inflight_revocation, verify_policy_changes
 from test_hosted import uid
@@ -356,8 +355,4 @@ class HostedProviders(HostedQuery):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        raise SystemExit('usage: test_hosted_providers.py EXE')
-    suite = unittest.TestSuite(HostedProviders(name) for name in unittest.defaultTestLoader.getTestCaseNames(HostedProviders)
-                               if name.startswith('test_provider_'))
-    raise SystemExit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
+    raise SystemExit(run_http_suite(HostedProviders))

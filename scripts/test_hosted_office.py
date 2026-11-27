@@ -1,12 +1,11 @@
 """Actual Office conversions with scoped hosted authority and durable IDs."""
+from _http_test_suite import run_http_suite
 import uuid
 import base64
 import hashlib
 import io
 import json
-import sys
 import time
-import unittest
 import zipfile
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -266,7 +265,4 @@ class HostedOffice(HostedReview):
 
 
 if __name__ == '__main__':
-    # Only the new cases here; complete inherited suites run through their entry points.
-    suite = unittest.TestSuite(HostedOffice(name) for name in unittest.defaultTestLoader.getTestCaseNames(HostedOffice) if name.startswith('test_office_'))
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
-    sys.exit(not result.wasSuccessful())
+    raise SystemExit(run_http_suite(HostedOffice))

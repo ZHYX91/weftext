@@ -25,7 +25,7 @@ translation_status: source
 
 纯文档改动运行 `python scripts/check.py`。涉及 schema、类型/时间算法或模型时运行 `python scripts/check.py --models`。实现切片增加自己的格式、静态分析和必要测试；跨平台、文件故障、权限、编辑和 Office 输出按真实影响选场景。失败记录实际原因；不通过删断言或改期望掩盖问题。
 
-`python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 40 个 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由完整 Rust 组逐项执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。
+`python scripts/mvp.py check` 保持完整产品入口，也可用重复的 `--group` 显式选择 `source`、`scripts`、`frontend`、`cli`、`rust`、`http`。分组只缩短开发反馈，不推断改动影响，也不授予未运行组通过：`source` 只运行源码／模型检查，不要求 Cargo 或 Node；`scripts` 运行原脚本合同；独立 `frontend` 组安装锁定依赖并运行测试与构建；后三组消费同批冻结的产品角色。默认完整入口保留全部检查、原 CLI 在较长 Rust 检查之前的次序，以及全部 HTTP 脚本。真实容量测试集中于 `reminder_device_state::integration_tests::capacity`，仍由完整 Rust 组逐项执行；64／65 成员、1024／1025 输入、合法 ledger 容量和真实 5 秒 permit 均不缩减。
 
 Rust 组保留原 workspace／all-targets Clippy，随后依次运行：
 
@@ -41,7 +41,7 @@ Windows 构建在固定双角色批次旁生成 `build-input-receipt.json`。`ch
 
 规范 `package` 在真实构建返回后、完整检查之前，用现有 `dependency_licenses` 收集器，依据实际固定源码根、完整 metadata 和实际 built package IDs，核 Cargo 依赖与已安装 npm 包的许可原文；CI 中这一步在独立回执子进程成功后执行。缺少原文立即停止打包并保留原物。随后 `package_windows` 从同批固定输入重新收集许可，只运行一次真实 SDK 资源／MSIX 生成，并生成完整 ZIP；原完整容器与 blockmap 校验通过后，才调用原全部检查。创建产物目录即写入 `INCOMPLETE.json`；此时只有未核定载荷，尚无 `PACKAGE.json` 或 `Unsigned local candidate` 成功标记。全部检查成功后，再核源码／前端／双 PE／catalog、许可原文与声明、SDK 工具、载荷／清单及容器完整字节和原摘要；只有仍相同才新建 `PACKAGE.json`、移除未完成标记并打印成功。SDK、容器、完整检查或最终复核失败都保留本次原物与未完成状态，不重建、不重试、不沿用旧 PASS。普通 `build`、`check` 和回执验证保持不变。
 
-Windows CI 先初始化本轮证据目录，不在这一步构建；随后调用原规范 `package --release`，只构建一次新的固定源码 release 批次。原构建返回准确产物后、原完整检查之前，用已选定的绝对 Python 3.11 从该固定源码根启动独立进程，运行原 `mvp.py check --release --group cli --artifacts ABSOLUTE_RECEIPT`；它继承该批实际构建环境，包括原显式 x64 target、linker 和 SDK，记录命令、工作目录、完整原 stdout／stderr 与退出码。子进程失败立即阻断后续检查与打包；成功后先执行打包许可预检及上述真实完整容器生成／严格校验，再让原产物继续执行全部 source／scripts／frontend／格式／Clippy／Core／App／CLI 与 40 个 HTTP 检查，保留真实容量用例及原五秒期限，不以子进程 PASS 代替任何完整检查。只有完整打包成功，才提供同批对应的 ZIP／MSIX、PACKAGE 和 BUILD；原回执／catalog、checkout／run 身份与控制／CLI 原件均绑定该实际批次及固定源码。失败控制、部分输出、SDK 日志与未打包材料原件继续保留为未核定证据，未签名复核产物按原策略保留 7 天。材料获取见 [PACKAGING](PACKAGING.zh-CN.md)，不签名、改信任、安装或发布；下载后不得改写 CI 回执源根冒本地构建。上传成功不等于检查通过。
+Windows CI 先初始化本轮证据目录，不在这一步构建；随后调用原规范 `package --release`，只构建一次新的固定源码 release 批次。原构建返回准确产物后、原完整检查之前，用已选定的绝对 Python 3.11 从该固定源码根启动独立进程，运行原 `mvp.py check --release --group cli --artifacts ABSOLUTE_RECEIPT`；它继承该批实际构建环境，包括原显式 x64 target、linker 和 SDK，记录命令、工作目录、完整原 stdout／stderr 与退出码。子进程失败立即阻断后续检查与打包；成功后先执行打包许可预检及上述真实完整容器生成／严格校验，再让原产物继续执行全部 source／scripts／frontend／格式／Clippy／Core／App／CLI 与全部 HTTP 检查，保留真实容量用例及原五秒期限，不以子进程 PASS 代替任何完整检查。只有完整打包成功，才提供同批对应的 ZIP／MSIX、PACKAGE 和 BUILD；原回执／catalog、checkout／run 身份与控制／CLI 原件均绑定该实际批次及固定源码。失败控制、部分输出、SDK 日志与未打包材料原件继续保留为未核定证据，未签名复核产物按原策略保留 7 天。材料获取见 [PACKAGING](PACKAGING.zh-CN.md)，不签名、改信任、安装或发布；下载后不得改写 CI 回执源根冒本地构建。上传成功不等于检查通过。
 
 CLI 合同入口保留业务用例与唯一报告，Win32／ConPTY、受控 relay、安全失败摘要及纯传输夹具分别放在支持模块。2048 个确定性 token 的 DOCX 夹具仍经过真实转换、多块下载和完整摘要／内容断言，不以模拟产物代替。并发输入测试在真实冻结捕获后确认原宿主的新 worker，再执行原修改并核特定后置拒绝和严格事件先后；不能用初始捕获失败、任意 409 或 worker 失败冒充撤权／依赖重验通过。
 
@@ -59,7 +59,7 @@ CLI 合同入口保留业务用例与唯一报告，Win32／ConPTY、受控 rela
 
 Pull Request 和 main 更新还运行 [Product checks](../.github/workflows/product.yml)：Linux 使用 Python 3.11 调用同一 `check --group frontend`，按锁执行 TypeScript 测试、类型检查和 Vite 构建；Windows 使用固定 Node.js 24.19.0、Rust 1.99.1 和 Python 3.11，在一次完整规范 release 打包的同批固定源码产物上执行上述独立进程回执检查。原 Design checks 继续独立运行，产品作业没有允许失败或跳过断言的后备路径。CI 不发布，也不代替真实桌面输入、系统 IME、辅助技术、NAS 或其他操作系统的产品验收。
 
-Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust 与 40 个 HTTP 脚本。CLI 合同先于较长的 Rust 检查运行；失败时立即输出有界、脱敏的原异常和本用例近期子进程／relay 诊断，并标明本轮新建的结果目录与产物目录，避免把缓存中的旧结果当成当前通过。产品操作和各用例本身的截止时间保持不变。
+Windows 作业总预算为 150 分钟，容纳顺序执行的完整 CLI、Rust 与 HTTP 脚本。CLI 合同先于较长的 Rust 检查运行；失败时立即输出有界、脱敏的原异常和本用例近期子进程／relay 诊断，并标明本轮新建的结果目录与产物目录，避免把缓存中的旧结果当成当前通过。产品操作和各用例本身的截止时间保持不变。
 
 0.6.3-rc.2 的外部 HTML 表格互操作使用 `node scripts/test_external_html_paste_browser.mjs EXE NEW_OUTPUT`，加 `--hosted` 验托管客户端。脚本在独立 HTML 页用浏览器原生复制，经实际剪贴板及可信粘贴事件进入本产品，核取消、合并格／换行／空值、未选内容和单步 Undo／Redo；不派发合成 ClipboardEvent，也不声明 Word／Excel 生产者已通过。`--dev` 只用于开发预检，候选验收消费 EXE 内嵌前端。
 

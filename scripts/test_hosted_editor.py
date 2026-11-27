@@ -1,9 +1,8 @@
 """Hosted native draft consumers using the actual executable and owned roots."""
+from _http_test_suite import run_http_suite
 import json
 import copy
-import sys
 import time
-import unittest
 from concurrent.futures import ThreadPoolExecutor
 from test_hosted import Hosted, uid, digest
 from owned_worker_observer import (SUPPORTED, OwnedWorkerObservation, event_time_ns, timed_call,
@@ -137,4 +136,5 @@ class HostedEditor(Hosted):
             self.assert_inflight_projection_change({**slow,'serial':3},None,410,'projection-revoked-race',
                 policy_request=request,policy_paths=[target],deadline=deadline)
 
-if __name__=='__main__': unittest.main(argv=[sys.argv[0]],defaultTest='HostedEditor',verbosity=2)
+if __name__ == '__main__':
+    raise SystemExit(run_http_suite(HostedEditor))

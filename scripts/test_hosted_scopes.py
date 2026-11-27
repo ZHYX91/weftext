@@ -3,13 +3,12 @@
 Local Core routes provision admissions and structural operations while the hosted
 server is stopped. Query, definition and output consumers use hosted HTTP only.
 """
+from _http_test_suite import run_http_suite
 from _creation_result import created_document
 import copy
 import json
 import shutil
-import sys
 import time
-import unittest
 from concurrent.futures import ThreadPoolExecutor
 from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call, freeze_policy_changes, apply_inflight_revocation, verify_policy_changes
 from pathlib import Path
@@ -409,6 +408,4 @@ class HostedScopes(HostedQuery):
 
 
 if __name__ == '__main__':
-    suite = unittest.TestSuite(HostedScopes(name) for name in
-        unittest.defaultTestLoader.getTestCaseNames(HostedScopes) if name.startswith('test_scope_'))
-    sys.exit(0 if unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful() else 1)
+    raise SystemExit(run_http_suite(HostedScopes))
