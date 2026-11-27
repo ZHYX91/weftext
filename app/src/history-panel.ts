@@ -223,6 +223,10 @@ class HistoryDialog {
             this.warnings.append(element("p", "history-warning", uiMessage("history.externalChangesHelp")));
         for (const warning of list?.warnings ?? [])
             this.warnings.append(element("p", "history-warning", coreDescriptionUiText(warning)));
+        const active = this.listHost.ownerDocument.activeElement?.closest<HTMLButtonElement>("[data-history-version]");
+        const focusedVersion = active && this.listHost.contains(active) ? active.dataset.historyVersion : undefined;
+        let focusTarget: HTMLButtonElement | undefined;
+        disposeUiTree(this.listHost);
         this.listHost.replaceChildren();
         for (const version of list?.versions ?? []) {
             const row = element("li", "history-version");
@@ -233,6 +237,8 @@ class HistoryDialog {
             setUiAttr(choice, "aria-label", () => `${uiTextValue(historyTimeLabel(version))}，${uiTextValue(sequence)}，${uiTextValue(availability[version.status] ?? version.status)}${uiTextValue(version.versionId === list!.currentSavedVersionId ? uiMessage("history.currentSavedAriaSuffix") : "")}`);
             choice.append(element("span", "history-version-meta", () => `${uiTextValue(sequence)} · ${uiTextValue(availability[version.status] ?? version.status)}${uiTextValue(version.versionId === list!.currentSavedVersionId ? uiMessage("history.currentSavedSuffix") : "")}`));
             choice.disabled = this.readBusy;
+            if (version.versionId === focusedVersion)
+                focusTarget = choice;
             row.append(choice);
             if (version.status !== "available")
                 row.append(element("p", "history-help", coreDescriptionUiText(version.description)));
@@ -252,6 +258,8 @@ class HistoryDialog {
         this.drawProtected();
         this.drawControls();
         this.drawOperation();
+        if (focusedVersion && this.dialog.open)
+            (focusTarget ?? this.refreshButton).focus({ preventScroll: true });
     }
     private drawSource(source: HistorySource): void {
         this.sourceHost.append(element("p", "history-help", displayMessage("history.sourceMetadata", { p0: uiDisplayParameter(historyTimeLabel(source)), p1: uiDisplayParameter(source.byteLength ?? uiMessage("common.unknown")), p2: uiDisplayParameter(source.versionId) })));
