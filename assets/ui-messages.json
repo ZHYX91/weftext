@@ -39378,6 +39378,11 @@
       "en-US": "Find",
       "params": {}
     },
+    "editor.cmInvalidPattern": {
+      "zh-CN": "正则表达式不完整或有误。请修改，或关闭正则表达式以按原文查找。",
+      "en-US": "This regular expression is incomplete or invalid. Edit it, or turn off regular expressions to search for the text as typed.",
+      "params": {}
+    },
     "editor.cmReplaceInput": {
       "zh-CN": "替换",
       "en-US": "Replace",
