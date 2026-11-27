@@ -30,15 +30,22 @@ try {
     const hash = async text => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))].map(byte => byte.toString(16).padStart(2, '0')).join('')
     const int = value => ({ kind: 'int', value })
     const fieldId = 'owned/values', key = 'values', typeId = 'owned/test'
+    const countShape = { kind: 'scalar', semantic: 'int' }
+    const recordShape = { kind: 'record', unknown: 'preserve', members: {
+      count: { shape: countShape, required: true, nullable: false },
+      rank: { shape: countShape, required: false, nullable: false },
+      limit: { shape: countShape, required: false, nullable: true },
+    } }
     const schema = {
       definitions: {}, aliases: {},
-      fields: [{ id: fieldId, key, shape: { kind: 'list', items: { kind: 'scalar', semantic: 'int' }, min: 0, max: null }, nullable: false }],
-      types: [{ id: typeId, fields: [{ id: fieldId, required: true }], requires: [], conflicts: [] }],
+      fields: [{ id: fieldId, key, shape: { kind: 'list', items: { kind: 'scalar', semantic: 'int' }, min: 0, max: null }, nullable: false }, { id: 'owned/record', key: 'record', shape: recordShape, nullable: false }],
+      types: [{ id: typeId, fields: [{ id: fieldId, required: true }, { id: 'owned/record', required: true }], requires: [], conflicts: [] }],
     }
     const schemaSource = JSON.stringify(schema)
     let values = ['1', '2', '3'].map(int)
     let basis = { inputId: 'one', sessionId: 'fixture', source: 'Synthetic property note', serial: 1, baseId: 'base', path: '/owned/note.typ', root: '/owned' }
-    let projected = values
+    let record = [{ key: 'count', value: int('1') }, { key: 'limit', value: int('9') }]
+    let projected = null
     const fixture = window.testFixture = { edits: [], installed: [], notices: [] }
     const panel = new DataPanel({
       getDocument: () => basis,
@@ -46,7 +53,8 @@ try {
       notify: (notice, error) => fixture.notices.push(error),
       applyPatch: async patch => {
         fixture.installed.push(patch)
-        values = projected
+        if (projected.key === 'record') record = projected.value.value
+        else values = projected.value.value
         basis = { ...basis, serial: basis.serial + 1, inputId: 'next', source: patch.text }
       },
       request: async (path, body) => {
@@ -54,10 +62,12 @@ try {
         if (path === '/api/data/project') return { serial: body.serial, sourceHash: await hash(body.source), schemaHash: await hash(schemaSource), schemaRevision: null, readOnly: false,
           projection: { qualification: 'qualified', id: null, types: [typeId], resolvedTypes: [typeId], fields: [{
             fieldId, key, cell: { state: 'value', value: { kind: 'array', value: values } }, sourceRange: null, raw: null, writable: true, required: true, unbound: [],
+          }, { fieldId: 'owned/record', key: 'record', cell: { state: 'value', value: { kind: 'record', value: record } },
+            sourceRange: null, raw: null, writable: true, required: true, unbound: [],
           }], unknownFields: [], diagnostics: [], budgetExhausted: false } }
         if (path === '/api/data/edit') {
           fixture.edits.push(body)
-          projected = body.value.value
+          projected = body
           return { from: 0, to: body.source.length, text: JSON.stringify(projected) }
         }
         throw Error('Unexpected fixture request ' + path)
@@ -104,6 +114,56 @@ try {
     assert.equal(await focused(rows.nth(2).getByRole('button', { name: '移除', exact: true })), true)
     assert.equal(await page.evaluate(() => window.testFixture.edits.length), 1)
     console.log('Property draft, rejection without a write, valid keyboard move/add/remove focus, and exact Apply passed')
+  }
+  if (!process.env.WEFTEXT_LIST_BASELINE) {
+    const record = page.locator('[data-field-key=record]')
+    const row = key => record.locator('.native-member').filter({ hasText: key })
+    const button = (key, name) => row(key).getByRole('button', { name, exact: true })
+    const count = row('count').locator('input')
+    const recordApply = record.getByRole('button', { name: '应用到草稿', exact: true })
+    const editCount = () => page.evaluate(() => window.testFixture.edits.filter(edit => edit.key === 'record').length)
+    await row('limit').locator('input').fill('10')
+    await count.fill('1e')
+    await button('rank', '添加').press('Enter')
+    if (process.env.WEFTEXT_RECORD_BASELINE) {
+      assert.equal(await count.inputValue(), '1')
+      assert.equal(await count.evaluate(el => el.validity.valid), true)
+      assert.equal(await focused(row('rank').locator('input')), false)
+      await recordApply.press('Enter')
+      await page.waitForFunction(() => window.testFixture.edits.some(edit => edit.key === 'record'))
+      assert.deepEqual(await page.evaluate(() => window.testFixture.edits.find(edit => edit.key === 'record').value.value[0].value), { kind: 'int', value: '1' })
+      console.log('Old property record discards the unfinished sibling and applies its old value')
+    } else {
+      const rawInvalid = async () => {
+        assert.equal(await count.inputValue(), '1e')
+        assert.equal(await count.evaluate(el => el.validity.valid), false)
+        assert.equal(await focused(count), true)
+      }
+      await rawInvalid()
+      await button('limit', '移除').press('Enter')
+      await rawInvalid()
+      await button('limit', '设为 none').press('Enter')
+      await rawInvalid()
+      assert.equal(await row('limit').locator('input').inputValue(), '10')
+      await recordApply.press('Enter')
+      assert.equal(await editCount(), 0)
+      await count.fill('7')
+      await button('rank', '添加').press('Enter')
+      const rank = row('rank').locator('input')
+      assert.equal(await focused(rank), true)
+      await rank.fill('5')
+      await button('limit', '设为 none').press('Enter')
+      assert.equal(await focused(button('limit', '填写值')), true)
+      await button('limit', '移除').press('Enter')
+      assert.equal(await focused(button('limit', '添加')), true)
+      await recordApply.press('Enter')
+      await page.waitForFunction(() => window.testFixture.edits.some(edit => edit.key === 'record'))
+      assert.equal(await editCount(), 1)
+      assert.deepEqual(await page.evaluate(() => window.testFixture.edits.find(edit => edit.key === 'record').value), {
+        kind: 'record', value: [{ key: 'count', value: { kind: 'int', value: '7' } }, { key: 'rank', value: { kind: 'int', value: '5' } }],
+      })
+      console.log('Property record keeps invalid siblings, restores focus and applies only the corrected record')
+    }
   }
   assert.deepEqual(errors, [])
 } finally {

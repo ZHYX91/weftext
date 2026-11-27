@@ -471,6 +471,18 @@ interface BoundNativeControl {
     slot: string;
     path: readonly ValuePath[];
 }
+function validBeforeNativeReshape(container: HTMLElement): boolean {
+    // A redraw starts from typed values, not from invalid raw child inputs.
+    const pending = container.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input:invalid,textarea:invalid,select:invalid");
+    if (!pending) return true;
+    pending.focus();
+    pending.reportValidity();
+    return false;
+}
+function firstNativeEditControl(container: HTMLElement | undefined): HTMLElement | null | undefined {
+    return container?.querySelector<HTMLElement>(":scope > .native-value-editor :is(input,select,textarea):not(:disabled)")
+        ?? container?.querySelector<HTMLElement>(":scope > .native-value-editor button:not(:disabled)");
+}
 export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSchema, changed: (value: NativeValue) => void, label: UiText, identity: NativeControlIdentity, depth = 0, references?: FormReferences, binding?: NativeControlBinding, lifetime = new Set<BoundNativeControl>()): HTMLElement {
     const retire = () => {
         for (const entry of lifetime)
@@ -544,8 +556,16 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
         }
         const record = ui("div", "native-record");
         host.append(record);
-        const render = (): void => {
+        const updateMember = (key: string, next: NativeValue | undefined): void => {
+            if (!validBeforeNativeReshape(record)) return;
+            retire();
+            value = replaceNativeMember(value, key, next);
+            changed(value);
+            render(key);
+        };
+        const render = (focusMember?: string): void => {
             record.replaceChildren();
+            let focus: HTMLElement | null | undefined;
             for (const [key, member] of Object.entries(resolved.members)) {
                 const present = nativeMember(value, key);
                 const row = ui("div", "native-member");
@@ -553,16 +573,17 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                 heading.append(ui("span", "", () => `${uiTextValue(fieldNames[key] ?? key)}${uiTextValue(member.required ? " *" : "")}`));
                 row.append(heading);
                 if (!present) {
-                    heading.append(ui("span", "data-empty", uiMessage("queryValue.absent")), action(uiMessage("nativeEditor.addMember"), () => { retire(); value = replaceNativeMember(value, key, emptyNativeValue(member.shape, schema)); changed(value); render(); }, "data-button compact"));
+                    heading.append(ui("span", "data-empty", uiMessage("queryValue.absent")), action(uiMessage("nativeEditor.addMember"), () => updateMember(key, emptyNativeValue(member.shape, schema)), "data-button compact"));
                 }
                 else {
                     if (!member.required)
-                        heading.append(action(uiMessage("nativeEditor.removeMember"), () => { retire(); value = replaceNativeMember(value, key, undefined); changed(value); render(); }, "data-button compact"));
+                        heading.append(action(uiMessage("nativeEditor.removeMember"), () => updateMember(key, undefined), "data-button compact"));
                     if (member.nullable && present.kind !== "none")
-                        heading.append(action(uiMessage("nativeEditor.setNone"), () => { retire(); value = replaceNativeMember(value, key, { kind: "none" }); changed(value); render(); }, "data-button compact"));
+                        heading.append(action(uiMessage("nativeEditor.setNone"), () => updateMember(key, { kind: "none" }), "data-button compact"));
                     row.append(valueEditor(member.shape, present, schema, next => { value = replaceNativeMember(value, key, next); changed(value); }, () => `${uiTextValue(label)} · ${uiTextValue(fieldNames[key] ?? key)}`, { ...identity, path: [...identity.path, { kind: "member", key }] }, depth + 1, references, binding, lifetime));
                 }
                 record.append(row);
+                if (key === focusMember) focus = firstNativeEditControl(row) ?? heading.querySelector<HTMLButtonElement>("button:not(:disabled)");
             }
             if (value.kind === "record")
                 for (const unknown of value.value.filter(item => !resolved.members[item.key])) {
@@ -570,6 +591,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                     row.append(ui("strong", "", displayMessage("nativeEditor.unboundReadOnly", { p0: uiDisplayParameter(unknown.key) })), ui("p", "", formatNativeValue(unknown.value)));
                     record.append(row);
                 }
+            focus?.focus();
         };
         render();
         return host;
@@ -582,14 +604,6 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
         const items = ui("div", "native-list");
         host.append(items);
         type FocusTarget = { index: number; action: "up" | "down" | "remove" | "input" };
-        const validBeforeReshape = (): boolean => {
-            // A redraw starts from typed values, not from invalid raw child inputs.
-            const pending = items.querySelector<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>("input:invalid,textarea:invalid,select:invalid");
-            if (!pending) return true;
-            pending.focus();
-            pending.reportValidity();
-            return false;
-        };
         const render = (focus?: FocusTarget): void => {
             items.replaceChildren();
             if (value.kind !== "array")
@@ -598,7 +612,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                 items.append(ui("span", "data-empty", uiMessage("nativeEditor.emptyArray")));
             const rows: { row: HTMLFieldSetElement; up: HTMLButtonElement; down: HTMLButtonElement; remove: HTMLButtonElement }[] = [];
             const move = (index: number, delta: -1 | 1, action: "up" | "down") => {
-                if (!validBeforeReshape()) return;
+                if (!validBeforeNativeReshape(items)) return;
                 retire();
                 const target = index + delta;
                 value = moveOrderedValue(value, index, target);
@@ -614,7 +628,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                 const down = action(uiMessage("nodeContents.moveDown"), () => move(index, 1, "down"), "data-button compact");
                 down.disabled = value.kind !== "array" || index === value.value.length - 1;
                 const remove = action(uiMessage("nativeEditor.removeMember"), () => {
-                    if (value.kind !== "array" || !validBeforeReshape())
+                    if (value.kind !== "array" || !validBeforeNativeReshape(items))
                         return;
                     retire();
                     value = { kind: "array", value: value.value.filter((_, ordinal) => ordinal !== index) };
@@ -635,7 +649,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
                 items.append(row);
             });
             const add = action(uiMessage("nativeEditor.addItem"), () => {
-                if (value.kind !== "array" || !validBeforeReshape())
+                if (value.kind !== "array" || !validBeforeNativeReshape(items))
                     return;
                 retire();
                 value = { kind: "array", value: [...value.value, emptyNativeValue(resolved.items, schema)] };
@@ -646,7 +660,7 @@ export function valueEditor(shape: Shape, initial: NativeValue, schema: DataSche
             items.append(add);
             if (!focus) return;
             const current = rows[focus.index];
-            const control = current?.row.querySelector<HTMLElement>(":scope > .native-value-editor :is(input,select,textarea,button):not(:disabled)");
+            const control = firstNativeEditControl(current?.row);
             const preferred = focus.action === "input" ? control
                 : current?.[focus.action];
             const inverse = focus.action === "up" ? current?.down : focus.action === "down" ? current?.up : undefined;
