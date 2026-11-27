@@ -77,7 +77,7 @@ test("Query identity preserves typed values, plan ordering, saved revisions and 
   for (const changed of [{ ...source, epoch: 3 }, { ...source, root: "other" }, { ...source, selection: { ...source.selection, revision: "new" } }, { ...source, parameters: { amount: { kind: "text", value: "9007199254740993.01" } } }, { ...source, plan: { select: ["body", "title"] } }]) assert.notEqual(queryRefreshKey(source), queryRefreshKey(changed));
 });
 
-test("density, thumbnails, pinning and inactive view settings cannot retire a valid in-flight Query", async () => {
+test("density, thumbnails, pinning and all result views cannot retire a valid in-flight Query", async () => {
   const input: QueryPlanInputs = { scope: null, descendants: true, lifecycle: "live", types: [], search: "", includeBody: false,
     conditions: [], expression: "", exactPlan: null, group: undefined, take: 200, preference: defaultPreference() };
   const key = () => queryRefreshKey(queryPlanRefreshInput(input)), original = key(), held = deferred(); let published = false, requests = 0;
@@ -85,8 +85,12 @@ test("density, thumbnails, pinning and inactive view settings cannot retire a va
   const first = queue.request(original, input); await Promise.resolve();
   input.preference.density = "compact"; input.preference.thumbnails = true; input.preference.pinned = ["another-row"];
   input.preference.view = "table"; input.preference.dateField = "unused-date"; input.preference.groupField = "unused-group";
+  for (const view of ["list", "table", "board", "calendar", "chart"] as const) {
+    input.preference.view = view;
+    assert.equal(key(), original);
+  }
   assert.equal(key(), original); held.resolve(); await first; assert.equal(published, true); assert.equal(requests, 1);
-  for (const edit of [(value: QueryPlanInputs) => { value.preference.summaries = false; }, (value: QueryPlanInputs) => { value.preference.columns.push("new-field"); }, (value: QueryPlanInputs) => { value.preference.sort = "due"; }, (value: QueryPlanInputs) => { value.preference.view = "calendar"; }]) {
+  for (const edit of [(value: QueryPlanInputs) => { value.preference.summaries = false; }, (value: QueryPlanInputs) => { value.preference.columns.push("new-field"); }, (value: QueryPlanInputs) => { value.preference.sort = "due"; }]) {
     const changed = structuredClone(input); edit(changed); assert.notEqual(queryRefreshKey(queryPlanRefreshInput(changed)), original);
   }
 });

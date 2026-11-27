@@ -853,7 +853,7 @@ export function pinEligibleRows(rows: QueryRow[], pins: string[]): QueryRow[] {
     return [...rows.filter(row => wanted.has(row.entityKey ?? row.key)), ...rows.filter(row => !wanted.has(row.entityKey ?? row.key))];
 }
 export function preferenceFieldErrors(preference: ViewPreference, schema: DataSchema): UiText[] {
-    return Object.entries(preference.fieldBindings ?? {}).filter(([key, id]) => [preference.sort, ...preference.columns, ...(preference.view === "board" ? [preference.groupField] : []), ...(preference.view === "calendar" ? [preference.dateField] : []), ...(preference.view === "chart" ? [preference.chartField] : [])].includes(key) && !schema.fields.some(field => field.id === id && field.key === key)).map(([key]) => displayMessage("queryView.invalidFieldBinding", { p0: uiDisplayParameter(fieldNames[key] ?? key) }));
+    return Object.entries(preference.fieldBindings ?? {}).filter(([key, id]) => [preference.sort, ...preference.columns].includes(key) && !schema.fields.some(field => field.id === id && field.key === key)).map(([key]) => displayMessage("queryView.invalidFieldBinding", { p0: uiDisplayParameter(fieldNames[key] ?? key) }));
 }
 /** Match only native plan inputs and the field bindings validated before execution. */
 export function queryPlanRefreshInput(input: QueryPlanInputs): unknown {
@@ -862,8 +862,7 @@ export function queryPlanRefreshInput(input: QueryPlanInputs): unknown {
         exactPlan: input.exactPlan, group: input.group, take: input.take };
     if (input.exactPlan)
         return common;
-    const preference = input.preference, columns = [...new Set([...preference.columns,
-            ...(preference.view === "board" ? [preference.groupField] : []), ...(preference.view === "calendar" ? [preference.dateField] : []), ...(preference.view === "chart" ? [preference.chartField] : [])])];
+    const preference = input.preference, columns = [...new Set(preference.columns)];
     const fields = new Set([preference.sort, ...columns]);
     return { ...common, preference: { columns, sort: preference.sort, descending: !input.group && preference.descending,
             summaries: !input.group && preference.summaries, fieldBindings: Object.fromEntries(Object.entries(preference.fieldBindings ?? {}).filter(([key]) => fields.has(key))) } };
@@ -997,14 +996,7 @@ function planForInputs(input: QueryPlanInputs, schema: DataSchema | null): Query
     const preference = input.preference, columns = [{ name: "title", expr: "title" }, { name: "types", expr: "types" }];
     if (preference.summaries && !input.group)
         columns.push({ name: "summary", expr: "body" });
-    const requested = new Set(preference.columns);
-    if (preference.view === "board")
-        requested.add(preference.groupField);
-    if (preference.view === "calendar")
-        requested.add(preference.dateField);
-    if (preference.view === "chart")
-        requested.add(preference.chartField);
-    for (const key of requested) {
+    for (const key of new Set(preference.columns)) {
         const id = field(key);
         if (id)
             columns.push({ name: key, expr: fieldExpr(id) });
@@ -1280,7 +1272,7 @@ export class QueryPanel {
     private savePreferences(bindFields = true): void {
         if (bindFields) {
             this.preference.fieldBindings ??= {};
-            for (const key of [...this.preference.columns, this.preference.sort, this.preference.groupField, this.preference.dateField, this.preference.chartField]) {
+            for (const key of [...this.preference.columns, this.preference.sort]) {
                 const id = this.fieldByKey(key);
                 if (id && !this.preference.fieldBindings[key])
                     this.preference.fieldBindings[key] = id;
@@ -1543,7 +1535,7 @@ export class QueryPanel {
         const chips = ui("div", "query-chips");
         let chipsKey = "";
         const presentation = ui("div", "query-presentation"), view = selectControl([["list", message("queryView.list")], ["table", message("queryView.table")], ["board", message("queryView.board")], ["calendar", message("queryView.calendar")], ["chart", message("queryView.chart")]], this.preference.view);
-        view.onchange = () => { this.preference.view = view.value as ResultView; this.savePreferences(); this.renderControls(); void this.refresh(); };
+        view.onchange = () => { this.preference.view = view.value as ResultView; this.savePreferences(false); this.renderControls(); this.renderResults(); };
         const density = selectControl([["comfortable", message("queryView.detailedDensity")], ["compact", message("queryView.compactDensity")]], this.preference.density);
         density.onchange = () => { this.preference.density = density.value as ViewPreference["density"]; this.savePreferences(false); this.renderResults(); };
         const sort = selectControl([], "");
@@ -1688,17 +1680,10 @@ export class QueryPanel {
         viewField.classList.add("query-view-field");
         viewField.onchange = () => {
             const property = this.preference.view === "board" ? "groupField" : this.preference.view === "calendar" ? "dateField" : "chartField";
-            if (this.exactPlan || this.savedSelection || this.group)
-                this.preference[property] = viewField.value;
-            else {
-                const selected = this.schema?.fields.find(item => item.id === viewField.value);
-                if (!selected && viewField.value !== "@count")
-                    return;
-                this.preference[property] = selected?.key ?? "count";
-                this.bindPreferenceField(this.preference[property]);
-            }
-            this.savePreferences();
-            void this.refresh();
+            if (!this.result?.columns?.includes(viewField.value)) return;
+            this.preference[property] = viewField.value;
+            this.savePreferences(false);
+            this.renderResults();
         };
         builder.append(viewFieldLabel);
         const aggregateForm = ui("form", "query-aggregate-builder"), groupKey = selectControl([], ""), op = selectControl([["count", message("queryAggregate.noteCount")], ["sum", message("queryAggregate.sum")], ["min", message("queryAggregate.minimum")], ["max", message("queryAggregate.maximum")]], "count"), amount = selectControl([], "");
@@ -1820,9 +1805,9 @@ export class QueryPanel {
             const caption = this.preference.view === "board" ? message("queryView.boardGroupFieldLabel") : this.preference.view === "calendar" ? message("queryView.calendarDateFieldLabel") : message("queryView.chartValueFieldLabel");
             if (viewFieldLabel.firstChild?.nodeType === 3)
                 setUiText(viewFieldLabel.firstChild, caption);
-            const derived = !!this.exactPlan || !!this.savedSelection || !!this.group;
-            const viewChoices = derived ? [...new Set([...(this.resultPlan?.select ?? this.getPlan().select).map(item => item.name), ...Object.keys(this.result?.rows[0]?.cells ?? {})])].filter(name => !["title", "summary", "types"].includes(name)).map(name => ({ value: name, label: fieldNames[name] ?? name })) : [...(this.preference.view === "chart" ? [{ value: "@count", label: message("queryAggregate.countOutput") }] : []), ...choices];
-            updateQueryChoices(viewField, viewChoices, derived ? selectedViewField : selectedViewField === "count" ? "@count" : this.preference.fieldBindings?.[selectedViewField] ?? this.fieldByKey(selectedViewField) ?? selectedViewField);
+            const viewChoices = (this.result?.columns ?? []).map(name => ({ value: name, label: fieldNames[name] ?? name }));
+            updateQueryChoices(viewField, viewChoices, selectedViewField);
+            viewField.disabled = !viewChoices.length;
             for (const control of builder.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>("input,select,textarea,button"))
                 if (!control.classList.contains("query-view-field") && !columns.contains(control))
                     control.disabled = locked;

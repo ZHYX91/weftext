@@ -33,7 +33,7 @@ try {
         calls.push({route,body:JSON.parse(JSON.stringify(body))});
         if(route==='/api/data/schema')return schema;
         if(route==='/api/navigation/tags')return {baseId:'registry-fixture',complete:true,tags:[{tagRef,tagId:'root',parentTagId:null,displayName:tagLabel},{tagRef:'weftext-tag://query-fixture/child',tagId:'child',parentTagId:'root',displayName:'子级'}]};
-        if(route==='/api/query/run'){const n=calls.filter(call=>call.route===route).length;return localQueryResult({cutId:'component-cut-'+n,columns:['title'],rows:[{key:'row',entityKey:null,path:null,revision:null,readOnly:true,cells:{title:{state:'value',value:{kind:'text',value:'Component result'}}}}],totalKnown:1});}
+        if(route==='/api/query/run'){const n=calls.filter(call=>call.route===route).length;return localQueryResult({cutId:'component-cut-'+n,columns:['title','count'],rows:[{key:'row',entityKey:null,path:null,revision:null,readOnly:true,cells:{title:{state:'value',value:{kind:'text',value:'Component result'}},count:{state:'value',value:{kind:'int',value:'12'}}}}],totalKnown:1});}
         throw Error('Unexpected component route '+route);
       }};
       locale.set('zh-CN');const panel=new QueryPanel(host);document.querySelector('main').append(panel.element);
@@ -53,6 +53,21 @@ try {
   const lastPlan = () => page.evaluate(() => window.fixture.calls.filter(call => call.route === '/api/query/run').at(-1).body.plan);
   const tagRow = panel.locator('.registered-tag-row').first();
   await ready(1);
+  await check('table, board, calendar, chart and list use one frozen result and its declared output columns', async () => {
+    const view = panel.locator('.query-presentation select').first();
+    const initial = await page.evaluate(() => window.fixture.panel.result);
+    for (const choice of ['table','board','calendar','chart','list']) {
+      await view.selectOption(choice);
+      if (choice === 'chart') {
+        assert.equal(await panel.locator('.query-chart-value').innerText(), '12');
+        const output = panel.locator('.query-view-field');
+        await output.evaluate(element => { element.value = 'title'; element.dispatchEvent(new Event('change')); });
+        assert.equal(await panel.locator('.query-chart-value').count(), 0);
+      }
+      assert.equal(await queryCount(), 1);
+      assert.deepEqual(await page.evaluate(() => window.fixture.panel.result), initial);
+    }
+  });
   await check('registered exact tag creates a real local display chip and sends only native Query state', async () => {
     await panel.getByText('登记标签与目录入口', { exact: true }).click();
     await panel.getByRole('button', { name: '读取登记标签', exact: true }).click();
