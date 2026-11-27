@@ -4,13 +4,12 @@ Each case owns a disposable library and private state directory. Local APIs are
 used only to provision structural moves while the hosted process is stopped.
 Consumer behavior always goes through the hosted authorization boundary.
 """
+from _http_test_suite import run_http_suite
 import uuid
 import json
 import os
 from pathlib import Path
 import subprocess
-import sys
-import unittest
 
 from build_receipt import selected_node
 from test_hosted import Hosted, Server, digest, uid
@@ -413,7 +412,4 @@ class HostedHistory(Hosted):
 
 
 if __name__ == '__main__':
-    suite = unittest.TestSuite(HostedHistory(name) for name in
-        unittest.defaultTestLoader.getTestCaseNames(HostedHistory)
-        if name.startswith('test_history_consumer_'))
-    sys.exit(0 if unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful() else 1)
+    raise SystemExit(run_http_suite(HostedHistory))

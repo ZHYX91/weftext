@@ -1,8 +1,9 @@
-"""Entry selection and frozen role routing; subprocess execution is recorded only."""
-from contextlib import contextmanager, redirect_stdout
+"""Product and HTTP entry selection and frozen role routing."""
+from contextlib import contextmanager, redirect_stdout, redirect_stderr
 import io
 from pathlib import Path
 import shutil
+import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -10,6 +11,7 @@ import uuid
 from unittest.mock import Mock, patch
 
 import mvp
+from _http_test_suite import run_http_suite
 import build_receipt as receipt
 from build_receipt import GROUPS
 from test_build_receipt import Fixture
@@ -23,6 +25,42 @@ class NpmFixture:
 
     def command(self, *args):
         return ['selected-node', 'real-npm-cli.js', *map(str, args)]
+
+
+class HostedSuiteSelection(unittest.TestCase):
+    def test_only_declaring_suite_runs_its_cases_and_checks_every_requested_name(self):
+        ran = []
+
+        class Parent(unittest.TestCase):
+            def test_parent(self):
+                ran.append('parent')
+
+        class Child(Parent):
+            def test_first(self):
+                ran.append('first')
+
+            def test_second(self):
+                ran.append('second')
+
+        class Empty(Parent):
+            pass
+
+        def invoke(case, *names):
+            argv = ['suite.py', sys.executable, *names]
+            with patch.object(sys, 'argv', argv), redirect_stderr(io.StringIO()):
+                return run_http_suite(case)
+
+        self.assertEqual(invoke(Child), 0)
+        self.assertEqual(ran, ['first', 'second'])
+        ran.clear()
+        self.assertEqual(invoke(Child, 'test_second'), 0)
+        self.assertEqual(ran, ['second'])
+        ran.clear()
+        for case, names in ((Child, ['test_parent']), (Child, ['test_first', 'test_typo']), (Empty, [])):
+            with self.subTest(case=case.__name__, names=names), self.assertRaises(SystemExit) as error:
+                invoke(case, *names)
+            self.assertEqual(error.exception.code, 2)
+            self.assertEqual(ran, [])
 
 
 class EntrySelection(unittest.TestCase):
@@ -363,7 +401,7 @@ class FrozenRouting(unittest.TestCase):
          '--message-format=json-render-diagnostics', '--', '--test-threads=1'],
     ]
 
-    def test_full_schedule_preserves_original_order_workers_roles_and_all_40_http(self):
+    def test_full_schedule_preserves_original_order_workers_roles_and_all_http_suites(self):
         with tempfile.TemporaryDirectory() as directory:
             fixture = Fixture(directory)
             calls, cargo_calls, environments, timeline = [], [], [], []
@@ -404,7 +442,7 @@ class FrozenRouting(unittest.TestCase):
                 ('verify', 0), ('verify', 0), ('run', 'scripts/test_mvp.py'),
             ])
             http = [call for call in calls if len(call) == 3 and call[2] == str(fixture.artifacts.paths['cli'])]
-            self.assertEqual(len(http), 40)
+            self.assertEqual(len(http), 42)
             self.assertEqual([call[1] for call in http], ['scripts/' + name for name in mvp.CHECK_SCRIPTS])
             cli = calls[names.index('scripts/test_cli_contract.py')]
             self.assertEqual(cli[cli.index('--gui-executable') + 1], str(fixture.artifacts.paths['desktop']))

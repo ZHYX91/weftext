@@ -2,6 +2,7 @@
 
 ZIP integrity is not automatic cross-device restoration or Office acceptance.
 """
+from _http_test_suite import run_http_suite
 import uuid
 import base64
 import hashlib
@@ -9,7 +10,6 @@ import io
 import json
 from pathlib import Path
 import sys
-import unittest
 import zipfile
 
 from test_hosted import Hosted, uid, digest
@@ -241,10 +241,4 @@ class HostedOwnerBackup(Hosted):
 
 
 if __name__ == '__main__':
-    names = set(sys.argv[2:])
-    available = {name for name in HostedOwnerBackup.__dict__ if name.startswith('test_')}
-    if names - available:
-        sys.exit('Unknown test selection: ' + ', '.join(sorted(names - available)))
-    selected = unittest.TestSuite(HostedOwnerBackup(name) for name in sorted(names or available))
-    result = unittest.TextTestRunner(verbosity=2).run(selected)
-    sys.exit(not result.wasSuccessful())
+    raise SystemExit(run_http_suite(HostedOwnerBackup))

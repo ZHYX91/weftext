@@ -3,13 +3,12 @@
 All libraries/uploads are owned fixtures. Only Core fixture preparation uses
 the local host; collection, import and consumer assertions use hosted HTTP.
 """
+from _http_test_suite import run_http_suite
 import base64
 import copy
 import hashlib
 import json
-import sys
 import time
-import unittest
 from concurrent.futures import ThreadPoolExecutor
 from owned_worker_observer import (OwnedWorkerObservation, event_time_ns, timed_call,
     apply_inflight_mutation, verify_inflight_change)
@@ -426,7 +425,4 @@ class HostedResourceCollections(HostedMedia):
 
 
 if __name__ == '__main__':
-    selected = set(sys.argv[2:])
-    suite = unittest.TestSuite(HostedResourceCollections(name) for name in sorted(HostedResourceCollections.__dict__)
-                              if name.startswith('test_collection_') and (not selected or name in selected))
-    sys.exit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
+    raise SystemExit(run_http_suite(HostedResourceCollections))

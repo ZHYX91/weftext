@@ -22,7 +22,7 @@ MONOTONIC_PERMIT_TEST = ('reminder_device_state::integration_tests::capacity::'
 CHECK_SCRIPTS = [
     'test_mvp.py', 'test_commit_delivery.py', 'test_local_features.py', 'test_outputs.py',
     'test_v05_completion.py', 'test_review_interchange.py', 'test_hosted.py',
-    'test_hosted_review.py', 'test_hosted_office.py', 'test_hosted_citations_outputs.py',
+    'test_hosted_editor.py', 'test_hosted_fields.py', 'test_hosted_review.py', 'test_hosted_office.py', 'test_hosted_citations_outputs.py',
     'test_v061_authoring.py', 'test_everyday.py', 'test_query_organization.py',
     'test_hierarchical_tags.py', 'test_link_diagnostics.py', 'test_v061_processing.py',
     'test_v061_processing_integration.py', 'test_recognition.py', 'test_hosted_owner_backup.py',

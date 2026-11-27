@@ -1,4 +1,5 @@
 """Real hosted HTTP boundaries against owned disposable libraries; no desktop input."""
+from _http_test_suite import run_http_suite
 from _cli_serve import launch_serve
 from _creation_result import created_document
 import copy
@@ -329,4 +330,4 @@ class Hosted(unittest.TestCase):
                                    (401, 'authentication', 'error.api.hosted.authenticationExpired', 'html'))
 
 if __name__ == '__main__':
-    unittest.main(argv=[sys.argv[0]],verbosity=2)
+    raise SystemExit(run_http_suite(Hosted))

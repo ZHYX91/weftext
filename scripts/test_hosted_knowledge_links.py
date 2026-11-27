@@ -3,11 +3,10 @@
 Run only against a freshly built executable containing knowledge_links::router.
 These checks do not claim browser Undo, native OS IME or other-platform acceptance.
 """
+from _http_test_suite import run_http_suite
 import json
 import secrets
-import sys
 import time
-import unittest
 from concurrent.futures import ThreadPoolExecutor
 from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call, freeze_policy_changes, apply_inflight_revocation, verify_policy_changes
 
@@ -333,7 +332,4 @@ class HostedKnowledgeLinks(HostedHistory):
 
 
 if __name__ == '__main__':
-    selected = set(sys.argv[2:])
-    suite = unittest.TestSuite(HostedKnowledgeLinks(name) for name in sorted(HostedKnowledgeLinks.__dict__)
-        if name.startswith('test_') and (not selected or name in selected))
-    sys.exit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
+    raise SystemExit(run_http_suite(HostedKnowledgeLinks))

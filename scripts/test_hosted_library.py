@@ -3,12 +3,11 @@
 Uses only owned disposable fixtures. Consumer requests never use local routes.
 The shared harness retains all original files and evidence after failures.
 """
+from _http_test_suite import run_http_suite
 import uuid
 from _creation_result import created_document
 import json
-import sys
 import time
-import unittest
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call
@@ -425,6 +424,4 @@ class HostedLibrary(HostedQuery):
 
 
 if __name__ == '__main__':
-    suite = unittest.TestSuite(HostedLibrary(name) for name in
-        unittest.defaultTestLoader.getTestCaseNames(HostedLibrary) if name.startswith('test_library_'))
-    sys.exit(0 if unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful() else 1)
+    raise SystemExit(run_http_suite(HostedLibrary))

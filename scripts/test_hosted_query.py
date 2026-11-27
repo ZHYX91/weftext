@@ -4,12 +4,11 @@ Uses owned disposable libraries and real HTTP/Core commits. No desktop input.
 The local process is used only to provision admitted fixtures while the hosted
 process is stopped; consumer requests always use the hosted boundary.
 """
+from _http_test_suite import run_http_suite
 import uuid
 import copy
 import json
-import sys
 import time
-import unittest
 from concurrent.futures import ThreadPoolExecutor
 from owned_worker_observer import (OwnedWorkerObservation, event_time_ns, timed_call,
     apply_inflight_mutation, verify_inflight_change, freeze_policy_changes,
@@ -518,7 +517,4 @@ class HostedQuery(HostedFields):
 
 
 if __name__ == '__main__':
-    suite = unittest.TestSuite(HostedQuery(name) for name in unittest.defaultTestLoader.getTestCaseNames(HostedQuery)
-                              if name.startswith('test_query_'))
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
-    sys.exit(not result.wasSuccessful())
+    raise SystemExit(run_http_suite(HostedQuery))
