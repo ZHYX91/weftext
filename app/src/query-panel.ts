@@ -2297,9 +2297,13 @@ export class QueryPanel {
                 return;
             }
             const prior = this.preferenceKey();
+            const previous = this.savedSelection;
             this.savedSelection = structuredClone(selection);
-            this.savedPlan = null;
-            this.definitionRevision = null;
+            if (previous?.owner !== selection.owner || previous.key !== selection.key
+                || previous.mode !== selection.mode || previous.revision !== selection.revision) {
+                this.savedPlan = null;
+                this.definitionRevision = null;
+            }
             this.draftFlags.delete(`saved:${selection.owner}:${selection.key}`);
             if (this.preferenceKey() !== prior)
                 this.loadPreferences();

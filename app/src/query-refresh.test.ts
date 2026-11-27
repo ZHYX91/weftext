@@ -144,12 +144,18 @@ for (const globalOwner of [true, false]) test(`tag registry mutations invalidate
   assert.equal(state.environmentEpoch, 1, "a departed library cannot produce another registry notification");
 });
 
-test("saved current and pinned reads use the same panel scheduler, while a different pinned revision remains a new intent", async () => {
-  const held = deferred(), sent = deferred(), selections: unknown[] = []; let runs = 0;
+test("saved current and pinned reads use the same panel scheduler, while a different pinned revision remains a new intent", { timeout: 5000 }, async () => {
+  const held = deferred(), sent = deferred(), selections: unknown[] = [], reads: unknown[] = []; let runs = 0;
+  const definition = { key: "saved", label: "weftext-query-saved",
+    plan: { scope: { descendants: true, lifecycle: "live" }, types: [], order: [], select: [] } };
   const { state, internals } = panelHarness(async (path, body) => {
     if (path === "/api/data/schema") return { definitions: {}, aliases: {}, types: [], fields: [] };
+    if (path === "/api/query/definitions") {
+      reads.push((body as { selection: unknown }).selection);
+      return { definitions: [definition], ownerRevision: "current-owner" };
+    }
     assert.equal(path, "/api/query/definition/run"); selections.push((body as { selection: unknown }).selection);
-    const cut = `saved-${++runs}`; if (runs === 1) { sent.resolve(); await held.promise; } return { result: result(cut), definitionRevision: `revision-${runs}` };
+    const cut = `saved-${++runs}`; if (runs === 1) { sent.resolve(); await held.promise; } return { result: result(cut), definition, definitionRevision: `revision-${runs}` };
   });
   const selection = { owner: "weftext-node://workspace/owner", key: "saved", label: "Original label", mode: "current" as const };
   const first = internals.runSaved(selection); await sent.promise;
@@ -158,6 +164,7 @@ test("saved current and pinned reads use the same panel scheduler, while a diffe
   await internals.runSaved({ ...selection, mode: "pinned", revision: "exact-a" });
   await internals.runSaved({ ...selection, mode: "pinned", revision: "exact-b" });
   assert.equal(runs, 3); assert.deepEqual(selections, [{ mode: "current", key: "saved" }, { mode: "pinned", key: "saved", revision: "exact-a" }, { mode: "pinned", key: "saved", revision: "exact-b" }]);
+  assert.deepEqual(reads, selections);
 });
 
 test("a saved definition keeps its frozen original through ordinary errors and delivers its committed fact", async () => {
