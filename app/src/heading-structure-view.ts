@@ -129,7 +129,9 @@ export class HeadingStructureView {
         parent.append(controls);
         const options = ui("details", "outline-options"), optionsBody = ui("div", "outline-options-body");
         options.open = this.optionsOpen;
-        options.append(ui("summary", "", message("heading.displayDepth")), optionsBody);
+        const summary = ui("summary", "", message("heading.displayDepth"));
+        summary.dataset.outlineControl = "options";
+        options.append(summary, optionsBody);
         const depth = ui("input");
         depth.type = "number"; depth.min = "0"; depth.max = "4294967295"; depth.value = String(this.depth);
         depth.dataset.outlineControl = "depth";

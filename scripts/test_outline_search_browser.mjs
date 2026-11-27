@@ -72,6 +72,24 @@ try {
   assert.equal(await page.locator('.outline-row.is-selected').count(), 0);
   await search.dispatchEvent('compositionend');
   await search.press('Enter'); assert.deepEqual(await jumps(), ['last', 'first', 'figure', 'figure']);
+  // A background snapshot must not drop focus while a keyboard user opens Options.
+  const options = page.locator('.outline-options');
+  const summary = options.locator('summary');
+  await summary.focus();
+  await page.keyboard.press('Space');
+  assert.equal(await options.evaluate(element => element.open), true);
+  await page.evaluate(() => window.draw());
+  assert.equal(await options.evaluate(element => element.open), true);
+  assert.equal(await summary.evaluate(element => document.activeElement === element), true,
+    'A fresh outline snapshot must retain focus on the disclosure');
+  await page.keyboard.press('Tab');
+  assert.equal(await options.locator('[data-outline-control="whole-document"]').evaluate(
+    element => document.activeElement === element), true);
+  await summary.focus();
+  await page.keyboard.press('Space');
+  await page.evaluate(() => window.draw());
+  assert.equal(await options.evaluate(element => element.open), false);
+  assert.equal(await summary.evaluate(element => document.activeElement === element), true);
   assert.deepEqual(errors, []);
   console.log('PASS outline search: initial result, wrap, Enter, filters, no matches, and composition ownership');
 } finally {
