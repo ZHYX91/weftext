@@ -645,6 +645,16 @@ export const zhCN = {
   "queryAdvanced.disclosure": "高级 Query · 完整计划与参数",
   "queryAdvanced.planLabel": "完整 Query 计划 JSON",
   "queryAdvanced.parametersLabel": "本次调用的原生参数 JSON",
+  "queryArguments.title": "按类型填写实参",
+  "queryArguments.noDeclarations": "当前计划未声明参数。",
+  "queryArguments.modeLabel": "{p0} 的实参来源",
+  "queryArguments.chooseValue": "请选择实参来源",
+  "queryArguments.enterValue": "填写值",
+  "queryArguments.useDefault": "使用默认值",
+  "queryArguments.defaultValue": "默认值为 {p0}",
+  "queryArguments.apply": "采用这些实参",
+  "queryArguments.changed": "查询计划、架构或实参草稿已变化。重新展开表单以读取当前内容。",
+  "queryArguments.applied": "实参已更新，可以运行查询。",
   "queryAdvanced.planHelp": "CEL 条件、投影和排序使用同一编译器。高级来源在 advanced 中；参数是本次输入，不成为另一份笔记内容。",
   "queryAdvanced.loadCurrentPlan": "载入当前实际计划（替换此编辑框）",
   "queryAdvanced.planField": "完整计划",
@@ -11022,6 +11032,16 @@ export interface MessageParamsMap {
   "queryAdvanced.disclosure": {  };
   "queryAdvanced.planLabel": {  };
   "queryAdvanced.parametersLabel": {  };
+  "queryArguments.title": {  };
+  "queryArguments.noDeclarations": {  };
+  "queryArguments.modeLabel": { p0: string };
+  "queryArguments.chooseValue": {  };
+  "queryArguments.enterValue": {  };
+  "queryArguments.useDefault": {  };
+  "queryArguments.defaultValue": { p0: string };
+  "queryArguments.apply": {  };
+  "queryArguments.changed": {  };
+  "queryArguments.applied": {  };
   "queryAdvanced.planHelp": {  };
   "queryAdvanced.loadCurrentPlan": {  };
   "queryAdvanced.planField": {  };
@@ -21585,6 +21605,20 @@ export const messageParamTypes = {
   "queryAdvanced.disclosure": {},
   "queryAdvanced.planLabel": {},
   "queryAdvanced.parametersLabel": {},
+  "queryArguments.title": {},
+  "queryArguments.noDeclarations": {},
+  "queryArguments.modeLabel": {
+    "p0": "text"
+  },
+  "queryArguments.chooseValue": {},
+  "queryArguments.enterValue": {},
+  "queryArguments.useDefault": {},
+  "queryArguments.defaultValue": {
+    "p0": "text"
+  },
+  "queryArguments.apply": {},
+  "queryArguments.changed": {},
+  "queryArguments.applied": {},
   "queryAdvanced.planHelp": {},
   "queryAdvanced.loadCurrentPlan": {},
   "queryAdvanced.planField": {},
@@ -33640,6 +33674,16 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryAdvanced.disclosure": "Advanced Query · complete plan and parameters",
   "queryAdvanced.planLabel": "Complete Query plan JSON",
   "queryAdvanced.parametersLabel": "Native parameter JSON for this invocation",
+  "queryArguments.title": "Enter typed arguments",
+  "queryArguments.noDeclarations": "The current plan declares no parameters.",
+  "queryArguments.modeLabel": "Argument source for {p0}",
+  "queryArguments.chooseValue": "Choose an argument source",
+  "queryArguments.enterValue": "Enter a value",
+  "queryArguments.useDefault": "Use the default",
+  "queryArguments.defaultValue": "Default value is {p0}",
+  "queryArguments.apply": "Use these arguments",
+  "queryArguments.changed": "The plan, schema or argument draft changed. Reopen the form to load the current values.",
+  "queryArguments.applied": "Arguments updated. You can run the query.",
   "queryAdvanced.planHelp": "CEL conditions, projection and ordering use the same compiler. Advanced sources are in advanced; parameters are input for this invocation, not another copy of note content.",
   "queryAdvanced.loadCurrentPlan": "Load current actual plan (replace this editor's contents)",
   "queryAdvanced.planField": "Complete plan",

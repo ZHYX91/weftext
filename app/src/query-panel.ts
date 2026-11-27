@@ -20,6 +20,7 @@ import { tagCancellationStatus, tagOperationStatus } from "./tag-navigation-stat
 import { QueryRefreshQueue, queryRefreshKey } from "./query-refresh";
 import { updateQueryChoices, type QueryChoice } from "./query-control-state";
 import { parseQueryPlan, parseQueryParameters, type QueryPlan } from "./query-plan";
+import { queryArgumentControls } from "./query-argument-controls";
 interface PeriodLookup {
     period: NativeValue;
     bounds: NativeValue;
@@ -1839,6 +1840,9 @@ export class QueryPanel {
         const feedback = ui("p", "data-help", message("queryAdvanced.planHelp"));
         feedback.setAttribute("aria-live", "polite");
         section.append(this.action(message("queryAdvanced.loadCurrentPlan"), () => { this.draftFlags.delete("advanced"); this.advancedDraft = JSON.stringify(this.getPlan(), null, 2); planInput.value = this.advancedDraft; planInitialized = true; }), labeled(message("queryAdvanced.planField"), planInput), labeled(message("queryAdvanced.parametersField"), parameterInput));
+        section.append(queryArgumentControls(parameterInput,
+            () => this.savedSelection ? this.savedPlan : parseQueryPlan(planInput.value),
+            () => this.schema, () => this.tagReferences, () => !this.closeGuard.frozen));
         section.append(this.action(message("queryAdvanced.runPlan"), async () => {
             try {
                 const plan = parseQueryPlan(planInput.value);

@@ -6,6 +6,7 @@ import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, 
 import { applySourcePatches, sourceBoundary, type SourcePatch } from "./editor";
 import { diagnosticText, fieldNames, formatNativeValue, type Cell, type DataSchema } from "./data-panel";
 import { queryPlanControls, queryCallControls } from "./query-plan-controls";
+import { queryArgumentControls } from "./query-argument-controls";
 import { initialOccurrenceView, decodeOccurrenceView, occurrenceViewControls, occurrenceProjection, renderOccurrenceCards, type OccurrenceView } from "./query-result-view";
 import { queryResultState, queryRowLifecycle, type QueryResult, type QueryRow } from "./query-panel";
 import { parseQueryParameters, parseQueryPlan, type QueryPlan } from "./query-plan";
@@ -534,7 +535,8 @@ export class EmbeddedQueryController {
                 }
                 this.refreshResult(item);
             };
-            parameters.append(input, element("p", "embedded-query-help", message("embeddedQuery.previewParametersHelp")));
+            parameters.append(input, queryArgumentControls(input, () => item.plan ?? null, () => this.formSchema),
+                element("p", "embedded-query-help", message("embeddedQuery.previewParametersHelp")));
             mount.append(parameters);
         }
         mount.append(element("div", "embedded-query-results"));

@@ -3329,6 +3329,16 @@
       "en-US": "Native parameter JSON for this invocation",
       "params": {}
     },
+    "queryArguments.title": { "zh-CN": "按类型填写实参", "en-US": "Enter typed arguments", "params": {} },
+    "queryArguments.noDeclarations": { "zh-CN": "当前计划未声明参数。", "en-US": "The current plan declares no parameters.", "params": {} },
+    "queryArguments.modeLabel": { "zh-CN": "{p0} 的实参来源", "en-US": "Argument source for {p0}", "params": { "p0": "text" } },
+    "queryArguments.chooseValue": { "zh-CN": "请选择实参来源", "en-US": "Choose an argument source", "params": {} },
+    "queryArguments.enterValue": { "zh-CN": "填写值", "en-US": "Enter a value", "params": {} },
+    "queryArguments.useDefault": { "zh-CN": "使用默认值", "en-US": "Use the default", "params": {} },
+    "queryArguments.defaultValue": { "zh-CN": "默认值为 {p0}", "en-US": "Default value is {p0}", "params": { "p0": "text" } },
+    "queryArguments.apply": { "zh-CN": "采用这些实参", "en-US": "Use these arguments", "params": {} },
+    "queryArguments.changed": { "zh-CN": "查询计划、架构或实参草稿已变化。重新展开表单以读取当前内容。", "en-US": "The plan, schema or argument draft changed. Reopen the form to load the current values.", "params": {} },
+    "queryArguments.applied": { "zh-CN": "实参已更新，可以运行查询。", "en-US": "Arguments updated. You can run the query.", "params": {} },
     "queryAdvanced.planHelp": {
       "zh-CN": "CEL 条件、投影和排序使用同一编译器。高级来源在 advanced 中；参数是本次输入，不成为另一份笔记内容。",
       "en-US": "CEL conditions, projection and ordering use the same compiler. Advanced sources are in advanced; parameters are input for this invocation, not another copy of note content.",

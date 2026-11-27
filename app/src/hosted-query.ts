@@ -3,6 +3,7 @@ import { displayMessage } from "./ui-locale";
 import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { action, diagnosticText, formatNativeValue, ui, fieldNames, type Cell, type DataSchema } from "./data-panel";
 import { queryPlanControls } from "./query-plan-controls";
+import { queryArgumentControls } from "./query-argument-controls";
 import { initialOccurrenceView, occurrenceViewControls, renderOccurrenceCards } from "./query-result-view";
 import { directQueryField, queryResultState } from "./query-panel";
 import { parseQueryJson, parseQueryParameters, parseQueryPlan, type QueryPlan } from "./query-plan";
@@ -420,7 +421,8 @@ export class HostedQuery {
         const plan = input("plan", message("hostedQuery.planLabel"), draft.plan, true), parameters = input("parameters", message("hostedQuery.parametersLabel"), draft.parameters, true);
         plan.control.oninput = () => { draft.plan = plan.control.value; this.changed(); this.renderScopes(); };
         parameters.control.oninput = () => { draft.parameters = parameters.control.value; this.changed(); };
-        this.controls.append(plan.host, parameters.host);
+        this.controls.append(plan.host, parameters.host, queryArgumentControls(parameters.control,
+            () => parseQueryPlan(draft.plan), () => this.catalog.formSchema ?? null));
         this.renderScopes();
         this.controls.append(this.scopeControls);
         const visual = ui("details");

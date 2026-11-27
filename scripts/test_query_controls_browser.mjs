@@ -12,7 +12,7 @@ assert.ok(path.isAbsolute(process.argv[2]), 'Output must be absolute');
 const repo = path.resolve(import.meta.dirname, '..'), out = path.resolve(process.argv[2]);
 assert.ok(path.relative(repo, out).startsWith('..' + path.sep), 'Keep private evidence outside the product repository');
 await mkdir(out, { recursive: false });
-const inputs = ['app/src/query-panel.ts', 'app/src/query-predicate.ts', 'app/src/query-plan-controls.ts', 'app/src/query-refresh.ts', 'app/src/query-control-state.ts', 'app/src/tag-tree.ts', 'app/src/query-result.test-support.ts', 'app/src/ui-locale.ts', 'app/src/ui-messages.ts', 'app/package.json', 'app/package-lock.json', 'scripts/test_query_controls_browser.mjs'];
+const inputs = ['app/src/query-panel.ts', 'app/src/query-predicate.ts', 'app/src/query-plan-controls.ts', 'app/src/query-argument-controls.ts', 'app/src/query-plan.ts', 'app/src/native-value-form.ts', 'app/src/query-refresh.ts', 'app/src/query-control-state.ts', 'app/src/tag-tree.ts', 'app/src/query-result.test-support.ts', 'app/src/ui-locale.ts', 'app/src/ui-messages.ts', 'app/package.json', 'app/package-lock.json', 'scripts/test_query_controls_browser.mjs'];
 const inventory = async () => Promise.all(inputs.map(async name => { const bytes = await readFile(path.join(repo, name)); return { path: name, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }; }));
 const result = { startedUtc: new Date().toISOString(), frontend: 'current Vite source, isolated QueryPanel component', developmentOnly: true,
   limits: ['Bounded host returns schema, registry and a strict local Query result; no Core query evaluation or persisted author operation.', 'No native desktop, OS IME, assistive technology, performance or whole-product acceptance.'],
@@ -156,6 +156,47 @@ try {
     assert.equal(actual.draft, 'title.startsWith("draft")');
     assert.equal(actual.combined, '(' + actual.bound + ') && (isInvalid(field("price")))');
     assert.ok(actual.operandAbsent);
+  });
+  await check('typed argument controls preserve exact values, default omission and an independently edited draft', async () => {
+    await page.evaluate(async () => {
+      window.fixture.locale.set('zh-CN');
+      const { queryArgumentControls } = await import('/src/query-argument-controls.ts');
+      const plan = { parameters: [
+        { name: 'amount', shape: { kind: 'scalar', semantic: 'decimal' } },
+        { name: 'start', shape: { kind: 'scalar', semantic: 'date' }, nullable: true,
+          default: { kind: 'date', value: '2026-11-28' } },
+      ] };
+      const draft = document.createElement('textarea');
+      draft.value = '{}';
+      const form = queryArgumentControls(draft, () => plan, () => null);
+      const host = document.createElement('div');
+      host.id = 'typed-arguments-fixture';
+      host.append(draft, form);
+      document.body.append(host);
+    });
+    const form = page.locator('#typed-arguments-fixture');
+    const draft = form.locator(':scope > textarea');
+    await form.locator('summary').click();
+    await form.locator('fieldset, [role="status"]:not(:empty)').first().waitFor();
+    assert.equal(await form.getByRole('status').innerText(), '');
+    const apply = form.getByRole('button', { name: '采用这些实参' });
+    const amountMode = form.getByRole('combobox', { name: 'amount 的实参来源' });
+    const startMode = form.getByRole('combobox', { name: 'start 的实参来源' });
+    await apply.click();
+    assert.equal(await draft.inputValue(), '{}');
+    await amountMode.selectOption('value');
+    await form.getByRole('textbox', { name: 'amount', exact: true }).fill('9007199254740993.01');
+    await apply.click();
+    const amount = { kind: 'decimal', value: '9007199254740993.01' };
+    assert.deepEqual(JSON.parse(await draft.inputValue()), { amount });
+    await startMode.selectOption('null');
+    await apply.click();
+    assert.deepEqual(JSON.parse(await draft.inputValue()), { amount, start: { kind: 'none' } });
+    await draft.fill('{"amount":{"kind":"decimal","value":"3.20"}}');
+    await apply.click();
+    assert.match(await form.getByRole('status').innerText(), /已变化/);
+    assert.equal(JSON.parse(await draft.inputValue()).amount.value, '3.20');
+    await form.evaluate(element => element.remove());
   });
   result.requests = await page.evaluate(() => window.fixture.calls);
   result.notifications = await page.evaluate(() => window.fixture.notifications);
