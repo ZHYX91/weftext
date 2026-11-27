@@ -375,11 +375,19 @@ export async function openLibraryStylePanel(host: LibraryStyleHost, controller =
     };
     reset.onclick = () => {
         try {
+            const restoreFocus = document.activeElement === reset;
+            const editingSource = advanced.open && controller.advanced;
             controller.resetDraft();
             drawState();
             clearPreview();
             status.classList.remove("style-error");
             setUiText(status, uiMessage("stylePanel.readStyleRestoredDiskUnchanged"));
+            // Restore becomes disabled after a successful reset. Continue in
+            // the relevant editor rather than dropping keyboard focus.
+            if (restoreFocus) {
+                const next = editingSource ? source : inputs.find(item => !item.input.disabled)?.input ?? enabled;
+                next.focus();
+            }
         }
         catch (error) {
             showError(error);
