@@ -75,8 +75,8 @@ class HostedQuery(HostedFields):
     def test_query_parameters_union_distinct_and_static_denial(self):
         self.prepare_query()
         base = {'select': [self.column()], 'where': 'status == wanted',
-                'advanced': {'parameters': [{'name': 'wanted',
-                    'shape': {'kind': 'scalar', 'semantic': 'text'}}]}}
+                'parameters': [{'name': 'wanted',
+                    'shape': {'kind': 'scalar', 'semantic': 'text'}}]}
         result = self.query(base, parameters={'wanted': {'kind': 'text', 'value': 'open'}})
         self.assertEqual([row['entityKey'] for row in result['result']['rows']], ['Shared'])
         self.assertEqual(result['columns'], ['status'])
@@ -205,9 +205,9 @@ class HostedQuery(HostedFields):
         self.policy(lambda users: [users['fields']['grants'][name]['fields'].update(
             {'people/parents': {'read': True}}) for name in ['Shared', 'Other']])
         self.grant_query(products=['self', 'types'], relations=[relation])
-        seed = {'where': 'self == origin', 'advanced': {'parameters': [{
+        seed = {'where': 'self == origin', 'parameters': [{
             'name': 'origin', 'shape': {'kind': 'scalar', 'semantic': 'node_ref'},
-            'default': {'kind': 'text', 'value': refs['Shared']}}]}}
+            'default': {'kind': 'text', 'value': refs['Shared']}}]}
         plan = {'select': [self.column('self', 'self')], 'advanced': {'related': {
             'relation': relation, 'from': seed, 'direction': 'forward'}}}
         request = dict(fields=['people/parents'], products=['self', 'types'], relations=[relation])
@@ -216,7 +216,7 @@ class HostedQuery(HostedFields):
         self.assertEqual(forward['rows'][0]['cells']['self']['value']['value'], refs['Other'])
         inverse = copy.deepcopy(plan)
         inverse['advanced']['related']['direction'] = 'inverse'
-        inverse['advanced']['related']['from']['advanced']['parameters'][0]['default']['value'] = refs['Other']
+        inverse['advanced']['related']['from']['parameters'][0]['default']['value'] = refs['Other']
         self.assertEqual([row['entityKey'] for row in self.query(inverse, **request)['result']['rows']], ['Shared'])
         self.policy(lambda users: users['fields']['grants']['Shared']['query'].update(relations=[]))
         self.query(plan, resources=['Shared', 'Other'], status=404, **request)
@@ -494,8 +494,8 @@ class HostedQuery(HostedFields):
         doc = self.open()
         original = (self.root / 'Shared/Shared.typ').read_bytes()
         plan = {'where': f'false && tagInSubtree(tagRef("{root}"), tagRef("{missing}"))',
-                'select': [self.column('true', 'value')], 'advanced': {'parameters': [
-                    {'name': 'root', 'shape': {'kind': 'scalar', 'semantic': 'tag_ref'}}]}}
+                'select': [self.column('true', 'value')], 'parameters': [
+                    {'name': 'root', 'shape': {'kind': 'scalar', 'semantic': 'tag_ref'}}]}
         request = dict(resource='Shared', sessionId=doc['sessionId'], baseId=doc['baseId'],
                        source=doc['source'], sourceHash=digest(doc['source']), serial=1,
                        operationId=uid(), label='weftext-query-tree', plan=plan)

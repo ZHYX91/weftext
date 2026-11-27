@@ -594,7 +594,7 @@ async function insertEverydayQuery(): Promise<void> {
                     const nativeName = nameValue.trim().replace(/\s+/g, "-");
                     if (!/^[\p{L}\p{N}_.:-]+$/u.test(nativeName))
                         throw new UiError(uiMessage("shell.queryNameCharacters"));
-                    let plan: import("./query-panel").QueryPlan = { scope: { descendants: true, lifecycle: "live" }, types: [], ...(conditionValue ? { where: conditionValue } : {}), select: [{ name: "title", expr: "title" }], order: [], take: 100 };
+                    let plan: import("./query-plan").QueryPlan = { scope: { descendants: true, lifecycle: "live" }, types: [], ...(conditionValue ? { where: conditionValue } : {}), select: [{ name: "title", expr: "title" }], order: [], take: 100 };
                     if (kind.value === "call") {
                         if (loadedOwner !== owners.value || !definitions.value || mode.value === "pinned" && !revision.value)
                             throw new UiError(uiMessage("shell.querySelectExactDefinitionVersion"));

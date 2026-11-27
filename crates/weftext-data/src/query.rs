@@ -131,6 +131,8 @@ pub struct QueryGroup {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QueryPlan {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parameters: Vec<QueryParameter>,
     #[serde(default)]
     pub scope: QueryScope,
     #[serde(default)]
@@ -3558,8 +3560,19 @@ pub fn saved_queries(source: &str) -> Result<Vec<SavedQuery>> {
             )
         })?;
         let allowed = [
-            "kind", "key", "binding", "scope", "types", "where", "select", "order", "take",
-            "group", "unnest", "advanced",
+            "kind",
+            "key",
+            "binding",
+            "scope",
+            "types",
+            "where",
+            "select",
+            "order",
+            "take",
+            "group",
+            "unnest",
+            "advanced",
+            "parameters",
         ];
         if record.iter().any(|m| !allowed.contains(&m.key.as_str())) {
             return Err(DataError::new(

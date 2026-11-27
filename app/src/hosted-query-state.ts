@@ -2,7 +2,7 @@ import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import type { QueryResult, QueryRow } from "./query-panel";
 import { decodeHostedQueryResponse } from "./query-result";
-import { parseQueryJson, parseQueryPlan, type QueryPlan } from "./query-panel";
+import { parseQueryJson, parseQueryPlan, type QueryPlan } from "./query-plan";
 export type HostedQueryRow = QueryRow & {
     resource?: string;
     canOpen?: boolean;

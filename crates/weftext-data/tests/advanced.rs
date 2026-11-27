@@ -23,17 +23,14 @@ fn projected_schema_parameters_validate_the_declared_shape_without_reinstallatio
     let plan = QueryPlan {
         r#where: Some("status == wanted".into()),
         select: vec![column("status", "status")],
-        advanced: Some(QueryAdvanced {
-            parameters: vec![QueryParameter {
-                name: "wanted".into(),
-                shape: Shape::Scalar {
-                    semantic: "text".into(),
-                },
-                nullable: false,
-                default: None,
-            }],
-            ..Default::default()
-        }),
+        parameters: vec![QueryParameter {
+            name: "wanted".into(),
+            shape: Shape::Scalar {
+                semantic: "text".into(),
+            },
+            nullable: false,
+            default: None,
+        }],
         ..Default::default()
     };
     let mut frozen = input(vec![FrozenNote {
@@ -71,7 +68,7 @@ fn projected_schema_parameters_validate_the_declared_shape_without_reinstallatio
     frozen.advanced.as_mut().unwrap().parameters.clear();
     assert!(execute_query(&frozen, &plan, &schema).is_err());
     let mut unknown = plan;
-    unknown.advanced.as_mut().unwrap().parameters[0].shape = Shape::Use {
+    unknown.parameters[0].shape = Shape::Use {
         name: "unregistered_shape".into(),
     };
     assert!(
@@ -279,17 +276,14 @@ fn related_consumes_authorized_field_cells_and_control_types_without_parsing_a_b
     let seed = QueryPlan {
         r#where: Some("self == origin".into()),
         select: vec![column("self", "self")],
-        advanced: Some(QueryAdvanced {
-            parameters: vec![QueryParameter {
-                name: "origin".into(),
-                shape: Shape::Scalar {
-                    semantic: "node_ref".into(),
-                },
-                nullable: false,
-                default: Some(NativeValue::Text(reference(A))),
-            }],
-            ..Default::default()
-        }),
+        parameters: vec![QueryParameter {
+            name: "origin".into(),
+            shape: Shape::Scalar {
+                semantic: "node_ref".into(),
+            },
+            nullable: false,
+            default: Some(NativeValue::Text(reference(A))),
+        }],
         ..Default::default()
     };
     let mut plan = QueryPlan {
@@ -320,8 +314,7 @@ fn related_consumes_authorized_field_cells_and_control_types_without_parsing_a_b
     );
     let related = plan.advanced.as_mut().unwrap().related.as_mut().unwrap();
     related.direction = "inverse".into();
-    related.from.advanced.as_mut().unwrap().parameters[0].default =
-        Some(NativeValue::Text(reference(B)));
+    related.from.parameters[0].default = Some(NativeValue::Text(reference(B)));
     let inverse =
         execute_authorized_query(&frozen, &plan, &schema, &QueryBudget::default(), &metadata)
             .unwrap();
@@ -551,17 +544,14 @@ fn related_forward_inverse_and_partial_do_not_guess_literal_targets() {
         r#where: Some("self == origin".into()),
         ..Default::default()
     };
-    seed.advanced = Some(QueryAdvanced {
-        parameters: vec![QueryParameter {
-            name: "origin".into(),
-            shape: Shape::Scalar {
-                semantic: "node_ref".into(),
-            },
-            nullable: false,
-            default: Some(NativeValue::Text(reference(A))),
-        }],
-        ..Default::default()
-    });
+    seed.parameters = vec![QueryParameter {
+        name: "origin".into(),
+        shape: Shape::Scalar {
+            semantic: "node_ref".into(),
+        },
+        nullable: false,
+        default: Some(NativeValue::Text(reference(A))),
+    }];
     let mut plan = QueryPlan {
         select: vec![column("self", "self")],
         advanced: Some(QueryAdvanced {
@@ -579,8 +569,7 @@ fn related_forward_inverse_and_partial_do_not_guess_literal_targets() {
     assert_eq!(result.rows[0].entity_key, Some(reference(B)));
     let related = plan.advanced.as_mut().unwrap().related.as_mut().unwrap();
     related.direction = "inverse".into();
-    related.from.advanced.as_mut().unwrap().parameters[0].default =
-        Some(NativeValue::Text(reference(B)));
+    related.from.parameters[0].default = Some(NativeValue::Text(reference(B)));
     let result = execute_query(&input, &plan, &Schema::bundled().unwrap()).unwrap();
     assert_eq!(result.rows.len(), 1);
     assert_eq!(result.rows[0].entity_key, Some(reference(A)));
@@ -592,7 +581,7 @@ fn related_forward_inverse_and_partial_do_not_guess_literal_targets() {
 }
 fn saved_source(default: &str, extra: &str) -> String {
     format!(
-        "#metadata((kind: \"weftext.query\", key: \"{KEY}\", binding: (schema: \"weftext-config://{WS}/schema\", revision: \"{REV}\", language: \"weftext.query.cel.v1\"), select: ((name: \"n\", expr: \"threshold\"),), advanced: (parameters: ((name: \"threshold\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false, default: {default}),), {extra}))) <weftext-query-count>"
+        "#metadata((kind: \"weftext.query\", key: \"{KEY}\", binding: (schema: \"weftext-config://{WS}/schema\", revision: \"{REV}\", language: \"weftext.query.cel.v1\"), select: ((name: \"n\", expr: \"threshold\"),), parameters: ((name: \"threshold\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false, default: {default}),), {extra})) <weftext-query-count>"
     )
 }
 fn saved_input(source: String) -> FrozenQueryInput {
@@ -722,7 +711,7 @@ fn recursive_saved_calls_reject_before_any_row_execution() {
     let source = saved_source(
         "2",
         &format!(
-            "call: (owner: \"{}\", selection: (mode: \"current\", key: \"{KEY}\")),",
+            "advanced: (call: (owner: \"{}\", selection: (mode: \"current\", key: \"{KEY}\"))),",
             reference(A)
         ),
     );
@@ -739,17 +728,14 @@ fn recursive_saved_calls_reject_before_any_row_execution() {
 fn native_writer_keeps_domain_defaults_without_transport_literal_records() {
     let schema = Schema::bundled().unwrap();
     let mut plan = project("d");
-    plan.advanced = Some(QueryAdvanced {
-        parameters: vec![QueryParameter {
-            name: "d".into(),
-            shape: Shape::Scalar {
-                semantic: "decimal".into(),
-            },
-            nullable: false,
-            default: Some(NativeValue::Decimal("0.30".into())),
-        }],
-        ..Default::default()
-    });
+    plan.parameters = vec![QueryParameter {
+        name: "d".into(),
+        shape: Shape::Scalar {
+            semantic: "decimal".into(),
+        },
+        nullable: false,
+        default: Some(NativeValue::Decimal("0.30".into())),
+    }];
     let binding = SavedQueryBinding {
         schema: format!("weftext-config://{WS}/schema"),
         revision: REV.into(),
@@ -773,7 +759,7 @@ fn native_writer_keeps_domain_defaults_without_transport_literal_records() {
     assert!(!patch.source.contains("kind: \"decimal\""));
     let parsed = saved_queries(&patch.source).unwrap();
     assert_eq!(
-        parsed[0].plan.advanced.as_ref().unwrap().parameters[0].default,
+        parsed[0].plan.parameters[0].default,
         Some(NativeValue::Decimal("0.30".into()))
     );
 }
@@ -916,17 +902,14 @@ fn terminal_union_distinct_order_take_and_host_budget_are_bounded() {
 #[test]
 fn parameters_missing_default_and_explicit_null_are_distinct_and_products_follow_callees() {
     let mut plan = project("p");
-    plan.advanced = Some(QueryAdvanced {
-        parameters: vec![QueryParameter {
-            name: "p".into(),
-            shape: Shape::Scalar {
-                semantic: "int".into(),
-            },
-            nullable: true,
-            default: Some(NativeValue::Int("2".into())),
-        }],
-        ..Default::default()
-    });
+    plan.parameters = vec![QueryParameter {
+        name: "p".into(),
+        shape: Shape::Scalar {
+            semantic: "int".into(),
+        },
+        nullable: true,
+        default: Some(NativeValue::Int("2".into())),
+    }];
     let mut frozen = input(vec![note(A, "task", ", status: \"open\"")]);
     assert_eq!(
         execute_query(&frozen, &plan, &Schema::bundled().unwrap())
@@ -947,7 +930,7 @@ fn parameters_missing_default_and_explicit_null_are_distinct_and_products_follow
             .cells["value"],
         Cell::Null
     ));
-    plan.advanced.as_mut().unwrap().parameters[0].default = None;
+    plan.parameters[0].default = None;
     frozen.advanced = None;
     assert_data_error(
         &execute_query(&frozen, &plan, &Schema::bundled().unwrap()).unwrap_err(),
@@ -1465,5 +1448,46 @@ fn row_lifecycle_follows_actual_leaf_lineage_and_disappears_for_distinct_groups(
             .rows
             .iter()
             .all(|r| r.entity_key.is_none() && r.lifecycle.is_none() && r.read_only)
+    );
+}
+
+#[test]
+fn declared_defaults_use_native_values_and_follow_nested_plan_positions() {
+    let declaration = serde_json::json!({"name":"amount", "shape":{"kind":"scalar","semantic":"decimal"},
+        "default":{"kind":"decimal","value":"0.30"}});
+    let nested = serde_json::json!({"parameters":[declaration.clone()], "select":[{"name":"value","expr":"amount"}]});
+    let plan: QueryPlan =
+        serde_json::from_value(serde_json::json!({"advanced":{"unionAll":[nested]}})).unwrap();
+    let schema = Schema::bundled().unwrap();
+    let binding = SavedQueryBinding {
+        schema: format!("weftext-config://{WS}/schema"),
+        revision: REV.into(),
+        language: "weftext.query.cel.v1".into(),
+    };
+    let patch = upsert_saved_query(
+        &note(A, "task", "").source,
+        None,
+        KEY,
+        "weftext-query-nested",
+        &binding,
+        &plan,
+        &schema,
+    )
+    .unwrap();
+    let decoded = saved_queries(&patch.source).unwrap().remove(0);
+    assert_eq!(
+        serde_json::to_value(decoded.plan).unwrap(),
+        serde_json::to_value(plan).unwrap()
+    );
+    assert!(
+        serde_json::from_value::<QueryPlan>(
+            serde_json::json!({"advanced":{"parameters":[declaration.clone()]}})
+        )
+        .is_err()
+    );
+    let mut invalid = declaration;
+    invalid["default"] = serde_json::Value::Null;
+    assert!(
+        serde_json::from_value::<QueryPlan>(serde_json::json!({"parameters":[invalid]})).is_err()
     );
 }

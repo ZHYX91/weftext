@@ -4,7 +4,8 @@ import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, 
 import { action, diagnosticText, formatNativeValue, ui, fieldNames, type Cell, type DataSchema } from "./data-panel";
 import { queryPlanControls } from "./query-plan-controls";
 import { initialOccurrenceView, occurrenceViewControls, renderOccurrenceCards } from "./query-result-view";
-import { directQueryField, parseQueryJson, parseQueryParameters, parseQueryPlan, queryResultState, type QueryPlan } from "./query-panel";
+import { directQueryField, queryResultState } from "./query-panel";
+import { parseQueryJson, parseQueryParameters, parseQueryPlan, type QueryPlan } from "./query-plan";
 import { applyHostedScope, decodeHostedQuery, exactHostedDependencies, exactHostedScope, hostedDependencyMap, hostedScopeDraft, HostedQueryGate, type HostedProviderDescriptor, type HostedQueryDependencies, type HostedQueryResponse, type HostedQueryResult, type HostedQueryRow, type HostedSeriesPolicyDescriptor, type HostedScopeCatalog } from "./hosted-query-state";
 import { hostedCachePrefix } from "./hosted-state";
 import { HostedQueryDefinitions, type HostedDefinitionHost } from "./hosted-query-definitions";
@@ -462,8 +463,10 @@ export class HostedQuery {
                 else if (combination.value === "distinct")
                     advanced.distinct = structuredClone(current.select);
                 else if (combination.value === "parameters") {
-                    advanced.parameters = [{ name: "wanted", shape: { kind: "scalar", semantic: "text" }, default: { kind: "text", value: "open" } }];
+                    current.parameters = [{ name: "wanted", shape: { kind: "scalar", semantic: "text" }, default: { kind: "text", value: "open" } }];
                     current.where = `(${current.where || "true"}) && status == wanted`;
+                    this.writePlan(current);
+                    return;
                 }
                 else {
                     const relation = draft.relations[0];

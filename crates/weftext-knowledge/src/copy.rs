@@ -475,22 +475,15 @@ fn saved_query_slots(
                 kind: "node_ref".into(),
             });
         }
-        let Some(advanced) = &plan.advanced else {
-            return Ok(());
-        };
-        let fields = members(member(&fields, "advanced")?)?;
-        if let Some(distinct) = &advanced.distinct {
-            columns(member(&fields, "distinct")?, distinct, parsed, source, out)?;
-        }
-        if !advanced.parameters.is_empty() {
+        if !plan.parameters.is_empty() {
             let parameters = array(member(&fields, "parameters")?)?;
-            if parameters.len() != advanced.parameters.len() {
+            if parameters.len() != plan.parameters.len() {
                 return Err(KnowledgeError::new(
                     "definitionReferenceSlot",
                     weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_query_parameters_plan_mismatch()),
                 ));
             }
-            for (expr, parameter) in parameters.into_iter().zip(&advanced.parameters) {
+            for (expr, parameter) in parameters.into_iter().zip(&plan.parameters) {
                 if let (Some(schema), Some(value)) = (schema, &parameter.default) {
                     defaults(
                         &parameter.shape,
@@ -506,6 +499,13 @@ fn saved_query_slots(
                     )?;
                 }
             }
+        }
+        let Some(advanced) = &plan.advanced else {
+            return Ok(());
+        };
+        let fields = members(member(&fields, "advanced")?)?;
+        if let Some(distinct) = &advanced.distinct {
+            columns(member(&fields, "distinct")?, distinct, parsed, source, out)?;
         }
         if let Some(call) = &advanced.call {
             let controls = members(member(&fields, "call")?)?;

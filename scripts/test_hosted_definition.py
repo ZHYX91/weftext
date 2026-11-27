@@ -264,7 +264,7 @@ class HostedDefinition(HostedQuery):
         self.provision()
         doc = self.open()
         parameterized = {'where': 'status == wanted', 'select': [self.column()],
-                         'advanced': {'parameters': [{'name': 'wanted', 'shape': {'kind': 'scalar', 'semantic': 'text'}}]}}
+                         'parameters': [{'name': 'wanted', 'shape': {'kind': 'scalar', 'semantic': 'text'}}]}
         prepared, proposal = self.proposal(doc, plan=parameterized)
         self.definition_save(doc, prepared['source'], [proposal['operationId']])
         call = {'advanced': {'call': {'owner': 'Shared', 'selection': {'mode': 'current', 'key': prepared['definition']['key']},
