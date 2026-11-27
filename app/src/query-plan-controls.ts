@@ -4,32 +4,29 @@ import type { AuthorInputSession } from "./author-input";
 import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 /** Visible controls edit the existing native QueryPlan; unknown CEL stays intact. */
 import { action, fieldNames, resolveShape, typeNames, ui, valueEditor, emptyNativeValue, type DataSchema, type NativeValue, type Shape, type FormReferences } from "./data-panel";
-import { shapedQueryLiteral, type QueryPlan } from "./query-panel";
+import type { QueryPlan } from "./query-panel";
+import { filterOperandShape, filterOperators, queryPredicate } from "./query-predicate";
+import { updateQueryChoices } from "./query-control-state";
 export interface PlanField {
     key: string;
     expr: string;
     label: UiText;
-    shape: Shape;
+    shape?: Shape;
+    fieldId?: string;
 }
 export function queryPlanFields(schema: DataSchema | null, plan: QueryPlan): PlanField[] {
     const fields: PlanField[] = [{ key: "title", expr: "title", label: message("queryColumn.title"), shape: { kind: "scalar", semantic: "text" } }];
     for (const field of schema?.fields ?? [])
-        fields.push({ key: field.key, expr: `field(${JSON.stringify(field.id)})`, label: fieldNames[field.key] ?? field.key, shape: field.shape });
+        fields.push({ key: field.key, expr: `field(${JSON.stringify(field.id)})`, fieldId: field.id, label: fieldNames[field.key] ?? field.key, shape: field.shape });
     for (const column of plan.select)
         if (!fields.some(field => field.expr === column.expr))
-            fields.push({ key: column.name, expr: column.expr, label: fieldNames[column.name] ?? column.name, shape: { kind: "scalar", semantic: "text" } });
+            fields.push({ key: column.name, expr: column.expr, label: fieldNames[column.name] ?? column.name });
     return fields;
 }
 export function addPlanFilter(plan: QueryPlan, field: PlanField, op: string, value: NativeValue, schema: DataSchema): QueryPlan {
-    const expr = field.expr;
-    if (!["==", "!=", "<", "<=", ">", ">=", "contains", "absent", "null"].includes(op))
-        throw new UiError(message("queryValidation.unsupportedOperator"));
-    const condition = op === "absent" ? `isAbsent(${expr})` : op === "null" ? `isNull(${expr})` : op === "contains" ? (() => {
-        if (value.kind !== "text")
-            throw new UiError(message("queryValidation.containsTextValueRequired"));
-        return `${expr}.contains(${JSON.stringify(value.value)})`;
-    })() : `${expr} ${op} ${shapedQueryLiteral(field.shape, schema, value)}`;
-    return { ...structuredClone(plan), where: plan.where?.trim() ? `(${plan.where}) && (${condition})` : condition };
+    if (!field.shape) throw new UiError(message("queryValidation.unsupportedOperator"));
+    const condition = queryPredicate(field.expr, field.shape, schema, !!field.fieldId, op, value);
+    return { ...plan, where: plan.where?.trim() ? `(${plan.where}) && (${condition})` : condition };
 }
 const emptySchema = (): DataSchema => ({ definitions: {}, fields: [], types: [], aliases: {} });
 function select(label: UiText, options: [
@@ -58,7 +55,7 @@ export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, ch
             setUiText(error, "");
         }
         catch (e) {
-            setUiText(error, String(e instanceof Error ? errorUiText(e) : e));
+            setUiText(error, e instanceof Error ? errorUiText(e) : String(e));
         }
     };
     if (schema?.types.length) {
@@ -80,7 +77,12 @@ export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, ch
         host.append(types);
     }
     const chips = ui("div", "query-condition-chips"), filterHost = ui("section");
+    const expression = ui("textarea", "data-input");
+    let syncedExpression = plan.where ?? "";
+    expression.value = syncedExpression;
     const drawConditions = () => {
+        if (expression.value === syncedExpression) expression.value = plan.where ?? "";
+        syncedExpression = plan.where ?? "";
         chips.replaceChildren();
         if (plan.where)
             chips.append(ui("code", "", plan.where), action(message("queryPlan.removeCondition"), () => { delete plan.where; changed(); drawConditions(); }));
@@ -88,39 +90,41 @@ export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, ch
             chips.append(ui("p", "data-help", message("queryPlan.noCondition")));
     };
     drawConditions();
-    const field = select(message("queryPlan.filterFieldLabel"), fields.map((field, i) => [String(i), field.label]), "0"), operator = select(message("queryPlan.filterOperatorLabel"), [["==", message("queryOperator.equals")], ["!=", message("queryOperator.notEquals")], ["<", message("queryOperator.lessThan")], ["<=", "≤"], [">", message("queryOperator.greaterThan")], [">=", "≥"], ["contains", message("queryOperator.containsText")], ["absent", message("queryValue.absent")], ["null", message("queryValue.explicitNull")]], "=="), valueHost = ui("div");
-    let value: NativeValue = { kind: "text", value: "" };
+    const filterFields = fields.filter((entry): entry is PlanField & { shape: Shape } => !!entry.shape);
+    const field = select(message("queryPlan.filterFieldLabel"), filterFields.map((entry, i) => [String(i), entry.label]), "0");
+    const operator = select(message("queryPlan.filterOperatorLabel"), [], ""), valueHost = ui("div");
+    let value: NativeValue = { kind: "none" };
     const drawValue = () => safely(() => {
-        const shape = resolveShape(fields[Number(field.value)].shape, actualSchema);
-        if (!["scalar", "enum", "union"].includes(shape.kind)) {
-            valueHost.replaceChildren(ui("p", "data-help", message("queryPlan.nestedFilterHelp")));
-            return;
-        }
-        value = emptyNativeValue(shape, actualSchema);
-        valueHost.replaceChildren(valueEditor(shape, value, actualSchema, next => { value = next; }, message("queryPlan.filterValueLabel"), { parameterId: fields[Number(field.value)].expr, path: [] }, 0, references, inputs ? { session: inputs, slot: "plan-filter" } : undefined));
-    });
-    field.onchange = () => {
-        if (field.isConnected === false)
-            return;
         inputs?.invalidate("plan-filter");
+        const selected = filterFields[Number(field.value)];
+        const shape = filterOperandShape(operator.value, selected.shape, actualSchema);
+        valueHost.replaceChildren();
+        if (!shape) return;
+        value = emptyNativeValue(shape, actualSchema);
+        valueHost.append(valueEditor(shape, value, actualSchema, next => { value = next; }, message("queryPlan.filterValueLabel"), { parameterId: selected.expr, path: [] }, 0, references, inputs ? { session: inputs, slot: "plan-filter" } : undefined));
+    });
+    const drawOperators = () => {
+        const selected = filterFields[Number(field.value)], choices = filterOperators(selected.shape, actualSchema, !!selected.fieldId);
+        updateQueryChoices(operator, choices, choices.some(option => option.value === operator.value) ? operator.value : "");
         drawValue();
     };
-    drawValue();
+    field.onchange = drawOperators;
+    operator.onchange = drawValue;
+    drawOperators();
     filterHost.append(ui("h4", "", message("queryPlan.filterTitle")), chips, field, operator, valueHost, action(message("queryPlan.addCondition"), () => safely(() => {
         const invalid = valueHost.querySelector<HTMLInputElement>(":invalid");
         if (invalid) {
             invalid.reportValidity();
             return;
         }
-        const next = addPlanFilter(plan, fields[Number(field.value)], operator.value, value, actualSchema);
+        const next = addPlanFilter(plan, filterFields[Number(field.value)], operator.value, value, actualSchema);
         plan.where = next.where;
         changed();
         drawConditions();
     })));
     const advanced = ui("details");
     advanced.append(ui("summary", "", message("queryPlan.advancedCelDisclosure")));
-    const expression = ui("textarea", "data-input");
-    expression.value = plan.where ?? "";
+
     inputs?.bind(expression, "plan-cel");
     setUiAttr(expression, "aria-label", message("queryPlan.celProposalLabel"));
     advanced.append(expression, action(message("queryPlan.adoptCondition"), () => {

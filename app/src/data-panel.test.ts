@@ -1,8 +1,9 @@
+import { scalarQueryLiteral, shapedQueryLiteral } from "./query-predicate";
 import { uiTextValue } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { decodeProjection, decodeSourcePatch, fieldsForTypes, moveOrderedValue, replaceNativeMember, scalarFromInput, switchUnionValue, typeConflicts, unionVariant, type DataSchema, type NativeValue, type Shape } from "./data-panel";
-import { calendarDay, composeWhere, decodeViewPreference, defaultPreference, distinctFacetCounts, facetPredicate, hasDirectStatusProjection, parseQueryJson, parseQueryParameters, parseQueryPlan, pinEligibleRows, preferenceFieldErrors, queryResultState, queryRowLifecycle, scalarQueryLiteral, shapedQueryLiteral, viewPreferenceIdentity, type QueryPlan, type QueryResult, type QueryRow } from "./query-panel";
+import { calendarDay, composeWhere, decodeViewPreference, defaultPreference, distinctFacetCounts, facetPredicate, hasDirectStatusProjection, parseQueryJson, parseQueryParameters, parseQueryPlan, pinEligibleRows, preferenceFieldErrors, queryResultState, queryRowLifecycle, viewPreferenceIdentity, type QueryPlan, type QueryResult, type QueryRow } from "./query-panel";
 
 const textShape: Shape = { kind: "scalar", semantic: "text" };
 const schema: DataSchema = {

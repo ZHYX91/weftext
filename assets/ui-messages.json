@@ -3129,6 +3129,11 @@
       "en-US": "Less than or equal to",
       "params": {}
     },
+    "queryOperator.startsWith": {"zh-CN": "开头是", "en-US": "Starts with", "params": {}},
+    "queryOperator.endsWith": {"zh-CN": "结尾是", "en-US": "Ends with", "params": {}},
+    "queryOperator.hasItem": {"zh-CN": "包含元素", "en-US": "Contains item", "params": {}},
+    "queryOperator.empty": {"zh-CN": "为空", "en-US": "Is empty", "params": {}},
+    "queryOperator.present": {"zh-CN": "字段存在", "en-US": "Field is present", "params": {}},
     "queryOperator.containsText": {
       "zh-CN": "包含文字",
       "en-US": "Contains text",
