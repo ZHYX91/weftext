@@ -600,6 +600,11 @@ export const zhCN = {
   "queryOperator.atLeast": "大于等于",
   "queryOperator.lessThan": "小于",
   "queryOperator.atMost": "小于等于",
+  "queryOperator.startsWith": "开头是",
+  "queryOperator.endsWith": "结尾是",
+  "queryOperator.hasItem": "包含元素",
+  "queryOperator.empty": "为空",
+  "queryOperator.present": "字段存在",
   "queryOperator.containsText": "包含文字",
   "queryOperator.explicitNone": "明确 none",
   "queryFilter.valueTypeLabel": "值类型（不自动转换）",
@@ -10972,6 +10977,11 @@ export interface MessageParamsMap {
   "queryOperator.atLeast": {  };
   "queryOperator.lessThan": {  };
   "queryOperator.atMost": {  };
+  "queryOperator.startsWith": {  };
+  "queryOperator.endsWith": {  };
+  "queryOperator.hasItem": {  };
+  "queryOperator.empty": {  };
+  "queryOperator.present": {  };
   "queryOperator.containsText": {  };
   "queryOperator.explicitNone": {  };
   "queryFilter.valueTypeLabel": {  };
@@ -21530,6 +21540,11 @@ export const messageParamTypes = {
   "queryOperator.atLeast": {},
   "queryOperator.lessThan": {},
   "queryOperator.atMost": {},
+  "queryOperator.startsWith": {},
+  "queryOperator.endsWith": {},
+  "queryOperator.hasItem": {},
+  "queryOperator.empty": {},
+  "queryOperator.present": {},
   "queryOperator.containsText": {},
   "queryOperator.explicitNone": {},
   "queryFilter.valueTypeLabel": {},
@@ -33580,6 +33595,11 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryOperator.atLeast": "Greater than or equal to",
   "queryOperator.lessThan": "Less than",
   "queryOperator.atMost": "Less than or equal to",
+  "queryOperator.startsWith": "Starts with",
+  "queryOperator.endsWith": "Ends with",
+  "queryOperator.hasItem": "Contains item",
+  "queryOperator.empty": "Is empty",
+  "queryOperator.present": "Field is present",
   "queryOperator.containsText": "Contains text",
   "queryOperator.explicitNone": "Explicit none",
   "queryFilter.valueTypeLabel": "Value type (no automatic conversion)",

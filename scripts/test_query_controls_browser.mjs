@@ -12,7 +12,7 @@ assert.ok(path.isAbsolute(process.argv[2]), 'Output must be absolute');
 const repo = path.resolve(import.meta.dirname, '..'), out = path.resolve(process.argv[2]);
 assert.ok(path.relative(repo, out).startsWith('..' + path.sep), 'Keep private evidence outside the product repository');
 await mkdir(out, { recursive: false });
-const inputs = ['app/src/query-panel.ts', 'app/src/query-refresh.ts', 'app/src/query-control-state.ts', 'app/src/tag-tree.ts', 'app/src/query-result.test-support.ts', 'app/src/ui-locale.ts', 'app/src/ui-messages.ts', 'app/package.json', 'app/package-lock.json', 'scripts/test_query_controls_browser.mjs'];
+const inputs = ['app/src/query-panel.ts', 'app/src/query-predicate.ts', 'app/src/query-plan-controls.ts', 'app/src/query-refresh.ts', 'app/src/query-control-state.ts', 'app/src/tag-tree.ts', 'app/src/query-result.test-support.ts', 'app/src/ui-locale.ts', 'app/src/ui-messages.ts', 'app/package.json', 'app/package-lock.json', 'scripts/test_query_controls_browser.mjs'];
 const inventory = async () => Promise.all(inputs.map(async name => { const bytes = await readFile(path.join(repo, name)); return { path: name, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }; }));
 const result = { startedUtc: new Date().toISOString(), frontend: 'current Vite source, isolated QueryPanel component', developmentOnly: true,
   limits: ['Bounded host returns schema, registry and a strict local Query result; no Core query evaluation or persisted author operation.', 'No native desktop, OS IME, assistive technology, performance or whole-product acceptance.'],
@@ -111,6 +111,36 @@ try {
     }), { reset: { version: 2, items: [] }, backupCount: 1, originalPreserved: true });
     assert.equal(await shortcuts.locator('.data-warning').count(), 0);
     await panel.locator('.query-heading').getByRole('button', { name: 'Refresh', exact: true }).click(); await ready(7);
+  });
+  await check('shared definition controls round-trip inclusive bounds, state-only filters and independent CEL drafts', async () => {
+    const actual = await page.evaluate(async () => {
+      const { queryPlanControls } = await import('/src/query-plan-controls.ts');
+      const plan = { scope: { descendants: true, lifecycle: 'live' }, types: [], where: 'title == "before"', select: [], order: [] };
+      const schema = { definitions: {}, aliases: {}, types: [], fields: [{ id: 'price', key: 'price', shape: { kind: 'scalar', semantic: 'decimal' }, nullable: true }] };
+      const controls = queryPlanControls(plan, schema, () => {});
+      document.body.append(controls);
+      const [field, operator] = controls.querySelectorAll('select');
+      const select = (control, value) => { control.value = value; control.dispatchEvent(new Event('change')); };
+      select(field, '1');
+      const options = [...operator.options].map(option => [option.value, option.textContent]);
+      const add = controls.querySelector('section > button'), source = controls.querySelector('textarea');
+      select(operator, '<=');
+      const value = operator.nextElementSibling.querySelector('input');
+      value.value = '9007199254740993.01'; value.dispatchEvent(new Event('input')); add.click();
+      const bound = plan.where, synced = source.value;
+      source.value = 'title.startsWith("draft")'; source.dispatchEvent(new Event('input'));
+      select(operator, 'invalid'); add.click();
+      const final = { options, bound, synced, draft: source.value, combined: plan.where, operandAbsent: !operator.nextElementSibling.querySelector('input') };
+      controls.remove(); return final;
+    });
+    assert.ok(actual.options.some(([value, label]) => value === '<=' && label !== '≤'));
+    assert.ok(actual.options.some(([value]) => value === '>='));
+    assert.equal(actual.options.some(([value]) => value === 'contains'), false);
+    assert.equal(actual.bound, '(title == "before") && (field("price") <= decimal("9007199254740993.01"))');
+    assert.equal(actual.synced, actual.bound);
+    assert.equal(actual.draft, 'title.startsWith("draft")');
+    assert.equal(actual.combined, '(' + actual.bound + ') && (isInvalid(field("price")))');
+    assert.ok(actual.operandAbsent);
   });
   result.requests = await page.evaluate(() => window.fixture.calls);
   result.notifications = await page.evaluate(() => window.fixture.notifications);

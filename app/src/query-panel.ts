@@ -1,3 +1,4 @@
+import { filterOperators, filterOperandShape, queryPredicate, shapedQueryLiteral } from "./query-predicate";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { readNoteProjection, sameProjectionInput } from "./data-projection-read";
 import { joinUiText } from "./ui-locale";
@@ -938,47 +939,6 @@ function canonicalNative(value: NativeValue): string {
         return JSON.stringify({ kind: "array", value: value.value.map(canonicalNative) });
     return JSON.stringify(value);
 }
-export function scalarQueryLiteral(value: NativeValue): string {
-    if (value.kind === "none")
-        return "null";
-    if (value.kind === "bool")
-        return String(value.value);
-    if (value.kind === "int")
-        return value.value;
-    if (value.kind === "float")
-        return /[.eE]/.test(value.value) ? value.value : `${value.value}.0`;
-    if (value.kind === "decimal")
-        return `decimal(${JSON.stringify(value.value)})`;
-    if (value.kind === "date")
-        return `date(${JSON.stringify(value.value)})`;
-    if (value.kind === "time")
-        return `time(${JSON.stringify(value.value)})`;
-    if (value.kind === "localDatetime")
-        return `localDatetime(${JSON.stringify(value.value)})`;
-    if (value.kind === "duration")
-        return `duration(${JSON.stringify(value.value)})`;
-    if (value.kind === "text")
-        return JSON.stringify(value.value);
-    throw new UiError(message("queryValidation.nestedLiteralUnsupported"));
-}
-export function shapedQueryLiteral(shape: Shape, schema: DataSchema, value: NativeValue): string {
-    const resolved = resolveShape(shape, schema);
-    if (resolved.kind === "union") {
-        const branch = unionVariant(resolved, value, schema);
-        if (branch < 0)
-            throw new UiError(message("queryValidation.ambiguousValueBranch"));
-        return shapedQueryLiteral(resolved.variants[branch], schema, value);
-    }
-    if (resolved.kind === "scalar") {
-        const constructor = ({ node_ref: "nodeRef", tag_ref: "tagRef", resource_ref: "resourceRef", instant: "instant", exact_decimal: "exactDecimal", exact_seconds: "exactSeconds" } as Record<string, string>)[resolved.semantic];
-        if (constructor) {
-            if (value.kind !== "text")
-                throw new UiError(message("queryValidation.scalarRepresentationMismatch"));
-            return `${constructor}(${JSON.stringify(value.value)})`;
-        }
-    }
-    return scalarQueryLiteral(value);
-}
 export function facetPredicate(facet: QueryFacet, schema: DataSchema): string {
     if (facet.expr)
         return facet.expr;
@@ -1661,7 +1621,7 @@ export class QueryPanel {
             this.contextChanged();
         };
         builder.append(labeled(message("queryFilter.typeLabel"), type));
-        const filterForm = ui("form", "query-filter-builder"), field = selectControl([], ""), operator = selectControl([["==", message("queryOperator.equals")], ["!=", message("queryOperator.notEquals")], [">", message("queryOperator.greaterThan")], [">=", message("queryOperator.atLeast")], ["<", message("queryOperator.lessThan")], ["<=", message("queryOperator.atMost")], ["contains", message("queryOperator.containsText")], ["absent", message("queryValue.absent")], ["null", message("queryOperator.explicitNone")]], "==");
+        const filterForm = ui("form", "query-filter-builder"), field = selectControl([], ""), operator = selectControl([], "");
         const value = ui("input", "data-input"), branch = selectControl([], ""), branchLabel = labeled(message("queryFilter.valueTypeLabel"), branch), filterMessage = ui("p", "data-warning");
         setUiAttr(value, "aria-label", message("queryFilter.exactValueLabel"));
         setUiAttr(value, "placeholder", message("queryFilter.exactValue"));
@@ -1673,6 +1633,10 @@ export class QueryPanel {
                 branch.value = "";
             updateQueryChoices(branch, variants.map(item => ({ value: queryRefreshKey(item), label: item.kind === "scalar" ? item.semantic : "enum" })));
             branchLabel.hidden = shape?.kind !== "union";
+        };
+        const selectedFilterShape = (fieldShape: Shape, schema: DataSchema) => {
+            const shape = resolveShape(fieldShape, schema);
+            return shape.kind === "union" ? shape.variants.map(item => resolveShape(item, schema)).find(item => queryRefreshKey(item) === branch.value) : shape;
         };
         branch.onchange = () => this.renderControls();
         operator.onchange = () => this.renderControls();
@@ -1692,28 +1656,14 @@ export class QueryPanel {
                 if (!schema || !selected)
                     throw new UiError(message("queryFilter.unavailableOriginalField"));
                 const expr = fieldExpr(selected.id);
-                let condition: string;
-                if (operator.value === "absent")
-                    condition = `isAbsent(${expr})`;
-                else if (operator.value === "null")
-                    condition = `isNull(${expr})`;
-                else {
-                    const shape = resolveShape(selected.shape, schema), resolved = shape.kind === "union" ? shape.variants.map(item => resolveShape(item, schema)).find(item => queryRefreshKey(item) === branch.value) : shape;
-                    if (!resolved || !["scalar", "enum"].includes(resolved.kind))
-                        throw new UiError(message("queryFilter.unavailableOriginalBranch"));
-                    const native = scalarFromInput(resolved, schema, value.value);
-                    if (operator.value === "contains") {
-                        if (native.kind !== "text")
-                            throw new UiError(message("queryValidation.containsTextFieldRequired"));
-                        condition = `${expr}.contains(${JSON.stringify(native.value)})`;
-                    }
-                    else
-                        condition = `${expr} ${operator.value} ${shapedQueryLiteral(resolved, schema, native)}`;
-                }
-                const selectedKey = selected.key, operatorKey = operator.value, rawValue = value.value;
-                const operatorLabels: Readonly<Record<string, UiText>> = { "==": message("queryOperator.equals"), "!=": message("queryOperator.notEquals"), ">": message("queryOperator.greaterThan"), ">=": message("queryOperator.atLeast"), "<": message("queryOperator.lessThan"), "<=": message("queryOperator.atMost"), contains: message("queryOperator.containsText"), absent: message("queryValue.absent"), null: message("queryOperator.explicitNone") };
+                const shape = selectedFilterShape(selected.shape, schema) ?? selected.shape;
+                const operand = filterOperandShape(operator.value, shape, schema);
+                const native = operand ? scalarFromInput(operand, schema, value.value) : undefined;
+                const condition = queryPredicate(expr, shape, schema, true, operator.value, native);
+                const selectedKey = selected.key, rawValue = operand ? value.value : "";
+                const choice = filterOperators(shape, schema, true).find(item => item.value === operator.value)!;
                 this.draftFlags.delete("filter");
-                this.conditions.push({ id: crypto.randomUUID(), label: () => `${uiTextValue(fieldNames[selectedKey] ?? selectedKey)} ${uiTextValue(operatorLabels[operatorKey] ?? operatorKey)} ${rawValue}`, expr: condition });
+                this.conditions.push({ id: crypto.randomUUID(), label: () => [uiTextValue(fieldNames[selectedKey] ?? selectedKey), uiTextValue(choice.label), rawValue].filter(Boolean).join(" "), expr: condition });
                 this.contextChanged();
             }
             catch (error) {
@@ -1804,6 +1754,12 @@ export class QueryPanel {
             const choices = fields.map(item => ({ value: item.id, label: fieldNames[item.key] ?? item.key }));
             const fieldValid = updateQueryChoices(field, choices), groupValid = updateQueryChoices(groupKey, [{ value: "", label: message("queryAggregate.noFieldGrouping") }, ...choices]), amountValid = updateQueryChoices(amount, choices);
             updateBranch(reset);
+            const selected = fields.find(item => item.id === field.value);
+            const shape = selected && schema ? selectedFilterShape(selected.shape, schema) ?? selected.shape : undefined;
+            const operators = shape && schema ? filterOperators(shape, schema, true) : [];
+            updateQueryChoices(operator, operators, operators.some(item => item.value === operator.value) ? operator.value : "");
+            const operand = shape && schema ? filterOperandShape(operator.value, shape, schema) : undefined;
+            value.hidden = !operand;
             filterMessage.hidden = fieldValid;
             setUiText(filterMessage, fieldValid ? "" : message("queryFilter.unavailableRetainedValue"));
             aggregateMessage.hidden = groupValid && (op.value === "count" || amountValid);
@@ -1870,7 +1826,7 @@ export class QueryPanel {
             for (const control of builder.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>("input,select,textarea,button"))
                 if (!control.classList.contains("query-view-field") && !columns.contains(control))
                     control.disabled = locked;
-            add.disabled = locked || !fieldValid || !field.value || operator.value !== "absent" && operator.value !== "null" && !branchLabel.hidden && branch.getAttribute("aria-invalid") === "true";
+            add.disabled = locked || !fieldValid || !field.value || !operator.value || !!operand && !branchLabel.hidden && branch.getAttribute("aria-invalid") === "true";
             aggregateSubmit.disabled = locked || !groupValid || op.value !== "count" && (!amountValid || !amount.value);
             grouped.hidden = !this.group;
             if (reset || priorLimit !== this.take) {
