@@ -29,6 +29,9 @@ class LocalizedSearchPanel implements Panel {
     private readonly regexp = document.createElement("input");
     private readonly wholeWord = document.createElement("input");
     private readonly replacementRow = document.createElement("span");
+    private readonly feedback = document.createElement("div");
+    private readonly matchControls: HTMLButtonElement[] = [];
+    private clearPatternError?: () => void;
     private query: SearchQuery;
     constructor(private readonly view: EditorView) {
         this.query = getSearchQuery(view.state);
@@ -39,8 +42,9 @@ class LocalizedSearchPanel implements Panel {
             this.scope.bindAttr(input, "aria-label", message(key)); this.scope.bindAttr(input, "placeholder", message(key));
             input.addEventListener("input", () => this.commit());
         }
-        const button = (name: string, key: keyof typeof phraseKeys, command: (view: EditorView) => boolean) => {
+        const button = (name: string, key: keyof typeof phraseKeys, command: (view: EditorView) => boolean, requiresPattern = true) => {
             const element = document.createElement("button"); element.type = "button"; element.name = name; element.className = "cm-button";
+            if (requiresPattern) this.matchControls.push(element);
             this.scope.bindText(element, message(phraseKeys[key])); element.addEventListener("click", () => command(view)); return element;
         };
         this.dom.append(this.find, button("next", "next", findNext), button("prev", "previous", findPrevious), button("select", "all", selectMatches));
@@ -49,24 +53,52 @@ class LocalizedSearchPanel implements Panel {
             const label = document.createElement("label"); label.append(input); this.scope.bindText(label, message(key)); this.dom.append(label);
         }
         this.replacementRow.append(document.createElement("br"), this.replacement, button("replace", "replace", replaceNext), button("replaceAll", "replace all", replaceAll));
-        const close = button("close", "close", closeSearchPanel); this.scope.bindAttr(close, "aria-label", message("editor.cmClose"));
-        this.dom.append(this.replacementRow, close);
+        const close = button("close", "close", closeSearchPanel, false); this.scope.bindAttr(close, "aria-label", message("editor.cmClose"));
+        this.feedback.id = `source-search-pattern-${crypto.randomUUID()}`;
+        this.feedback.className = "cm-search-pattern-error";
+        this.feedback.setAttribute("role", "status");
+        this.dom.append(this.replacementRow, close, this.feedback);
         this.dom.addEventListener("keydown", event => {
             if (runScopeHandlers(view, event, "search-panel")) event.preventDefault();
             else if (event.key === "Enter" && !event.isComposing) {
-                if (event.target === this.find) { event.preventDefault(); (event.shiftKey ? findPrevious : findNext)(view); }
-                else if (event.target === this.replacement) { event.preventDefault(); replaceNext(view); }
+                if (event.target === this.find) { event.preventDefault(); if (!this.clearPatternError) (event.shiftKey ? findPrevious : findNext)(view); }
+                else if (event.target === this.replacement) { event.preventDefault(); if (!this.clearPatternError) replaceNext(view); }
             }
         });
         this.setQuery(this.query); this.updateReadOnly(view.state);
     }
     private commit(): void {
         const query = new SearchQuery({ search: this.find.value, replace: this.replacement.value, caseSensitive: this.caseSensitive.checked, regexp: this.regexp.checked, wholeWord: this.wholeWord.checked, literal: this.query.literal, test: this.query.test });
-        if (!query.eq(this.query)) { this.query = query; this.view.dispatch({ effects: setSearchQuery.of(query) }); }
+        if (!query.eq(this.query)) {
+            this.query = query;
+            this.updatePatternError();
+            this.view.dispatch({ effects: setSearchQuery.of(query) });
+        }
     }
     private setQuery(query: SearchQuery): void {
         this.query = query; this.find.value = query.search; this.replacement.value = query.replace;
         this.caseSensitive.checked = query.caseSensitive; this.regexp.checked = query.regexp; this.wholeWord.checked = query.wholeWord;
+        this.updatePatternError();
+    }
+    private updatePatternError(): void {
+        const invalid = this.query.regexp && this.query.search.length > 0 && !this.query.valid;
+        if (invalid === Boolean(this.clearPatternError)) return;
+        for (const control of this.matchControls) control.disabled = invalid;
+        if (invalid) {
+            const feedback = message("editor.cmInvalidPattern");
+            this.find.setAttribute("aria-invalid", "true");
+            this.find.setAttribute("aria-describedby", this.feedback.id);
+            const unbindText = this.scope.bindText(this.feedback, feedback);
+            const unbindValidity = this.scope.bindValidity(this.find, feedback);
+            this.clearPatternError = () => { unbindText(); unbindValidity(); };
+        } else {
+            this.clearPatternError?.();
+            this.clearPatternError = undefined;
+            this.feedback.textContent = "";
+            this.find.setCustomValidity("");
+            this.find.removeAttribute("aria-invalid");
+            this.find.removeAttribute("aria-describedby");
+        }
     }
     private updateReadOnly(state: EditorState): void { this.replacementRow.hidden = state.readOnly; }
     update(update: ViewUpdate): void {
@@ -77,7 +109,10 @@ class LocalizedSearchPanel implements Panel {
     destroy(): void { this.scope.dispose(); }
 }
 
-export const localizedSourceSearch = search({ createPanel: view => new LocalizedSearchPanel(view) });
+export const localizedSourceSearch = [
+    search({ createPanel: view => new LocalizedSearchPanel(view) }),
+    EditorView.baseTheme({ ".cm-search-pattern-error": { color: "var(--danger, currentColor)" } }),
+];
 
 /** Same public go-to semantics, with a live label around the original input. */
 export function localizedGotoLine(view: EditorView): boolean {

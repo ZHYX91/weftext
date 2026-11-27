@@ -7601,6 +7601,7 @@ export const zhCN = {
   "error.export.nativePackage.versionUnsupported": "不支持原生资料包版本 {version}；原包字节保持不变",
   "error.export.nativePackage.manifestMembersExceeded": "原生资料包清单成员数量超出预算",
   "editor.cmFind": "查找",
+  "editor.cmInvalidPattern": "正则表达式不完整或有误。请修改，或关闭正则表达式以按原文查找。",
   "editor.cmReplaceInput": "替换",
   "editor.cmNext": "下一个",
   "editor.cmPrevious": "上一个",
@@ -17974,6 +17975,7 @@ export interface MessageParamsMap {
   "error.export.nativePackage.versionUnsupported": { version: number };
   "error.export.nativePackage.manifestMembersExceeded": {  };
   "editor.cmFind": {  };
+  "editor.cmInvalidPattern": {  };
   "editor.cmReplaceInput": {  };
   "editor.cmNext": {  };
   "editor.cmPrevious": {  };
@@ -29782,6 +29784,7 @@ export const messageParamTypes = {
   },
   "error.export.nativePackage.manifestMembersExceeded": {},
   "editor.cmFind": {},
+  "editor.cmInvalidPattern": {},
   "editor.cmReplaceInput": {},
   "editor.cmNext": {},
   "editor.cmPrevious": {},
@@ -40584,6 +40587,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.export.nativePackage.versionUnsupported": "Native package version {version} is unsupported; original package bytes remain unchanged",
   "error.export.nativePackage.manifestMembersExceeded": "Native package manifest member budget exceeded",
   "editor.cmFind": "Find",
+  "editor.cmInvalidPattern": "This regular expression is incomplete or invalid. Edit it, or turn off regular expressions to search for the text as typed.",
   "editor.cmReplaceInput": "Replace",
   "editor.cmNext": "next",
   "editor.cmPrevious": "previous",
