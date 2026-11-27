@@ -1720,12 +1720,12 @@ fn query_snapshot_impl(
             diagnostics.push(UiMessage::error_api_data_query_identity_unavailable().into());
         }
         let mut notes = Vec::new();
+        let mut entries_by_path = BTreeMap::new();
+        for entry in &inventory.entries {
+            entries_by_path.entry(entry.path.as_str()).or_insert(entry);
+        }
         for file in captured.files {
-            let Some(entry) = inventory
-                .entries
-                .iter()
-                .find(|entry| entry.path == file.path)
-            else {
+            let Some(entry) = entries_by_path.get(file.path.as_str()) else {
                 return Err(CoreError::new(
                     "invalidState",
                     UiMessage::error_api_data_unexpected_snapshot_source(),

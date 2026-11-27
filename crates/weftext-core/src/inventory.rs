@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use weftext_messages::UiMessage;
 
 const MAX_ENTRIES: usize = 5000;
@@ -152,9 +152,13 @@ impl Core {
         // One call-local cut of original committed admissions. Re-reading the
         // entire journal for each source makes one complete inventory quadratic
         // in journal I/O. Every later inventory builds this evidence afresh.
-        let mut births = Vec::new();
+        let mut nodes_by_identity = BTreeMap::new();
         for plan in self.committed_plans()? {
-            births.extend(self.read_births(&plan.operation_id)?);
+            for birth in self.read_births(&plan.operation_id)? {
+                nodes_by_identity
+                    .entry(birth.identity)
+                    .or_insert(birth.node_id);
+            }
         }
         let mut result = Inventory {
             root: display(&root),
@@ -279,12 +283,11 @@ impl Core {
                                 }
                                 total += source.len();
                                 let info = weftext_engine::inspect(&source);
-                                let known = births.iter().find(|birth| birth.identity == identity);
-                                if let Some(birth) = known {
+                                if let Some(node_id) = nodes_by_identity.get(&identity) {
                                     item.kind = "node".into();
-                                    item.node_id = Some(birth.node_id.clone());
+                                    item.node_id = Some(node_id.clone());
                                     item.identity_status = if !is_canonical(&path)
-                                        || info.id.as_ref() != Some(&birth.node_id)
+                                        || info.id.as_ref() != Some(node_id)
                                     {
                                         "bindingConflict"
                                     } else if unmanaged {
