@@ -2120,6 +2120,11 @@
       "en-US": "unionAll must contain source plans.",
       "params": {}
     },
+    "queryValidation.invalidParameterDeclaration": {
+      "zh-CN": "parameters 应为参数声明列表。每项需要唯一的标识符名称和类型。",
+      "en-US": "Use a list of parameter declarations. Each needs a unique identifier and a shape.",
+      "params": {}
+    },
     "queryValidation.parameterObjectRequired": {
       "zh-CN": "参数必须是名称到原生值的对象。",
       "en-US": "Parameters must be an object mapping names to native values.",
@@ -2128,16 +2133,6 @@
     "queryValidation.invalidNativeParameter": {
       "zh-CN": "参数原生值无效。",
       "en-US": "Invalid native parameter value.",
-      "params": {}
-    },
-    "queryValidation.invalidRecordParameter": {
-      "zh-CN": "参数记录成员重复或无效。",
-      "en-US": "Duplicate or invalid parameter record member.",
-      "params": {}
-    },
-    "queryValidation.nativeParameterKindRequired": {
-      "zh-CN": "参数须使用带 kind 的原生值；准确数字使用字符串。",
-      "en-US": "Parameters must use native values with a kind. Keep exact numbers as strings.",
       "params": {}
     },
     "periodNavigation.day": {
@@ -3370,8 +3365,8 @@
       "params": {}
     },
     "queryAdvanced.nativeSyntaxHelp": {
-      "zh-CN": "select 支持命名 CEL 投影；order 可含多项并明确 nulls。unnest 为 {array, binding}。advanced 支持 parameters、unionAll、distinct、related 与 call。参数例如 {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}；准确数字保字符串，none 与未提供不同。",
-      "en-US": "select supports named CEL projections; order can contain multiple items with explicit nulls. unnest is {array, binding}. advanced supports parameters, unionAll, distinct, related and call. Example parameters: {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}. Keep exact numbers as strings; none differs from not provided.",
+      "zh-CN": "select 支持命名 CEL 投影；order 可含多项并明确 nulls。unnest 为 {array, binding}。parameters 在计划顶层声明。advanced 支持 unionAll、distinct、related 与 call。参数例如 {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}；准确数字保字符串，none 与未提供不同。",
+      "en-US": "select supports named CEL projections; order can contain multiple items with explicit nulls. unnest is {array, binding}. Declare parameters at the top level. advanced supports unionAll, distinct, related and call. Example parameters: {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}. Keep exact numbers as strings; none differs from not provided.",
       "params": {}
     },
     "queryFacets.currentScopeTitle": {

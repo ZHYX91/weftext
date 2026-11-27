@@ -741,7 +741,7 @@ fn foreign_copy_maps_complete_tag_refs_and_query_constructors_but_preserves_lite
     let expression =
         format!("tagInSubtree(tagRef('{old}'), tagRef('{old}')) || '{old}' == '{old}'");
     let query = format!(
-        "#metadata((kind: \"weftext.query\", key: \"{B}\", binding: (schema: \"weftext-config://{WORKSPACE}/schema\", revision: \"{D}\", language: \"weftext.query.cel.v1\"), where: {}, select: ((name: \"value\", expr: \"true\"),), advanced: (parameters: ((name: \"root\", shape: (kind: \"scalar\", semantic: \"tag_ref\"), nullable: false, default: \"{old}\"),),))) <weftext-query-tree>",
+        "#metadata((kind: \"weftext.query\", key: \"{B}\", binding: (schema: \"weftext-config://{WORKSPACE}/schema\", revision: \"{D}\", language: \"weftext.query.cel.v1\"), where: {}, select: ((name: \"value\", expr: \"true\"),), parameters: ((name: \"root\", shape: (kind: \"scalar\", semantic: \"tag_ref\"), nullable: false, default: \"{old}\"),))) <weftext-query-tree>",
         serde_json::to_string(&expression).unwrap()
     );
     let a = node(
@@ -808,7 +808,7 @@ fn foreign_copy_maps_complete_tag_refs_and_query_constructors_but_preserves_lite
     );
     assert!(source.contains(&format!("tags: (\"{new}\", \"{foreign}\")")));
     assert!(
-        matches!(&definition.plan.advanced.unwrap().parameters[0].default,Some(weftext_data::NativeValue::Text(value)) if value==&new)
+        matches!(&definition.plan.parameters[0].default,Some(weftext_data::NativeValue::Text(value)) if value==&new)
     );
     input.tag_map.clear();
     input.allow_losses = true;

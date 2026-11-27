@@ -3835,10 +3835,7 @@ mod tests {
                 name: "value".into(),
                 expr: "true".into(),
             }],
-            advanced: Some(weftext_data::QueryAdvanced {
-                parameters: vec![parameter],
-                ..Default::default()
-            }),
+            parameters: vec![parameter],
             ..Default::default()
         };
         let mut request = definition_request(&document, original.clone(), None, "open");

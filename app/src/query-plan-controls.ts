@@ -4,7 +4,8 @@ import type { AuthorInputSession } from "./author-input";
 import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 /** Visible controls edit the existing native QueryPlan; unknown CEL stays intact. */
 import { action, fieldNames, resolveShape, typeNames, ui, valueEditor, emptyNativeValue, type DataSchema, type NativeValue, type Shape, type FormReferences } from "./data-panel";
-import { shapedQueryLiteral, type QueryPlan } from "./query-panel";
+import { shapedQueryLiteral } from "./query-panel";
+import { type QueryPlan } from "./query-plan";
 export interface PlanField {
     key: string;
     expr: string;

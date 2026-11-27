@@ -767,12 +767,10 @@ fn actual_row_provider_uses_original_admitted_cut_and_records_runtime_dependenci
                 expr: "spare".into(),
             },
         ],
-        advanced: Some(
-            serde_json::from_value(serde_json::json!({
-                "parameters":[{"name":"spare","shape":{"kind":"scalar","semantic":"int"}}]
-            }))
-            .unwrap(),
-        ),
+        parameters: serde_json::from_value(
+            serde_json::json!([{"name":"spare","shape":{"kind":"scalar","semantic":"int"}}]),
+        )
+        .unwrap(),
         ..Default::default()
     };
     let source = format!(

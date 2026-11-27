@@ -2,7 +2,8 @@ import { uiTextValue } from "./ui-locale";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { decodeProjection, decodeSourcePatch, fieldsForTypes, moveOrderedValue, replaceNativeMember, scalarFromInput, switchUnionValue, typeConflicts, unionVariant, type DataSchema, type NativeValue, type Shape } from "./data-panel";
-import { calendarDay, composeWhere, decodeViewPreference, defaultPreference, distinctFacetCounts, facetPredicate, hasDirectStatusProjection, parseQueryJson, parseQueryParameters, parseQueryPlan, pinEligibleRows, preferenceFieldErrors, queryResultState, queryRowLifecycle, scalarQueryLiteral, shapedQueryLiteral, viewPreferenceIdentity, type QueryPlan, type QueryResult, type QueryRow } from "./query-panel";
+import { calendarDay, composeWhere, decodeViewPreference, defaultPreference, distinctFacetCounts, facetPredicate, hasDirectStatusProjection, pinEligibleRows, preferenceFieldErrors, queryResultState, queryRowLifecycle, scalarQueryLiteral, shapedQueryLiteral, viewPreferenceIdentity, type QueryResult, type QueryRow } from "./query-panel";
+import { parseQueryJson, parseQueryParameters, parseQueryPlan, type QueryPlan } from "./query-plan";
 
 const textShape: Shape = { kind: "scalar", semantic: "text" };
 const schema: DataSchema = {
@@ -110,7 +111,7 @@ test("only direct fields offer actions and composite lifecycle is never guessed"
 });
 
 test("advanced plans preserve projection, sorting, producers and exact invocation parameters", () => {
-  const plan: QueryPlan = { scope: { directory: "weftext-directory://workspace/id", descendants: false, lifecycle: "live" }, types: [], select: [{ name: "phone", expr: "item.number" }], order: [{ expr: "item.label", descending: true, nulls: "first" }, { expr: "title", descending: false, nulls: "last" }], unnest: { array: 'field("people/phones")', binding: "item" }, advanced: { parameters: [{ name: "amount", shape: { kind: "scalar", semantic: "decimal" }, default: { kind: "decimal", value: "0.30" } }] } };
+  const plan: QueryPlan = { scope: { directory: "weftext-directory://workspace/id", descendants: false, lifecycle: "live" }, types: [], select: [{ name: "phone", expr: "item.number" }], order: [{ expr: "item.label", descending: true, nulls: "first" }, { expr: "title", descending: false, nulls: "last" }], unnest: { array: 'field("people/phones")', binding: "item" }, parameters: [{ name: "amount", shape: { kind: "scalar", semantic: "decimal" }, default: { kind: "decimal", value: "0.30" } }] };
   assert.deepEqual(parseQueryPlan(JSON.stringify(plan)), plan);
   const composite = { ...plan, advanced: { unionAll: [plan], distinct: [{ name: "phone", expr: "phone" }] } };
   assert.deepEqual(parseQueryPlan(JSON.stringify(composite)), composite);
@@ -186,4 +187,19 @@ test("search and visual filters compose safely without altering typed date condi
   assert.ok(where?.includes("phones.exists"));
   assert.equal(scalarQueryLiteral({ kind: "decimal", value: "0.30" }), 'decimal("0.30")');
   assert.throws(() => scalarQueryLiteral({ kind: "array", value: [text("x")] }));
+});
+
+test("each query declares its own parameters and validates native defaults", () => {
+  const parameter = { name: "wanted", shape: { kind: "scalar", semantic: "decimal" }, default: { kind: "decimal", value: "0.30" } };
+  const query = (parameters: unknown) => ({ parameters, select: [{ name: "amount", expr: "wanted" }] });
+  const branch = parseQueryPlan(JSON.stringify({ advanced: { unionAll: [query([parameter])] } })).advanced!.unionAll![0];
+  assert.deepEqual(branch.parameters, [parameter]);
+  assert.deepEqual(branch.scope, { descendants: true, lifecycle: "live" });
+  for (const declarations of [null, {}, [parameter, parameter], [{ ...parameter, default: null }], [{ ...parameter, nullable: "true" }]]) {
+    assert.throws(() => parseQueryPlan(JSON.stringify(query(declarations))));
+  }
+  assert.throws(() => parseQueryPlan(JSON.stringify({ advanced: { parameters: [parameter] } })));
+  const member = { key: "x", value: { kind: "none" } };
+  assert.throws(() => parseQueryParameters(JSON.stringify({ input: { kind: "record", value: [member, member] } })));
+  assert.throws(() => parseQueryParameters(JSON.stringify({ input: { kind: "bool", value: false, text: "false" } })));
 });

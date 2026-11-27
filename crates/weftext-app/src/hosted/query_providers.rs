@@ -361,35 +361,35 @@ pub(super) fn check_shape_names(
         remaining: &mut usize,
     ) -> Result<(), ApiError> {
         *remaining = remaining.checked_sub(1).ok_or_else(unavailable)?;
-        if let Some(advanced) = &plan.advanced {
-            for parameter in &advanced.parameters {
-                let mut names = BTreeSet::new();
-                shape_references(schema, &parameter.shape, &mut names, remaining)?;
-                for name in names.difference(field_names) {
-                    let own = schema.definitions.get(name).ok_or_else(unavailable)?;
-                    let bundled = public.definitions.get(name).ok_or_else(unavailable)?;
-                    if serde_json::to_value(own).map_err(|_| unavailable())?
-                        != serde_json::to_value(bundled).map_err(|_| unavailable())?
+        for parameter in &plan.parameters {
+            let mut names = BTreeSet::new();
+            shape_references(schema, &parameter.shape, &mut names, remaining)?;
+            for name in names.difference(field_names) {
+                let own = schema.definitions.get(name).ok_or_else(unavailable)?;
+                let bundled = public.definitions.get(name).ok_or_else(unavailable)?;
+                if serde_json::to_value(own).map_err(|_| unavailable())?
+                    != serde_json::to_value(bundled).map_err(|_| unavailable())?
+                {
+                    return Err(unavailable());
+                }
+                let mut closure = BTreeSet::new();
+                shape_references(public, bundled, &mut closure, remaining)?;
+                for member in closure {
+                    if serde_json::to_value(
+                        schema.definitions.get(&member).ok_or_else(unavailable)?,
+                    )
+                    .map_err(|_| unavailable())?
+                        != serde_json::to_value(
+                            public.definitions.get(&member).ok_or_else(unavailable)?,
+                        )
+                        .map_err(|_| unavailable())?
                     {
                         return Err(unavailable());
                     }
-                    let mut closure = BTreeSet::new();
-                    shape_references(public, bundled, &mut closure, remaining)?;
-                    for member in closure {
-                        if serde_json::to_value(
-                            schema.definitions.get(&member).ok_or_else(unavailable)?,
-                        )
-                        .map_err(|_| unavailable())?
-                            != serde_json::to_value(
-                                public.definitions.get(&member).ok_or_else(unavailable)?,
-                            )
-                            .map_err(|_| unavailable())?
-                        {
-                            return Err(unavailable());
-                        }
-                    }
                 }
             }
+        }
+        if let Some(advanced) = &plan.advanced {
             for child in advanced.union_all.iter().flatten() {
                 visit(schema, public, field_names, child, remaining)?;
             }
@@ -490,7 +490,7 @@ mod tests {
         );
         let plan = |name: &str| {
             serde_json::from_value(json!({"select":[{"name":"value","expr":"wanted"}],
-            "advanced":{"parameters":[{"name":"wanted","shape":{"kind":"use","name":name}}]}}))
+            "parameters":[{"name":"wanted","shape":{"kind":"use","name":name}}]}))
             .unwrap()
         };
         for name in ["PrivateDecision", "NeverInstalledDecision"] {
@@ -588,7 +588,7 @@ mod tests {
             for name in ["PrivateDecision", "NeverInstalledDecision"] {
                 let req: query::QueryRequest = serde_json::from_value(json!({"fields":["tasks/status"],"resources":resources,
                     "parameters":{"wanted":{"kind":"text","value":"ONLY_INTERNAL_CHOICE"}},
-                    "plan":{"select":[{"name":"value","expr":"wanted"}],"advanced":{"parameters":[{"name":"wanted","shape":{"kind":"use","name":name}}]}}})).unwrap();
+                    "plan":{"select":[{"name":"value","expr":"wanted"}],"parameters":[{"name":"wanted","shape":{"kind":"use","name":name}}]}})).unwrap();
                 let error = query::execute(&state, &auth, req).await.unwrap_err();
                 assert_eq!(error.status, StatusCode::BAD_REQUEST);
                 let current = (
@@ -604,7 +604,7 @@ mod tests {
         let mut refusal = None;
         let mut inner = state.inner.lock().unwrap();
         for name in ["PrivateDecision", "NeverInstalledDecision"] {
-            let plan = serde_json::from_value(json!({"select":[{"name":"value","expr":"wanted"}],"advanced":{"parameters":[{"name":"wanted","shape":{"kind":"use","name":name}}]}})).unwrap();
+            let plan = serde_json::from_value(json!({"select":[{"name":"value","expr":"wanted"}],"parameters":[{"name":"wanted","shape":{"kind":"use","name":name}}]})).unwrap();
             let result = query::validate_definition(
                 &mut inner,
                 &auth,

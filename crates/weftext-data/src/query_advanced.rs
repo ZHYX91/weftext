@@ -17,8 +17,6 @@ pub use definition_preflight::{
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QueryAdvanced {
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub parameters: Vec<QueryParameter>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -39,8 +37,17 @@ pub struct QueryParameter {
     pub shape: Shape,
     #[serde(default)]
     pub nullable: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "parameter_default"
+    )]
     pub default: Option<NativeValue>,
+}
+fn parameter_default<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Option<NativeValue>, D::Error> {
+    NativeValue::deserialize(deserializer).map(Some)
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -248,10 +255,7 @@ fn parameter_bindings(
     values: &BTreeMap<String, NativeValue>,
     required: bool,
 ) -> Result<Bindings> {
-    let declared = plan
-        .advanced
-        .as_ref()
-        .map_or(&[][..], |a| a.parameters.as_slice());
+    let declared = plan.parameters.as_slice();
     let mut cells = BTreeMap::new();
     let mut shapes = BTreeMap::new();
     let reserved = symbols(schema)?;
@@ -376,11 +380,7 @@ fn validate_plan_static(
             if let Some(context) = context {
                 let (_, definition) = selected(call, &context.definitions)?;
                 let baseline = exact_definition_schema(context, &definition, schema)?;
-                let target = definition
-                    .plan
-                    .advanced
-                    .as_ref()
-                    .map_or(&[][..], |a| a.parameters.as_slice());
+                let target = definition.plan.parameters.as_slice();
                 for (name, e) in &call.arguments {
                     let p = target
                         .iter()
@@ -867,7 +867,7 @@ pub fn query_read_requirements(
         }
         let a = plan.advanced.clone().unwrap_or_default();
         a.validate_union()?;
-        let mut bound = a
+        let mut bound = plan
             .parameters
             .iter()
             .map(|p| p.name.clone())
@@ -1718,10 +1718,8 @@ fn parameter_subset(
     plan: &QueryPlan,
     cells: &BTreeMap<String, Cell>,
 ) -> BTreeMap<String, NativeValue> {
-    plan.advanced
-        .as_ref()
-        .into_iter()
-        .flat_map(|a| &a.parameters)
+    plan.parameters
+        .iter()
         .filter_map(|p| {
             cells.get(&p.name).and_then(|c| match c {
                 Cell::Value { value } => Some((p.name.clone(), value.clone())),
@@ -2637,22 +2635,39 @@ fn transform(
 
 // Native saved carriers persist domain defaults as actual author values. The
 // tagged NativeValue representation belongs only to the API, never author data.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SavedSlot {
+    Plan,
+    Advanced,
+    Related,
+    Parameter,
+    Plain,
+}
+
+impl SavedSlot {
+    fn member(self, key: &str) -> Self {
+        match (self, key) {
+            (Self::Plan, "parameters") => Self::Parameter,
+            (Self::Plan, "advanced") => Self::Advanced,
+            (Self::Advanced, "unionAll") | (Self::Related, "from") => Self::Plan,
+            (Self::Advanced, "related") => Self::Related,
+            _ => Self::Plain,
+        }
+    }
+}
+
 pub(crate) fn saved_plan_json(value: &NativeValue) -> Result<serde_json::Value> {
-    fn convert(v: &NativeValue, advanced: bool, parameter: bool) -> Result<serde_json::Value> {
+    fn convert(v: &NativeValue, slot: SavedSlot) -> Result<serde_json::Value> {
         Ok(match v {
             NativeValue::Record(m) => serde_json::Value::Object(
                 m.iter()
                     .map(|m| {
                         Ok((
                             m.key.clone(),
-                            if parameter && m.key == "default" {
+                            if slot == SavedSlot::Parameter && m.key == "default" {
                                 serde_json::to_value(&m.value)?
                             } else {
-                                convert(
-                                    &m.value,
-                                    m.key == "advanced",
-                                    advanced && m.key == "parameters",
-                                )?
+                                convert(&m.value, slot.member(&m.key))?
                             },
                         ))
                     })
@@ -2660,7 +2675,7 @@ pub(crate) fn saved_plan_json(value: &NativeValue) -> Result<serde_json::Value> 
             ),
             NativeValue::Array(a) => serde_json::Value::Array(
                 a.iter()
-                    .map(|v| convert(v, false, parameter))
+                    .map(|v| convert(v, slot))
                     .collect::<Result<_>>()?,
             ),
             NativeValue::None => serde_json::Value::Null,
@@ -2675,10 +2690,10 @@ pub(crate) fn saved_plan_json(value: &NativeValue) -> Result<serde_json::Value> 
             )),
         })
     }
-    convert(value, false, false)
+    convert(value, SavedSlot::Plan)
 }
 pub(crate) fn saved_plan_native(value: &serde_json::Value) -> Result<NativeValue> {
-    fn convert(v: &serde_json::Value, advanced: bool, parameter: bool) -> Result<NativeValue> {
+    fn convert(v: &serde_json::Value, slot: SavedSlot) -> Result<NativeValue> {
         Ok(match v {
             serde_json::Value::Object(m) => NativeValue::Record(
                 m.iter()
@@ -2686,22 +2701,20 @@ pub(crate) fn saved_plan_native(value: &serde_json::Value) -> Result<NativeValue
                     .map(|(k, v)| {
                         Ok(NativeMember {
                             key: k.clone(),
-                            value: if parameter && k == "default" {
+                            value: if slot == SavedSlot::Parameter && k == "default" {
                                 serde_json::from_value(v.clone())?
                             } else {
-                                convert(v, k == "advanced", advanced && k == "parameters")?
+                                convert(v, slot.member(k))?
                             },
                         })
                     })
                     .collect::<Result<_>>()?,
             ),
-            serde_json::Value::Array(a) => NativeValue::Array(
-                a.iter()
-                    .map(|v| convert(v, false, parameter))
-                    .collect::<Result<_>>()?,
-            ),
+            serde_json::Value::Array(a) => {
+                NativeValue::Array(a.iter().map(|v| convert(v, slot)).collect::<Result<_>>()?)
+            }
             _ => json_native(v)?,
         })
     }
-    convert(value, false, false)
+    convert(value, SavedSlot::Plan)
 }

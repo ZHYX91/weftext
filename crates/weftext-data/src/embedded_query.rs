@@ -139,11 +139,7 @@ fn static_key(raw: &str) -> Option<String> {
 fn supported_builder(plan: &QueryPlan) -> bool {
     plan.unnest.is_none()
         && plan.advanced.as_ref().is_none_or(|a| {
-            a.call.is_some()
-                && a.parameters.is_empty()
-                && a.union_all.is_none()
-                && a.distinct.is_none()
-                && a.related.is_none()
+            a.call.is_some() && a.union_all.is_none() && a.distinct.is_none() && a.related.is_none()
         })
 }
 

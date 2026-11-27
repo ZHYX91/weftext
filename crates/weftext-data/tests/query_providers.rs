@@ -181,17 +181,14 @@ fn provider_static_partial_known_arguments_and_closed_end_cannot_hide_private_ca
 fn provider_static_use_constraints_defaults_and_required_dynamic_parameter_are_exact() {
     let schema = installed();
     let mut p = plan("compareTemporal(wanted, date('2026-01-01'))");
-    p.advanced = Some(QueryAdvanced {
-        parameters: vec![QueryParameter {
-            name: "wanted".into(),
-            shape: Shape::Use {
-                name: "CalendarDate".into(),
-            },
-            nullable: false,
-            default: Some(calendar("v1")),
-        }],
-        ..Default::default()
-    });
+    p.parameters = vec![QueryParameter {
+        name: "wanted".into(),
+        shape: Shape::Use {
+            name: "CalendarDate".into(),
+        },
+        nullable: false,
+        default: Some(calendar("v1")),
+    }];
     let req = query_provider_requirements(&p, &schema, &FrozenAdvancedInput::default())
         .unwrap()
         .remove(0);
@@ -207,7 +204,7 @@ fn provider_static_use_constraints_defaults_and_required_dynamic_parameter_are_e
             .providers
             .contains_key("calendars/private")
     );
-    p.advanced.as_mut().unwrap().parameters[0].default = None;
+    p.parameters[0].default = None;
     let dynamic = query_provider_requirements(&p, &schema, &FrozenAdvancedInput::default())
         .unwrap()
         .remove(0);
@@ -569,15 +566,12 @@ fn provider_preflight_lexical_shadowing_does_not_execute_an_outer_parameter_as_a
     };
     constraints.clear();
     let mut p = plan("items.map(p, compareTemporal(p, date('2026-01-01'))).size()");
-    p.advanced = Some(QueryAdvanced {
-        parameters: vec![QueryParameter {
-            name: "p".into(),
-            shape: parameter_shape,
-            nullable: false,
-            default: Some(calendar("v1")),
-        }],
-        ..Default::default()
-    });
+    p.parameters = vec![QueryParameter {
+        name: "p".into(),
+        shape: parameter_shape,
+        nullable: false,
+        default: Some(calendar("v1")),
+    }];
     let req = query_provider_requirements(&p, &schema, &FrozenAdvancedInput::default())
         .unwrap()
         .remove(0);
@@ -636,17 +630,14 @@ fn provider_saved_call_partial_selector_evidence_is_separate_from_real_execution
         language: "weftext.query.cel.v1".into(),
     };
     let mut callee = plan("containsDate(wanted, date('2026-01-01'))");
-    callee.advanced = Some(QueryAdvanced {
-        parameters: vec![QueryParameter {
-            name: "wanted".into(),
-            shape: Shape::Use {
-                name: "During".into(),
-            },
-            nullable: false,
-            default: None,
-        }],
-        ..Default::default()
-    });
+    callee.parameters = vec![QueryParameter {
+        name: "wanted".into(),
+        shape: Shape::Use {
+            name: "During".into(),
+        },
+        nullable: false,
+        default: None,
+    }];
     let source = upsert_saved_query(
         "#metadata((id: \"32eb9a12-e752-4bfa-8cdf-65e00f23ac26\", types: ())) <weftext>\n",
         None,

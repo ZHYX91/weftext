@@ -412,10 +412,9 @@ export const zhCN = {
   "queryValidation.invalidWhereOrTake": "where 或 take 无效。",
   "queryValidation.advancedObjectRequired": "advanced 必须是对象。",
   "queryValidation.unionSourcesRequired": "unionAll 必须包含来源计划。",
+  "queryValidation.invalidParameterDeclaration": "parameters 应为参数声明列表。每项需要唯一的标识符名称和类型。",
   "queryValidation.parameterObjectRequired": "参数必须是名称到原生值的对象。",
   "queryValidation.invalidNativeParameter": "参数原生值无效。",
-  "queryValidation.invalidRecordParameter": "参数记录成员重复或无效。",
-  "queryValidation.nativeParameterKindRequired": "参数须使用带 kind 的原生值；准确数字使用字符串。",
   "periodNavigation.day": "日",
   "periodNavigation.week": "周",
   "periodNavigation.month": "月",
@@ -649,7 +648,7 @@ export const zhCN = {
   "queryAdvanced.rerunParameters": "按本次参数重跑",
   "queryAdvanced.returnToVisual": "返回可视化查询",
   "queryAdvanced.loadUnnestExample": "载入多值展开示例（暂不运行）",
-  "queryAdvanced.nativeSyntaxHelp": "select 支持命名 CEL 投影；order 可含多项并明确 nulls。unnest 为 {array, binding}。advanced 支持 parameters、unionAll、distinct、related 与 call。参数例如 {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}；准确数字保字符串，none 与未提供不同。",
+  "queryAdvanced.nativeSyntaxHelp": "select 支持命名 CEL 投影；order 可含多项并明确 nulls。unnest 为 {array, binding}。parameters 在计划顶层声明。advanced 支持 unionAll、distinct、related 与 call。参数例如 {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}；准确数字保字符串，none 与未提供不同。",
   "queryFacets.currentScopeTitle": "当前范围属性导航",
   "queryFacets.currentScopeKnownTitle": "当前范围属性导航 · 已知计数",
   "queryFacets.loadedResultsTitle": "已加载结果属性导航 · 已知计数",
@@ -10787,10 +10786,9 @@ export interface MessageParamsMap {
   "queryValidation.invalidWhereOrTake": {  };
   "queryValidation.advancedObjectRequired": {  };
   "queryValidation.unionSourcesRequired": {  };
+  "queryValidation.invalidParameterDeclaration": {  };
   "queryValidation.parameterObjectRequired": {  };
   "queryValidation.invalidNativeParameter": {  };
-  "queryValidation.invalidRecordParameter": {  };
-  "queryValidation.nativeParameterKindRequired": {  };
   "periodNavigation.day": {  };
   "periodNavigation.week": {  };
   "periodNavigation.month": {  };
@@ -21284,10 +21282,9 @@ export const messageParamTypes = {
   "queryValidation.invalidWhereOrTake": {},
   "queryValidation.advancedObjectRequired": {},
   "queryValidation.unionSourcesRequired": {},
+  "queryValidation.invalidParameterDeclaration": {},
   "queryValidation.parameterObjectRequired": {},
   "queryValidation.invalidNativeParameter": {},
-  "queryValidation.invalidRecordParameter": {},
-  "queryValidation.nativeParameterKindRequired": {},
   "periodNavigation.day": {},
   "periodNavigation.week": {},
   "periodNavigation.month": {},
@@ -33401,10 +33398,9 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryValidation.invalidWhereOrTake": "Invalid where or take.",
   "queryValidation.advancedObjectRequired": "advanced must be an object.",
   "queryValidation.unionSourcesRequired": "unionAll must contain source plans.",
+  "queryValidation.invalidParameterDeclaration": "Use a list of parameter declarations. Each needs a unique identifier and a shape.",
   "queryValidation.parameterObjectRequired": "Parameters must be an object mapping names to native values.",
   "queryValidation.invalidNativeParameter": "Invalid native parameter value.",
-  "queryValidation.invalidRecordParameter": "Duplicate or invalid parameter record member.",
-  "queryValidation.nativeParameterKindRequired": "Parameters must use native values with a kind. Keep exact numbers as strings.",
   "periodNavigation.day": "Day",
   "periodNavigation.week": "Week",
   "periodNavigation.month": "Month",
@@ -33638,7 +33634,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryAdvanced.rerunParameters": "Rerun with these parameters",
   "queryAdvanced.returnToVisual": "Return to visual query",
   "queryAdvanced.loadUnnestExample": "Load multivalue expansion example (do not run yet)",
-  "queryAdvanced.nativeSyntaxHelp": "select supports named CEL projections; order can contain multiple items with explicit nulls. unnest is {array, binding}. advanced supports parameters, unionAll, distinct, related and call. Example parameters: {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}. Keep exact numbers as strings; none differs from not provided.",
+  "queryAdvanced.nativeSyntaxHelp": "select supports named CEL projections; order can contain multiple items with explicit nulls. unnest is {array, binding}. Declare parameters at the top level. advanced supports unionAll, distinct, related and call. Example parameters: {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}. Keep exact numbers as strings; none differs from not provided.",
   "queryFacets.currentScopeTitle": "Property navigation in current scope",
   "queryFacets.currentScopeKnownTitle": "Property navigation in current scope · known counts",
   "queryFacets.loadedResultsTitle": "Property navigation in loaded results · known counts",
