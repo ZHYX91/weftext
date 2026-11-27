@@ -88,7 +88,7 @@ export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, ch
             chips.append(ui("p", "data-help", message("queryPlan.noCondition")));
     };
     drawConditions();
-    const field = select(message("queryPlan.filterFieldLabel"), fields.map((field, i) => [String(i), field.label]), "0"), operator = select(message("queryPlan.filterOperatorLabel"), [["==", message("queryOperator.equals")], ["!=", message("queryOperator.notEquals")], ["<", message("queryOperator.lessThan")], ["<=", message("queryOperator.lessThanOrEqual")], [">", message("queryOperator.greaterThan")], [">=", message("queryOperator.greaterThanOrEqual")], ["contains", message("queryOperator.containsText")], ["absent", message("queryValue.absent")], ["null", message("queryValue.explicitNull")]], "=="), valueHost = ui("div");
+    const field = select(message("queryPlan.filterFieldLabel"), fields.map((field, i) => [String(i), field.label]), "0"), operator = select(message("queryPlan.filterOperatorLabel"), [["==", message("queryOperator.equals")], ["!=", message("queryOperator.notEquals")], ["<", message("queryOperator.lessThan")], ["<=", "≤"], [">", message("queryOperator.greaterThan")], [">=", "≥"], ["contains", message("queryOperator.containsText")], ["absent", message("queryValue.absent")], ["null", message("queryValue.explicitNull")]], "=="), valueHost = ui("div");
     let value: NativeValue = { kind: "text", value: "" };
     const drawValue = () => safely(() => {
         const shape = resolveShape(fields[Number(field.value)].shape, actualSchema);
