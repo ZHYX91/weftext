@@ -10,6 +10,7 @@ weftext-engine = { path = "../weftext-engine" }
 typst-syntax = "=0.15.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
+indexmap = "2"
 sha2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 rust_decimal = "1.43"

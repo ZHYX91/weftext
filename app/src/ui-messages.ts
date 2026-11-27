@@ -7790,7 +7790,6 @@ export const zhCN = {
   "error.data.query.nonfiniteFloatResult": "浮点运算结果不是有限值。",
   "error.data.query.resultRecordKeyRequiresText": "结果记录的键必须是文本。",
   "error.data.query.unsupportedCelResultType": "不支持此 CEL 结果类型。",
-  "error.data.query.unknownTypedConstantConstructor": "未知的类型化常量构造器。",
   "error.data.query.invalidTypedQueryConstant": "类型化 Query 常量无效。",
   "error.data.query.fieldUnresolved": "字段尚未解析。",
   "error.data.query.recordRequiresStaticStringKeys": "仅支持静态字符串键记录。",
@@ -8302,7 +8301,6 @@ export const zhCN = {
   "error.data.query.providerResultNotValue": "查询 Provider 未返回可用值",
   "error.data.query.closedExpressionUnavailable": "闭合查询表达式无效或不可用",
   "error.data.query.celSyntaxInvalid": "CEL 查询语法无效",
-  "error.data.query.recordCompilationFailed": "内部有序记录入口未通过 CEL 编译",
   "error.data.query.functionRegistrationFailed": "无法注册查询函数：{function}",
   "error.data.projection.fieldEditValidationFailed": "字段 {field} 的修改未通过完整验证；状态为 {state}",
   "error.data.projection.typedReferenceClosureIncomplete": "类型化引用闭包不完整",
@@ -18164,7 +18162,6 @@ export interface MessageParamsMap {
   "error.data.query.nonfiniteFloatResult": {  };
   "error.data.query.resultRecordKeyRequiresText": {  };
   "error.data.query.unsupportedCelResultType": {  };
-  "error.data.query.unknownTypedConstantConstructor": {  };
   "error.data.query.invalidTypedQueryConstant": {  };
   "error.data.query.fieldUnresolved": {  };
   "error.data.query.recordRequiresStaticStringKeys": {  };
@@ -18676,7 +18673,6 @@ export interface MessageParamsMap {
   "error.data.query.providerResultNotValue": {  };
   "error.data.query.closedExpressionUnavailable": {  };
   "error.data.query.celSyntaxInvalid": {  };
-  "error.data.query.recordCompilationFailed": {  };
   "error.data.query.functionRegistrationFailed": { function: string };
   "error.data.projection.fieldEditValidationFailed": { field: string; state: string };
   "error.data.projection.typedReferenceClosureIncomplete": {  };
@@ -29987,7 +29983,6 @@ export const messageParamTypes = {
   "error.data.query.nonfiniteFloatResult": {},
   "error.data.query.resultRecordKeyRequiresText": {},
   "error.data.query.unsupportedCelResultType": {},
-  "error.data.query.unknownTypedConstantConstructor": {},
   "error.data.query.invalidTypedQueryConstant": {},
   "error.data.query.fieldUnresolved": {},
   "error.data.query.recordRequiresStaticStringKeys": {},
@@ -30577,7 +30572,6 @@ export const messageParamTypes = {
   "error.data.query.providerResultNotValue": {},
   "error.data.query.closedExpressionUnavailable": {},
   "error.data.query.celSyntaxInvalid": {},
-  "error.data.query.recordCompilationFailed": {},
   "error.data.query.functionRegistrationFailed": {
     "function": "text"
   },
@@ -40776,7 +40770,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.data.query.nonfiniteFloatResult": "Nonfinite float result",
   "error.data.query.resultRecordKeyRequiresText": "Result record key must be text",
   "error.data.query.unsupportedCelResultType": "Unsupported CEL result type",
-  "error.data.query.unknownTypedConstantConstructor": "Unknown typed constant constructor",
   "error.data.query.invalidTypedQueryConstant": "Invalid typed Query constant",
   "error.data.query.fieldUnresolved": "Unresolved field",
   "error.data.query.recordRequiresStaticStringKeys": "Only static string-key records",
@@ -41288,7 +41281,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.data.query.providerResultNotValue": "The Query provider did not return an available value.",
   "error.data.query.closedExpressionUnavailable": "The closed Query expression is invalid or unavailable.",
   "error.data.query.celSyntaxInvalid": "The CEL Query syntax is invalid.",
-  "error.data.query.recordCompilationFailed": "The internal ordered-record entry failed CEL compilation.",
   "error.data.query.functionRegistrationFailed": "The Query function could not be registered: {function}",
   "error.data.projection.fieldEditValidationFailed": "The edit to field {field} failed full validation; its state is {state}.",
   "error.data.projection.typedReferenceClosureIncomplete": "The typed reference closure is incomplete.",
