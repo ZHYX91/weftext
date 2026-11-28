@@ -2531,7 +2531,7 @@ async fn qualify_query_products(
         let products = if let Some((products, dependencies, compiler_version)) = qualified
             && products.target == "html"
         {
-            frozen.versions.push(json!({"role":"nativeProduct","entityKey":note.entity_key,"compileIdentity":identity,
+            frozen.versions.push(json!({"role":"nativeProduct","entityKey":note.entity_key,"compileIdentity":identity,"target":products.target,
                 "compilerVersion":compiler_version,"dependencies":dependencies}));
             native_query_products(identity, products)
         } else if unfinished && let Some(reason) = &remainder {
