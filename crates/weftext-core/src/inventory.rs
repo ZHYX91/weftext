@@ -177,6 +177,7 @@ impl Core {
         };
         let mut queue = vec![(root.clone(), false)];
         let mut total = 0;
+        let pending = self.pending_read();
         while let Some((directory, inherited_unmanaged)) = queue.pop() {
             let directory_guard = match ParentGuard::acquire(
                 &self.backend,
@@ -259,7 +260,7 @@ impl Core {
                         result
                             .warnings
                             .push(UiMessage::inventory_source_budget_reached().into());
-                    } else if self.check_pending(&path).is_err() {
+                    } else if pending.check_path(&path).is_err() {
                         result.complete = false;
                         item.identity_status = "recoveryPending".into();
                     } else {
@@ -268,7 +269,7 @@ impl Core {
                             let mut file = guard.open_read_guard_file()?;
                             let bytes = read_source(&mut file)?;
                             let id = stamp(&file)?.identity;
-                            self.check_pending_identity(&id)?;
+                            pending.check_identity(&id)?;
                             Ok((decode(&bytes)?, id))
                         })();
                         match observed {
@@ -342,6 +343,7 @@ impl Core {
         result
             .entries
             .sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        pending.recheck()?;
         Ok(result)
     }
     pub(crate) fn check_discovery_boundary(&self, root: &Path, parent: &Path) -> Result<()> {

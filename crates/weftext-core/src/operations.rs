@@ -30,6 +30,7 @@ pub(crate) struct QualifiedReadObservation<'a> {
     core: &'a Core,
     plans: Vec<&'a journal::Plan>,
     births: BTreeMap<String, Vec<Birth>>,
+    birth_positions: BTreeMap<FileIdentity, (&'a str, usize)>,
     snapshot_records: Option<SnapshotReadObservation<'a>>,
     resource_births: Option<Result<Vec<ResourceBirth>>>,
 }
@@ -41,18 +42,23 @@ impl<'a> QualifiedReadObservation<'a> {
     pub(crate) fn read(core: &'a Core) -> Result<Self> {
         let plans = core.committed_plans()?;
         let mut births = BTreeMap::new();
+        let mut birth_positions = BTreeMap::new();
         for plan in &plans {
             // Read the complete original evidence before selecting a binding:
             // an earlier match must not hide a corrupt later Birth record.
-            births.insert(
-                plan.operation_id.clone(),
-                core.read_births(&plan.operation_id)?,
-            );
+            let original = core.read_births(&plan.operation_id)?;
+            for (position, birth) in original.iter().enumerate() {
+                birth_positions
+                    .entry(birth.identity.clone())
+                    .or_insert((plan.operation_id.as_str(), position));
+            }
+            births.insert(plan.operation_id.clone(), original);
         }
         Ok(Self {
             core,
             plans,
             births,
+            birth_positions,
             snapshot_records: None,
             resource_births: None,
         })
@@ -104,10 +110,8 @@ impl<'a> QualifiedReadObservation<'a> {
         }
     }
     pub(crate) fn binding(&self, identity: &FileIdentity) -> Option<&Birth> {
-        self.plans
-            .iter()
-            .flat_map(|plan| &self.births[&plan.operation_id])
-            .find(|birth| &birth.identity == identity)
+        let &(operation, position) = self.birth_positions.get(identity)?;
+        self.births[operation].get(position)
     }
     pub(crate) fn placements(&self, birth: &Birth) -> Result<BTreeSet<String>> {
         Ok(self
@@ -3252,14 +3256,22 @@ impl Core {
             .iter()
             .map(|file| hash(&file.bytes))
             .collect::<Vec<_>>();
+        let mut file_positions = BTreeMap::<_, Vec<usize>>::new();
+        for (position, (file, digest)) in files.iter().zip(&digests).enumerate() {
+            file_positions
+                .entry((&file.stamp, digest.as_str()))
+                .or_default()
+                .push(position);
+        }
         let mut all_candidates = files.iter().map(|_| Vec::new()).collect::<Vec<_>>();
         for plan in plans {
             let facts = read_facts(&plan.operation_id)?;
+            let mut matched = BTreeSet::new();
             let mut sequence = None;
-            for (index, captured) in files.iter().enumerate() {
-                if let Some(fact) = facts
-                    .iter()
-                    .find(|fact| fact.stamp == captured.stamp && fact.hash == digests[index])
+            for fact in &facts {
+                let key = (&fact.stamp, fact.hash.as_str());
+                if let Some(positions) = file_positions.get(&key)
+                    && matched.insert(key)
                 {
                     let sequence = if let Some(sequence) = sequence {
                         sequence
@@ -3268,7 +3280,9 @@ impl Core {
                         sequence = Some(current);
                         current
                     };
-                    all_candidates[index].push((sequence, fact.revision.clone()));
+                    for &position in positions {
+                        all_candidates[position].push((sequence, fact.revision.clone()));
+                    }
                 }
             }
         }
@@ -3504,6 +3518,7 @@ impl Core {
         let mut guards = Vec::new();
         let mut handles = Vec::new();
         let mut seen = BTreeSet::new();
+        let pending = self.pending_read();
         for p in paths {
             let path = absolute_path(Path::new(p))?;
             if !path.starts_with(&root) || !seen.insert(display(&path).to_lowercase()) {
@@ -3513,7 +3528,7 @@ impl Core {
                     ),
                 ));
             }
-            self.check_pending(&path)?;
+            pending.check_path(&path)?;
             let guard = ParentGuard::acquire(&self.backend, &path)?;
             let handle = match guard.open_file(false, false) {
                 Ok(f) => Some(f),
@@ -3521,7 +3536,7 @@ impl Core {
                 Err(e) => return Err(e),
             };
             if let Some(f) = &handle {
-                self.check_pending_identity(&stamp(f)?.identity)?;
+                pending.check_identity(&stamp(f)?.identity)?;
             }
             guards.push((path, guard));
             handles.push(handle);
@@ -3606,6 +3621,7 @@ impl Core {
                 },
             ));
         }
+        pending.recheck()?;
         Ok((
             SnapshotSet {
                 files: output,
@@ -4160,8 +4176,9 @@ impl Core {
     ) -> Result<(Vec<ParentGuard>, Vec<backend::BoundFile>)> {
         let mut guards = Vec::new();
         let mut handles = Vec::new();
+        let pending = self.pending_read();
         for file in captured {
-            self.check_pending(Path::new(&file.path))?;
+            pending.check_path(Path::new(&file.path))?;
             let guard = ParentGuard::acquire(&self.backend, Path::new(&file.path))?;
             let mut handle = guard.open_file(false, false)?;
             if stamp(&handle)? != file.stamp
@@ -4193,6 +4210,7 @@ impl Core {
             }
             guards.push(guard);
         }
+        pending.recheck()?;
         Ok((guards, handles))
     }
 
@@ -4366,10 +4384,10 @@ impl Core {
         let mut files = BTreeMap::new();
         let mut bases = Vec::new();
         let mut bindings = Vec::new();
-        for f in captured {
+        for (f, guard) in captured.into_iter().zip(&guards) {
             let path = Path::new(&f.path);
             let base_id = fresh();
-            let parent = ParentGuard::acquire(&self.backend, path)?.directory_identity()?;
+            let parent = guard.directory_identity()?;
             files.insert(
                 path.strip_prefix(root)
                     .map_err(|_| {

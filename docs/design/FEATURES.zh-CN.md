@@ -136,6 +136,8 @@ Weftext Query 查询获权的库数据，Typst 官方 `query` 仍只做当前编
 
 本地全文在冻结的全范围内分批生成原生 HTML 语义产品。Core 在私有目录原子保存有界、带版本和校验和的可重建投影。每次先核对当次范围和授权，再以编译制品、当前源位置、内容、样式以及实际读取的依赖资格命中投影。修改只更新受影响的笔记，删除或移出范围的笔记不参与当前查询。托管按用户、授权代和请求的语义产品分区，保存前重新核对交付资格。进程重启可继续复用经过复核的投影，词位按原有统一算法重建。损坏记录按需重建。已有时间、字节和进程预算继续生效，尚未生成的语义产品产生明确的部分覆盖。
 
+批量读在一次持有 Core 的调用内先核定已提交操作，逐文件检查未决操作及路径、实体资格，完成时复核已排除的提交决定。版本匹配按实体、文件印记与内容摘要查找原始事实，保持原有的顺序和歧义判定。编译输入复用同一冻结过程已经持有的父目录句柄。
+
 基础节点为 `scan(scope,lifecycle)`、`read(fields/products)`、`filter(expr)`、`project(columns)`、`unnest(array,binding)`、`sort(keys)`、`take(limit)`、`union_all`、`distinct(keys)`、`group(keys,aggregates)`、`related(relation)` 与保存 Query 调用。默认displayed body/title/table来自该次Html final tree，native heading产品及显示关联按§3.1单列；生成/任意深heading只读存在不等于已显示或可写。显式Paged产品读另一个具名target，同run中每个product带compileIdentity/target且不跨目标拼值或occurrence。基础全文搜索生成显式 `textMatch` 节点，UI 显示是否查正文、目录/子目录/库范围及所有组合条件；本轮不另造查询 DSL。
 
 Query 用 SOURCE 的唯一 Type/Value：text、bool、i64 int、exact decimal、显式 float、civil date/time/local datetime、带 offset instant、ref、array、record 和 schema判别union。money+currency、quantity+unit与精度日期都是该shape系统定义的业务record，不增加未注册scalar codec。数组保序及重复；record 成员按 schema 解释，未知原生成员仍保留为只读值，不猜类型。无隐式 float↔decimal、date↔instant、币种↔币种或单位换算。显式换算需指定准确 provider 与版本，并纳入依赖。电话始终 text。schema 冲突/缺失不能从第一行数据推断 type。

@@ -41,6 +41,8 @@ Build each snapshot from one frozen input. Preserve absent, null, invalid and un
 
 Generate deterministic fixtures of 1k, 10k, 50k and 100k entities with representative field lengths, nested values and high-cardinality groups. Record hardware, build mode, data shape and seed. Cover indexed and unindexed filters, full text, collections, sorting, grouping, traversal, paging and repeated refresh. Record cold and warm p50/p95, peak RSS, allocations, index build/update cost, cancellation latency and concurrency. Compare index results with a full scan.
 
+The Windows full-text benchmark accepts `--profile` to alternate scalar and warm full-text queries on the same server and fixture. CPU and I/O counters describe the server process. Use elapsed time for requests that also run child processes. An authorized local call can request timings for scope capture, native products, evaluation and result preparation.
+
 Enforce budgets for steps, time, input/decoded bytes, rows, result size, memory, nesting and fan-out where work or allocation occurs. Observe cancellation during scan, evaluation, sort, aggregate, index and serialization. Keep editing and navigation responsive and distinguish progress, interruption and partial results. Measure and remove quadratic paths, per-row registration, repeated parsing/cloning and unbounded materialization.
 
 Indexes are rebuildable projections. Define version, coverage, freshness, incremental updates, crash recovery and permission filtering. Measure size, write amplification, update latency and query benefit separately for full-text, common scalar, type, tag and relation indexes.

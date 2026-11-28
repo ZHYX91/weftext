@@ -2,6 +2,8 @@
 
 import argparse
 import base64
+import ctypes
+from ctypes import wintypes
 import hashlib
 import io
 import json
@@ -18,6 +20,55 @@ import zipfile
 import test_hosted
 from _creation_result import created_document
 from test_hosted import Server, uid
+
+
+class ProcessIo(ctypes.Structure):
+    _fields_ = [(name, ctypes.c_uint64) for name in (
+        'reads', 'writes', 'other', 'readBytes', 'writeBytes', 'otherBytes')]
+
+
+def process_counters(pid):
+    kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+    kernel.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel.OpenProcess.restype = wintypes.HANDLE
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(wintypes.FILETIME)] * 4
+    kernel.GetProcessIoCounters.argtypes = [wintypes.HANDLE, ctypes.POINTER(ProcessIo)]
+    handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        times = [wintypes.FILETIME() for _ in range(4)]
+        io = ProcessIo()
+        if (not kernel.GetProcessTimes(handle, *(ctypes.byref(t) for t in times))
+                or not kernel.GetProcessIoCounters(handle, ctypes.byref(io))):
+            raise ctypes.WinError(ctypes.get_last_error())
+        kernel_ms, user_ms = [(t.dwHighDateTime << 32 | t.dwLowDateTime) / 10_000 for t in times[2:]]
+        return {'kernelMs': kernel_ms, 'userMs': user_ms,
+                **{name: getattr(io, name) for name, _ in io._fields_}}
+    finally:
+        kernel.CloseHandle(handle)
+
+
+def profile_query(server, root, case, predicate, expected):
+    counters = process_counters(server.process.pid)
+    start = time.perf_counter_ns()
+    status, outcome, headers = server.call('/api/query/run', {
+        'root': str(root), 'plan': {'types': ['task'], 'where': predicate,
+            'select': [{'name': 'status', 'expr': 'status'}], 'take': 100},
+    }, headers={'X-Weftext-Query-Profile': '1'})
+    elapsed = (time.perf_counter_ns() - start) / 1_000_000
+    end = process_counters(server.process.pid)
+    if status != 200 or outcome['coverage'] != 'complete' or outcome['totalKnown'] != expected:
+        raise ValueError(f'Profile control {case} returned unexpected status, coverage or count')
+    result = {'case': case, 'ms': elapsed,
+              'serverCounters': {name: value - counters[name] for name, value in end.items()},
+              'serverTiming': headers.get('Server-Timing')}
+    if case == 'profile-body':
+        result['index'] = next(v for v in outcome['inputVersions'] if v.get('role') == 'nativeQueryIndex')
+        if result['index']['misses'] or result['index']['built']:
+            raise ValueError(f'Profile control {case} was not warm')
+    return result
 
 
 def fixture_id(key):
@@ -137,7 +188,7 @@ def measure(data, root, size, samples, output):
                        'serverPeakWorkingSetBytes': int(peak), 'expectedRowsBeforeTake': expected})
 
 
-def measure_full_text(data, root, size, samples, output):
+def measure_full_text(data, root, size, samples, output, *, profile=False):
     if size < 40:
         raise ValueError('Use at least 40 notes to exercise coverage beyond the former limit')
 
@@ -164,6 +215,12 @@ def measure_full_text(data, root, size, samples, output):
         expected = (size + 1) // 2
         measured(server, 'cold', 'needle search', expected, size + 1)
         warm = [measured(server, 'warm', 'needle search', expected, 0) for _ in range(samples)]
+        if profile:
+            controls = [('profile-scalar', 'status == "open"'),
+                        ('profile-body', 'textMatch(body, "needle search", "phrase")')]
+            for serial in range(3):
+                for case, predicate in controls[::1 if serial % 2 == 0 else -1]:
+                    output.append(profile_query(server, root, case, predicate, expected))
         measured(server, 'last-document', f'term{size-1:06}', 1, 0)
         name = f'Task-{size-1:06}'
         path = root / 'Synthetic' / name / f'{name}.typ'
@@ -206,9 +263,12 @@ def main():
     parser.add_argument('--notes', default=1000, type=int)
     parser.add_argument('--samples', default=20, type=int)
     parser.add_argument('--full-text', action='store_true', help='Exercise native body coverage and incremental index changes')
+    parser.add_argument('--profile', action='store_true', help='Record paired Windows process counters for scalar and warm native reads')
     args = parser.parse_args()
     if not 1 <= args.notes <= 2000 or not 1 <= args.samples <= 100:
         parser.error('Use 1–2000 notes and 1–100 samples under the current inventory budget')
+    if args.profile and (not args.full_text or os.name != 'nt'):
+        parser.error('--profile requires a Windows full-text run')
     evidence = args.output.resolve()
     if evidence.is_relative_to(Path(__file__).resolve().parents[1]):
         parser.error('Store benchmark evidence outside the source checkout')
@@ -222,7 +282,7 @@ def main():
     try:
         result['fixtureArchiveSha256'] = provision(data, root, args.notes, full_text=args.full_text)
         if args.full_text:
-            result['fullText'] = measure_full_text(data, root, args.notes, args.samples, result['cases'])
+            result['fullText'] = measure_full_text(data, root, args.notes, args.samples, result['cases'], profile=args.profile)
         else:
             measure(data, root, args.notes, args.samples, result['cases'])
         result['complete'] = True

@@ -1824,15 +1824,41 @@ fn query_snapshot_impl(
 
 async fn query(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     RequestJson(req): RequestJson<QueryRequest>,
-) -> ApiResult {
+) -> Result<Response, ApiError> {
+    let started = std::time::Instant::now();
     let frozen = core_call(&state, move |core| {
         let mut frozen = query_render_snapshot(core, &req.root, req.plan, None)?;
         freeze_query_definitions(core, &mut frozen, req.parameters)?;
         Ok(frozen)
     })
     .await?;
-    Ok(Json(evaluate_frozen(&state, frozen).await?))
+    let scope = started.elapsed();
+    let mut profile = QueryProfile::default();
+    let mut response =
+        Json(evaluate_frozen_profiled(&state, frozen, &mut profile).await?).into_response();
+    if headers
+        .get("x-weftext-query-profile")
+        .is_some_and(|value| value == "1")
+    {
+        let finish = started
+            .elapsed()
+            .saturating_sub(scope + profile.native + profile.evaluate);
+        let timing = [
+            ("scope", scope),
+            ("native", profile.native),
+            ("evaluate", profile.evaluate),
+            ("finish", finish),
+        ]
+        .map(|(name, time)| format!("{name};dur={:.3}", time.as_secs_f64() * 1000.0))
+        .join(", ");
+        response.headers_mut().insert(
+            "server-timing",
+            HeaderValue::from_str(&timing).expect("fixed query timing header"),
+        );
+    }
+    Ok(response)
 }
 
 fn freeze_query_definitions(
@@ -2575,8 +2601,22 @@ fn publish_query_diagnostics(
 }
 
 async fn evaluate_frozen(state: &AppState, frozen: FrozenQuery) -> Result<Value, ApiError> {
+    evaluate_frozen_profiled(state, frozen, &mut QueryProfile::default()).await
+}
+
+#[derive(Default)]
+struct QueryProfile {
+    native: Duration,
+    evaluate: Duration,
+}
+
+async fn evaluate_frozen_profiled(
+    state: &AppState,
+    frozen: FrozenQuery,
+    profile: &mut QueryProfile,
+) -> Result<Value, ApiError> {
     let cuts = frozen_query_cut_ids(&frozen);
-    let result = evaluate_frozen_inner(state, frozen).await;
+    let result = evaluate_frozen_inner(state, frozen, profile).await;
     if result.is_err() {
         core_call(state, move |core| {
             release_query_cuts(core, &cuts);
@@ -2590,8 +2630,11 @@ async fn evaluate_frozen(state: &AppState, frozen: FrozenQuery) -> Result<Value,
 async fn evaluate_frozen_inner(
     state: &AppState,
     mut frozen: FrozenQuery,
+    profile: &mut QueryProfile,
 ) -> Result<Value, ApiError> {
+    let native = std::time::Instant::now();
     let products = qualify_query_products(state, &mut frozen).await?;
+    profile.native = native.elapsed();
     let export_root = frozen.root.clone();
     let export_schema = value(&frozen.schema)?;
     let mut export_columns = frozen
@@ -2625,12 +2668,14 @@ async fn evaluate_frozen_inner(
     let raw_pending = frozen.raw_pending;
     let membership_ids = frozen.membership_ids;
     let scope_cuts = frozen.scope_cuts;
+    let evaluation = std::time::Instant::now();
     let mut result = crate::work::spawn_blocking(move || {
         weftext_data::execute_query(&frozen.input, &frozen.plan, &frozen.schema)
     })
     .await
     .map_err(|_| ApiError::internal(UiMessage::error_api_data_query_evaluation_incomplete()))?
     .map_err(data_error)?;
+    profile.evaluate = evaluation.elapsed();
     let diagnostics: Vec<weftext_core::CoreDescription> = result
         .diagnostics
         .drain(..)
