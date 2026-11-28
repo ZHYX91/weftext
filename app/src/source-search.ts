@@ -19,6 +19,9 @@ export function sourceSearchPhrases(): Record<string, string> {
     return Object.freeze(phrases);
 }
 
+// Visual Writing can lock the source surface while its explicit Undo still works.
+function canReplace(state: EditorState): boolean { return !state.readOnly && state.facet(EditorView.editable); }
+
 /** This panel translates owned labels without replacing a field or dispatching a search edit. */
 class LocalizedSearchPanel implements Panel {
     readonly dom = document.createElement("div");
@@ -57,7 +60,7 @@ class LocalizedSearchPanel implements Panel {
             input.type = "checkbox"; input.name = name; input.addEventListener("change", () => this.commit());
             const label = document.createElement("label"); label.append(input); this.scope.bindText(label, message(key)); this.dom.append(label);
         }
-        this.replacementRow.append(document.createElement("br"), this.replacement, button("replace", "replace", replaceNext), button("replaceAll", "replace all", replaceAll));
+        this.replacementRow.append(document.createElement("br"), this.replacement, button("replace", "replace", view => canReplace(view.state) && replaceNext(view)), button("replaceAll", "replace all", view => canReplace(view.state) && replaceAll(view)));
         const close = button("close", "close", closeSearchPanel, false); this.scope.bindAttr(close, "aria-label", message("editor.cmClose"));
         this.feedback.id = `source-search-pattern-${crypto.randomUUID()}`;
         this.feedback.className = "cm-search-pattern-error";
@@ -69,7 +72,7 @@ class LocalizedSearchPanel implements Panel {
             if (runScopeHandlers(view, event, "search-panel")) event.preventDefault();
             else if (event.key === "Enter") {
                 if (event.target === this.find) { event.preventDefault(); if (!this.clearPatternError) (event.shiftKey ? findPrevious : findNext)(view); }
-                else if (event.target === this.replacement) { event.preventDefault(); if (!this.clearPatternError) replaceNext(view); }
+                else if (event.target === this.replacement) { event.preventDefault(); if (!this.clearPatternError && canReplace(view.state)) replaceNext(view); }
             }
         });
         this.setQuery(this.query); this.updateReadOnly(view.state);
@@ -107,10 +110,15 @@ class LocalizedSearchPanel implements Panel {
             this.find.removeAttribute("aria-describedby");
         }
     }
-    private updateReadOnly(state: EditorState): void { this.replacementRow.hidden = state.readOnly; }
+    private updateReadOnly(state: EditorState): void {
+        const hidden = !canReplace(state);
+        const returnToFind = hidden && this.replacementRow.contains(this.view.root.activeElement);
+        this.replacementRow.hidden = hidden;
+        if (returnToFind) this.find.focus({ preventScroll: true });
+    }
     update(update: ViewUpdate): void {
         for (const transaction of update.transactions) for (const effect of transaction.effects) if (effect.is(setSearchQuery) && !effect.value.eq(this.query)) this.setQuery(effect.value);
-        if (update.startState.readOnly !== update.state.readOnly) this.updateReadOnly(update.state);
+        if (canReplace(update.startState) !== canReplace(update.state)) this.updateReadOnly(update.state);
     }
     mount(): void { this.find.select(); }
     destroy(): void { this.scope.dispose(); }
