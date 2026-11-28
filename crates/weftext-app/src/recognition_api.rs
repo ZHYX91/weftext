@@ -18,8 +18,14 @@ use tokio::io::AsyncWriteExt;
 use weftext_core::{ActorFeatureStatus, ConfigRole, OperationIntent, OperationRequest};
 use weftext_export::recognition::RecognitionReview;
 
+#[cfg(windows)]
+mod host_temp;
+
 pub(crate) const MAX_INPUT: usize = 16 * 1024 * 1024;
 const MAX_RESULT: usize = 32 * 1024 * 1024;
+const MAX_WORKER_REQUEST: usize = 256 * 1024;
+const WORKER_REQUEST_MAGIC: &[u8; 4] = b"WFRQ";
+const WORKER_REQUEST_VERSION: u32 = 1;
 const TTL: u64 = 900_000;
 pub(crate) fn now() -> u64 {
     SystemTime::now()
@@ -668,6 +674,236 @@ fn envelope(run: &Run, operation: Option<(&str, u64)>) -> Value {
     };
     json!({"request":request,"format":run.claim.request.format,"purpose":if op=="preview"{"note"}else{o["purpose"].as_str().unwrap_or("note")},"scheme":if op=="recognize"{o["scheme"].as_str().unwrap_or("none")}else{"none"},"schemeOptions":{"language":o["language"],"script":o["script"],"region":o["region"],"numbering":o["numbering"].as_str().unwrap_or("keep"),"selectedStructureIds":o.get("selectedStructureIds").cloned().unwrap_or_else(||json!([]))}})
 }
+fn worker_request_frame(envelope: &Value) -> Result<Vec<u8>, ApiError> {
+    let request = serde_json::to_vec(envelope).map_err(|_| changed())?;
+    if request.is_empty() || request.len() > MAX_WORKER_REQUEST {
+        return Err(changed());
+    }
+    let mut frame = Vec::with_capacity(12 + request.len());
+    frame.extend_from_slice(WORKER_REQUEST_MAGIC);
+    frame.extend_from_slice(&WORKER_REQUEST_VERSION.to_le_bytes());
+    frame.extend_from_slice(&(request.len() as u32).to_le_bytes());
+    frame.extend_from_slice(&request);
+    Ok(frame)
+}
+
+async fn send_worker_request(
+    child: &mut crate::owned_process::Child,
+    request: &[u8],
+) -> Result<crate::owned_process::Pipe, ApiError> {
+    let Some(mut stdin) = child.stdin.take() else {
+        child.kill().await.map_err(io_error)?;
+        return Err(changed());
+    };
+    let input = tokio::time::timeout(Duration::from_secs(15), stdin.write_all(request)).await;
+    if !matches!(input, Ok(Ok(()))) {
+        child.kill().await.map_err(io_error)?;
+        return Err(changed());
+    }
+    // Windows pipe writes may still be queued after write_all returns. The
+    // caller retains this writer until the original child has actually ended.
+    Ok(stdin)
+}
+
+#[cfg(test)]
+mod request_transport_tests {
+    use super::*;
+
+    #[test]
+    fn private_request_frame_preserves_json_without_an_eof_delimiter() {
+        let envelope = json!({"request":{"inputPath":"D:/TEST/识别.pdf","note":"first\nsecond"},"scheme":"none"});
+        let frame = worker_request_frame(&envelope).unwrap();
+        assert_eq!(&frame[..8], b"WFRQ\x01\x00\x00\x00");
+        let length = u32::from_le_bytes(frame[8..12].try_into().unwrap()) as usize;
+        assert_eq!(length, frame.len() - 12);
+        assert_eq!(
+            serde_json::from_slice::<Value>(&frame[12..]).unwrap(),
+            envelope
+        );
+    }
+
+    #[test]
+    fn private_request_frame_enforces_the_json_payload_budget() {
+        // The quotes are part of the UTF-8 JSON payload budget.
+        let at_limit = json!("x".repeat(MAX_WORKER_REQUEST - 2));
+        let frame = worker_request_frame(&at_limit).unwrap();
+        assert_eq!(frame.len(), 12 + MAX_WORKER_REQUEST);
+        let over_limit = json!("x".repeat(MAX_WORKER_REQUEST - 1));
+        assert!(worker_request_frame(&over_limit).is_err());
+    }
+
+    #[cfg(windows)]
+    fn native_receiver() -> crate::owned_process::Command {
+        use crate::owned_process::{Command, Stdio};
+        // Fixed non-UI transport fixture. It reads the publicized frame bytes,
+        // never evaluates payload text, and deliberately never waits for EOF.
+        let script = r#"
+$ErrorActionPreference='Stop'
+$source=[Console]::OpenStandardInput()
+function Read-Exact([int]$length) {
+    $bytes=[byte[]]::new($length)
+    $offset=0
+    while($offset -lt $length) {
+        $count=$source.Read($bytes,$offset,$length-$offset)
+        if($count -eq 0){throw 'Truncated request'}
+        $offset+=$count
+    }
+    return ,$bytes
+}
+$header=Read-Exact 12
+if([Text.Encoding]::ASCII.GetString($header,0,4) -cne 'WFRQ' -or
+   [BitConverter]::ToUInt32($header,4) -ne 1){throw 'Invalid frame'}
+$length=[BitConverter]::ToUInt32($header,8)
+if($length -lt 1 -or $length -gt 262144){throw 'Invalid length'}
+$payload=Read-Exact $length
+$text=[Text.Encoding]::UTF8.GetString($payload)
+if($text -ceq '{"outcome":"fail"}'){exit 17}
+$sink=[Console]::OpenStandardOutput()
+if($text -ceq '{"outcome":"wait"}') {
+    $marker=[Text.Encoding]::ASCII.GetBytes('accepted')
+    $sink.Write($marker,0,$marker.Length)
+    $sink.Flush()
+    $null=$source.ReadByte()
+    exit 19
+}
+$sink.Write($payload,0,$payload.Length)
+$sink.Flush()
+"#;
+        let system_root = std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into());
+        let executable =
+            PathBuf::from(&system_root).join("System32/WindowsPowerShell/v1.0/powershell.exe");
+        let mut command = Command::new(executable);
+        command
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .env_clear()
+            .env("SystemRoot", system_root)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null());
+        command
+    }
+
+    #[cfg(windows)]
+    async fn native_reply(value: &Value) -> (crate::owned_process::Status, Vec<u8>) {
+        use tokio::io::AsyncReadExt;
+        let frame = worker_request_frame(value).unwrap();
+        let mut child = native_receiver().spawn().await.unwrap();
+        let result = tokio::time::timeout(Duration::from_secs(10), async {
+            let _request_input = send_worker_request(&mut child, &frame)
+                .await
+                .map_err(|_| std::io::Error::other("Private request delivery failed"))?;
+            let stdout = child.stdout.take().unwrap();
+            let read = async move {
+                let mut bytes = Vec::new();
+                stdout
+                    .take((MAX_WORKER_REQUEST + 1) as u64)
+                    .read_to_end(&mut bytes)
+                    .await?;
+                Ok::<_, std::io::Error>(bytes)
+            };
+            let (bytes, status) = tokio::try_join!(read, child.wait())?;
+            Ok::<_, std::io::Error>((status, bytes))
+        })
+        .await;
+        if !matches!(&result, Ok(Ok(_))) {
+            child.kill().await.unwrap();
+        }
+        result
+            .expect("The actual owned pipe receiver must complete")
+            .unwrap()
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn native_owned_pipe_completes_small_and_large_frames_with_the_writer_retained() {
+        for request in [
+            json!({"text":"TEST","unicode":"识别"}),
+            json!({"text":"x".repeat(128 * 1024),"unicode":"识别"}),
+        ] {
+            let (status, bytes) = native_reply(&request).await;
+            assert!(status.success());
+            assert_eq!(serde_json::from_slice::<Value>(&bytes).unwrap(), request);
+        }
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn native_owned_pipe_observes_the_original_nonzero_receiver_exit() {
+        let (status, bytes) = native_reply(&json!({"outcome":"fail"})).await;
+        assert_eq!(
+            status.exit(),
+            crate::owned_process::ProcessExit::Windows { code: 17 }
+        );
+        assert!(bytes.is_empty());
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn native_owned_pipe_missing_input_retires_the_original_receiver() {
+        let mut child = native_receiver().spawn().await.unwrap();
+        let unavailable_input = child.stdin.take().unwrap();
+        let frame = worker_request_frame(&json!({"outcome":"wait"})).unwrap();
+        assert!(child.try_wait().unwrap().is_none());
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            send_worker_request(&mut child, &frame),
+        )
+        .await;
+        if result.is_err() {
+            child.kill().await.unwrap();
+        }
+        assert!(
+            result
+                .expect("Failed delivery must drain its original child")
+                .is_err()
+        );
+        assert_eq!(
+            child.try_wait().unwrap().unwrap().exit(),
+            crate::owned_process::ProcessExit::Windows { code: 1 }
+        );
+        drop(unavailable_input);
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn native_owned_pipe_cancellation_drains_the_original_waiting_receiver() {
+        use tokio::io::AsyncReadExt;
+        let mut child = native_receiver().spawn().await.unwrap();
+        let frame = worker_request_frame(&json!({"outcome":"wait"})).unwrap();
+        let result = tokio::time::timeout(Duration::from_secs(10), async {
+            let _request_input = send_worker_request(&mut child, &frame)
+                .await
+                .map_err(|_| std::io::Error::other("Private request delivery failed"))?;
+            let mut marker = [0; 8];
+            child
+                .stdout
+                .as_mut()
+                .unwrap()
+                .read_exact(&mut marker)
+                .await?;
+            if child.try_wait()?.is_some() {
+                return Err(std::io::Error::other(
+                    "The receiver exited before cancellation",
+                ));
+            }
+            child.kill().await?;
+            Ok::<_, std::io::Error>(marker)
+        })
+        .await;
+        if !matches!(&result, Ok(Ok(_))) {
+            child.kill().await.unwrap();
+        }
+        let marker = result
+            .expect("The original receiver must be cancellable")
+            .unwrap();
+        assert_eq!(&marker, b"accepted");
+        assert_eq!(
+            child.try_wait().unwrap().unwrap().exit(),
+            crate::owned_process::ProcessExit::Windows { code: 1 }
+        );
+    }
+}
+
 async fn execute(run: &Run, operation: Option<(&str, u64)>) -> Result<Value, ApiError> {
     if run.cancel.load(Ordering::SeqCst) {
         return Err(changed());
@@ -692,6 +928,7 @@ async fn execute(run: &Run, operation: Option<(&str, u64)>) -> Result<Value, Api
         })?;
     let python = run.python.as_ref().ok_or_else(unavailable)?;
     let runtime = run.runtime.as_ref().ok_or_else(unavailable)?;
+    let request = worker_request_frame(&envelope(run, operation))?;
     let tag = uuid::Uuid::new_v4().to_string();
     let output = run.dir.join(format!("output-{tag}.json"));
     let diagnostics = run.dir.join(format!("diagnostics-{tag}.txt"));
@@ -705,6 +942,14 @@ async fn execute(run: &Run, operation: Option<(&str, u64)>) -> Result<Value, Api
         .create_new(true)
         .open(&diagnostics)
         .map_err(io_error)?;
+    #[cfg(windows)]
+    let mut temp_workspace =
+        host_temp::Workspace::create(runtime, &run.dir, &tag).map_err(|_| unavailable())?;
+    #[cfg(windows)]
+    let host_temp_path = temp_workspace.path();
+    #[cfg(not(windows))]
+    let host_temp_path = &run.dir;
+
     let mut command = crate::owned_process::Command::new(python);
     command
         .args(["-I"])
@@ -720,8 +965,8 @@ async fn execute(run: &Run, operation: Option<(&str, u64)>) -> Result<Value, Api
             "SystemRoot",
             std::env::var_os("SystemRoot").unwrap_or_else(|| "C:\\Windows".into()),
         )
-        .env("TEMP", &run.dir)
-        .env("TMP", &run.dir)
+        .env("TEMP", host_temp_path)
+        .env("TMP", host_temp_path)
         .env("PYTHONUTF8", "1")
         .stdin(crate::owned_process::Stdio::piped())
         .stdout(crate::owned_process::Stdio::from(out))
@@ -729,16 +974,15 @@ async fn execute(run: &Run, operation: Option<(&str, u64)>) -> Result<Value, Api
     if operation.is_none() {
         command.arg("--progress").arg(run.dir.join("progress.json"));
     }
+    #[cfg(windows)]
+    temp_workspace.spawn_attempted();
     let mut child = command.spawn().await.map_err(io_error)?;
-    let request = serde_json::to_vec(&envelope(run, operation)).map_err(|_| changed())?;
-    if let Some(mut stdin) = child.stdin.take() {
-        let input = tokio::time::timeout(Duration::from_secs(15), stdin.write_all(&request)).await;
-        drop(stdin); // NamedPipeServer::shutdown only flushes; close sends EOF.
-        if !matches!(input, Ok(Ok(()))) {
-            child.kill().await.map_err(io_error)?;
-            return Err(changed());
-        }
+    let delivered = send_worker_request(&mut child, &request).await;
+    #[cfg(windows)]
+    if delivered.is_err() && matches!(child.try_wait(), Ok(Some(_))) {
+        temp_workspace.confirmed_terminal();
     }
+    let _request_input = delivered?;
     let start = std::time::Instant::now();
     let status = loop {
         if run.cancel.load(Ordering::SeqCst)
@@ -748,6 +992,8 @@ async fn execute(run: &Run, operation: Option<(&str, u64)>) -> Result<Value, Api
             || fs::metadata(&diagnostics).map_or(0, |m| m.len()) > 1024 * 1024
         {
             child.kill().await.map_err(io_error)?;
+            #[cfg(windows)]
+            temp_workspace.confirmed_terminal();
             return Err(changed());
         }
         if let Some(s) = child.try_wait().map_err(io_error)? {
@@ -755,6 +1001,8 @@ async fn execute(run: &Run, operation: Option<(&str, u64)>) -> Result<Value, Api
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     };
+    #[cfg(windows)]
+    temp_workspace.confirmed_terminal();
     if !status.success() {
         return Err(changed());
     }

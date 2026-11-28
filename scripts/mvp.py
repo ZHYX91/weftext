@@ -211,6 +211,7 @@ def check(artifacts=None, groups=None):
         checked(node, '--test', 'scripts/test_cli_serve.mjs')
         checked(sys.executable, 'scripts/recognition/test_schemes.py')
         checked(sys.executable, '-S', 'scripts/recognition/test_docx_reader.py')
+        checked(sys.executable, '-S', 'scripts/recognition/test_product_worker_transport.py')
         checked(sys.executable, 'resources/fonts/verify.py')
 
     def frontend():

@@ -23,4 +23,3 @@ export async function cancellableQuery<T>(signal: AbortSignal, prepare: () => Pr
         await acknowledgement;
     }
 }
-

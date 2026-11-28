@@ -39,4 +39,3 @@ test("a running query waits for its original cancellation receipt", async () => 
     cancelled.resolve();
     await observed;
 });
-
