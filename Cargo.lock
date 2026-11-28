@@ -4436,7 +4436,7 @@ checksum = "a28ac98ddc8b9274cb41bb4d9d4d5c425b6020c50c46f25559911905610b4a88"
 
 [[package]]
 name = "weftext-app"
-version = "0.7.0-rc.10"
+version = "0.7.0-rc.11"
 dependencies = [
  "axum",
  "base64 0.22.1",
@@ -4471,7 +4471,7 @@ dependencies = [
 
 [[package]]
 name = "weftext-core"
-version = "0.7.0-rc.10"
+version = "0.7.0-rc.11"
 dependencies = [
  "hmac",
  "libc",
@@ -4494,7 +4494,7 @@ dependencies = [
 
 [[package]]
 name = "weftext-data"
-version = "0.7.0-rc.10"
+version = "0.7.0-rc.11"
 dependencies = [
  "cel",
  "chrono",
@@ -4517,7 +4517,7 @@ dependencies = [
 
 [[package]]
 name = "weftext-engine"
-version = "0.7.0-rc.10"
+version = "0.7.0-rc.11"
 dependencies = [
  "base64 0.22.1",
  "serde",
@@ -4536,7 +4536,7 @@ dependencies = [
 
 [[package]]
 name = "weftext-enrollment"
-version = "0.7.0-rc.10"
+version = "0.7.0-rc.11"
 dependencies = [
  "libc",
  "serde",
@@ -4548,7 +4548,7 @@ dependencies = [
 
 [[package]]
 name = "weftext-export"
-version = "0.7.0-rc.10"
+version = "0.7.0-rc.11"
 dependencies = [
  "base64 0.22.1",
  "biblatex",
@@ -4568,7 +4568,7 @@ dependencies = [
 
 [[package]]
 name = "weftext-knowledge"
-version = "0.7.0-rc.10"
+version = "0.7.0-rc.11"
 dependencies = [
  "aho-corasick",
  "serde",
@@ -4592,7 +4592,7 @@ dependencies = [
 
 [[package]]
 name = "weftext-worker-broker"
-version = "0.7.0-rc.10"
+version = "0.7.0-rc.11"
 dependencies = [
  "libc",
  "serde",

@@ -223,7 +223,7 @@ Local Capture can retain the current draft and start or resume another blank dra
 
 System login startup selects one qualified profile at a time. Enabling it in another profile changes the application's actual startup target. The previous profile's personal intent remains retained, but does not establish the currently effective system selection. In a notification summary, opening one task pauses the other choices and refresh until the document is adopted or the attempt fails. A failed attempt leaves the summary available. A notification activation failure or timeout ends only that activation wait; it cannot close a subsequently opened author window or revoke a later accepted CLI service.
 
-This native GUI batch targets Windows 11 x64, build 22000 or later, with the contract's minimum WebView2 Runtime. Core/HTTP/CLI capability checks are independent. Headless checks on Windows Server 2022 do not qualify Windows 11 GUI, notifications or installation.
+This native GUI batch targets Windows 10 22H2 x64 (build 19045) and later Windows desktop versions, with the contract's minimum WebView2 Runtime. Core/HTTP/CLI capability checks are independent. Headless checks on Windows Server 2022 do not qualify Windows 11 GUI, notifications or installation.
 
 | Delivery capability | MSIX | ZIP |
 | --- | --- | --- |

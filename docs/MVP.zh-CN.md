@@ -222,7 +222,7 @@ Library 与独立 Capture 入口在实际作者所有者注册后才向原生宿
 
 系统登录启动一次只选择一个已核验的 profile。在另一个 profile 启用时，会切换本应用的实际登录启动目标；旧 profile 的个人意图仍保留，但不代表它仍是系统当前生效的选择。在通知摘要中打开一项任务时，其他任务和刷新暂不可用，直到打开成功或本次尝试失败。失败后仍可在摘要中选择。一次通知激活失败或等待到期只结束那次启动等待，不能关闭随后打开的作者窗口或撤销后来接纳的 CLI 服务。
 
-Windows 原生 GUI 的本批目标是 Windows 11 x64、build 22000 起，并要求合同内最低 WebView2 Runtime。Core／HTTP／CLI 的能力检查独立；Windows Server 2022 的无界面检查不构成 Windows 11 GUI、通知或安装验收。
+Windows 原生 GUI 的本批目标是 Windows 10 22H2 x64（build 19045）及后续 Windows 桌面版本，并要求合同内最低 WebView2 Runtime。Core／HTTP／CLI 的能力检查独立；Windows Server 2022 的无界面检查不构成 Windows 11 GUI、通知或安装验收。
 
 | 交付能力 | MSIX | ZIP |
 | --- | --- | --- |

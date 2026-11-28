@@ -244,11 +244,20 @@ impl Desktop {
 /// Headless Core/HTTP/CLI/worker checks on Server 2022 do not call this function.
 fn qualify_gui() -> Result<(), ServeError> {
     use windows::Win32::System::SystemInformation::*;
+    let [major, minor, build] = crate::host_contract::get()
+        .ok()
+        .and_then(|contract| contract.platform.minimum_os_version())
+        .ok_or_else(|| {
+            error(
+                "hostContract",
+                "The shared Windows host contract is invalid",
+            )
+        })?;
     let mut version = OSVERSIONINFOEXW {
         dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOEXW>() as u32,
-        dwMajorVersion: 10,
-        dwMinorVersion: 0,
-        dwBuildNumber: 22000,
+        dwMajorVersion: major.into(),
+        dwMinorVersion: minor.into(),
+        dwBuildNumber: build.into(),
         wProductType: 1,
         ..Default::default()
     };
@@ -278,7 +287,7 @@ fn qualify_gui() -> Result<(), ServeError> {
     .map_err(|_| {
         error(
             "desktopPlatform",
-            "The Windows desktop requires Windows 11 x64 build 22000 or later",
+            "The Windows desktop requires Windows 10 22H2 x64 (build 19045) or later and must meet this build's host contract",
         )
     })
 }
