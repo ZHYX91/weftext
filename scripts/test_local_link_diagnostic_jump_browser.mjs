@@ -36,7 +36,9 @@ try {
       graph: null, headingStructure: null, links: null, renderedLinks: [], citations: null, mentions: null,
       annotations: [], annotationStatus: "valid", templates: [], trash: [], warnings: [], errors: [],
       annotationDiagnostics: [], propertyReferences: { coverage: "complete", items: [], diagnostics: [] },
-      diagnostics: { coverage: "complete", scannedNodes: 1, nodes: [], issues: [item] },
+      diagnostics: { coverage: "complete", scannedNodes: 1, nodes: [], issues: [
+        item, { ...item, occurrence: { ...item.occurrence, utf16From: source.indexOf(address), utf16To: source.indexOf(address) + address.length } },
+      ] },
     };
     let context = { ...owner }, held, next = null;
     const selected = [], notices = [];
@@ -56,13 +58,17 @@ try {
     window.fixture = {
       reset() { context = { ...owner }; selected.length = notices.length = 0; held = undefined; },
       arm() { window.fixture.claimed = false; next = () => { window.fixture.claimed = true; }; },
-      release() { held(); },
+      release() { return held(); },
       edit() { context = { ...context, serial: 1, inputId: "edited", source: "前缀。" + source }; },
       check() { return { selected, notices, from, to: from + address.length }; },
     };
     await panel.refresh();
   });
-  const locate = page.getByRole("button", { name: "定位来源", exact: true });
+  await page.getByLabel("问题分组", { exact: true }).selectOption("occurrence");
+  const actions = page.getByRole("button", { name: "定位来源", exact: true });
+  assert.equal(await actions.count(), 2);
+  const locate = actions.first();
+  const nextLocate = actions.last();
   await locate.click();
   await page.waitForFunction(() => window.fixture.check().selected.length === 1);
   const { from, to, selected } = await page.evaluate(() => window.fixture.check());
@@ -81,6 +87,25 @@ try {
     assert.equal(result.notices.length, 1);
     assert.equal(await other.evaluate(el => el === document.activeElement), true);
   }
+  await page.evaluate(() => { window.fixture.reset(); window.fixture.arm(); });
+  await locate.click();
+  await page.waitForFunction(() => window.fixture.claimed);
+  await nextLocate.click();
+  await page.waitForFunction(() => window.fixture.check().selected.length === 1);
+  const newest = await page.evaluate(() => window.fixture.check().selected[0]);
+  assert.notEqual(newest.from, from);
+  assert.equal(newest.to - newest.from, to - from);
+  await page.evaluate(async () => {
+    await window.fixture.release();
+    await new Promise(requestAnimationFrame);
+  });
+  const overlap = await page.evaluate(() => window.fixture.check());
+  if (process.env.EXPECT_STALE_DIAGNOSTIC_JUMP) {
+    assert.deepEqual(overlap.selected, [newest, { session: "A", from, to }], "baseline reselects older occurrence");
+  } else {
+    assert.deepEqual(overlap.selected, [newest], "only the latest activation may select the source");
+    assert.deepEqual(overlap.notices, [], "superseded successful verification is not an error");
+  }
   assert.deepEqual(errors, []);
-  console.log("Knowledge diagnostic uses exact repeated range; delayed switch/edit never moves focus or caret");
+  console.log("Repeated source ranges, switch/edit and reverse delivery of two diagnostic selections checked");
 } finally { await browser.close(); await vite.close(); }
