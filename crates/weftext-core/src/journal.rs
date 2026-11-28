@@ -37,11 +37,11 @@ impl InventoryPendingRead {
     pub(crate) fn check_path(&self, core: &Core, path: &Path) -> Result<()> {
         crate::query_read_checkpoint()?;
         core.backend.check_path(path)?;
-        core.check_pending_path_in(path, self.unchecked(core)?)
+        core.check_pending_path_in(path, self.unchecked(core)?.into_iter())
     }
 
     pub(crate) fn check_identity(&self, core: &Core, identity: &FileIdentity) -> Result<()> {
-        core.check_pending_identity_in(identity, self.unchecked(core)?)
+        core.check_pending_identity_in(identity, self.unchecked(core)?.into_iter())
     }
 
     fn unchecked<'a>(&self, core: &'a Core) -> Result<Vec<&'a Plan>> {
