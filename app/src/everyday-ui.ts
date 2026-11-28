@@ -68,8 +68,9 @@ export function openEverydayMenu(
             list.append(empty);
         }
     };
+    let composing = false;
     const keys = (event: KeyboardEvent) => {
-        if (event.isComposing || event.keyCode === 229)
+        if (event.isComposing || event.keyCode === 229 || (composing && event.target === search))
             return;
         if (event.key === "Escape") {
             event.preventDefault();
@@ -93,11 +94,14 @@ export function openEverydayMenu(
         if (!composing)
             render();
     };
-    let composing = false;
     search.addEventListener("compositionstart", () => { composing = true; });
     search.addEventListener("compositionend", () => { composing = false; render(); });
     dialog.onkeydown = keys;
-    dialog.oncancel = event => { event.preventDefault(); close(); };
+    dialog.oncancel = event => {
+        event.preventDefault();
+        if (!composing || document.activeElement !== search)
+            close();
+    };
     const cancel = document.createElement("button");
     cancel.type = "button";
     setUiText(cancel, message("common.close"));
