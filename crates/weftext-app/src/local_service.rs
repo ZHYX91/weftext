@@ -168,6 +168,7 @@ impl LocalService {
             uuid::Uuid::new_v4().simple()
         );
         let state = api::AppState {
+            draft_lane: Default::default(),
             core: Arc::new(Mutex::new(core)),
             token: Arc::from(token.as_str()),
             port,

@@ -49,6 +49,8 @@ Indexes are rebuildable projections. Define version, coverage, freshness, increm
 
 Local, saved and embedded queries support cancellation while running. The client reserves a short-lived, single-use ticket at the authenticated `query/prepare` endpoint and passes it in the `X-Weftext-Query-Run` header. The `query/cancel` endpoint matches the original credential and ticket, and waits for active reads and native processes to finish. Once result delivery begins, cancellation returns unavailable.
 
+During local scope qualification, Core can service ordered editor Draft persistence between guarded reads. The same Core retains the complete source handle set for the indivisible capture. Other writes still use the exclusive Core lease. A Draft acknowledgement uses its own persistence outcome even if the Query is cancelled.
+
 ## Delivery order
 
 Use independently executable slices for the entry-point inventory, core conditions and parameters, execution and benchmarks, text search, collections and relations, relative dates and parameter forms, frozen result views, and removal of obsolete code and documentation. Each slice records success and refusal cases and the commands and outcomes. Before release, combine index updates/recovery/revocation, concurrency and cancellation, paging and changed-input scenarios. Record implemented behavior, tested behavior and outstanding acceptance per surface.

@@ -44,6 +44,59 @@ struct Rules {
     unmanaged: HashSet<PathBuf>,
     warnings: Vec<CoreDescription>,
 }
+enum InventoryAccess<'a> {
+    Shared(&'a Core),
+    Query(&'a mut Core),
+}
+
+enum InventoryPending<'a> {
+    Shared(journal::PendingRead<'a>),
+    Query(journal::InventoryPendingRead),
+}
+
+impl InventoryPending<'_> {
+    fn check_path(&self, core: &Core, path: &Path) -> Result<()> {
+        match self {
+            Self::Shared(pending) => pending.check_path(path),
+            Self::Query(pending) => pending.check_path(core, path),
+        }
+    }
+
+    fn check_identity(&self, core: &Core, identity: &FileIdentity) -> Result<()> {
+        match self {
+            Self::Shared(pending) => pending.check_identity(identity),
+            Self::Query(pending) => pending.check_identity(core, identity),
+        }
+    }
+
+    fn recheck(&self, core: &Core) -> Result<()> {
+        match self {
+            Self::Shared(pending) => pending.recheck(),
+            Self::Query(pending) => pending.recheck(core),
+        }
+    }
+}
+
+impl std::ops::Deref for InventoryAccess<'_> {
+    type Target = Core;
+
+    fn deref(&self) -> &Core {
+        match self {
+            Self::Shared(core) => core,
+            Self::Query(core) => core,
+        }
+    }
+}
+
+impl InventoryAccess<'_> {
+    fn checkpoint(&mut self) -> Result<()> {
+        match self {
+            Self::Shared(_) => crate::query_read_checkpoint(),
+            Self::Query(core) => core.query_draft_checkpoint(),
+        }
+    }
+}
+
 impl Core {
     /// Read only an immediate ordinary file that current discovery rules expose
     /// in the selected folder. Hosted callers must use their independently
@@ -142,7 +195,21 @@ impl Core {
         })
     }
     pub fn inventory(&self, root: impl AsRef<Path>) -> Result<Inventory> {
-        let root = absolute_path(root.as_ref())?;
+        InventoryAccess::Shared(self).inventory(root.as_ref())
+    }
+
+    pub fn query_inventory(&mut self, root: impl AsRef<Path>) -> Result<Inventory> {
+        if self.query_drafts.is_some() {
+            InventoryAccess::Query(self).inventory(root.as_ref())
+        } else {
+            self.inventory(root)
+        }
+    }
+}
+
+impl InventoryAccess<'_> {
+    fn inventory(&mut self, root: &Path) -> Result<Inventory> {
+        let root = absolute_path(root)?;
         // Qualify and retain the root ancestor closure while browsing; descendants
         // are separately opened with relative guarded handles before reading bytes.
         let anchor = root.join(".weftext-inventory-prospective");
@@ -153,6 +220,7 @@ impl Core {
         // entire journal for each source makes one complete inventory quadratic
         // in journal I/O. Every later inventory builds this evidence afresh.
         let mut nodes_by_identity = BTreeMap::new();
+        self.checkpoint()?;
         for plan in self.committed_plans()? {
             crate::query_read_checkpoint()?;
             for birth in self.read_births(&plan.operation_id)? {
@@ -178,7 +246,11 @@ impl Core {
         };
         let mut queue = vec![(root.clone(), false)];
         let mut total = 0;
-        let pending = self.pending_read();
+        self.checkpoint()?;
+        let pending = match self {
+            Self::Shared(core) => InventoryPending::Shared((*core).pending_read()),
+            Self::Query(core) => InventoryPending::Query(core.pending_read().detach()),
+        };
         while let Some((directory, inherited_unmanaged)) = queue.pop() {
             let directory_guard = match ParentGuard::acquire(
                 &self.backend,
@@ -206,14 +278,14 @@ impl Core {
             }
             children.sort_by(|a, b| a.0.cmp(&b.0));
             for (name, attrs) in children {
-                crate::query_read_checkpoint()?;
+                self.checkpoint()?;
                 let path = directory.join(name);
                 if result.entries.len() >= MAX_ENTRIES {
                     result.complete = false;
                     result
                         .warnings
                         .push(UiMessage::inventory_entries_capped().into());
-                    pending.recheck()?;
+                    pending.recheck(self)?;
                     return Ok(result);
                 }
                 let relative = path.strip_prefix(&root).unwrap().to_path_buf();
@@ -263,7 +335,7 @@ impl Core {
                         result
                             .warnings
                             .push(UiMessage::inventory_source_budget_reached().into());
-                    } else if pending.check_path(&path).is_err() {
+                    } else if pending.check_path(self, &path).is_err() {
                         result.complete = false;
                         item.identity_status = "recoveryPending".into();
                     } else {
@@ -272,7 +344,7 @@ impl Core {
                             let mut file = guard.open_read_guard_file()?;
                             let bytes = read_source(&mut file)?;
                             let id = stamp(&file)?.identity;
-                            pending.check_identity(&id)?;
+                            pending.check_identity(self, &id)?;
                             Ok((decode(&bytes)?, id))
                         })();
                         match observed {
@@ -346,9 +418,12 @@ impl Core {
         result
             .entries
             .sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
-        pending.recheck()?;
+        pending.recheck(self)?;
         Ok(result)
     }
+}
+
+impl Core {
     pub(crate) fn check_discovery_boundary(&self, root: &Path, parent: &Path) -> Result<()> {
         let relative = parent.strip_prefix(root).map_err(|_| {
             CoreError::new(

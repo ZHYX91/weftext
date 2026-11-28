@@ -12,7 +12,72 @@ pub(crate) struct PendingRead<'a> {
     unchecked: Vec<&'a Plan>,
 }
 
+/// A short-lived copy of just the original operation IDs across cooperative
+/// inventory checkpoints. Ordinary reads keep the borrowed Plan cut.
+pub(crate) struct InventoryPendingRead {
+    committed: Vec<String>,
+    unchecked: Vec<String>,
+}
+
+impl InventoryPendingRead {
+    pub(crate) fn recheck(&self, core: &Core) -> Result<()> {
+        for id in &self.committed {
+            crate::query_read_checkpoint()?;
+            Self::plan(core, id)?;
+            if !core.committed(id)? {
+                return Err(CoreError::new(
+                    "identityPending",
+                    UiMessage::error_core_backend_accepted_decision_missing(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn check_path(&self, core: &Core, path: &Path) -> Result<()> {
+        crate::query_read_checkpoint()?;
+        core.backend.check_path(path)?;
+        core.check_pending_path_in(path, self.unchecked(core)?)
+    }
+
+    pub(crate) fn check_identity(&self, core: &Core, identity: &FileIdentity) -> Result<()> {
+        core.check_pending_identity_in(identity, self.unchecked(core)?)
+    }
+
+    fn unchecked<'a>(&self, core: &'a Core) -> Result<Vec<&'a Plan>> {
+        self.unchecked
+            .iter()
+            .map(|id| Self::plan(core, id))
+            .collect()
+    }
+
+    fn plan<'a>(core: &'a Core, id: &str) -> Result<&'a Plan> {
+        core.operations
+            .get(id)
+            .filter(|plan| plan.operation_id == id)
+            .ok_or_else(|| {
+                CoreError::new(
+                    "identityPending",
+                    UiMessage::error_core_backend_accepted_decision_missing(),
+                )
+            })
+    }
+}
+
 impl PendingRead<'_> {
+    pub(crate) fn detach(self) -> InventoryPendingRead {
+        let ids = |plans: Vec<&Plan>| {
+            plans
+                .into_iter()
+                .map(|plan| plan.operation_id.clone())
+                .collect()
+        };
+        InventoryPendingRead {
+            committed: ids(self.committed),
+            unchecked: ids(self.unchecked),
+        }
+    }
+
     pub(crate) fn check_path(&self, path: &Path) -> Result<()> {
         crate::query_read_checkpoint()?;
         self.core.backend.check_path(path)?;

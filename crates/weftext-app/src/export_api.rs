@@ -1207,6 +1207,7 @@ mod tests {
     }
     fn state_with_core(core: Core) -> AppState {
         AppState {
+            draft_lane: Default::default(),
             core: Arc::new(Mutex::new(core)),
             token: Arc::from("test-output"),
             port: 12345,

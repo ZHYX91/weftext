@@ -608,6 +608,14 @@ struct Birth {
     identity: FileIdentity,
 }
 
+/// A queued local editor write and its private completion channel.
+pub struct PendingOrderedDraft {
+    pub request: DraftInputRequest,
+    pub complete: Box<dyn FnOnce(Result<DocumentDraftEvidence>) + Send>,
+}
+
+type QueryDraftSource = std::sync::Arc<dyn Fn() -> Option<PendingOrderedDraft> + Send + Sync>;
+
 pub struct Core {
     backend: BackendContext,
     actor_library: Option<hosted::ActorLibraryBinding>,
@@ -618,6 +626,7 @@ pub struct Core {
     _private_guards: Vec<ParentGuard>,
     data_dir: PathBuf,
     sessions: HashMap<String, Session>,
+    query_drafts: Option<QueryDraftSource>,
     operations: HashMap<String, journal::Plan>,
     committed_sequence: std::sync::atomic::AtomicU64,
     snapshots: HashMap<String, operations::SnapshotBinding>,
@@ -628,6 +637,35 @@ pub struct Core {
     query_product_index: Option<query_product_index::QueryProductIndex>,
 }
 impl Core {
+    /// Poll the local editor only at explicit unlocked-leaf boundaries in a
+    /// read-only Query capture. The caller retains the exclusive Core lease.
+    pub fn with_query_draft_checkpoints<T>(
+        &mut self,
+        source: std::sync::Arc<dyn Fn() -> Option<PendingOrderedDraft> + Send + Sync>,
+        read: impl FnOnce(&mut Self) -> T,
+    ) -> T {
+        let previous = self.query_drafts.replace(source);
+        let result = read(self);
+        self.query_drafts = previous;
+        result
+    }
+
+    fn query_draft_checkpoint(&mut self) -> Result<()> {
+        query_read_checkpoint()?;
+        let source = self.query_drafts.take();
+        if let Some(PendingOrderedDraft { request, complete }) =
+            source.as_ref().and_then(|poll| poll())
+        {
+            // A draft may need original journal reads of its own. It does
+            // not inherit the enclosing Query's stop flag or draft polling.
+            complete(weftext_data::without_query_stop(|| {
+                self.persist_draft_ordered(request)
+            }));
+        }
+        self.query_drafts = source;
+        Ok(())
+    }
+
     pub fn query_text_index(&self, scope: &[&str]) -> weftext_data::QueryTextIndex {
         self.query_text_index.scoped(scope)
     }
@@ -738,6 +776,7 @@ impl Core {
             _private_guards: private_guards,
             data_dir,
             sessions: HashMap::new(),
+            query_drafts: None,
             operations: HashMap::new(),
             committed_sequence: std::sync::atomic::AtomicU64::new(0),
             snapshots: HashMap::new(),

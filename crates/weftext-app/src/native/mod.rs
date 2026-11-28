@@ -1276,21 +1276,27 @@ async fn draft_call(
 ) -> (serde_json::Value, Option<String>) {
     let session = request.session_id().to_owned();
     let acknowledges = request.acknowledges_input();
-    let result = crate::core_call(state, move |core| match request {
+    let result = match request {
         close::DraftRequest::Persist { body } => {
             let revision = body.input_revision;
-            let evidence = core.persist_draft_ordered(body)?;
-            Ok(serde_json::json!({"ok":true,"inputRevision":revision,"evidence":evidence}))
+            crate::draft_lane::persist(state, body).await.map(|evidence| {
+                serde_json::json!({"ok":true,"inputRevision":revision,"evidence":evidence})
+            })
         }
         close::DraftRequest::Resume { body } => {
-            core.resume_recovered_draft(body)?;
-            Ok(serde_json::json!({"ok":true}))
+            crate::core_call(state, move |core| {
+                core.resume_recovered_draft(body)?;
+                Ok(serde_json::json!({"ok":true}))
+            })
+            .await
         }
         close::DraftRequest::Flush { body } => {
-            Ok(serde_json::to_value(core.flush_document_draft(body)?)?)
+            crate::core_call(state, move |core| {
+                Ok(serde_json::to_value(core.flush_document_draft(body)?)?)
+            })
+            .await
         }
-    })
-    .await;
+    };
     match result {
         Ok(body) => (body, acknowledges.then_some(session)),
         Err(error) => (serde_json::json!({"error":error}), None),

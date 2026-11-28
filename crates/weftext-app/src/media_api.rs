@@ -1458,6 +1458,7 @@ mod tests {
         let bytes = image.into_inner();
         std::fs::write(&path, &bytes).unwrap();
         let state = AppState {
+            draft_lane: Default::default(),
             core: Arc::new(Mutex::new(Core::new(temp.path().join("private")).unwrap())),
             token: Arc::from("test-token"),
             port: 0,
@@ -1824,6 +1825,7 @@ mod tests {
         core.execute_operation(&operation_id, &preview.plan_id)
             .unwrap();
         let state = AppState {
+            draft_lane: Default::default(),
             core: Arc::new(Mutex::new(core)),
             token: Arc::from("test-token"),
             port: 0,
@@ -1946,6 +1948,7 @@ mod tests {
             .revision
             .unwrap();
         let state = AppState {
+            draft_lane: Default::default(),
             core: Arc::new(Mutex::new(core)),
             token: Arc::from("test-token"),
             port: 0,

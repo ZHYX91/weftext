@@ -59,6 +59,7 @@ pub mod client_protocol;
 mod compiler_worker;
 mod data_api;
 mod desktop_api;
+mod draft_lane;
 mod embedded_output;
 mod embedded_query_api;
 mod export_api;
@@ -105,6 +106,7 @@ static ASSETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../app/dist");
 #[derive(Clone)]
 struct AppState {
     core: Arc<Mutex<Core>>,
+    draft_lane: draft_lane::DraftLane,
     token: Arc<str>,
     port: u16,
     locations: Arc<Mutex<HashMap<String, Location>>>,
@@ -850,7 +852,7 @@ async fn draft(
     RequestJson(req): RequestJson<DraftRequest>,
 ) -> ApiResult {
     let revision = req.input_revision;
-    let evidence = core_call(&state, move |c| c.persist_draft_ordered(req)).await?;
+    let evidence = draft_lane::persist(&state, req).await?;
     Ok(Json(
         json!({"ok":true,"inputRevision":revision,"evidence":evidence}),
     ))

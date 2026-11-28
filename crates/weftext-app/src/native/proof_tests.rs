@@ -44,6 +44,7 @@ async fn actual_native_verify_and_retire_reprove_exact_input_while_other_produce
         missing.as_object_mut().unwrap().remove("inputId");
         assert!(serde_json::from_value::<Proof>(missing).is_err());
         let state = crate::AppState {
+            draft_lane: Default::default(),
             core: Arc::new(Mutex::new(core)),
             token: Arc::from("test-token"),
             port: 0,

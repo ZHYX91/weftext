@@ -3699,9 +3699,10 @@ impl Core {
         // private authority, not all raw directories that resemble Nodes.
         let mut expected = BTreeMap::new();
         let mut trashed = BTreeSet::new();
-        for p in self.committed_plans()?.into_iter() {
+        self.query_draft_checkpoint()?;
+        for plan in self.committed_plans()? {
             crate::query_read_checkpoint()?;
-            for b in self.read_births(&p.operation_id)? {
+            for b in self.read_births(&plan.operation_id)? {
                 if b.workspace_id == workspace.workspace_id {
                     expected.insert(b.node_id.clone(), b);
                 }
@@ -3715,7 +3716,7 @@ impl Core {
             }
         }
         expected.retain(|id, _| !trashed.contains(id));
-        let mut inventory = self.inventory(&root)?;
+        let mut inventory = self.query_inventory(&root)?;
         let raw_complete = inventory.complete;
         let raw_pending = inventory
             .entries
@@ -3738,7 +3739,7 @@ impl Core {
             }
         }
         for (id, birth) in &expected {
-            crate::query_read_checkpoint()?;
+            self.query_draft_checkpoint()?;
             let Some(Some(candidate)) = admitted_by_id.get(id.as_str()) else {
                 complete = false;
                 warnings.push(
@@ -3782,6 +3783,7 @@ impl Core {
         // All selected share-zero source/config handles coexist during capture.
         // Core commit cannot run between members because this authority is mutably
         // borrowed; new raw files cannot fabricate committed birth membership.
+        self.query_draft_checkpoint()?;
         let (mut cut, tags) =
             match self.read_bounded_snapshot(&root, &paths, MAX_OPERATION_FILES + 2) {
                 Ok(mut cut) => {
@@ -4240,6 +4242,7 @@ impl Core {
         let mut captured = Vec::new();
         let mut directories = Vec::new();
         snapshot_tree(&self.backend, root, &mut captured, &mut directories, false)?;
+        self.query_draft_checkpoint()?;
         let (mut guards, handles) = self.hold_compile_tree(&captured, &directories)?;
         let exact_paths: BTreeMap<_, _> = captured
             .iter()

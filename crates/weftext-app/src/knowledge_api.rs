@@ -4494,6 +4494,7 @@ mod tests {
             })
             .unwrap();
         let state = AppState {
+            draft_lane: Default::default(),
             core: Arc::new(Mutex::new(core)),
             token: Arc::from("test-token"),
             port: 0,

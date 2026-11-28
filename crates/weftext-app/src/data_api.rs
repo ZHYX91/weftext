@@ -1828,7 +1828,7 @@ async fn query(
     RequestJson(req): RequestJson<QueryRequest>,
 ) -> Result<(axum::http::HeaderMap, Json<Value>), ApiError> {
     let started = std::time::Instant::now();
-    let frozen = core_call(&state, move |core| {
+    let frozen = crate::draft_lane::query_capture(&state, move |core| {
         let mut frozen = query_render_snapshot(core, &req.root, req.plan, None)?;
         freeze_query_definitions(core, &mut frozen, req.parameters)?;
         Ok(frozen)
@@ -2735,7 +2735,7 @@ struct OwnerSource {
 }
 
 fn owner_source(core: &mut Core, root: &str, owner: &str) -> Result<OwnerSource, CoreError> {
-    let inventory = core.inventory(root)?;
+    let inventory = core.query_inventory(root)?;
     let entry = resolve_entity(&inventory, owner)?;
     let mut snapshot = core.read_snapshot(&inventory.root, std::slice::from_ref(&entry.path))?;
     let file = snapshot.files.pop().ok_or_else(|| {
@@ -3262,7 +3262,7 @@ fn freeze_embedded_query(
     binding: weftext_data::SavedQueryBinding,
     parameters: BTreeMap<String, NativeValue>,
 ) -> Result<FrozenQuery, CoreError> {
-    let inventory = core.inventory(root)?;
+    let inventory = core.query_inventory(root)?;
     let workspace = inventory.workspace_id.as_ref().ok_or_else(|| {
         CoreError::new(
             "queryUnavailable",
@@ -3347,7 +3347,7 @@ pub(crate) async fn run_embedded_query(
     binding: weftext_data::SavedQueryBinding,
     parameters: BTreeMap<String, NativeValue>,
 ) -> Result<Value, ApiError> {
-    let frozen = core_call(state, move |core| {
+    let frozen = crate::draft_lane::query_capture(state, move |core| {
         freeze_embedded_query(core, &root, &path, &source, plan, binding, parameters)
     })
     .await?;
@@ -3362,7 +3362,7 @@ pub(crate) async fn validate_embedded_query_plan(
     plan: weftext_data::QueryPlan,
     binding: weftext_data::SavedQueryBinding,
 ) -> Result<(), ApiError> {
-    core_call(state, move |core| {
+    crate::draft_lane::query_capture(state, move |core| {
         let frozen =
             freeze_embedded_query(core, &root, &path, &source, plan, binding, BTreeMap::new())?;
         with_temporary_frozen_query(core, frozen, |_core, frozen| {
@@ -3425,7 +3425,7 @@ async fn run_definition(
     RequestJson(req): RequestJson<DefinitionRunRequest>,
 ) -> ApiResult {
     let (frozen, definition, revision, mode, owner_revision, changed) =
-        core_call(&state, move |core| {
+        crate::draft_lane::query_capture(&state, move |core| {
             let current = owner_source(core, &req.root, &req.owner)?;
             let (definition, revision) =
                 select_saved_definition(core, &req.root, &current, &req.selection)?;
@@ -3797,6 +3797,7 @@ mod tests {
         let mut core = Core::new(directory.path().join("state")).unwrap();
         core.create_library(&root).unwrap();
         let state = AppState {
+            draft_lane: Default::default(),
             core: Arc::new(Mutex::new(core)),
             token: Arc::from("fixture-token"),
             port: 12345,
@@ -3810,6 +3811,90 @@ mod tests {
             initial: None,
         };
         (directory, state, root.to_string_lossy().to_string())
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn local_draft_ack_completes_during_query_capture_and_survives_query_cancel() {
+        use std::{
+            future::{Future, poll_fn},
+            sync::atomic::AtomicBool,
+            task::Poll,
+        };
+        use weftext_core::{DocumentDraftEvidence, DocumentDraftFlush, DraftInputRequest};
+
+        for cancel in [false, true] {
+            let (_directory, state, root) = fixture();
+            let document = state
+                .core
+                .lock()
+                .unwrap()
+                .create_note_fixture(&root, &root, "Draft")
+                .unwrap();
+            let (query_started, started) = tokio::sync::oneshot::channel();
+            let (query_continue, resume) = std::sync::mpsc::channel();
+            let (query_release, release) = std::sync::mpsc::channel();
+            let query_state = state.clone();
+            let query = tokio::spawn(async move {
+                crate::draft_lane::query_capture(&query_state, move |core| {
+                    query_started.send(()).unwrap();
+                    resume.recv().unwrap();
+                    let captured =
+                        weftext_data::with_query_stop(Arc::new(AtomicBool::new(cancel)), || {
+                            core.admitted_snapshot(&root)
+                        })?;
+                    // Hold the exclusive lease after the capture so a draft
+                    // sent through the old mutex-only path cannot report success.
+                    release.recv().unwrap();
+                    let members = captured.membership_ids.clone();
+                    core.release_admitted_cut(&captured.cut_id);
+                    Ok(members)
+                })
+                .await
+            });
+            started.await.unwrap();
+            let source = format!("{}\nDraft only", document.source);
+            let input_id = uuid::Uuid::new_v4().to_string();
+            let request = DraftInputRequest {
+                session_id: document.session_id.clone(),
+                source: source.clone(),
+                input_revision: 1,
+                input_id: input_id.clone(),
+                base_id: Some(document.base_id.clone()),
+                retained_base_source: None,
+            };
+            let draft = crate::draft(State(state.clone()), RequestJson(request));
+            tokio::pin!(draft);
+            assert!(poll_fn(|cx| Poll::Ready(draft.as_mut().poll(cx).is_pending())).await);
+            query_continue.send(()).unwrap();
+            let acknowledged =
+                tokio::time::timeout(std::time::Duration::from_secs(10), draft).await;
+            // Release the worker even if the old path caused a timeout.
+            let _ = query_release.send(());
+            let acknowledgement = acknowledged.unwrap().unwrap().0;
+            assert_eq!(acknowledgement["inputRevision"], 1);
+            assert_eq!(acknowledgement["evidence"], "authorDraft");
+            let query = query.await.unwrap();
+            if cancel {
+                assert_eq!(query.unwrap_err().code, "queryCancelled");
+            } else {
+                assert!(query.unwrap().contains(document.node_id.as_ref().unwrap()));
+            }
+            let mut core = state.core.lock().unwrap();
+            let receipt = core
+                .flush_document_draft(DocumentDraftFlush {
+                    session_id: document.session_id,
+                    base_id: document.base_id,
+                    source_digest: weftext_engine::source_hash(&source),
+                    input_id: Some(input_id),
+                })
+                .unwrap();
+            assert_eq!(receipt.evidence, DocumentDraftEvidence::AuthorDraft);
+            assert_eq!(
+                std::fs::read_to_string(document.path).unwrap(),
+                document.source
+            );
+        }
     }
 
     #[cfg(windows)]
