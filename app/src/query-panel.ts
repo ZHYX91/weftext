@@ -19,7 +19,8 @@ import { tagPicker } from "./tag-picker";
 import { tagCancellationStatus, tagOperationStatus } from "./tag-navigation-state";
 import { QueryRefreshQueue, queryRefreshKey } from "./query-refresh";
 import { updateQueryChoices, type QueryChoice } from "./query-control-state";
-import { parseQueryPlan, parseQueryParameters, type QueryPlan } from "./query-plan";
+import { andPredicates, parseQueryPlan, parseQueryParameters, type QueryPlan } from "./query-plan";
+import { queryPlanControls } from "./query-plan-controls";
 import { queryArgumentControls } from "./query-argument-controls";
 interface PeriodLookup {
     period: NativeValue;
@@ -990,7 +991,7 @@ function planForInputs(input: QueryPlanInputs, schema: DataSchema | null): Query
     if (input.exactPlan) {
         const plan = structuredClone(input.exactPlan);
         plan.types = [...input.types];
-        plan.where = composeWhere(input.search, input.includeBody, input.conditions, plan.where ?? "");
+        plan.where = andPredicates(plan.where, composeWhere(input.search, input.includeBody, input.conditions, ""));
         return plan;
     }
     const field = (key: string) => schema?.fields.find(item => item.key === key)?.id;
@@ -1241,7 +1242,7 @@ export class QueryPanel {
     setPlan(plan: QueryPlan): void { if (this.closeGuard.frozen) return; this.draftFlags.delete("advanced"); this.adoptPlan(plan); this.renderControls(); void this.refresh(); }
     private adoptPlan(plan: QueryPlan): void { this.savedSelection = null; this.savedPlan = null; this.definitionRevision = null; this.exactPlan = structuredClone(plan); this.advancedDraft = JSON.stringify(plan, null, 2); this.directory = plan.scope.directory ?? null; this.scopeIdentity = this.directory?.startsWith("weftext-") ? this.directory : null; this.descendants = plan.scope.descendants; this.lifecycle = plan.scope.lifecycle; this.types = [...plan.types]; this.conditions = []; this.search = ""; this.expression = ""; this.group = plan.group; this.take = plan.take ?? 200; this.loadPreferences(); }
     private libraryIdentity(): string { return this.workspaceId ? `weftext-workspace://${this.workspaceId}` : this.root ?? ""; }
-    private preferenceKey(): string { const predicates = [...this.conditions.map(item => item.expr), ...((this.exactPlan?.where ?? this.expression).trim() ? [(this.exactPlan?.where ?? this.expression).trim()] : []), ...(this.search ? [composeWhere(this.search, this.includeBody, [], "")!] : []), ...(this.exactPlan ? [JSON.stringify(this.exactPlan)] : [])]; return `weftext-query-view:${viewPreferenceIdentity(this.libraryIdentity(), this.scopeIdentity ?? this.directory ?? "@library", this.types, predicates, this.savedSelection ?? undefined)}`; }
+    private preferenceKey(): string { const predicates = [...this.conditions.map(item => item.expr), ...(this.expression.trim() ? [this.expression.trim()] : []), ...(this.search ? [composeWhere(this.search, this.includeBody, [], "")!] : []), ...(this.exactPlan ? [JSON.stringify(this.exactPlan)] : [])]; return `weftext-query-view:${viewPreferenceIdentity(this.libraryIdentity(), this.scopeIdentity ?? this.directory ?? "@library", this.types, predicates, this.savedSelection ?? undefined)}`; }
     private contextChanged(): void { this.loadPreferences(); this.renderControls(); void this.refresh(); }
     private loadPreferences(): void {
         this.preference = defaultPreference();
@@ -1852,6 +1853,28 @@ export class QueryPanel {
         section.append(queryArgumentControls(parameterInput,
             () => this.savedSelection ? this.savedPlan : parseQueryPlan(planInput.value),
             () => this.schema, () => this.tagReferences, () => !this.closeGuard.frozen));
+        const builder = ui("details");
+        const builderBody = ui("div");
+        builder.append(ui("summary", "", message("hostedQuery.planControlsDisclosure")), builderBody);
+        builder.ontoggle = () => {
+            builderBody.replaceChildren();
+            if (!builder.open) return;
+            const opening = planInput.value;
+            try {
+                const proposal = parseQueryPlan(opening);
+                builderBody.append(queryPlanControls(proposal, this.schema, () => {}, this.tagReferences),
+                    this.action(message("hostedQuery.adoptControlProposal"), () => {
+                        if (opening !== planInput.value)
+                            throw new UiError(message("hostedQuery.controlProposalSuperseded"));
+                        planInput.value = JSON.stringify(parseQueryPlan(JSON.stringify(proposal)), null, 2);
+                        planInput.dispatchEvent(new Event("input"));
+                        builder.open = false;
+                    }));
+            } catch (error) {
+                builderBody.append(ui("p", "data-warning", error instanceof Error ? errorUiText(error) : String(error)));
+            }
+        };
+        section.append(builder);
         section.append(this.action(message("queryAdvanced.runPlan"), async () => {
             try {
                 const plan = parseQueryPlan(planInput.value);

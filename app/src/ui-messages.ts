@@ -790,6 +790,14 @@ export const zhCN = {
   "queryPlan.filterOperatorLabel": "筛选运算",
   "queryPlan.nestedFilterHelp": "多值／嵌套条件请使用下方 CEL，保留同项含义。",
   "queryPlan.filterValueLabel": "筛选值",
+  "queryConditions.all": "全部满足",
+  "queryConditions.any": "任一满足",
+  "queryConditions.not": "取反",
+  "queryConditions.group": "条件组运算方式",
+  "queryConditions.wrap": "放入新条件组",
+  "queryConditions.addTo": "添加条件到",
+  "queryConditions.edit": "编辑条件 {p0}",
+  "queryConditions.target": "条件组 {p0}",
   "queryPlan.filterTitle": "筛选",
   "queryPlan.addCondition": "添加筛选条件",
   "queryPlan.advancedCelDisclosure": "高级：完整 CEL 条件",
@@ -970,10 +978,6 @@ export const zhCN = {
   "hostedQuery.planControlsDisclosure": "属性筛选、排序与汇总控件",
   "hostedQuery.adoptControlProposal": "采用控件提案到临时查询",
   "hostedQuery.controlProposalSuperseded": "完整计划已变化，控件提案保留，未覆盖新计划。",
-  "hostedQuery.visualWhereLabel": "托管可视条件（CEL）",
-  "hostedQuery.visualColumnsLabel": "托管投影列（JSON）",
-  "hostedQuery.visualOrderLabel": "托管排序（JSON）",
-  "hostedQuery.applyVisual": "应用可视条件到临时计划",
   "hostedQuery.combinationLabel": "托管高级组合示例",
   "hostedQuery.unionExample": "两个准确来源的 unionAll",
   "hostedQuery.distinctExample": "按完整投影值 distinct",
@@ -7893,6 +7897,8 @@ export const zhCN = {
   "error.data.queryAdvanced.unknownRelationOrDirection": "未知的关系或方向。",
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": "Query 范围展开预算已耗尽。",
   "error.data.queryAdvanced.unsupportedLifecycleScope": "不支持此生命周期范围。",
+  "error.data.query.conditionGroupBudget": "查询条件组超出嵌套、条件数或表达式大小上限。",
+  "error.data.query.conditionGroupArity": "条件组至少需要一项，取反组必须正好包含一项。",
   "error.data.queryAdvanced.celSourceBudgetExceeded": "CEL 源码超过配置预算。",
   "error.data.queryAdvanced.queryProductExpansionBudgetExhausted": "Query 结果项展开预算已耗尽。",
   "error.data.queryAdvanced.queryColumnExpansionBudgetExceeded": "Query 列展开超过预算。",
@@ -11177,6 +11183,14 @@ export interface MessageParamsMap {
   "queryPlan.filterOperatorLabel": {  };
   "queryPlan.nestedFilterHelp": {  };
   "queryPlan.filterValueLabel": {  };
+  "queryConditions.all": {  };
+  "queryConditions.any": {  };
+  "queryConditions.not": {  };
+  "queryConditions.group": {  };
+  "queryConditions.wrap": {  };
+  "queryConditions.addTo": {  };
+  "queryConditions.edit": { p0: string };
+  "queryConditions.target": { p0: number };
   "queryPlan.filterTitle": {  };
   "queryPlan.addCondition": {  };
   "queryPlan.advancedCelDisclosure": {  };
@@ -11357,10 +11371,6 @@ export interface MessageParamsMap {
   "hostedQuery.planControlsDisclosure": {  };
   "hostedQuery.adoptControlProposal": {  };
   "hostedQuery.controlProposalSuperseded": {  };
-  "hostedQuery.visualWhereLabel": {  };
-  "hostedQuery.visualColumnsLabel": {  };
-  "hostedQuery.visualOrderLabel": {  };
-  "hostedQuery.applyVisual": {  };
   "hostedQuery.combinationLabel": {  };
   "hostedQuery.unionExample": {  };
   "hostedQuery.distinctExample": {  };
@@ -18280,6 +18290,8 @@ export interface MessageParamsMap {
   "error.data.queryAdvanced.unknownRelationOrDirection": {  };
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": {  };
   "error.data.queryAdvanced.unsupportedLifecycleScope": {  };
+  "error.data.query.conditionGroupBudget": {  };
+  "error.data.query.conditionGroupArity": {  };
   "error.data.queryAdvanced.celSourceBudgetExceeded": {  };
   "error.data.queryAdvanced.queryProductExpansionBudgetExhausted": {  };
   "error.data.queryAdvanced.queryColumnExpansionBudgetExceeded": {  };
@@ -21807,6 +21819,18 @@ export const messageParamTypes = {
   "queryPlan.filterOperatorLabel": {},
   "queryPlan.nestedFilterHelp": {},
   "queryPlan.filterValueLabel": {},
+  "queryConditions.all": {},
+  "queryConditions.any": {},
+  "queryConditions.not": {},
+  "queryConditions.group": {},
+  "queryConditions.wrap": {},
+  "queryConditions.addTo": {},
+  "queryConditions.edit": {
+    "p0": "text"
+  },
+  "queryConditions.target": {
+    "p0": "integer"
+  },
   "queryPlan.filterTitle": {},
   "queryPlan.addCondition": {},
   "queryPlan.advancedCelDisclosure": {},
@@ -22047,10 +22071,6 @@ export const messageParamTypes = {
   "hostedQuery.planControlsDisclosure": {},
   "hostedQuery.adoptControlProposal": {},
   "hostedQuery.controlProposalSuperseded": {},
-  "hostedQuery.visualWhereLabel": {},
-  "hostedQuery.visualColumnsLabel": {},
-  "hostedQuery.visualOrderLabel": {},
-  "hostedQuery.applyVisual": {},
   "hostedQuery.combinationLabel": {},
   "hostedQuery.unionExample": {},
   "hostedQuery.distinctExample": {},
@@ -30122,6 +30142,8 @@ export const messageParamTypes = {
   "error.data.queryAdvanced.unknownRelationOrDirection": {},
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": {},
   "error.data.queryAdvanced.unsupportedLifecycleScope": {},
+  "error.data.query.conditionGroupBudget": {},
+  "error.data.query.conditionGroupArity": {},
   "error.data.queryAdvanced.celSourceBudgetExceeded": {},
   "error.data.queryAdvanced.queryProductExpansionBudgetExhausted": {},
   "error.data.queryAdvanced.queryColumnExpansionBudgetExceeded": {},
@@ -33819,6 +33841,14 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryPlan.filterOperatorLabel": "Filter operator",
   "queryPlan.nestedFilterHelp": "For multivalue / nested conditions, use CEL below to retain same-item semantics.",
   "queryPlan.filterValueLabel": "Filter value",
+  "queryConditions.all": "Match all",
+  "queryConditions.any": "Match any",
+  "queryConditions.not": "Negate",
+  "queryConditions.group": "Condition group operation",
+  "queryConditions.wrap": "Wrap in new condition group",
+  "queryConditions.addTo": "Add condition to",
+  "queryConditions.edit": "Edit condition {p0}",
+  "queryConditions.target": "Condition group {p0}",
   "queryPlan.filterTitle": "Filter",
   "queryPlan.addCondition": "Add filter condition",
   "queryPlan.advancedCelDisclosure": "Advanced: complete CEL condition",
@@ -33999,10 +34029,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "hostedQuery.planControlsDisclosure": "Property filtering, sorting and aggregate controls",
   "hostedQuery.adoptControlProposal": "Adopt control proposal into temporary query",
   "hostedQuery.controlProposalSuperseded": "The complete plan has changed. The control proposal is retained and did not overwrite the new plan.",
-  "hostedQuery.visualWhereLabel": "Hosted visual condition (CEL)",
-  "hostedQuery.visualColumnsLabel": "Hosted projection columns (JSON)",
-  "hostedQuery.visualOrderLabel": "Hosted ordering (JSON)",
-  "hostedQuery.applyVisual": "Apply visual conditions to temporary plan",
   "hostedQuery.combinationLabel": "Hosted advanced combination example",
   "hostedQuery.unionExample": "unionAll from two exact sources",
   "hostedQuery.distinctExample": "distinct by complete projected values",
@@ -40922,6 +40948,8 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.data.queryAdvanced.unknownRelationOrDirection": "Unknown relation/direction",
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": "Query scope expansion budget exhausted",
   "error.data.queryAdvanced.unsupportedLifecycleScope": "Unsupported lifecycle scope",
+  "error.data.query.conditionGroupBudget": "Query conditions exceed the nesting, condition count or expression size limit.",
+  "error.data.query.conditionGroupArity": "A condition group needs at least one item. A negation needs exactly one.",
   "error.data.queryAdvanced.celSourceBudgetExceeded": "CEL source exceeds profile budget",
   "error.data.queryAdvanced.queryProductExpansionBudgetExhausted": "Query product expansion budget exhausted",
   "error.data.queryAdvanced.queryColumnExpansionBudgetExceeded": "Query column expansion budget",

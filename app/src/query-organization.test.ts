@@ -11,31 +11,36 @@ import type { DataSchema, Cell } from "./data-panel";
 const schema: DataSchema = { definitions: {}, types: [], aliases: {}, fields: [{ id: "money/amount", key: "amount", shape: { kind: "scalar", semantic: "decimal" }, nullable: true }, { id: "tasks/project", key: "project", shape: { kind: "scalar", semantic: "node_ref" }, nullable: false }] };
 const plan = (): QueryPlan => ({ scope: { descendants: true, lifecycle: "live" }, types: [], where: 'phones.exists(p, p.number == "重复" && p.label == "工作")', select: [{ name: "amount", expr: 'field("money/amount")' }], order: [] });
 
+function cel(plan: QueryPlan): string {
+  assert.ok(typeof plan.where === "string");
+  return plan.where;
+}
+
 test("visible Query conditions preserve native decimal precision, reference type and existing same-item CEL", () => {
   const original = plan(), fields = queryPlanFields(schema, original);
   const next = addPlanFilter(original, fields.find(field => field.key === "amount")!, ">", { kind: "decimal", value: "9007199254740993.0000000001" }, schema);
   assert.equal(next.where, '(' + original.where + ') && (field("money/amount") > decimal("9007199254740993.0000000001"))'); assert.equal(original.where, plan().where);
-  const ref = addPlanFilter(original, fields.find(field => field.key === "project")!, "==", { kind: "text", value: "weftext-node://owner/target" }, schema); assert.ok(ref.where!.includes('nodeRef("weftext-node://owner/target")'));
+  const ref = addPlanFilter(original, fields.find(field => field.key === "project")!, "==", { kind: "text", value: "weftext-node://owner/target" }, schema); assert.ok(cel(ref).includes('nodeRef("weftext-node://owner/target")'));
   assert.throws(() => addPlanFilter(original, fields[0], "bad", { kind: "text", value: "x" }, schema));
 });
 test("the shared filter vocabulary generates exact typed bounds, list membership, text and direct field state predicates", () => {
   const original = plan();
   const [title, amount, project] = queryPlanFields(schema, original);
   for (const op of ["<=", ">="]) {
-    assert.match(addPlanFilter(original, amount, op, { kind: "decimal", value: "0.000000000000000001" }, schema).where!, new RegExp(op + ' decimal'));
+    assert.match(cel(addPlanFilter(original, amount, op, { kind: "decimal", value: "0.000000000000000001" }, schema)), new RegExp(op + ' decimal'));
   }
   for (const op of ["contains", "startsWith", "endsWith"]) {
     const raw = 'A"\n😀';
-    assert.ok(addPlanFilter(original, title, op, { kind: "text", value: raw }, schema).where!.endsWith(`(title.${op}(${JSON.stringify(raw)}))`));
+    assert.ok(cel(addPlanFilter(original, title, op, { kind: "text", value: raw }, schema)).endsWith(`(title.${op}(${JSON.stringify(raw)}))`));
     assert.throws(() => addPlanFilter(original, project, op, { kind: "text", value: "x" }, schema));
   }
   const list = { ...project, shape: { kind: "list" as const, min: 0, max: null, items: project.shape! } };
-  assert.ok(addPlanFilter(original, list, "member", { kind: "text", value: "weftext-node://owner/target" }, schema).where!.endsWith('(nodeRef("weftext-node://owner/target") in field("tasks/project"))'));
+  assert.ok(cel(addPlanFilter(original, list, "member", { kind: "text", value: "weftext-node://owner/target" }, schema)).endsWith('(nodeRef("weftext-node://owner/target") in field("tasks/project"))'));
   for (const [op, predicate] of [["present", "!isAbsent"], ["absent", "isAbsent"], ["null", "isNull"], ["invalid", "isInvalid"], ["unavailable", "isUnavailable"]]) {
-    assert.ok(addPlanFilter(original, list, op, { kind: "none" }, schema).where!.endsWith(`(${predicate}(field("tasks/project")))`));
+    assert.ok(cel(addPlanFilter(original, list, op, { kind: "none" }, schema)).endsWith(`(${predicate}(field("tasks/project")))`));
     assert.throws(() => addPlanFilter(original, title, op, { kind: "none" }, schema));
   }
-  assert.ok(addPlanFilter(original, list, "empty", { kind: "none" }, schema).where!.endsWith('(size(field("tasks/project")) == 0)'));
+  assert.ok(cel(addPlanFilter(original, list, "empty", { kind: "none" }, schema)).endsWith('(size(field("tasks/project")) == 0)'));
   assert.equal(original.where, plan().where);
 });
 test("row writers require a direct permanent field, and aggregate, computed and producer rows remain read-only", () => {

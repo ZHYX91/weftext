@@ -1,5 +1,6 @@
 #[cfg(test)]
 mod evaluator_benchmark;
+mod predicate;
 mod prepared;
 use crate::*;
 use cel::{
@@ -14,6 +15,7 @@ use cel::{
     },
 };
 use indexmap::IndexMap;
+pub use predicate::{QueryBoolean, QueryPredicate, QueryPredicateGroup};
 use prepared::PreparedExpression;
 pub(crate) use prepared::visit_children;
 use serde::{Deserialize, Serialize};
@@ -143,7 +145,7 @@ pub struct QueryPlan {
     pub scope: QueryScope,
     #[serde(default)]
     pub types: Vec<String>,
-    pub r#where: Option<String>,
+    pub r#where: Option<QueryPredicate>,
     #[serde(default)]
     pub select: Vec<QueryColumn>,
     #[serde(default)]
@@ -888,10 +890,7 @@ pub(crate) fn compile(
             weftext_messages::UiMessage::error_data_query_cel_source_budget_exceeded(),
         ));
     }
-    let p = Program::compile(expr).map_err(|error| {
-        DataError::new(UiMessage::error_data_query_cel_syntax_invalid())
-            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
-    })?;
+    let p = parse_cel(expr)?;
     let mut ast = p.expression().clone();
     alpha_rename(&mut ast, &BTreeMap::new(), &mut 0);
     let ty = typecheck(&ast, schema, vars, 0)?;
@@ -900,6 +899,13 @@ pub(crate) fn compile(
         ast,
         ty,
         vars: vars.clone(),
+    })
+}
+
+fn parse_cel(expr: &str) -> Result<Program> {
+    Program::compile(expr).map_err(|error| {
+        DataError::new(UiMessage::error_data_query_cel_syntax_invalid())
+            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
     })
 }
 pub(crate) fn alpha_rename(
@@ -2508,8 +2514,8 @@ pub(crate) fn execute_query_leaf_traced(
         })
         .transpose()?;
     let predicate = plan
-        .r#where
-        .as_ref()
+        .predicate_source()?
+        .as_deref()
         .filter(|s| !s.trim().is_empty())
         .map(|s| compile(s, schema, &vars))
         .transpose()?;

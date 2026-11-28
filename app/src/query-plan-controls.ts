@@ -4,7 +4,7 @@ import type { AuthorInputSession } from "./author-input";
 import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 /** Visible controls edit the existing native QueryPlan; unknown CEL stays intact. */
 import { action, fieldNames, resolveShape, typeNames, ui, valueEditor, emptyNativeValue, type DataSchema, type NativeValue, type Shape, type FormReferences } from "./data-panel";
-import type { QueryPlan } from "./query-plan";
+import { andPredicates, validateQueryPredicate, type QueryBoolean, type QueryPlan, type QueryPredicate, type QueryPredicateGroup } from "./query-plan";
 import { filterOperandShape, filterOperators, queryPredicate } from "./query-predicate";
 import { updateQueryChoices } from "./query-control-state";
 export interface PlanField {
@@ -26,7 +26,9 @@ export function queryPlanFields(schema: DataSchema | null, plan: QueryPlan): Pla
 export function addPlanFilter(plan: QueryPlan, field: PlanField, op: string, value: NativeValue, schema: DataSchema): QueryPlan {
     if (!field.shape) throw new UiError(message("queryValidation.unsupportedOperator"));
     const condition = queryPredicate(field.expr, field.shape, schema, !!field.fieldId, op, value);
-    return { ...plan, where: plan.where?.trim() ? `(${plan.where}) && (${condition})` : condition };
+    const prior = plan.where;
+    return { ...plan, where: typeof prior === "string" && prior.trim()
+        ? `(${prior}) && (${condition})` : andPredicates(prior, condition) };
 }
 const emptySchema = (): DataSchema => ({ definitions: {}, fields: [], types: [], aliases: {} });
 function select(label: UiText, options: [
@@ -45,7 +47,7 @@ function select(label: UiText, options: [
 }
 function labeled(label: UiText, input: HTMLElement): HTMLLabelElement { const wrapper = ui("label", "data-label", label); wrapper.append(input); return wrapper; }
 /** This proposal is owned by its caller, and applies only through its existing Draft writer. */
-export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, changed: () => void, references?: FormReferences, inputs?: AuthorInputSession): HTMLElement {
+export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, changed: () => void, references?: FormReferences, inputs?: AuthorInputSession, conditionLabel?: UiText): HTMLElement {
     const host = ui("section", "query-plan-controls"), actualSchema = schema ?? emptySchema(), fields = queryPlanFields(schema, plan);
     const error = ui("p", "data-warning");
     error.setAttribute("role", "status");
@@ -78,16 +80,100 @@ export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, ch
     }
     const chips = ui("div", "query-condition-chips"), filterHost = ui("section");
     const expression = ui("textarea", "data-input");
-    let syncedExpression = plan.where ?? "";
+    let syncedExpression = typeof plan.where === "string" ? plan.where : "";
     expression.value = syncedExpression;
+    const modes: [QueryBoolean, UiText][] = [
+        ["all", message("queryConditions.all")],
+        ["any", message("queryConditions.any")],
+        ["not", message("queryConditions.not")],
+    ];
+    const groupTargets: QueryPredicateGroup[] = [];
+    const target = select(message("queryConditions.addTo"), [], "");
+    const slots = new Set<string>();
+    let composing = 0;
+    const apply = (next: QueryPredicate | undefined) => {
+        if (composing) return;
+        if (next !== undefined) validateQueryPredicate(next);
+        plan.where = next;
+        changed();
+        drawConditions();
+    };
     const drawConditions = () => {
-        if (expression.value === syncedExpression) expression.value = plan.where ?? "";
-        syncedExpression = plan.where ?? "";
+        const source = typeof plan.where === "string" ? plan.where : "";
+        if (expression.value === syncedExpression) expression.value = source;
+        syncedExpression = source;
+        for (const slot of slots) inputs?.invalidate(slot);
+        slots.clear();
         chips.replaceChildren();
-        if (plan.where)
-            chips.append(ui("code", "", plan.where), action(message("queryPlan.removeCondition"), () => { delete plan.where; changed(); drawConditions(); }));
+        const priorTarget = groupTargets[Number(target.value)];
+        groupTargets.length = 0;
+        const row = (node: QueryPredicate, path: number[], replace: (value: QueryPredicate | undefined) => void, edit?: (value: string) => void): HTMLElement => {
+            const host = ui("fieldset", "query-condition");
+            const number = path.map(index => index + 1).join(".");
+            if (typeof node === "string") {
+                if (path.length) {
+                    const input = ui("textarea", "data-input");
+                    setUiAttr(input, "aria-label", displayMessage("queryConditions.edit", { p0: uiDisplayParameter(number) }));
+                    input.value = node;
+                    const slot = `plan-condition:${number}`;
+                    slots.add(slot);
+                    inputs?.bind(input, slot);
+                    input.addEventListener("compositionstart", () => { composing++; });
+                    input.addEventListener("compositionend", () => { composing--; });
+                    input.oninput = () => {
+                        node = input.value;
+                        edit?.(input.value);
+                    };
+                    host.append(input);
+                } else {
+                    host.append(ui("code", "", node));
+                }
+            } else {
+                const group = node;
+                const mode = select(message("queryConditions.group"), modes.filter(([op]) => op !== "not" || group.conditions.length === 1), group.op);
+                mode.onchange = () => safely(() => replace({ ...group, op: mode.value as QueryBoolean }));
+                host.append(mode);
+                if (group.op !== "not") groupTargets.push(group);
+                group.conditions.forEach((child, index) => {
+                    const item = row(child, [...path, index], next => {
+                        const conditions = group.conditions.slice();
+                        if (next === undefined) conditions.splice(index, 1);
+                        else conditions[index] = next;
+                        replace(conditions.length ? { ...group, conditions } : undefined);
+                    }, value => {
+                        group.conditions[index] = value;
+                        changed();
+                    });
+                    const move = (delta: number) => safely(() => {
+                        const conditions = group.conditions.slice();
+                        [conditions[index], conditions[index + delta]] = [conditions[index + delta], conditions[index]];
+                        replace({ ...group, conditions });
+                    });
+                    const up = action(message("queryShortcut.moveUp"), () => move(-1));
+                    const down = action(message("nodeContents.moveDown"), () => move(1));
+                    up.disabled = index === 0;
+                    down.disabled = index === group.conditions.length - 1;
+                    item.append(up, down);
+                    host.append(item);
+                });
+            }
+            const wrap = select(message("queryConditions.group"), modes, "all");
+            host.append(wrap, action(message("queryConditions.wrap"), () => safely(() =>
+                replace({ op: wrap.value as QueryBoolean, conditions: [node] }))),
+                action(message("queryPlan.removeCondition"), () => safely(() => replace(undefined))));
+            return host;
+        };
+        if (plan.where) chips.append(row(plan.where, [], apply));
         else
             chips.append(ui("p", "data-help", message("queryPlan.noCondition")));
+        target.replaceChildren();
+        for (const [index, group] of groupTargets.entries()) {
+            const option = ui("option", "", displayMessage("queryConditions.target", { p0: index + 1 }));
+            option.value = String(index);
+            target.append(option);
+            if (priorTarget === group) target.value = option.value;
+        }
+        target.hidden = !groupTargets.length;
     };
     drawConditions();
     const filterFields = fields.filter((entry): entry is PlanField & { shape: Shape } => !!entry.shape);
@@ -111,30 +197,35 @@ export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, ch
     field.onchange = drawOperators;
     operator.onchange = drawValue;
     drawOperators();
-    filterHost.append(ui("h4", "", message("queryPlan.filterTitle")), chips, field, operator, valueHost, action(message("queryPlan.addCondition"), () => safely(() => {
+    filterHost.append(ui("h4", "", message("queryPlan.filterTitle")), chips, target, field, operator, valueHost, action(message("queryPlan.addCondition"), () => safely(() => {
         const invalid = valueHost.querySelector<HTMLInputElement>(":invalid");
         if (invalid) {
             invalid.reportValidity();
             return;
         }
-        const next = addPlanFilter(plan, filterFields[Number(field.value)], operator.value, value, actualSchema);
-        plan.where = next.where;
-        changed();
-        drawConditions();
+        const selected = filterFields[Number(field.value)];
+        const group = groupTargets[Number(target.value)];
+        if (!group) {
+            apply(addPlanFilter(plan, selected, operator.value, value, actualSchema).where);
+            return;
+        }
+        if (composing) return;
+        const condition = queryPredicate(selected.expr, selected.shape, actualSchema, !!selected.fieldId, operator.value, value);
+        group.conditions.push(condition);
+        try {
+            apply(plan.where);
+        } catch (error) {
+            group.conditions.pop();
+            throw error;
+        }
     })));
     const advanced = ui("details");
     advanced.append(ui("summary", "", message("queryPlan.advancedCelDisclosure")));
 
     inputs?.bind(expression, "plan-cel");
-    setUiAttr(expression, "aria-label", message("queryPlan.celProposalLabel"));
-    advanced.append(expression, action(message("queryPlan.adoptCondition"), () => {
-        if (expression.value.trim())
-            plan.where = expression.value;
-        else
-            delete plan.where;
-        changed();
-        drawConditions();
-    }));
+    setUiAttr(expression, "aria-label", conditionLabel ?? message("queryPlan.celProposalLabel"));
+    advanced.append(expression, action(message("queryPlan.adoptCondition"), () => safely(() =>
+        apply(expression.value.trim() ? expression.value : undefined))));
     filterHost.append(advanced);
     host.append(filterHost);
     const columns = ui("fieldset");

@@ -6,7 +6,7 @@ import { queryPlanControls } from "./query-plan-controls";
 import { queryArgumentControls } from "./query-argument-controls";
 import { initialOccurrenceView, occurrenceViewControls, renderOccurrenceCards } from "./query-result-view";
 import { directQueryField, queryResultState } from "./query-panel";
-import { parseQueryJson, parseQueryParameters, parseQueryPlan, type QueryPlan } from "./query-plan";
+import { andPredicates, parseQueryParameters, parseQueryPlan, type QueryPlan } from "./query-plan";
 import { applyHostedScope, decodeHostedQuery, exactHostedDependencies, exactHostedScope, hostedDependencyMap, hostedScopeDraft, HostedQueryGate, type HostedProviderDescriptor, type HostedQueryDependencies, type HostedQueryResponse, type HostedQueryResult, type HostedQueryRow, type HostedSeriesPolicyDescriptor, type HostedScopeCatalog } from "./hosted-query-state";
 import { hostedCachePrefix } from "./hosted-state";
 import { HostedQueryDefinitions, type HostedDefinitionHost } from "./hosted-query-definitions";
@@ -65,11 +65,6 @@ type Draft = HostedQueryDependencies & {
     selection: "current" | "pinned";
     revision: string;
     scopeDraft?: QueryPlan["scope"];
-    visual?: {
-        where: string;
-        columns: string;
-        order: string;
-    };
     tagFilter?: {
         reference: string;
         mode: TagMatchMode;
@@ -270,7 +265,7 @@ export class HostedQuery {
         this.persist();
         this.renderResults();
     }
-    private writePlan(plan: QueryPlan) { this.draft.plan = JSON.stringify(plan, null, 2); this.draft.visual = undefined; this.changed(); this.renderControls(); }
+    private writePlan(plan: QueryPlan) { this.draft.plan = JSON.stringify(plan, null, 2); this.changed(); this.renderControls(); }
     private checkboxes<T extends string>(kind: "resources" | "fields" | "products" | "relations", legend: UiText, values: T[], chosen: T[], update: (items: T[]) => void) {
         const group = ui("fieldset");
         group.append(ui("legend", "", legend));
@@ -444,18 +439,6 @@ export class HostedQuery {
             }));
             visual.append(controls);
         }
-        const where = input("visual-where", message("hostedQuery.visualWhereLabel"), draft.visual?.where ?? parsed?.where ?? ""), columns = input("visual-columns", message("hostedQuery.visualColumnsLabel"), draft.visual?.columns ?? JSON.stringify(parsed?.select ?? [], null, 2), true), order = input("visual-order", message("hostedQuery.visualOrderLabel"), draft.visual?.order ?? JSON.stringify(parsed?.order ?? [], null, 2), true);
-        for (const control of [where.control, columns.control, order.control])
-            control.oninput = () => { draft.visual = { where: where.control.value, columns: columns.control.value, order: order.control.value }; this.changed(); };
-        visual.append(where.host, columns.host, order.host, action(message("hostedQuery.applyVisual"), () => {
-            try {
-                const current = parseQueryPlan(draft.plan), selection = parseQueryJson(columns.control.value), sorting = parseQueryJson(order.control.value);
-                this.writePlan(parseQueryPlan(JSON.stringify({ ...current, where: where.control.value || undefined, select: selection, order: sorting })));
-            }
-            catch (error) {
-                setUiText(this.message, error instanceof Error ? errorUiText(error) : String(error));
-            }
-        }));
         const combination = select("combination", message("hostedQuery.combinationLabel"), [["union", message("hostedQuery.unionExample")], ["distinct", message("hostedQuery.distinctExample")], ["parameters", message("hostedQuery.parameterExample")], ["related", message("hostedQuery.relatedExample")]], "union");
         visual.append(combination, action(message("hostedQuery.addCombination"), () => {
             try {
@@ -466,7 +449,7 @@ export class HostedQuery {
                     advanced.distinct = structuredClone(current.select);
                 else if (combination.value === "parameters") {
                     current.parameters = [{ name: "wanted", shape: { kind: "scalar", semantic: "text" }, default: { kind: "text", value: "open" } }];
-                    current.where = `(${current.where || "true"}) && status == wanted`;
+                    current.where = andPredicates(current.where, "status == wanted");
                     this.writePlan(current);
                     return;
                 }
@@ -531,7 +514,7 @@ export class HostedQuery {
                     if (!field)
                         throw new UiError(message("hostedQuery.tagsFieldUnavailable"));
                     const predicate = tagPredicate(chosen.reference, chosen.mode, `field(${JSON.stringify(field.id)})`);
-                    plan.where = plan.where ? `(${plan.where}) && (${predicate})` : predicate;
+                    plan.where = andPredicates(plan.where, predicate);
                     this.writePlan(plan);
                 }
                 catch (error) {

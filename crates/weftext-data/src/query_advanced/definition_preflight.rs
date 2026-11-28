@@ -374,8 +374,8 @@ impl Preflight<'_> {
             }
         }
         if let Some(predicate) = plan
-            .r#where
-            .as_ref()
+            .predicate_source()?
+            .as_deref()
             .filter(|predicate| !predicate.trim().is_empty())
             && expression_uses_unknown_parameters(&compile(predicate, schema, &vars)?, parameters)
         {
@@ -654,10 +654,11 @@ impl Preflight<'_> {
             }
         }
         for expression in plan
-            .r#where
-            .iter()
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
             .filter(|expression| !expression.trim().is_empty())
-            .chain(plan.select.iter().map(|column| &column.expr))
+            .chain(plan.select.iter().map(|column| column.expr.as_str()))
         {
             self.expression(expression, schema, parameters, shapes, &vars, &env)?;
         }

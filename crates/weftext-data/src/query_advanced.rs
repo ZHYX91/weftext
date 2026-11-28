@@ -683,11 +683,12 @@ pub fn query_products(plan: &QueryPlan, owners: &[FrozenDefinitionOwner]) -> Res
             out.insert("title".into());
         }
         for e in plan
-            .r#where
-            .iter()
-            .chain(plan.select.iter().map(|c| &c.expr))
-            .chain(plan.order.iter().map(|o| &o.expr))
-            .chain(plan.unnest.iter().map(|u| &u.array))
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
+            .chain(plan.select.iter().map(|c| c.expr.as_str()))
+            .chain(plan.order.iter().map(|o| o.expr.as_str()))
+            .chain(plan.unnest.iter().map(|u| u.array.as_str()))
         {
             expression(e, out)?;
         }
@@ -891,9 +892,10 @@ pub fn query_read_requirements(
             bound.insert(u.binding.clone());
         }
         for e in plan
-            .r#where
-            .iter()
-            .chain(plan.select.iter().map(|c| &c.expr))
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
+            .chain(plan.select.iter().map(|c| c.expr.as_str()))
         {
             expression(e, schema, &bound, out)?;
         }
@@ -1066,9 +1068,9 @@ fn check_tag_structure(
         a.validate_union()?;
         let mut found = false;
         for source in plan
-            .r#where
-            .iter()
-            .map(String::as_str)
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
             .chain(plan.select.iter().map(|c| c.expr.as_str()))
             .chain(plan.order.iter().map(|c| c.expr.as_str()))
             .chain(plan.unnest.iter().map(|u| u.array.as_str()))
@@ -1203,9 +1205,9 @@ fn check_tag_structure(
         let advanced = plan.advanced.clone().unwrap_or_default();
         advanced.validate_union()?;
         for expression in plan
-            .r#where
-            .iter()
-            .map(String::as_str)
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
             .chain(plan.select.iter().map(|c| c.expr.as_str()))
             .chain(plan.order.iter().map(|c| c.expr.as_str()))
             .chain(plan.unnest.iter().map(|u| u.array.as_str()))
@@ -2298,8 +2300,8 @@ fn transform(
         })
         .transpose()?;
     let predicate = plan
-        .r#where
-        .as_ref()
+        .predicate_source()?
+        .as_deref()
         .map(|p| compile(p, schema, &vars))
         .transpose()?;
     if predicate.as_ref().is_some_and(|p| p.ty != scalar("bool")) {

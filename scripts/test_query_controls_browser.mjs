@@ -140,7 +140,7 @@ try {
       const schema = { definitions: {}, aliases: {}, types: [], fields: [{ id: 'price', key: 'price', shape: { kind: 'scalar', semantic: 'decimal' }, nullable: true }] };
       const controls = queryPlanControls(plan, schema, () => {});
       document.body.append(controls);
-      const [field, operator] = controls.querySelectorAll('select');
+      const [, field, operator] = controls.querySelectorAll('section > select');
       const select = (control, value) => { control.value = value; control.dispatchEvent(new Event('change')); };
       select(field, '1');
       const options = [...operator.options].map(option => [option.value, option.textContent]);
@@ -162,6 +162,32 @@ try {
     assert.equal(actual.draft, 'title.startsWith("draft")');
     assert.equal(actual.combined, '(' + actual.bound + ') && (isInvalid(field("price")))');
     assert.ok(actual.operandAbsent);
+  });
+  await check('condition groups preserve edited leaves, nesting and order in the native plan', async () => {
+    await page.evaluate(async () => {
+      window.fixture.locale.set('zh-CN');
+      const { queryPlanControls } = await import('/src/query-plan-controls.ts');
+      const plan = { scope: { descendants: true, lifecycle: 'live' }, types: [], order: [], select: [],
+        where: { op: 'any', conditions: ['title == "first"', 'title == "second"'] } };
+      window.fixture.conditionPlan = plan;
+      const form = queryPlanControls(plan, null, () => {});
+      form.id = 'condition-group-fixture';
+      document.body.append(form);
+    });
+    const controls = page.locator('#condition-group-fixture');
+    const group = controls.locator('.query-condition-chips > fieldset');
+    const second = group.locator(':scope > fieldset').nth(1);
+    await second.getByRole('textbox').fill('title == "edited"');
+    await second.locator(':scope > select').selectOption('not');
+    await second.getByRole('button', { name: '放入新条件组' }).click();
+    await group.locator(':scope > fieldset').nth(1).locator(':scope > button').last().evaluate(button =>
+      button.previousElementSibling.click());
+    const actual = await page.evaluate(async () => {
+      const { parseQueryPlan } = await import('/src/query-plan.ts');
+      return parseQueryPlan(JSON.stringify(window.fixture.conditionPlan)).where;
+    });
+    assert.deepEqual(actual, { op: 'any', conditions: [{ op: 'not', conditions: ['title == "edited"'] }, 'title == "first"'] });
+    await controls.evaluate(node => node.remove());
   });
   await check('typed argument controls preserve exact values, default omission and an independently edited draft', async () => {
     await page.evaluate(async () => {

@@ -772,9 +772,23 @@ fn saved_query_direct_role_exact_current_and_pinned_no_latest_fallback() {
         &history,
     )
     .unwrap();
-    assert!(pinned.plan.r#where.unwrap().contains("'work'"));
+    assert!(
+        pinned
+            .plan
+            .predicate_source()
+            .unwrap()
+            .unwrap()
+            .contains("'work'")
+    );
     let current = select_definition(&DefinitionSelection::Current { key }, &history).unwrap();
-    assert!(current.plan.r#where.unwrap().contains("'home'"));
+    assert!(
+        current
+            .plan
+            .predicate_source()
+            .unwrap()
+            .unwrap()
+            .contains("'home'")
+    );
 }
 #[test]
 fn saved_query_writer_preserves_root_identity_and_exact_other_source() {

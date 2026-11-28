@@ -2,6 +2,42 @@ import type { Shape } from "./native-value-form";
 import { decodeNativeValue, type NativeValue } from "./native-values";
 import { displayMessage, message, uiDisplayParameter, UiError } from "./ui-locale";
 
+export type QueryBoolean = "all" | "any" | "not";
+export type QueryPredicate = string | QueryPredicateGroup;
+export interface QueryPredicateGroup {
+    op: QueryBoolean;
+    conditions: QueryPredicate[];
+}
+
+export function andPredicates(left: QueryPredicate | undefined, right: QueryPredicate | undefined): QueryPredicate | undefined {
+    if (!left) return right;
+    if (!right) return left;
+    return { op: "all", conditions: [left, right] };
+}
+
+export function validateQueryPredicate(predicate: unknown): void {
+    let nodes = 0, bytes = 0;
+    const visit = (value: unknown, depth: number): void => {
+        if (++nodes > 256 || depth > 12)
+            throw new UiError(message("error.data.query.conditionGroupBudget"));
+        if (typeof value === "string" && value.trim()) {
+            bytes += new TextEncoder().encode(value).length;
+            if (bytes > 16 * 1024)
+                throw new UiError(message("error.data.query.conditionGroupBudget"));
+            return;
+        }
+        if (!value || typeof value !== "object" || Array.isArray(value))
+            throw new UiError(message("error.data.query.conditionGroupArity"));
+        const group = value as Record<string, unknown>;
+        if (Object.keys(group).length !== 2 || !["all", "any", "not"].includes(String(group.op))
+            || !Array.isArray(group.conditions) || !group.conditions.length
+            || group.op === "not" && group.conditions.length !== 1)
+            throw new UiError(message("error.data.query.conditionGroupArity"));
+        for (const child of group.conditions) visit(child, depth + 1);
+    };
+    visit(predicate, 0);
+}
+
 export interface QueryPlan {
     scope: {
         directory?: string;
@@ -9,7 +45,7 @@ export interface QueryPlan {
         lifecycle: "live" | "trash";
     };
     types: string[];
-    where?: string;
+    where?: QueryPredicate;
     select: {
         name: string;
         expr: string;
@@ -176,7 +212,8 @@ export function parseQueryPlan(source: string): QueryPlan {
         for (const key of ["select", "order"])
             if (plan[key] != null && (!Array.isArray(plan[key]) || (plan[key] as unknown[]).some(item => !item || typeof item !== "object" || typeof (item as Record<string, unknown>).expr !== "string")))
                 throw new UiError(displayMessage("queryValidation.expressionArrayRequired", { p0: uiDisplayParameter(key) }));
-        if (plan.where != null && typeof plan.where !== "string" || plan.take != null && (!Number.isSafeInteger(plan.take) || Number(plan.take) < 1))
+        if (plan.where != null) validateQueryPredicate(plan.where);
+        if (plan.take != null && (!Number.isSafeInteger(plan.take) || Number(plan.take) < 1))
             throw new UiError(message("queryValidation.invalidWhereOrTake"));
         const advanced = plan.advanced as QueryPlan["advanced"];
         if (advanced != null) {

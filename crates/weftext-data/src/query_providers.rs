@@ -964,11 +964,12 @@ fn provider_requirements(
             }
         }
         for source in plan
-            .r#where
-            .iter()
-            .chain(plan.select.iter().map(|c| &c.expr))
-            .chain(plan.order.iter().map(|o| &o.expr))
-            .chain(plan.unnest.iter().map(|u| &u.array))
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
+            .chain(plan.select.iter().map(|c| c.expr.as_str()))
+            .chain(plan.order.iter().map(|o| o.expr.as_str()))
+            .chain(plan.unnest.iter().map(|u| u.array.as_str()))
         {
             expression(
                 source,

@@ -60,7 +60,7 @@ fn input(rows: bool) -> FrozenQueryInput {
 }
 fn plan(expression: String) -> QueryPlan {
     QueryPlan {
-        r#where: Some(expression),
+        r#where: Some(expression.into()),
         select: vec![QueryColumn {
             name: "value".into(),
             expr: "true".into(),
@@ -172,10 +172,8 @@ fn typed_frozen_parameter_is_valid_but_unknown_candidate_stays_partial() {
         1
     );
     let mut shadowed = query.clone();
-    shadowed.r#where = Some(format!(
-        "[{}].exists(root, tagInSubtree(root, root))",
-        literal(1)
-    ));
+    shadowed.r#where =
+        Some(format!("[{}].exists(root, tagInSubtree(root, root))", literal(1)).into());
     assert!(execute_query(&frozen, &shadowed, &schema).is_err());
     assert!(
         validate_query_plan_with_context(&shadowed, &schema, frozen.advanced.as_ref().unwrap())

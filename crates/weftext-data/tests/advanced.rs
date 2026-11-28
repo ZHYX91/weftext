@@ -8,6 +8,42 @@ const B: &str = "708365a4-0574-491e-9676-eb179f3a8098";
 const C: &str = "7f28ed24-c09b-4e54-a1ba-2c1a966781c6";
 const KEY: &str = "eb8ee74a-330c-45d2-bb8b-82a6d5210e43";
 const REV: &str = "8a81e35f-ad48-4c12-af4f-3d2607102fa9";
+
+#[test]
+fn nested_boolean_conditions_use_the_normal_query_read_and_execution_contracts() {
+    let schema = Schema::bundled().unwrap();
+    let frozen = input(vec![
+        note(A, "task", ", status: \"open\""),
+        note(B, "task", ", status: \"done\""),
+        note(C, "task", ", status: \"cancelled\""),
+    ]);
+    let plan: QueryPlan = serde_json::from_value(serde_json::json!({
+        "where": {"op":"all","conditions":[
+            {"op":"any","conditions":["status == 'open' // retained","status == 'done'"]},
+            {"op":"not","conditions":["status == 'done'"]},
+        ]},
+        "select":[{"name":"status","expr":"status"}],
+    }))
+    .unwrap();
+    let reads = query_read_requirements(&plan, &schema, &FrozenAdvancedInput::default()).unwrap();
+    assert_eq!(
+        reads.fields.into_iter().collect::<Vec<_>>(),
+        ["tasks/status"]
+    );
+    let output = execute_query(&frozen, &plan, &schema).unwrap();
+    assert_eq!(output.coverage, "complete");
+    assert_eq!(output.rows.len(), 1);
+    assert_eq!(output.rows[0].entity_key, Some(reference(A)));
+    for where_clause in [
+        serde_json::json!({"op":"not","conditions":["true","false"]}),
+        serde_json::json!({"op":"all","conditions":[]}),
+        serde_json::json!({"op":"all","conditions":["false) || (true"]}),
+    ] {
+        let plan: QueryPlan =
+            serde_json::from_value(serde_json::json!({"where": where_clause})).unwrap();
+        assert!(plan.predicate_source().is_err());
+    }
+}
 fn reference(id: &str) -> String {
     format!("weftext-node://{WS}/{id}")
 }
@@ -615,7 +651,7 @@ fn two_related_hops_deduplicate_a_cycle_and_keep_unavailable_edges_explicit() {
         input(notes)
     };
     let seed = QueryPlan {
-        r#where: Some(format!("self == nodeRef(\"{}\")", reference(A))),
+        r#where: Some(format!("self == nodeRef(\"{}\")", reference(A)).into()),
         select: vec![column("self", "self")],
         ..Default::default()
     };
@@ -1074,7 +1110,7 @@ fn real_cel_recurrence_results_and_provider_partial_survive_boolean_absorption()
     assert_eq!(result.coverage, "complete");
     let call = call.replace("max_occurrences\":100", "max_occurrences\":1");
     let plan = QueryPlan {
-        r#where: Some(format!("({call}.status == \"partial\") && false")),
+        r#where: Some(format!("({call}.status == \"partial\") && false").into()),
         ..Default::default()
     };
     let result = execute_query(&frozen, &plan, &Schema::bundled().unwrap()).unwrap();
@@ -1290,7 +1326,7 @@ fn literal_controls_and_typed_constants_reject_without_reading_rows() {
     );
     let frozen = input(vec![note(A, "task", ", status: \"open\"")]);
     let plan = QueryPlan {
-        r#where: Some(format!("self == nodeRef(\"{}\")", reference(A))),
+        r#where: Some(format!("self == nodeRef(\"{}\")", reference(A)).into()),
         ..Default::default()
     };
     assert_eq!(

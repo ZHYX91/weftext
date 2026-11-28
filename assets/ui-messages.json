@@ -4067,6 +4067,14 @@
       "en-US": "Filter value",
       "params": {}
     },
+    "queryConditions.all": { "zh-CN": "全部满足", "en-US": "Match all", "params": {} },
+    "queryConditions.any": { "zh-CN": "任一满足", "en-US": "Match any", "params": {} },
+    "queryConditions.not": { "zh-CN": "取反", "en-US": "Negate", "params": {} },
+    "queryConditions.group": { "zh-CN": "条件组运算方式", "en-US": "Condition group operation", "params": {} },
+    "queryConditions.wrap": { "zh-CN": "放入新条件组", "en-US": "Wrap in new condition group", "params": {} },
+    "queryConditions.addTo": { "zh-CN": "添加条件到", "en-US": "Add condition to", "params": {} },
+    "queryConditions.edit": { "zh-CN": "编辑条件 {p0}", "en-US": "Edit condition {p0}", "params": { "p0": "text" } },
+    "queryConditions.target": { "zh-CN": "条件组 {p0}", "en-US": "Condition group {p0}", "params": { "p0": "integer" } },
     "queryPlan.filterTitle": {
       "zh-CN": "筛选",
       "en-US": "Filter",
@@ -5025,26 +5033,6 @@
     "hostedQuery.controlProposalSuperseded": {
       "zh-CN": "完整计划已变化，控件提案保留，未覆盖新计划。",
       "en-US": "The complete plan has changed. The control proposal is retained and did not overwrite the new plan.",
-      "params": {}
-    },
-    "hostedQuery.visualWhereLabel": {
-      "zh-CN": "托管可视条件（CEL）",
-      "en-US": "Hosted visual condition (CEL)",
-      "params": {}
-    },
-    "hostedQuery.visualColumnsLabel": {
-      "zh-CN": "托管投影列（JSON）",
-      "en-US": "Hosted projection columns (JSON)",
-      "params": {}
-    },
-    "hostedQuery.visualOrderLabel": {
-      "zh-CN": "托管排序（JSON）",
-      "en-US": "Hosted ordering (JSON)",
-      "params": {}
-    },
-    "hostedQuery.applyVisual": {
-      "zh-CN": "应用可视条件到临时计划",
-      "en-US": "Apply visual conditions to temporary plan",
       "params": {}
     },
     "hostedQuery.combinationLabel": {
@@ -40794,6 +40782,8 @@
       "en-US": "Unsupported lifecycle scope",
       "params": {}
     },
+    "error.data.query.conditionGroupBudget": { "zh-CN": "查询条件组超出嵌套、条件数或表达式大小上限。", "en-US": "Query conditions exceed the nesting, condition count or expression size limit.", "params": {} },
+    "error.data.query.conditionGroupArity": { "zh-CN": "条件组至少需要一项，取反组必须正好包含一项。", "en-US": "A condition group needs at least one item. A negation needs exactly one.", "params": {} },
     "error.data.queryAdvanced.celSourceBudgetExceeded": {
       "zh-CN": "CEL 源码超过配置预算。",
       "en-US": "CEL source exceeds profile budget",

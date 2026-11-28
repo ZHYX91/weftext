@@ -1173,7 +1173,7 @@ fn period_plan(
         weftext_data::QueryPlan {
             scope,
             types: vec!["calendar/period-note".into()],
-            r#where: Some(predicate),
+            r#where: Some(predicate.into()),
             select: vec![weftext_data::QueryColumn {
                 name: "period".into(),
                 expr: expression,
@@ -3849,9 +3849,9 @@ mod tests {
             default: None,
         };
         let plan = weftext_data::QueryPlan {
-            r#where: Some(format!(
-                "false && tagInSubtree(tagRef('{tag}'), tagRef('{missing}'))"
-            )),
+            r#where: Some(
+                format!("false && tagInSubtree(tagRef('{tag}'), tagRef('{missing}'))").into(),
+            ),
             select: vec![weftext_data::QueryColumn {
                 name: "value".into(),
                 expr: "true".into(),
@@ -3874,7 +3874,7 @@ mod tests {
         );
         let mut request = definition_request(&document, original, None, "open");
         request.plan = plan;
-        request.plan.r#where = Some(format!("false && tagInSubtree(tagRef('{tag}'), root)"));
+        request.plan.r#where = Some(format!("false && tagInSubtree(tagRef('{tag}'), root)").into());
         let Json(saved) = ok(save_definition(State(state), crate::RequestJson(request)).await);
         assert!(saved["definitionRevision"].is_string());
     }
@@ -3902,9 +3902,7 @@ mod tests {
         let parent = create(&mut core, None);
         let leaf = create(&mut core, Some(&parent));
         let plan = weftext_data::QueryPlan {
-            r#where: Some(format!(
-                "tagInSubtree(tagRef('{leaf}'), tagRef('{parent}'))"
-            )),
+            r#where: Some(format!("tagInSubtree(tagRef('{leaf}'), tagRef('{parent}'))").into()),
             select: vec![weftext_data::QueryColumn {
                 name: "value".into(),
                 expr: "true".into(),
@@ -3918,11 +3916,14 @@ mod tests {
         assert!(result.rows.is_empty());
         assert_eq!(result.coverage, "complete");
         let invalid = weftext_data::QueryPlan {
-            r#where: Some(format!(
-                "true || tagInSubtree(tagRef('{leaf}'), tagRef('weftext-tag://{}/{}'))",
-                parent.split('/').nth(2).unwrap(),
-                uuid::Uuid::new_v4()
-            )),
+            r#where: Some(
+                format!(
+                    "true || tagInSubtree(tagRef('{leaf}'), tagRef('weftext-tag://{}/{}'))",
+                    parent.split('/').nth(2).unwrap(),
+                    uuid::Uuid::new_v4()
+                )
+                .into(),
+            ),
             ..plan.clone()
         };
         let mut invalid = query_snapshot(&mut core, &root, invalid).unwrap();
@@ -3976,7 +3977,7 @@ mod tests {
             .open(Path::new(&root).join(".weftext-tags.json"))
             .unwrap();
         let exact = weftext_data::QueryPlan {
-            r#where: Some(format!("tagRef('{leaf}') == tagRef('{leaf}')")),
+            r#where: Some(format!("tagRef('{leaf}') == tagRef('{leaf}')").into()),
             ..plan.clone()
         };
         let mut unrelated = query_snapshot(&mut core, &root, exact).unwrap();
