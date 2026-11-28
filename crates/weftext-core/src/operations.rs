@@ -3518,7 +3518,10 @@ impl Core {
         let mut guards = Vec::new();
         let mut handles = Vec::new();
         let mut seen = BTreeSet::new();
-        let pending = self.pending_read();
+        // Shared resource observations and single-leaf reads already qualify
+        // selected original facts. Avoid reopening every unrelated decision
+        // for each such capture.
+        let pending = (shared.is_none() && paths.len() > 1).then(|| self.pending_read());
         for p in paths {
             let path = absolute_path(Path::new(p))?;
             if !path.starts_with(&root) || !seen.insert(display(&path).to_lowercase()) {
@@ -3528,7 +3531,11 @@ impl Core {
                     ),
                 ));
             }
-            pending.check_path(&path)?;
+            if let Some(pending) = &pending {
+                pending.check_path(&path)?;
+            } else {
+                self.check_pending(&path)?;
+            }
             let guard = ParentGuard::acquire(&self.backend, &path)?;
             let handle = match guard.open_file(false, false) {
                 Ok(f) => Some(f),
@@ -3536,7 +3543,12 @@ impl Core {
                 Err(e) => return Err(e),
             };
             if let Some(f) = &handle {
-                pending.check_identity(&stamp(f)?.identity)?;
+                let identity = stamp(f)?.identity;
+                if let Some(pending) = &pending {
+                    pending.check_identity(&identity)?;
+                } else {
+                    self.check_pending_identity(&identity)?;
+                }
             }
             guards.push((path, guard));
             handles.push(handle);
@@ -3621,7 +3633,9 @@ impl Core {
                 },
             ));
         }
-        pending.recheck()?;
+        if let Some(pending) = &pending {
+            pending.recheck()?;
+        }
         Ok((
             SnapshotSet {
                 files: output,

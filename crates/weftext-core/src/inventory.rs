@@ -211,6 +211,7 @@ impl Core {
                     result
                         .warnings
                         .push(UiMessage::inventory_entries_capped().into());
+                    pending.recheck()?;
                     return Ok(result);
                 }
                 let relative = path.strip_prefix(&root).unwrap().to_path_buf();
