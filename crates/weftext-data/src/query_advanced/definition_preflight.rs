@@ -611,6 +611,7 @@ impl Preflight<'_> {
             self.budget,
             Some(trace),
             self.context.tag_structure.as_ref(),
+            None,
         )?;
         // A global group may generate an empty-input count row. It is a type
         // witness only and must not select a provider or validate a runtime row.
