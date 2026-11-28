@@ -105,8 +105,9 @@ try {
     await page.evaluate(() => window.fixture.locale.set('zh-CN'));
     assert.match(await chips.innerText(), /标签：.*研究 😀.*仅此标签/);
     assert.equal(await queryCount(), count);
+    await panel.getByRole('combobox', { name: '全文匹配方式' }).selectOption('phrase');
     await panel.locator('.query-search-form button[type="submit"]').click(); await ready(5);
-    assert.match((await lastPlan()).where, /中文 😀 retained/);
+    assert.match((await lastPlan()).where, /textMatch\(title, "中文 😀 retained", "phrase"\)/);
   });
   await check('invalid shortcut recovery displays its local warning, retains the original record and permits Query refresh', async () => {
     await page.evaluate(() => {

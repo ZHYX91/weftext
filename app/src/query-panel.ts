@@ -1,4 +1,4 @@
-import { filterOperators, filterOperandShape, queryPredicate, shapedQueryLiteral } from "./query-predicate";
+import { filterOperators, filterOperandShape, queryPredicate, queryTextModes, queryTextPredicate, shapedQueryLiteral, type QueryTextMode } from "./query-predicate";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { readNoteProjection, sameProjectionInput } from "./data-projection-read";
 import { joinUiText } from "./ui-locale";
@@ -817,6 +817,7 @@ export interface QueryPlanInputs {
     lifecycle: "live" | "trash";
     types: string[];
     search: string;
+    searchMode?: QueryTextMode;
     includeBody: boolean;
     conditions: {
         expr: string;
@@ -860,7 +861,7 @@ export function preferenceFieldErrors(preference: ViewPreference, schema: DataSc
 /** Match only native plan inputs and the field bindings validated before execution. */
 export function queryPlanRefreshInput(input: QueryPlanInputs): unknown {
     const common = { scope: input.scope, descendants: input.descendants, lifecycle: input.lifecycle, types: input.types,
-        search: input.search, includeBody: input.includeBody, conditions: input.conditions.map(item => item.expr), expression: input.expression,
+        search: input.search, searchMode: input.searchMode ?? "all", includeBody: input.includeBody, conditions: input.conditions.map(item => item.expr), expression: input.expression,
         exactPlan: input.exactPlan, group: input.group, take: input.take };
     if (input.exactPlan)
         return common;
@@ -974,11 +975,12 @@ export function facetPredicate(facet: QueryFacet, schema: DataSchema): string {
 }
 export function composeWhere(search: string, includeBody: boolean, conditions: readonly {
     expr: string;
-}[], expression: string): string | undefined {
+}[], expression: string, mode: QueryTextMode = "all"): string | undefined {
     const pieces = conditions.map(condition => `(${condition.expr})`);
     if (search) {
-        const literal = JSON.stringify(search);
-        pieces.unshift(includeBody ? `(title.contains(${literal}) || body.contains(${literal}))` : `(title.contains(${literal}))`);
+        const title = queryTextPredicate("title", search, mode);
+        const body = queryTextPredicate("body", search, mode);
+        pieces.unshift(includeBody ? `(${title} ${mode === "exclude" ? "&&" : "||"} ${body})` : `(${title})`);
     }
     if (expression.trim())
         pieces.push(`(${expression.trim()})`);
@@ -991,7 +993,7 @@ function planForInputs(input: QueryPlanInputs, schema: DataSchema | null): Query
     if (input.exactPlan) {
         const plan = structuredClone(input.exactPlan);
         plan.types = [...input.types];
-        plan.where = andPredicates(plan.where, composeWhere(input.search, input.includeBody, input.conditions, ""));
+        plan.where = andPredicates(plan.where, composeWhere(input.search, input.includeBody, input.conditions, "", input.searchMode));
         return plan;
     }
     const field = (key: string) => schema?.fields.find(item => item.key === key)?.id;
@@ -1004,7 +1006,7 @@ function planForInputs(input: QueryPlanInputs, schema: DataSchema | null): Query
             columns.push({ name: key, expr: fieldExpr(id) });
     }
     const sort = preference.sort === "title" ? "title" : field(preference.sort) ? fieldExpr(field(preference.sort)!) : preference.sort;
-    return { scope: { ...(input.scope ? { directory: input.scope } : {}), descendants: input.descendants, lifecycle: input.lifecycle }, types: [...input.types], where: composeWhere(input.search, input.includeBody, input.conditions, input.expression), select: input.group ? [] : columns, order: input.group ? [] : [{ expr: sort, descending: preference.descending, nulls: "last" }], take: input.take, ...(input.group ? { group: input.group } : {}) };
+    return { scope: { ...(input.scope ? { directory: input.scope } : {}), descendants: input.descendants, lifecycle: input.lifecycle }, types: [...input.types], where: composeWhere(input.search, input.includeBody, input.conditions, input.expression, input.searchMode), select: input.group ? [] : columns, order: input.group ? [] : [{ expr: sort, descending: preference.descending, nulls: "last" }], take: input.take, ...(input.group ? { group: input.group } : {}) };
 }
 const rowTitle = (row: QueryRow): UiText => row.cells.title?.state === "value" && row.cells.title.value ? formatNativeValue(row.cells.title.value) || row.path || row.key : row.path?.replaceAll("\\", "/").split("/").at(-1) || (row.readOnly && !row.entityKey ? joinUiText(Object.entries(row.cells).filter(([name]) => !["count", "amount"].includes(name)).map(([, cell]) => stateText(cell)), " · ") : row.entityKey || row.key);
 const stateText = (cell: Cell | undefined): UiText => !cell ? message("queryValue.unprojected") : cell.state === "value" ? formatNativeValue(cell.value) : cellLabels[cell.state];
@@ -1089,6 +1091,7 @@ export class QueryPanel {
     private resultPlan: QueryPlan | null = null;
     private search = "";
     private includeBody = false;
+    private searchMode: QueryTextMode = "all";
     private expression = "";
     private conditions: Condition[] = [];
     private types: string[] = [];
@@ -1242,7 +1245,7 @@ export class QueryPanel {
     setPlan(plan: QueryPlan): void { if (this.closeGuard.frozen) return; this.draftFlags.delete("advanced"); this.adoptPlan(plan); this.renderControls(); void this.refresh(); }
     private adoptPlan(plan: QueryPlan): void { this.savedSelection = null; this.savedPlan = null; this.definitionRevision = null; this.exactPlan = structuredClone(plan); this.advancedDraft = JSON.stringify(plan, null, 2); this.directory = plan.scope.directory ?? null; this.scopeIdentity = this.directory?.startsWith("weftext-") ? this.directory : null; this.descendants = plan.scope.descendants; this.lifecycle = plan.scope.lifecycle; this.types = [...plan.types]; this.conditions = []; this.search = ""; this.expression = ""; this.group = plan.group; this.take = plan.take ?? 200; this.loadPreferences(); }
     private libraryIdentity(): string { return this.workspaceId ? `weftext-workspace://${this.workspaceId}` : this.root ?? ""; }
-    private preferenceKey(): string { const predicates = [...this.conditions.map(item => item.expr), ...(this.expression.trim() ? [this.expression.trim()] : []), ...(this.search ? [composeWhere(this.search, this.includeBody, [], "")!] : []), ...(this.exactPlan ? [JSON.stringify(this.exactPlan)] : [])]; return `weftext-query-view:${viewPreferenceIdentity(this.libraryIdentity(), this.scopeIdentity ?? this.directory ?? "@library", this.types, predicates, this.savedSelection ?? undefined)}`; }
+    private preferenceKey(): string { const predicates = [...this.conditions.map(item => item.expr), ...(this.expression.trim() ? [this.expression.trim()] : []), ...(this.search ? [composeWhere(this.search, this.includeBody, [], "", this.searchMode)!] : []), ...(this.exactPlan ? [JSON.stringify(this.exactPlan)] : [])]; return `weftext-query-view:${viewPreferenceIdentity(this.libraryIdentity(), this.scopeIdentity ?? this.directory ?? "@library", this.types, predicates, this.savedSelection ?? undefined)}`; }
     private contextChanged(): void { this.loadPreferences(); this.renderControls(); void this.refresh(); }
     private loadPreferences(): void {
         this.preference = defaultPreference();
@@ -1305,7 +1308,7 @@ export class QueryPanel {
     }
     private planInputs(): QueryPlanInputs {
         return structuredClone({ scope: this.scopeIdentity ?? this.directory, descendants: this.descendants, lifecycle: this.lifecycle,
-            types: this.types, search: this.search, includeBody: this.includeBody, conditions: this.conditions.map(({ expr }) => ({ expr })), expression: this.expression,
+            types: this.types, search: this.search, searchMode: this.searchMode, includeBody: this.includeBody, conditions: this.conditions.map(({ expr }) => ({ expr })), expression: this.expression,
             exactPlan: this.exactPlan, group: this.group, take: this.take, preference: this.preference });
     }
     getPlan(): QueryPlan { return this.savedSelection && this.savedPlan ? structuredClone(this.savedPlan) : planForInputs(this.planInputs(), this.schema); }
@@ -1534,7 +1537,10 @@ export class QueryPanel {
         setUiAttr(search, "aria-label", message("queryPanel.searchTitleLabel"));
         run.type = "submit";
         const updateSearch = this.draftInput(search, () => this.search, value => { this.search = value; this.draftFlags.add("search"); });
-        searchForm.append(search, run, this.action(message("common.cancel"), () => { this.search = ""; search.value = ""; this.draftFlags.delete("search"); }));
+        const matchMode = selectControl(Object.entries(queryTextModes), this.searchMode);
+        setUiAttr(matchMode, "aria-label", message("queryText.mode"));
+        matchMode.onchange = () => { this.searchMode = matchMode.value as QueryTextMode; };
+        searchForm.append(search, matchMode, run, this.action(message("common.cancel"), () => { this.search = ""; search.value = ""; this.draftFlags.delete("search"); }));
         searchForm.onsubmit = event => { event.preventDefault(); void this.refresh(); };
         const scopeRow = ui("div", "query-scope-row"), scopeText = ui("span", "query-scope"), all = this.action(message("queryPanel.wholeLibrary"), () => this.applyScope(null), "data-button compact");
         const descendants = ui("input"), body = ui("input"), lifecycle = selectControl([["live", message("queryPanel.liveNotes")], ["trash", message("queryPanel.readOnlyTrash")]], this.lifecycle);
@@ -1573,7 +1579,7 @@ export class QueryPanel {
             setUiText(savedNotice, selected ? displayMessage("queryPanel.savedSelectionSummary", { p0: uiDisplayParameter(selected.mode === "pinned" ? message("queryPanel.pinnedDefinition") : message("queryPanel.currentDefinition")), p1: uiDisplayParameter(selected.label), p2: uiDisplayParameter(this.definitionRevision ? ` · ${this.definitionRevision}` : "") }) : "");
             exactNotice.hidden = !this.exactPlan || !!selected;
             updateSearch(reset);
-            search.disabled = run.disabled = !!selected;
+            search.disabled = matchMode.disabled = run.disabled = !!selected;
             setUiText(scopeText, this.directory ? displayMessage("queryPanel.directoryChip", { p0: uiDisplayParameter(this.directory) }) : message("queryPanel.entireLibrary"));
             all.hidden = !this.directory;
             descendants.checked = this.descendants;

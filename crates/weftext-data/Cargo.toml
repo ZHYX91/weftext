@@ -18,6 +18,8 @@ num-bigint = "0.4"
 cel = { version = "=0.15.0", default-features = false }
 uuid = "1"
 chrono-tz = "=0.10.4"
+unicode-segmentation = "=1.13.3"
+unicode-normalization = "=0.1.25"
 
 [dev-dependencies]
 typst = "=0.15.1"

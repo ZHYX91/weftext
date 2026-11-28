@@ -1,11 +1,23 @@
 import { resolveShape, unionVariant, type DataSchema, type NativeValue, type Shape } from "./native-value-form";
 import { message, UiError } from "./ui-locale";
 
+export const queryTextModes = {
+    all: message("queryText.all"),
+    any: message("queryText.any"),
+    phrase: message("queryText.phrase"),
+    exclude: message("queryText.exclude"),
+};
+export type QueryTextMode = keyof typeof queryTextModes;
+export function queryTextPredicate(expr: string, query: string, mode: QueryTextMode): string {
+    return `textMatch(${expr}, ${JSON.stringify(query)}, ${JSON.stringify(mode)})`;
+}
+
 const labels = {
     "==": message("queryOperator.equals"), "!=": message("queryOperator.notEquals"),
     "<": message("queryOperator.lessThan"), "<=": message("queryOperator.atMost"),
     ">": message("queryOperator.greaterThan"), ">=": message("queryOperator.atLeast"),
     contains: message("queryOperator.containsText"), startsWith: message("queryOperator.startsWith"), endsWith: message("queryOperator.endsWith"),
+    all: queryTextModes.all, any: queryTextModes.any, phrase: queryTextModes.phrase, exclude: queryTextModes.exclude,
     member: message("queryOperator.hasItem"), empty: message("queryOperator.empty"),
     present: message("queryOperator.present"), absent: message("queryValue.absent"), null: message("queryValue.explicitNull"),
     invalid: message("queryValue.invalid"), unavailable: message("queryValue.unavailable"),
@@ -28,7 +40,8 @@ function valueOperators(shape: Shape, schema: DataSchema): Operator[] {
     if (resolved.kind === "scalar" && ["schema_ref", "none"].includes(resolved.semantic)) return [];
     const operators: Operator[] = ["==", "!="];
     if (resolved.kind === "enum" || resolved.semantic !== "bool") operators.push("<", "<=", ">", ">=");
-    if (resolved.kind === "enum" || textSemantics.has(resolved.semantic)) operators.push("contains", "startsWith", "endsWith", "empty");
+    if (resolved.kind === "enum" || textSemantics.has(resolved.semantic))
+        operators.push("contains", "startsWith", "endsWith", "empty", "all", "any", "phrase", "exclude");
     return operators;
 }
 
@@ -43,7 +56,8 @@ export function filterOperandShape(op: string, shape: Shape, schema: DataSchema)
     if (["present", "absent", "null", "invalid", "unavailable", "empty"].includes(op)) return;
     const resolved = resolveShape(shape, schema);
     if (op === "member" && resolved.kind === "list") return resolveShape(resolved.items, schema);
-    if (["contains", "startsWith", "endsWith"].includes(op)) return { kind: "scalar", semantic: "text" };
+    if (["contains", "startsWith", "endsWith"].includes(op) || Object.hasOwn(queryTextModes, op))
+        return { kind: "scalar", semantic: "text" };
     return resolved;
 }
 
@@ -63,6 +77,10 @@ export function queryPredicate(expr: string, shape: Shape, schema: DataSchema, d
     if (["contains", "startsWith", "endsWith"].includes(op)) {
         if (value.kind !== "text") throw new UiError(message("queryValidation.containsTextValueRequired"));
         return `${expr}.${op}(${JSON.stringify(value.value)})`;
+    }
+    if (Object.hasOwn(queryTextModes, op)) {
+        if (value.kind !== "text") throw new UiError(message("queryValidation.containsTextValueRequired"));
+        return queryTextPredicate(expr, value.value, op as QueryTextMode);
     }
     const literal = shapedQueryLiteral(operand, schema, value);
     return op === "member" ? `${literal} in ${expr}` : `${expr} ${op} ${literal}`;

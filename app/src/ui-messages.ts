@@ -790,6 +790,11 @@ export const zhCN = {
   "queryPlan.filterOperatorLabel": "筛选运算",
   "queryPlan.nestedFilterHelp": "多值／嵌套条件请使用下方 CEL，保留同项含义。",
   "queryPlan.filterValueLabel": "筛选值",
+  "queryText.mode": "全文匹配方式",
+  "queryText.all": "包含全部词项",
+  "queryText.any": "包含任一词项",
+  "queryText.phrase": "匹配连续短语",
+  "queryText.exclude": "排除这些词项",
   "queryDates.title": "按日期范围筛选",
   "queryDates.field": "日期字段",
   "queryDates.period": "日期范围类型",
@@ -7928,6 +7933,8 @@ export const zhCN = {
   "error.data.queryAdvanced.unknownRelationOrDirection": "未知的关系或方向。",
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": "Query 范围展开预算已耗尽。",
   "error.data.queryAdvanced.unsupportedLifecycleScope": "不支持此生命周期范围。",
+  "error.data.query.textIndexBudget": "全文条件超出文本大小或词项数量上限。",
+  "error.data.query.textIndexArguments": "全文匹配需要文本、检索词和有效的匹配方式。",
   "error.data.query.relativeDatePeriod": "日期条件的范围无效。",
   "error.data.query.relativeDateZone": "日期条件需要有效的 IANA 时区。",
   "error.data.query.conditionGroupBudget": "查询条件组超出嵌套、条件数或表达式大小上限。",
@@ -11216,6 +11223,11 @@ export interface MessageParamsMap {
   "queryPlan.filterOperatorLabel": {  };
   "queryPlan.nestedFilterHelp": {  };
   "queryPlan.filterValueLabel": {  };
+  "queryText.mode": {  };
+  "queryText.all": {  };
+  "queryText.any": {  };
+  "queryText.phrase": {  };
+  "queryText.exclude": {  };
   "queryDates.title": {  };
   "queryDates.field": {  };
   "queryDates.period": {  };
@@ -18354,6 +18366,8 @@ export interface MessageParamsMap {
   "error.data.queryAdvanced.unknownRelationOrDirection": {  };
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": {  };
   "error.data.queryAdvanced.unsupportedLifecycleScope": {  };
+  "error.data.query.textIndexBudget": {  };
+  "error.data.query.textIndexArguments": {  };
   "error.data.query.relativeDatePeriod": {  };
   "error.data.query.relativeDateZone": {  };
   "error.data.query.conditionGroupBudget": {  };
@@ -21885,6 +21899,11 @@ export const messageParamTypes = {
   "queryPlan.filterOperatorLabel": {},
   "queryPlan.nestedFilterHelp": {},
   "queryPlan.filterValueLabel": {},
+  "queryText.mode": {},
+  "queryText.all": {},
+  "queryText.any": {},
+  "queryText.phrase": {},
+  "queryText.exclude": {},
   "queryDates.title": {},
   "queryDates.field": {},
   "queryDates.period": {},
@@ -30239,6 +30258,8 @@ export const messageParamTypes = {
   "error.data.queryAdvanced.unknownRelationOrDirection": {},
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": {},
   "error.data.queryAdvanced.unsupportedLifecycleScope": {},
+  "error.data.query.textIndexBudget": {},
+  "error.data.query.textIndexArguments": {},
   "error.data.query.relativeDatePeriod": {},
   "error.data.query.relativeDateZone": {},
   "error.data.query.conditionGroupBudget": {},
@@ -33940,6 +33961,11 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryPlan.filterOperatorLabel": "Filter operator",
   "queryPlan.nestedFilterHelp": "For multivalue / nested conditions, use CEL below to retain same-item semantics.",
   "queryPlan.filterValueLabel": "Filter value",
+  "queryText.mode": "Full-text match mode",
+  "queryText.all": "All search terms",
+  "queryText.any": "Any search term",
+  "queryText.phrase": "Exact term sequence",
+  "queryText.exclude": "Exclude these terms",
   "queryDates.title": "Filter by date range",
   "queryDates.field": "Date field",
   "queryDates.period": "Date range type",
@@ -41078,6 +41104,8 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.data.queryAdvanced.unknownRelationOrDirection": "Unknown relation/direction",
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": "Query scope expansion budget exhausted",
   "error.data.queryAdvanced.unsupportedLifecycleScope": "Unsupported lifecycle scope",
+  "error.data.query.textIndexBudget": "Full-text matching exceeded the text size or term count limit.",
+  "error.data.query.textIndexArguments": "Full-text matching requires text, search terms and a valid match mode.",
   "error.data.query.relativeDatePeriod": "The date condition has an invalid range.",
   "error.data.query.relativeDateZone": "The date condition requires a valid IANA time zone.",
   "error.data.query.conditionGroupBudget": "Query conditions exceed the nesting, condition count or expression size limit.",

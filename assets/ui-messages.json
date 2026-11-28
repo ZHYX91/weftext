@@ -4067,6 +4067,11 @@
       "en-US": "Filter value",
       "params": {}
     },
+    "queryText.mode": { "zh-CN": "全文匹配方式", "en-US": "Full-text match mode", "params": {} },
+    "queryText.all": { "zh-CN": "包含全部词项", "en-US": "All search terms", "params": {} },
+    "queryText.any": { "zh-CN": "包含任一词项", "en-US": "Any search term", "params": {} },
+    "queryText.phrase": { "zh-CN": "匹配连续短语", "en-US": "Exact term sequence", "params": {} },
+    "queryText.exclude": { "zh-CN": "排除这些词项", "en-US": "Exclude these terms", "params": {} },
     "queryDates.title": { "zh-CN": "按日期范围筛选", "en-US": "Filter by date range", "params": {} },
     "queryDates.field": { "zh-CN": "日期字段", "en-US": "Date field", "params": {} },
     "queryDates.period": { "zh-CN": "日期范围类型", "en-US": "Date range type", "params": {} },
@@ -40805,6 +40810,8 @@
       "en-US": "Unsupported lifecycle scope",
       "params": {}
     },
+    "error.data.query.textIndexBudget": { "zh-CN": "全文条件超出文本大小或词项数量上限。", "en-US": "Full-text matching exceeded the text size or term count limit.", "params": {} },
+    "error.data.query.textIndexArguments": { "zh-CN": "全文匹配需要文本、检索词和有效的匹配方式。", "en-US": "Full-text matching requires text, search terms and a valid match mode.", "params": {} },
     "error.data.query.relativeDatePeriod": { "zh-CN": "日期条件的范围无效。", "en-US": "The date condition has an invalid range.", "params": {} },
     "error.data.query.relativeDateZone": { "zh-CN": "日期条件需要有效的 IANA 时区。", "en-US": "The date condition requires a valid IANA time zone.", "params": {} },
     "error.data.query.conditionGroupBudget": { "zh-CN": "查询条件组超出嵌套、条件数或表达式大小上限。", "en-US": "Query conditions exceed the nesting, condition count or expression size limit.", "params": {} },

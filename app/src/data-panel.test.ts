@@ -183,7 +183,8 @@ test("partial, stale, complete empty and limited output have distinct states", (
 test("search and visual filters compose safely without altering typed date conditions", () => {
   const date = { id: "date", label: "截止日期", expr: 'field("tasks/due") == date("2026-10-13")' };
   const where = composeWhere('引号"与中文', true, [date], 'phones.exists(p, p.number == "138" && p.label == "工作")');
-  assert.ok(where?.includes('title.contains("引号\\\"与中文")'));
+  assert.ok(where?.includes('textMatch(title, "引号\\\"与中文", "all")'));
+  assert.match(composeWhere("excluded", true, [], "", "exclude")!, /"exclude"\) && textMatch\(body/);
   assert.ok(where?.includes(date.expr));
   assert.ok(where?.includes("phones.exists"));
   assert.equal(scalarQueryLiteral({ kind: "decimal", value: "0.30" }), 'decimal("0.30")');

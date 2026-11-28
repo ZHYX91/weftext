@@ -3,6 +3,7 @@ mod evaluator_benchmark;
 mod predicate;
 mod prepared;
 mod relative_date;
+mod text_index;
 use crate::*;
 use cel::{
     Context, ExecutionError, Program, Value as CelValue,
@@ -799,6 +800,20 @@ fn typecheck(
                     }
                     scalar("bool")
                 }
+                "textMatch" => {
+                    if c.target.is_some()
+                        || args.len() != 3
+                        || !args.iter().all(|value| compatible(value, &scalar("text")))
+                        || !literal_text(&c.args[2])
+                            .as_deref()
+                            .is_some_and(text_index::valid_mode)
+                    {
+                        return Err(DataError::new(
+                            UiMessage::error_data_query_text_index_arguments(),
+                        ));
+                    }
+                    scalar("bool")
+                }
                 "expandRecurrence" => {
                     if c.target.is_some() || args.len() != 3 {
                         return Err(DataError::new(
@@ -1462,6 +1477,24 @@ pub(crate) fn evaluate(
     }
     let mut context = Context::with_env(env.env.clone());
     let failures = HostFailures::default();
+    if prepared.uses_function("textMatch") {
+        context
+            .add_function::<text_index::TextMatchFunction, _>(
+                "textMatch",
+                text_index::TextMatchFunction {
+                    indexes: env.text_indexes.clone(),
+                    failures: failures.clone(),
+                },
+            )
+            .map_err(|error| {
+                DataError::unavailable(UiMessage::error_data_query_function_registration_failed(
+                    weftext_messages::params::ErrorDataQueryFunctionRegistrationFailed {
+                        function: "textMatch".into(),
+                    },
+                ))
+                .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+            })?;
+    }
     if prepared.uses_function("tagInSubtree") {
         context
             .add_function::<TagSubtreeFunction, _>(
@@ -1913,6 +1946,7 @@ pub(crate) struct QueryRuntime {
     pub(crate) tag_partial: Arc<AtomicBool>,
     env: Arc<cel::Env>,
     schema: Arc<Schema>,
+    text_indexes: Arc<Mutex<text_index::TextIndexes>>,
     pub(crate) parameter_shapes: BTreeMap<String, Shape>,
     pub(crate) provider_partial: Arc<AtomicBool>,
     pub(crate) native_budget_partial: Arc<AtomicBool>,
@@ -1928,6 +1962,7 @@ pub(crate) fn query_env_traced(
         tag_partial: Arc::new(AtomicBool::new(false)),
         env: Arc::new(cel::Env::stdlib()),
         schema: Arc::new(schema.clone()),
+        text_indexes: Arc::new(Mutex::new(text_index::TextIndexes::default())),
         parameter_shapes: BTreeMap::new(),
         provider_partial: Arc::new(AtomicBool::new(false)),
         native_budget_partial: Arc::new(AtomicBool::new(false)),

@@ -4508,6 +4508,8 @@ dependencies = [
  "tempfile",
  "typst",
  "typst-syntax",
+ "unicode-normalization",
+ "unicode-segmentation",
  "uuid",
  "weftext-engine",
  "weftext-messages",

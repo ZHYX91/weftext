@@ -68,6 +68,28 @@ fn saved_relative_date_uses_one_frozen_run_clock_for_civil_time() {
         assert_eq!(actual.rows[0].entity_key, Some(reference(expected)));
     }
 }
+
+#[test]
+fn text_match_uses_visible_products_and_real_query_rows() {
+    let schema = Schema::bundled().unwrap();
+    let mut first = note(A, "task", ", status: \"open\"");
+    first.title = Some("Ｆｉｎａｌ 会议 notes".into());
+    let mut second = note(B, "task", ", status: \"open\"");
+    second.title = Some("会议 notes final".into());
+    let frozen = input(vec![first, second]);
+    let plan = QueryPlan {
+        r#where: Some("textMatch(title, 'final 会议', 'phrase') && status == 'open'".into()),
+        select: vec![column("status", "status")],
+        ..Default::default()
+    };
+    let reads = query_read_requirements(&plan, &schema, &FrozenAdvancedInput::default()).unwrap();
+    assert!(reads.products.contains("title"));
+    assert!(!reads.products.contains("body"));
+    let result = execute_query(&frozen, &plan, &schema).unwrap();
+    assert_eq!(result.coverage, "complete");
+    assert_eq!(result.rows.len(), 1);
+    assert_eq!(result.rows[0].entity_key, Some(reference(A)));
+}
 fn reference(id: &str) -> String {
     format!("weftext-node://{WS}/{id}")
 }
