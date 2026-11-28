@@ -1,8 +1,9 @@
 use super::{
     CelBool, CelString, CowVal, DataError, ExecutionError, HostFailures, Result, UiMessage,
 };
+use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     sync::{Arc, Mutex},
 };
 use unicode_normalization::UnicodeNormalization;
@@ -12,7 +13,9 @@ const MAX_TEXT_BYTES: usize = 512 * 1024;
 const MAX_TERMS_BYTES: usize = 4096;
 const MAX_TERMS: usize = 64;
 const MAX_TOKENS: usize = 64 * 1024;
-const MAX_CACHE_BYTES: usize = 4 * 1024 * 1024;
+const MAX_CACHE_BYTES: usize = 16 * 1024 * 1024;
+const MAX_CACHE_ENTRIES: usize = 4096;
+const MAX_TEXT_WORK_BYTES: usize = 64 * 1024 * 1024;
 
 fn budget() -> DataError {
     DataError::budget(UiMessage::error_data_query_text_index_budget())
@@ -27,6 +30,7 @@ fn words(text: &str) -> impl Iterator<Item = String> + '_ {
         .map(|word| word.nfkc().flat_map(char::to_lowercase).collect())
 }
 
+#[derive(Debug)]
 struct TextIndex {
     postings: BTreeMap<String, Vec<usize>>,
     retained_bytes: usize,
@@ -38,7 +42,7 @@ impl TextIndex {
             return Err(budget());
         }
         let mut postings = BTreeMap::<String, Vec<usize>>::new();
-        let mut retained_bytes = text.len();
+        let mut retained_bytes = 256;
         for (position, word) in words(text).enumerate() {
             if position >= MAX_TOKENS {
                 return Err(budget());
@@ -87,18 +91,95 @@ impl TextIndex {
     }
 }
 
+type IndexKey = ([u8; 32], [u8; 32]);
+
+#[derive(Debug, Default)]
+struct IndexStore {
+    entries: BTreeMap<IndexKey, Arc<TextIndex>>,
+    insertion_order: VecDeque<IndexKey>,
+    retained_bytes: usize,
+}
+
+/// Bounded, disposable postings for already-qualified text. The handle cannot
+/// enumerate text or return search hits independently of the current input.
+#[derive(Clone, Default)]
+pub struct QueryTextIndex {
+    store: Arc<Mutex<IndexStore>>,
+    scope: [u8; 32],
+}
+
+impl std::fmt::Debug for QueryTextIndex {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("QueryTextIndex")
+            .finish_non_exhaustive()
+    }
+}
+
+impl QueryTextIndex {
+    pub fn scoped(&self, parts: &[&str]) -> Self {
+        let mut hash = Sha256::new();
+        for part in parts {
+            hash.update((part.len() as u64).to_le_bytes());
+            hash.update(part.as_bytes());
+        }
+        Self {
+            store: self.store.clone(),
+            scope: hash.finalize().into(),
+        }
+    }
+
+    fn index(&self, text: &str) -> Result<Arc<TextIndex>> {
+        if text.len() > MAX_TEXT_BYTES {
+            return Err(budget());
+        }
+        let key = (self.scope, Sha256::digest(text.as_bytes()).into());
+        if let Some(index) = self
+            .store
+            .lock()
+            .expect("text index store")
+            .entries
+            .get(&key)
+        {
+            return Ok(index.clone());
+        }
+        // Concurrent misses may build the same value, but the store lock is
+        // never held during tokenization or phrase matching.
+        let index = Arc::new(TextIndex::build(text)?);
+        let mut store = self.store.lock().expect("text index store");
+        if let Some(index) = store.entries.get(&key) {
+            return Ok(index.clone());
+        }
+        if index.retained_bytes <= MAX_CACHE_BYTES {
+            while store.entries.len() >= MAX_CACHE_ENTRIES
+                || index.retained_bytes > MAX_CACHE_BYTES - store.retained_bytes
+            {
+                let oldest = store.insertion_order.pop_front().expect("indexed entry");
+                let evicted = store.entries.remove(&oldest).expect("indexed entry");
+                store.retained_bytes -= evicted.retained_bytes;
+            }
+            store.retained_bytes += index.retained_bytes;
+            store.insertion_order.push_back(key);
+            store.entries.insert(key, index.clone());
+        }
+        Ok(index)
+    }
+}
+
 #[derive(Default)]
 pub(super) struct TextIndexes {
-    indexes: BTreeMap<String, TextIndex>,
+    pub cache: QueryTextIndex,
     terms: BTreeMap<String, Vec<String>>,
-    retained_bytes: usize,
+    touched_bytes: usize,
 }
 
 impl TextIndexes {
     fn find(&mut self, text: &str, query: &str, mode: &str) -> Result<bool> {
-        if query.len() > MAX_TERMS_BYTES {
+        let charge = text.len().saturating_add(query.len());
+        if query.len() > MAX_TERMS_BYTES || charge > MAX_TEXT_WORK_BYTES - self.touched_bytes {
             return Err(budget());
         }
+        self.touched_bytes += charge;
         let unretained = if self.terms.contains_key(query) {
             None
         } else {
@@ -118,18 +199,7 @@ impl TextIndexes {
             .get(query)
             .or(unretained.as_ref())
             .expect("parsed query terms");
-        if let Some(index) = self.indexes.get(text) {
-            return Ok(index.matches(terms, mode));
-        }
-        let index = TextIndex::build(text)?;
-        let matched = index.matches(terms, mode);
-        if self.indexes.len() < 512
-            && index.retained_bytes <= MAX_CACHE_BYTES.saturating_sub(self.retained_bytes)
-        {
-            self.retained_bytes += index.retained_bytes;
-            self.indexes.insert(text.into(), index);
-        }
-        Ok(matched)
+        Ok(self.cache.index(text)?.matches(terms, mode))
     }
 }
 
@@ -188,6 +258,58 @@ mod tests {
         assert!(query.find(body, "报告 notes", "any").unwrap());
         assert!(query.find(body, "absent terms", "exclude").unwrap());
         assert!(!query.find(body, "note", "all").unwrap());
-        assert_eq!(query.indexes.len(), 1);
+        assert_eq!(query.cache.store.lock().unwrap().entries.len(), 1);
+    }
+
+    #[test]
+    fn scoped_cache_reuses_exact_content_and_isolates_changed_authority() {
+        let root = QueryTextIndex::default();
+        let before = root.scoped(&["actor-a", "workspace", "1"]);
+        let old = before.index("original body").unwrap();
+        let read_again = root.scoped(&["actor-a", "workspace", "1"]);
+        assert!(Arc::ptr_eq(
+            &old,
+            &read_again.index("original body").unwrap()
+        ));
+        let changed = read_again.index("updated body").unwrap();
+        assert!(!changed.matches(&["original".into()], "all"));
+        assert!(changed.matches(&["updated".into()], "all"));
+        for parts in [
+            ["actor-b", "workspace", "1"],
+            ["actor-a", "workspace", "2"],
+            ["actor-a", "other-workspace", "1"],
+        ] {
+            assert!(!Arc::ptr_eq(
+                &old,
+                &root.scoped(&parts).index("original body").unwrap()
+            ));
+        }
+        assert_eq!(root.store.lock().unwrap().entries.len(), 5);
+        assert!(root.index(&"a".repeat(MAX_TEXT_BYTES + 1)).is_err());
+    }
+
+    #[test]
+    fn concurrent_builds_publish_one_complete_entry() {
+        let cache = QueryTextIndex::default();
+        let gate = std::sync::Barrier::new(4);
+        let indexes = std::thread::scope(|scope| {
+            let workers = (0..4)
+                .map(|_| {
+                    scope.spawn(|| {
+                        gate.wait();
+                        cache.index("first next last").unwrap()
+                    })
+                })
+                .collect::<Vec<_>>();
+            workers
+                .into_iter()
+                .map(|worker| worker.join().unwrap())
+                .collect::<Vec<_>>()
+        });
+        assert!(indexes.iter().all(|index| Arc::ptr_eq(index, &indexes[0])));
+        assert!(indexes[0].matches(&["next".into(), "last".into()], "phrase"));
+        let store = cache.store.lock().unwrap();
+        assert_eq!(store.entries.len(), 1);
+        assert_eq!(store.retained_bytes, indexes[0].retained_bytes);
     }
 }

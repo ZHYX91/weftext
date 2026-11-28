@@ -622,8 +622,13 @@ pub struct Core {
     style_bases: HashMap<String, operations::StyleBasis>,
     admitted_cuts: HashMap<String, operations::AdmittedBasis>,
     compile_dependency_cuts: HashMap<String, compile_dependencies::CompileDependencyCut>,
+    query_text_index: weftext_data::QueryTextIndex,
 }
 impl Core {
+    pub fn query_text_index(&self, scope: &[&str]) -> weftext_data::QueryTextIndex {
+        self.query_text_index.scoped(scope)
+    }
+
     pub fn check_session_base(&self, session_id: &str, base_id: &str) -> Result<()> {
         self.backend.check_path(&self.data_dir)?;
         self.check_actor_session(session_id)?;
@@ -736,6 +741,7 @@ impl Core {
             style_bases: HashMap::new(),
             admitted_cuts: HashMap::new(),
             compile_dependency_cuts: HashMap::new(),
+            query_text_index: Default::default(),
         };
         if let Some((_, device_id)) = expected {
             let device = core.existing_device_identity()?;

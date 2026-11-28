@@ -99,6 +99,8 @@ pub struct FrozenAdvancedInput {
     pub tag_structure: Option<FrozenTagStructure>,
     #[serde(skip)]
     pub reference_utc: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip)]
+    pub text_index: Option<QueryTextIndex>,
     #[serde(default)]
     pub parameters: BTreeMap<String, NativeValue>,
     #[serde(default)]
@@ -1478,6 +1480,7 @@ impl Runner<'_> {
                 .map(|(n, s)| (n.clone(), shape_type(schema, s)))
                 .collect();
             let mut env = query_env_traced(schema, trace.as_ref())?;
+            env.use_text_index(self.context.text_index.as_ref());
             env.tag_structure = self.context.tag_structure.clone();
             env.parameter_shapes = shapes.clone();
             let mut args = BTreeMap::new();

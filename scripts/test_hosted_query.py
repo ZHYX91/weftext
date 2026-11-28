@@ -136,6 +136,22 @@ class HostedQuery(HostedFields):
         self.policy(lambda users: users['fields']['grants']['Other']['query']['products'].update(body=False))
         self.query(plan, fields=[], products=requested, resources=[], status=404)
 
+    def test_full_text_cache_requires_current_body_authority(self):
+        self.prepare_query()
+        self.grant_query(products=['body'])
+        plan = {'where': {'op': 'all', 'conditions': [
+                    'textMatch(body, "正文Shared", "phrase")',
+                    'textMatch(body, "PRIVATE_Shared_UNREADABLE", "exclude")']},
+                'select': [self.column('1', 'matched')]}
+        for _ in range(2):
+            output = self.query(plan, fields=[], products=['body'])
+            self.assertEqual([row['entityKey'] for row in output['result']['rows']], ['Shared'])
+            self.assertNotIn('PRIVATE_', json.dumps(output))
+        self.policy(lambda users: users['fields']['grants']['Shared']['query']['products'].update(body=False))
+        self.query(plan, fields=[], products=['body'], resources=['Shared'], status=404)
+        output = self.query(plan, fields=[], products=['body'], resources=['Other'])
+        self.assertEqual(output['result']['rows'], [])
+
     def test_query_saved_current_pinned_calls_need_exact_definition_authority(self):
         self.prepare_query()
         plan = {'where': 'status == "open"', 'select': [self.column()]}

@@ -31,6 +31,7 @@ use std::{
         atomic::{AtomicBool, Ordering as AtomicOrdering},
     },
 };
+pub use text_index::QueryTextIndex;
 
 const MAX_HOST_FAILURES: usize = 128;
 const MAX_HOST_FAILURE_BYTES: usize = 8 * 1024 * 1024;
@@ -1953,6 +1954,16 @@ pub(crate) struct QueryRuntime {
     provider_trace: Option<crate::query_providers::ProviderTrace>,
     provider_failed: Arc<AtomicBool>,
 }
+impl QueryRuntime {
+    pub(crate) fn use_text_index(&mut self, cache: Option<&QueryTextIndex>) {
+        if let Some(cache) = cache {
+            self.text_indexes
+                .lock()
+                .expect("query-local text index")
+                .cache = cache.clone();
+        }
+    }
+}
 pub(crate) fn query_env_traced(
     schema: &Schema,
     trace: Option<&crate::query_providers::ProviderTrace>,
@@ -2649,6 +2660,12 @@ pub(crate) fn execute_query_leaf_traced(
     let mut diagnostics = vec![];
     let mut partial = input.coverage == "partial";
     let mut env = query_env_traced(schema, trace)?;
+    env.use_text_index(
+        input
+            .advanced
+            .as_ref()
+            .and_then(|context| context.text_index.as_ref()),
+    );
     env.tag_structure = input
         .advanced
         .as_ref()

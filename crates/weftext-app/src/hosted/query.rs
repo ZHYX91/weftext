@@ -822,7 +822,15 @@ fn freeze_definitions(
         draft,
         draft_keys,
     } = selected;
-    let mut context = weftext_data::FrozenAdvancedInput::default();
+    let mut context = weftext_data::FrozenAdvancedInput {
+        text_index: Some(inner.core.query_text_index(&[
+            "hosted",
+            actor,
+            workspace,
+            &inner.policy.generation.to_string(),
+        ])),
+        ..Default::default()
+    };
     let mut baselines = BTreeMap::new();
     for _ in 0..64 {
         let dependencies = weftext_data::definition_dependencies(plan, &context.definitions)

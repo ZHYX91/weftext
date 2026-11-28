@@ -132,7 +132,7 @@ Weftext Query 查询获权的库数据，Typst 官方 `query` 仍只做当前编
 
 日期条件保存字段 ID、日期或时间戳类型、IANA 时区和所选周期。每次运行冻结同一个 UTC 参考时刻，使用构建时固定的时区数据库。周一为每周起点，过去和未来 N 天均从今天之外起算，自选日期含起止两天。时间戳字段分别换算两个自然日边界。午夜重叠取第一次，午夜缺失取跳变后的第一个时刻。
 
-全文使用 `textMatch(text, terms, mode)`，支持 `all`、`any`、`phrase` 和 `exclude`。按 Unicode 词边界切分，逐词做 NFKC 规范化和小写转换。短语要求同一字段中按序相邻的词项。快速搜索查标题，可加入已显示正文。类型化文本筛选和 CEL 可对获权属性或单个章节标题使用同一函数。引擎仅为实际收到的文本建立有界的内存词位索引，在本次求值中复用重复的文本与词项。原 `contains` 仍可用于匹配标点和区分大小写的子串。
+全文使用 `textMatch(text, terms, mode)`，支持 `all`、`any`、`phrase` 和 `exclude`。按 Unicode 词边界切分，逐词做 NFKC 规范化和小写转换。短语要求同一字段中按序相邻的词项。快速搜索查标题，可加入已显示正文。类型化文本筛选和 CEL 可对获权属性或单个章节标题使用同一函数。每次由 Core 授权并冻结范围，执行器只为当次获权文本取用词位索引。索引在 Core 进程内按授权范围和文本摘要复用，改动的文本按需重建，托管授权版本改变后使用新的索引分区。索引容量有上限，进程重启后按需重建。`contains` 可匹配标点和区分大小写的子串。
 
 基础节点为 `scan(scope,lifecycle)`、`read(fields/products)`、`filter(expr)`、`project(columns)`、`unnest(array,binding)`、`sort(keys)`、`take(limit)`、`union_all`、`distinct(keys)`、`group(keys,aggregates)`、`related(relation)` 与保存 Query 调用。默认displayed body/title/table来自该次Html final tree，native heading产品及显示关联按§3.1单列；生成/任意深heading只读存在不等于已显示或可写。显式Paged产品读另一个具名target，同run中每个product带compileIdentity/target且不跨目标拼值或occurrence。基础全文搜索生成显式 `textMatch` 节点，UI 显示是否查正文、目录/子目录/库范围及所有组合条件；本轮不另造查询 DSL。
 

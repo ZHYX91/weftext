@@ -1865,6 +1865,7 @@ fn freeze_query_definitions_with_draft_inner(
     let mut context = weftext_data::FrozenAdvancedInput {
         parameters,
         scope_bindings: frozen.scope_bindings.clone(),
+        text_index: Some(core.query_text_index(&["local", &frozen.root.to_string_lossy()])),
         ..Default::default()
     };
     let mut loaded = BTreeSet::new();
