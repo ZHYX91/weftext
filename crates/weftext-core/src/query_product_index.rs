@@ -206,17 +206,17 @@ impl QueryProductIndex {
 }
 
 impl Core {
-    pub fn query_product_entries(
+    pub fn query_product_entries<'cut>(
         &mut self,
-        cut: &QueryProductCut,
-        keys: &[QueryProductKey],
+        inputs: impl IntoIterator<Item = (&'cut QueryProductCut, &'cut QueryProductKey)>,
     ) -> Vec<Option<IndexedQueryProduct>> {
         if self.query_product_index.is_none() {
             self.query_product_index = Some(QueryProductIndex::load(self));
         }
         let store = self.query_product_index.as_ref().unwrap();
-        keys.iter()
-            .map(|key| {
+        inputs
+            .into_iter()
+            .map(|(cut, key)| {
                 let (_, entry) = store.entries.get(&key.slot)?;
                 (entry.basis == key.basis
                     && entry

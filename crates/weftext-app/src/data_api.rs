@@ -2397,7 +2397,11 @@ async fn qualify_query_products(
     let mut index_keys = None;
     if let Some(files) = frozen.render_files.take() {
         let cut = std::sync::Arc::new(weftext_core::QueryProductCut::new(
-            &["local", &frozen.root],
+            &[
+                "local",
+                &frozen.root,
+                crate::query_product_worker::build_identity(),
+            ],
             &files,
             frozen.render_style.as_ref(),
         ));
@@ -2411,10 +2415,13 @@ async fn qualify_query_products(
         );
         let lookup_cut = cut.clone();
         let lookup_keys = keys.clone();
-        cached = core_call(state, move |core| {
-            Ok(core.query_product_entries(&lookup_cut, &lookup_keys))
-        })
-        .await?;
+        cached =
+            core_call(state, move |core| {
+                Ok(core.query_product_entries(
+                    lookup_keys.iter().map(|key| (lookup_cut.as_ref(), key)),
+                ))
+            })
+            .await?;
         let inputs = files.iter().map(|(path, bytes)| {
             json!({"path":path,"byteLength":bytes.len(),"contentHash":cut.file_fingerprint(path)})
         }).collect::<Vec<_>>();

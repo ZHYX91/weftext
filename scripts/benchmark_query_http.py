@@ -148,7 +148,7 @@ def measure_full_text(data, root, size, samples, output):
             'select': [{'name': 'status', 'expr': 'status'}], 'take': 100,
         }})
         elapsed = (time.perf_counter_ns() - start) / 1_000_000
-        index = next((v for v in outcome.get('inputVersions', []) if v['role'] == 'nativeQueryIndex'), {})
+        index = next((v for v in outcome.get('inputVersions', []) if v.get('role') == 'nativeQueryIndex'), {})
         sample = {'case': name, 'ms': elapsed, 'coverage': outcome['coverage'],
                   'matches': outcome['totalKnown'], 'expectedMatches': expected,
                   'index': index, 'expectedMisses': expected_misses}
@@ -186,6 +186,14 @@ def measure_full_text(data, root, size, samples, output):
         measured(server, 'restart-warm', 'shared revision', 2, 0)
     finally:
         server.close()
+    if size == 40:
+        (data / 'query-products.json').write_bytes(b'{"format":"damaged synthetic index"}')
+        server = Server(['--data-dir', str(data)])
+        try:
+            measured(server, 'rebuild-corrupt-index', 'shared revision', 2, size + 1)
+            measured(server, 'rebuilt-index-reused', 'shared revision', 2, 0)
+        finally:
+            server.close()
     ordered = sorted(warm)
     return {'p50Ms': statistics.median(warm), 'p95Ms': ordered[math.ceil(.95 * samples) - 1],
             'serverPeakWorkingSetBytes': int(peak)}

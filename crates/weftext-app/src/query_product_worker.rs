@@ -6,6 +6,14 @@ use weftext_engine::{FrozenQueryProduct, FrozenQuerySource, StyleModule};
 pub(super) const BATCH_NOTES: usize = 96;
 const MAX_FILES_BYTES: usize = 64 * 1024 * 1024;
 
+pub(super) fn build_identity() -> &'static str {
+    #[cfg(windows)]
+    if let Ok(catalog) = crate::artifact_catalog::Catalog::get() {
+        return catalog.build_id();
+    }
+    env!("CARGO_PKG_VERSION")
+}
+
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct BatchRequest<Files = BTreeMap<String, String>> {
