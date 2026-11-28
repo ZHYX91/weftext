@@ -312,6 +312,7 @@ impl ApiError {
     fn worker_failure_summary(failure: &worker_failure::WorkerFailure) -> Self {
         use worker_failure::Kind;
         let (status, code, message) = if !failure.cleanup_confirmed {
+            let _ = crate::query_runs::CURRENT.try_with(|run| run.jobs.mark_failed());
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "compiler_exit_unknown",
@@ -1329,9 +1330,6 @@ async fn owned_compiler_worker(
             // Cleanup-induced cancellation cannot erase the original pump failure.
             _ => facts.kind,
         };
-    }
-    if !facts.cleanup_confirmed {
-        let _ = crate::query_runs::CURRENT.try_with(|r| r.jobs.mark_failed());
     }
     let facts = Arc::new(facts);
     let mut error = match protocol_error {

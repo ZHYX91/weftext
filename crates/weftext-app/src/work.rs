@@ -28,6 +28,22 @@ impl Drop for Permit {
     }
 }
 
+// A disconnected waiter can no longer observe a JoinError. Keep the outcome
+// with the run that must prove all of its work completed before replying.
+struct QueryJob(Option<Permit>);
+impl QueryJob {
+    fn finish(mut self) {
+        self.0.take();
+    }
+}
+impl Drop for QueryJob {
+    fn drop(&mut self) {
+        if let Some(permit) = &self.0 {
+            permit.0.mark_failed();
+        }
+    }
+}
+
 impl Registry {
     pub(crate) fn mark_failed(&self) {
         self.0.failed.store(true, Ordering::Release);
@@ -67,8 +83,8 @@ pub(crate) fn registry() -> &'static Registry {
 }
 
 pub(crate) fn fault() {
-    registry().0.failed.store(true, Ordering::Release);
-    registry().0.changed.notify_waiters();
+    registry().mark_failed();
+    let _ = crate::query_runs::CURRENT.try_with(|run| run.jobs.mark_failed());
 }
 
 pub(crate) fn spawn<F>(future: F) -> JoinHandle<F::Output>
@@ -78,13 +94,15 @@ where
 {
     let permit = registry().enter();
     let query = crate::query_runs::CURRENT.try_with(Arc::clone).ok();
-    let query_permit = query.as_ref().map(|q| q.jobs.enter());
+    let job = QueryJob(query.as_ref().map(|q| q.jobs.enter()));
     tokio::spawn(async move {
-        let _permits = (permit, query_permit);
-        match query {
+        let _permit = permit;
+        let output = match query {
             Some(run) => crate::query_runs::CURRENT.scope(run, future).await,
             None => future.await,
-        }
+        };
+        job.finish();
+        output
     })
 }
 
@@ -95,13 +113,15 @@ where
 {
     let permit = registry().enter();
     let query = crate::query_runs::CURRENT.try_with(Arc::clone).ok();
-    let query_permit = query.as_ref().map(|q| q.jobs.enter());
+    let job = QueryJob(query.as_ref().map(|q| q.jobs.enter()));
     tokio::task::spawn_blocking(move || {
-        let _permits = (permit, query_permit);
-        match query {
+        let _permit = permit;
+        let output = match query {
             Some(run) => crate::query_runs::CURRENT.sync_scope(run.clone(), || run.read(operation)),
             None => operation(),
-        }
+        };
+        job.finish();
+        output
     })
 }
 

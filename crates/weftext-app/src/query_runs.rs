@@ -303,6 +303,20 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_lost_nested_task_cannot_acknowledge_quiescence() {
+        let run = Arc::new(Run::default());
+        let worker = CURRENT
+            .scope(run.clone(), async {
+                crate::work::spawn(std::future::pending::<()>())
+            })
+            .await;
+        worker.abort();
+        assert!(worker.await.unwrap_err().is_cancelled());
+        assert!(run.jobs.drain().await.is_err());
+        assert!(Run::default().jobs.drain().await.is_ok());
+    }
+
+    #[tokio::test]
     async fn publication_and_cancellation_have_one_winner() {
         let delivered = Arc::new(Run::default());
         CURRENT
