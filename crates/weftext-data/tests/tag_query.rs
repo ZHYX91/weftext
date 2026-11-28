@@ -60,7 +60,7 @@ fn input(rows: bool) -> FrozenQueryInput {
 }
 fn plan(expression: String) -> QueryPlan {
     QueryPlan {
-        r#where: Some(expression),
+        r#where: Some(expression.into()),
         select: vec![QueryColumn {
             name: "value".into(),
             expr: "true".into(),
@@ -159,26 +159,21 @@ fn typed_frozen_parameter_is_valid_but_unknown_candidate_stays_partial() {
     frozen.advanced.as_mut().unwrap().parameters =
         BTreeMap::from([("root".into(), NativeValue::Text(reference(0)))]);
     let mut query = plan(format!("tagInSubtree({}, root)", literal(1)));
-    query.advanced = Some(QueryAdvanced {
-        parameters: vec![QueryParameter {
-            name: "root".into(),
-            shape: Shape::Scalar {
-                semantic: "tag_ref".into(),
-            },
-            nullable: false,
-            default: None,
-        }],
-        ..Default::default()
-    });
+    query.parameters = vec![QueryParameter {
+        name: "root".into(),
+        shape: Shape::Scalar {
+            semantic: "tag_ref".into(),
+        },
+        nullable: false,
+        default: None,
+    }];
     assert_eq!(
         execute_query(&frozen, &query, &schema).unwrap().rows.len(),
         1
     );
     let mut shadowed = query.clone();
-    shadowed.r#where = Some(format!(
-        "[{}].exists(root, tagInSubtree(root, root))",
-        literal(1)
-    ));
+    shadowed.r#where =
+        Some(format!("[{}].exists(root, tagInSubtree(root, root))", literal(1)).into());
     assert!(execute_query(&frozen, &shadowed, &schema).is_err());
     assert!(
         validate_query_plan_with_context(&shadowed, &schema, frozen.advanced.as_ref().unwrap())
@@ -267,7 +262,7 @@ fn pinned_definition_reuses_its_definition_with_the_current_frozen_tree() {
     let owner = format!("weftext-node://{WS}/{}", id(9));
     let expression = format!("tagInSubtree({}, root)", literal(1));
     let definition = format!(
-        "#metadata((kind: \"weftext.query\", key: \"{key}\", binding: (schema: \"weftext-config://{WS}/schema\", revision: \"{revision}\", language: \"weftext.query.cel.v1\"), where: {}, select: ((name: \"value\", expr: \"true\"),), advanced: (parameters: ((name: \"root\", shape: (kind: \"scalar\", semantic: \"tag_ref\"), nullable: false, default: \"{}\"),),))) <weftext-query-tree>",
+        "#metadata((kind: \"weftext.query\", key: \"{key}\", binding: (schema: \"weftext-config://{WS}/schema\", revision: \"{revision}\", language: \"weftext.query.cel.v1\"), where: {}, select: ((name: \"value\", expr: \"true\"),), parameters: ((name: \"root\", shape: (kind: \"scalar\", semantic: \"tag_ref\"), nullable: false, default: \"{}\"),))) <weftext-query-tree>",
         serde_json::to_string(&expression).unwrap(),
         reference(0)
     );
@@ -336,17 +331,14 @@ fn definition_preflight_validates_closed_roots_under_short_circuit_and_defers_on
     assert!(validate_query_plan_with_context(&bad, &schema, &context).is_err());
     assert!(preflight_query_definition(&bad, &schema, &context, &QueryBudget::default()).is_err());
     let mut deferred = plan(format!("false && tagInSubtree({}, root)", literal(1)));
-    deferred.advanced = Some(QueryAdvanced {
-        parameters: vec![QueryParameter {
-            name: "root".into(),
-            shape: Shape::Scalar {
-                semantic: "tag_ref".into(),
-            },
-            nullable: false,
-            default: None,
-        }],
-        ..Default::default()
-    });
+    deferred.parameters = vec![QueryParameter {
+        name: "root".into(),
+        shape: Shape::Scalar {
+            semantic: "tag_ref".into(),
+        },
+        nullable: false,
+        default: None,
+    }];
     validate_query_plan_with_context(&deferred, &schema, &context).unwrap();
     let checked =
         preflight_query_definition(&deferred, &schema, &context, &QueryBudget::default()).unwrap();
@@ -361,8 +353,7 @@ fn definition_preflight_validates_closed_roots_under_short_circuit_and_defers_on
     no_tree.tag_structure = None;
     assert!(validate_query_plan_with_context(&deferred, &schema, &no_tree).is_err());
     let mut default_bad = deferred.clone();
-    default_bad.advanced.as_mut().unwrap().parameters[0].default =
-        Some(NativeValue::Text(reference(99)));
+    default_bad.parameters[0].default = Some(NativeValue::Text(reference(99)));
     assert!(
         preflight_query_definition(&default_bad, &schema, &context, &QueryBudget::default())
             .is_err()
@@ -378,7 +369,7 @@ fn definition_preflight_validates_closed_roots_under_short_circuit_and_defers_on
     let owner = format!("weftext-node://{WS}/{}", id(9));
     let expression = format!("false && tagInSubtree({}, root)", literal(1));
     let definition = format!(
-        "#metadata((kind: \"weftext.query\", key: \"{key}\", binding: (schema: \"weftext-config://{WS}/schema\", revision: \"{revision}\", language: \"weftext.query.cel.v1\"), where: {}, select: ((name: \"value\", expr: \"true\"),), advanced: (parameters: ((name: \"root\", shape: (kind: \"scalar\", semantic: \"tag_ref\"), nullable: false, default: \"{}\"),),))) <weftext-query-tree>",
+        "#metadata((kind: \"weftext.query\", key: \"{key}\", binding: (schema: \"weftext-config://{WS}/schema\", revision: \"{revision}\", language: \"weftext.query.cel.v1\"), where: {}, select: ((name: \"value\", expr: \"true\"),), parameters: ((name: \"root\", shape: (kind: \"scalar\", semantic: \"tag_ref\"), nullable: false, default: \"{}\"),))) <weftext-query-tree>",
         serde_json::to_string(&expression).unwrap(),
         reference(99)
     );
@@ -397,8 +388,8 @@ fn definition_preflight_validates_closed_roots_under_short_circuit_and_defers_on
         projection: schema.clone(),
     }];
     let mut caller = QueryPlan {
+        parameters: deferred.parameters.clone(),
         advanced: Some(QueryAdvanced {
-            parameters: deferred.advanced.as_ref().unwrap().parameters.clone(),
             call: Some(QueryCall {
                 owner,
                 selection: DefinitionSelection::Current { key },

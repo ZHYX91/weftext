@@ -3,11 +3,10 @@
 Uses owned libraries and the existing local installer for fixture provisioning;
 all consumer requests use hosted HTTP. No host desktop input or external data.
 """
+from _http_test_suite import run_http_suite
 import copy
 import json
-import sys
 import time
-import unittest
 from concurrent.futures import ThreadPoolExecutor
 from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call, freeze_policy_changes, apply_inflight_revocation, verify_policy_changes
 from test_hosted import uid
@@ -117,7 +116,7 @@ class HostedProviders(HostedQuery):
         expression = ('containsDate({"start":date("2026-10-01"),"end":date("2026-10-31")},day)'
                       ' && nextCivilDay(day)==date("2026-10-15") && status=="open"')
         plan = {'select': [self.column(expression, 'matches')],
-                'advanced': {'parameters': [{'name': 'day', 'shape': {'kind': 'scalar', 'semantic': 'date'}}]}}
+                'parameters': [{'name': 'day', 'shape': {'kind': 'scalar', 'semantic': 'date'}}]}
         result = self.query(plan, parameters={'day': {'kind': 'date', 'value': '2026-10-14'}}, **choice)['result']
         self.assertEqual(result['coverage'], 'complete')
         rows = {row['entityKey']: row for row in result['rows']}
@@ -140,7 +139,7 @@ class HostedProviders(HostedQuery):
         self.assertTrue(all(row['cells']['order']['value'] == {'kind': 'int', 'value': '0'}
                             for row in first['result']['rows']))
         parameter_plan = {'select': [self.column('compareTemporal(day,date("2026-01-01"))', 'order')],
-            'advanced': {'parameters': [{'name': 'day', 'shape': {'kind': 'use', 'name': 'CalendarDate'}}]}}
+            'parameters': [{'name': 'day', 'shape': {'kind': 'use', 'name': 'CalendarDate'}}]}
         parameter = self.query(parameter_plan, parameters={'day': self.native_record(self.private_date())}, **choice)
         self.assertEqual(parameter['result']['coverage'], 'complete')
         self.assertEqual(parameter['result']['rows'][0]['cells']['order']['value']['value'], '0')
@@ -178,7 +177,7 @@ class HostedProviders(HostedQuery):
             self.require_unavailable({'select': [self.column(expression)]}, **choice)
             self.require_unavailable({'select': [self.column(expression)]}, resources=[], **choice)
         parameter_plan = {'select': [self.column('compareTemporal(day,date("2026-01-01"))')],
-            'advanced': {'parameters': [{'name': 'day', 'shape': {'kind': 'use', 'name': 'CalendarDate'}}]}}
+            'parameters': [{'name': 'day', 'shape': {'kind': 'use', 'name': 'CalendarDate'}}]}
         self.require_unavailable(parameter_plan, resources=[],
             parameters={'day': self.native_record(self.private_date(version='missing-v0'))}, **choice)
 
@@ -340,8 +339,8 @@ class HostedProviders(HostedQuery):
         self.call('editor/map', {'sessionId': doc['sessionId'], 'source': doc['source'], 'serial': 1})
         results = []
         for name in ['PrivateDecision', 'NeverInstalledDecision']:
-            plan = {'select': [self.column('wanted', 'choice')], 'advanced': {'parameters': [
-                {'name': 'wanted', 'shape': {'kind': 'use', 'name': name}}]}}
+            plan = {'select': [self.column('wanted', 'choice')], 'parameters': [
+                {'name': 'wanted', 'shape': {'kind': 'use', 'name': name}}]}
             direct = self.query(plan, parameters={'wanted': {'kind': 'text', 'value': 'ONLY_INTERNAL_CHOICE'}}, status=400)
             empty = self.query(plan, resources=[], parameters={'wanted': {'kind': 'text', 'value': 'ONLY_INTERNAL_CHOICE'}}, status=400)
             operation = uid()
@@ -356,8 +355,4 @@ class HostedProviders(HostedQuery):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        raise SystemExit('usage: test_hosted_providers.py EXE')
-    suite = unittest.TestSuite(HostedProviders(name) for name in unittest.defaultTestLoader.getTestCaseNames(HostedProviders)
-                               if name.startswith('test_provider_'))
-    raise SystemExit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
+    raise SystemExit(run_http_suite(HostedProviders))

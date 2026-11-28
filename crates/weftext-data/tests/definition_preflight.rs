@@ -31,10 +31,7 @@ fn plan(expression: &str) -> QueryPlan {
                 expr: "spare".into(),
             },
         ],
-        advanced: Some(QueryAdvanced {
-            parameters: vec![parameter("spare")],
-            ..Default::default()
-        }),
+        parameters: vec![parameter("spare")],
         ..Default::default()
     }
 }
@@ -90,21 +87,18 @@ fn callee() -> (QueryPlan, FrozenAdvancedInput) {
                 expr: "amount".into(),
             },
         ],
-        advanced: Some(QueryAdvanced {
-            parameters: vec![
-                QueryParameter {
-                    name: "wanted".into(),
-                    shape: Shape::Enum {
-                        values: vec!["open".into()],
-                        open: false,
-                    },
-                    nullable: false,
-                    default: None,
+        parameters: vec![
+            QueryParameter {
+                name: "wanted".into(),
+                shape: Shape::Enum {
+                    values: vec!["open".into()],
+                    open: false,
                 },
-                parameter("amount"),
-            ],
-            ..Default::default()
-        }),
+                nullable: false,
+                default: None,
+            },
+            parameter("amount"),
+        ],
         ..Default::default()
     };
     let source = upsert_saved_query(
@@ -135,8 +129,8 @@ fn callee() -> (QueryPlan, FrozenAdvancedInput) {
         ..Default::default()
     };
     let caller = QueryPlan {
+        parameters: vec![parameter("spare")],
         advanced: Some(QueryAdvanced {
-            parameters: vec![parameter("spare")],
             call: Some(QueryCall {
                 owner: OWNER.into(),
                 selection: DefinitionSelection::Current { key: KEY.into() },
@@ -363,7 +357,7 @@ fn closed_callee_rows_keep_exact_definition_and_schema_under_unknown_caller() {
     let schema = Schema::bundled().unwrap();
     let mut callee_plan = plan(ROW_DAY);
     callee_plan.select.pop();
-    callee_plan.advanced = None;
+    callee_plan.parameters.clear();
     context.definitions[0].history[0].source = upsert_saved_query(
         "#metadata((id: \"32eb9a12-e752-4bfa-8cdf-65e00f23ac26\", types: ())) <weftext>\n",
         None,
@@ -481,7 +475,7 @@ fn terminal_provider(kind: &str) -> (QueryPlan, FrozenAdvancedInput) {
     let mut root = plan("nextCivilDay(value == 'done' ? date('9999-12-31') : date('2026-01-01'))");
     let mut context = FrozenAdvancedInput::default();
     if kind == "union" {
-        root.advanced.as_mut().unwrap().union_all = Some(vec![producer]);
+        root.advanced.get_or_insert_default().union_all = Some(vec![producer]);
     } else {
         let (_, original) = callee();
         context = original;
@@ -500,7 +494,7 @@ fn terminal_provider(kind: &str) -> (QueryPlan, FrozenAdvancedInput) {
         )
         .unwrap()
         .source;
-        root.advanced.as_mut().unwrap().call = Some(QueryCall {
+        root.advanced.get_or_insert_default().call = Some(QueryCall {
             owner: OWNER.into(),
             selection: DefinitionSelection::Current { key: KEY.into() },
             arguments: BTreeMap::new(),
@@ -591,7 +585,7 @@ fn independent_order_distinct_and_group_providers_keep_their_actual_row_stages()
                         expr: "unknown".into(),
                     });
                 }
-                original.advanced.as_mut().unwrap().distinct = Some(keys);
+                original.advanced.get_or_insert_default().distinct = Some(keys);
             }
             "groupKey" => {
                 original.group = Some(QueryGroup {

@@ -1,3 +1,4 @@
+import { filterOperators, filterOperandShape, queryPredicate, queryTextModes, queryTextPredicate, shapedQueryLiteral, type QueryTextMode } from "./query-predicate";
 import { ProposalCloseGuard } from "./proposal-close-guard";
 import { readNoteProjection, sameProjectionInput } from "./data-projection-read";
 import { joinUiText } from "./ui-locale";
@@ -18,214 +19,9 @@ import { tagPicker } from "./tag-picker";
 import { tagCancellationStatus, tagOperationStatus } from "./tag-navigation-state";
 import { QueryRefreshQueue, queryRefreshKey } from "./query-refresh";
 import { updateQueryChoices, type QueryChoice } from "./query-control-state";
-export interface QueryPlan {
-    scope: {
-        directory?: string;
-        descendants: boolean;
-        lifecycle: "live" | "trash";
-    };
-    types: string[];
-    where?: string;
-    select: {
-        name: string;
-        expr: string;
-    }[];
-    order: {
-        expr: string;
-        descending: boolean;
-        nulls: "first" | "last";
-    }[];
-    take?: number;
-    group?: {
-        keys: {
-            name: string;
-            expr: string;
-        }[];
-        aggregates: {
-            name: string;
-            op: "count" | "sum" | "min" | "max";
-            expr?: string;
-        }[];
-    };
-    unnest?: {
-        array: string;
-        binding: string;
-    };
-    advanced?: {
-        parameters?: {
-            name: string;
-            shape: Shape;
-            nullable?: boolean;
-            default?: NativeValue;
-        }[];
-        unionAll?: QueryPlan[];
-        distinct?: {
-            name: string;
-            expr: string;
-        }[];
-        related?: {
-            relation: string;
-            from: QueryPlan;
-            direction?: "forward" | "inverse";
-        };
-        call?: {
-            owner: string;
-            selection: {
-                mode: "current";
-                key: string;
-            } | {
-                mode: "pinned";
-                key: string;
-                revision: string;
-            };
-            arguments?: Record<string, string>;
-        };
-    };
-}
-/** Reject duplicate JSON members before parsing: a plan editor must not silently choose the last value. */
-export function parseQueryJson(source: string): unknown {
-    const parsed: unknown = JSON.parse(source);
-    let position = 0;
-    const whitespace = (): void => {
-        while (/\s/.test(source[position] ?? "") && position < source.length)
-            position++;
-    };
-    const string = (): string => {
-        const start = position++;
-        while (position < source.length) {
-            const char = source[position++];
-            if (char === "\\")
-                position++;
-            else if (char === '"')
-                return JSON.parse(source.slice(start, position)) as string;
-        }
-        throw new UiError(message("queryValidation.incompleteJsonString"));
-    };
-    const value = (depth: number): void => {
-        if (depth > 100)
-            throw new UiError(message("queryValidation.jsonNestingExceeded"));
-        whitespace();
-        const char = source[position];
-        if (char === '"') {
-            string();
-            return;
-        }
-        if (char === "{") {
-            position++;
-            whitespace();
-            const keys = new Set<string>();
-            if (source[position] === "}") {
-                position++;
-                return;
-            }
-            for (;;) {
-                whitespace();
-                const key = string();
-                if (keys.has(key))
-                    throw new UiError(displayMessage("queryValidation.duplicateJsonMember", { p0: uiDisplayParameter(key) }));
-                keys.add(key);
-                whitespace();
-                position++;
-                value(depth + 1);
-                whitespace();
-                if (source[position++] === "}")
-                    return;
-            }
-        }
-        if (char === "[") {
-            position++;
-            whitespace();
-            if (source[position] === "]") {
-                position++;
-                return;
-            }
-            for (;;) {
-                value(depth + 1);
-                whitespace();
-                if (source[position++] === "]")
-                    return;
-            }
-        }
-        while (position < source.length && !/[\s,}\]]/.test(source[position]))
-            position++;
-    };
-    value(0);
-    return parsed;
-}
-/** Structural checks only; the shared compiler owns CEL, schema and producer validation. */
-export function parseQueryPlan(source: string): QueryPlan {
-    const parsed = parseQueryJson(source);
-    let nodes = 0;
-    const visit = (value: unknown, depth: number): QueryPlan => {
-        if (++nodes > 1024 || depth > 64)
-            throw new UiError(message("queryValidation.planBudgetExceeded"));
-        if (!value || typeof value !== "object" || Array.isArray(value))
-            throw new UiError(message("queryValidation.planObjectRequired"));
-        const plan = value as Record<string, unknown>;
-        const allowed = ["scope", "types", "where", "select", "order", "take", "group", "unnest", "advanced"];
-        const unknown = Object.keys(plan).find(key => !allowed.includes(key));
-        if (unknown)
-            throw new UiError(displayMessage("queryValidation.unknownPlanMember", { p0: uiDisplayParameter(unknown) }));
-        const scope = plan.scope ?? { descendants: true, lifecycle: "live" };
-        if (!scope || typeof scope !== "object" || Array.isArray(scope))
-            throw new UiError(message("queryValidation.scopeObjectRequired"));
-        const actualScope = scope as Record<string, unknown>;
-        if (Object.keys(actualScope).some(key => !["directory", "descendants", "lifecycle"].includes(key)) || actualScope.directory != null && typeof actualScope.directory !== "string" || actualScope.descendants != null && typeof actualScope.descendants !== "boolean" || actualScope.lifecycle != null && !["live", "trash"].includes(String(actualScope.lifecycle)))
-            throw new UiError(message("queryValidation.invalidScope"));
-        if (plan.types != null && (!Array.isArray(plan.types) || plan.types.some(item => typeof item !== "string")))
-            throw new UiError(message("queryValidation.typeArrayRequired"));
-        for (const key of ["select", "order"])
-            if (plan[key] != null && (!Array.isArray(plan[key]) || (plan[key] as unknown[]).some(item => !item || typeof item !== "object" || typeof (item as Record<string, unknown>).expr !== "string")))
-                throw new UiError(displayMessage("queryValidation.expressionArrayRequired", { p0: uiDisplayParameter(key) }));
-        if (plan.where != null && typeof plan.where !== "string" || plan.take != null && (!Number.isSafeInteger(plan.take) || Number(plan.take) < 1))
-            throw new UiError(message("queryValidation.invalidWhereOrTake"));
-        const advanced = plan.advanced as QueryPlan["advanced"];
-        if (advanced != null) {
-            if (typeof advanced !== "object" || Array.isArray(advanced))
-                throw new UiError(message("queryValidation.advancedObjectRequired"));
-            if (advanced.unionAll) {
-                if (!Array.isArray(advanced.unionAll) || !advanced.unionAll.length)
-                    throw new UiError(message("queryValidation.unionSourcesRequired"));
-                advanced.unionAll.forEach(branch => visit(branch, depth + 1));
-            }
-            if (advanced.related)
-                visit(advanced.related.from, depth + 1);
-        }
-        return { ...plan, scope: { ...actualScope, descendants: actualScope.descendants ?? true, lifecycle: actualScope.lifecycle ?? "live" }, types: plan.types ?? [], select: plan.select ?? [], order: plan.order ?? [] } as QueryPlan;
-    };
-    return visit(parsed, 0);
-}
-export function parseQueryParameters(source: string): Record<string, NativeValue> {
-    const parsed = parseQueryJson(source);
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
-        throw new UiError(message("queryValidation.parameterObjectRequired"));
-    const check = (value: unknown, depth = 0): void => {
-        if (depth > 64 || !value || typeof value !== "object" || Array.isArray(value))
-            throw new UiError(message("queryValidation.invalidNativeParameter"));
-        const native = value as Record<string, unknown>;
-        if (native.kind === "none" && Object.keys(native).length === 1)
-            return;
-        if (native.kind === "array" && Array.isArray(native.value)) {
-            native.value.forEach(item => check(item, depth + 1));
-            return;
-        }
-        if (native.kind === "record" && Array.isArray(native.value)) {
-            const keys = new Set<string>();
-            for (const item of native.value) {
-                if (!item || typeof item.key !== "string" || keys.has(item.key))
-                    throw new UiError(message("queryValidation.invalidRecordParameter"));
-                keys.add(item.key);
-                check(item.value, depth + 1);
-            }
-            return;
-        }
-        if (native.kind === "bool" && typeof native.value === "boolean" || ["text", "int", "float", "decimal", "date", "time", "localDatetime", "duration"].includes(String(native.kind)) && typeof native.value === "string")
-            return;
-        throw new UiError(message("queryValidation.nativeParameterKindRequired"));
-    };
-    Object.values(parsed).forEach(value => check(value));
-    return parsed as Record<string, NativeValue>;
-}
+import { andPredicates, parseQueryPlan, parseQueryParameters, type QueryPlan } from "./query-plan";
+import { queryPlanControls } from "./query-plan-controls";
+import { queryArgumentControls } from "./query-argument-controls";
 interface PeriodLookup {
     period: NativeValue;
     bounds: NativeValue;
@@ -1021,6 +817,7 @@ export interface QueryPlanInputs {
     lifecycle: "live" | "trash";
     types: string[];
     search: string;
+    searchMode?: QueryTextMode;
     includeBody: boolean;
     conditions: {
         expr: string;
@@ -1059,17 +856,16 @@ export function pinEligibleRows(rows: QueryRow[], pins: string[]): QueryRow[] {
     return [...rows.filter(row => wanted.has(row.entityKey ?? row.key)), ...rows.filter(row => !wanted.has(row.entityKey ?? row.key))];
 }
 export function preferenceFieldErrors(preference: ViewPreference, schema: DataSchema): UiText[] {
-    return Object.entries(preference.fieldBindings ?? {}).filter(([key, id]) => [preference.sort, ...preference.columns, ...(preference.view === "board" ? [preference.groupField] : []), ...(preference.view === "calendar" ? [preference.dateField] : []), ...(preference.view === "chart" ? [preference.chartField] : [])].includes(key) && !schema.fields.some(field => field.id === id && field.key === key)).map(([key]) => displayMessage("queryView.invalidFieldBinding", { p0: uiDisplayParameter(fieldNames[key] ?? key) }));
+    return Object.entries(preference.fieldBindings ?? {}).filter(([key, id]) => [preference.sort, ...preference.columns].includes(key) && !schema.fields.some(field => field.id === id && field.key === key)).map(([key]) => displayMessage("queryView.invalidFieldBinding", { p0: uiDisplayParameter(fieldNames[key] ?? key) }));
 }
 /** Match only native plan inputs and the field bindings validated before execution. */
 export function queryPlanRefreshInput(input: QueryPlanInputs): unknown {
     const common = { scope: input.scope, descendants: input.descendants, lifecycle: input.lifecycle, types: input.types,
-        search: input.search, includeBody: input.includeBody, conditions: input.conditions.map(item => item.expr), expression: input.expression,
+        search: input.search, searchMode: input.searchMode ?? "all", includeBody: input.includeBody, conditions: input.conditions.map(item => item.expr), expression: input.expression,
         exactPlan: input.exactPlan, group: input.group, take: input.take };
     if (input.exactPlan)
         return common;
-    const preference = input.preference, columns = [...new Set([...preference.columns,
-            ...(preference.view === "board" ? [preference.groupField] : []), ...(preference.view === "calendar" ? [preference.dateField] : []), ...(preference.view === "chart" ? [preference.chartField] : [])])];
+    const preference = input.preference, columns = [...new Set(preference.columns)];
     const fields = new Set([preference.sort, ...columns]);
     return { ...common, preference: { columns, sort: preference.sort, descending: !input.group && preference.descending,
             summaries: !input.group && preference.summaries, fieldBindings: Object.fromEntries(Object.entries(preference.fieldBindings ?? {}).filter(([key]) => fields.has(key))) } };
@@ -1145,47 +941,6 @@ function canonicalNative(value: NativeValue): string {
         return JSON.stringify({ kind: "array", value: value.value.map(canonicalNative) });
     return JSON.stringify(value);
 }
-export function scalarQueryLiteral(value: NativeValue): string {
-    if (value.kind === "none")
-        return "null";
-    if (value.kind === "bool")
-        return String(value.value);
-    if (value.kind === "int")
-        return value.value;
-    if (value.kind === "float")
-        return /[.eE]/.test(value.value) ? value.value : `${value.value}.0`;
-    if (value.kind === "decimal")
-        return `decimal(${JSON.stringify(value.value)})`;
-    if (value.kind === "date")
-        return `date(${JSON.stringify(value.value)})`;
-    if (value.kind === "time")
-        return `time(${JSON.stringify(value.value)})`;
-    if (value.kind === "localDatetime")
-        return `localDatetime(${JSON.stringify(value.value)})`;
-    if (value.kind === "duration")
-        return `duration(${JSON.stringify(value.value)})`;
-    if (value.kind === "text")
-        return JSON.stringify(value.value);
-    throw new UiError(message("queryValidation.nestedLiteralUnsupported"));
-}
-export function shapedQueryLiteral(shape: Shape, schema: DataSchema, value: NativeValue): string {
-    const resolved = resolveShape(shape, schema);
-    if (resolved.kind === "union") {
-        const branch = unionVariant(resolved, value, schema);
-        if (branch < 0)
-            throw new UiError(message("queryValidation.ambiguousValueBranch"));
-        return shapedQueryLiteral(resolved.variants[branch], schema, value);
-    }
-    if (resolved.kind === "scalar") {
-        const constructor = ({ node_ref: "nodeRef", tag_ref: "tagRef", resource_ref: "resourceRef", instant: "instant", exact_decimal: "exactDecimal", exact_seconds: "exactSeconds" } as Record<string, string>)[resolved.semantic];
-        if (constructor) {
-            if (value.kind !== "text")
-                throw new UiError(message("queryValidation.scalarRepresentationMismatch"));
-            return `${constructor}(${JSON.stringify(value.value)})`;
-        }
-    }
-    return scalarQueryLiteral(value);
-}
 export function facetPredicate(facet: QueryFacet, schema: DataSchema): string {
     if (facet.expr)
         return facet.expr;
@@ -1220,11 +975,12 @@ export function facetPredicate(facet: QueryFacet, schema: DataSchema): string {
 }
 export function composeWhere(search: string, includeBody: boolean, conditions: readonly {
     expr: string;
-}[], expression: string): string | undefined {
+}[], expression: string, mode: QueryTextMode = "all"): string | undefined {
     const pieces = conditions.map(condition => `(${condition.expr})`);
     if (search) {
-        const literal = JSON.stringify(search);
-        pieces.unshift(includeBody ? `(title.contains(${literal}) || body.contains(${literal}))` : `(title.contains(${literal}))`);
+        const title = queryTextPredicate("title", search, mode);
+        const body = queryTextPredicate("body", search, mode);
+        pieces.unshift(includeBody ? `(${title} ${mode === "exclude" ? "&&" : "||"} ${body})` : `(${title})`);
     }
     if (expression.trim())
         pieces.push(`(${expression.trim()})`);
@@ -1237,27 +993,20 @@ function planForInputs(input: QueryPlanInputs, schema: DataSchema | null): Query
     if (input.exactPlan) {
         const plan = structuredClone(input.exactPlan);
         plan.types = [...input.types];
-        plan.where = composeWhere(input.search, input.includeBody, input.conditions, plan.where ?? "");
+        plan.where = andPredicates(plan.where, composeWhere(input.search, input.includeBody, input.conditions, "", input.searchMode));
         return plan;
     }
     const field = (key: string) => schema?.fields.find(item => item.key === key)?.id;
     const preference = input.preference, columns = [{ name: "title", expr: "title" }, { name: "types", expr: "types" }];
     if (preference.summaries && !input.group)
         columns.push({ name: "summary", expr: "body" });
-    const requested = new Set(preference.columns);
-    if (preference.view === "board")
-        requested.add(preference.groupField);
-    if (preference.view === "calendar")
-        requested.add(preference.dateField);
-    if (preference.view === "chart")
-        requested.add(preference.chartField);
-    for (const key of requested) {
+    for (const key of new Set(preference.columns)) {
         const id = field(key);
         if (id)
             columns.push({ name: key, expr: fieldExpr(id) });
     }
     const sort = preference.sort === "title" ? "title" : field(preference.sort) ? fieldExpr(field(preference.sort)!) : preference.sort;
-    return { scope: { ...(input.scope ? { directory: input.scope } : {}), descendants: input.descendants, lifecycle: input.lifecycle }, types: [...input.types], where: composeWhere(input.search, input.includeBody, input.conditions, input.expression), select: input.group ? [] : columns, order: input.group ? [] : [{ expr: sort, descending: preference.descending, nulls: "last" }], take: input.take, ...(input.group ? { group: input.group } : {}) };
+    return { scope: { ...(input.scope ? { directory: input.scope } : {}), descendants: input.descendants, lifecycle: input.lifecycle }, types: [...input.types], where: composeWhere(input.search, input.includeBody, input.conditions, input.expression, input.searchMode), select: input.group ? [] : columns, order: input.group ? [] : [{ expr: sort, descending: preference.descending, nulls: "last" }], take: input.take, ...(input.group ? { group: input.group } : {}) };
 }
 const rowTitle = (row: QueryRow): UiText => row.cells.title?.state === "value" && row.cells.title.value ? formatNativeValue(row.cells.title.value) || row.path || row.key : row.path?.replaceAll("\\", "/").split("/").at(-1) || (row.readOnly && !row.entityKey ? joinUiText(Object.entries(row.cells).filter(([name]) => !["count", "amount"].includes(name)).map(([, cell]) => stateText(cell)), " · ") : row.entityKey || row.key);
 const stateText = (cell: Cell | undefined): UiText => !cell ? message("queryValue.unprojected") : cell.state === "value" ? formatNativeValue(cell.value) : cellLabels[cell.state];
@@ -1273,6 +1022,7 @@ interface QueryInlineDraft {
     revision: number;
 }
 export class QueryPanel {
+    private runController?: AbortController;
     private readonly closeGuard = new ProposalCloseGuard();
     private readonly draftFlags = new Set<string>();
     private discardQueryProposals(): void {
@@ -1342,6 +1092,7 @@ export class QueryPanel {
     private resultPlan: QueryPlan | null = null;
     private search = "";
     private includeBody = false;
+    private searchMode: QueryTextMode = "all";
     private expression = "";
     private conditions: Condition[] = [];
     private types: string[] = [];
@@ -1413,6 +1164,7 @@ export class QueryPanel {
         if (this.root === (library?.root ?? null) && this.workspaceId === library?.workspaceId)
             return;
         this.tagReferences = { nodes: [], state: "unavailable", messages: [] };
+        this.runController?.abort();
         this.refreshQueue.invalidate();
         this.environmentEpoch++;
         this.loading = false;
@@ -1495,7 +1247,7 @@ export class QueryPanel {
     setPlan(plan: QueryPlan): void { if (this.closeGuard.frozen) return; this.draftFlags.delete("advanced"); this.adoptPlan(plan); this.renderControls(); void this.refresh(); }
     private adoptPlan(plan: QueryPlan): void { this.savedSelection = null; this.savedPlan = null; this.definitionRevision = null; this.exactPlan = structuredClone(plan); this.advancedDraft = JSON.stringify(plan, null, 2); this.directory = plan.scope.directory ?? null; this.scopeIdentity = this.directory?.startsWith("weftext-") ? this.directory : null; this.descendants = plan.scope.descendants; this.lifecycle = plan.scope.lifecycle; this.types = [...plan.types]; this.conditions = []; this.search = ""; this.expression = ""; this.group = plan.group; this.take = plan.take ?? 200; this.loadPreferences(); }
     private libraryIdentity(): string { return this.workspaceId ? `weftext-workspace://${this.workspaceId}` : this.root ?? ""; }
-    private preferenceKey(): string { const predicates = [...this.conditions.map(item => item.expr), ...((this.exactPlan?.where ?? this.expression).trim() ? [(this.exactPlan?.where ?? this.expression).trim()] : []), ...(this.search ? [composeWhere(this.search, this.includeBody, [], "")!] : []), ...(this.exactPlan ? [JSON.stringify(this.exactPlan)] : [])]; return `weftext-query-view:${viewPreferenceIdentity(this.libraryIdentity(), this.scopeIdentity ?? this.directory ?? "@library", this.types, predicates, this.savedSelection ?? undefined)}`; }
+    private preferenceKey(): string { const predicates = [...this.conditions.map(item => item.expr), ...(this.expression.trim() ? [this.expression.trim()] : []), ...(this.search ? [composeWhere(this.search, this.includeBody, [], "", this.searchMode)!] : []), ...(this.exactPlan ? [JSON.stringify(this.exactPlan)] : [])]; return `weftext-query-view:${viewPreferenceIdentity(this.libraryIdentity(), this.scopeIdentity ?? this.directory ?? "@library", this.types, predicates, this.savedSelection ?? undefined)}`; }
     private contextChanged(): void { this.loadPreferences(); this.renderControls(); void this.refresh(); }
     private loadPreferences(): void {
         this.preference = defaultPreference();
@@ -1527,7 +1279,7 @@ export class QueryPanel {
     private savePreferences(bindFields = true): void {
         if (bindFields) {
             this.preference.fieldBindings ??= {};
-            for (const key of [...this.preference.columns, this.preference.sort, this.preference.groupField, this.preference.dateField, this.preference.chartField]) {
+            for (const key of [...this.preference.columns, this.preference.sort]) {
                 const id = this.fieldByKey(key);
                 if (id && !this.preference.fieldBindings[key])
                     this.preference.fieldBindings[key] = id;
@@ -1558,7 +1310,7 @@ export class QueryPanel {
     }
     private planInputs(): QueryPlanInputs {
         return structuredClone({ scope: this.scopeIdentity ?? this.directory, descendants: this.descendants, lifecycle: this.lifecycle,
-            types: this.types, search: this.search, includeBody: this.includeBody, conditions: this.conditions.map(({ expr }) => ({ expr })), expression: this.expression,
+            types: this.types, search: this.search, searchMode: this.searchMode, includeBody: this.includeBody, conditions: this.conditions.map(({ expr }) => ({ expr })), expression: this.expression,
             exactPlan: this.exactPlan, group: this.group, take: this.take, preference: this.preference });
     }
     getPlan(): QueryPlan { return this.savedSelection && this.savedPlan ? structuredClone(this.savedPlan) : planForInputs(this.planInputs(), this.schema); }
@@ -1635,6 +1387,8 @@ export class QueryPanel {
     }
     private async executeRefresh(intent: QueryRefreshIntent, selected: () => boolean): Promise<void> {
         return this.closeGuard.run(async () => {
+            const controller = new AbortController();
+            this.runController = controller;
             const key = this.intentKey(intent);
             const current = (): boolean => {
                 if (this.closeGuard.frozen || !selected())
@@ -1664,12 +1418,21 @@ export class QueryPanel {
                 this.renderControls();
                 if (intent.selection) {
                     const selection = intent.selection;
+                    const selectedDefinition = { mode: selection.mode, key: selection.key,
+                        ...(selection.mode === "pinned" ? { revision: selection.revision } : {}) };
+                    if (!this.savedPlan) {
+                        const definitions = await this.host.request<SavedDefinitions>("/api/query/definitions",
+                            { root: intent.root, owner: selection.owner, selection: selectedDefinition });
+                        if (!current())
+                            return;
+                        this.savedPlan = definitions.definitions.find(item => item.key === selection.key)?.plan ?? null;
+                    }
                     const response = await this.host.request<QueryResult & {
                         result?: QueryResult;
                         definitionRevision?: string;
                         definition?: SavedQuery;
                         definitionChanged?: boolean;
-                    }>("/api/query/definition/run", { root: intent.root, owner: selection.owner, parameters: intent.parameters, selection: { mode: selection.mode, key: selection.key, ...(selection.mode === "pinned" ? { revision: selection.revision } : {}) } });
+                    }>("/api/query/definition/run", { root: intent.root, owner: selection.owner, parameters: intent.parameters, selection: selectedDefinition }, controller.signal);
                     if (!current())
                         return;
                     const savedPlan = response.definition?.plan ?? null;
@@ -1702,7 +1465,7 @@ export class QueryPanel {
                     const errors = intent.inputs.exactPlan ? [] : preferenceFieldErrors(intent.inputs.preference, schema);
                     if (errors.length)
                         throw new UiError(joinUiText(errors, "；"));
-                    const plan = planForInputs(intent.inputs, schema), result = await this.host.request<QueryResult>("/api/query/run", { root: intent.root, plan, parameters: intent.parameters });
+                    const plan = planForInputs(intent.inputs, schema), result = await this.host.request<QueryResult>("/api/query/run", { root: intent.root, plan, parameters: intent.parameters }, controller.signal);
                     if (!current())
                         return;
                     this.result = decodeLocalQueryResult(result);
@@ -1723,6 +1486,7 @@ export class QueryPanel {
                 }
             }
             finally {
+                if (this.runController === controller) this.runController = undefined;
                 if (!this.closeGuard.frozen && selected()) {
                     this.loading = false;
                     this.renderControls();
@@ -1756,7 +1520,9 @@ export class QueryPanel {
     private mountControls(): void {
         this.controlUpdates = [];
         const heading = ui("div", "query-heading"), capture = this.action(message("queryCapture.title"), () => this.showCapture(), "data-button primary");
-        heading.append(ui("h2", "", message("queryPanel.libraryTitle")), this.action(message("common.refresh"), () => this.refresh(), "data-button compact"), capture,
+        const stop = this.action(message("queryPanel.cancelRun"), () => this.runController?.abort());
+        this.controlUpdates.push(() => { stop.hidden = !this.runController; });
+        heading.append(ui("h2", "", message("queryPanel.libraryTitle")), this.action(message("common.refresh"), () => this.refresh(), "data-button compact"), stop, capture,
             this.action(message("common.cancel"), () => this.discardQueryProposals()),
             this.action(message("queryEdit.discardAllFieldInputs"), () => { this.inlineDrafts.clear(); this.renderResults(); }));
         const savedNotice = ui("p", "query-result-status"), copy = this.action(message("queryPanel.copyDefinitionToTemporary"), () => {
@@ -1778,7 +1544,10 @@ export class QueryPanel {
         setUiAttr(search, "aria-label", message("queryPanel.searchTitleLabel"));
         run.type = "submit";
         const updateSearch = this.draftInput(search, () => this.search, value => { this.search = value; this.draftFlags.add("search"); });
-        searchForm.append(search, run, this.action(message("common.cancel"), () => { this.search = ""; search.value = ""; this.draftFlags.delete("search"); }));
+        const matchMode = selectControl(Object.entries(queryTextModes), this.searchMode);
+        setUiAttr(matchMode, "aria-label", message("queryText.mode"));
+        matchMode.onchange = () => { this.searchMode = matchMode.value as QueryTextMode; };
+        searchForm.append(search, matchMode, run, this.action(message("common.cancel"), () => { this.search = ""; search.value = ""; this.draftFlags.delete("search"); }));
         searchForm.onsubmit = event => { event.preventDefault(); void this.refresh(); };
         const scopeRow = ui("div", "query-scope-row"), scopeText = ui("span", "query-scope"), all = this.action(message("queryPanel.wholeLibrary"), () => this.applyScope(null), "data-button compact");
         const descendants = ui("input"), body = ui("input"), lifecycle = selectControl([["live", message("queryPanel.liveNotes")], ["trash", message("queryPanel.readOnlyTrash")]], this.lifecycle);
@@ -1790,7 +1559,7 @@ export class QueryPanel {
         const chips = ui("div", "query-chips");
         let chipsKey = "";
         const presentation = ui("div", "query-presentation"), view = selectControl([["list", message("queryView.list")], ["table", message("queryView.table")], ["board", message("queryView.board")], ["calendar", message("queryView.calendar")], ["chart", message("queryView.chart")]], this.preference.view);
-        view.onchange = () => { this.preference.view = view.value as ResultView; this.savePreferences(); this.renderControls(); void this.refresh(); };
+        view.onchange = () => { this.preference.view = view.value as ResultView; this.savePreferences(false); this.renderControls(); this.renderResults(); };
         const density = selectControl([["comfortable", message("queryView.detailedDensity")], ["compact", message("queryView.compactDensity")]], this.preference.density);
         density.onchange = () => { this.preference.density = density.value as ViewPreference["density"]; this.savePreferences(false); this.renderResults(); };
         const sort = selectControl([], "");
@@ -1817,7 +1586,7 @@ export class QueryPanel {
             setUiText(savedNotice, selected ? displayMessage("queryPanel.savedSelectionSummary", { p0: uiDisplayParameter(selected.mode === "pinned" ? message("queryPanel.pinnedDefinition") : message("queryPanel.currentDefinition")), p1: uiDisplayParameter(selected.label), p2: uiDisplayParameter(this.definitionRevision ? ` · ${this.definitionRevision}` : "") }) : "");
             exactNotice.hidden = !this.exactPlan || !!selected;
             updateSearch(reset);
-            search.disabled = run.disabled = !!selected;
+            search.disabled = matchMode.disabled = run.disabled = !!selected;
             setUiText(scopeText, this.directory ? displayMessage("queryPanel.directoryChip", { p0: uiDisplayParameter(this.directory) }) : message("queryPanel.entireLibrary"));
             all.hidden = !this.directory;
             descendants.checked = this.descendants;
@@ -1868,7 +1637,7 @@ export class QueryPanel {
             this.contextChanged();
         };
         builder.append(labeled(message("queryFilter.typeLabel"), type));
-        const filterForm = ui("form", "query-filter-builder"), field = selectControl([], ""), operator = selectControl([["==", message("queryOperator.equals")], ["!=", message("queryOperator.notEquals")], [">", message("queryOperator.greaterThan")], [">=", message("queryOperator.atLeast")], ["<", message("queryOperator.lessThan")], ["<=", message("queryOperator.atMost")], ["contains", message("queryOperator.containsText")], ["absent", message("queryValue.absent")], ["null", message("queryOperator.explicitNone")]], "==");
+        const filterForm = ui("form", "query-filter-builder"), field = selectControl([], ""), operator = selectControl([], "");
         const value = ui("input", "data-input"), branch = selectControl([], ""), branchLabel = labeled(message("queryFilter.valueTypeLabel"), branch), filterMessage = ui("p", "data-warning");
         setUiAttr(value, "aria-label", message("queryFilter.exactValueLabel"));
         setUiAttr(value, "placeholder", message("queryFilter.exactValue"));
@@ -1880,6 +1649,10 @@ export class QueryPanel {
                 branch.value = "";
             updateQueryChoices(branch, variants.map(item => ({ value: queryRefreshKey(item), label: item.kind === "scalar" ? item.semantic : "enum" })));
             branchLabel.hidden = shape?.kind !== "union";
+        };
+        const selectedFilterShape = (fieldShape: Shape, schema: DataSchema) => {
+            const shape = resolveShape(fieldShape, schema);
+            return shape.kind === "union" ? shape.variants.map(item => resolveShape(item, schema)).find(item => queryRefreshKey(item) === branch.value) : shape;
         };
         branch.onchange = () => this.renderControls();
         operator.onchange = () => this.renderControls();
@@ -1899,28 +1672,14 @@ export class QueryPanel {
                 if (!schema || !selected)
                     throw new UiError(message("queryFilter.unavailableOriginalField"));
                 const expr = fieldExpr(selected.id);
-                let condition: string;
-                if (operator.value === "absent")
-                    condition = `isAbsent(${expr})`;
-                else if (operator.value === "null")
-                    condition = `isNull(${expr})`;
-                else {
-                    const shape = resolveShape(selected.shape, schema), resolved = shape.kind === "union" ? shape.variants.map(item => resolveShape(item, schema)).find(item => queryRefreshKey(item) === branch.value) : shape;
-                    if (!resolved || !["scalar", "enum"].includes(resolved.kind))
-                        throw new UiError(message("queryFilter.unavailableOriginalBranch"));
-                    const native = scalarFromInput(resolved, schema, value.value);
-                    if (operator.value === "contains") {
-                        if (native.kind !== "text")
-                            throw new UiError(message("queryValidation.containsTextFieldRequired"));
-                        condition = `${expr}.contains(${JSON.stringify(native.value)})`;
-                    }
-                    else
-                        condition = `${expr} ${operator.value} ${shapedQueryLiteral(resolved, schema, native)}`;
-                }
-                const selectedKey = selected.key, operatorKey = operator.value, rawValue = value.value;
-                const operatorLabels: Readonly<Record<string, UiText>> = { "==": message("queryOperator.equals"), "!=": message("queryOperator.notEquals"), ">": message("queryOperator.greaterThan"), ">=": message("queryOperator.atLeast"), "<": message("queryOperator.lessThan"), "<=": message("queryOperator.atMost"), contains: message("queryOperator.containsText"), absent: message("queryValue.absent"), null: message("queryOperator.explicitNone") };
+                const shape = selectedFilterShape(selected.shape, schema) ?? selected.shape;
+                const operand = filterOperandShape(operator.value, shape, schema);
+                const native = operand ? scalarFromInput(operand, schema, value.value) : undefined;
+                const condition = queryPredicate(expr, shape, schema, true, operator.value, native);
+                const selectedKey = selected.key, rawValue = operand ? value.value : "";
+                const choice = filterOperators(shape, schema, true).find(item => item.value === operator.value)!;
                 this.draftFlags.delete("filter");
-                this.conditions.push({ id: crypto.randomUUID(), label: () => `${uiTextValue(fieldNames[selectedKey] ?? selectedKey)} ${uiTextValue(operatorLabels[operatorKey] ?? operatorKey)} ${rawValue}`, expr: condition });
+                this.conditions.push({ id: crypto.randomUUID(), label: () => [uiTextValue(fieldNames[selectedKey] ?? selectedKey), uiTextValue(choice.label), rawValue].filter(Boolean).join(" "), expr: condition });
                 this.contextChanged();
             }
             catch (error) {
@@ -1945,17 +1704,10 @@ export class QueryPanel {
         viewField.classList.add("query-view-field");
         viewField.onchange = () => {
             const property = this.preference.view === "board" ? "groupField" : this.preference.view === "calendar" ? "dateField" : "chartField";
-            if (this.exactPlan || this.savedSelection || this.group)
-                this.preference[property] = viewField.value;
-            else {
-                const selected = this.schema?.fields.find(item => item.id === viewField.value);
-                if (!selected && viewField.value !== "@count")
-                    return;
-                this.preference[property] = selected?.key ?? "count";
-                this.bindPreferenceField(this.preference[property]);
-            }
-            this.savePreferences();
-            void this.refresh();
+            if (!this.result?.columns?.includes(viewField.value)) return;
+            this.preference[property] = viewField.value;
+            this.savePreferences(false);
+            this.renderResults();
         };
         builder.append(viewFieldLabel);
         const aggregateForm = ui("form", "query-aggregate-builder"), groupKey = selectControl([], ""), op = selectControl([["count", message("queryAggregate.noteCount")], ["sum", message("queryAggregate.sum")], ["min", message("queryAggregate.minimum")], ["max", message("queryAggregate.maximum")]], "count"), amount = selectControl([], "");
@@ -2011,6 +1763,12 @@ export class QueryPanel {
             const choices = fields.map(item => ({ value: item.id, label: fieldNames[item.key] ?? item.key }));
             const fieldValid = updateQueryChoices(field, choices), groupValid = updateQueryChoices(groupKey, [{ value: "", label: message("queryAggregate.noFieldGrouping") }, ...choices]), amountValid = updateQueryChoices(amount, choices);
             updateBranch(reset);
+            const selected = fields.find(item => item.id === field.value);
+            const shape = selected && schema ? selectedFilterShape(selected.shape, schema) ?? selected.shape : undefined;
+            const operators = shape && schema ? filterOperators(shape, schema, true) : [];
+            updateQueryChoices(operator, operators, operators.some(item => item.value === operator.value) ? operator.value : "");
+            const operand = shape && schema ? filterOperandShape(operator.value, shape, schema) : undefined;
+            value.hidden = !operand;
             filterMessage.hidden = fieldValid;
             setUiText(filterMessage, fieldValid ? "" : message("queryFilter.unavailableRetainedValue"));
             aggregateMessage.hidden = groupValid && (op.value === "count" || amountValid);
@@ -2071,13 +1829,13 @@ export class QueryPanel {
             const caption = this.preference.view === "board" ? message("queryView.boardGroupFieldLabel") : this.preference.view === "calendar" ? message("queryView.calendarDateFieldLabel") : message("queryView.chartValueFieldLabel");
             if (viewFieldLabel.firstChild?.nodeType === 3)
                 setUiText(viewFieldLabel.firstChild, caption);
-            const derived = !!this.exactPlan || !!this.savedSelection || !!this.group;
-            const viewChoices = derived ? [...new Set([...(this.resultPlan?.select ?? this.getPlan().select).map(item => item.name), ...Object.keys(this.result?.rows[0]?.cells ?? {})])].filter(name => !["title", "summary", "types"].includes(name)).map(name => ({ value: name, label: fieldNames[name] ?? name })) : [...(this.preference.view === "chart" ? [{ value: "@count", label: message("queryAggregate.countOutput") }] : []), ...choices];
-            updateQueryChoices(viewField, viewChoices, derived ? selectedViewField : selectedViewField === "count" ? "@count" : this.preference.fieldBindings?.[selectedViewField] ?? this.fieldByKey(selectedViewField) ?? selectedViewField);
+            const viewChoices = (this.result?.columns ?? []).map(name => ({ value: name, label: fieldNames[name] ?? name }));
+            updateQueryChoices(viewField, viewChoices, selectedViewField);
+            viewField.disabled = !viewChoices.length;
             for (const control of builder.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>("input,select,textarea,button"))
                 if (!control.classList.contains("query-view-field") && !columns.contains(control))
                     control.disabled = locked;
-            add.disabled = locked || !fieldValid || !field.value || operator.value !== "absent" && operator.value !== "null" && !branchLabel.hidden && branch.getAttribute("aria-invalid") === "true";
+            add.disabled = locked || !fieldValid || !field.value || !operator.value || !!operand && !branchLabel.hidden && branch.getAttribute("aria-invalid") === "true";
             aggregateSubmit.disabled = locked || !groupValid || op.value !== "count" && (!amountValid || !amount.value);
             grouped.hidden = !this.group;
             if (reset || priorLimit !== this.take) {
@@ -2105,6 +1863,31 @@ export class QueryPanel {
         const feedback = ui("p", "data-help", message("queryAdvanced.planHelp"));
         feedback.setAttribute("aria-live", "polite");
         section.append(this.action(message("queryAdvanced.loadCurrentPlan"), () => { this.draftFlags.delete("advanced"); this.advancedDraft = JSON.stringify(this.getPlan(), null, 2); planInput.value = this.advancedDraft; planInitialized = true; }), labeled(message("queryAdvanced.planField"), planInput), labeled(message("queryAdvanced.parametersField"), parameterInput));
+        section.append(queryArgumentControls(parameterInput,
+            () => this.savedSelection ? this.savedPlan : parseQueryPlan(planInput.value),
+            () => this.schema, () => this.tagReferences, () => !this.closeGuard.frozen));
+        const builder = ui("details");
+        const builderBody = ui("div");
+        builder.append(ui("summary", "", message("hostedQuery.planControlsDisclosure")), builderBody);
+        builder.ontoggle = () => {
+            builderBody.replaceChildren();
+            if (!builder.open) return;
+            const opening = planInput.value;
+            try {
+                const proposal = parseQueryPlan(opening);
+                builderBody.append(queryPlanControls(proposal, this.schema, () => {}, this.tagReferences),
+                    this.action(message("hostedQuery.adoptControlProposal"), () => {
+                        if (opening !== planInput.value)
+                            throw new UiError(message("hostedQuery.controlProposalSuperseded"));
+                        planInput.value = JSON.stringify(parseQueryPlan(JSON.stringify(proposal)), null, 2);
+                        planInput.dispatchEvent(new Event("input"));
+                        builder.open = false;
+                    }));
+            } catch (error) {
+                builderBody.append(ui("p", "data-warning", error instanceof Error ? errorUiText(error) : String(error)));
+            }
+        };
+        section.append(builder);
         section.append(this.action(message("queryAdvanced.runPlan"), async () => {
             try {
                 const plan = parseQueryPlan(planInput.value);
@@ -2550,7 +2333,13 @@ export class QueryPanel {
                 return;
             }
             const prior = this.preferenceKey();
+            const previous = this.savedSelection;
             this.savedSelection = structuredClone(selection);
+            if (previous?.owner !== selection.owner || previous.key !== selection.key
+                || previous.mode !== selection.mode || previous.revision !== selection.revision) {
+                this.savedPlan = null;
+                this.definitionRevision = null;
+            }
             this.draftFlags.delete(`saved:${selection.owner}:${selection.key}`);
             if (this.preferenceKey() !== prior)
                 this.loadPreferences();

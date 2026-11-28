@@ -7,7 +7,8 @@ import { SourceEditor, sourceBoundary, type SourcePatch } from "./editor";
 import { everydayWritingCommands } from "./everyday-writing";
 import type { EverydayCommand } from "./everyday-navigation";
 import { EmbeddedQueryController, sameQueryBasis, queryBasisWire, type EmbeddedQueryBasis } from "./embedded-query";
-import type { QueryPlan, QueryResult, QueryRow } from "./query-panel";
+import type { QueryResult, QueryRow } from "./query-panel";
+import type { QueryPlan } from "./query-plan";
 import type { FrozenQuery } from "./export-state";
 import type { AuthorInputFactory } from "./author-input";
 import { decodeEditorMapResponse, WritingController, groupWritingRenderNodes, groupWritingEmptySlots, writingStructureIndex, type WritingMap, type WritingRange } from "./writing";
@@ -42,7 +43,7 @@ interface Projection {
         notes?: import("./document-notes").NotesSourceMap;
     };
 }
-type Request = <T>(path: string, body?: unknown) => Promise<T>;
+type Request = <T>(path: string, body?: unknown, signal?: AbortSignal) => Promise<T>;
 export interface HostedEditorQueryHost {
     openRow(row: QueryRow, plan: QueryPlan | null): Promise<void>;
     canOpenRow(row: QueryRow, plan: QueryPlan | null): boolean;
@@ -445,12 +446,12 @@ export class HostedEditor {
                         }>("query/catalog")).formSchema ?? null,
                         basis: () => ({ sessionId: this.sessionId, source: this.value, serial: this.serial, inputId: this.authorInputId }), mode: () => this.mode,
                         editable: () => this.editor === editor && !this.blocked && this.mode !== "read" && !this.writing?.state.composing,
-                        request: (path, body) => {
+                        request: (path, body, signal) => {
                             const routes: Record<string, string> = { "/api/query/embedded/discover": "query/embedded/discover", "/api/query/embedded/run": "query/embedded/run", "/api/query/embedded/edit": "query/embedded/edit" };
                             if (!routes[path])
                                 throw new UiError(uiMessage("hostedEditor.queryReadEndpointUnavailable"));
                             const dependencies = path === "/api/query/embedded/run" ? this.queryHost?.dependencies?.() ?? { providers: {}, seriesPolicies: {} } : undefined;
-                            return this.request(routes[path], dependencies ? { ...(body as object), ...dependencies } : body);
+                            return this.request(routes[path], dependencies ? { ...(body as object), ...dependencies } : body, signal);
                         },
                         prepareEdit: () => this.flush(), apply: async (patches, basis, event) => this.applyQueryPatches(patches, basis, event),
                         reveal: (item, host) => {

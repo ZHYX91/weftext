@@ -2,7 +2,7 @@ import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { applySourcePatches, sourceBoundary, type SourcePatch } from "./editor";
 import { utf8Offset } from "./writing";
-import type { QueryPlan } from "./query-panel";
+import type { QueryPlan } from "./query-plan";
 export interface DefinitionAuthorContext {
     inputId: string;
     resource: string;

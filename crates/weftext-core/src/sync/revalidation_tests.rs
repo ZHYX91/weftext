@@ -467,7 +467,7 @@ fn saved_required_parameters_are_typed_but_not_fabricated_as_runtime_values() {
     let schema = f.schema(&Schema::bundled().unwrap());
     let baseline = schema.file_revisions[".weftext-schema.json"].clone();
     let key = fresh();
-    let definition=f.definition(&key,&baseline,"select: ((name: \"n\", expr: \"threshold\"),), ","advanced: (parameters: ((name: \"threshold\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false),),)");
+    let definition=f.definition(&key,&baseline,"select: ((name: \"n\", expr: \"threshold\"),), ","parameters: ((name: \"threshold\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false),)");
     let source = f.node(id, "Note", &definition);
     f.offer(
         &[f.head.clone()],
@@ -738,7 +738,7 @@ fn pinned_callee_uses_exact_file_revision_and_never_falls_back_to_current() {
     );
     let root_key = fresh();
     let advanced = format!(
-        "advanced: (parameters: ((name: \"spare\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false),), call: (owner: \"weftext-node://{}/{callee_id}\", selection: (mode: \"pinned\", key: \"{key}\", revision: \"{pinned}\"), arguments: (:)))",
+        "parameters: ((name: \"spare\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false),), advanced: (call: (owner: \"weftext-node://{}/{callee_id}\", selection: (mode: \"pinned\", key: \"{key}\", revision: \"{pinned}\"), arguments: (:)))",
         f.workspace
     );
     let root = f.definition(&root_key, &root_baseline, "", &advanced);
@@ -803,7 +803,7 @@ fn pinned_callee_uses_exact_file_revision_and_never_falls_back_to_current() {
     assert_eq!(outer.plan.select[0].name, "value");
     assert_eq!(outer.plan.select[0].expr, "value");
     let outer_advanced = outer.plan.advanced.as_ref().unwrap();
-    assert!(outer_advanced.parameters.is_empty());
+    assert!(outer.plan.parameters.is_empty());
     let outer_call = outer_advanced.call.as_ref().unwrap();
     assert_eq!(outer_call.owner, exact_callee.owner);
     assert!(outer_call.arguments.is_empty());
@@ -921,7 +921,7 @@ fn closed_actual_call_cannot_defer_an_invalid_literal_parameter() {
     let baseline = schema.file_revisions[".weftext-schema.json"].clone();
     let key = fresh();
     let definition = f.definition(&key, &baseline, "select: ((name: \"wanted\", expr: \"wanted\"),), ",
-        "advanced: (parameters: ((name: \"wanted\", shape: (kind: \"enum\", values: (\"open\",), open: false), nullable: false),),)");
+        "parameters: ((name: \"wanted\", shape: (kind: \"enum\", values: (\"open\",), open: false), nullable: false),)");
     let source = f.node(callee_id, "Callee", &definition);
     let root_key = fresh();
     let expression = weftext_data::typst_string("\"open\"");
@@ -976,7 +976,7 @@ fn closed_actual_call_cannot_defer_an_invalid_literal_parameter() {
     // force the original writer to discharge the call's actual evidence.
     let with_spare = wrong.replace(
         "advanced: (call:",
-        "advanced: (parameters: ((name: \"spare\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false),), call:",
+        "parameters: ((name: \"spare\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false),), advanced: (call:",
     );
     let state = f.node(caller_id, "Caller", &with_spare);
     let prior = chosen[&caller].revision.clone();
@@ -1345,7 +1345,7 @@ fn required_used_parameter_does_not_hide_closed_provider_failure_or_block_legal_
         "select: ((name: \"closed\", expr: {}), (name: \"unknown\", expr: \"spare\")), ",
         weftext_data::typst_string("nextCivilDay(date('9999-12-31'))")
     );
-    let source = f.definition(&fresh(), &baseline, &select, "advanced: (parameters: ((name: \"spare\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false),),)");
+    let source = f.definition(&fresh(), &baseline, &select, "parameters: ((name: \"spare\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false),)");
     let state = f.node(id, "Note", &source);
     f.offer(
         &[f.head.clone()],

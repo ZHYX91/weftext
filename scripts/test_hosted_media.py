@@ -3,6 +3,7 @@
 Only owned disposable fixtures are created. The local host provisions admitted
 resources; all tested consumer requests cross the hosted HTTP boundary.
 """
+from _http_test_suite import run_http_suite
 import uuid
 import base64
 import copy
@@ -10,9 +11,7 @@ import hashlib
 import io
 import json
 from pathlib import Path
-import sys
 import time
-import unittest
 import wave
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -419,8 +418,4 @@ class HostedMedia(HostedQuery):
 
 
 if __name__ == '__main__':
-    selected = set(sys.argv[2:])
-    suite = unittest.TestSuite(HostedMedia(name) for name in sorted(HostedMedia.__dict__)
-                              if name.startswith('test_media_') and (not selected or name in selected))
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
-    sys.exit(not result.wasSuccessful())
+    raise SystemExit(run_http_suite(HostedMedia))

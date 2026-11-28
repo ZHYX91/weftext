@@ -1,3 +1,9 @@
+#[cfg(test)]
+mod evaluator_benchmark;
+mod predicate;
+mod prepared;
+mod relative_date;
+mod text_index;
 use crate::*;
 use cel::{
     Context, ExecutionError, Program, Value as CelValue,
@@ -10,6 +16,11 @@ use cel::{
         value::{BuiltinRef, CowVal, StaticVal, Val},
     },
 };
+use indexmap::IndexMap;
+pub use predicate::{QueryBoolean, QueryPredicate, QueryPredicateGroup};
+use prepared::PreparedExpression;
+pub(crate) use prepared::visit_children;
+pub use relative_date::{QueryDateKind, QueryDatePeriod, QueryPeriodUnit, QueryRelativeDate};
 use serde::{Deserialize, Serialize};
 use std::{
     any::Any,
@@ -20,6 +31,7 @@ use std::{
         atomic::{AtomicBool, Ordering as AtomicOrdering},
     },
 };
+pub use text_index::QueryTextIndex;
 
 const MAX_HOST_FAILURES: usize = 128;
 const MAX_HOST_FAILURE_BYTES: usize = 8 * 1024 * 1024;
@@ -131,11 +143,13 @@ pub struct QueryGroup {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QueryPlan {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parameters: Vec<QueryParameter>,
     #[serde(default)]
     pub scope: QueryScope,
     #[serde(default)]
     pub types: Vec<String>,
-    pub r#where: Option<String>,
+    pub r#where: Option<QueryPredicate>,
     #[serde(default)]
     pub select: Vec<QueryColumn>,
     #[serde(default)]
@@ -618,28 +632,14 @@ fn typecheck(
                 }
                 return Ok(scalar("bool"));
             }
-            if matches!(
-                c.func_name.as_str(),
-                "decimal"
-                    | "exactDecimal"
-                    | "date"
-                    | "time"
-                    | "localDatetime"
-                    | "instant"
-                    | "nodeRef"
-                    | "resourceRef"
-                    | "tagRef"
-                    | "duration"
-                    | "exactSeconds"
-            ) {
+            if let Some(constructor) = TypedConstructor::named(&c.func_name) {
                 if c.target.is_some() || c.args.len() != 1 || literal_text(&c.args[0]).is_none() {
                     return Err(DataError::new(
                         weftext_messages::UiMessage::error_data_query_typed_constructor_requires_literal_string(),
                     ));
                 }
-                let (semantic, _) =
-                    typed_constant(&c.func_name, literal_text(&c.args[0]).unwrap())?;
-                return Ok(scalar(semantic));
+                constructor.value(literal_text(&c.args[0]).unwrap())?;
+                return Ok(scalar(constructor.semantic));
             }
             let mut args = vec![];
             if let Some(t) = &c.target {
@@ -801,6 +801,20 @@ fn typecheck(
                     }
                     scalar("bool")
                 }
+                "textMatch" => {
+                    if c.target.is_some()
+                        || args.len() != 3
+                        || !args.iter().all(|value| compatible(value, &scalar("text")))
+                        || !literal_text(&c.args[2])
+                            .as_deref()
+                            .is_some_and(text_index::valid_mode)
+                    {
+                        return Err(DataError::new(
+                            UiMessage::error_data_query_text_index_arguments(),
+                        ));
+                    }
+                    scalar("bool")
+                }
                 "expandRecurrence" => {
                     if c.target.is_some() || args.len() != 3 {
                         return Err(DataError::new(
@@ -879,6 +893,7 @@ fn typecheck(
 }
 pub(crate) struct Compiled {
     ast: IdedExpr,
+    prepared: PreparedExpression,
     pub(crate) ty: QType,
     vars: BTreeMap<String, QType>,
 }
@@ -893,17 +908,22 @@ pub(crate) fn compile(
             weftext_messages::UiMessage::error_data_query_cel_source_budget_exceeded(),
         ));
     }
-    let p = Program::compile(expr).map_err(|error| {
-        DataError::new(UiMessage::error_data_query_cel_syntax_invalid())
-            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
-    })?;
+    let p = parse_cel(expr)?;
     let mut ast = p.expression().clone();
     alpha_rename(&mut ast, &BTreeMap::new(), &mut 0);
     let ty = typecheck(&ast, schema, vars, 0)?;
     Ok(Compiled {
+        prepared: PreparedExpression::new(&ast, schema)?,
         ast,
         ty,
         vars: vars.clone(),
+    })
+}
+
+fn parse_cel(expr: &str) -> Result<Program> {
+    Program::compile(expr).map_err(|error| {
+        DataError::new(UiMessage::error_data_query_cel_syntax_invalid())
+            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
     })
 }
 pub(crate) fn alpha_rename(
@@ -1032,11 +1052,19 @@ impl Comparer for ExactAtom {
         })
     }
 }
-/// An ordinary CEL map adapter with deterministic authored member order.
-/// Macro filter/map clones this exact structure instead of rebuilding HashMaps.
+/// Authored iteration order with keyed access for lookup and map equality.
 #[derive(Debug, Clone)]
 struct OrderedRecord {
-    members: Vec<(CelString<'static>, Box<dyn Val>)>,
+    members: Arc<IndexMap<RecordKey, Box<dyn Val>>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct RecordKey(CelString<'static>);
+
+impl std::borrow::Borrow<str> for RecordKey {
+    fn borrow(&self) -> &str {
+        self.0.inner()
+    }
 }
 struct OrderedRecordConstructor {
     schema: Arc<Schema>,
@@ -1079,20 +1107,22 @@ impl cel::extractors::IntoFunction<OrderedRecordConstructor> for OrderedRecordCo
                     UiMessage::error_data_query_record_constructor_invalid(),
                 )));
             }
-            let mut members = vec![];
+            let mut members = IndexMap::with_capacity(context.args.len() / 2);
             for pair in context.args.as_chunks::<2>().0 {
                 let BuiltinRef::String(key) = pair[0].as_builtin() else {
                     return Err(self.failures.error(DataError::new(
                         UiMessage::error_data_query_record_key_text_required(),
                     )));
                 };
-                members.push((
-                    CelString::from(key.inner().to_string()),
+                members.insert(
+                    RecordKey(CelString::from(key.inner().to_string())),
                     owned(pair[1].as_ref(), &self.schema, &self.failures)
                         .map_err(|error| self.failures.error(error))?,
-                ));
+                );
             }
-            Ok(CowVal::Owned(Box::new(OrderedRecord { members })))
+            Ok(CowVal::Owned(Box::new(OrderedRecord {
+                members: Arc::new(members),
+            })))
         })
     }
 }
@@ -1131,12 +1161,10 @@ impl Val for OrderedRecord {
     fn equals(&self, other: &dyn Val) -> bool {
         other.downcast_ref::<Self>().is_some_and(|o| {
             self.members.len() == o.members.len()
-                && self.members.iter().all(|(k, v)| {
-                    o.members
-                        .iter()
-                        .find(|(ok, _)| ok.inner() == k.inner())
-                        .is_some_and(|(_, ov)| v.equals(ov.as_ref()))
-                })
+                && self
+                    .members
+                    .iter()
+                    .all(|(k, v)| o.members.get(k).is_some_and(|ov| v.equals(ov.as_ref())))
         })
     }
 }
@@ -1152,9 +1180,8 @@ impl Indexer for OrderedRecord {
             });
         };
         self.members
-            .iter()
-            .find(|(k, _)| k.inner() == s.inner())
-            .map(|(_, v)| CowVal::Borrowed(v.as_ref()))
+            .get(s.inner())
+            .map(|v| CowVal::Borrowed(v.as_ref()))
             .ok_or_else(|| ExecutionError::NoSuchKey(Arc::new(s.inner().to_string())))
     }
     fn steal<'v>(
@@ -1174,22 +1201,19 @@ impl Sizer for OrderedRecord {
 }
 impl Container for OrderedRecord {
     fn contains(&self, key: &dyn Val) -> std::result::Result<bool, ExecutionError> {
-        match self.get(key) {
-            Ok(_) => Ok(true),
-            Err(ExecutionError::NoSuchKey(_)) => Ok(false),
-            Err(e) => Err(e),
+        match key.as_builtin() {
+            BuiltinRef::String(s) => Ok(self.members.contains_key(s.inner())),
+            _ => Err(ExecutionError::UnexpectedType {
+                got: key.get_type().name().into(),
+                want: "string".into(),
+            }),
         }
     }
 }
-struct RecordKeys<'a> {
-    members: &'a [(CelString<'static>, Box<dyn Val>)],
-    index: usize,
-}
+struct RecordKeys<'a>(indexmap::map::Keys<'a, RecordKey, Box<dyn Val>>);
 impl<'b, 'v> cel::common::traits::Iterator<'b, 'v> for RecordKeys<'b> {
     fn next(&mut self) -> Option<&'b (dyn Val + 'v)> {
-        let item = self.members.get(self.index)?;
-        self.index += 1;
-        Some(&item.0)
+        self.0.next().map(|key| &key.0 as &dyn Val)
     }
 }
 impl Iterable for OrderedRecord {
@@ -1197,10 +1221,7 @@ impl Iterable for OrderedRecord {
     where
         Self: 'v,
     {
-        Box::new(RecordKeys {
-            members: &self.members,
-            index: 0,
-        })
+        Box::new(RecordKeys(self.members.keys()))
     }
 }
 fn to_cel(
@@ -1262,20 +1283,21 @@ fn to_cel(
                 None
             };
             Box::new(OrderedRecord {
-                members: a
-                    .iter()
-                    .map(|m| {
-                        (
-                            CelString::from(m.key.clone()),
-                            to_cel(
-                                &m.value,
-                                schema,
-                                members.and_then(|a| a.get(&m.key)).map(|m| &m.shape),
-                                failures,
-                            ),
-                        )
-                    })
-                    .collect(),
+                members: Arc::new(
+                    a.iter()
+                        .map(|m| {
+                            (
+                                RecordKey(CelString::from(m.key.clone())),
+                                to_cel(
+                                    &m.value,
+                                    schema,
+                                    members.and_then(|a| a.get(&m.key)).map(|m| &m.shape),
+                                    failures,
+                                ),
+                            )
+                        })
+                        .collect(),
+                ),
             })
         }
     }
@@ -1291,7 +1313,7 @@ fn from_cel(v: &dyn Val) -> Result<NativeValue> {
                 .iter()
                 .map(|(key, value)| {
                     Ok(NativeMember {
-                        key: key.inner().to_string(),
+                        key: key.0.inner().to_string(),
                         value: from_cel(value.as_ref())?,
                     })
                 })
@@ -1344,114 +1366,37 @@ fn from_cel(v: &dyn Val) -> Result<NativeValue> {
         )),
     }
 }
-fn typed_constant(name: &str, text: String) -> Result<(&'static str, NativeValue)> {
-    let (semantic, value) = match name {
-        "decimal" => ("decimal", NativeValue::Decimal(text)),
-        "exactDecimal" => ("exact_decimal", NativeValue::Text(text)),
-        "date" => ("date", NativeValue::Date(text)),
-        "time" => ("time", NativeValue::Time(text)),
-        "localDatetime" => ("local_datetime", NativeValue::LocalDatetime(text)),
-        "instant" => ("instant", NativeValue::Text(text)),
-        "nodeRef" => ("node_ref", NativeValue::Text(text)),
-        "resourceRef" => ("resource_ref", NativeValue::Text(text)),
-        "tagRef" => ("tag_ref", NativeValue::Text(text)),
-        "duration" => ("duration", NativeValue::Duration(text)),
-        "exactSeconds" => ("exact_seconds", NativeValue::Text(text)),
-        _ => {
+struct TypedConstructor {
+    semantic: &'static str,
+    native: fn(String) -> NativeValue,
+}
+impl TypedConstructor {
+    fn named(name: &str) -> Option<Self> {
+        let (semantic, native): (_, fn(String) -> NativeValue) = match name {
+            "decimal" => ("decimal", NativeValue::Decimal),
+            "exactDecimal" => ("exact_decimal", NativeValue::Text),
+            "date" => ("date", NativeValue::Date),
+            "time" => ("time", NativeValue::Time),
+            "localDatetime" => ("local_datetime", NativeValue::LocalDatetime),
+            "instant" => ("instant", NativeValue::Text),
+            "nodeRef" => ("node_ref", NativeValue::Text),
+            "resourceRef" => ("resource_ref", NativeValue::Text),
+            "tagRef" => ("tag_ref", NativeValue::Text),
+            "duration" => ("duration", NativeValue::Duration),
+            "exactSeconds" => ("exact_seconds", NativeValue::Text),
+            _ => return None,
+        };
+        Some(Self { semantic, native })
+    }
+    fn value(&self, text: String) -> Result<NativeValue> {
+        let value = (self.native)(text);
+        if !scalar_valid(self.semantic, &value) {
             return Err(DataError::new(
-                weftext_messages::UiMessage::error_data_query_unknown_typed_constant_constructor(),
+                UiMessage::error_data_query_invalid_typed_query_constant(),
             ));
         }
-    };
-    if !scalar_valid(semantic, &value) {
-        return Err(DataError::new(
-            weftext_messages::UiMessage::error_data_query_invalid_typed_query_constant(),
-        ));
+        Ok(value)
     }
-    Ok((semantic, value))
-}
-fn bool_expr(v: bool) -> Expr {
-    Expr::Literal(LiteralValue::Boolean(CelBool::from(v)))
-}
-fn bind_ast(
-    ast: &mut IdedExpr,
-    schema: &Schema,
-    cells: &BTreeMap<String, Cell>,
-    context: &mut Context,
-    counter: &mut usize,
-    failures: &HostFailures,
-) -> Result<()> {
-    if let Expr::Call(c) = &ast.expr {
-        if c.func_name == "field" {
-            ast.expr = Expr::Ident(field_name(ast, schema).ok_or_else(|| {
-                DataError::new(weftext_messages::UiMessage::error_data_query_field_unresolved())
-            })?);
-            return Ok(());
-        }
-        if matches!(
-            c.func_name.as_str(),
-            "isAbsent" | "isNull" | "isInvalid" | "isUnavailable"
-        ) {
-            let name = field_name(&c.args[0], schema).unwrap();
-            let state = cells.get(&name).map(Cell::state).unwrap_or("absent");
-            let expected = match c.func_name.as_str() {
-                "isAbsent" => "absent",
-                "isNull" => "null",
-                "isInvalid" => "invalid",
-                _ => "unavailable",
-            };
-            ast.expr = bool_expr(state == expected);
-            return Ok(());
-        }
-        if matches!(
-            c.func_name.as_str(),
-            "decimal"
-                | "exactDecimal"
-                | "date"
-                | "time"
-                | "localDatetime"
-                | "instant"
-                | "nodeRef"
-                | "resourceRef"
-                | "tagRef"
-                | "duration"
-                | "exactSeconds"
-        ) {
-            let s = literal_text(&c.args[0]).unwrap();
-            let (semantic, value) = typed_constant(&c.func_name, s)?;
-            let name = format!("@weftext_constant_{}", *counter);
-            *counter += 1;
-            context.add_variable_as_val(&name, Box::new(ExactAtom::new(value, semantic, failures)));
-            ast.expr = Expr::Ident(name);
-            return Ok(());
-        }
-    }
-    visit_children_mut(ast, |e| {
-        bind_ast(e, schema, cells, context, counter, failures)
-    })?;
-    if let Expr::Map(map) = &ast.expr {
-        let mut args = vec![];
-        for entry in &map.entries {
-            let EntryExpr::MapEntry(entry) = &entry.expr else {
-                return Err(DataError::new(
-                    weftext_messages::UiMessage::error_data_query_record_requires_static_string_keys(),
-                ));
-            };
-            args.push(entry.key.clone());
-            args.push(entry.value.clone());
-        }
-        let program = Program::compile("weftext_record()").map_err(|error| {
-            DataError::unavailable(UiMessage::error_data_query_record_compilation_failed())
-                .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
-        })?;
-        let Expr::Call(mut call) = program.expression().expr.clone() else {
-            unreachable!()
-        };
-        call.func_name = "@weftext_ordered_record".into();
-        call.args = args;
-        ast.expr = Expr::Call(call);
-    }
-    Ok(())
 }
 pub(crate) fn visit_children_mut(
     ast: &mut IdedExpr,
@@ -1495,36 +1440,6 @@ pub(crate) fn visit_children_mut(
     }
     Ok(())
 }
-fn ast_cost(ast: &IdedExpr, max_collection: u64) -> u64 {
-    let mut a = ast.clone();
-    let mut cost = 1u64;
-    let mut children = vec![];
-    let _ = visit_children_mut(&mut a, |e| {
-        children.push(e.clone());
-        Ok(())
-    });
-    for c in children {
-        cost = cost.saturating_add(ast_cost(&c, max_collection));
-    }
-    if matches!(ast.expr, Expr::Comprehension(_)) {
-        cost = cost.saturating_mul(max_collection.max(1));
-    }
-    cost
-}
-fn literal_collection_bound(ast: &IdedExpr) -> u64 {
-    let own = match &ast.expr {
-        Expr::List(a) => a.elements.len() as u64,
-        Expr::Map(m) => m.entries.len() as u64,
-        _ => 0,
-    };
-    let mut a = ast.clone();
-    let mut bound = own;
-    let _ = visit_children_mut(&mut a, |e| {
-        bound = bound.max(literal_collection_bound(e));
-        Ok(())
-    });
-    bound
-}
 fn max_collection(v: &NativeValue) -> usize {
     match v {
         NativeValue::Array(a) => a.len().max(a.iter().map(max_collection).max().unwrap_or(0)),
@@ -1544,99 +1459,84 @@ pub(crate) fn evaluate(
     budget: &mut u64,
     env: &QueryRuntime,
 ) -> Result<Cell> {
-    // Decode limits are host failures in the static read closure, not CEL
-    // errors that boolean absorption can turn into a complete result.
-    fn consumes_native_budget(
-        ast: &IdedExpr,
-        cells: &BTreeMap<String, Cell>,
-        schema: &Schema,
-    ) -> bool {
-        let name = field_name(ast, schema).or_else(|| {
-            if let Expr::Ident(n) = &ast.expr {
-                Some(n.clone())
-            } else {
-                None
-            }
-        });
-        if name
-            .as_ref()
-            .and_then(|n| cells.get(n))
-            .is_some_and(Cell::is_native_budget)
-        {
-            return true;
-        }
-        let mut ast = ast.clone();
-        let mut consumed = false;
-        let _ = visit_children_mut(&mut ast, |child| {
-            consumed |= consumes_native_budget(child, cells, schema);
-            Ok(())
-        });
-        consumed
-    }
-    if consumes_native_budget(&compiled.ast, cells, schema) {
+    let prepared = &compiled.prepared;
+    if prepared.reads_native_budget(cells) {
         env.native_budget_partial
             .store(true, AtomicOrdering::Relaxed);
     }
-    let max = cells
-        .values()
-        .filter_map(Cell::native)
-        .map(max_collection)
-        .max()
-        .unwrap_or(1) as u64;
-    let max = max.max(literal_collection_bound(&compiled.ast));
-    let cost = ast_cost(&compiled.ast, max);
+    let cost = prepared.cost(cells);
     if cost > *budget {
         return Err(DataError::budget(
             weftext_messages::UiMessage::error_data_query_host_budget_exhausted(),
         ));
     }
     *budget -= cost;
-    if let Expr::Ident(name) = &compiled.ast.expr
+    if let Some(name) = prepared.direct_input()
         && let Some(cell) = cells.get(name)
-    {
-        return Ok(cell.clone());
-    }
-    if let Some(name) = field_name(&compiled.ast, schema)
-        && let Some(cell) = cells.get(&name)
     {
         return Ok(cell.clone());
     }
     let mut context = Context::with_env(env.env.clone());
     let failures = HostFailures::default();
-    context
-        .add_function::<TagSubtreeFunction, _>(
-            "tagInSubtree",
-            TagSubtreeFunction {
-                structure: env.tag_structure.clone(),
-                partial: env.tag_partial.clone(),
-                failures: failures.clone(),
-            },
-        )
-        .map_err(|error| {
-            DataError::unavailable(UiMessage::error_data_query_function_registration_failed(
-                weftext_messages::params::ErrorDataQueryFunctionRegistrationFailed {
-                    function: "tagInSubtree".into(),
+    if prepared.uses_function("textMatch") {
+        context
+            .add_function::<text_index::TextMatchFunction, _>(
+                "textMatch",
+                text_index::TextMatchFunction {
+                    indexes: env.text_indexes.clone(),
+                    failures: failures.clone(),
                 },
-            ))
-            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
-        })?;
-    context
-        .add_function::<OrderedRecordConstructor, _>(
-            "@weftext_ordered_record",
-            OrderedRecordConstructor {
-                schema: env.schema.clone(),
-                failures: failures.clone(),
-            },
-        )
-        .map_err(|error| {
-            DataError::unavailable(UiMessage::error_data_query_function_registration_failed(
-                weftext_messages::params::ErrorDataQueryFunctionRegistrationFailed {
-                    function: "@weftext_ordered_record".into(),
+            )
+            .map_err(|error| {
+                DataError::unavailable(UiMessage::error_data_query_function_registration_failed(
+                    weftext_messages::params::ErrorDataQueryFunctionRegistrationFailed {
+                        function: "textMatch".into(),
+                    },
+                ))
+                .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+            })?;
+    }
+    if prepared.uses_function("tagInSubtree") {
+        context
+            .add_function::<TagSubtreeFunction, _>(
+                "tagInSubtree",
+                TagSubtreeFunction {
+                    structure: env.tag_structure.clone(),
+                    partial: env.tag_partial.clone(),
+                    failures: failures.clone(),
                 },
-            ))
-            .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
-        })?;
+            )
+            .map_err(|error| {
+                DataError::unavailable(UiMessage::error_data_query_function_registration_failed(
+                    weftext_messages::params::ErrorDataQueryFunctionRegistrationFailed {
+                        function: "tagInSubtree".into(),
+                    },
+                ))
+                .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+            })?;
+    }
+    if prepared.uses_function("@weftext_ordered_record") {
+        context
+            .add_function::<OrderedRecordConstructor, _>(
+                "@weftext_ordered_record",
+                OrderedRecordConstructor {
+                    schema: env.schema.clone(),
+                    failures: failures.clone(),
+                },
+            )
+            .map_err(|error| {
+                DataError::unavailable(UiMessage::error_data_query_function_registration_failed(
+                    weftext_messages::params::ErrorDataQueryFunctionRegistrationFailed {
+                        function: "@weftext_ordered_record".into(),
+                    },
+                ))
+                .diagnostic(DiagnosticOrigin::Dependency, error.to_string())
+            })?;
+    }
     for (name, arity) in TEMPORAL_CALLS {
+        if !prepared.uses_function(name) {
+            continue;
+        }
         context
             .add_function::<ProviderFunction, _>(
                 name,
@@ -1662,7 +1562,10 @@ pub(crate) fn evaluate(
     let self_shape = Shape::Scalar {
         semantic: "node_ref".into(),
     };
-    for (name, cell) in cells {
+    for name in prepared.inputs() {
+        let Some(cell) = cells.get(name) else {
+            continue;
+        };
         match cell {
             Cell::Value { value } => context.add_variable_as_val(
                 name,
@@ -1680,9 +1583,8 @@ pub(crate) fn evaluate(
             _ => {}
         }
     }
-    let mut ast = compiled.ast.clone();
-    bind_ast(&mut ast, schema, cells, &mut context, &mut 0, &failures)?;
-    let result = CelValue::resolve_val(&ast, &context);
+    prepared.bind(&mut context, cells, &failures);
+    let result = CelValue::resolve_val(&prepared.ast, &context);
     let failures = failures.take();
     let final_raw = result
         .as_ref()
@@ -2045,11 +1947,22 @@ pub(crate) struct QueryRuntime {
     pub(crate) tag_partial: Arc<AtomicBool>,
     env: Arc<cel::Env>,
     schema: Arc<Schema>,
+    text_indexes: Arc<Mutex<text_index::TextIndexes>>,
     pub(crate) parameter_shapes: BTreeMap<String, Shape>,
     pub(crate) provider_partial: Arc<AtomicBool>,
     pub(crate) native_budget_partial: Arc<AtomicBool>,
     provider_trace: Option<crate::query_providers::ProviderTrace>,
     provider_failed: Arc<AtomicBool>,
+}
+impl QueryRuntime {
+    pub(crate) fn use_text_index(&mut self, cache: Option<&QueryTextIndex>) {
+        if let Some(cache) = cache {
+            self.text_indexes
+                .lock()
+                .expect("query-local text index")
+                .cache = cache.clone();
+        }
+    }
 }
 pub(crate) fn query_env_traced(
     schema: &Schema,
@@ -2060,6 +1973,7 @@ pub(crate) fn query_env_traced(
         tag_partial: Arc::new(AtomicBool::new(false)),
         env: Arc::new(cel::Env::stdlib()),
         schema: Arc::new(schema.clone()),
+        text_indexes: Arc::new(Mutex::new(text_index::TextIndexes::default())),
         parameter_shapes: BTreeMap::new(),
         provider_partial: Arc::new(AtomicBool::new(false)),
         native_budget_partial: Arc::new(AtomicBool::new(false)),
@@ -2097,9 +2011,8 @@ fn expression_inputs_bound(
             .all(|child| expression_inputs_bound(child, known, &bound))
         }
         _ => {
-            let mut copy = ast.clone();
             let mut bound = true;
-            let _ = visit_children_mut(&mut copy, |child| {
+            let _ = visit_children(ast, |child| {
                 bound &= expression_inputs_bound(child, known, locals);
                 Ok(())
             });
@@ -2146,9 +2059,8 @@ pub(crate) fn expression_uses_unknown_parameters(
                 .any(|child| visit(child, unknown, &bound))
             }
             _ => {
-                let mut copy = ast.clone();
                 let mut found = false;
-                let _ = visit_children_mut(&mut copy, |child| {
+                let _ = visit_children(ast, |child| {
                     found |= visit(child, unknown, locals);
                     Ok(())
                 });
@@ -2208,9 +2120,8 @@ fn preflight_expression(
         {
             return true;
         }
-        let mut copy = ast.clone();
         let mut found = false;
-        let _ = visit_children_mut(&mut copy, |child| {
+        let _ = visit_children(ast, |child| {
             found |= contains_provider(child);
             Ok(())
         });
@@ -2225,6 +2136,7 @@ fn preflight_expression(
         env: &QueryRuntime,
     ) -> Result<Cell> {
         let compiled = Compiled {
+            prepared: PreparedExpression::new(ast, schema)?,
             ast: ast.clone(),
             ty: typecheck(ast, schema, vars, 0)?,
             vars: vars.clone(),
@@ -2335,8 +2247,7 @@ fn preflight_expression(
             // Fully bound comprehensions were evaluated by the original CEL above.
             return Ok(None);
         }
-        let mut copy = ast.clone();
-        visit_children_mut(&mut copy, |child| {
+        visit_children(ast, |child| {
             visit(
                 child,
                 parameters,
@@ -2589,6 +2500,7 @@ pub(crate) fn execute_query_leaf(
         remaining,
         metadata,
         None,
+        None,
     )
 }
 #[allow(clippy::too_many_arguments)]
@@ -2602,6 +2514,7 @@ pub(crate) fn execute_query_leaf_traced(
     remaining: &mut u64,
     metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
     trace: Option<&crate::query_providers::ProviderTrace>,
+    reference: Option<chrono::DateTime<chrono::Utc>>,
 ) -> Result<QueryResult> {
     if !matches!(input.coverage.as_str(), "complete" | "partial")
         || !matches!(input.freshness.as_str(), "current" | "stale")
@@ -2651,8 +2564,8 @@ pub(crate) fn execute_query_leaf_traced(
         })
         .transpose()?;
     let predicate = plan
-        .r#where
-        .as_ref()
+        .predicate_source_at(reference)?
+        .as_deref()
         .filter(|s| !s.trim().is_empty())
         .map(|s| compile(s, schema, &vars))
         .transpose()?;
@@ -2661,7 +2574,7 @@ pub(crate) fn execute_query_leaf_traced(
             weftext_messages::UiMessage::error_data_query_where_requires_boolean_result(),
         ));
     }
-    let columns = if plan.select.is_empty() {
+    let columns = if plan.select.is_empty() && plan.group.is_none() {
         vec![
             QueryColumn {
                 name: "title".into(),
@@ -2747,6 +2660,12 @@ pub(crate) fn execute_query_leaf_traced(
     let mut diagnostics = vec![];
     let mut partial = input.coverage == "partial";
     let mut env = query_env_traced(schema, trace)?;
+    env.use_text_index(
+        input
+            .advanced
+            .as_ref()
+            .and_then(|context| context.text_index.as_ref()),
+    );
     env.tag_structure = input
         .advanced
         .as_ref()
@@ -2767,6 +2686,7 @@ pub(crate) fn execute_query_leaf_traced(
     let mut bytes = 0usize;
     let mut data_rows = vec![];
     'notes: for note in notes {
+        crate::query_checkpoint()?;
         if note.lifecycle != lifecycle || !in_directory(&note.path, &plan.scope) {
             continue;
         }
@@ -2957,6 +2877,7 @@ pub(crate) fn execute_query_leaf_traced(
             vec![(note.entity_key.clone(), cells)]
         };
         for (key, cells) in expanded {
+            crate::query_checkpoint()?;
             if data_rows.len() >= limits.max_rows {
                 partial = true;
                 diagnostics.push(
@@ -3053,6 +2974,7 @@ pub(crate) fn execute_query_leaf_traced(
     if let Some(group) = &plan.group {
         let mut grouped: BTreeMap<String, GroupBucket> = BTreeMap::new();
         for (_, _, keys, agg) in data_rows {
+            crate::query_checkpoint()?;
             if keys
                 .iter()
                 .any(|k| matches!(k, Cell::Invalid { .. } | Cell::Unavailable { .. }))
@@ -3082,6 +3004,7 @@ pub(crate) fn execute_query_leaf_traced(
             grouped.insert("[]".into(), (vec![], vec![]));
         }
         for (key, (keys, values)) in grouped {
+            crate::query_checkpoint()?;
             let mut cells = group
                 .keys
                 .iter()
@@ -3558,8 +3481,19 @@ pub fn saved_queries(source: &str) -> Result<Vec<SavedQuery>> {
             )
         })?;
         let allowed = [
-            "kind", "key", "binding", "scope", "types", "where", "select", "order", "take",
-            "group", "unnest", "advanced",
+            "kind",
+            "key",
+            "binding",
+            "scope",
+            "types",
+            "where",
+            "select",
+            "order",
+            "take",
+            "group",
+            "unnest",
+            "advanced",
+            "parameters",
         ];
         if record.iter().any(|m| !allowed.contains(&m.key.as_str())) {
             return Err(DataError::new(

@@ -244,11 +244,20 @@ impl Desktop {
 /// Headless Core/HTTP/CLI/worker checks on Server 2022 do not call this function.
 fn qualify_gui() -> Result<(), ServeError> {
     use windows::Win32::System::SystemInformation::*;
+    let [major, minor, build] = crate::host_contract::get()
+        .ok()
+        .and_then(|contract| contract.platform.minimum_os_version())
+        .ok_or_else(|| {
+            error(
+                "hostContract",
+                "The shared Windows host contract is invalid",
+            )
+        })?;
     let mut version = OSVERSIONINFOEXW {
         dwOSVersionInfoSize: std::mem::size_of::<OSVERSIONINFOEXW>() as u32,
-        dwMajorVersion: 10,
-        dwMinorVersion: 0,
-        dwBuildNumber: 22000,
+        dwMajorVersion: major.into(),
+        dwMinorVersion: minor.into(),
+        dwBuildNumber: build.into(),
         wProductType: 1,
         ..Default::default()
     };
@@ -278,7 +287,7 @@ fn qualify_gui() -> Result<(), ServeError> {
     .map_err(|_| {
         error(
             "desktopPlatform",
-            "The Windows desktop requires Windows 11 x64 build 22000 or later",
+            "The Windows desktop requires Windows 10 22H2 x64 (build 19045) or later and must meet this build's host contract",
         )
     })
 }
@@ -1267,21 +1276,27 @@ async fn draft_call(
 ) -> (serde_json::Value, Option<String>) {
     let session = request.session_id().to_owned();
     let acknowledges = request.acknowledges_input();
-    let result = crate::core_call(state, move |core| match request {
+    let result = match request {
         close::DraftRequest::Persist { body } => {
             let revision = body.input_revision;
-            let evidence = core.persist_draft_ordered(body)?;
-            Ok(serde_json::json!({"ok":true,"inputRevision":revision,"evidence":evidence}))
+            crate::draft_lane::persist(state, body).await.map(|evidence| {
+                serde_json::json!({"ok":true,"inputRevision":revision,"evidence":evidence})
+            })
         }
         close::DraftRequest::Resume { body } => {
-            core.resume_recovered_draft(body)?;
-            Ok(serde_json::json!({"ok":true}))
+            crate::core_call(state, move |core| {
+                core.resume_recovered_draft(body)?;
+                Ok(serde_json::json!({"ok":true}))
+            })
+            .await
         }
         close::DraftRequest::Flush { body } => {
-            Ok(serde_json::to_value(core.flush_document_draft(body)?)?)
+            crate::core_call(state, move |core| {
+                Ok(serde_json::to_value(core.flush_document_draft(body)?)?)
+            })
+            .await
         }
-    })
-    .await;
+    };
     match result {
         Ok(body) => (body, acknowledges.then_some(session)),
         Err(error) => (serde_json::json!({"error":error}), None),

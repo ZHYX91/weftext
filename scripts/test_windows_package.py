@@ -66,6 +66,26 @@ def containers(common, manifest_bytes, *, extra=False, corrupt_hash=False):
 
 
 class VersionAndPolicy(unittest.TestCase):
+    def test_windows10_22h2_is_the_minimum_and_older_builds_are_rejected(self):
+        self.assertEqual(CONTRACT['platform']['minVersion'], '10.0.19045.0')
+        for minimum in ('10.0.19045.0', '10.0.22000.0', '10.0.26100.0'):
+            changed = copy.deepcopy(CONTRACT)
+            changed['platform']['minVersion'] = minimum
+            with self.subTest(minimum=minimum):
+                accepted = load_contract(json.dumps(changed))
+                tree = ET.fromstring(manifest(accepted, '0.7.0.1'))
+                dependency = tree.find(f".//{{{NS['']}}}TargetDeviceFamily")
+                self.assertEqual(dependency.attrib['MinVersion'], minimum)
+        for changes in (
+            {'minVersion': '10.0.19044.0'}, {'minVersion': '10.0.19041.0'},
+            {'minVersion': '10.0.19045.1'}, {'minVersion': '10.0.019045.0'},
+            {'architecture': 'arm64'}, {'maxVersionTested': '10.0.19044.0'},
+        ):
+            changed = copy.deepcopy(CONTRACT)
+            changed['platform'].update(changes)
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                load_contract(json.dumps(changed))
+
     def test_duplicate_authoritative_json_fields_are_rejected(self):
         duplicate = CONTRACT_BYTES.decode().replace('"schemaVersion": 1,', '"schemaVersion": 1, "schemaVersion": 1,', 1)
         self.assertNotEqual(duplicate, CONTRACT_BYTES.decode())
@@ -154,7 +174,7 @@ class VersionAndPolicy(unittest.TestCase):
         with self.assertRaises(ValueError):
             load_contract(json.dumps(changed))
 
-    def test_real_manifest_has_correct_activation_and_no_global_unvirtualization(self):
+    def test_real_manifest_keeps_win11_precise_retention_and_correct_activation(self):
         tree = ET.fromstring(manifest(CONTRACT, '0.7.0.1'))
         ns = {key or 'f': value for key, value in NS.items()}
         excluded = tree.findall('.//virtualization:ExcludedDirectory', ns)
@@ -162,17 +182,17 @@ class VersionAndPolicy(unittest.TestCase):
             '$(KnownFolder:LocalAppData)\\Weftext-MVP',
             '$(KnownFolder:LocalAppData)\\Weftext\\Cache',
         ])
-        # Two exact owned trees, never all LocalAppData or a registry opt-out.
+        # On Windows 11 this precise list takes precedence over the Win10
+        # filesystem fallback. Neither OS receives a registry opt-out.
         self.assertIsNone(tree.find('.//virtualization:RegistryWriteVirtualization', ns))
-        desktop6 = 'http://schemas.microsoft.com/appx/manifest/desktop/windows10/6'
-        for property_name in ('FileSystemWriteVirtualization', 'RegistryWriteVirtualization'):
-            self.assertIsNone(tree.find(f'.//{{{desktop6}}}{property_name}'))
+        self.assertIsNone(tree.find('.//desktop6:RegistryWriteVirtualization', ns))
+        self.assertEqual(tree.find('f:Properties/desktop6:FileSystemWriteVirtualization', ns).text, 'disabled')
         capabilities = tree.findall('.//rescap:Capability', ns)
         self.assertEqual({item.attrib['Name'] for item in capabilities},
                          {'runFullTrust', 'unvirtualizedResources'})
         extensions = tree.findall('.//desktop:Extension', ns)
         startup = next(node for node in extensions if node.attrib['Category'] == 'windows.startupTask')
-        # Overriding the startup executable requires its complete Win11 activation combination.
+        # The packaged desktop startup executable requires the complete activation combination.
         self.assertEqual(startup.attrib['Executable'], 'weftext.exe')
         self.assertEqual(startup.attrib['{' + NS['uap10'] + '}RuntimeBehavior'], 'packagedClassicApp')
         self.assertEqual(startup.attrib['{' + NS['uap10'] + '}TrustLevel'], 'mediumIL')
@@ -187,6 +207,25 @@ class VersionAndPolicy(unittest.TestCase):
         self.assertEqual(application.attrib['{' + NS['uap10'] + '}SupportsMultipleInstances'], 'true')
         self.assertEqual(tree.find('.//uap5:AppExecutionAlias', ns).attrib['{' + NS['uap10'] + '}Subsystem'], 'console')
         self.assertEqual(tree.find('.//uap5:Extension', ns).attrib['Executable'], 'weftext-cli.exe')
+
+    def test_win10_manifest_retains_filesystem_fallback_when_new_namespace_is_ignored(self):
+        tree = ET.fromstring(manifest(CONTRACT, '0.7.0.1'))
+        ns = {key or 'f': value for key, value in NS.items()}
+        ignorable = set(tree.attrib['IgnorableNamespaces'].split())
+        self.assertTrue({'desktop6', 'virtualization', 'rescap'} <= ignorable)
+        # This is a schema projection, not a simulated installation/PASS:
+        # an older reader may ignore the unknown precise-exclusion namespace.
+        properties = tree.find('f:Properties', ns)
+        for child in list(properties):
+            if child.tag.startswith('{' + NS['virtualization'] + '}'):
+                properties.remove(child)
+        self.assertIsNone(tree.find('.//virtualization:ExcludedDirectory', ns))
+        self.assertEqual(properties.find('desktop6:FileSystemWriteVirtualization', ns).text, 'disabled')
+        self.assertIsNone(properties.find('desktop6:RegistryWriteVirtualization', ns))
+        self.assertIn('unvirtualizedResources', {
+            item.attrib['Name'] for item in tree.findall('.//rescap:Capability', ns)
+        })
+        self.assertEqual(tree.find('f:Dependencies/f:TargetDeviceFamily', ns).attrib['MinVersion'], '10.0.19045.0')
 
 
 class ActualRoleSelection(unittest.TestCase):

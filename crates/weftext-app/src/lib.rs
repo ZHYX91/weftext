@@ -59,6 +59,7 @@ pub mod client_protocol;
 mod compiler_worker;
 mod data_api;
 mod desktop_api;
+mod draft_lane;
 mod embedded_output;
 mod embedded_query_api;
 mod export_api;
@@ -86,6 +87,8 @@ mod native;
 mod navigation_api;
 mod owned_process;
 mod processing_api;
+mod query_product_worker;
+mod query_runs;
 mod readonly_evidence;
 mod recognition_api;
 mod request_json;
@@ -103,6 +106,7 @@ static ASSETS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../app/dist");
 #[derive(Clone)]
 struct AppState {
     core: Arc<Mutex<Core>>,
+    draft_lane: draft_lane::DraftLane,
     token: Arc<str>,
     port: u16,
     locations: Arc<Mutex<HashMap<String, Location>>>,
@@ -310,6 +314,7 @@ impl ApiError {
     fn worker_failure_summary(failure: &worker_failure::WorkerFailure) -> Self {
         use worker_failure::Kind;
         let (status, code, message) = if !failure.cleanup_confirmed {
+            let _ = crate::query_runs::CURRENT.try_with(|run| run.jobs.mark_failed());
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "compiler_exit_unknown",
@@ -327,7 +332,6 @@ impl ApiError {
                     "compile_timeout",
                     UiMessage::error_api_worker_deadline(),
                 ),
-                #[cfg(target_os = "linux")]
                 Kind::Cancelled => (
                     StatusCode::CONFLICT,
                     "compiler_cancelled",
@@ -848,7 +852,7 @@ async fn draft(
     RequestJson(req): RequestJson<DraftRequest>,
 ) -> ApiResult {
     let revision = req.input_revision;
-    let evidence = core_call(&state, move |c| c.persist_draft_ordered(req)).await?;
+    let evidence = draft_lane::persist(&state, req).await?;
     Ok(Json(
         json!({"ok":true,"inputRevision":revision,"evidence":evidence}),
     ))
@@ -905,6 +909,12 @@ struct WorkerRequest {
     #[serde(default)]
     style: Option<weftext_engine::StyleModule>,
     frozen_files: std::collections::BTreeMap<String, String>,
+}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RenderWorkerInput {
+    Query(query_product_worker::BatchRequest),
+    Document(WorkerRequest),
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1190,6 +1200,7 @@ async fn owned_compiler_worker(
     transport: compiler_worker::Transport,
 ) -> Result<Value, ApiError> {
     use worker_failure::{Kind, WorkerFailure};
+    crate::query_runs::check()?;
     let bytes = serde_json::to_vec(&input)
         .map_err(|_| ApiError::worker_failure(WorkerFailure::new(Kind::InputEncoding)))?;
     if bytes.len() > 96 * 1024 * 1024 {
@@ -1211,7 +1222,7 @@ async fn owned_compiler_worker(
         let mut stdin = child.stdin.take().ok_or((Kind::Setup, None, None))?;
         let stdout = child.stdout.take().ok_or((Kind::Setup, None, None))?;
         let stderr = child.stderr.take().ok_or((Kind::Setup, None, None))?;
-        let output = tokio::time::timeout(Duration::from_secs(20), async {
+        let exchange = tokio::time::timeout(Duration::from_secs(20), async {
             let input = async {
                 stdin
                     .write_all(&bytes)
@@ -1250,8 +1261,12 @@ async fn owned_compiler_worker(
             };
             let (_, (), (), status) = tokio::try_join!(input, result, diagnostics, status)?;
             Ok::<_, (Kind, Option<std::io::Error>)>(status)
-        })
-        .await
+        });
+        let output = tokio::select! {
+            biased;
+            () = crate::query_runs::cancellation() => return Err((Kind::Cancelled, None, None)),
+            result = exchange => result,
+        }
         .map_err(|_| (Kind::Deadline, None, None))?
         .map_err(|(kind, error)| (kind, error, None))?;
         if !output.success() {
@@ -2234,7 +2249,15 @@ fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
             ErrorDescription::new(UiMessage::error_api_worker_render_input_budget()).into(),
         );
     }
-    let input: WorkerRequest = serde_json::from_str(&input)?;
+    let input = match serde_json::from_str::<RenderWorkerInput>(&input)? {
+        RenderWorkerInput::Document(input) => input,
+        RenderWorkerInput::Query(batch) => {
+            let output = batch.render()?;
+            serde_json::to_writer(std::io::stdout().lock(), &output)?;
+            std::io::stdout().flush()?;
+            return Ok(());
+        }
+    };
     if input.source.len() > weftext_core::MAX_SOURCE_BYTES {
         return Err("Compile source exceeds the local budget".into());
     }

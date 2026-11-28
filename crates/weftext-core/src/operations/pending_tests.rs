@@ -83,6 +83,39 @@ fn pending_create_only_refuses(node: bool, recovery: bool) {
 fn pending_update_create_only_refuses_before_original_install() {
     pending_create_only_refuses(false, false);
 }
+
+#[test]
+fn bulk_pending_reads_keep_unresolved_members_and_revalidate_skipped_decisions() {
+    let temp = tempfile::tempdir().unwrap();
+    let data = temp.path().join("private");
+    let root = temp.path().join("library");
+    let mut core = Core::new(&data).unwrap();
+    core.create_library(&root).unwrap();
+    let accepted = prepared_node(&mut core, &root);
+    core.execute_operation(&accepted.operation_id, &accepted.plan_id)
+        .unwrap();
+    let unfinished = prepared_config(&mut core, &root, 1);
+    core.install_record(&core.operations[&unfinished.operation_id])
+        .unwrap();
+    let pending = core.pending_read();
+    pending
+        .check_path(&root.join("AbsentParent/AbsentParent.typ"))
+        .unwrap();
+    assert_eq!(
+        pending
+            .check_path(&root.join(".weftext-schema.json"))
+            .unwrap_err()
+            .code,
+        "recoveryPending",
+    );
+    pending.recheck().unwrap();
+    let commit = core.journal_path(&accepted.operation_id, "commit");
+    fs::rename(&commit, temp.path().join("owned-commit-original")).unwrap();
+    assert_eq!(pending.recheck().unwrap_err().code, "identityPending");
+    fs::rename(temp.path().join("owned-commit-original"), commit).unwrap();
+    pending.recheck().unwrap();
+}
+
 #[test]
 fn pending_create_tree_new_parent_refuses_before_original_install() {
     pending_create_only_refuses(true, false);

@@ -1,6 +1,6 @@
 [package]
 name = "weftext-data"
-version = "0.7.0-rc.10"
+version = "0.7.0-rc.11"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 
@@ -10,12 +10,16 @@ weftext-engine = { path = "../weftext-engine" }
 typst-syntax = "=0.15.1"
 serde = { version = "1", features = ["derive"] }
 serde_json = { workspace = true, features = ["preserve_order"] }
+indexmap = "2"
 sha2 = "0.10"
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 rust_decimal = "1.43"
 num-bigint = "0.4"
 cel = { version = "=0.15.0", default-features = false }
 uuid = "1"
+chrono-tz = "=0.10.4"
+unicode-segmentation = "=1.13.3"
+unicode-normalization = "=0.1.25"
 
 [dev-dependencies]
 typst = "=0.15.1"

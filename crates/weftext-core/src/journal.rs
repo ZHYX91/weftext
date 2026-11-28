@@ -3,6 +3,107 @@ use weftext_messages::UiMessage;
 
 const MAX_RESOLUTION_BYTES: u64 = 4096;
 
+/// One synchronous bulk read under the Core lease. Terminal operations are
+/// qualified once instead of traversing their participant lists for every
+/// file. Uncertain decisions stay on the normal pending-check path.
+pub(crate) struct PendingRead<'a> {
+    core: &'a Core,
+    committed: Vec<&'a Plan>,
+    unchecked: Vec<&'a Plan>,
+}
+
+/// A short-lived copy of just the original operation IDs across cooperative
+/// inventory checkpoints. Ordinary reads keep the borrowed Plan cut.
+pub(crate) struct InventoryPendingRead {
+    committed: Vec<String>,
+    unchecked: Vec<String>,
+}
+
+impl InventoryPendingRead {
+    pub(crate) fn recheck(&self, core: &Core) -> Result<()> {
+        for id in &self.committed {
+            crate::query_read_checkpoint()?;
+            Self::plan(core, id)?;
+            if !core.committed(id)? {
+                return Err(CoreError::new(
+                    "identityPending",
+                    UiMessage::error_core_backend_accepted_decision_missing(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn check_path(&self, core: &Core, path: &Path) -> Result<()> {
+        crate::query_read_checkpoint()?;
+        core.backend.check_path(path)?;
+        core.check_pending_path_in(path, self.unchecked(core)?.into_iter())
+    }
+
+    pub(crate) fn check_identity(&self, core: &Core, identity: &FileIdentity) -> Result<()> {
+        core.check_pending_identity_in(identity, self.unchecked(core)?.into_iter())
+    }
+
+    fn unchecked<'a>(&self, core: &'a Core) -> Result<Vec<&'a Plan>> {
+        self.unchecked
+            .iter()
+            .map(|id| Self::plan(core, id))
+            .collect()
+    }
+
+    fn plan<'a>(core: &'a Core, id: &str) -> Result<&'a Plan> {
+        core.operations
+            .get(id)
+            .filter(|plan| plan.operation_id == id)
+            .ok_or_else(|| {
+                CoreError::new(
+                    "identityPending",
+                    UiMessage::error_core_backend_accepted_decision_missing(),
+                )
+            })
+    }
+}
+
+impl PendingRead<'_> {
+    pub(crate) fn detach(self) -> InventoryPendingRead {
+        let ids = |plans: Vec<&Plan>| {
+            plans
+                .into_iter()
+                .map(|plan| plan.operation_id.clone())
+                .collect()
+        };
+        InventoryPendingRead {
+            committed: ids(self.committed),
+            unchecked: ids(self.unchecked),
+        }
+    }
+
+    pub(crate) fn check_path(&self, path: &Path) -> Result<()> {
+        crate::query_read_checkpoint()?;
+        self.core.backend.check_path(path)?;
+        self.core
+            .check_pending_path_in(path, self.unchecked.iter().copied())
+    }
+
+    pub(crate) fn check_identity(&self, identity: &FileIdentity) -> Result<()> {
+        self.core
+            .check_pending_identity_in(identity, self.unchecked.iter().copied())
+    }
+
+    pub(crate) fn recheck(&self) -> Result<()> {
+        for plan in &self.committed {
+            crate::query_read_checkpoint()?;
+            if !self.core.committed(&plan.operation_id)? {
+                return Err(CoreError::new(
+                    "identityPending",
+                    UiMessage::error_core_backend_accepted_decision_missing(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A decision in the original journal, never an author participant or a second
 /// operation ledger. A missing Plan can only have an attempt cancellation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -929,6 +1030,7 @@ impl Core {
         self.backend.check_path(&self.data_dir)?;
         let mut plans = Vec::new();
         for plan in self.operations.values() {
+            crate::query_read_checkpoint()?;
             if self.committed(&plan.operation_id)? {
                 plans.push(plan);
             }
@@ -1171,10 +1273,19 @@ impl Core {
         self.check_pending_except(path, None)
     }
     pub(crate) fn check_pending_except(&self, path: &Path, except: Option<&str>) -> Result<()> {
-        for p in self.operations.values() {
-            if Some(p.operation_id.as_str()) == except {
-                continue;
-            }
+        self.check_pending_path_in(
+            path,
+            self.operations
+                .values()
+                .filter(|p| Some(p.operation_id.as_str()) != except),
+        )
+    }
+    fn check_pending_path_in<'a>(
+        &self,
+        path: &Path,
+        plans: impl Iterator<Item = &'a Plan>,
+    ) -> Result<()> {
+        for p in plans {
             let pending_path = Path::new(&p.path);
             let same =
                 backend::namespace_path_compare(pending_path, path)? == std::cmp::Ordering::Equal;
@@ -1215,10 +1326,19 @@ impl Core {
         identity: &FileIdentity,
         except: Option<&str>,
     ) -> Result<()> {
-        for plan in self.operations.values() {
-            if Some(plan.operation_id.as_str()) == except {
-                continue;
-            }
+        self.check_pending_identity_in(
+            identity,
+            self.operations
+                .values()
+                .filter(|p| Some(p.operation_id.as_str()) != except),
+        )
+    }
+    fn check_pending_identity_in<'a>(
+        &self,
+        identity: &FileIdentity,
+        plans: impl Iterator<Item = &'a Plan>,
+    ) -> Result<()> {
+        for plan in plans {
             if (plan.identity.as_ref() == Some(identity)
                 || plan
                     .transaction
@@ -1238,6 +1358,17 @@ impl Core {
             }
         }
         Ok(())
+    }
+    pub(crate) fn pending_read(&self) -> PendingRead<'_> {
+        let (committed, unchecked) = self
+            .operations
+            .values()
+            .partition(|plan| matches!(self.committed(&plan.operation_id), Ok(true)));
+        PendingRead {
+            core: self,
+            committed,
+            unchecked,
+        }
     }
     pub(crate) fn retry(&self, id: &str, fingerprint: &str) -> Result<Option<Receipt>> {
         if let Some(plan) = self.operations.get(id) {

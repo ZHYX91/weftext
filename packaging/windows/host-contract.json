@@ -7,7 +7,7 @@
   },
   "platform": {
     "architecture": "x64",
-    "minVersion": "10.0.22000.0",
+    "minVersion": "10.0.19045.0",
     "maxVersionTested": "10.0.26100.0"
   },
   "roles": {

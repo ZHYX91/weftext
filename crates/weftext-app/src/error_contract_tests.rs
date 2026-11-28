@@ -96,6 +96,7 @@ async fn original_creation_receipt_survives_typed_document_delivery_failure() {
     std::fs::rename(&root, &retained).unwrap();
     std::fs::create_dir(&root).unwrap();
     let state = AppState {
+        draft_lane: Default::default(),
         core: Arc::new(Mutex::new(core)),
         token: Arc::from("test-token"),
         port: 0,

@@ -3,13 +3,12 @@
 These cases exercise the hosted boundary; ZIP inspection is not Word/WPS GUI
 acceptance. No user documents or desktop input are used.
 """
+from _http_test_suite import run_http_suite
 import uuid
 import io
 import base64
 import json
-import sys
 import subprocess
-import unittest
 import zipfile
 import xml.etree.ElementTree as ET
 
@@ -358,7 +357,4 @@ class HostedCitationsOutputs(HostedOffice, HostedQuery):
 
 
 if __name__ == '__main__':
-    suite = unittest.TestSuite(HostedCitationsOutputs(name) for name in
-        sorted(vars(HostedCitationsOutputs)) if name.startswith('test_'))
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
-    sys.exit(not result.wasSuccessful())
+    raise SystemExit(run_http_suite(HostedCitationsOutputs))

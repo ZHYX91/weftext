@@ -1,9 +1,8 @@
 """Real authorized compiled-label navigation, using owned HTTP fixtures."""
+from _http_test_suite import run_http_suite
 import uuid
 import json
-import sys
 import time
-import unittest
 from concurrent.futures import ThreadPoolExecutor
 from owned_worker_observer import OwnedWorkerObservation, event_time_ns, timed_call, freeze_policy_changes, apply_inflight_revocation, verify_policy_changes
 from urllib.parse import quote
@@ -162,7 +161,4 @@ class HostedNavigationFragments(HostedHistory):
 
 
 if __name__ == '__main__':
-    selected = set(sys.argv[2:])
-    suite = unittest.TestSuite(HostedNavigationFragments(name) for name in sorted(HostedNavigationFragments.__dict__)
-                              if name.startswith('test_fragment_') and (not selected or name in selected))
-    sys.exit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
+    raise SystemExit(run_http_suite(HostedNavigationFragments))

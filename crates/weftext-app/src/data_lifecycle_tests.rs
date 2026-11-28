@@ -117,8 +117,9 @@ async fn mixed_lifecycle_definition_save_run_and_callee_use_both_original_read_c
     )
     .await);
     assert_mixed_rows(&ran["result"]);
-    let Json(called) = ok(query(
+    let (_, Json(called)) = ok(query(
         State(state.clone()),
+        Default::default(),
         crate::RequestJson(QueryRequest {
             root: root.clone(),
             plan: weftext_data::QueryPlan {
@@ -237,8 +238,9 @@ async fn mixed_lifecycle_trash_leaf_loads_a_qualified_live_callee_before_scope_c
         }),
         ..Default::default()
     });
-    let Json(result) = ok(query(
+    let (_, Json(result)) = ok(query(
         State(state.clone()),
+        Default::default(),
         crate::RequestJson(QueryRequest {
             root: root.clone(),
             plan,
@@ -267,6 +269,7 @@ async fn mixed_lifecycle_trash_leaf_loads_a_qualified_live_callee_before_scope_c
     invalid_terminal.scope.lifecycle = "trash".into();
     let rejected = query(
         State(state),
+        Default::default(),
         crate::RequestJson(QueryRequest {
             root,
             plan: invalid_terminal,
