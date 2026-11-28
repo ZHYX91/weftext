@@ -2308,16 +2308,20 @@ pub(crate) fn native_query_products(
     weftext_data::native_query_products(identity, products)
 }
 
+const QUERY_NATIVE_RESULT_BYTES: usize = 32 * 1024 * 1024;
+type NativeQueryResults = BTreeMap<usize, Result<weftext_engine::FrozenQueryProduct, ApiError>>;
+
 async fn render_query_misses(
     state: &AppState,
     frozen: &FrozenQuery,
     files: &BTreeMap<String, Vec<u8>>,
     misses: &[usize],
-) -> BTreeMap<usize, Result<weftext_engine::FrozenQueryProduct, ApiError>> {
+) -> (NativeQueryResults, Option<UiMessage>) {
     let mut remaining = misses
         .chunks(crate::query_product_worker::BATCH_NOTES)
         .collect::<std::collections::VecDeque<_>>();
     let mut output = BTreeMap::new();
+    let mut remaining_bytes = QUERY_NATIVE_RESULT_BYTES;
     let encoded = crate::query_product_worker::encode_files(files);
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
     while let Some(batch) = remaining.pop_front() {
@@ -2342,39 +2346,50 @@ async fn render_query_misses(
             ),
         )
         .await;
-        match response {
-            Ok(Ok(products)) => {
-                output.extend(
-                    batch
-                        .iter()
-                        .copied()
-                        .zip(products.into_iter().map(|product| {
-                            product.map_err(|description| {
-                                ApiError::from_product(
-                                    StatusCode::UNPROCESSABLE_ENTITY,
-                                    "query_native_product",
-                                    None,
-                                    description,
-                                    Vec::new(),
-                                )
-                            })
-                        })),
-                );
-            }
+        let products = match response {
+            Ok(Ok(products)) => products
+                .into_iter()
+                .map(|product| {
+                    product.map_err(|description| {
+                        ApiError::from_product(
+                            StatusCode::UNPROCESSABLE_ENTITY,
+                            "query_native_product",
+                            None,
+                            description,
+                            Vec::new(),
+                        )
+                    })
+                })
+                .collect::<Vec<_>>(),
             Ok(Err(_)) if batch.len() > 1 => {
                 // Isolate an oversized or rejected batch. Each smaller batch
                 // remains subject to the original process and request budgets.
                 let (first, rest) = batch.split_at(batch.len() / 2);
                 remaining.push_front(rest);
                 remaining.push_front(first);
+                continue;
             }
-            Ok(Err(error)) => {
-                output.insert(batch[0], Err(error));
+            Ok(Err(error)) => vec![Err(error)],
+            Err(_) => {
+                return (
+                    output,
+                    Some(UiMessage::error_api_data_native_product_deadline()),
+                );
             }
-            Err(_) => break,
+        };
+        for (&index, product) in batch.iter().zip(products) {
+            let size = serde_json::to_vec(&product).map_or(usize::MAX, |bytes| bytes.len());
+            if size > remaining_bytes {
+                return (
+                    output,
+                    Some(UiMessage::error_api_data_native_product_budget()),
+                );
+            }
+            remaining_bytes -= size;
+            output.insert(index, product);
         }
     }
-    output
+    (output, None)
 }
 
 async fn qualify_query_products(
@@ -2393,6 +2408,7 @@ async fn qualify_query_products(
     }
     let mut cached = Vec::new();
     let mut rendered = BTreeMap::new();
+    let mut remainder = None;
     let mut index_cut = None;
     let mut index_keys = None;
     if let Some(files) = frozen.render_files.take() {
@@ -2433,7 +2449,7 @@ async fn qualify_query_products(
             .filter_map(|(index, value)| value.is_none().then_some(index))
             .collect::<Vec<_>>();
         if !misses.is_empty() {
-            rendered = render_query_misses(state, frozen, &files, &misses).await;
+            (rendered, remainder) = render_query_misses(state, frozen, &files, &misses).await;
         }
         let hits = cached.len() - misses.len();
         let built = rendered
@@ -2456,7 +2472,7 @@ async fn qualify_query_products(
         );
         let hit = cached.get_mut(position).and_then(Option::take);
         let rendered_product = rendered.remove(&position);
-        let timed_out = index_cut.is_some() && hit.is_none() && rendered_product.is_none();
+        let unfinished = hit.is_none() && rendered_product.is_none();
         let qualified = match (hit, rendered_product) {
             (Some(entry), _) => Some((entry.products, entry.dependencies, entry.compiler_version)),
             (_, Some(Ok(output))) => {
@@ -2492,11 +2508,11 @@ async fn qualify_query_products(
             frozen.versions.push(json!({"role":"nativeProduct","entityKey":note.entity_key,"compileIdentity":identity,
                 "compilerVersion":compiler_version,"dependencies":dependencies}));
             native_query_products(identity, products)
-        } else if timed_out {
+        } else if unfinished && let Some(reason) = &remainder {
             unavailable_products(
                 identity,
                 weftext_data::DataErrorKind::NativeBudget,
-                UiMessage::error_api_data_native_product_deadline(),
+                reason.clone(),
             )
         } else if index_cut.is_none() {
             unavailable_products(
