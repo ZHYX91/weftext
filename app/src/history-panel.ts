@@ -174,6 +174,8 @@ class HistoryDialog {
         } finally { endCloseWork(); }
     }
     private async refresh(): Promise<void> {
+        if (this.readBusy || this.controller.busy)
+            return;
         const endCloseWork = this.closeGuard.begin();
         try {
             await this.read(async () => { await this.controller.refresh(); });
@@ -187,6 +189,8 @@ class HistoryDialog {
         } finally { endCloseWork(); }
     }
     private async compare(): Promise<void> {
+        if (this.readBusy || this.controller.busy)
+            return;
         const endCloseWork = this.closeGuard.begin();
         try {
             if (!this.savedChoice.checked && !this.draftChoice.checked) {
@@ -301,8 +305,16 @@ class HistoryDialog {
     }
     private drawControls(): void {
         const disabled = this.readBusy || this.controller.locked || this.unacknowledged !== null || this.acknowledging;
-        this.refreshButton.disabled = this.readBusy || this.controller.busy;
-        this.compareButton.disabled = !this.controller.selected || this.readBusy || this.controller.busy;
+        // These read commands remain focusable while reads settle. The actual
+        // action handlers reject duplicate activation in that interval.
+        this.refreshButton.disabled = this.controller.busy && !this.readBusy;
+        this.compareButton.disabled = !this.controller.selected || this.refreshButton.disabled;
+        for (const control of [this.refreshButton, this.compareButton]) {
+            if (this.readBusy && !control.disabled)
+                control.setAttribute("aria-disabled", "true");
+            else
+                control.removeAttribute("aria-disabled");
+        }
         this.restoreButton.disabled = !this.controller.selected || disabled || this.host.getDocument()?.readOnly === true;
         this.savedChoice.disabled = this.readBusy || this.controller.busy;
         this.draftChoice.disabled = this.savedChoice.disabled;

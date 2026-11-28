@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from '../app/node_modules/vite/dist/node/index.js';
 
 const require = createRequire(import.meta.url);
+const baseline = process.argv.includes('--baseline');
 const { chromium } = require(process.env.WEFTEXT_PLAYWRIGHT_MODULE || 'playwright');
 const server = await createServer({
   root: fileURLToPath(new URL('../app/', import.meta.url)),
@@ -49,11 +50,24 @@ try {
       warnings: [], protectedDrafts: [],
     };
     window.calls = [];
+    window.notices = [];
     const panel = new HistoryPanel({
       getDocument: () => note,
       request: (path, body) => {
         window.calls.push(path);
-        if (path === '/api/history/list') return Promise.resolve(list);
+        if (path === '/api/history/list' && window.calls.length === 1) return Promise.resolve(list);
+        if (path === '/api/history/list' || path === '/api/history/compare') {
+          const comparison = { selected: versions.find(item => item.versionId === body.versionId),
+            current: { source: note.baseSource, baseId: note.baseId, path: note.path, serial: note.serial },
+            comparison: 'currentSaved', equal: false };
+          return new Promise((resolve, reject) => {
+            window.finishAction = (error = false) => {
+              delete window.finishAction;
+              if (error) reject(Error('Synthetic read failure'));
+              else resolve(path === '/api/history/list' ? list : comparison);
+            };
+          });
+        }
         if (path === '/api/history/read') {
           const row = versions.find(item => item.versionId === body.versionId);
           return new Promise(resolve => { window.completeRead = () => {
@@ -64,7 +78,7 @@ try {
         throw Error(`Unexpected write or request: ${path}`);
       },
       restored: () => { throw Error('Read-only fixture must not restore'); },
-      notify: (message, error) => { if (error) throw Error(String(message)); },
+      notify: (message, error) => { if (error) window.notices.push(message); },
     });
     await panel.open();
   });
@@ -95,8 +109,53 @@ try {
   assert.deepEqual(await page.evaluate(() => window.calls), [
     '/api/history/list', '/api/history/read', '/api/history/read',
   ]);
+  const refresh = page.locator('.history-sidebar > button');
+  const compare = page.locator('.history-actions > button').first();
+  const awaitAction = () => page.waitForFunction(() => typeof window.finishAction === 'function');
+  const finish = async (error = false) => {
+    await page.evaluate(error => window.finishAction(error), error);
+    await page.waitForFunction(() => !document.querySelector('.history-sidebar > button').disabled
+      && document.querySelector('.history-sidebar > button').getAttribute('aria-disabled') !== 'true');
+  };
+  for (const [control, endpoint] of [[refresh, '/api/history/list'], [compare, '/api/history/compare']]) {
+    const priorCount = await page.evaluate(endpoint => window.calls.filter(path => path === endpoint).length, endpoint);
+    await control.focus();
+    await page.keyboard.press('Enter');
+    await awaitAction();
+    if (baseline) {
+      await control.evaluate(el => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await focused(control), false, endpoint + ' baseline loses focus');
+      await finish();
+      console.log(endpoint + ' reproduced focus loss on #38');
+      continue;
+    }
+    assert.equal(await focused(control), true, endpoint + ' holds focus while pending');
+    assert.equal(await control.getAttribute('aria-disabled'), 'true');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(endpoint => window.calls.filter(path => path === endpoint).length, endpoint), priorCount + 1);
+    await finish(endpoint === '/api/history/compare');
+    assert.equal(await focused(control), true, endpoint + ' holds focus after settling');
+  }
+  if (!baseline) {
+    assert.equal(await page.evaluate(() => window.notices.length), 1);
+    await page.keyboard.press('Enter');
+    await awaitAction();
+    await close.focus();
+    await finish();
+    assert.equal(await focused(close), true, 'successful comparison must not retake focus');
+    await refresh.focus();
+    await page.keyboard.press('Enter');
+    await awaitAction();
+    await finish();
+    await page.keyboard.press('Tab');
+    assert.equal(await focused(second), true, 'Tab continues from Refresh into the history list');
+    assert.deepEqual(await page.evaluate(() => window.calls), [
+      '/api/history/list', '/api/history/read', '/api/history/read', '/api/history/list',
+      '/api/history/compare', '/api/history/compare', '/api/history/list',
+    ]);
+  }
   assert.deepEqual(errors, []);
-  console.log('Local history selection preserves keyboard focus without stealing focus or writing.');
+  console.log('Local history is read-only; row navigation and read-action focus checked.');
 } finally {
   await browser?.close();
   await server.close();

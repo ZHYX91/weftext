@@ -47,7 +47,7 @@
 .history-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin: 16px 0 0; }
 .history-button { font: inherit; font-size: 13px; line-height: 1.5; color: inherit; background: var(--surface, #fff); border: 1px solid var(--border, #d6dfd7); border-radius: 7px; padding: 8px 12px; cursor: pointer; }
 .history-button.primary { color: #fff; background: var(--accent, #32734b); border-color: var(--accent, #32734b); }
-.history-button:disabled { cursor: default; opacity: .5; }
+.history-button:disabled, .history-button[aria-disabled="true"] { cursor: default; opacity: .5; }
 .history-button:focus-visible, .history-source:focus-visible, .history-draft summary:focus-visible { outline: 2px solid var(--accent, #32734b); outline-offset: 3px; }
 .history-compare-choice { border: 1px solid var(--border, #d6dfd7); border-radius: 7px; margin: 0; padding: 8px 12px; font-size: 13px; }
 .history-radio { display: inline-flex; align-items: center; gap: 5px; margin-right: 12px; }
