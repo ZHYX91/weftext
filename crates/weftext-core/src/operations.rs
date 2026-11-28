@@ -3694,13 +3694,19 @@ impl Core {
         let mut warnings = Vec::new();
         let mut complete = true;
         let mut members = Vec::new();
+        let mut admitted_by_id = BTreeMap::new();
+        for entry in &inventory.entries {
+            if entry.identity_status == "admitted"
+                && let Some(id) = entry.node_id.as_deref()
+            {
+                admitted_by_id
+                    .entry(id)
+                    .and_modify(|candidate| *candidate = None)
+                    .or_insert(Some(entry));
+            }
+        }
         for (id, birth) in &expected {
-            let candidates = inventory
-                .entries
-                .iter()
-                .filter(|e| e.node_id.as_ref() == Some(id) && e.identity_status == "admitted")
-                .collect::<Vec<_>>();
-            if candidates.len() != 1 {
+            let Some(Some(candidate)) = admitted_by_id.get(id.as_str()) else {
                 complete = false;
                 warnings.push(
                     UiMessage::error_core_operations_admitted_node_unavailable(
@@ -3711,8 +3717,7 @@ impl Core {
                     .into(),
                 );
                 continue;
-            }
-            let candidate = candidates[0];
+            };
             let observed = capture_optional(&self.backend, Path::new(&candidate.path))?;
             if observed
                 .as_ref()
@@ -3762,17 +3767,23 @@ impl Core {
                 }
             };
         let schema = cut.files.pop().unwrap();
-        for f in &cut.files {
-            let expected_node = inventory
-                .entries
+        let entry_indices: Vec<_> = {
+            let mut by_path = BTreeMap::new();
+            for (index, entry) in inventory.entries.iter().enumerate() {
+                by_path.entry(entry.path.as_str()).or_insert(index);
+            }
+            cut.files
                 .iter()
-                .find(|e| e.path == f.path)
-                .and_then(|e| e.node_id.clone());
-            if f.node_id != expected_node
-                || f.bytes.as_ref().is_none_or(|b| {
-                    decode(b)
-                        .ok()
-                        .is_none_or(|s| weftext_engine::inspect_metadata(&s).id != expected_node)
+                .map(|file| by_path.get(file.path.as_str()).copied())
+                .collect()
+        };
+        for (f, index) in cut.files.iter().zip(entry_indices) {
+            let entry = index.map(|index| &mut inventory.entries[index]);
+            let expected_node = entry.as_ref().and_then(|entry| entry.node_id.as_ref());
+            let source = f.bytes.as_ref().and_then(|b| decode(b).ok());
+            if f.node_id.as_ref() != expected_node
+                || source.as_ref().is_none_or(|s| {
+                    weftext_engine::inspect_metadata(s).id.as_ref() != expected_node
                 })
             {
                 complete = false;
@@ -3783,8 +3794,8 @@ impl Core {
                     .into(),
                 );
             }
-            if let Some(entry) = inventory.entries.iter_mut().find(|e| e.path == f.path) {
-                entry.source = f.bytes.as_ref().and_then(|b| decode(b).ok());
+            if let Some(entry) = entry {
+                entry.source = source;
             }
         }
         // Schema is frozen author input; absence is explicit and the caller can

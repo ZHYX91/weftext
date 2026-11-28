@@ -579,6 +579,70 @@ fn related_forward_inverse_and_partial_do_not_guess_literal_targets() {
     assert_eq!(result.coverage, "partial");
     assert!(!result.aggregate_exact);
 }
+#[test]
+fn two_related_hops_deduplicate_a_cycle_and_keep_unavailable_edges_explicit() {
+    let schema = Schema::bundled().unwrap();
+    let relation = &schema
+        .relations
+        .iter()
+        .find(|relation| relation.field == "people/parents")
+        .unwrap()
+        .id;
+    let people = |include_c: bool| {
+        let mut notes = vec![
+            note(
+                A,
+                "person",
+                &format!(
+                    ", parents: ((target: (ref: \"{}\"),), (target: (ref: \"{}\"),))",
+                    reference(B),
+                    reference(C)
+                ),
+            ),
+            note(
+                B,
+                "person",
+                &format!(", parents: ((target: (ref: \"{}\"),),)", reference(A)),
+            ),
+        ];
+        if include_c {
+            notes.push(note(
+                C,
+                "person",
+                &format!(", parents: ((target: (ref: \"{}\"),),)", reference(A)),
+            ));
+        }
+        input(notes)
+    };
+    let seed = QueryPlan {
+        r#where: Some(format!("self == nodeRef(\"{}\")", reference(A))),
+        select: vec![column("self", "self")],
+        ..Default::default()
+    };
+    let hop = |from| QueryPlan {
+        select: vec![column("self", "self")],
+        advanced: Some(QueryAdvanced {
+            related: Some(QueryRelated {
+                relation: relation.clone(),
+                from: Box::new(from),
+                direction: "forward".into(),
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let two_hops = hop(hop(seed));
+    let result = execute_query(&people(true), &two_hops, &schema).unwrap();
+    assert_eq!(result.coverage, "complete");
+    assert_eq!(result.rows.len(), 1);
+    assert_eq!(result.rows[0].entity_key, Some(reference(A)));
+    let partial = execute_query(&people(false), &two_hops, &schema).unwrap();
+    assert_eq!(partial.coverage, "partial");
+    assert!(!partial.aggregate_exact);
+    assert_eq!(partial.rows.len(), 1);
+    assert_eq!(partial.rows[0].entity_key, Some(reference(A)));
+}
+
 fn saved_source(default: &str, extra: &str) -> String {
     format!(
         "#metadata((kind: \"weftext.query\", key: \"{KEY}\", binding: (schema: \"weftext-config://{WS}/schema\", revision: \"{REV}\", language: \"weftext.query.cel.v1\"), select: ((name: \"n\", expr: \"threshold\"),), parameters: ((name: \"threshold\", shape: (kind: \"scalar\", semantic: \"int\"), nullable: false, default: {default}),), {extra})) <weftext-query-count>"
@@ -763,6 +827,42 @@ fn native_writer_keeps_domain_defaults_without_transport_literal_records() {
         Some(NativeValue::Decimal("0.30".into()))
     );
 }
+#[test]
+fn grouped_query_freezes_only_document_products_used_in_its_expressions() {
+    let schema = Schema::bundled().unwrap();
+    let mut plan = QueryPlan {
+        group: Some(QueryGroup {
+            keys: vec![column("status", "status")],
+            aggregates: vec![QueryAggregate {
+                name: "notes".into(),
+                op: "count".into(),
+                expr: None,
+            }],
+        }),
+        ..Default::default()
+    };
+    assert!(query_products(&plan, &[]).unwrap().is_empty());
+    let result = execute_query(
+        &input(vec![note(A, "task", ", status: \"open\"")]),
+        &plan,
+        &schema,
+    )
+    .unwrap();
+    assert_eq!(result.total_known, 1);
+    assert!(matches!(
+        &result.rows[0].cells["notes"],
+        Cell::Value {
+            value: NativeValue::Int(value)
+        } if value == "1"
+    ));
+    plan.group.as_mut().unwrap().keys = vec![column("title", "title")];
+    assert_eq!(query_products(&plan, &[]).unwrap(), vec!["title"]);
+    assert_eq!(
+        query_products(&QueryPlan::default(), &[]).unwrap(),
+        vec!["title"]
+    );
+}
+
 #[test]
 fn products_are_actual_free_symbols_and_html_identity_preserves_absence() {
     let plan = QueryPlan {
