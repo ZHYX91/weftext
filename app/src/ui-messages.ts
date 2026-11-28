@@ -790,6 +790,26 @@ export const zhCN = {
   "queryPlan.filterOperatorLabel": "筛选运算",
   "queryPlan.nestedFilterHelp": "多值／嵌套条件请使用下方 CEL，保留同项含义。",
   "queryPlan.filterValueLabel": "筛选值",
+  "queryDates.title": "按日期范围筛选",
+  "queryDates.field": "日期字段",
+  "queryDates.period": "日期范围类型",
+  "queryDates.today": "今天",
+  "queryDates.yesterday": "昨天",
+  "queryDates.current": "本期",
+  "queryDates.previous": "上期",
+  "queryDates.past": "过去 N 天",
+  "queryDates.future": "未来 N 天",
+  "queryDates.between": "自选日期",
+  "queryDates.unit": "周期单位",
+  "queryDates.week": "周",
+  "queryDates.month": "月",
+  "queryDates.quarter": "季度",
+  "queryDates.year": "年",
+  "queryDates.days": "天数",
+  "queryDates.start": "开始日期",
+  "queryDates.end": "结束日期",
+  "queryDates.zone": "IANA 时区",
+  "queryDates.adopt": "采用日期条件",
   "queryRelations.title": "按关系查找",
   "queryRelations.relation": "关系类型",
   "queryRelations.nextRelation": "下一跳的关系类型",
@@ -7908,6 +7928,8 @@ export const zhCN = {
   "error.data.queryAdvanced.unknownRelationOrDirection": "未知的关系或方向。",
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": "Query 范围展开预算已耗尽。",
   "error.data.queryAdvanced.unsupportedLifecycleScope": "不支持此生命周期范围。",
+  "error.data.query.relativeDatePeriod": "日期条件的范围无效。",
+  "error.data.query.relativeDateZone": "日期条件需要有效的 IANA 时区。",
   "error.data.query.conditionGroupBudget": "查询条件组超出嵌套、条件数或表达式大小上限。",
   "error.data.query.conditionGroupArity": "条件组至少需要一项，取反组必须正好包含一项。",
   "error.data.queryAdvanced.celSourceBudgetExceeded": "CEL 源码超过配置预算。",
@@ -11194,6 +11216,26 @@ export interface MessageParamsMap {
   "queryPlan.filterOperatorLabel": {  };
   "queryPlan.nestedFilterHelp": {  };
   "queryPlan.filterValueLabel": {  };
+  "queryDates.title": {  };
+  "queryDates.field": {  };
+  "queryDates.period": {  };
+  "queryDates.today": {  };
+  "queryDates.yesterday": {  };
+  "queryDates.current": {  };
+  "queryDates.previous": {  };
+  "queryDates.past": {  };
+  "queryDates.future": {  };
+  "queryDates.between": {  };
+  "queryDates.unit": {  };
+  "queryDates.week": {  };
+  "queryDates.month": {  };
+  "queryDates.quarter": {  };
+  "queryDates.year": {  };
+  "queryDates.days": {  };
+  "queryDates.start": {  };
+  "queryDates.end": {  };
+  "queryDates.zone": {  };
+  "queryDates.adopt": {  };
   "queryRelations.title": {  };
   "queryRelations.relation": {  };
   "queryRelations.nextRelation": {  };
@@ -18312,6 +18354,8 @@ export interface MessageParamsMap {
   "error.data.queryAdvanced.unknownRelationOrDirection": {  };
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": {  };
   "error.data.queryAdvanced.unsupportedLifecycleScope": {  };
+  "error.data.query.relativeDatePeriod": {  };
+  "error.data.query.relativeDateZone": {  };
   "error.data.query.conditionGroupBudget": {  };
   "error.data.query.conditionGroupArity": {  };
   "error.data.queryAdvanced.celSourceBudgetExceeded": {  };
@@ -21841,6 +21885,26 @@ export const messageParamTypes = {
   "queryPlan.filterOperatorLabel": {},
   "queryPlan.nestedFilterHelp": {},
   "queryPlan.filterValueLabel": {},
+  "queryDates.title": {},
+  "queryDates.field": {},
+  "queryDates.period": {},
+  "queryDates.today": {},
+  "queryDates.yesterday": {},
+  "queryDates.current": {},
+  "queryDates.previous": {},
+  "queryDates.past": {},
+  "queryDates.future": {},
+  "queryDates.between": {},
+  "queryDates.unit": {},
+  "queryDates.week": {},
+  "queryDates.month": {},
+  "queryDates.quarter": {},
+  "queryDates.year": {},
+  "queryDates.days": {},
+  "queryDates.start": {},
+  "queryDates.end": {},
+  "queryDates.zone": {},
+  "queryDates.adopt": {},
   "queryRelations.title": {},
   "queryRelations.relation": {},
   "queryRelations.nextRelation": {},
@@ -30175,6 +30239,8 @@ export const messageParamTypes = {
   "error.data.queryAdvanced.unknownRelationOrDirection": {},
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": {},
   "error.data.queryAdvanced.unsupportedLifecycleScope": {},
+  "error.data.query.relativeDatePeriod": {},
+  "error.data.query.relativeDateZone": {},
   "error.data.query.conditionGroupBudget": {},
   "error.data.query.conditionGroupArity": {},
   "error.data.queryAdvanced.celSourceBudgetExceeded": {},
@@ -33874,6 +33940,26 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryPlan.filterOperatorLabel": "Filter operator",
   "queryPlan.nestedFilterHelp": "For multivalue / nested conditions, use CEL below to retain same-item semantics.",
   "queryPlan.filterValueLabel": "Filter value",
+  "queryDates.title": "Filter by date range",
+  "queryDates.field": "Date field",
+  "queryDates.period": "Date range type",
+  "queryDates.today": "Today",
+  "queryDates.yesterday": "Yesterday",
+  "queryDates.current": "This period",
+  "queryDates.previous": "Previous period",
+  "queryDates.past": "Previous N days",
+  "queryDates.future": "Next N days",
+  "queryDates.between": "Custom dates",
+  "queryDates.unit": "Period unit",
+  "queryDates.week": "Week",
+  "queryDates.month": "Month",
+  "queryDates.quarter": "Quarter",
+  "queryDates.year": "Year",
+  "queryDates.days": "Day count",
+  "queryDates.start": "Start date",
+  "queryDates.end": "End date",
+  "queryDates.zone": "IANA time zone",
+  "queryDates.adopt": "Use date condition",
   "queryRelations.title": "Find related notes",
   "queryRelations.relation": "Relation type",
   "queryRelations.nextRelation": "Relation type for the next hop",
@@ -40992,6 +41078,8 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.data.queryAdvanced.unknownRelationOrDirection": "Unknown relation/direction",
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": "Query scope expansion budget exhausted",
   "error.data.queryAdvanced.unsupportedLifecycleScope": "Unsupported lifecycle scope",
+  "error.data.query.relativeDatePeriod": "The date condition has an invalid range.",
+  "error.data.query.relativeDateZone": "The date condition requires a valid IANA time zone.",
   "error.data.query.conditionGroupBudget": "Query conditions exceed the nesting, condition count or expression size limit.",
   "error.data.query.conditionGroupArity": "A condition group needs at least one item. A negation needs exactly one.",
   "error.data.queryAdvanced.celSourceBudgetExceeded": "CEL source exceeds profile budget",

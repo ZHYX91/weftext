@@ -12,7 +12,7 @@ assert.ok(path.isAbsolute(process.argv[2]), 'Output must be absolute');
 const repo = path.resolve(import.meta.dirname, '..'), out = path.resolve(process.argv[2]);
 assert.ok(path.relative(repo, out).startsWith('..' + path.sep), 'Keep private evidence outside the product repository');
 await mkdir(out, { recursive: false });
-const inputs = ['app/src/query-panel.ts', 'app/src/query-predicate.ts', 'app/src/query-plan-controls.ts', 'app/src/query-argument-controls.ts', 'app/src/query-relation-controls.ts', 'app/src/query-plan.ts', 'app/src/native-value-form.ts', 'app/src/query-refresh.ts', 'app/src/query-control-state.ts', 'app/src/tag-tree.ts', 'app/src/query-result.test-support.ts', 'app/src/ui-locale.ts', 'app/src/ui-messages.ts', 'app/package.json', 'app/package-lock.json', 'scripts/test_query_controls_browser.mjs'];
+const inputs = ['app/src/query-panel.ts', 'app/src/query-predicate.ts', 'app/src/query-plan-controls.ts', 'app/src/query-argument-controls.ts', 'app/src/query-relation-controls.ts', 'app/src/query-relative-date-controls.ts', 'app/src/query-plan.ts', 'app/src/native-value-form.ts', 'app/src/query-refresh.ts', 'app/src/query-control-state.ts', 'app/src/tag-tree.ts', 'app/src/query-result.test-support.ts', 'app/src/ui-locale.ts', 'app/src/ui-messages.ts', 'app/package.json', 'app/package-lock.json', 'scripts/test_query_controls_browser.mjs'];
 const inventory = async () => Promise.all(inputs.map(async name => { const bytes = await readFile(path.join(repo, name)); return { path: name, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }; }));
 const result = { startedUtc: new Date().toISOString(), frontend: 'current Vite source, isolated QueryPanel component', developmentOnly: true,
   limits: ['Bounded host returns schema, registry and a strict local Query result; no Core query evaluation or persisted author operation.', 'No native desktop, OS IME, assistive technology, performance or whole-product acceptance.'],
@@ -219,6 +219,24 @@ try {
     await relations.getByRole('button', { name: '移除最后一跳并返回该跳之前的查询' }).click();
     assert.equal(await add.count(), 1);
     await relations.evaluate(node => node.remove());
+  });
+  await check('relative date form saves the period and zone without substituting browser dates', async () => {
+    await page.evaluate(async () => {
+      const { queryRelativeDateControls } = await import('/src/query-relative-date-controls.ts');
+      const editor = queryRelativeDateControls([{ id: 'tasks/due', label: '截止日期', kind: 'date' }],
+        value => { window.fixture.relativeDate = value; });
+      editor.id = 'relative-date-fixture';
+      document.body.append(editor);
+    });
+    const form = page.locator('#relative-date-fixture');
+    await form.getByRole('combobox', { name: '日期范围类型' }).selectOption('previous');
+    await form.getByRole('combobox', { name: '周期单位' }).selectOption('quarter');
+    await form.getByRole('textbox', { name: 'IANA 时区' }).fill('Asia/Shanghai');
+    await form.getByRole('button', { name: '采用日期条件' }).click();
+    const stored = await page.evaluate(() => window.fixture.relativeDate);
+    assert.deepEqual(stored, { field: 'tasks/due', dateKind: 'date', timeZone: 'Asia/Shanghai',
+      period: { kind: 'previous', unit: 'quarter' } });
+    await form.evaluate(node => node.remove());
   });
   await check('typed argument controls preserve exact values, default omission and an independently edited draft', async () => {
     await page.evaluate(async () => {

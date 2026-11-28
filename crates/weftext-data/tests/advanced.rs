@@ -44,6 +44,30 @@ fn nested_boolean_conditions_use_the_normal_query_read_and_execution_contracts()
         assert!(plan.predicate_source().is_err());
     }
 }
+
+#[test]
+fn saved_relative_date_uses_one_frozen_run_clock_for_civil_time() {
+    let schema = Schema::bundled().unwrap();
+    let mut frozen = input(vec![
+        note(A, "task", ", due: datetime(year: 2024, month: 2, day: 28)"),
+        note(B, "task", ", due: datetime(year: 2024, month: 2, day: 29)"),
+        note(C, "task", ", due: datetime(year: 2024, month: 3, day: 1)"),
+    ]);
+    let plan: QueryPlan = serde_json::from_value(serde_json::json!({
+        "where": {"field":"tasks/due","dateKind":"date","timeZone":"Asia/Shanghai","period":{"kind":"today"}},
+        "select":[{"name":"due","expr":"due"}],
+    })).unwrap();
+    for (clock, expected) in [("2024-02-28T20:00:00Z", B), ("2024-02-29T20:00:00Z", C)] {
+        frozen.advanced = Some(FrozenAdvancedInput {
+            reference_utc: Some(clock.parse().unwrap()),
+            ..Default::default()
+        });
+        let actual = execute_query(&frozen, &plan, &schema).unwrap();
+        assert_eq!(actual.coverage, "complete");
+        assert_eq!(actual.rows.len(), 1);
+        assert_eq!(actual.rows[0].entity_key, Some(reference(expected)));
+    }
+}
 fn reference(id: &str) -> String {
     format!("weftext-node://{WS}/{id}")
 }

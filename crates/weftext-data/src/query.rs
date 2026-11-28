@@ -2,6 +2,7 @@
 mod evaluator_benchmark;
 mod predicate;
 mod prepared;
+mod relative_date;
 use crate::*;
 use cel::{
     Context, ExecutionError, Program, Value as CelValue,
@@ -18,6 +19,7 @@ use indexmap::IndexMap;
 pub use predicate::{QueryBoolean, QueryPredicate, QueryPredicateGroup};
 use prepared::PreparedExpression;
 pub(crate) use prepared::visit_children;
+pub use relative_date::{QueryDateKind, QueryDatePeriod, QueryPeriodUnit, QueryRelativeDate};
 use serde::{Deserialize, Serialize};
 use std::{
     any::Any,
@@ -2452,6 +2454,7 @@ pub(crate) fn execute_query_leaf(
         remaining,
         metadata,
         None,
+        None,
     )
 }
 #[allow(clippy::too_many_arguments)]
@@ -2465,6 +2468,7 @@ pub(crate) fn execute_query_leaf_traced(
     remaining: &mut u64,
     metadata: &BTreeMap<String, AuthorizedQueryMetadata>,
     trace: Option<&crate::query_providers::ProviderTrace>,
+    reference: Option<chrono::DateTime<chrono::Utc>>,
 ) -> Result<QueryResult> {
     if !matches!(input.coverage.as_str(), "complete" | "partial")
         || !matches!(input.freshness.as_str(), "current" | "stale")
@@ -2514,7 +2518,7 @@ pub(crate) fn execute_query_leaf_traced(
         })
         .transpose()?;
     let predicate = plan
-        .predicate_source()?
+        .predicate_source_at(reference)?
         .as_deref()
         .filter(|s| !s.trim().is_empty())
         .map(|s| compile(s, schema, &vars))

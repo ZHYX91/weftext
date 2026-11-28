@@ -270,6 +270,7 @@ impl Preflight<'_> {
                 &mut self.remaining,
                 &BTreeMap::new(),
                 Some(&trace),
+                None,
             )?;
             result.rows.clear();
             if plan.group.is_some() {

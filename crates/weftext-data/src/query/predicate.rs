@@ -1,4 +1,5 @@
-use super::{DataError, QueryPlan, Result, UiMessage, parse_cel};
+use super::{DataError, QueryPlan, QueryRelativeDate, Result, UiMessage, parse_cel};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 
@@ -11,6 +12,7 @@ const MAX_CEL_BYTES: usize = 16 * 1024;
 pub enum QueryPredicate {
     Expression(String),
     Group(QueryPredicateGroup),
+    RelativeDate(QueryRelativeDate),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -42,21 +44,37 @@ impl From<String> for QueryPredicate {
 
 impl QueryPlan {
     pub fn predicate_source(&self) -> Result<Option<Cow<'_, str>>> {
-        self.r#where.as_ref().map(QueryPredicate::cel).transpose()
+        self.predicate_source_at(None)
+    }
+
+    pub(crate) fn predicate_source_at(
+        &self,
+        reference: Option<DateTime<Utc>>,
+    ) -> Result<Option<Cow<'_, str>>> {
+        self.r#where
+            .as_ref()
+            .map(|predicate| predicate.cel_at(reference))
+            .transpose()
     }
 }
 
 impl QueryPredicate {
-    pub fn cel(&self) -> Result<Cow<'_, str>> {
+    fn cel_at(&self, reference: Option<DateTime<Utc>>) -> Result<Cow<'_, str>> {
         if let Self::Expression(source) = self {
             return Ok(Cow::Borrowed(source));
         }
         let mut source = String::new();
-        self.write_cel(&mut source, 0, &mut 0)?;
+        self.write_cel(&mut source, 0, &mut 0, reference)?;
         Ok(Cow::Owned(source))
     }
 
-    fn write_cel(&self, source: &mut String, depth: usize, nodes: &mut usize) -> Result<()> {
+    fn write_cel(
+        &self,
+        source: &mut String,
+        depth: usize,
+        nodes: &mut usize,
+        reference: Option<DateTime<Utc>>,
+    ) -> Result<()> {
         *nodes += 1;
         let budget = || DataError::budget(UiMessage::error_data_query_condition_group_budget());
         if depth > MAX_DEPTH || *nodes > MAX_NODES {
@@ -72,6 +90,9 @@ impl QueryPredicate {
                 parse_cel(expression)?;
                 source.push_str(expression);
                 source.push('\n');
+            }
+            Self::RelativeDate(date) => {
+                source.push_str(&date.cel(reference.unwrap_or(DateTime::UNIX_EPOCH))?);
             }
             Self::Group(group) => {
                 if group.conditions.is_empty()
@@ -93,7 +114,7 @@ impl QueryPredicate {
                     if index != 0 {
                         source.push_str(join);
                     }
-                    condition.write_cel(source, depth + 1, nodes)?;
+                    condition.write_cel(source, depth + 1, nodes, reference)?;
                 }
             }
         }

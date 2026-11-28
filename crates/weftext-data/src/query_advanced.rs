@@ -97,6 +97,8 @@ pub struct FrozenAdvancedInput {
     /// Trusted Core-qualified, same-cut structure. JSON cannot supply authority.
     #[serde(skip)]
     pub tag_structure: Option<FrozenTagStructure>,
+    #[serde(skip)]
+    pub reference_utc: Option<chrono::DateTime<chrono::Utc>>,
     #[serde(default)]
     pub parameters: BTreeMap<String, NativeValue>,
     #[serde(default)]
@@ -419,6 +421,7 @@ fn validate_plan_static(
                     &QueryBudget::default(),
                     None,
                     None,
+                    None,
                 );
             }
             if !plan.select.is_empty()
@@ -472,6 +475,7 @@ fn validate_plan_static(
                 &shapes,
                 &mut remaining,
                 &QueryBudget::default(),
+                None,
                 None,
                 None,
             );
@@ -1413,6 +1417,9 @@ pub(crate) fn execute_advanced_query_traced(
         source_bytes: definition_bytes,
         metadata,
         trace: trace.cloned(),
+        reference: context
+            .reference_utc
+            .unwrap_or_else(|| chrono::DateTime::from(std::time::SystemTime::now())),
     };
     runner.run(plan, schema, &context.parameters, 0, None)
 }
@@ -1425,6 +1432,7 @@ struct Runner<'a> {
     source_bytes: usize,
     metadata: &'a BTreeMap<String, AuthorizedQueryMetadata>,
     trace: Option<crate::query_providers::ProviderTrace>,
+    reference: chrono::DateTime<chrono::Utc>,
 }
 impl Runner<'_> {
     fn run(
@@ -1513,6 +1521,7 @@ impl Runner<'_> {
                 self.limits,
                 trace.as_ref(),
                 self.context.tag_structure.as_ref(),
+                Some(self.reference),
             );
         }
         if advanced.union_all.is_some() {
@@ -1557,6 +1566,7 @@ impl Runner<'_> {
                 self.limits,
                 trace.as_ref(),
                 self.context.tag_structure.as_ref(),
+                Some(self.reference),
             );
         }
         if let Some(related) = &advanced.related {
@@ -1702,6 +1712,7 @@ impl Runner<'_> {
             &mut self.remaining,
             self.metadata,
             trace,
+            Some(self.reference),
         )?;
         if grouped {
             sort_terminal(
@@ -2280,6 +2291,7 @@ fn transform(
     limits: &QueryBudget,
     trace: Option<&crate::query_providers::ProviderTrace>,
     tags: Option<&FrozenTagStructure>,
+    reference: Option<chrono::DateTime<chrono::Utc>>,
 ) -> Result<QueryResult> {
     let (mut vars, env) = terminal_env(&result, schema, parameters, shapes, trace, tags)?;
     let unnest = plan
@@ -2300,7 +2312,7 @@ fn transform(
         })
         .transpose()?;
     let predicate = plan
-        .predicate_source()?
+        .predicate_source_at(reference)?
         .as_deref()
         .map(|p| compile(p, schema, &vars))
         .transpose()?;

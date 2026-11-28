@@ -278,6 +278,7 @@ fn saved_query_slots(
                 weftext_data::QueryPredicate::Expression(value) => {
                     expression(expr, value, parsed, source, out)
                 }
+                weftext_data::QueryPredicate::RelativeDate(_) => Ok(()),
                 weftext_data::QueryPredicate::Group(group) => {
                     let slots = array(member(&members(expr)?, "conditions")?)?;
                     for (slot, value) in slots.into_iter().zip(&group.conditions) {

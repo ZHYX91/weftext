@@ -8,6 +8,7 @@ import { andPredicates, validateQueryPredicate, type QueryBoolean, type QueryPla
 import { filterOperandShape, filterOperators, queryPredicate } from "./query-predicate";
 import { updateQueryChoices } from "./query-control-state";
 import { queryRelationControls } from "./query-relation-controls";
+import { queryRelativeDateControls, type QueryDateField } from "./query-relative-date-controls";
 export interface PlanField {
     key: string;
     expr: string;
@@ -90,6 +91,12 @@ export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, ch
     ];
     const groupTargets: QueryPredicateGroup[] = [];
     const target = select(message("queryConditions.addTo"), [], "");
+    const dateFields = fields.flatMap((field): QueryDateField[] => {
+        if (!field.fieldId || !field.shape) return [];
+        const shape = resolveShape(field.shape, actualSchema);
+        return shape.kind === "scalar" && (shape.semantic === "date" || shape.semantic === "instant")
+            ? [{ id: field.fieldId, label: field.label, kind: shape.semantic }] : [];
+    });
     const slots = new Set<string>();
     let composing = 0;
     const apply = (next: QueryPredicate | undefined) => {
@@ -98,6 +105,21 @@ export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, ch
         plan.where = next;
         changed();
         drawConditions();
+    };
+    const addCondition = (condition: QueryPredicate, appendToRoot = () => andPredicates(plan.where, condition)) => {
+        if (composing) return;
+        const group = groupTargets[Number(target.value)];
+        if (!group) {
+            apply(appendToRoot());
+            return;
+        }
+        group.conditions.push(condition);
+        try {
+            apply(plan.where);
+        } catch (error) {
+            group.conditions.pop();
+            throw error;
+        }
     };
     const drawConditions = () => {
         const source = typeof plan.where === "string" ? plan.where : "";
@@ -129,6 +151,8 @@ export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, ch
                 } else {
                     host.append(ui("code", "", node));
                 }
+            } else if ("dateKind" in node) {
+                host.append(queryRelativeDateControls(dateFields, replace, node));
             } else {
                 const group = node;
                 const mode = select(message("queryConditions.group"), modes.filter(([op]) => op !== "not" || group.conditions.length === 1), group.op);
@@ -205,21 +229,11 @@ export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, ch
             return;
         }
         const selected = filterFields[Number(field.value)];
-        const group = groupTargets[Number(target.value)];
-        if (!group) {
-            apply(addPlanFilter(plan, selected, operator.value, value, actualSchema).where);
-            return;
-        }
-        if (composing) return;
         const condition = queryPredicate(selected.expr, selected.shape, actualSchema, !!selected.fieldId, operator.value, value);
-        group.conditions.push(condition);
-        try {
-            apply(plan.where);
-        } catch (error) {
-            group.conditions.pop();
-            throw error;
-        }
+        addCondition(condition, () => addPlanFilter(plan, selected, operator.value, value, actualSchema).where);
     })));
+    if (dateFields.length)
+        filterHost.append(queryRelativeDateControls(dateFields, addCondition));
     const advanced = ui("details");
     advanced.append(ui("summary", "", message("queryPlan.advancedCelDisclosure")));
 

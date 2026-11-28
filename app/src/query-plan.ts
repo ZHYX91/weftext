@@ -3,7 +3,19 @@ import { decodeNativeValue, type NativeValue } from "./native-values";
 import { displayMessage, message, uiDisplayParameter, UiError } from "./ui-locale";
 
 export type QueryBoolean = "all" | "any" | "not";
-export type QueryPredicate = string | QueryPredicateGroup;
+export type QueryPeriodUnit = "week" | "month" | "quarter" | "year";
+export type QueryDatePeriod =
+    | { kind: "today" | "yesterday" }
+    | { kind: "current" | "previous"; unit: QueryPeriodUnit }
+    | { kind: "past" | "future"; days: number }
+    | { kind: "between"; start: string; end: string };
+export interface QueryRelativeDate {
+    field: string;
+    dateKind: "date" | "instant";
+    timeZone: string;
+    period: QueryDatePeriod;
+}
+export type QueryPredicate = string | QueryPredicateGroup | QueryRelativeDate;
 export interface QueryPredicateGroup {
     op: QueryBoolean;
     conditions: QueryPredicate[];
@@ -29,6 +41,35 @@ export function validateQueryPredicate(predicate: unknown): void {
         if (!value || typeof value !== "object" || Array.isArray(value))
             throw new UiError(message("error.data.query.conditionGroupArity"));
         const group = value as Record<string, unknown>;
+        if ("dateKind" in group) {
+            const period = group.period as Record<string, unknown> | undefined;
+            const invalid = () => new UiError(message("error.data.query.relativeDatePeriod"));
+            if (Object.keys(group).length !== 4 || typeof group.field !== "string" || !group.field
+                || !["date", "instant"].includes(String(group.dateKind))
+                || typeof group.timeZone !== "string" || !group.timeZone || !period || typeof period !== "object")
+                throw invalid();
+            const yearMonthDay = /^\d{4}-\d{2}-\d{2}$/;
+            switch (period.kind) {
+                case "today":
+                case "yesterday":
+                    if (Object.keys(period).length === 1) return;
+                    break;
+                case "current":
+                case "previous":
+                    if (Object.keys(period).length === 2 && ["week", "month", "quarter", "year"].includes(String(period.unit))) return;
+                    break;
+                case "past":
+                case "future":
+                    if (Object.keys(period).length === 2 && Number.isInteger(period.days)
+                        && Number(period.days) >= 1 && Number(period.days) <= 3660) return;
+                    break;
+                case "between":
+                    if (Object.keys(period).length === 3 && typeof period.start === "string" && typeof period.end === "string"
+                        && yearMonthDay.test(period.start) && yearMonthDay.test(period.end) && period.start <= period.end) return;
+                    break;
+            }
+            throw invalid();
+        }
         if (Object.keys(group).length !== 2 || !["all", "any", "not"].includes(String(group.op))
             || !Array.isArray(group.conditions) || !group.conditions.length
             || group.op === "not" && group.conditions.length !== 1)
