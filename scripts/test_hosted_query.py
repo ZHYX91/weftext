@@ -4,12 +4,11 @@ Uses owned disposable libraries and real HTTP/Core commits. No desktop input.
 The local process is used only to provision admitted fixtures while the hosted
 process is stopped; consumer requests always use the hosted boundary.
 """
+from _http_test_suite import run_http_suite
 import uuid
 import copy
 import json
-import sys
 import time
-import unittest
 from concurrent.futures import ThreadPoolExecutor
 from owned_worker_observer import (OwnedWorkerObservation, event_time_ns, timed_call,
     apply_inflight_mutation, verify_inflight_change, freeze_policy_changes,
@@ -75,8 +74,8 @@ class HostedQuery(HostedFields):
     def test_query_parameters_union_distinct_and_static_denial(self):
         self.prepare_query()
         base = {'select': [self.column()], 'where': 'status == wanted',
-                'advanced': {'parameters': [{'name': 'wanted',
-                    'shape': {'kind': 'scalar', 'semantic': 'text'}}]}}
+                'parameters': [{'name': 'wanted',
+                    'shape': {'kind': 'scalar', 'semantic': 'text'}}]}
         result = self.query(base, parameters={'wanted': {'kind': 'text', 'value': 'open'}})
         self.assertEqual([row['entityKey'] for row in result['result']['rows']], ['Shared'])
         self.assertEqual(result['columns'], ['status'])
@@ -137,6 +136,22 @@ class HostedQuery(HostedFields):
         self.policy(lambda users: users['fields']['grants']['Other']['query']['products'].update(body=False))
         self.query(plan, fields=[], products=requested, resources=[], status=404)
 
+    def test_full_text_cache_requires_current_body_authority(self):
+        self.prepare_query()
+        self.grant_query(products=['body'])
+        plan = {'where': {'op': 'all', 'conditions': [
+                    'textMatch(body, "正文Shared", "phrase")',
+                    'textMatch(body, "PRIVATE_Shared_UNREADABLE", "exclude")']},
+                'select': [self.column('1', 'matched')]}
+        for _ in range(2):
+            output = self.query(plan, fields=[], products=['body'])
+            self.assertEqual([row['entityKey'] for row in output['result']['rows']], ['Shared'])
+            self.assertNotIn('PRIVATE_', json.dumps(output))
+        self.policy(lambda users: users['fields']['grants']['Shared']['query']['products'].update(body=False))
+        self.query(plan, fields=[], products=['body'], resources=['Shared'], status=404)
+        output = self.query(plan, fields=[], products=['body'], resources=['Other'])
+        self.assertEqual(output['result']['rows'], [])
+
     def test_query_saved_current_pinned_calls_need_exact_definition_authority(self):
         self.prepare_query()
         plan = {'where': 'status == "open"', 'select': [self.column()]}
@@ -188,6 +203,67 @@ class HostedQuery(HostedFields):
         missing['advanced']['call']['owner'] = 'NotThere'
         self.assertEqual(self.query(hidden, status=404), self.query(missing, status=404))
 
+    def test_saved_query_reuses_typed_parameters_across_run_routes(self):
+        self.prepare_query()
+        declarations = [{'name': 'wanted', 'shape': {'kind': 'scalar', 'semantic': 'text'}}]
+        saved = self.add_definition({
+            'where': 'status == wanted', 'select': [self.column()], 'parameters': declarations,
+        })
+        definition = saved['definition']
+        selection = {'mode': 'current', 'key': definition['key']}
+        self.grant_query(definitions=True)
+        workspace = definition['binding']['schema'].split('://', 1)[1].split('/', 1)[0]
+        owner = f"weftext-node://{workspace}/{self.docs['Other']['nodeId']}"
+        hosted_plan = {
+            'parameters': declarations,
+            'advanced': {'call': {'owner': 'Other', 'selection': selection,
+                                  'arguments': {'wanted': 'wanted'}}},
+        }
+        path = self.root / 'Other' / 'Other.typ'
+        original = path.read_bytes()
+
+        def arguments(value):
+            return {'wanted': {'kind': 'text', 'value': value}}
+
+        def assert_status(result, value, entities):
+            rows = result['rows']
+            self.assertEqual({row['entityKey'] for row in rows}, entities)
+            self.assertEqual(len(rows), len(entities))
+            self.assertTrue(all(row['cells']['status']['value'] == arguments(value)['wanted']
+                                for row in rows))
+
+        def local_runs(api):
+            root = str(self.root)
+            for choice in [selection, {**selection, 'mode': 'pinned',
+                                       'revision': saved['definitionRevision']}]:
+                resolved = api('/api/query/definitions', {
+                    'root': root, 'owner': owner, 'selection': choice,
+                })
+                self.assertEqual(resolved['definitionRevision'], saved['definitionRevision'])
+                self.assertEqual(resolved['definitions'], [definition])
+            doc = api('/api/open', {'root': root, 'path': str(path)})
+            basis = {'sessionId': doc['sessionId'], 'source': doc['source'], 'serial': 1}
+            occurrences = api('/api/query/embedded/discover', basis)['occurrences']
+            occurrence = next(item for item in occurrences if item['key'] == definition['key'])
+            for status, names in [('open', ('Shared', 'Secret')), ('done', ('Other',))]:
+                parameters = arguments(status)
+                expected = {f"weftext-node://{workspace}/{self.docs[name]['nodeId']}"
+                            for name in names}
+                saved_run = api('/api/query/definition/run', {
+                    'root': root, 'owner': owner, 'selection': selection, 'parameters': parameters,
+                })
+                embedded_run = api('/api/query/embedded/run', {
+                    **basis, 'occurrenceId': occurrence['id'], 'parameters': parameters,
+                })
+                assert_status(saved_run['result'], status, expected)
+                assert_status(embedded_run['result'], status, expected)
+
+        self.local(local_runs)
+        for status, name in [('open', 'Shared'), ('done', 'Other')]:
+            result = self.query(hosted_plan, parameters=arguments(status))['result']
+            assert_status(result, status, {name})
+        self.assertEqual(path.read_bytes(), original)
+
     def test_query_related_uses_granted_fields_types_identity_and_actual_refs(self):
         self.prepare_query()
         library = self.local(lambda api: api('/api/library/open', {'path': str(self.root)}))
@@ -205,9 +281,9 @@ class HostedQuery(HostedFields):
         self.policy(lambda users: [users['fields']['grants'][name]['fields'].update(
             {'people/parents': {'read': True}}) for name in ['Shared', 'Other']])
         self.grant_query(products=['self', 'types'], relations=[relation])
-        seed = {'where': 'self == origin', 'advanced': {'parameters': [{
+        seed = {'where': 'self == origin', 'parameters': [{
             'name': 'origin', 'shape': {'kind': 'scalar', 'semantic': 'node_ref'},
-            'default': {'kind': 'text', 'value': refs['Shared']}}]}}
+            'default': {'kind': 'text', 'value': refs['Shared']}}]}
         plan = {'select': [self.column('self', 'self')], 'advanced': {'related': {
             'relation': relation, 'from': seed, 'direction': 'forward'}}}
         request = dict(fields=['people/parents'], products=['self', 'types'], relations=[relation])
@@ -216,7 +292,7 @@ class HostedQuery(HostedFields):
         self.assertEqual(forward['rows'][0]['cells']['self']['value']['value'], refs['Other'])
         inverse = copy.deepcopy(plan)
         inverse['advanced']['related']['direction'] = 'inverse'
-        inverse['advanced']['related']['from']['advanced']['parameters'][0]['default']['value'] = refs['Other']
+        inverse['advanced']['related']['from']['parameters'][0]['default']['value'] = refs['Other']
         self.assertEqual([row['entityKey'] for row in self.query(inverse, **request)['result']['rows']], ['Shared'])
         self.policy(lambda users: users['fields']['grants']['Shared']['query'].update(relations=[]))
         self.query(plan, resources=['Shared', 'Other'], status=404, **request)
@@ -494,8 +570,8 @@ class HostedQuery(HostedFields):
         doc = self.open()
         original = (self.root / 'Shared/Shared.typ').read_bytes()
         plan = {'where': f'false && tagInSubtree(tagRef("{root}"), tagRef("{missing}"))',
-                'select': [self.column('true', 'value')], 'advanced': {'parameters': [
-                    {'name': 'root', 'shape': {'kind': 'scalar', 'semantic': 'tag_ref'}}]}}
+                'select': [self.column('true', 'value')], 'parameters': [
+                    {'name': 'root', 'shape': {'kind': 'scalar', 'semantic': 'tag_ref'}}]}
         request = dict(resource='Shared', sessionId=doc['sessionId'], baseId=doc['baseId'],
                        source=doc['source'], sourceHash=digest(doc['source']), serial=1,
                        operationId=uid(), label='weftext-query-tree', plan=plan)
@@ -518,7 +594,4 @@ class HostedQuery(HostedFields):
 
 
 if __name__ == '__main__':
-    suite = unittest.TestSuite(HostedQuery(name) for name in unittest.defaultTestLoader.getTestCaseNames(HostedQuery)
-                              if name.startswith('test_query_'))
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
-    sys.exit(not result.wasSuccessful())
+    raise SystemExit(run_http_suite(HostedQuery))

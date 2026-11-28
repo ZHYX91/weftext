@@ -1073,6 +1073,7 @@ mod tests {
         let session_id = note.session_id.clone();
         let note_path = PathBuf::from(note.path);
         let state = AppState {
+            draft_lane: Default::default(),
             core: Arc::new(Mutex::new(core)),
             token: Arc::from("fixture-token"),
             port: 12345,

@@ -822,7 +822,15 @@ fn freeze_definitions(
         draft,
         draft_keys,
     } = selected;
-    let mut context = weftext_data::FrozenAdvancedInput::default();
+    let mut context = weftext_data::FrozenAdvancedInput {
+        text_index: Some(inner.core.query_text_index(&[
+            "hosted",
+            actor,
+            workspace,
+            &inner.policy.generation.to_string(),
+        ])),
+        ..Default::default()
+    };
     let mut baselines = BTreeMap::new();
     for _ in 0..64 {
         let dependencies = weftext_data::definition_dependencies(plan, &context.definitions)
@@ -1519,6 +1527,7 @@ fn capture(
     for _ in 0..64 {
         let mut authority = Authority::default();
         for r in &resources {
+            crate::query_runs::check()?;
             authority.fields.insert(r.clone(), req.fields.clone());
             authority.products.insert(r.clone(), req.products.clone());
             authority.relations.insert(r.clone(), req.relations.clone());
@@ -1734,6 +1743,7 @@ fn capture(
             authority.products.clear();
             authority.relations.clear();
             for r in &resources {
+                crate::query_runs::check()?;
                 authority.fields.insert(r.clone(), req.fields.clone());
                 authority.products.insert(r.clone(), req.products.clone());
                 authority.relations.insert(r.clone(), req.relations.clone());
@@ -1746,6 +1756,7 @@ fn capture(
             return Err(unavailable());
         }
         for r in &resources {
+            crate::query_runs::check()?;
             row_access(inner, &actor, r, &req)?;
         }
         // Even resources=[] uses a real explicit authorized object as evidence
@@ -1799,10 +1810,12 @@ fn capture(
             .any(|p| matches!(p.as_str(), "title" | "body" | "headings"))
         {
             for r in &resources {
+                crate::query_runs::check()?;
                 needed_inputs.extend(inner.file(r)?.inputs.iter().cloned());
             }
         }
         for r in &needed_inputs {
+            crate::query_runs::check()?;
             inputs::access(inner, &actor, r)?;
         }
         authority.inputs.extend(needed_inputs.clone());
@@ -1881,6 +1894,7 @@ fn capture(
         let mut complete = true;
         if !validate_only {
             for r in &resources {
+                crate::query_runs::check()?;
                 let Some(file) = snapshots.get(r) else {
                     return Err(changed());
                 };
@@ -2023,6 +2037,7 @@ fn capture(
             // authority into downstream Office delivery as well as Query read.
             environment.attach_inputs(inner, &actor, captured_inputs.clone())?;
             for (entity, worker) in &mut workers {
+                crate::query_runs::check()?;
                 let resource = resource_map.get(entity).ok_or_else(changed)?;
                 if let Some(citations) = citations::freeze(inner, &actor, resource, &worker.source)?
                 {
@@ -2130,6 +2145,7 @@ async fn execute_captured(
     auth: &Auth,
     mut captured: Capture,
 ) -> Result<Value, ApiError> {
+    let mut indexed = Vec::new();
     let outcome: Result<_, ApiError> = async {
         let mut execution_bytes = frozen_input_bytes(
             &captured.input,
@@ -2142,20 +2158,113 @@ async fn execute_captured(
         if let Some(environment) = &captured.environment {
             charge_bytes(&mut execution_bytes, environment.retained_bytes())?;
         }
-        for (entity, worker) in std::mem::take(&mut captured.workers) {
-            let output = editor::compile_frozen(state, worker).await?;
-            let products = if output["ok"] == true {
-                serde_json::from_value::<weftext_engine::RenderProducts>(output["products"].clone())
-                    .ok()
-                    .map(|p| {
-                        data_api::native_query_products(
-                            format!("{}:{entity}", captured.input.cut_id),
-                            p,
+        let workers = std::mem::take(&mut captured.workers);
+        let product_scope = captured
+            .products
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(",");
+        let epoch = captured.epoch.to_string();
+        let bases = Arc::new(
+            workers
+                .iter()
+                .map(|(entity, worker)| {
+                    let root = worker.root.to_string_lossy();
+                    let path = worker.path.to_string_lossy();
+                    let files = worker
+                        .frozen_files
+                        .iter()
+                        .map(|(path, bytes)| {
+                            base64::engine::general_purpose::STANDARD
+                                .decode(bytes)
+                                .map(|bytes| (path.clone(), bytes))
+                                .map_err(|_| invalid())
+                        })
+                        .collect::<Result<BTreeMap<_, _>, _>>()?;
+                    let cut = weftext_core::QueryProductCut::new(
+                        &[
+                            "hosted",
+                            &root,
+                            &captured.actor,
+                            &epoch,
+                            &product_scope,
+                            crate::query_product_worker::build_identity(),
+                        ],
+                        &files,
+                        worker.style.as_ref(),
+                    );
+                    let key = cut.key(entity, &path, &worker.source);
+                    Ok((cut, key))
+                })
+                .collect::<Result<Vec<_>, ApiError>>()?,
+        );
+        let lookup = bases.clone();
+        let cache = if lookup.is_empty() {
+            Vec::new()
+        } else {
+            locked(state, move |inner| {
+                Ok(inner
+                    .core
+                    .query_product_entries(lookup.iter().map(|(cut, key)| (cut, key))))
+            })
+            .await?
+        };
+        for (((entity, worker), (cut, key)), entry) in
+            workers.into_iter().zip(bases.iter()).zip(cache)
+        {
+            let products = match entry {
+                Some(entry) => Some(entry.products),
+                None => {
+                    crate::query_runs::check()?;
+                    let output = editor::compile_frozen(state, worker).await?;
+                    if output["ok"] != true {
+                        None
+                    } else {
+                        let mut product = serde_json::from_value::<weftext_engine::RenderProducts>(
+                            output["products"].clone(),
                         )
-                    })
-            } else {
-                None
-            };
+                        .ok();
+                        if let Some(products) = &mut product {
+                            if !captured.products.contains("title") {
+                                products.title_status = "unavailable".into();
+                                products.title = None;
+                                products.metadata_title = None;
+                                products.native_title_bodies.clear();
+                            }
+                            if !captured.products.contains("body") {
+                                products.body_status = "unavailable".into();
+                                products.body = None;
+                            }
+                            if !captured.products.contains("headings") {
+                                products.headings.clear();
+                            }
+                        }
+                        if let (Some(products), Ok(dependencies), Some(compiler_version)) = (
+                            &product,
+                            serde_json::from_value(output["dependencies"].clone()),
+                            output["compilerVersion"].as_str(),
+                        ) && let Some(entry) = cut.record(
+                            key,
+                            &weftext_engine::FrozenQueryProduct {
+                                products: Some(products.clone()),
+                                dependencies,
+                                compiler_version: compiler_version.into(),
+                                diagnostics: Vec::new(),
+                            },
+                        ) {
+                            indexed.push(entry);
+                        }
+                        product
+                    }
+                }
+            }
+            .map(|product| {
+                data_api::native_query_products(
+                    format!("{}:{entity}", captured.input.cut_id),
+                    product,
+                )
+            });
             if let Some(note) = captured
                 .input
                 .notes
@@ -2190,7 +2299,7 @@ async fn execute_captured(
                 note.products = Some(products);
             }
         }
-        let (result, provider_dependencies) =
+        let evaluate = || {
             weftext_data::execute_authorized_query_with_provider_dependencies(
                 &captured.input,
                 &captured.plan,
@@ -2201,7 +2310,12 @@ async fn execute_captured(
                 },
                 &captured.metadata,
             )
-            .map_err(|_| invalid())?;
+        };
+        let result = match crate::query_runs::CURRENT.try_with(Arc::clone) {
+            Ok(run) => run.read(evaluate),
+            Err(_) => evaluate(),
+        };
+        let (result, provider_dependencies) = result.map_err(|_| invalid())?;
         if result.rows.len() > 500 {
             return Err(invalid());
         }
@@ -2225,11 +2339,15 @@ async fn execute_captured(
     let auth = auth.clone();
     locked(state,move|inner|{
         let (actor, mut result) = deliver_query_result(inner, &auth, &captured, outcome)?;
+        if !indexed.is_empty() {
+            inner.core.remember_query_products(indexed);
+        }
         for row in &mut result.rows{row.key=digest(format!("{}:{}",result.cut_id,row.key).as_bytes());row.revision=row.revision.as_ref().map(|_|result.cut_id.clone());if let Some(entity)=&row.entity_key{let resource=captured.resource_map.get(entity).ok_or_else(changed)?;row.entity_key=Some(resource.clone());row.path=Some(format!("resource:{resource}"));}}
         result.diagnostics=public_query_diagnostics(result.diagnostics);
         let mut public=serde_json::to_value(&result).map_err(|_|invalid())?;
         for row in public["rows"].as_array_mut().ok_or_else(invalid)?{if let Some(resource)=row["entityKey"].as_str().map(str::to_owned){row["resource"]=json!(resource);row["canOpen"]=json!(inner.file(&resource)?.lifecycle=="live"&&inner.file(&resource)?.editable&&inner.rights(&actor,&resource).is_ok());}}
         let tag_witness = if captured.authority.tag_structure {Some(captured.witnesses.iter().find(|(path, _)| Path::new(path) == inner.config.root.join(".weftext-tags.json")).ok_or_else(changed)?.clone())} else {None};
+        crate::query_runs::publish()?;
         let id=fields::retain_query(inner,&actor,result,captured.columns.clone(),captured.schema,captured.authority,tag_witness)?;
         Ok(json!({"result":public,"queryId":id,"columns":captured.columns,"scope":"authorizedProjection","readOnly":true}))
     }).await

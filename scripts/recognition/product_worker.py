@@ -5,12 +5,30 @@ import json
 import copy
 import os
 from pathlib import Path
+import struct
 import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import worker
 import schemes
 import docx_reader
+
+
+def read_request(stream):
+    def exact(length):
+        data = bytearray()
+        while len(data) < length:
+            part = stream.read(length - len(data))
+            if not part:
+                raise worker.Refusal('invalid-request-frame')
+            data.extend(part)
+        return bytes(data)
+    magic, version, length = struct.unpack('<4sII', exact(12))
+    if magic != b'WFRQ' or version != 1 or not 0 < length <= 256 * 1024:
+        raise worker.Refusal('invalid-request-frame')
+    return worker.checked_json(exact(length))
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -18,7 +36,7 @@ def main():
     parser.add_argument('--progress', type=Path)
     args = parser.parse_args()
     try:
-        envelope = worker.checked_json(sys.stdin.buffer.read(256 * 1024 + 1))
+        envelope = read_request(sys.stdin.buffer)
         request = envelope['request']
         original = worker.read_file(Path(request['inputPath']), worker.MAX_INPUT)
         if worker.digest(original) != request['inputSha256']:

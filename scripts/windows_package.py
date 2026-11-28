@@ -21,6 +21,7 @@ NS = {
     'uap10': 'http://schemas.microsoft.com/appx/manifest/uap/windows10/10',
     'desktop': 'http://schemas.microsoft.com/appx/manifest/desktop/windows10',
     'com': 'http://schemas.microsoft.com/appx/manifest/com/windows10',
+    'desktop6': 'http://schemas.microsoft.com/appx/manifest/desktop/windows10/6',
     'virtualization': 'http://schemas.microsoft.com/appx/manifest/virtualization/windows10',
     'rescap': 'http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities',
 }
@@ -76,8 +77,9 @@ def load_contract(data):
     if not isinstance(identity['applicationId'], str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9]{0,63}', identity['applicationId']):
         raise ValueError('Invalid application Id')
     platform = value['platform']
-    if platform['architecture'] != 'x64' or quad(platform['minVersion']) < (10, 0, 22000, 0) or quad(platform['maxVersionTested']) < quad(platform['minVersion']):
-        raise ValueError('This package requires the Win11 x64 precise-virtualization contract')
+    minimum = quad(platform['minVersion'])
+    if platform['architecture'] != 'x64' or minimum < (10, 0, 19045, 0) or minimum[3] != 0 or quad(platform['maxVersionTested']) < minimum:
+        raise ValueError('This package requires Windows 10 22H2 x64 or later, with a build-level minimum version')
     # MakeAppx accepts some invalid KnownFolder values. Keep this security/data
     # boundary closed rather than accepting arbitrary paths from a caller.
     if value['paths'] != {'persistentKnownFolder': 'LocalAppData', 'persistentRelativeRoot': 'Weftext-MVP',
@@ -241,6 +243,7 @@ def manifest(contract, version):
     properties = add(package, 'Properties')
     for key, text in (('DisplayName', 'ms-resource:DisplayName'), ('PublisherDisplayName', 'Weftext'), ('Description', 'ms-resource:Description'), ('Logo', 'Assets/StoreLogo.png')):
         add(properties, key, text=text)
+    add(properties, 'desktop6:FileSystemWriteVirtualization', text='disabled')
     excluded = add(add(properties, 'virtualization:FileSystemWriteVirtualization'), 'virtualization:ExcludedDirectories')
     paths = contract['paths']
     # Both roots contain durable author recovery; the historical browser path

@@ -143,11 +143,9 @@ impl Preflight<'_> {
         }
         let trace = self.trace.at(baseline.clone());
         let mut trace_plan = plan.clone();
-        if let Some(advanced) = &mut trace_plan.advanced {
-            for parameter in &mut advanced.parameters {
-                if unknown.contains(&parameter.name) {
-                    parameter.default = None;
-                }
+        for parameter in &mut trace_plan.parameters {
+            if unknown.contains(&parameter.name) {
+                parameter.default = None;
             }
         }
         trace_parameters(&trace_plan, schema, values, &trace, &mut self.remaining)?;
@@ -158,11 +156,7 @@ impl Preflight<'_> {
         let mut result = if let Some(call) = &advanced.call {
             let (revision, definition) = selected(call, &self.context.definitions)?;
             let baseline_schema = exact_definition_schema(self.context, &definition, schema)?;
-            let target = definition
-                .plan
-                .advanced
-                .as_ref()
-                .map_or(&[][..], |advanced| advanced.parameters.as_slice());
+            let target = definition.plan.parameters.as_slice();
             let vars = shapes
                 .iter()
                 .map(|(name, shape)| (name.clone(), shape_type(schema, shape)))
@@ -276,6 +270,7 @@ impl Preflight<'_> {
                 &mut self.remaining,
                 &BTreeMap::new(),
                 Some(&trace),
+                None,
             )?;
             result.rows.clear();
             if plan.group.is_some() {
@@ -380,8 +375,8 @@ impl Preflight<'_> {
             }
         }
         if let Some(predicate) = plan
-            .r#where
-            .as_ref()
+            .predicate_source()?
+            .as_deref()
             .filter(|predicate| !predicate.trim().is_empty())
             && expression_uses_unknown_parameters(&compile(predicate, schema, &vars)?, parameters)
         {
@@ -420,12 +415,12 @@ impl Preflight<'_> {
         projection.take = None;
         if let Some(advanced) = &mut projection.advanced {
             advanced.distinct = None;
-            advanced.parameters.retain(|parameter| {
-                !parameters
-                    .get(&parameter.name)
-                    .is_some_and(|value| matches!(value, Cell::Absent))
-            });
         }
+        projection.parameters.retain(|parameter| {
+            !parameters
+                .get(&parameter.name)
+                .is_some_and(|value| matches!(value, Cell::Absent))
+        });
         let known = |expression: &str,
                      vars: &BTreeMap<String, QType>,
                      parameters: &BTreeMap<String, Cell>|
@@ -552,11 +547,8 @@ impl Preflight<'_> {
                     // pre-distinct terminal, with the original executor.
                     extra.push(QueryPlan {
                         select: independent,
+                        parameters: projection.parameters.clone(),
                         advanced: Some(QueryAdvanced {
-                            parameters: projection
-                                .advanced
-                                .as_ref()
-                                .map_or(vec![], |advanced| advanced.parameters.clone()),
                             union_all: Some(vec![projection.clone()]),
                             ..Default::default()
                         }),
@@ -619,6 +611,7 @@ impl Preflight<'_> {
             self.budget,
             Some(trace),
             self.context.tag_structure.as_ref(),
+            None,
         )?;
         // A global group may generate an empty-input count row. It is a type
         // witness only and must not select a provider or validate a runtime row.
@@ -663,10 +656,11 @@ impl Preflight<'_> {
             }
         }
         for expression in plan
-            .r#where
-            .iter()
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
             .filter(|expression| !expression.trim().is_empty())
-            .chain(plan.select.iter().map(|column| &column.expr))
+            .chain(plan.select.iter().map(|column| column.expr.as_str()))
         {
             self.expression(expression, schema, parameters, shapes, &vars, &env)?;
         }
@@ -733,10 +727,8 @@ fn inherited_parameters(
 ) -> (BTreeMap<String, NativeValue>, BTreeSet<String>) {
     let known = parameter_subset(plan, parameters);
     let unknown = plan
-        .advanced
-        .as_ref()
-        .into_iter()
-        .flat_map(|advanced| &advanced.parameters)
+        .parameters
+        .iter()
         .filter(|parameter| {
             parameters
                 .get(&parameter.name)

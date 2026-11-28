@@ -6,8 +6,10 @@ import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, 
 import { applySourcePatches, sourceBoundary, type SourcePatch } from "./editor";
 import { diagnosticText, fieldNames, formatNativeValue, type Cell, type DataSchema } from "./data-panel";
 import { queryPlanControls, queryCallControls } from "./query-plan-controls";
+import { queryArgumentControls } from "./query-argument-controls";
 import { initialOccurrenceView, decodeOccurrenceView, occurrenceViewControls, occurrenceProjection, renderOccurrenceCards, type OccurrenceView } from "./query-result-view";
-import { parseQueryParameters, parseQueryPlan, queryResultState, queryRowLifecycle, type QueryPlan, type QueryResult, type QueryRow } from "./query-panel";
+import { queryResultState, queryRowLifecycle, type QueryResult, type QueryRow } from "./query-panel";
+import { parseQueryParameters, parseQueryPlan, type QueryPlan } from "./query-plan";
 import type { Origin, RenderNode, ViewMode } from "./types";
 import { textareaSourceDraft, utf8Offset } from "./writing";
 import type { FrozenQuery, EmbeddedQuerySelection } from "./export-state";
@@ -198,6 +200,7 @@ interface QueryPresentation {
     resultBasis?: EmbeddedQueryBasis;
     resultPlan?: QueryPlan;
     loading: boolean;
+    controller?: AbortController;
     error?: UiText;
     expanded: boolean;
     builderOpen: boolean;
@@ -219,7 +222,7 @@ export interface EmbeddedQueryHost {
     basis(): EmbeddedQueryBasis;
     mode(): ViewMode;
     editable(): boolean;
-    request<T>(path: string, body: unknown): Promise<T>;
+    request<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T>;
     prepareEdit(): Promise<void>;
     apply(patches: SourcePatch[], basis: EmbeddedQueryBasis, event: string): Promise<void>;
     reveal(occurrence: EmbeddedQueryOccurrence, host: HTMLElement): boolean;
@@ -303,6 +306,7 @@ export class EmbeddedQueryController {
     invalidate(): void {
         this.discoveryGeneration++;
         for (const state of this.states.values()) {
+            state.controller?.abort();
             state.gate.invalidate();
             state.loading = false;
         }
@@ -312,6 +316,7 @@ export class EmbeddedQueryController {
     /** Host-owned execution inputs change independently of native author source. */
     runInputsChanged(): void {
         for (const state of this.states.values()) {
+            state.controller?.abort();
             state.gate.invalidate();
             state.loading = false;
             state.resultBasis = undefined;
@@ -408,6 +413,8 @@ export class EmbeddedQueryController {
                 || button.dataset.queryEdit === "builderApply" && (!association.occurrence || !!this.state(association.occurrence).pendingEdit || !sameQueryBasis(this.state(association.occurrence).planBasis ?? null, this.host.basis()));
         if (association.occurrence) {
             const item = association.occurrence, state = this.state(item);
+            for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-query-cancel]"))
+                button.hidden = !state.loading;
             for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-query-run]"))
                 button.disabled = !this.current(association) || !item.runnable || state.loading;
             for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-query-output]"))
@@ -452,7 +459,10 @@ export class EmbeddedQueryController {
         const run = action(state.loading ? message("embeddedQuery.running") : state.result ? message("embeddedQuery.refreshResults") : message("embeddedQuery.runDraft"), () => this.run(association), this.host);
         run.dataset.queryRun = "run";
         run.disabled = state.loading || !this.current(association) || !item.runnable;
-        heading.append(run);
+        const stop = action(message("queryPanel.cancelRun"), () => state.controller?.abort(), this.host);
+        stop.dataset.queryCancel = "run";
+        stop.hidden = !state.loading;
+        heading.append(run, stop);
         if (policy.sourceVisible) {
             const source = element("pre", "embedded-query-native-source", item.range.raw);
             setUiAttr(source, "aria-label", message("embeddedQuery.completeSourceLabel"));
@@ -533,7 +543,8 @@ export class EmbeddedQueryController {
                 }
                 this.refreshResult(item);
             };
-            parameters.append(input, element("p", "embedded-query-help", message("embeddedQuery.previewParametersHelp")));
+            parameters.append(input, queryArgumentControls(input, () => item.plan ?? null, () => this.formSchema),
+                element("p", "embedded-query-help", message("embeddedQuery.previewParametersHelp")));
             mount.append(parameters);
         }
         mount.append(element("div", "embedded-query-results"));
@@ -602,11 +613,14 @@ export class EmbeddedQueryController {
         if (!item || !this.current(association) || !item.runnable)
             return;
         const basis = { ...this.host.basis() }, state = this.state(item), parameters = parseQueryParameters(state.parameters), token = state.gate.begin(basis, item.id, this.discovery?.sourceHash);
+        state.controller?.abort();
+        const controller = new AbortController();
+        state.controller = controller;
         state.loading = true;
         state.error = undefined;
         this.refreshResult(item);
         try {
-            const result = await this.host.request<EmbeddedQueryRun>("/api/query/embedded/run", { ...queryBasisWire(basis), occurrenceId: item.id, parameters });
+            const result = await this.host.request<EmbeddedQueryRun>("/api/query/embedded/run", { ...queryBasisWire(basis), occurrenceId: item.id, parameters }, controller.signal);
             if (!state.gate.accepts(token, this.host.basis(), result))
                 return;
             state.result = this.host.queryResultScope === "hosted" ? decodeHostedQueryResult(result.result,true) : decodeLocalQueryResult(result.result);
@@ -622,6 +636,7 @@ export class EmbeddedQueryController {
             }
         }
         finally {
+            if (state.controller === controller) state.controller = undefined;
             if (state.gate.current(token, this.host.basis())) {
                 state.loading = false;
                 this.refreshResult(item);
@@ -714,16 +729,12 @@ export class EmbeddedQueryController {
             state.authorSessionId = currentBasis.sessionId;
         }
         const inputs = state.authorInputs ??= this.host.authorInputs?.();
-        builder.append(plan.advanced?.call ? queryCallControls(plan, inputs) : queryPlanControls(plan, this.formSchema, changed, undefined, inputs));
+        const conditionLabel = () => `${uiTextValue(item.label)} ${uiTextValue(message("embeddedQuery.conditionLabel"))}`;
+        builder.append(plan.advanced?.call ? queryCallControls(plan, inputs)
+            : queryPlanControls(plan, this.formSchema, changed, undefined, inputs, conditionLabel));
         const add = (role: string, label: UiText, value: string, update: (value: string) => void, multiline = false): HTMLInputElement | HTMLTextAreaElement => { const field = element("label", "embedded-query-field", label), input = multiline ? element("textarea", "embedded-query-input") : element("input", "embedded-query-input"); input.value = value; inputs?.bind(input, `query-author:${role}`); input.dataset.controlKey = JSON.stringify(["embedded-query-builder", item.id, role]); setUiAttr(input, "aria-label", () => `${uiTextValue(item.label)} ${uiTextValue(label)}`); input.oninput = () => update(input.value); field.append(input); builder.append(field); return input; };
         if (!plan.advanced?.call) {
             add("types", message("embeddedQuery.typesLabel"), plan.types.join(", "), value => { plan.types = value.split(",").map(item => item.trim()).filter(Boolean); });
-            add("where", message("embeddedQuery.conditionLabel"), plan.where ?? "", value => {
-                if (value.trim())
-                    plan.where = value;
-                else
-                    delete plan.where;
-            }, true);
             const take = add("take", message("embeddedQuery.takeLabel"), plan.take == null ? "" : String(plan.take), value => {
                 if (!value.trim())
                     delete plan.take;

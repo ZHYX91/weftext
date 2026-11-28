@@ -303,12 +303,10 @@ fn original_create_plan_supplies_new_owner_admission_and_actual_after_query_rows
                 expr: "spare".into(),
             },
         ],
-        advanced: Some(
-            serde_json::from_value(serde_json::json!({
-                "parameters":[{"name":"spare","shape":{"kind":"scalar","semantic":"int"}}]
-            }))
-            .unwrap(),
-        ),
+        parameters: serde_json::from_value(
+            serde_json::json!([{"name":"spare","shape":{"kind":"scalar","semantic":"int"}}]),
+        )
+        .unwrap(),
         ..Default::default()
     };
     let source =

@@ -188,8 +188,8 @@ class SyncRevalidation(SyncCompound):
         doc = self.open(self.a, self.ra, Path('Note/Note.typ'))
         plan = {'select': [{'name': 'closed', 'expr': "nextCivilDay(date('2026-01-01'))"},
                            {'name': 'unknown', 'expr': 'spare'}],
-                'advanced': {'parameters': [{'name': 'spare', 'shape': {'kind': 'scalar', 'semantic': 'int'},
-                                             'nullable': False}]}}
+                'parameters': [{'name': 'spare', 'shape': {'kind': 'scalar', 'semantic': 'int'},
+                                             'nullable': False}]}
         result = self.call(self.a, '/api/query/definition/save', sessionId=doc['sessionId'],
                            source=doc['source'], sourceHash=hashlib.sha256(doc['source'].encode()).hexdigest(),
                            serial=1, baseId=doc['baseId'], key=None, label='weftext-query-semantic',

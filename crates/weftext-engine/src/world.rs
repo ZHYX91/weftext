@@ -3,7 +3,7 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
 };
 use typst::{
     Library, World,
@@ -18,6 +18,41 @@ use typst_syntax::{FileId, RootedPath, Source, VirtualPath, VirtualRoot};
 const FILE_LIMIT: u64 = 32 * 1024 * 1024;
 const TOTAL_LIMIT: usize = 128 * 1024 * 1024;
 const DEPENDENCY_LIMIT: usize = 512;
+
+pub(crate) struct FrozenFiles {
+    files: Arc<HashMap<FileId, Bytes>>,
+    bytes: usize,
+}
+
+impl FrozenFiles {
+    pub(crate) fn new(input: &BTreeMap<String, Vec<u8>>) -> Result<Self, EngineError> {
+        let mut files = HashMap::with_capacity(input.len());
+        let mut bytes = 0;
+        for (path, data) in input {
+            let id = admitted_file_id(Path::new(path))?;
+            if data.len() as u64 > FILE_LIMIT {
+                return Err(EngineError::new(
+                    UiMessage::error_engine_world_frozen_file_byte_budget(),
+                ));
+            }
+            if data.len() > TOTAL_LIMIT - bytes {
+                return Err(EngineError::new(
+                    UiMessage::error_engine_world_frozen_input_byte_budget(),
+                ));
+            }
+            bytes += data.len();
+            if files.insert(id, Bytes::new(data.clone())).is_some() {
+                return Err(EngineError::new(
+                    UiMessage::error_engine_world_frozen_path_duplicate(),
+                ));
+            }
+        }
+        Ok(Self {
+            files: Arc::new(files),
+            bytes,
+        })
+    }
+}
 
 fn admitted_file_id(path: &Path) -> Result<FileId, EngineError> {
     if path.as_os_str().is_empty()
@@ -62,7 +97,7 @@ pub(crate) struct LocalWorld<'a> {
     pub main_source: Source,
     compile_id: FileId,
     overrides: HashMap<FileId, Source>,
-    frozen_files: Option<HashMap<FileId, Bytes>>,
+    frozen_files: Option<Arc<HashMap<FileId, Bytes>>>,
     cache: Mutex<Cache>,
     pub(crate) trusted_style_sources: HashSet<FileId>,
 }
@@ -295,8 +330,29 @@ impl<'a> LocalWorld<'a> {
         fonts: &'a FontStore,
         input: &crate::FrozenRenderRequest,
     ) -> Result<Self, EngineError> {
-        if !input.root.is_absolute()
-            || input.root.components().any(|c| {
+        let files = FrozenFiles::new(&input.files)?;
+        Self::with_frozen_files(
+            library,
+            fonts,
+            &input.source,
+            &input.path,
+            &input.root,
+            input.style.as_ref(),
+            &files,
+        )
+    }
+
+    pub(crate) fn with_frozen_files(
+        library: &'a LazyHash<Library>,
+        fonts: &'a FontStore,
+        source: &str,
+        path: &Path,
+        root: &Path,
+        style: Option<&crate::StyleModule>,
+        files: &FrozenFiles,
+    ) -> Result<Self, EngineError> {
+        if !root.is_absolute()
+            || root.components().any(|c| {
                 matches!(
                     c,
                     std::path::Component::ParentDir | std::path::Component::CurDir
@@ -307,64 +363,48 @@ impl<'a> LocalWorld<'a> {
                 weftext_messages::UiMessage::error_engine_world_frozen_root_absolute_required(),
             ));
         }
-        let relative = if input.path.is_absolute() {
-            input.path.strip_prefix(&input.root).map_err(|_| {
+        let relative = if path.is_absolute() {
+            path.strip_prefix(root).map_err(|_| {
                 EngineError::new(
                     weftext_messages::UiMessage::error_engine_world_frozen_main_outside_root(),
                 )
             })?
         } else {
-            input.path.as_path()
+            path
         };
         let main_id = admitted_file_id(relative)?;
-        if input.source.len() as u64 > FILE_LIMIT {
+        if source.len() as u64 > FILE_LIMIT {
             return Err(EngineError::new(
                 weftext_messages::UiMessage::error_engine_world_frozen_main_byte_budget(),
             ));
         }
-        let mut files = HashMap::new();
-        let mut total = input.source.len();
-        for (path, data) in &input.files {
-            let id = admitted_file_id(Path::new(path))?;
-            if data.len() as u64 > FILE_LIMIT {
-                return Err(EngineError::new(
-                    weftext_messages::UiMessage::error_engine_world_frozen_file_byte_budget(),
-                ));
-            }
-            total = total.checked_add(data.len()).ok_or_else(|| {
-                EngineError::new(
-                    weftext_messages::UiMessage::error_engine_world_frozen_input_size_overflow(),
-                )
-            })?;
-            if total > TOTAL_LIMIT {
-                return Err(EngineError::new(
-                    weftext_messages::UiMessage::error_engine_world_frozen_input_byte_budget(),
-                ));
-            }
-            if id == main_id && data.as_slice() != input.source.as_bytes() {
-                return Err(EngineError::new(
-                    weftext_messages::UiMessage::error_engine_world_frozen_main_mismatch(),
-                ));
-            }
-            if files.insert(id, Bytes::new(data.clone())).is_some() {
-                return Err(EngineError::new(
-                    weftext_messages::UiMessage::error_engine_world_frozen_path_duplicate(),
-                ));
-            }
+        if source.len() > TOTAL_LIMIT - files.bytes {
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_frozen_input_byte_budget(),
+            ));
+        }
+        if files
+            .files
+            .get(&main_id)
+            .is_some_and(|data| data.as_slice() != source.as_bytes())
+        {
+            return Err(EngineError::new(
+                weftext_messages::UiMessage::error_engine_world_frozen_main_mismatch(),
+            ));
         }
         let world = Self {
             library,
             fonts,
-            root: input.root.clone(),
+            root: root.to_owned(),
             main_id,
-            main_source: Source::new(main_id, input.source.clone()),
+            main_source: Source::new(main_id, source.to_owned()),
             compile_id: main_id,
             overrides: HashMap::new(),
-            frozen_files: Some(files),
+            frozen_files: Some(files.files.clone()),
             cache: Mutex::new(Cache::default()),
             trusted_style_sources: HashSet::new(),
         };
-        match &input.style {
+        match style {
             Some(style) => Self::apply_style(world, style),
             None => Ok(world),
         }

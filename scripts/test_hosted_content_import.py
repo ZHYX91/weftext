@@ -3,14 +3,13 @@
 Local APIs only provision the owned destination and its admitted Schema/root.
 All import effects, original-request recovery and result reads use hosted HTTP.
 """
+from _http_test_suite import run_http_suite
 import uuid
 import base64
 import copy
 import hashlib
 import io
 import json
-import sys
-import unittest
 import zipfile
 
 from test_hosted import uid, digest
@@ -507,9 +506,4 @@ class HostedContentImport(HostedHistory):
 
 
 if __name__ == '__main__':
-    selected = set(sys.argv[2:])
-    available = {name for name in HostedContentImport.__dict__ if name.startswith('test_content_import_')}
-    if selected - available:
-        sys.exit('Unknown test selection: ' + ', '.join(sorted(selected - available)))
-    suite = unittest.TestSuite(HostedContentImport(name) for name in sorted(selected or available))
-    sys.exit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
+    raise SystemExit(run_http_suite(HostedContentImport))

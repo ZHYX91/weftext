@@ -1,3 +1,4 @@
+import { cancellableQuery } from "./cancellable-query";
 import { ApiError, decodeApiError } from "./api-error";
 import { message } from "./ui-locale";
 import { readStrictJsonResponse, StrictJsonError } from "./strict-json";
@@ -12,9 +13,9 @@ if (suppliedToken) {
   history.replaceState(null, "", location.pathname + location.search);
 }
 
-async function send(path: string, body?: unknown): Promise<Response> {
+async function send(path: string, body?: unknown, runId?: string): Promise<Response> {
   try {
-    return await fetch(path, { method: body === undefined ? "GET" : "POST", headers: { "Content-Type": "application/json", "X-Weftext-Token": sessionStorage.getItem("weftext-token") ?? "" }, body: body === undefined ? undefined : JSON.stringify(body) });
+    return await fetch(path, { method: body === undefined ? "GET" : "POST", headers: { "Content-Type": "application/json", "X-Weftext-Token": sessionStorage.getItem("weftext-token") ?? "", ...(runId ? { "X-Weftext-Query-Run": runId } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch (error) {
     throw new ApiError("networkRequest", message("error.networkRequest"), [{ origin: "network", text: error instanceof Error ? error.message : String(error) }]);
   }
@@ -30,7 +31,15 @@ function responseError(data: unknown, status: number): ApiError {
   return decoded ?? new ApiError("invalidResponse", message("error.invalidResponse"), [], undefined, [], status);
 }
 
-export async function api<T>(path: string, body?: unknown): Promise<T> {
+export async function api<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+  if (signal) {
+    return cancellableQuery(signal, () => api("/api/query/prepare", {}),
+      id => apiRequest<T>(path, body, id), runId => api("/api/query/cancel", { runId }));
+  }
+  return apiRequest<T>(path, body);
+}
+
+async function apiRequest<T>(path: string, body?: unknown, runId?: string): Promise<T> {
   const finish = beginNativeRequest();
   try {
   const native = nativeDraftRequest(path, body);
@@ -39,7 +48,7 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
     if (data && typeof data === "object" && Object.hasOwn(data, "error")) throw responseError(data, 200);
     return data as T;
   }
-  const response = await send(path, body), data = await json(response);
+  const response = await send(path, body, runId), data = await json(response);
   if (!response.ok || data && typeof data === "object" && !Array.isArray(data) && Object.keys(data).length === 1 && Object.hasOwn(data, "error")) throw responseError(data, response.status);
   return data as T;
   } finally { finish(); }

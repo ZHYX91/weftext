@@ -77,7 +77,7 @@ test("Query identity preserves typed values, plan ordering, saved revisions and 
   for (const changed of [{ ...source, epoch: 3 }, { ...source, root: "other" }, { ...source, selection: { ...source.selection, revision: "new" } }, { ...source, parameters: { amount: { kind: "text", value: "9007199254740993.01" } } }, { ...source, plan: { select: ["body", "title"] } }]) assert.notEqual(queryRefreshKey(source), queryRefreshKey(changed));
 });
 
-test("density, thumbnails, pinning and inactive view settings cannot retire a valid in-flight Query", async () => {
+test("density, thumbnails, pinning and all result views cannot retire a valid in-flight Query", async () => {
   const input: QueryPlanInputs = { scope: null, descendants: true, lifecycle: "live", types: [], search: "", includeBody: false,
     conditions: [], expression: "", exactPlan: null, group: undefined, take: 200, preference: defaultPreference() };
   const key = () => queryRefreshKey(queryPlanRefreshInput(input)), original = key(), held = deferred(); let published = false, requests = 0;
@@ -85,8 +85,12 @@ test("density, thumbnails, pinning and inactive view settings cannot retire a va
   const first = queue.request(original, input); await Promise.resolve();
   input.preference.density = "compact"; input.preference.thumbnails = true; input.preference.pinned = ["another-row"];
   input.preference.view = "table"; input.preference.dateField = "unused-date"; input.preference.groupField = "unused-group";
+  for (const view of ["list", "table", "board", "calendar", "chart"] as const) {
+    input.preference.view = view;
+    assert.equal(key(), original);
+  }
   assert.equal(key(), original); held.resolve(); await first; assert.equal(published, true); assert.equal(requests, 1);
-  for (const edit of [(value: QueryPlanInputs) => { value.preference.summaries = false; }, (value: QueryPlanInputs) => { value.preference.columns.push("new-field"); }, (value: QueryPlanInputs) => { value.preference.sort = "due"; }, (value: QueryPlanInputs) => { value.preference.view = "calendar"; }]) {
+  for (const edit of [(value: QueryPlanInputs) => { value.preference.summaries = false; }, (value: QueryPlanInputs) => { value.preference.columns.push("new-field"); }, (value: QueryPlanInputs) => { value.preference.sort = "due"; }]) {
     const changed = structuredClone(input); edit(changed); assert.notEqual(queryRefreshKey(queryPlanRefreshInput(changed)), original);
   }
 });
@@ -140,12 +144,18 @@ for (const globalOwner of [true, false]) test(`tag registry mutations invalidate
   assert.equal(state.environmentEpoch, 1, "a departed library cannot produce another registry notification");
 });
 
-test("saved current and pinned reads use the same panel scheduler, while a different pinned revision remains a new intent", async () => {
-  const held = deferred(), sent = deferred(), selections: unknown[] = []; let runs = 0;
+test("saved current and pinned reads use the same panel scheduler, while a different pinned revision remains a new intent", { timeout: 5000 }, async () => {
+  const held = deferred(), sent = deferred(), selections: unknown[] = [], reads: unknown[] = []; let runs = 0;
+  const definition = { key: "saved", label: "weftext-query-saved",
+    plan: { scope: { descendants: true, lifecycle: "live" }, types: [], order: [], select: [] } };
   const { state, internals } = panelHarness(async (path, body) => {
     if (path === "/api/data/schema") return { definitions: {}, aliases: {}, types: [], fields: [] };
+    if (path === "/api/query/definitions") {
+      reads.push((body as { selection: unknown }).selection);
+      return { definitions: [definition], ownerRevision: "current-owner" };
+    }
     assert.equal(path, "/api/query/definition/run"); selections.push((body as { selection: unknown }).selection);
-    const cut = `saved-${++runs}`; if (runs === 1) { sent.resolve(); await held.promise; } return { result: result(cut), definitionRevision: `revision-${runs}` };
+    const cut = `saved-${++runs}`; if (runs === 1) { sent.resolve(); await held.promise; } return { result: result(cut), definition, definitionRevision: `revision-${runs}` };
   });
   const selection = { owner: "weftext-node://workspace/owner", key: "saved", label: "Original label", mode: "current" as const };
   const first = internals.runSaved(selection); await sent.promise;
@@ -154,6 +164,7 @@ test("saved current and pinned reads use the same panel scheduler, while a diffe
   await internals.runSaved({ ...selection, mode: "pinned", revision: "exact-a" });
   await internals.runSaved({ ...selection, mode: "pinned", revision: "exact-b" });
   assert.equal(runs, 3); assert.deepEqual(selections, [{ mode: "current", key: "saved" }, { mode: "pinned", key: "saved", revision: "exact-a" }, { mode: "pinned", key: "saved", revision: "exact-b" }]);
+  assert.deepEqual(reads, selections);
 });
 
 test("a saved definition keeps its frozen original through ordinary errors and delivers its committed fact", async () => {

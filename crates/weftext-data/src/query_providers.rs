@@ -576,15 +576,13 @@ pub(crate) fn trace_parameters(
     let mut dependencies = SemanticDependencies::default();
     let initial = (*budget).min(200_000) as usize;
     let mut remaining = initial;
-    if let Some(advanced) = &plan.advanced {
-        for parameter in &advanced.parameters {
-            dependencies.shape(
-                schema,
-                &parameter.shape,
-                values.get(&parameter.name).or(parameter.default.as_ref()),
-                &mut remaining,
-            )?;
-        }
+    for parameter in &plan.parameters {
+        dependencies.shape(
+            schema,
+            &parameter.shape,
+            values.get(&parameter.name).or(parameter.default.as_ref()),
+            &mut remaining,
+        )?;
     }
     *budget = budget.saturating_sub((initial - remaining) as u64);
     trace.record(&dependencies)
@@ -932,7 +930,7 @@ fn provider_requirements(
                     ..Default::default()
                 });
         let mut deps = SemanticDependencies::default();
-        for parameter in &a.parameters {
+        for parameter in &plan.parameters {
             let value = supplied
                 .known
                 .get(&parameter.name)
@@ -966,11 +964,12 @@ fn provider_requirements(
             }
         }
         for source in plan
-            .r#where
-            .iter()
-            .chain(plan.select.iter().map(|c| &c.expr))
-            .chain(plan.order.iter().map(|o| &o.expr))
-            .chain(plan.unnest.iter().map(|u| &u.array))
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
+            .chain(plan.select.iter().map(|c| c.expr.as_str()))
+            .chain(plan.order.iter().map(|o| o.expr.as_str()))
+            .chain(plan.unnest.iter().map(|u| u.array.as_str()))
         {
             expression(
                 source,

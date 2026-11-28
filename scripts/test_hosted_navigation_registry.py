@@ -1,8 +1,7 @@
 """Directory/tag consumers and original actor transactions on owned HTTP fixtures."""
+from _http_test_suite import run_http_suite
 import json
 import secrets
-import sys
-import unittest
 
 from test_hosted import digest, uid
 from test_hosted_history import HostedHistory
@@ -284,7 +283,4 @@ class HostedNavigationRegistry(HostedHistory):
 
 
 if __name__ == '__main__':
-    selected = set(sys.argv[2:])
-    suite = unittest.TestSuite(HostedNavigationRegistry(name) for name in sorted(HostedNavigationRegistry.__dict__)
-        if name.startswith('test_registry_') and (not selected or name in selected))
-    sys.exit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
+    raise SystemExit(run_http_suite(HostedNavigationRegistry))

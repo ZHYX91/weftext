@@ -260,6 +260,34 @@ fn saved_query_slots(
                 .push((text_slot(expr, expected, parsed, source)?, expected.into()));
             Ok(())
         }
+        fn predicate(
+            expr: ast::Expr<'_>,
+            value: &weftext_data::QueryPredicate,
+            parsed: &Source,
+            source: &str,
+            out: &mut SavedQueryReferenceSlots,
+            depth: usize,
+        ) -> Result<()> {
+            if depth > 12 {
+                return Err(KnowledgeError::new(
+                    "definitionReferenceBudget",
+                    weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_query_traversal_depth_exceeded()),
+                ));
+            }
+            match value {
+                weftext_data::QueryPredicate::Expression(value) => {
+                    expression(expr, value, parsed, source, out)
+                }
+                weftext_data::QueryPredicate::RelativeDate(_) => Ok(()),
+                weftext_data::QueryPredicate::Group(group) => {
+                    let slots = array(member(&members(expr)?, "conditions")?)?;
+                    for (slot, value) in slots.into_iter().zip(&group.conditions) {
+                        predicate(slot, value, parsed, source, out, depth + 1)?;
+                    }
+                    Ok(())
+                }
+            }
+        }
         fn columns(
             expr: ast::Expr<'_>,
             columns: &[weftext_data::QueryColumn],
@@ -392,7 +420,7 @@ fn saved_query_slots(
             Ok(())
         }
         if let Some(filter) = &plan.r#where {
-            expression(member(&fields, "where")?, filter, parsed, source, out)?;
+            predicate(member(&fields, "where")?, filter, parsed, source, out, 0)?;
         }
         if !plan.select.is_empty() {
             columns(
@@ -475,22 +503,15 @@ fn saved_query_slots(
                 kind: "node_ref".into(),
             });
         }
-        let Some(advanced) = &plan.advanced else {
-            return Ok(());
-        };
-        let fields = members(member(&fields, "advanced")?)?;
-        if let Some(distinct) = &advanced.distinct {
-            columns(member(&fields, "distinct")?, distinct, parsed, source, out)?;
-        }
-        if !advanced.parameters.is_empty() {
+        if !plan.parameters.is_empty() {
             let parameters = array(member(&fields, "parameters")?)?;
-            if parameters.len() != advanced.parameters.len() {
+            if parameters.len() != plan.parameters.len() {
                 return Err(KnowledgeError::new(
                     "definitionReferenceSlot",
                     weftext_messages::ErrorDescription::new(weftext_messages::UiMessage::error_knowledge_copy_query_parameters_plan_mismatch()),
                 ));
             }
-            for (expr, parameter) in parameters.into_iter().zip(&advanced.parameters) {
+            for (expr, parameter) in parameters.into_iter().zip(&plan.parameters) {
                 if let (Some(schema), Some(value)) = (schema, &parameter.default) {
                     defaults(
                         &parameter.shape,
@@ -506,6 +527,13 @@ fn saved_query_slots(
                     )?;
                 }
             }
+        }
+        let Some(advanced) = &plan.advanced else {
+            return Ok(());
+        };
+        let fields = members(member(&fields, "advanced")?)?;
+        if let Some(distinct) = &advanced.distinct {
+            columns(member(&fields, "distinct")?, distinct, parsed, source, out)?;
         }
         if let Some(call) = &advanced.call {
             let controls = members(member(&fields, "call")?)?;

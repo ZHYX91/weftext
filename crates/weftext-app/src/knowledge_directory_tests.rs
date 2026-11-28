@@ -85,6 +85,7 @@ fn fixture() -> Fixture {
         documents.push(value(document).unwrap());
     }
     let state = AppState {
+        draft_lane: Default::default(),
         core: Arc::new(Mutex::new(core)),
         token: Arc::from("test-token"),
         port: 0,

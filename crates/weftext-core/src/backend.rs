@@ -413,7 +413,7 @@ impl std::io::Seek for BoundFile {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct FileStamp {
     pub identity: FileIdentity,
     pub modified: u64,

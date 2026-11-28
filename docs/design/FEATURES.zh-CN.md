@@ -126,6 +126,18 @@ RTL 用逻辑范围及当前排版映射绘线，不按 x 坐标排序语义。�
 
 Weftext Query 查询获权的库数据，Typst 官方 `query` 仍只做当前编译文档 introspection。普通搜索、导航条件、可视化筛选、保存 Query 和 API 均产生同一个 typed Query AST，交给同一执行器。结构用原生 dictionary/array 储存，表达式选择 CEL 语法的静态受限、确定、无副作用 profile，使用标准 `exists/all/filter/map` comprehension；不继承旧 DAG wire/八必填成员/贡献版本树。CEL parser 只处理表达式字符串，官方 Typst parser 处理原生承载，两者职责分开；无 eval/import/任意回调/网络。高级表达式须静态型检查并保留源，builder 不理解时提供只读高级条件/Source，不替作者删条件。
 
+`where` 接受单个 CEL 条件或结构化条件组。组使用 `op` 选择 `all`（全部）、`any`（任一）或 `not`（取反），`conditions` 按顺序保存 CEL 条件和子组；取反组恰有一项。条件树以根为第 0 层，最多 12 层嵌套和 256 个节点，生成的 CEL 最多 16 KiB。保存定义按原顺序保留条件树，依赖分析与执行使用同一逻辑，复制引用时只改写对应 CEL 条件中的引用位置。
+
+查询控件中的 **按关系查找** 以当前查询作为起点。每一跳分别选择已登记的关系及指向或指回方向，控件最多支持连续两跳。移除最后一跳会恢复该跳之前的查询。托管控件提供用户从已授权范围中选定的关系。
+
+日期条件保存字段 ID、日期或时间戳类型、IANA 时区和所选周期。每次运行冻结同一个 UTC 参考时刻，使用构建时固定的时区数据库。周一为每周起点，过去和未来 N 天均从今天之外起算，自选日期含起止两天。时间戳字段分别换算两个自然日边界。午夜重叠取第一次，午夜缺失取跳变后的第一个时刻。
+
+全文使用 `textMatch(text, terms, mode)`，支持 `all`、`any`、`phrase` 和 `exclude`。按 Unicode 词边界切分，逐词做 NFKC 规范化和小写转换。短语要求同一字段中按序相邻的词项。快速搜索查标题，可加入已显示正文。类型化文本筛选和 CEL 可对获权属性或单个章节标题使用同一函数。每次由 Core 授权并冻结范围，执行器只为当次获权文本取用词位索引。索引在 Core 进程内按授权范围和文本摘要复用，改动的文本按需重建，托管授权版本改变后使用新的索引分区。索引容量有上限，进程重启后按需重建。`contains` 可匹配标点和区分大小写的子串。
+
+本地全文在冻结的全范围内分批生成原生 HTML 语义产品。Core 在私有目录原子保存有界、带版本和校验和的可重建投影。每次先核对当次范围和授权，再以编译制品、当前源位置、内容、样式以及实际读取的依赖资格命中投影。修改只更新受影响的笔记，删除或移出范围的笔记不参与当前查询。托管按用户、授权代和请求的语义产品分区，保存前重新核对交付资格。进程重启可继续复用经过复核的投影，词位按原有统一算法重建。损坏记录按需重建。已有时间、字节和进程预算继续生效，尚未生成的语义产品产生明确的部分覆盖。
+
+批量读在一次持有 Core 的调用内先核定已提交操作，逐文件检查未决操作及路径、实体资格，完成时复核已排除的提交决定。版本匹配按实体、文件印记与内容摘要查找原始事实，保持原有的顺序和歧义判定。编译输入复用同一冻结过程已经持有的父目录句柄。
+
 基础节点为 `scan(scope,lifecycle)`、`read(fields/products)`、`filter(expr)`、`project(columns)`、`unnest(array,binding)`、`sort(keys)`、`take(limit)`、`union_all`、`distinct(keys)`、`group(keys,aggregates)`、`related(relation)` 与保存 Query 调用。默认displayed body/title/table来自该次Html final tree，native heading产品及显示关联按§3.1单列；生成/任意深heading只读存在不等于已显示或可写。显式Paged产品读另一个具名target，同run中每个product带compileIdentity/target且不跨目标拼值或occurrence。基础全文搜索生成显式 `textMatch` 节点，UI 显示是否查正文、目录/子目录/库范围及所有组合条件；本轮不另造查询 DSL。
 
 Query 用 SOURCE 的唯一 Type/Value：text、bool、i64 int、exact decimal、显式 float、civil date/time/local datetime、带 offset instant、ref、array、record 和 schema判别union。money+currency、quantity+unit与精度日期都是该shape系统定义的业务record，不增加未注册scalar codec。数组保序及重复；record 成员按 schema 解释，未知原生成员仍保留为只读值，不猜类型。无隐式 float↔decimal、date↔instant、币种↔币种或单位换算。显式换算需指定准确 provider 与版本，并纳入依赖。电话始终 text。schema 冲突/缺失不能从第一行数据推断 type。

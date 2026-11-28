@@ -17,8 +17,6 @@ pub use definition_preflight::{
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct QueryAdvanced {
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub parameters: Vec<QueryParameter>,
     #[serde(
         default,
         skip_serializing_if = "Option::is_none",
@@ -39,8 +37,17 @@ pub struct QueryParameter {
     pub shape: Shape,
     #[serde(default)]
     pub nullable: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "parameter_default"
+    )]
     pub default: Option<NativeValue>,
+}
+fn parameter_default<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Option<NativeValue>, D::Error> {
+    NativeValue::deserialize(deserializer).map(Some)
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -90,6 +97,10 @@ pub struct FrozenAdvancedInput {
     /// Trusted Core-qualified, same-cut structure. JSON cannot supply authority.
     #[serde(skip)]
     pub tag_structure: Option<FrozenTagStructure>,
+    #[serde(skip)]
+    pub reference_utc: Option<chrono::DateTime<chrono::Utc>>,
+    #[serde(skip)]
+    pub text_index: Option<QueryTextIndex>,
     #[serde(default)]
     pub parameters: BTreeMap<String, NativeValue>,
     #[serde(default)]
@@ -248,10 +259,7 @@ fn parameter_bindings(
     values: &BTreeMap<String, NativeValue>,
     required: bool,
 ) -> Result<Bindings> {
-    let declared = plan
-        .advanced
-        .as_ref()
-        .map_or(&[][..], |a| a.parameters.as_slice());
+    let declared = plan.parameters.as_slice();
     let mut cells = BTreeMap::new();
     let mut shapes = BTreeMap::new();
     let reserved = symbols(schema)?;
@@ -376,11 +384,7 @@ fn validate_plan_static(
             if let Some(context) = context {
                 let (_, definition) = selected(call, &context.definitions)?;
                 let baseline = exact_definition_schema(context, &definition, schema)?;
-                let target = definition
-                    .plan
-                    .advanced
-                    .as_ref()
-                    .map_or(&[][..], |a| a.parameters.as_slice());
+                let target = definition.plan.parameters.as_slice();
                 for (name, e) in &call.arguments {
                     let p = target
                         .iter()
@@ -417,6 +421,7 @@ fn validate_plan_static(
                     &shapes,
                     &mut remaining,
                     &QueryBudget::default(),
+                    None,
                     None,
                     None,
                 );
@@ -472,6 +477,7 @@ fn validate_plan_static(
                 &shapes,
                 &mut remaining,
                 &QueryBudget::default(),
+                None,
                 None,
                 None,
             );
@@ -646,8 +652,7 @@ pub fn query_products(plan: &QueryPlan, owners: &[FrozenDefinitionOwner]) -> Res
                     walk(&c.result, &scope, out)?;
                 }
                 _ => {
-                    let mut clone = ast.clone();
-                    visit_children_mut(&mut clone, |e| walk(e, bound, out))?;
+                    visit_children(ast, |e| walk(e, bound, out))?;
                 }
             }
             Ok(())
@@ -676,15 +681,20 @@ pub fn query_products(plan: &QueryPlan, owners: &[FrozenDefinitionOwner]) -> Res
         }
         let a = plan.advanced.clone().unwrap_or_default();
         a.validate_union()?;
-        if plan.select.is_empty() && a.union_all.is_none() && a.call.is_none() {
+        if plan.select.is_empty()
+            && plan.group.is_none()
+            && a.union_all.is_none()
+            && a.call.is_none()
+        {
             out.insert("title".into());
         }
         for e in plan
-            .r#where
-            .iter()
-            .chain(plan.select.iter().map(|c| &c.expr))
-            .chain(plan.order.iter().map(|o| &o.expr))
-            .chain(plan.unnest.iter().map(|u| &u.array))
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
+            .chain(plan.select.iter().map(|c| c.expr.as_str()))
+            .chain(plan.order.iter().map(|o| o.expr.as_str()))
+            .chain(plan.unnest.iter().map(|u| u.array.as_str()))
         {
             expression(e, out)?;
         }
@@ -817,8 +827,7 @@ pub fn query_read_requirements(
                 }
                 Expr::Call(c) if c.func_name == "tagInSubtree" => {
                     out.tag_structure = true;
-                    let mut child = ast.clone();
-                    visit_children_mut(&mut child, |e| walk(e, schema, bound, out))?;
+                    visit_children(ast, |e| walk(e, schema, bound, out))?;
                 }
                 Expr::Comprehension(c) => {
                     walk(&c.iter_range, schema, bound, out)?;
@@ -834,8 +843,7 @@ pub fn query_read_requirements(
                     }
                 }
                 _ => {
-                    let mut child = ast.clone();
-                    visit_children_mut(&mut child, |e| walk(e, schema, bound, out))?;
+                    visit_children(ast, |e| walk(e, schema, bound, out))?;
                 }
             }
             Ok(())
@@ -867,7 +875,7 @@ pub fn query_read_requirements(
         }
         let a = plan.advanced.clone().unwrap_or_default();
         a.validate_union()?;
-        let mut bound = a
+        let mut bound = plan
             .parameters
             .iter()
             .map(|p| p.name.clone())
@@ -890,9 +898,10 @@ pub fn query_read_requirements(
             bound.insert(u.binding.clone());
         }
         for e in plan
-            .r#where
-            .iter()
-            .chain(plan.select.iter().map(|c| &c.expr))
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
+            .chain(plan.select.iter().map(|c| c.expr.as_str()))
         {
             expression(e, schema, &bound, out)?;
         }
@@ -1054,9 +1063,8 @@ fn check_tag_structure(
             if matches!(&ast.expr, Expr::Call(c) if c.func_name == "tagInSubtree") {
                 return Ok(true);
             }
-            let mut child = ast.clone();
             let mut found = false;
-            visit_children_mut(&mut child, |e| {
+            visit_children(ast, |e| {
                 found |= ast_needs(e)?;
                 Ok(())
             })?;
@@ -1066,9 +1074,9 @@ fn check_tag_structure(
         a.validate_union()?;
         let mut found = false;
         for source in plan
-            .r#where
-            .iter()
-            .map(String::as_str)
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
             .chain(plan.select.iter().map(|c| c.expr.as_str()))
             .chain(plan.order.iter().map(|c| c.expr.as_str()))
             .chain(plan.unnest.iter().map(|u| u.array.as_str()))
@@ -1175,8 +1183,7 @@ fn check_tag_structure(
             }
             return Ok(());
         }
-        let mut child = ast.clone();
-        visit_children_mut(&mut child, |e| roots(e, parameters, tags, locals, deferred))
+        visit_children(ast, |e| roots(e, parameters, tags, locals, deferred))
     }
     #[allow(clippy::too_many_arguments)]
     fn visit(
@@ -1204,9 +1211,9 @@ fn check_tag_structure(
         let advanced = plan.advanced.clone().unwrap_or_default();
         advanced.validate_union()?;
         for expression in plan
-            .r#where
-            .iter()
-            .map(String::as_str)
+            .predicate_source()?
+            .as_deref()
+            .into_iter()
             .chain(plan.select.iter().map(|c| c.expr.as_str()))
             .chain(plan.order.iter().map(|c| c.expr.as_str()))
             .chain(plan.unnest.iter().map(|u| u.array.as_str()))
@@ -1412,6 +1419,9 @@ pub(crate) fn execute_advanced_query_traced(
         source_bytes: definition_bytes,
         metadata,
         trace: trace.cloned(),
+        reference: context
+            .reference_utc
+            .unwrap_or_else(|| chrono::DateTime::from(std::time::SystemTime::now())),
     };
     runner.run(plan, schema, &context.parameters, 0, None)
 }
@@ -1424,6 +1434,7 @@ struct Runner<'a> {
     source_bytes: usize,
     metadata: &'a BTreeMap<String, AuthorizedQueryMetadata>,
     trace: Option<crate::query_providers::ProviderTrace>,
+    reference: chrono::DateTime<chrono::Utc>,
 }
 impl Runner<'_> {
     fn run(
@@ -1469,6 +1480,7 @@ impl Runner<'_> {
                 .map(|(n, s)| (n.clone(), shape_type(schema, s)))
                 .collect();
             let mut env = query_env_traced(schema, trace.as_ref())?;
+            env.use_text_index(self.context.text_index.as_ref());
             env.tag_structure = self.context.tag_structure.clone();
             env.parameter_shapes = shapes.clone();
             let mut args = BTreeMap::new();
@@ -1512,6 +1524,7 @@ impl Runner<'_> {
                 self.limits,
                 trace.as_ref(),
                 self.context.tag_structure.as_ref(),
+                Some(self.reference),
             );
         }
         if advanced.union_all.is_some() {
@@ -1556,6 +1569,7 @@ impl Runner<'_> {
                 self.limits,
                 trace.as_ref(),
                 self.context.tag_structure.as_ref(),
+                Some(self.reference),
             );
         }
         if let Some(related) = &advanced.related {
@@ -1581,11 +1595,18 @@ impl Runner<'_> {
                 self.metadata,
             )?;
             self.source_bytes = self.source_bytes.saturating_add(consumed);
-            let mut filtered = self.input.clone();
-            filtered.notes = notes;
-            if origin.coverage == "partial" || !gaps.is_empty() {
-                filtered.coverage = "partial".into();
-            }
+            let filtered = FrozenQueryInput {
+                cut_id: self.input.cut_id.clone(),
+                schema_revision: self.input.schema_revision.clone(),
+                coverage: if origin.coverage == "partial" || !gaps.is_empty() {
+                    "partial".into()
+                } else {
+                    self.input.coverage.clone()
+                },
+                freshness: self.input.freshness.clone(),
+                notes,
+                advanced: self.input.advanced.clone(),
+            };
             let mut leaf = plan.clone();
             leaf.advanced = None;
             if advanced.distinct.is_some() {
@@ -1694,6 +1715,7 @@ impl Runner<'_> {
             &mut self.remaining,
             self.metadata,
             trace,
+            Some(self.reference),
         )?;
         if grouped {
             sort_terminal(
@@ -1718,10 +1740,8 @@ fn parameter_subset(
     plan: &QueryPlan,
     cells: &BTreeMap<String, Cell>,
 ) -> BTreeMap<String, NativeValue> {
-    plan.advanced
-        .as_ref()
-        .into_iter()
-        .flat_map(|a| &a.parameters)
+    plan.parameters
+        .iter()
         .filter_map(|p| {
             cells.get(&p.name).and_then(|c| match c {
                 Cell::Value { value } => Some((p.name.clone(), value.clone())),
@@ -1824,7 +1844,14 @@ fn related_notes(
     if seeds.is_empty() {
         return Ok((vec![], gaps, consumed));
     }
+    let mut notes_by_entity = BTreeMap::new();
+    for note in &input.notes {
+        notes_by_entity
+            .entry(note.entity_key.as_str())
+            .or_insert(note);
+    }
     'scan: for note in &input.notes {
+        crate::query_checkpoint()?;
         if !matches!(note.lifecycle.as_str(), "live" | "trash") {
             continue;
         }
@@ -1868,9 +1895,7 @@ fn related_notes(
                     }
                     *remaining -= 1;
                     if !targets.contains_key(endpoint) {
-                        let qualified = if let Some(target) =
-                            input.notes.iter().find(|n| n.entity_key == endpoint)
-                        {
+                        let qualified = if let Some(target) = notes_by_entity.get(endpoint) {
                             let target_bytes = query_note_bytes(target, metadata)?;
                             if *remaining == 0
                                 || consumed.saturating_add(target_bytes) > max_source_bytes
@@ -2040,6 +2065,7 @@ fn sort_terminal(
         }
         let mut sorted = vec![];
         for row in std::mem::take(&mut result.rows) {
+            crate::query_checkpoint()?;
             let mut cells = row.cells.clone();
             cells.extend(parameters.clone());
             let keys = compiled_order
@@ -2143,6 +2169,7 @@ fn distinct_terminal(
     }
     let mut groups: BTreeMap<String, (String, QueryRow)> = BTreeMap::new();
     for mut row in std::mem::take(&mut result.rows) {
+        crate::query_checkpoint()?;
         let mut cells = row.cells.clone();
         cells.extend(parameters.clone());
         let values = compiled
@@ -2270,6 +2297,7 @@ fn transform(
     limits: &QueryBudget,
     trace: Option<&crate::query_providers::ProviderTrace>,
     tags: Option<&FrozenTagStructure>,
+    reference: Option<chrono::DateTime<chrono::Utc>>,
 ) -> Result<QueryResult> {
     let (mut vars, env) = terminal_env(&result, schema, parameters, shapes, trace, tags)?;
     let unnest = plan
@@ -2290,8 +2318,8 @@ fn transform(
         })
         .transpose()?;
     let predicate = plan
-        .r#where
-        .as_ref()
+        .predicate_source_at(reference)?
+        .as_deref()
         .map(|p| compile(p, schema, &vars))
         .transpose()?;
     if predicate.as_ref().is_some_and(|p| p.ty != scalar("bool")) {
@@ -2406,6 +2434,7 @@ fn transform(
             vec![(row.key.clone(), cells)]
         };
         for (key, cells) in expanded {
+            crate::query_checkpoint()?;
             if rows.len() >= limits.max_rows {
                 mark_partial(
                     &mut result,
@@ -2637,22 +2666,39 @@ fn transform(
 
 // Native saved carriers persist domain defaults as actual author values. The
 // tagged NativeValue representation belongs only to the API, never author data.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum SavedSlot {
+    Plan,
+    Advanced,
+    Related,
+    Parameter,
+    Plain,
+}
+
+impl SavedSlot {
+    fn member(self, key: &str) -> Self {
+        match (self, key) {
+            (Self::Plan, "parameters") => Self::Parameter,
+            (Self::Plan, "advanced") => Self::Advanced,
+            (Self::Advanced, "unionAll") | (Self::Related, "from") => Self::Plan,
+            (Self::Advanced, "related") => Self::Related,
+            _ => Self::Plain,
+        }
+    }
+}
+
 pub(crate) fn saved_plan_json(value: &NativeValue) -> Result<serde_json::Value> {
-    fn convert(v: &NativeValue, advanced: bool, parameter: bool) -> Result<serde_json::Value> {
+    fn convert(v: &NativeValue, slot: SavedSlot) -> Result<serde_json::Value> {
         Ok(match v {
             NativeValue::Record(m) => serde_json::Value::Object(
                 m.iter()
                     .map(|m| {
                         Ok((
                             m.key.clone(),
-                            if parameter && m.key == "default" {
+                            if slot == SavedSlot::Parameter && m.key == "default" {
                                 serde_json::to_value(&m.value)?
                             } else {
-                                convert(
-                                    &m.value,
-                                    m.key == "advanced",
-                                    advanced && m.key == "parameters",
-                                )?
+                                convert(&m.value, slot.member(&m.key))?
                             },
                         ))
                     })
@@ -2660,7 +2706,7 @@ pub(crate) fn saved_plan_json(value: &NativeValue) -> Result<serde_json::Value> 
             ),
             NativeValue::Array(a) => serde_json::Value::Array(
                 a.iter()
-                    .map(|v| convert(v, false, parameter))
+                    .map(|v| convert(v, slot))
                     .collect::<Result<_>>()?,
             ),
             NativeValue::None => serde_json::Value::Null,
@@ -2675,10 +2721,10 @@ pub(crate) fn saved_plan_json(value: &NativeValue) -> Result<serde_json::Value> 
             )),
         })
     }
-    convert(value, false, false)
+    convert(value, SavedSlot::Plan)
 }
 pub(crate) fn saved_plan_native(value: &serde_json::Value) -> Result<NativeValue> {
-    fn convert(v: &serde_json::Value, advanced: bool, parameter: bool) -> Result<NativeValue> {
+    fn convert(v: &serde_json::Value, slot: SavedSlot) -> Result<NativeValue> {
         Ok(match v {
             serde_json::Value::Object(m) => NativeValue::Record(
                 m.iter()
@@ -2686,22 +2732,20 @@ pub(crate) fn saved_plan_native(value: &serde_json::Value) -> Result<NativeValue
                     .map(|(k, v)| {
                         Ok(NativeMember {
                             key: k.clone(),
-                            value: if parameter && k == "default" {
+                            value: if slot == SavedSlot::Parameter && k == "default" {
                                 serde_json::from_value(v.clone())?
                             } else {
-                                convert(v, k == "advanced", advanced && k == "parameters")?
+                                convert(v, slot.member(k))?
                             },
                         })
                     })
                     .collect::<Result<_>>()?,
             ),
-            serde_json::Value::Array(a) => NativeValue::Array(
-                a.iter()
-                    .map(|v| convert(v, false, parameter))
-                    .collect::<Result<_>>()?,
-            ),
+            serde_json::Value::Array(a) => {
+                NativeValue::Array(a.iter().map(|v| convert(v, slot)).collect::<Result<_>>()?)
+            }
             _ => json_native(v)?,
         })
     }
-    convert(value, false, false)
+    convert(value, SavedSlot::Plan)
 }
