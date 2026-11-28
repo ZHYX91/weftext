@@ -1826,7 +1826,7 @@ async fn query(
     State(state): State<AppState>,
     headers: axum::http::HeaderMap,
     RequestJson(req): RequestJson<QueryRequest>,
-) -> Result<Response, ApiError> {
+) -> Result<(axum::http::HeaderMap, Json<Value>), ApiError> {
     let started = std::time::Instant::now();
     let frozen = core_call(&state, move |core| {
         let mut frozen = query_render_snapshot(core, &req.root, req.plan, None)?;
@@ -1836,8 +1836,8 @@ async fn query(
     .await?;
     let scope = started.elapsed();
     let mut profile = QueryProfile::default();
-    let mut response =
-        Json(evaluate_frozen_profiled(&state, frozen, &mut profile).await?).into_response();
+    let result = evaluate_frozen_profiled(&state, frozen, &mut profile).await?;
+    let mut response_headers = axum::http::HeaderMap::new();
     if headers
         .get("x-weftext-query-profile")
         .is_some_and(|value| value == "1")
@@ -1853,12 +1853,12 @@ async fn query(
         ]
         .map(|(name, time)| format!("{name};dur={:.3}", time.as_secs_f64() * 1000.0))
         .join(", ");
-        response.headers_mut().insert(
+        response_headers.insert(
             "server-timing",
             HeaderValue::from_str(&timing).expect("fixed query timing header"),
         );
     }
-    Ok(response)
+    Ok((response_headers, Json(result)))
 }
 
 fn freeze_query_definitions(
@@ -3948,8 +3948,9 @@ mod tests {
             (path, format!("{}\n// observed external edit", note.source))
         };
         std::fs::write(&path, &source).unwrap();
-        let Json(rows) = ok(query(
+        let (_, Json(rows)) = ok(query(
             State(state.clone()),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 root: root.clone(),
                 parameters: BTreeMap::new(),
@@ -4500,8 +4501,9 @@ mod tests {
             document["nodeId"].as_str().unwrap()
         );
         let plan: weftext_data::QueryPlan = serde_json::from_value(json!({"scope":{"directory":entity,"descendants":true},"types":["task"],"where":"status == 'open'","select":[{"name":"status","expr":"status"}]})).unwrap();
-        let Json(rows) = ok(query(
+        let (_, Json(rows)) = ok(query(
             State(state.clone()),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),
@@ -4556,8 +4558,9 @@ mod tests {
             name: "status".into(),
             expr: "status".into(),
         }];
-        let Json(renamed_rows) = ok(query(
+        let (_, Json(renamed_rows)) = ok(query(
             State(state.clone()),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 root: root.clone(),
                 plan,
@@ -4585,6 +4588,7 @@ mod tests {
         ));
         let result = query(
             State(state),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 root,
                 plan: unavailable,
@@ -4888,8 +4892,11 @@ mod tests {
     #[tokio::test]
     async fn admitted_complete_zero_and_external_pending_remain_distinct() {
         let (_directory, state, root) = fixture();
-        let Json(empty) = ok(query(
+        let mut profile = axum::http::HeaderMap::new();
+        profile.insert("x-weftext-query-profile", HeaderValue::from_static("1"));
+        let (timing, Json(empty)) = ok(query(
             State(state.clone()),
+            profile,
             crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),
@@ -4897,14 +4904,19 @@ mod tests {
             }),
         )
         .await);
+        let timing = timing["server-timing"].to_str().unwrap();
+        for phase in ["scope", "native", "evaluate", "finish"] {
+            assert!(timing.contains(&format!("{phase};dur=")));
+        }
         assert!(empty["rows"].as_array().unwrap().is_empty());
         assert_eq!(empty["coverage"], "complete");
         assert_eq!(empty["aggregateExact"], true);
         let external = Path::new(&root).join("External");
         std::fs::create_dir(&external).unwrap();
         std::fs::write(external.join("External.typ"),format!("#metadata((id: \"{}\", types: (\"task\",), status: \"done\")) <weftext>\n外部未准入笔记\n",uuid::Uuid::new_v4())).unwrap();
-        let Json(raw) = ok(query(
+        let (_, Json(raw)) = ok(query(
             State(state),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root,
@@ -5074,8 +5086,9 @@ mod tests {
         .await);
         let mut plan = status_plan("open");
         plan.scope.lifecycle = "trash".into();
-        let Json(rows) = ok(query(
+        let (_, Json(rows)) = ok(query(
             State(state.clone()),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),
