@@ -63,6 +63,15 @@ impl Run {
         true
     }
 
+    fn publish(&self) -> Result<(), ApiError> {
+        let mut phase = self.phase.lock().unwrap();
+        if *phase == Phase::Cancelling {
+            return Err(cancelled());
+        }
+        *phase = Phase::Delivering;
+        Ok(())
+    }
+
     pub(crate) fn read<T>(&self, f: impl FnOnce() -> T) -> T {
         weftext_data::with_query_stop(self.stop.clone(), f)
     }
@@ -87,16 +96,7 @@ pub(crate) async fn cancellation() {
 }
 
 pub(crate) fn publish() -> Result<(), ApiError> {
-    CURRENT
-        .try_with(|r| {
-            let mut phase = r.phase.lock().unwrap();
-            if *phase == Phase::Cancelling {
-                return Err(cancelled());
-            }
-            *phase = Phase::Delivering;
-            Ok(())
-        })
-        .unwrap_or(Ok(()))
+    CURRENT.try_with(|r| r.publish()).unwrap_or(Ok(()))
 }
 
 pub(crate) fn cancelled() -> ApiError {
@@ -249,12 +249,14 @@ async fn execute(State(tickets): State<Tickets>, request: Request, next: Next) -
         };
         let response = CURRENT.scope(run.clone(), next.run(request)).await;
         let clean = run.jobs.drain().await.is_ok();
-        let stopped = run.stop.load(Ordering::Acquire);
+        // Early errors have no result handle. Claim their response under the
+        // same lock as a successful publication so a late cancel cannot also win.
+        let publication = run.publish();
         completion.clean = clean;
         if !clean {
             ApiError::internal(UiMessage::error_api_worker_process_exit_unknown()).into_response()
-        } else if stopped {
-            cancelled().into_response()
+        } else if let Err(error) = publication {
+            error.into_response()
         } else {
             response
         }
