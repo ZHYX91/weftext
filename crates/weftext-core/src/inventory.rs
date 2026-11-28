@@ -1,5 +1,5 @@
 use super::*;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use weftext_messages::UiMessage;
 
 const MAX_ENTRIES: usize = 5000;
@@ -152,9 +152,13 @@ impl Core {
         // One call-local cut of original committed admissions. Re-reading the
         // entire journal for each source makes one complete inventory quadratic
         // in journal I/O. Every later inventory builds this evidence afresh.
-        let mut births = Vec::new();
+        let mut nodes_by_identity = BTreeMap::new();
         for plan in self.committed_plans()? {
-            births.extend(self.read_births(&plan.operation_id)?);
+            for birth in self.read_births(&plan.operation_id)? {
+                nodes_by_identity
+                    .entry(birth.identity)
+                    .or_insert(birth.node_id);
+            }
         }
         let mut result = Inventory {
             root: display(&root),
@@ -173,6 +177,7 @@ impl Core {
         };
         let mut queue = vec![(root.clone(), false)];
         let mut total = 0;
+        let pending = self.pending_read();
         while let Some((directory, inherited_unmanaged)) = queue.pop() {
             let directory_guard = match ParentGuard::acquire(
                 &self.backend,
@@ -206,6 +211,7 @@ impl Core {
                     result
                         .warnings
                         .push(UiMessage::inventory_entries_capped().into());
+                    pending.recheck()?;
                     return Ok(result);
                 }
                 let relative = path.strip_prefix(&root).unwrap().to_path_buf();
@@ -255,7 +261,7 @@ impl Core {
                         result
                             .warnings
                             .push(UiMessage::inventory_source_budget_reached().into());
-                    } else if self.check_pending(&path).is_err() {
+                    } else if pending.check_path(&path).is_err() {
                         result.complete = false;
                         item.identity_status = "recoveryPending".into();
                     } else {
@@ -264,7 +270,7 @@ impl Core {
                             let mut file = guard.open_read_guard_file()?;
                             let bytes = read_source(&mut file)?;
                             let id = stamp(&file)?.identity;
-                            self.check_pending_identity(&id)?;
+                            pending.check_identity(&id)?;
                             Ok((decode(&bytes)?, id))
                         })();
                         match observed {
@@ -279,12 +285,11 @@ impl Core {
                                 }
                                 total += source.len();
                                 let info = weftext_engine::inspect(&source);
-                                let known = births.iter().find(|birth| birth.identity == identity);
-                                if let Some(birth) = known {
+                                if let Some(node_id) = nodes_by_identity.get(&identity) {
                                     item.kind = "node".into();
-                                    item.node_id = Some(birth.node_id.clone());
+                                    item.node_id = Some(node_id.clone());
                                     item.identity_status = if !is_canonical(&path)
-                                        || info.id.as_ref() != Some(&birth.node_id)
+                                        || info.id.as_ref() != Some(node_id)
                                     {
                                         "bindingConflict"
                                     } else if unmanaged {
@@ -339,6 +344,7 @@ impl Core {
         result
             .entries
             .sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        pending.recheck()?;
         Ok(result)
     }
     pub(crate) fn check_discovery_boundary(&self, root: &Path, parent: &Path) -> Result<()> {

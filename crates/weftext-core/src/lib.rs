@@ -7,6 +7,7 @@ pub use author_order::{
 };
 mod capture_draft;
 mod compile_dependencies;
+mod query_product_index;
 pub use capture_draft::{
     CaptureAuthorInput, CaptureAuthorRawInput, CaptureAuthorRecovery, CaptureAuthorTexts,
     CaptureBodyMode, CaptureCreationRequest, CaptureDetachedAuthorInput, CaptureDetachedRawInput,
@@ -20,6 +21,7 @@ pub use capture_draft::{
 pub use compile_dependencies::{
     CompileDependency, CompileDependencyKind, CompileDependencyStatus, CompileDependencyWitness,
 };
+pub use query_product_index::{IndexedQueryProduct, QueryProductCut, QueryProductKey};
 mod device_state;
 mod directory_identity;
 pub use device_state::DeviceIdentity;
@@ -622,8 +624,14 @@ pub struct Core {
     style_bases: HashMap<String, operations::StyleBasis>,
     admitted_cuts: HashMap<String, operations::AdmittedBasis>,
     compile_dependency_cuts: HashMap<String, compile_dependencies::CompileDependencyCut>,
+    query_text_index: weftext_data::QueryTextIndex,
+    query_product_index: Option<query_product_index::QueryProductIndex>,
 }
 impl Core {
+    pub fn query_text_index(&self, scope: &[&str]) -> weftext_data::QueryTextIndex {
+        self.query_text_index.scoped(scope)
+    }
+
     pub fn check_session_base(&self, session_id: &str, base_id: &str) -> Result<()> {
         self.backend.check_path(&self.data_dir)?;
         self.check_actor_session(session_id)?;
@@ -736,6 +744,8 @@ impl Core {
             style_bases: HashMap::new(),
             admitted_cuts: HashMap::new(),
             compile_dependency_cuts: HashMap::new(),
+            query_text_index: Default::default(),
+            query_product_index: None,
         };
         if let Some((_, device_id)) = expected {
             let device = core.existing_device_identity()?;

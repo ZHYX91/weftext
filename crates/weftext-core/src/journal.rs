@@ -3,6 +3,40 @@ use weftext_messages::UiMessage;
 
 const MAX_RESOLUTION_BYTES: u64 = 4096;
 
+/// One synchronous bulk read under the Core lease. Terminal operations are
+/// qualified once instead of traversing their participant lists for every
+/// file. Uncertain decisions stay on the normal pending-check path.
+pub(crate) struct PendingRead<'a> {
+    core: &'a Core,
+    committed: Vec<&'a Plan>,
+    unchecked: Vec<&'a Plan>,
+}
+
+impl PendingRead<'_> {
+    pub(crate) fn check_path(&self, path: &Path) -> Result<()> {
+        self.core.backend.check_path(path)?;
+        self.core
+            .check_pending_path_in(path, self.unchecked.iter().copied())
+    }
+
+    pub(crate) fn check_identity(&self, identity: &FileIdentity) -> Result<()> {
+        self.core
+            .check_pending_identity_in(identity, self.unchecked.iter().copied())
+    }
+
+    pub(crate) fn recheck(&self) -> Result<()> {
+        for plan in &self.committed {
+            if !self.core.committed(&plan.operation_id)? {
+                return Err(CoreError::new(
+                    "identityPending",
+                    UiMessage::error_core_backend_accepted_decision_missing(),
+                ));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A decision in the original journal, never an author participant or a second
 /// operation ledger. A missing Plan can only have an attempt cancellation.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -1171,10 +1205,19 @@ impl Core {
         self.check_pending_except(path, None)
     }
     pub(crate) fn check_pending_except(&self, path: &Path, except: Option<&str>) -> Result<()> {
-        for p in self.operations.values() {
-            if Some(p.operation_id.as_str()) == except {
-                continue;
-            }
+        self.check_pending_path_in(
+            path,
+            self.operations
+                .values()
+                .filter(|p| Some(p.operation_id.as_str()) != except),
+        )
+    }
+    fn check_pending_path_in<'a>(
+        &self,
+        path: &Path,
+        plans: impl Iterator<Item = &'a Plan>,
+    ) -> Result<()> {
+        for p in plans {
             let pending_path = Path::new(&p.path);
             let same =
                 backend::namespace_path_compare(pending_path, path)? == std::cmp::Ordering::Equal;
@@ -1215,10 +1258,19 @@ impl Core {
         identity: &FileIdentity,
         except: Option<&str>,
     ) -> Result<()> {
-        for plan in self.operations.values() {
-            if Some(plan.operation_id.as_str()) == except {
-                continue;
-            }
+        self.check_pending_identity_in(
+            identity,
+            self.operations
+                .values()
+                .filter(|p| Some(p.operation_id.as_str()) != except),
+        )
+    }
+    fn check_pending_identity_in<'a>(
+        &self,
+        identity: &FileIdentity,
+        plans: impl Iterator<Item = &'a Plan>,
+    ) -> Result<()> {
+        for plan in plans {
             if (plan.identity.as_ref() == Some(identity)
                 || plan
                     .transaction
@@ -1238,6 +1290,17 @@ impl Core {
             }
         }
         Ok(())
+    }
+    pub(crate) fn pending_read(&self) -> PendingRead<'_> {
+        let (committed, unchecked) = self
+            .operations
+            .values()
+            .partition(|plan| matches!(self.committed(&plan.operation_id), Ok(true)));
+        PendingRead {
+            core: self,
+            committed,
+            unchecked,
+        }
     }
     pub(crate) fn retry(&self, id: &str, fingerprint: &str) -> Result<Option<Receipt>> {
         if let Some(plan) = self.operations.get(id) {

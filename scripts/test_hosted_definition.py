@@ -3,11 +3,10 @@
 These cases use owned fixtures and the real Core journal/HTTP boundary. Local
 routes only provision the initial library/schema while its server is stopped.
 """
+from _http_test_suite import run_http_suite
 import uuid
 from _creation_result import created_document
 import json
-import sys
-import unittest
 
 from test_hosted import digest, uid
 from test_hosted_query import HostedQuery
@@ -264,7 +263,7 @@ class HostedDefinition(HostedQuery):
         self.provision()
         doc = self.open()
         parameterized = {'where': 'status == wanted', 'select': [self.column()],
-                         'advanced': {'parameters': [{'name': 'wanted', 'shape': {'kind': 'scalar', 'semantic': 'text'}}]}}
+                         'parameters': [{'name': 'wanted', 'shape': {'kind': 'scalar', 'semantic': 'text'}}]}
         prepared, proposal = self.proposal(doc, plan=parameterized)
         self.definition_save(doc, prepared['source'], [proposal['operationId']])
         call = {'advanced': {'call': {'owner': 'Shared', 'selection': {'mode': 'current', 'key': prepared['definition']['key']},
@@ -313,7 +312,4 @@ class HostedDefinition(HostedQuery):
 
 
 if __name__ == '__main__':
-    suite = unittest.TestSuite(HostedDefinition(name) for name in unittest.defaultTestLoader.getTestCaseNames(HostedDefinition)
-                              if name.startswith('test_definition_'))
-    result = unittest.TextTestRunner(verbosity=2).run(suite)
-    sys.exit(not result.wasSuccessful())
+    raise SystemExit(run_http_suite(HostedDefinition))

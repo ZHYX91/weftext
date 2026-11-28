@@ -822,7 +822,15 @@ fn freeze_definitions(
         draft,
         draft_keys,
     } = selected;
-    let mut context = weftext_data::FrozenAdvancedInput::default();
+    let mut context = weftext_data::FrozenAdvancedInput {
+        text_index: Some(inner.core.query_text_index(&[
+            "hosted",
+            actor,
+            workspace,
+            &inner.policy.generation.to_string(),
+        ])),
+        ..Default::default()
+    };
     let mut baselines = BTreeMap::new();
     for _ in 0..64 {
         let dependencies = weftext_data::definition_dependencies(plan, &context.definitions)
@@ -2130,6 +2138,7 @@ async fn execute_captured(
     auth: &Auth,
     mut captured: Capture,
 ) -> Result<Value, ApiError> {
+    let mut indexed = Vec::new();
     let outcome: Result<_, ApiError> = async {
         let mut execution_bytes = frozen_input_bytes(
             &captured.input,
@@ -2142,20 +2151,112 @@ async fn execute_captured(
         if let Some(environment) = &captured.environment {
             charge_bytes(&mut execution_bytes, environment.retained_bytes())?;
         }
-        for (entity, worker) in std::mem::take(&mut captured.workers) {
-            let output = editor::compile_frozen(state, worker).await?;
-            let products = if output["ok"] == true {
-                serde_json::from_value::<weftext_engine::RenderProducts>(output["products"].clone())
-                    .ok()
-                    .map(|p| {
-                        data_api::native_query_products(
-                            format!("{}:{entity}", captured.input.cut_id),
-                            p,
+        let workers = std::mem::take(&mut captured.workers);
+        let product_scope = captured
+            .products
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>()
+            .join(",");
+        let epoch = captured.epoch.to_string();
+        let bases = Arc::new(
+            workers
+                .iter()
+                .map(|(entity, worker)| {
+                    let root = worker.root.to_string_lossy();
+                    let path = worker.path.to_string_lossy();
+                    let files = worker
+                        .frozen_files
+                        .iter()
+                        .map(|(path, bytes)| {
+                            base64::engine::general_purpose::STANDARD
+                                .decode(bytes)
+                                .map(|bytes| (path.clone(), bytes))
+                                .map_err(|_| invalid())
+                        })
+                        .collect::<Result<BTreeMap<_, _>, _>>()?;
+                    let cut = weftext_core::QueryProductCut::new(
+                        &[
+                            "hosted",
+                            &root,
+                            &captured.actor,
+                            &epoch,
+                            &product_scope,
+                            crate::query_product_worker::build_identity(),
+                        ],
+                        &files,
+                        worker.style.as_ref(),
+                    );
+                    let key = cut.key(entity, &path, &worker.source);
+                    Ok((cut, key))
+                })
+                .collect::<Result<Vec<_>, ApiError>>()?,
+        );
+        let lookup = bases.clone();
+        let cache = if lookup.is_empty() {
+            Vec::new()
+        } else {
+            locked(state, move |inner| {
+                Ok(inner
+                    .core
+                    .query_product_entries(lookup.iter().map(|(cut, key)| (cut, key))))
+            })
+            .await?
+        };
+        for (((entity, worker), (cut, key)), entry) in
+            workers.into_iter().zip(bases.iter()).zip(cache)
+        {
+            let products = match entry {
+                Some(entry) => Some(entry.products),
+                None => {
+                    let output = editor::compile_frozen(state, worker).await?;
+                    if output["ok"] != true {
+                        None
+                    } else {
+                        let mut product = serde_json::from_value::<weftext_engine::RenderProducts>(
+                            output["products"].clone(),
                         )
-                    })
-            } else {
-                None
-            };
+                        .ok();
+                        if let Some(products) = &mut product {
+                            if !captured.products.contains("title") {
+                                products.title_status = "unavailable".into();
+                                products.title = None;
+                                products.metadata_title = None;
+                                products.native_title_bodies.clear();
+                            }
+                            if !captured.products.contains("body") {
+                                products.body_status = "unavailable".into();
+                                products.body = None;
+                            }
+                            if !captured.products.contains("headings") {
+                                products.headings.clear();
+                            }
+                        }
+                        if let (Some(products), Ok(dependencies), Some(compiler_version)) = (
+                            &product,
+                            serde_json::from_value(output["dependencies"].clone()),
+                            output["compilerVersion"].as_str(),
+                        ) && let Some(entry) = cut.record(
+                            key,
+                            &weftext_engine::FrozenQueryProduct {
+                                products: Some(products.clone()),
+                                dependencies,
+                                compiler_version: compiler_version.into(),
+                                diagnostics: Vec::new(),
+                            },
+                        ) {
+                            indexed.push(entry);
+                        }
+                        product
+                    }
+                }
+            }
+            .map(|product| {
+                data_api::native_query_products(
+                    format!("{}:{entity}", captured.input.cut_id),
+                    product,
+                )
+            });
             if let Some(note) = captured
                 .input
                 .notes
@@ -2225,6 +2326,9 @@ async fn execute_captured(
     let auth = auth.clone();
     locked(state,move|inner|{
         let (actor, mut result) = deliver_query_result(inner, &auth, &captured, outcome)?;
+        if !indexed.is_empty() {
+            inner.core.remember_query_products(indexed);
+        }
         for row in &mut result.rows{row.key=digest(format!("{}:{}",result.cut_id,row.key).as_bytes());row.revision=row.revision.as_ref().map(|_|result.cut_id.clone());if let Some(entity)=&row.entity_key{let resource=captured.resource_map.get(entity).ok_or_else(changed)?;row.entity_key=Some(resource.clone());row.path=Some(format!("resource:{resource}"));}}
         result.diagnostics=public_query_diagnostics(result.diagnostics);
         let mut public=serde_json::to_value(&result).map_err(|_|invalid())?;

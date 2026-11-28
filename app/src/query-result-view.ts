@@ -2,7 +2,8 @@ import { uiDisplayParameter } from "./ui-locale";
 import { displayMessage } from "./ui-locale";
 import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import { fieldNames, formatNativeValue, ui, type Cell } from "./data-panel";
-import { calendarDay, type QueryPlan, type QueryResult, type QueryRow } from "./query-panel";
+import { calendarDay, type QueryResult, type QueryRow } from "./query-panel";
+import { type QueryPlan } from "./query-plan";
 export interface OccurrenceView {
     kind: "list" | "table" | "board" | "calendar";
     group: string;

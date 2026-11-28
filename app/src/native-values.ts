@@ -1,10 +1,10 @@
 /** Author values are independent of product display messages and interface language. */
 export type NativeValue = {kind:"none"} | {kind:"text"|"int"|"float"|"decimal"|"date"|"time"|"localDatetime"|"duration";value:string} | {kind:"bool";value:boolean} | {kind:"array";value:NativeValue[]} | {kind:"record";value:{key:string;value:NativeValue}[]};
 
-export function decodeNativeValue(value: unknown): NativeValue | undefined {
+export function decodeNativeValue(value: unknown, maxDepth = 256): NativeValue | undefined {
     const ancestors = new Set<object>();
     const visit = (value: unknown, depth: number): NativeValue | undefined => {
-        if (!value || typeof value !== "object" || Array.isArray(value) || depth > 256 || ancestors.has(value)) return;
+        if (!value || typeof value !== "object" || Array.isArray(value) || depth > maxDepth || ancestors.has(value)) return;
         const item = value as Record<string,unknown>;
         if (item.kind === "none") return Object.keys(item).length === 1 ? {kind:"none"} : undefined;
         if (Object.keys(item).sort().join(",") !== "kind,value") return;
@@ -19,9 +19,11 @@ export function decodeNativeValue(value: unknown): NativeValue | undefined {
                 return {kind:"array",value:children};
             }
             if (item.kind === "record") {
+                const keys = new Set<string>();
                 const members: {key:string;value:NativeValue}[] = [];
                 for (const child of item.value) {
-                    if (!child || typeof child !== "object" || Array.isArray(child) || Object.keys(child).sort().join(",") !== "key,value" || typeof child.key !== "string") return;
+                    if (!child || typeof child !== "object" || Array.isArray(child) || Object.keys(child).sort().join(",") !== "key,value" || typeof child.key !== "string" || keys.has(child.key)) return;
+                    keys.add(child.key);
                     const decoded = visit(child.value,depth+1); if (!decoded) return; members.push({key:child.key,value:decoded});
                 }
                 return {kind:"record",value:members};

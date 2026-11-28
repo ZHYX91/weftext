@@ -30,6 +30,7 @@ pub(crate) struct QualifiedReadObservation<'a> {
     core: &'a Core,
     plans: Vec<&'a journal::Plan>,
     births: BTreeMap<String, Vec<Birth>>,
+    birth_positions: BTreeMap<FileIdentity, (&'a str, usize)>,
     snapshot_records: Option<SnapshotReadObservation<'a>>,
     resource_births: Option<Result<Vec<ResourceBirth>>>,
 }
@@ -41,18 +42,23 @@ impl<'a> QualifiedReadObservation<'a> {
     pub(crate) fn read(core: &'a Core) -> Result<Self> {
         let plans = core.committed_plans()?;
         let mut births = BTreeMap::new();
+        let mut birth_positions = BTreeMap::new();
         for plan in &plans {
             // Read the complete original evidence before selecting a binding:
             // an earlier match must not hide a corrupt later Birth record.
-            births.insert(
-                plan.operation_id.clone(),
-                core.read_births(&plan.operation_id)?,
-            );
+            let original = core.read_births(&plan.operation_id)?;
+            for (position, birth) in original.iter().enumerate() {
+                birth_positions
+                    .entry(birth.identity.clone())
+                    .or_insert((plan.operation_id.as_str(), position));
+            }
+            births.insert(plan.operation_id.clone(), original);
         }
         Ok(Self {
             core,
             plans,
             births,
+            birth_positions,
             snapshot_records: None,
             resource_births: None,
         })
@@ -104,10 +110,8 @@ impl<'a> QualifiedReadObservation<'a> {
         }
     }
     pub(crate) fn binding(&self, identity: &FileIdentity) -> Option<&Birth> {
-        self.plans
-            .iter()
-            .flat_map(|plan| &self.births[&plan.operation_id])
-            .find(|birth| &birth.identity == identity)
+        let &(operation, position) = self.birth_positions.get(identity)?;
+        self.births[operation].get(position)
     }
     pub(crate) fn placements(&self, birth: &Birth) -> Result<BTreeSet<String>> {
         Ok(self
@@ -3252,14 +3256,22 @@ impl Core {
             .iter()
             .map(|file| hash(&file.bytes))
             .collect::<Vec<_>>();
+        let mut file_positions = BTreeMap::<_, Vec<usize>>::new();
+        for (position, (file, digest)) in files.iter().zip(&digests).enumerate() {
+            file_positions
+                .entry((&file.stamp, digest.as_str()))
+                .or_default()
+                .push(position);
+        }
         let mut all_candidates = files.iter().map(|_| Vec::new()).collect::<Vec<_>>();
         for plan in plans {
             let facts = read_facts(&plan.operation_id)?;
+            let mut matched = BTreeSet::new();
             let mut sequence = None;
-            for (index, captured) in files.iter().enumerate() {
-                if let Some(fact) = facts
-                    .iter()
-                    .find(|fact| fact.stamp == captured.stamp && fact.hash == digests[index])
+            for fact in &facts {
+                let key = (&fact.stamp, fact.hash.as_str());
+                if let Some(positions) = file_positions.get(&key)
+                    && matched.insert(key)
                 {
                     let sequence = if let Some(sequence) = sequence {
                         sequence
@@ -3268,7 +3280,9 @@ impl Core {
                         sequence = Some(current);
                         current
                     };
-                    all_candidates[index].push((sequence, fact.revision.clone()));
+                    for &position in positions {
+                        all_candidates[position].push((sequence, fact.revision.clone()));
+                    }
                 }
             }
         }
@@ -3504,6 +3518,10 @@ impl Core {
         let mut guards = Vec::new();
         let mut handles = Vec::new();
         let mut seen = BTreeSet::new();
+        // Shared resource observations and single-leaf reads already qualify
+        // selected original facts. Avoid reopening every unrelated decision
+        // for each such capture.
+        let pending = (shared.is_none() && paths.len() > 1).then(|| self.pending_read());
         for p in paths {
             let path = absolute_path(Path::new(p))?;
             if !path.starts_with(&root) || !seen.insert(display(&path).to_lowercase()) {
@@ -3513,7 +3531,11 @@ impl Core {
                     ),
                 ));
             }
-            self.check_pending(&path)?;
+            if let Some(pending) = &pending {
+                pending.check_path(&path)?;
+            } else {
+                self.check_pending(&path)?;
+            }
             let guard = ParentGuard::acquire(&self.backend, &path)?;
             let handle = match guard.open_file(false, false) {
                 Ok(f) => Some(f),
@@ -3521,7 +3543,12 @@ impl Core {
                 Err(e) => return Err(e),
             };
             if let Some(f) = &handle {
-                self.check_pending_identity(&stamp(f)?.identity)?;
+                let identity = stamp(f)?.identity;
+                if let Some(pending) = &pending {
+                    pending.check_identity(&identity)?;
+                } else {
+                    self.check_pending_identity(&identity)?;
+                }
             }
             guards.push((path, guard));
             handles.push(handle);
@@ -3605,6 +3632,9 @@ impl Core {
                     parent: guard.directory_identity()?,
                 },
             ));
+        }
+        if let Some(pending) = &pending {
+            pending.recheck()?;
         }
         Ok((
             SnapshotSet {
@@ -3694,13 +3724,19 @@ impl Core {
         let mut warnings = Vec::new();
         let mut complete = true;
         let mut members = Vec::new();
+        let mut admitted_by_id = BTreeMap::new();
+        for entry in &inventory.entries {
+            if entry.identity_status == "admitted"
+                && let Some(id) = entry.node_id.as_deref()
+            {
+                admitted_by_id
+                    .entry(id)
+                    .and_modify(|candidate| *candidate = None)
+                    .or_insert(Some(entry));
+            }
+        }
         for (id, birth) in &expected {
-            let candidates = inventory
-                .entries
-                .iter()
-                .filter(|e| e.node_id.as_ref() == Some(id) && e.identity_status == "admitted")
-                .collect::<Vec<_>>();
-            if candidates.len() != 1 {
+            let Some(Some(candidate)) = admitted_by_id.get(id.as_str()) else {
                 complete = false;
                 warnings.push(
                     UiMessage::error_core_operations_admitted_node_unavailable(
@@ -3711,8 +3747,7 @@ impl Core {
                     .into(),
                 );
                 continue;
-            }
-            let candidate = candidates[0];
+            };
             let observed = capture_optional(&self.backend, Path::new(&candidate.path))?;
             if observed
                 .as_ref()
@@ -3762,17 +3797,23 @@ impl Core {
                 }
             };
         let schema = cut.files.pop().unwrap();
-        for f in &cut.files {
-            let expected_node = inventory
-                .entries
+        let entry_indices: Vec<_> = {
+            let mut by_path = BTreeMap::new();
+            for (index, entry) in inventory.entries.iter().enumerate() {
+                by_path.entry(entry.path.as_str()).or_insert(index);
+            }
+            cut.files
                 .iter()
-                .find(|e| e.path == f.path)
-                .and_then(|e| e.node_id.clone());
-            if f.node_id != expected_node
-                || f.bytes.as_ref().is_none_or(|b| {
-                    decode(b)
-                        .ok()
-                        .is_none_or(|s| weftext_engine::inspect_metadata(&s).id != expected_node)
+                .map(|file| by_path.get(file.path.as_str()).copied())
+                .collect()
+        };
+        for (f, index) in cut.files.iter().zip(entry_indices) {
+            let entry = index.map(|index| &mut inventory.entries[index]);
+            let expected_node = entry.as_ref().and_then(|entry| entry.node_id.as_ref());
+            let source = f.bytes.as_ref().and_then(|b| decode(b).ok());
+            if f.node_id.as_ref() != expected_node
+                || source.as_ref().is_none_or(|s| {
+                    weftext_engine::inspect_metadata(s).id.as_ref() != expected_node
                 })
             {
                 complete = false;
@@ -3783,8 +3824,8 @@ impl Core {
                     .into(),
                 );
             }
-            if let Some(entry) = inventory.entries.iter_mut().find(|e| e.path == f.path) {
-                entry.source = f.bytes.as_ref().and_then(|b| decode(b).ok());
+            if let Some(entry) = entry {
+                entry.source = source;
             }
         }
         // Schema is frozen author input; absence is explicit and the caller can
@@ -4149,8 +4190,9 @@ impl Core {
     ) -> Result<(Vec<ParentGuard>, Vec<backend::BoundFile>)> {
         let mut guards = Vec::new();
         let mut handles = Vec::new();
+        let pending = self.pending_read();
         for file in captured {
-            self.check_pending(Path::new(&file.path))?;
+            pending.check_path(Path::new(&file.path))?;
             let guard = ParentGuard::acquire(&self.backend, Path::new(&file.path))?;
             let mut handle = guard.open_file(false, false)?;
             if stamp(&handle)? != file.stamp
@@ -4182,6 +4224,7 @@ impl Core {
             }
             guards.push(guard);
         }
+        pending.recheck()?;
         Ok((guards, handles))
     }
 
@@ -4195,6 +4238,10 @@ impl Core {
         let mut directories = Vec::new();
         snapshot_tree(&self.backend, root, &mut captured, &mut directories, false)?;
         let (mut guards, handles) = self.hold_compile_tree(&captured, &directories)?;
+        let exact_paths: BTreeMap<_, _> = captured
+            .iter()
+            .map(|file| (file.path.as_str(), file))
+            .collect();
         for original in snapshot
             .files
             .iter()
@@ -4207,9 +4254,14 @@ impl Core {
                     UiMessage::error_core_operations_selected_source_basis_expired(),
                 )
             })?;
-            let current = captured
-                .iter()
-                .find(|f| locator_equal(&f.path, &original.path));
+            let current = exact_paths
+                .get(original.path.as_str())
+                .copied()
+                .or_else(|| {
+                    captured
+                        .iter()
+                        .find(|file| locator_equal(&file.path, &original.path))
+                });
             if basis.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
                 != current.map(|f| (&f.stamp, &f.bytes))
             {
@@ -4346,10 +4398,10 @@ impl Core {
         let mut files = BTreeMap::new();
         let mut bases = Vec::new();
         let mut bindings = Vec::new();
-        for f in captured {
+        for (f, guard) in captured.into_iter().zip(&guards) {
             let path = Path::new(&f.path);
             let base_id = fresh();
-            let parent = ParentGuard::acquire(&self.backend, path)?.directory_identity()?;
+            let parent = guard.directory_identity()?;
             files.insert(
                 path.strip_prefix(root)
                     .map_err(|_| {

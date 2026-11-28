@@ -412,10 +412,9 @@ export const zhCN = {
   "queryValidation.invalidWhereOrTake": "where 或 take 无效。",
   "queryValidation.advancedObjectRequired": "advanced 必须是对象。",
   "queryValidation.unionSourcesRequired": "unionAll 必须包含来源计划。",
+  "queryValidation.invalidParameterDeclaration": "parameters 应为参数声明列表。每项需要唯一的标识符名称和类型。",
   "queryValidation.parameterObjectRequired": "参数必须是名称到原生值的对象。",
   "queryValidation.invalidNativeParameter": "参数原生值无效。",
-  "queryValidation.invalidRecordParameter": "参数记录成员重复或无效。",
-  "queryValidation.nativeParameterKindRequired": "参数须使用带 kind 的原生值；准确数字使用字符串。",
   "periodNavigation.day": "日",
   "periodNavigation.week": "周",
   "periodNavigation.month": "月",
@@ -601,6 +600,11 @@ export const zhCN = {
   "queryOperator.atLeast": "大于等于",
   "queryOperator.lessThan": "小于",
   "queryOperator.atMost": "小于等于",
+  "queryOperator.startsWith": "开头是",
+  "queryOperator.endsWith": "结尾是",
+  "queryOperator.hasItem": "包含元素",
+  "queryOperator.empty": "为空",
+  "queryOperator.present": "字段存在",
   "queryOperator.containsText": "包含文字",
   "queryOperator.explicitNone": "明确 none",
   "queryFilter.valueTypeLabel": "值类型（不自动转换）",
@@ -641,6 +645,16 @@ export const zhCN = {
   "queryAdvanced.disclosure": "高级 Query · 完整计划与参数",
   "queryAdvanced.planLabel": "完整 Query 计划 JSON",
   "queryAdvanced.parametersLabel": "本次调用的原生参数 JSON",
+  "queryArguments.title": "按类型填写实参",
+  "queryArguments.noDeclarations": "当前计划未声明参数。",
+  "queryArguments.modeLabel": "{p0} 的实参来源",
+  "queryArguments.chooseValue": "请选择实参来源",
+  "queryArguments.enterValue": "填写值",
+  "queryArguments.useDefault": "使用默认值",
+  "queryArguments.defaultValue": "默认值为 {p0}",
+  "queryArguments.apply": "采用这些实参",
+  "queryArguments.changed": "查询计划、架构或实参草稿已变化。重新展开表单以读取当前内容。",
+  "queryArguments.applied": "实参已更新，可以运行查询。",
   "queryAdvanced.planHelp": "CEL 条件、投影和排序使用同一编译器。高级来源在 advanced 中；参数是本次输入，不成为另一份笔记内容。",
   "queryAdvanced.loadCurrentPlan": "载入当前实际计划（替换此编辑框）",
   "queryAdvanced.planField": "完整计划",
@@ -649,7 +663,7 @@ export const zhCN = {
   "queryAdvanced.rerunParameters": "按本次参数重跑",
   "queryAdvanced.returnToVisual": "返回可视化查询",
   "queryAdvanced.loadUnnestExample": "载入多值展开示例（暂不运行）",
-  "queryAdvanced.nativeSyntaxHelp": "select 支持命名 CEL 投影；order 可含多项并明确 nulls。unnest 为 {array, binding}。advanced 支持 parameters、unionAll、distinct、related 与 call。参数例如 {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}；准确数字保字符串，none 与未提供不同。",
+  "queryAdvanced.nativeSyntaxHelp": "select 支持命名 CEL 投影；order 可含多项并明确 nulls。unnest 为 {array, binding}。parameters 在计划顶层声明。advanced 支持 unionAll、distinct、related 与 call。参数例如 {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}；准确数字保字符串，none 与未提供不同。",
   "queryFacets.currentScopeTitle": "当前范围属性导航",
   "queryFacets.currentScopeKnownTitle": "当前范围属性导航 · 已知计数",
   "queryFacets.loadedResultsTitle": "已加载结果属性导航 · 已知计数",
@@ -776,6 +790,52 @@ export const zhCN = {
   "queryPlan.filterOperatorLabel": "筛选运算",
   "queryPlan.nestedFilterHelp": "多值／嵌套条件请使用下方 CEL，保留同项含义。",
   "queryPlan.filterValueLabel": "筛选值",
+  "queryText.mode": "全文匹配方式",
+  "queryText.all": "包含全部词项",
+  "queryText.any": "包含任一词项",
+  "queryText.phrase": "匹配连续短语",
+  "queryText.exclude": "排除这些词项",
+  "queryDates.title": "按日期范围筛选",
+  "queryDates.field": "日期字段",
+  "queryDates.period": "日期范围类型",
+  "queryDates.today": "今天",
+  "queryDates.yesterday": "昨天",
+  "queryDates.current": "本期",
+  "queryDates.previous": "上期",
+  "queryDates.past": "过去 N 天",
+  "queryDates.future": "未来 N 天",
+  "queryDates.between": "自选日期",
+  "queryDates.unit": "周期单位",
+  "queryDates.week": "周",
+  "queryDates.month": "月",
+  "queryDates.quarter": "季度",
+  "queryDates.year": "年",
+  "queryDates.days": "天数",
+  "queryDates.start": "开始日期",
+  "queryDates.end": "结束日期",
+  "queryDates.zone": "IANA 时区",
+  "queryDates.adopt": "采用日期条件",
+  "queryRelations.title": "按关系查找",
+  "queryRelations.relation": "关系类型",
+  "queryRelations.nextRelation": "下一跳的关系类型",
+  "queryRelations.direction": "关系方向",
+  "queryRelations.forward": "指向的笔记",
+  "queryRelations.inverse": "指回的笔记",
+  "queryRelations.firstHop": "第一跳",
+  "queryRelations.secondHop": "第二跳",
+  "queryRelations.addHop": "添加一跳",
+  "queryRelations.updateHop": "更新这一跳",
+  "queryRelations.backToSource": "移除最后一跳并返回该跳之前的查询",
+  "queryRelations.useSource": "请在完整计划中编辑超过两跳的查询。",
+  "queryRelations.adoptFilterFirst": "请先采用手写条件，再修改关系。",
+  "queryConditions.all": "全部满足",
+  "queryConditions.any": "任一满足",
+  "queryConditions.not": "取反",
+  "queryConditions.group": "条件组运算方式",
+  "queryConditions.wrap": "放入新条件组",
+  "queryConditions.addTo": "添加条件到",
+  "queryConditions.edit": "编辑条件 {p0}",
+  "queryConditions.target": "条件组 {p0}",
   "queryPlan.filterTitle": "筛选",
   "queryPlan.addCondition": "添加筛选条件",
   "queryPlan.advancedCelDisclosure": "高级：完整 CEL 条件",
@@ -956,17 +1016,11 @@ export const zhCN = {
   "hostedQuery.planControlsDisclosure": "属性筛选、排序与汇总控件",
   "hostedQuery.adoptControlProposal": "采用控件提案到临时查询",
   "hostedQuery.controlProposalSuperseded": "完整计划已变化，控件提案保留，未覆盖新计划。",
-  "hostedQuery.visualWhereLabel": "托管可视条件（CEL）",
-  "hostedQuery.visualColumnsLabel": "托管投影列（JSON）",
-  "hostedQuery.visualOrderLabel": "托管排序（JSON）",
-  "hostedQuery.applyVisual": "应用可视条件到临时计划",
   "hostedQuery.combinationLabel": "托管高级组合示例",
   "hostedQuery.unionExample": "两个准确来源的 unionAll",
   "hostedQuery.distinctExample": "按完整投影值 distinct",
   "hostedQuery.parameterExample": "带原生 wanted 参数",
-  "hostedQuery.relatedExample": "沿获权关系查询",
   "hostedQuery.addCombination": "将高级组合加入临时计划",
-  "hostedQuery.relationRequired": "请先选择独立获权的关系。",
   "hostedQuery.nativeExampleHelp": "示例仍是原生 Query 计划；运行由同一执行器核验完整 CEL、类型、关系和定义授权。参数、union、distinct、group、unnest 与保存定义调用可直接在完整计划中组合。",
   "hostedQuery.running": "正在运行托管 Query…",
   "hostedQuery.run": "运行托管高级查询",
@@ -7791,7 +7845,6 @@ export const zhCN = {
   "error.data.query.nonfiniteFloatResult": "浮点运算结果不是有限值。",
   "error.data.query.resultRecordKeyRequiresText": "结果记录的键必须是文本。",
   "error.data.query.unsupportedCelResultType": "不支持此 CEL 结果类型。",
-  "error.data.query.unknownTypedConstantConstructor": "未知的类型化常量构造器。",
   "error.data.query.invalidTypedQueryConstant": "类型化 Query 常量无效。",
   "error.data.query.fieldUnresolved": "字段尚未解析。",
   "error.data.query.recordRequiresStaticStringKeys": "仅支持静态字符串键记录。",
@@ -7880,6 +7933,12 @@ export const zhCN = {
   "error.data.queryAdvanced.unknownRelationOrDirection": "未知的关系或方向。",
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": "Query 范围展开预算已耗尽。",
   "error.data.queryAdvanced.unsupportedLifecycleScope": "不支持此生命周期范围。",
+  "error.data.query.textIndexBudget": "全文条件超出文本大小或词项数量上限。",
+  "error.data.query.textIndexArguments": "全文匹配需要文本、检索词和有效的匹配方式。",
+  "error.data.query.relativeDatePeriod": "日期条件的范围无效。",
+  "error.data.query.relativeDateZone": "日期条件需要有效的 IANA 时区。",
+  "error.data.query.conditionGroupBudget": "查询条件组超出嵌套、条件数或表达式大小上限。",
+  "error.data.query.conditionGroupArity": "条件组至少需要一项，取反组必须正好包含一项。",
   "error.data.queryAdvanced.celSourceBudgetExceeded": "CEL 源码超过配置预算。",
   "error.data.queryAdvanced.queryProductExpansionBudgetExhausted": "Query 结果项展开预算已耗尽。",
   "error.data.queryAdvanced.queryColumnExpansionBudgetExceeded": "Query 列展开超过预算。",
@@ -8303,7 +8362,6 @@ export const zhCN = {
   "error.data.query.providerResultNotValue": "查询 Provider 未返回可用值",
   "error.data.query.closedExpressionUnavailable": "闭合查询表达式无效或不可用",
   "error.data.query.celSyntaxInvalid": "CEL 查询语法无效",
-  "error.data.query.recordCompilationFailed": "内部有序记录入口未通过 CEL 编译",
   "error.data.query.functionRegistrationFailed": "无法注册查询函数：{function}",
   "error.data.projection.fieldEditValidationFailed": "字段 {field} 的修改未通过完整验证；状态为 {state}",
   "error.data.projection.typedReferenceClosureIncomplete": "类型化引用闭包不完整",
@@ -10787,10 +10845,9 @@ export interface MessageParamsMap {
   "queryValidation.invalidWhereOrTake": {  };
   "queryValidation.advancedObjectRequired": {  };
   "queryValidation.unionSourcesRequired": {  };
+  "queryValidation.invalidParameterDeclaration": {  };
   "queryValidation.parameterObjectRequired": {  };
   "queryValidation.invalidNativeParameter": {  };
-  "queryValidation.invalidRecordParameter": {  };
-  "queryValidation.nativeParameterKindRequired": {  };
   "periodNavigation.day": {  };
   "periodNavigation.week": {  };
   "periodNavigation.month": {  };
@@ -10976,6 +11033,11 @@ export interface MessageParamsMap {
   "queryOperator.atLeast": {  };
   "queryOperator.lessThan": {  };
   "queryOperator.atMost": {  };
+  "queryOperator.startsWith": {  };
+  "queryOperator.endsWith": {  };
+  "queryOperator.hasItem": {  };
+  "queryOperator.empty": {  };
+  "queryOperator.present": {  };
   "queryOperator.containsText": {  };
   "queryOperator.explicitNone": {  };
   "queryFilter.valueTypeLabel": {  };
@@ -11016,6 +11078,16 @@ export interface MessageParamsMap {
   "queryAdvanced.disclosure": {  };
   "queryAdvanced.planLabel": {  };
   "queryAdvanced.parametersLabel": {  };
+  "queryArguments.title": {  };
+  "queryArguments.noDeclarations": {  };
+  "queryArguments.modeLabel": { p0: string };
+  "queryArguments.chooseValue": {  };
+  "queryArguments.enterValue": {  };
+  "queryArguments.useDefault": {  };
+  "queryArguments.defaultValue": { p0: string };
+  "queryArguments.apply": {  };
+  "queryArguments.changed": {  };
+  "queryArguments.applied": {  };
   "queryAdvanced.planHelp": {  };
   "queryAdvanced.loadCurrentPlan": {  };
   "queryAdvanced.planField": {  };
@@ -11151,6 +11223,52 @@ export interface MessageParamsMap {
   "queryPlan.filterOperatorLabel": {  };
   "queryPlan.nestedFilterHelp": {  };
   "queryPlan.filterValueLabel": {  };
+  "queryText.mode": {  };
+  "queryText.all": {  };
+  "queryText.any": {  };
+  "queryText.phrase": {  };
+  "queryText.exclude": {  };
+  "queryDates.title": {  };
+  "queryDates.field": {  };
+  "queryDates.period": {  };
+  "queryDates.today": {  };
+  "queryDates.yesterday": {  };
+  "queryDates.current": {  };
+  "queryDates.previous": {  };
+  "queryDates.past": {  };
+  "queryDates.future": {  };
+  "queryDates.between": {  };
+  "queryDates.unit": {  };
+  "queryDates.week": {  };
+  "queryDates.month": {  };
+  "queryDates.quarter": {  };
+  "queryDates.year": {  };
+  "queryDates.days": {  };
+  "queryDates.start": {  };
+  "queryDates.end": {  };
+  "queryDates.zone": {  };
+  "queryDates.adopt": {  };
+  "queryRelations.title": {  };
+  "queryRelations.relation": {  };
+  "queryRelations.nextRelation": {  };
+  "queryRelations.direction": {  };
+  "queryRelations.forward": {  };
+  "queryRelations.inverse": {  };
+  "queryRelations.firstHop": {  };
+  "queryRelations.secondHop": {  };
+  "queryRelations.addHop": {  };
+  "queryRelations.updateHop": {  };
+  "queryRelations.backToSource": {  };
+  "queryRelations.useSource": {  };
+  "queryRelations.adoptFilterFirst": {  };
+  "queryConditions.all": {  };
+  "queryConditions.any": {  };
+  "queryConditions.not": {  };
+  "queryConditions.group": {  };
+  "queryConditions.wrap": {  };
+  "queryConditions.addTo": {  };
+  "queryConditions.edit": { p0: string };
+  "queryConditions.target": { p0: number };
   "queryPlan.filterTitle": {  };
   "queryPlan.addCondition": {  };
   "queryPlan.advancedCelDisclosure": {  };
@@ -11331,17 +11449,11 @@ export interface MessageParamsMap {
   "hostedQuery.planControlsDisclosure": {  };
   "hostedQuery.adoptControlProposal": {  };
   "hostedQuery.controlProposalSuperseded": {  };
-  "hostedQuery.visualWhereLabel": {  };
-  "hostedQuery.visualColumnsLabel": {  };
-  "hostedQuery.visualOrderLabel": {  };
-  "hostedQuery.applyVisual": {  };
   "hostedQuery.combinationLabel": {  };
   "hostedQuery.unionExample": {  };
   "hostedQuery.distinctExample": {  };
   "hostedQuery.parameterExample": {  };
-  "hostedQuery.relatedExample": {  };
   "hostedQuery.addCombination": {  };
-  "hostedQuery.relationRequired": {  };
   "hostedQuery.nativeExampleHelp": {  };
   "hostedQuery.running": {  };
   "hostedQuery.run": {  };
@@ -18166,7 +18278,6 @@ export interface MessageParamsMap {
   "error.data.query.nonfiniteFloatResult": {  };
   "error.data.query.resultRecordKeyRequiresText": {  };
   "error.data.query.unsupportedCelResultType": {  };
-  "error.data.query.unknownTypedConstantConstructor": {  };
   "error.data.query.invalidTypedQueryConstant": {  };
   "error.data.query.fieldUnresolved": {  };
   "error.data.query.recordRequiresStaticStringKeys": {  };
@@ -18255,6 +18366,12 @@ export interface MessageParamsMap {
   "error.data.queryAdvanced.unknownRelationOrDirection": {  };
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": {  };
   "error.data.queryAdvanced.unsupportedLifecycleScope": {  };
+  "error.data.query.textIndexBudget": {  };
+  "error.data.query.textIndexArguments": {  };
+  "error.data.query.relativeDatePeriod": {  };
+  "error.data.query.relativeDateZone": {  };
+  "error.data.query.conditionGroupBudget": {  };
+  "error.data.query.conditionGroupArity": {  };
   "error.data.queryAdvanced.celSourceBudgetExceeded": {  };
   "error.data.queryAdvanced.queryProductExpansionBudgetExhausted": {  };
   "error.data.queryAdvanced.queryColumnExpansionBudgetExceeded": {  };
@@ -18678,7 +18795,6 @@ export interface MessageParamsMap {
   "error.data.query.providerResultNotValue": {  };
   "error.data.query.closedExpressionUnavailable": {  };
   "error.data.query.celSyntaxInvalid": {  };
-  "error.data.query.recordCompilationFailed": {  };
   "error.data.query.functionRegistrationFailed": { function: string };
   "error.data.projection.fieldEditValidationFailed": { field: string; state: string };
   "error.data.projection.typedReferenceClosureIncomplete": {  };
@@ -21284,10 +21400,9 @@ export const messageParamTypes = {
   "queryValidation.invalidWhereOrTake": {},
   "queryValidation.advancedObjectRequired": {},
   "queryValidation.unionSourcesRequired": {},
+  "queryValidation.invalidParameterDeclaration": {},
   "queryValidation.parameterObjectRequired": {},
   "queryValidation.invalidNativeParameter": {},
-  "queryValidation.invalidRecordParameter": {},
-  "queryValidation.nativeParameterKindRequired": {},
   "periodNavigation.day": {},
   "periodNavigation.week": {},
   "periodNavigation.month": {},
@@ -21537,6 +21652,11 @@ export const messageParamTypes = {
   "queryOperator.atLeast": {},
   "queryOperator.lessThan": {},
   "queryOperator.atMost": {},
+  "queryOperator.startsWith": {},
+  "queryOperator.endsWith": {},
+  "queryOperator.hasItem": {},
+  "queryOperator.empty": {},
+  "queryOperator.present": {},
   "queryOperator.containsText": {},
   "queryOperator.explicitNone": {},
   "queryFilter.valueTypeLabel": {},
@@ -21577,6 +21697,20 @@ export const messageParamTypes = {
   "queryAdvanced.disclosure": {},
   "queryAdvanced.planLabel": {},
   "queryAdvanced.parametersLabel": {},
+  "queryArguments.title": {},
+  "queryArguments.noDeclarations": {},
+  "queryArguments.modeLabel": {
+    "p0": "text"
+  },
+  "queryArguments.chooseValue": {},
+  "queryArguments.enterValue": {},
+  "queryArguments.useDefault": {},
+  "queryArguments.defaultValue": {
+    "p0": "text"
+  },
+  "queryArguments.apply": {},
+  "queryArguments.changed": {},
+  "queryArguments.applied": {},
   "queryAdvanced.planHelp": {},
   "queryAdvanced.loadCurrentPlan": {},
   "queryAdvanced.planField": {},
@@ -21765,6 +21899,56 @@ export const messageParamTypes = {
   "queryPlan.filterOperatorLabel": {},
   "queryPlan.nestedFilterHelp": {},
   "queryPlan.filterValueLabel": {},
+  "queryText.mode": {},
+  "queryText.all": {},
+  "queryText.any": {},
+  "queryText.phrase": {},
+  "queryText.exclude": {},
+  "queryDates.title": {},
+  "queryDates.field": {},
+  "queryDates.period": {},
+  "queryDates.today": {},
+  "queryDates.yesterday": {},
+  "queryDates.current": {},
+  "queryDates.previous": {},
+  "queryDates.past": {},
+  "queryDates.future": {},
+  "queryDates.between": {},
+  "queryDates.unit": {},
+  "queryDates.week": {},
+  "queryDates.month": {},
+  "queryDates.quarter": {},
+  "queryDates.year": {},
+  "queryDates.days": {},
+  "queryDates.start": {},
+  "queryDates.end": {},
+  "queryDates.zone": {},
+  "queryDates.adopt": {},
+  "queryRelations.title": {},
+  "queryRelations.relation": {},
+  "queryRelations.nextRelation": {},
+  "queryRelations.direction": {},
+  "queryRelations.forward": {},
+  "queryRelations.inverse": {},
+  "queryRelations.firstHop": {},
+  "queryRelations.secondHop": {},
+  "queryRelations.addHop": {},
+  "queryRelations.updateHop": {},
+  "queryRelations.backToSource": {},
+  "queryRelations.useSource": {},
+  "queryRelations.adoptFilterFirst": {},
+  "queryConditions.all": {},
+  "queryConditions.any": {},
+  "queryConditions.not": {},
+  "queryConditions.group": {},
+  "queryConditions.wrap": {},
+  "queryConditions.addTo": {},
+  "queryConditions.edit": {
+    "p0": "text"
+  },
+  "queryConditions.target": {
+    "p0": "integer"
+  },
   "queryPlan.filterTitle": {},
   "queryPlan.addCondition": {},
   "queryPlan.advancedCelDisclosure": {},
@@ -22005,17 +22189,11 @@ export const messageParamTypes = {
   "hostedQuery.planControlsDisclosure": {},
   "hostedQuery.adoptControlProposal": {},
   "hostedQuery.controlProposalSuperseded": {},
-  "hostedQuery.visualWhereLabel": {},
-  "hostedQuery.visualColumnsLabel": {},
-  "hostedQuery.visualOrderLabel": {},
-  "hostedQuery.applyVisual": {},
   "hostedQuery.combinationLabel": {},
   "hostedQuery.unionExample": {},
   "hostedQuery.distinctExample": {},
   "hostedQuery.parameterExample": {},
-  "hostedQuery.relatedExample": {},
   "hostedQuery.addCombination": {},
-  "hostedQuery.relationRequired": {},
   "hostedQuery.nativeExampleHelp": {},
   "hostedQuery.running": {},
   "hostedQuery.run": {},
@@ -29990,7 +30168,6 @@ export const messageParamTypes = {
   "error.data.query.nonfiniteFloatResult": {},
   "error.data.query.resultRecordKeyRequiresText": {},
   "error.data.query.unsupportedCelResultType": {},
-  "error.data.query.unknownTypedConstantConstructor": {},
   "error.data.query.invalidTypedQueryConstant": {},
   "error.data.query.fieldUnresolved": {},
   "error.data.query.recordRequiresStaticStringKeys": {},
@@ -30081,6 +30258,12 @@ export const messageParamTypes = {
   "error.data.queryAdvanced.unknownRelationOrDirection": {},
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": {},
   "error.data.queryAdvanced.unsupportedLifecycleScope": {},
+  "error.data.query.textIndexBudget": {},
+  "error.data.query.textIndexArguments": {},
+  "error.data.query.relativeDatePeriod": {},
+  "error.data.query.relativeDateZone": {},
+  "error.data.query.conditionGroupBudget": {},
+  "error.data.query.conditionGroupArity": {},
   "error.data.queryAdvanced.celSourceBudgetExceeded": {},
   "error.data.queryAdvanced.queryProductExpansionBudgetExhausted": {},
   "error.data.queryAdvanced.queryColumnExpansionBudgetExceeded": {},
@@ -30580,7 +30763,6 @@ export const messageParamTypes = {
   "error.data.query.providerResultNotValue": {},
   "error.data.query.closedExpressionUnavailable": {},
   "error.data.query.celSyntaxInvalid": {},
-  "error.data.query.recordCompilationFailed": {},
   "error.data.query.functionRegistrationFailed": {
     "function": "text"
   },
@@ -33401,10 +33583,9 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryValidation.invalidWhereOrTake": "Invalid where or take.",
   "queryValidation.advancedObjectRequired": "advanced must be an object.",
   "queryValidation.unionSourcesRequired": "unionAll must contain source plans.",
+  "queryValidation.invalidParameterDeclaration": "Use a list of parameter declarations. Each needs a unique identifier and a shape.",
   "queryValidation.parameterObjectRequired": "Parameters must be an object mapping names to native values.",
   "queryValidation.invalidNativeParameter": "Invalid native parameter value.",
-  "queryValidation.invalidRecordParameter": "Duplicate or invalid parameter record member.",
-  "queryValidation.nativeParameterKindRequired": "Parameters must use native values with a kind. Keep exact numbers as strings.",
   "periodNavigation.day": "Day",
   "periodNavigation.week": "Week",
   "periodNavigation.month": "Month",
@@ -33590,6 +33771,11 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryOperator.atLeast": "Greater than or equal to",
   "queryOperator.lessThan": "Less than",
   "queryOperator.atMost": "Less than or equal to",
+  "queryOperator.startsWith": "Starts with",
+  "queryOperator.endsWith": "Ends with",
+  "queryOperator.hasItem": "Contains item",
+  "queryOperator.empty": "Is empty",
+  "queryOperator.present": "Field is present",
   "queryOperator.containsText": "Contains text",
   "queryOperator.explicitNone": "Explicit none",
   "queryFilter.valueTypeLabel": "Value type (no automatic conversion)",
@@ -33630,6 +33816,16 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryAdvanced.disclosure": "Advanced Query · complete plan and parameters",
   "queryAdvanced.planLabel": "Complete Query plan JSON",
   "queryAdvanced.parametersLabel": "Native parameter JSON for this invocation",
+  "queryArguments.title": "Enter typed arguments",
+  "queryArguments.noDeclarations": "The current plan declares no parameters.",
+  "queryArguments.modeLabel": "Argument source for {p0}",
+  "queryArguments.chooseValue": "Choose an argument source",
+  "queryArguments.enterValue": "Enter a value",
+  "queryArguments.useDefault": "Use the default",
+  "queryArguments.defaultValue": "Default value is {p0}",
+  "queryArguments.apply": "Use these arguments",
+  "queryArguments.changed": "The plan, schema or argument draft changed. Reopen the form to load the current values.",
+  "queryArguments.applied": "Arguments updated. You can run the query.",
   "queryAdvanced.planHelp": "CEL conditions, projection and ordering use the same compiler. Advanced sources are in advanced; parameters are input for this invocation, not another copy of note content.",
   "queryAdvanced.loadCurrentPlan": "Load current actual plan (replace this editor's contents)",
   "queryAdvanced.planField": "Complete plan",
@@ -33638,7 +33834,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryAdvanced.rerunParameters": "Rerun with these parameters",
   "queryAdvanced.returnToVisual": "Return to visual query",
   "queryAdvanced.loadUnnestExample": "Load multivalue expansion example (do not run yet)",
-  "queryAdvanced.nativeSyntaxHelp": "select supports named CEL projections; order can contain multiple items with explicit nulls. unnest is {array, binding}. advanced supports parameters, unionAll, distinct, related and call. Example parameters: {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}. Keep exact numbers as strings; none differs from not provided.",
+  "queryAdvanced.nativeSyntaxHelp": "select supports named CEL projections; order can contain multiple items with explicit nulls. unnest is {array, binding}. Declare parameters at the top level. advanced supports unionAll, distinct, related and call. Example parameters: {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}. Keep exact numbers as strings; none differs from not provided.",
   "queryFacets.currentScopeTitle": "Property navigation in current scope",
   "queryFacets.currentScopeKnownTitle": "Property navigation in current scope · known counts",
   "queryFacets.loadedResultsTitle": "Property navigation in loaded results · known counts",
@@ -33765,6 +33961,52 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryPlan.filterOperatorLabel": "Filter operator",
   "queryPlan.nestedFilterHelp": "For multivalue / nested conditions, use CEL below to retain same-item semantics.",
   "queryPlan.filterValueLabel": "Filter value",
+  "queryText.mode": "Full-text match mode",
+  "queryText.all": "All search terms",
+  "queryText.any": "Any search term",
+  "queryText.phrase": "Exact term sequence",
+  "queryText.exclude": "Exclude these terms",
+  "queryDates.title": "Filter by date range",
+  "queryDates.field": "Date field",
+  "queryDates.period": "Date range type",
+  "queryDates.today": "Today",
+  "queryDates.yesterday": "Yesterday",
+  "queryDates.current": "This period",
+  "queryDates.previous": "Previous period",
+  "queryDates.past": "Previous N days",
+  "queryDates.future": "Next N days",
+  "queryDates.between": "Custom dates",
+  "queryDates.unit": "Period unit",
+  "queryDates.week": "Week",
+  "queryDates.month": "Month",
+  "queryDates.quarter": "Quarter",
+  "queryDates.year": "Year",
+  "queryDates.days": "Day count",
+  "queryDates.start": "Start date",
+  "queryDates.end": "End date",
+  "queryDates.zone": "IANA time zone",
+  "queryDates.adopt": "Use date condition",
+  "queryRelations.title": "Find related notes",
+  "queryRelations.relation": "Relation type",
+  "queryRelations.nextRelation": "Relation type for the next hop",
+  "queryRelations.direction": "Relation direction",
+  "queryRelations.forward": "Outgoing notes",
+  "queryRelations.inverse": "Incoming notes",
+  "queryRelations.firstHop": "First hop",
+  "queryRelations.secondHop": "Second hop",
+  "queryRelations.addHop": "Add a hop",
+  "queryRelations.updateHop": "Update this hop",
+  "queryRelations.backToSource": "Remove the final hop and return to its source query",
+  "queryRelations.useSource": "Edit queries beyond two hops in the complete plan.",
+  "queryRelations.adoptFilterFirst": "Adopt the edited condition before changing relations.",
+  "queryConditions.all": "Match all",
+  "queryConditions.any": "Match any",
+  "queryConditions.not": "Negate",
+  "queryConditions.group": "Condition group operation",
+  "queryConditions.wrap": "Wrap in new condition group",
+  "queryConditions.addTo": "Add condition to",
+  "queryConditions.edit": "Edit condition {p0}",
+  "queryConditions.target": "Condition group {p0}",
   "queryPlan.filterTitle": "Filter",
   "queryPlan.addCondition": "Add filter condition",
   "queryPlan.advancedCelDisclosure": "Advanced: complete CEL condition",
@@ -33945,17 +34187,11 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "hostedQuery.planControlsDisclosure": "Property filtering, sorting and aggregate controls",
   "hostedQuery.adoptControlProposal": "Adopt control proposal into temporary query",
   "hostedQuery.controlProposalSuperseded": "The complete plan has changed. The control proposal is retained and did not overwrite the new plan.",
-  "hostedQuery.visualWhereLabel": "Hosted visual condition (CEL)",
-  "hostedQuery.visualColumnsLabel": "Hosted projection columns (JSON)",
-  "hostedQuery.visualOrderLabel": "Hosted ordering (JSON)",
-  "hostedQuery.applyVisual": "Apply visual conditions to temporary plan",
   "hostedQuery.combinationLabel": "Hosted advanced combination example",
   "hostedQuery.unionExample": "unionAll from two exact sources",
   "hostedQuery.distinctExample": "distinct by complete projected values",
   "hostedQuery.parameterExample": "With a native wanted parameter",
-  "hostedQuery.relatedExample": "Query along an authorized relationship",
   "hostedQuery.addCombination": "Add advanced combination to temporary plan",
-  "hostedQuery.relationRequired": "Select a separately authorized relationship first.",
   "hostedQuery.nativeExampleHelp": "Examples remain native Query plans. The same executor validates complete CEL, types, relationships and definition authorization at run time. Parameters, union, distinct, group, unnest and saved-definition invocations can be combined directly in the complete plan.",
   "hostedQuery.running": "Running hosted Query…",
   "hostedQuery.run": "Run hosted advanced query",
@@ -40780,7 +41016,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.data.query.nonfiniteFloatResult": "Nonfinite float result",
   "error.data.query.resultRecordKeyRequiresText": "Result record key must be text",
   "error.data.query.unsupportedCelResultType": "Unsupported CEL result type",
-  "error.data.query.unknownTypedConstantConstructor": "Unknown typed constant constructor",
   "error.data.query.invalidTypedQueryConstant": "Invalid typed Query constant",
   "error.data.query.fieldUnresolved": "Unresolved field",
   "error.data.query.recordRequiresStaticStringKeys": "Only static string-key records",
@@ -40869,6 +41104,12 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.data.queryAdvanced.unknownRelationOrDirection": "Unknown relation/direction",
   "error.data.queryAdvanced.queryScopeExpansionBudgetExhausted": "Query scope expansion budget exhausted",
   "error.data.queryAdvanced.unsupportedLifecycleScope": "Unsupported lifecycle scope",
+  "error.data.query.textIndexBudget": "Full-text matching exceeded the text size or term count limit.",
+  "error.data.query.textIndexArguments": "Full-text matching requires text, search terms and a valid match mode.",
+  "error.data.query.relativeDatePeriod": "The date condition has an invalid range.",
+  "error.data.query.relativeDateZone": "The date condition requires a valid IANA time zone.",
+  "error.data.query.conditionGroupBudget": "Query conditions exceed the nesting, condition count or expression size limit.",
+  "error.data.query.conditionGroupArity": "A condition group needs at least one item. A negation needs exactly one.",
   "error.data.queryAdvanced.celSourceBudgetExceeded": "CEL source exceeds profile budget",
   "error.data.queryAdvanced.queryProductExpansionBudgetExhausted": "Query product expansion budget exhausted",
   "error.data.queryAdvanced.queryColumnExpansionBudgetExceeded": "Query column expansion budget",
@@ -41292,7 +41533,6 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.data.query.providerResultNotValue": "The Query provider did not return an available value.",
   "error.data.query.closedExpressionUnavailable": "The closed Query expression is invalid or unavailable.",
   "error.data.query.celSyntaxInvalid": "The CEL Query syntax is invalid.",
-  "error.data.query.recordCompilationFailed": "The internal ordered-record entry failed CEL compilation.",
   "error.data.query.functionRegistrationFailed": "The Query function could not be registered: {function}",
   "error.data.projection.fieldEditValidationFailed": "The edit to field {field} failed full validation; its state is {state}.",
   "error.data.projection.typedReferenceClosureIncomplete": "The typed reference closure is incomplete.",

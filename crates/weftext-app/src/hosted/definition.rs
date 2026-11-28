@@ -753,8 +753,11 @@ mod integration_tests {
     #[tokio::test]
     async fn required_parameter_preparation_is_static_and_original_source_save_admits() {
         let (_temp, state, auth, doc) = fixture();
-        let plan = serde_json::from_value(json!({"where":"status == wanted","select":[{"name":"status","expr":"status"}],
-            "advanced":{"parameters":[{"name":"wanted","shape":{"kind":"scalar","semantic":"text"}}]}})).unwrap();
+        let plan = serde_json::from_value(
+            json!({"where":"status == wanted","select":[{"name":"status","expr":"status"}],
+            "parameters":[{"name":"wanted","shape":{"kind":"scalar","semantic":"text"}}]}),
+        )
+        .unwrap();
         let req = req(&doc, plan);
         let Json(output) = tokio::time::timeout(
             Duration::from_secs(5),

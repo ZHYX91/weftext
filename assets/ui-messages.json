@@ -2120,6 +2120,11 @@
       "en-US": "unionAll must contain source plans.",
       "params": {}
     },
+    "queryValidation.invalidParameterDeclaration": {
+      "zh-CN": "parameters 应为参数声明列表。每项需要唯一的标识符名称和类型。",
+      "en-US": "Use a list of parameter declarations. Each needs a unique identifier and a shape.",
+      "params": {}
+    },
     "queryValidation.parameterObjectRequired": {
       "zh-CN": "参数必须是名称到原生值的对象。",
       "en-US": "Parameters must be an object mapping names to native values.",
@@ -2128,16 +2133,6 @@
     "queryValidation.invalidNativeParameter": {
       "zh-CN": "参数原生值无效。",
       "en-US": "Invalid native parameter value.",
-      "params": {}
-    },
-    "queryValidation.invalidRecordParameter": {
-      "zh-CN": "参数记录成员重复或无效。",
-      "en-US": "Duplicate or invalid parameter record member.",
-      "params": {}
-    },
-    "queryValidation.nativeParameterKindRequired": {
-      "zh-CN": "参数须使用带 kind 的原生值；准确数字使用字符串。",
-      "en-US": "Parameters must use native values with a kind. Keep exact numbers as strings.",
       "params": {}
     },
     "periodNavigation.day": {
@@ -3129,6 +3124,11 @@
       "en-US": "Less than or equal to",
       "params": {}
     },
+    "queryOperator.startsWith": {"zh-CN": "开头是", "en-US": "Starts with", "params": {}},
+    "queryOperator.endsWith": {"zh-CN": "结尾是", "en-US": "Ends with", "params": {}},
+    "queryOperator.hasItem": {"zh-CN": "包含元素", "en-US": "Contains item", "params": {}},
+    "queryOperator.empty": {"zh-CN": "为空", "en-US": "Is empty", "params": {}},
+    "queryOperator.present": {"zh-CN": "字段存在", "en-US": "Field is present", "params": {}},
     "queryOperator.containsText": {
       "zh-CN": "包含文字",
       "en-US": "Contains text",
@@ -3329,6 +3329,16 @@
       "en-US": "Native parameter JSON for this invocation",
       "params": {}
     },
+    "queryArguments.title": { "zh-CN": "按类型填写实参", "en-US": "Enter typed arguments", "params": {} },
+    "queryArguments.noDeclarations": { "zh-CN": "当前计划未声明参数。", "en-US": "The current plan declares no parameters.", "params": {} },
+    "queryArguments.modeLabel": { "zh-CN": "{p0} 的实参来源", "en-US": "Argument source for {p0}", "params": { "p0": "text" } },
+    "queryArguments.chooseValue": { "zh-CN": "请选择实参来源", "en-US": "Choose an argument source", "params": {} },
+    "queryArguments.enterValue": { "zh-CN": "填写值", "en-US": "Enter a value", "params": {} },
+    "queryArguments.useDefault": { "zh-CN": "使用默认值", "en-US": "Use the default", "params": {} },
+    "queryArguments.defaultValue": { "zh-CN": "默认值为 {p0}", "en-US": "Default value is {p0}", "params": { "p0": "text" } },
+    "queryArguments.apply": { "zh-CN": "采用这些实参", "en-US": "Use these arguments", "params": {} },
+    "queryArguments.changed": { "zh-CN": "查询计划、架构或实参草稿已变化。重新展开表单以读取当前内容。", "en-US": "The plan, schema or argument draft changed. Reopen the form to load the current values.", "params": {} },
+    "queryArguments.applied": { "zh-CN": "实参已更新，可以运行查询。", "en-US": "Arguments updated. You can run the query.", "params": {} },
     "queryAdvanced.planHelp": {
       "zh-CN": "CEL 条件、投影和排序使用同一编译器。高级来源在 advanced 中；参数是本次输入，不成为另一份笔记内容。",
       "en-US": "CEL conditions, projection and ordering use the same compiler. Advanced sources are in advanced; parameters are input for this invocation, not another copy of note content.",
@@ -3370,8 +3380,8 @@
       "params": {}
     },
     "queryAdvanced.nativeSyntaxHelp": {
-      "zh-CN": "select 支持命名 CEL 投影；order 可含多项并明确 nulls。unnest 为 {array, binding}。advanced 支持 parameters、unionAll、distinct、related 与 call。参数例如 {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}；准确数字保字符串，none 与未提供不同。",
-      "en-US": "select supports named CEL projections; order can contain multiple items with explicit nulls. unnest is {array, binding}. advanced supports parameters, unionAll, distinct, related and call. Example parameters: {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}. Keep exact numbers as strings; none differs from not provided.",
+      "zh-CN": "select 支持命名 CEL 投影；order 可含多项并明确 nulls。unnest 为 {array, binding}。parameters 在计划顶层声明。advanced 支持 unionAll、distinct、related 与 call。参数例如 {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}；准确数字保字符串，none 与未提供不同。",
+      "en-US": "select supports named CEL projections; order can contain multiple items with explicit nulls. unnest is {array, binding}. Declare parameters at the top level. advanced supports unionAll, distinct, related and call. Example parameters: {\"limit\":{\"kind\":\"int\",\"value\":\"200\"}}. Keep exact numbers as strings; none differs from not provided.",
       "params": {}
     },
     "queryFacets.currentScopeTitle": {
@@ -4057,6 +4067,52 @@
       "en-US": "Filter value",
       "params": {}
     },
+    "queryText.mode": { "zh-CN": "全文匹配方式", "en-US": "Full-text match mode", "params": {} },
+    "queryText.all": { "zh-CN": "包含全部词项", "en-US": "All search terms", "params": {} },
+    "queryText.any": { "zh-CN": "包含任一词项", "en-US": "Any search term", "params": {} },
+    "queryText.phrase": { "zh-CN": "匹配连续短语", "en-US": "Exact term sequence", "params": {} },
+    "queryText.exclude": { "zh-CN": "排除这些词项", "en-US": "Exclude these terms", "params": {} },
+    "queryDates.title": { "zh-CN": "按日期范围筛选", "en-US": "Filter by date range", "params": {} },
+    "queryDates.field": { "zh-CN": "日期字段", "en-US": "Date field", "params": {} },
+    "queryDates.period": { "zh-CN": "日期范围类型", "en-US": "Date range type", "params": {} },
+    "queryDates.today": { "zh-CN": "今天", "en-US": "Today", "params": {} },
+    "queryDates.yesterday": { "zh-CN": "昨天", "en-US": "Yesterday", "params": {} },
+    "queryDates.current": { "zh-CN": "本期", "en-US": "This period", "params": {} },
+    "queryDates.previous": { "zh-CN": "上期", "en-US": "Previous period", "params": {} },
+    "queryDates.past": { "zh-CN": "过去 N 天", "en-US": "Previous N days", "params": {} },
+    "queryDates.future": { "zh-CN": "未来 N 天", "en-US": "Next N days", "params": {} },
+    "queryDates.between": { "zh-CN": "自选日期", "en-US": "Custom dates", "params": {} },
+    "queryDates.unit": { "zh-CN": "周期单位", "en-US": "Period unit", "params": {} },
+    "queryDates.week": { "zh-CN": "周", "en-US": "Week", "params": {} },
+    "queryDates.month": { "zh-CN": "月", "en-US": "Month", "params": {} },
+    "queryDates.quarter": { "zh-CN": "季度", "en-US": "Quarter", "params": {} },
+    "queryDates.year": { "zh-CN": "年", "en-US": "Year", "params": {} },
+    "queryDates.days": { "zh-CN": "天数", "en-US": "Day count", "params": {} },
+    "queryDates.start": { "zh-CN": "开始日期", "en-US": "Start date", "params": {} },
+    "queryDates.end": { "zh-CN": "结束日期", "en-US": "End date", "params": {} },
+    "queryDates.zone": { "zh-CN": "IANA 时区", "en-US": "IANA time zone", "params": {} },
+    "queryDates.adopt": { "zh-CN": "采用日期条件", "en-US": "Use date condition", "params": {} },
+    "queryRelations.title": { "zh-CN": "按关系查找", "en-US": "Find related notes", "params": {} },
+    "queryRelations.relation": { "zh-CN": "关系类型", "en-US": "Relation type", "params": {} },
+    "queryRelations.nextRelation": { "zh-CN": "下一跳的关系类型", "en-US": "Relation type for the next hop", "params": {} },
+    "queryRelations.direction": { "zh-CN": "关系方向", "en-US": "Relation direction", "params": {} },
+    "queryRelations.forward": { "zh-CN": "指向的笔记", "en-US": "Outgoing notes", "params": {} },
+    "queryRelations.inverse": { "zh-CN": "指回的笔记", "en-US": "Incoming notes", "params": {} },
+    "queryRelations.firstHop": { "zh-CN": "第一跳", "en-US": "First hop", "params": {} },
+    "queryRelations.secondHop": { "zh-CN": "第二跳", "en-US": "Second hop", "params": {} },
+    "queryRelations.addHop": { "zh-CN": "添加一跳", "en-US": "Add a hop", "params": {} },
+    "queryRelations.updateHop": { "zh-CN": "更新这一跳", "en-US": "Update this hop", "params": {} },
+    "queryRelations.backToSource": { "zh-CN": "移除最后一跳并返回该跳之前的查询", "en-US": "Remove the final hop and return to its source query", "params": {} },
+    "queryRelations.useSource": { "zh-CN": "请在完整计划中编辑超过两跳的查询。", "en-US": "Edit queries beyond two hops in the complete plan.", "params": {} },
+    "queryRelations.adoptFilterFirst": { "zh-CN": "请先采用手写条件，再修改关系。", "en-US": "Adopt the edited condition before changing relations.", "params": {} },
+    "queryConditions.all": { "zh-CN": "全部满足", "en-US": "Match all", "params": {} },
+    "queryConditions.any": { "zh-CN": "任一满足", "en-US": "Match any", "params": {} },
+    "queryConditions.not": { "zh-CN": "取反", "en-US": "Negate", "params": {} },
+    "queryConditions.group": { "zh-CN": "条件组运算方式", "en-US": "Condition group operation", "params": {} },
+    "queryConditions.wrap": { "zh-CN": "放入新条件组", "en-US": "Wrap in new condition group", "params": {} },
+    "queryConditions.addTo": { "zh-CN": "添加条件到", "en-US": "Add condition to", "params": {} },
+    "queryConditions.edit": { "zh-CN": "编辑条件 {p0}", "en-US": "Edit condition {p0}", "params": { "p0": "text" } },
+    "queryConditions.target": { "zh-CN": "条件组 {p0}", "en-US": "Condition group {p0}", "params": { "p0": "integer" } },
     "queryPlan.filterTitle": {
       "zh-CN": "筛选",
       "en-US": "Filter",
@@ -5017,26 +5073,6 @@
       "en-US": "The complete plan has changed. The control proposal is retained and did not overwrite the new plan.",
       "params": {}
     },
-    "hostedQuery.visualWhereLabel": {
-      "zh-CN": "托管可视条件（CEL）",
-      "en-US": "Hosted visual condition (CEL)",
-      "params": {}
-    },
-    "hostedQuery.visualColumnsLabel": {
-      "zh-CN": "托管投影列（JSON）",
-      "en-US": "Hosted projection columns (JSON)",
-      "params": {}
-    },
-    "hostedQuery.visualOrderLabel": {
-      "zh-CN": "托管排序（JSON）",
-      "en-US": "Hosted ordering (JSON)",
-      "params": {}
-    },
-    "hostedQuery.applyVisual": {
-      "zh-CN": "应用可视条件到临时计划",
-      "en-US": "Apply visual conditions to temporary plan",
-      "params": {}
-    },
     "hostedQuery.combinationLabel": {
       "zh-CN": "托管高级组合示例",
       "en-US": "Hosted advanced combination example",
@@ -5057,19 +5093,9 @@
       "en-US": "With a native wanted parameter",
       "params": {}
     },
-    "hostedQuery.relatedExample": {
-      "zh-CN": "沿获权关系查询",
-      "en-US": "Query along an authorized relationship",
-      "params": {}
-    },
     "hostedQuery.addCombination": {
       "zh-CN": "将高级组合加入临时计划",
       "en-US": "Add advanced combination to temporary plan",
-      "params": {}
-    },
-    "hostedQuery.relationRequired": {
-      "zh-CN": "请先选择独立获权的关系。",
-      "en-US": "Select a separately authorized relationship first.",
       "params": {}
     },
     "hostedQuery.nativeExampleHelp": {
@@ -40342,11 +40368,6 @@
       "en-US": "Unsupported CEL result type",
       "params": {}
     },
-    "error.data.query.unknownTypedConstantConstructor": {
-      "zh-CN": "未知的类型化常量构造器。",
-      "en-US": "Unknown typed constant constructor",
-      "params": {}
-    },
     "error.data.query.invalidTypedQueryConstant": {
       "zh-CN": "类型化 Query 常量无效。",
       "en-US": "Invalid typed Query constant",
@@ -40789,6 +40810,12 @@
       "en-US": "Unsupported lifecycle scope",
       "params": {}
     },
+    "error.data.query.textIndexBudget": { "zh-CN": "全文条件超出文本大小或词项数量上限。", "en-US": "Full-text matching exceeded the text size or term count limit.", "params": {} },
+    "error.data.query.textIndexArguments": { "zh-CN": "全文匹配需要文本、检索词和有效的匹配方式。", "en-US": "Full-text matching requires text, search terms and a valid match mode.", "params": {} },
+    "error.data.query.relativeDatePeriod": { "zh-CN": "日期条件的范围无效。", "en-US": "The date condition has an invalid range.", "params": {} },
+    "error.data.query.relativeDateZone": { "zh-CN": "日期条件需要有效的 IANA 时区。", "en-US": "The date condition requires a valid IANA time zone.", "params": {} },
+    "error.data.query.conditionGroupBudget": { "zh-CN": "查询条件组超出嵌套、条件数或表达式大小上限。", "en-US": "Query conditions exceed the nesting, condition count or expression size limit.", "params": {} },
+    "error.data.query.conditionGroupArity": { "zh-CN": "条件组至少需要一项，取反组必须正好包含一项。", "en-US": "A condition group needs at least one item. A negation needs exactly one.", "params": {} },
     "error.data.queryAdvanced.celSourceBudgetExceeded": {
       "zh-CN": "CEL 源码超过配置预算。",
       "en-US": "CEL source exceeds profile budget",
@@ -42978,11 +43005,6 @@
     "error.data.query.celSyntaxInvalid": {
       "zh-CN": "CEL 查询语法无效",
       "en-US": "The CEL Query syntax is invalid.",
-      "params": {}
-    },
-    "error.data.query.recordCompilationFailed": {
-      "zh-CN": "内部有序记录入口未通过 CEL 编译",
-      "en-US": "The internal ordered-record entry failed CEL compilation.",
       "params": {}
     },
     "error.data.query.functionRegistrationFailed": {

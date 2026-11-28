@@ -86,6 +86,7 @@ mod native;
 mod navigation_api;
 mod owned_process;
 mod processing_api;
+mod query_product_worker;
 mod readonly_evidence;
 mod recognition_api;
 mod request_json;
@@ -905,6 +906,12 @@ struct WorkerRequest {
     #[serde(default)]
     style: Option<weftext_engine::StyleModule>,
     frozen_files: std::collections::BTreeMap<String, String>,
+}
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum RenderWorkerInput {
+    Query(query_product_worker::BatchRequest),
+    Document(WorkerRequest),
 }
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -2234,7 +2241,15 @@ fn worker_main() -> Result<(), Box<dyn std::error::Error>> {
             ErrorDescription::new(UiMessage::error_api_worker_render_input_budget()).into(),
         );
     }
-    let input: WorkerRequest = serde_json::from_str(&input)?;
+    let input = match serde_json::from_str::<RenderWorkerInput>(&input)? {
+        RenderWorkerInput::Document(input) => input,
+        RenderWorkerInput::Query(batch) => {
+            let output = batch.render()?;
+            serde_json::to_writer(std::io::stdout().lock(), &output)?;
+            std::io::stdout().flush()?;
+            return Ok(());
+        }
+    };
     if input.source.len() > weftext_core::MAX_SOURCE_BYTES {
         return Err("Compile source exceeds the local budget".into());
     }

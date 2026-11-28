@@ -1,10 +1,9 @@
 """Narrow fields/Query through the actual server, durable journal and ACL."""
+from _http_test_suite import run_http_suite
 import uuid
 import copy
 import json
 import secrets
-import sys
-import unittest
 from test_hosted import uid, digest, Server
 from test_hosted_editor import HostedEditor
 
@@ -171,4 +170,5 @@ class HostedFields(HostedEditor):
         self.assertEqual((self.root/'Shared/Shared.typ').read_bytes(), unchanged)
 
 
-if __name__ == '__main__': unittest.main(argv=[sys.argv[0]], defaultTest='HostedFields', verbosity=2)
+if __name__ == '__main__':
+    raise SystemExit(run_http_suite(HostedFields))

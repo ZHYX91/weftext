@@ -1062,7 +1062,8 @@ mod tests {
         assert!(
             definition
                 .plan
-                .r#where
+                .predicate_source()
+                .unwrap()
                 .unwrap()
                 .contains(&format!("tagRef(\"{}\")", root.tag_ref))
         );

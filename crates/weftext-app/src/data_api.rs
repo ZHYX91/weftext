@@ -73,6 +73,7 @@ struct QueryRequest {
 struct DefinitionsRequest {
     root: String,
     owner: String,
+    selection: Option<weftext_data::DefinitionSelection>,
 }
 
 #[derive(Deserialize, Clone)]
@@ -1172,7 +1173,7 @@ fn period_plan(
         weftext_data::QueryPlan {
             scope,
             types: vec!["calendar/period-note".into()],
-            r#where: Some(predicate),
+            r#where: Some(predicate.into()),
             select: vec![weftext_data::QueryColumn {
                 name: "period".into(),
                 expr: expression,
@@ -1720,12 +1721,12 @@ fn query_snapshot_impl(
             diagnostics.push(UiMessage::error_api_data_query_identity_unavailable().into());
         }
         let mut notes = Vec::new();
+        let mut entries_by_path = BTreeMap::new();
+        for entry in &inventory.entries {
+            entries_by_path.entry(entry.path.as_str()).or_insert(entry);
+        }
         for file in captured.files {
-            let Some(entry) = inventory
-                .entries
-                .iter()
-                .find(|entry| entry.path == file.path)
-            else {
+            let Some(entry) = entries_by_path.get(file.path.as_str()) else {
                 return Err(CoreError::new(
                     "invalidState",
                     UiMessage::error_api_data_unexpected_snapshot_source(),
@@ -1823,15 +1824,41 @@ fn query_snapshot_impl(
 
 async fn query(
     State(state): State<AppState>,
+    headers: axum::http::HeaderMap,
     RequestJson(req): RequestJson<QueryRequest>,
-) -> ApiResult {
+) -> Result<(axum::http::HeaderMap, Json<Value>), ApiError> {
+    let started = std::time::Instant::now();
     let frozen = core_call(&state, move |core| {
         let mut frozen = query_render_snapshot(core, &req.root, req.plan, None)?;
         freeze_query_definitions(core, &mut frozen, req.parameters)?;
         Ok(frozen)
     })
     .await?;
-    Ok(Json(evaluate_frozen(&state, frozen).await?))
+    let scope = started.elapsed();
+    let mut profile = QueryProfile::default();
+    let result = evaluate_frozen_profiled(&state, frozen, &mut profile).await?;
+    let mut response_headers = axum::http::HeaderMap::new();
+    if headers
+        .get("x-weftext-query-profile")
+        .is_some_and(|value| value == "1")
+    {
+        let finish = started
+            .elapsed()
+            .saturating_sub(scope + profile.native + profile.evaluate);
+        let timing = [
+            ("scope", scope),
+            ("native", profile.native),
+            ("evaluate", profile.evaluate),
+            ("finish", finish),
+        ]
+        .map(|(name, time)| format!("{name};dur={:.3}", time.as_secs_f64() * 1000.0))
+        .join(", ");
+        response_headers.insert(
+            "server-timing",
+            HeaderValue::from_str(&timing).expect("fixed query timing header"),
+        );
+    }
+    Ok((response_headers, Json(result)))
 }
 
 fn freeze_query_definitions(
@@ -1864,6 +1891,7 @@ fn freeze_query_definitions_with_draft_inner(
     let mut context = weftext_data::FrozenAdvancedInput {
         parameters,
         scope_bindings: frozen.scope_bindings.clone(),
+        text_index: Some(core.query_text_index(&["local", &frozen.root])),
         ..Default::default()
     };
     let mut loaded = BTreeSet::new();
@@ -2306,6 +2334,90 @@ pub(crate) fn native_query_products(
     weftext_data::native_query_products(identity, products)
 }
 
+const QUERY_NATIVE_RESULT_BYTES: usize = 32 * 1024 * 1024;
+type NativeQueryResults = BTreeMap<usize, Result<weftext_engine::FrozenQueryProduct, ApiError>>;
+
+async fn render_query_misses(
+    state: &AppState,
+    frozen: &FrozenQuery,
+    files: &BTreeMap<String, Vec<u8>>,
+    misses: &[usize],
+) -> (NativeQueryResults, Option<UiMessage>) {
+    let mut remaining = misses
+        .chunks(crate::query_product_worker::BATCH_NOTES)
+        .collect::<std::collections::VecDeque<_>>();
+    let mut output = BTreeMap::new();
+    let mut remaining_bytes = QUERY_NATIVE_RESULT_BYTES;
+    let encoded = crate::query_product_worker::encode_files(files);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+    while let Some(batch) = remaining.pop_front() {
+        let sources = batch
+            .iter()
+            .map(|&index| {
+                let note = &frozen.input.notes[index];
+                weftext_engine::FrozenQuerySource {
+                    path: PathBuf::from(&note.path),
+                    source: note.source.clone(),
+                }
+            })
+            .collect();
+        let response = tokio::time::timeout_at(
+            deadline,
+            crate::query_product_worker::run(
+                state,
+                PathBuf::from(&frozen.root),
+                frozen.render_style.clone(),
+                encoded.clone(),
+                sources,
+            ),
+        )
+        .await;
+        let products = match response {
+            Ok(Ok(products)) => products
+                .into_iter()
+                .map(|product| {
+                    product.map_err(|description| {
+                        ApiError::from_product(
+                            StatusCode::UNPROCESSABLE_ENTITY,
+                            "query_native_product",
+                            None,
+                            description,
+                            Vec::new(),
+                        )
+                    })
+                })
+                .collect::<Vec<_>>(),
+            Ok(Err(_)) if batch.len() > 1 => {
+                // Isolate an oversized or rejected batch. Each smaller batch
+                // remains subject to the original process and request budgets.
+                let (first, rest) = batch.split_at(batch.len() / 2);
+                remaining.push_front(rest);
+                remaining.push_front(first);
+                continue;
+            }
+            Ok(Err(error)) => vec![Err(error)],
+            Err(_) => {
+                return (
+                    output,
+                    Some(UiMessage::error_api_data_native_product_deadline()),
+                );
+            }
+        };
+        for (&index, product) in batch.iter().zip(products) {
+            let size = serde_json::to_vec(&product).map_or(usize::MAX, |bytes| bytes.len());
+            if size > remaining_bytes {
+                return (
+                    output,
+                    Some(UiMessage::error_api_data_native_product_budget()),
+                );
+            }
+            remaining_bytes -= size;
+            output.insert(index, product);
+        }
+    }
+    (output, None)
+}
+
 async fn qualify_query_products(
     state: &AppState,
     frozen: &mut FrozenQuery,
@@ -2320,93 +2432,125 @@ async fn qualify_query_products(
     if demands.is_empty() {
         return Ok(demands);
     }
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
-    if let Some(files) = &frozen.render_files {
-        use base64::Engine as _;
-        let inputs = files.iter().map(|(path,bytes)|json!({"path":path,"byteLength":bytes.len(),
-            "contentHash":weftext_engine::source_hash(&base64::engine::general_purpose::STANDARD.encode(bytes))})).collect::<Vec<_>>();
+    let mut cached = Vec::new();
+    let mut rendered = BTreeMap::new();
+    let mut remainder = None;
+    let mut index_cut = None;
+    let mut index_keys = None;
+    if let Some(files) = frozen.render_files.take() {
+        let cut = std::sync::Arc::new(weftext_core::QueryProductCut::new(
+            &[
+                "local",
+                &frozen.root,
+                crate::query_product_worker::build_identity(),
+            ],
+            &files,
+            frozen.render_style.as_ref(),
+        ));
+        let keys = std::sync::Arc::new(
+            frozen
+                .input
+                .notes
+                .iter()
+                .map(|note| cut.key(&note.entity_key, &note.path, &note.source))
+                .collect::<Vec<_>>(),
+        );
+        let lookup_cut = cut.clone();
+        let lookup_keys = keys.clone();
+        cached =
+            core_call(state, move |core| {
+                Ok(core.query_product_entries(
+                    lookup_keys.iter().map(|key| (lookup_cut.as_ref(), key)),
+                ))
+            })
+            .await?;
+        let inputs = files.iter().map(|(path, bytes)| {
+            json!({"path":path,"byteLength":bytes.len(),"contentHash":cut.file_fingerprint(path)})
+        }).collect::<Vec<_>>();
         frozen.versions.push(json!({"role":"nativeCompile","cutId":frozen.input.cut_id,"target":"html","files":inputs,
             "style":frozen.render_style.as_ref().map(|style|json!({"path":style.path,"sourceHash":weftext_engine::source_hash(&style.source),"enabled":style.enabled,"entryFunction":style.entry_function}))}));
+        let misses = cached
+            .iter()
+            .enumerate()
+            .filter_map(|(index, value)| value.is_none().then_some(index))
+            .collect::<Vec<_>>();
+        if !misses.is_empty() {
+            (rendered, remainder) = render_query_misses(state, frozen, &files, &misses).await;
+        }
+        let hits = cached.len() - misses.len();
+        let built = rendered
+            .values()
+            .filter(|value| matches!(value, Ok(product) if product.products.is_some()))
+            .count();
+        frozen.versions.push(
+            json!({"role":"nativeQueryIndex","hits":hits,"misses":misses.len(),"built":built}),
+        );
+        index_cut = Some(cut);
+        index_keys = Some(keys);
     }
-    for (index, note) in frozen.input.notes.iter_mut().enumerate() {
+    let mut entries = Vec::new();
+    for (position, note) in frozen.input.notes.iter_mut().enumerate() {
         let identity = format!(
             "native-html:{}:{}:{}",
             frozen.input.cut_id,
             note.entity_key,
             weftext_engine::source_hash(&note.source)
         );
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        let products = if index >= 32 || remaining.is_zero() {
+        let hit = cached.get_mut(position).and_then(Option::take);
+        let rendered_product = rendered.remove(&position);
+        let unfinished = hit.is_none() && rendered_product.is_none();
+        let qualified = match (hit, rendered_product) {
+            (Some(entry), _) => Some((entry.products, entry.dependencies, entry.compiler_version)),
+            (_, Some(Ok(output))) => {
+                if output.products.is_some() {
+                    if let (Some(cut), Some(keys)) = (&index_cut, &index_keys)
+                        && let Some(entry) = cut.record(&keys[position], &output)
+                    {
+                        entries.push(entry);
+                    }
+                    output
+                        .products
+                        .map(|products| (products, output.dependencies, output.compiler_version))
+                } else {
+                    frozen.engine_diagnostics.push(QueryEngineDiagnostics {
+                        entity_key: note.entity_key.clone(),
+                        diagnostics: output.diagnostics,
+                    });
+                    None
+                }
+            }
+            (_, Some(Err(error))) => {
+                frozen.product_errors.push(QueryProductError {
+                    entity_key: note.entity_key.clone(),
+                    error,
+                });
+                None
+            }
+            _ => None,
+        };
+        let products = if let Some((products, dependencies, compiler_version)) = qualified
+            && products.target == "html"
+        {
+            frozen.versions.push(json!({"role":"nativeProduct","entityKey":note.entity_key,"compileIdentity":identity,"target":products.target,
+                "compilerVersion":compiler_version,"dependencies":dependencies}));
+            native_query_products(identity, products)
+        } else if unfinished && let Some(reason) = &remainder {
             unavailable_products(
                 identity,
                 weftext_data::DataErrorKind::NativeBudget,
-                UiMessage::error_api_data_native_product_budget(),
+                reason.clone(),
             )
-        } else if let Some(files) = &frozen.render_files {
-            let request = weftext_engine::FrozenRenderRequest {
-                source: note.source.clone(),
-                path: PathBuf::from(&note.path),
-                root: PathBuf::from(&frozen.root),
-                files: files.clone(),
-                style: frozen.render_style.clone(),
-            };
-            match tokio::time::timeout(remaining, render_frozen_worker(state, request)).await {
-                Ok(Ok(output)) if output["ok"] == true => {
-                    match serde_json::from_value::<weftext_engine::RenderProducts>(
-                        output["products"].clone(),
-                    ) {
-                        Ok(products) if products.target == "html" => {
-                            frozen.versions.push(json!({"role":"nativeProduct","entityKey":note.entity_key,"compileIdentity":identity,
-                            "compilerVersion":output["compilerVersion"],"target":"html","dependencies":output["dependencies"]}));
-                            native_query_products(identity, products)
-                        }
-                        _ => unavailable_products(
-                            identity,
-                            weftext_data::DataErrorKind::Unavailable,
-                            UiMessage::error_api_data_native_products_unqualified(),
-                        ),
-                    }
-                }
-                Ok(Ok(output)) => {
-                    let diagnostics = serde_json::from_value::<Vec<weftext_engine::Diagnostic>>(
-                        output["diagnostics"].clone(),
-                    )
-                    .map_err(|error| {
-                        ApiError::internal(UiMessage::error_api_data_native_diagnostics_invalid())
-                            .diagnostic(weftext_messages::DiagnosticOrigin::Json, error.to_string())
-                    })?;
-                    frozen.engine_diagnostics.push(QueryEngineDiagnostics {
-                        entity_key: note.entity_key.clone(),
-                        diagnostics,
-                    });
-                    unavailable_products(
-                        identity,
-                        weftext_data::DataErrorKind::Unavailable,
-                        UiMessage::error_api_data_native_compile_failed(),
-                    )
-                }
-                Ok(Err(error)) => {
-                    frozen.product_errors.push(QueryProductError {
-                        entity_key: note.entity_key.clone(),
-                        error,
-                    });
-                    unavailable_products(
-                        identity,
-                        weftext_data::DataErrorKind::Unavailable,
-                        UiMessage::error_api_data_native_worker_unavailable(),
-                    )
-                }
-                Err(_) => unavailable_products(
-                    identity,
-                    weftext_data::DataErrorKind::NativeBudget,
-                    UiMessage::error_api_data_native_product_deadline(),
-                ),
-            }
-        } else {
+        } else if index_cut.is_none() {
             unavailable_products(
                 identity,
                 weftext_data::DataErrorKind::Unavailable,
                 UiMessage::error_api_data_native_environment_unavailable(),
+            )
+        } else {
+            unavailable_products(
+                identity,
+                weftext_data::DataErrorKind::Unavailable,
+                UiMessage::error_api_data_native_compile_failed(),
             )
         };
         let partial = demands.iter().any(|demand| {
@@ -2434,6 +2578,13 @@ async fn qualify_query_products(
         }
         note.products = Some(products);
     }
+    if !entries.is_empty() {
+        core_call(state, move |core| {
+            core.remember_query_products(entries);
+            Ok(())
+        })
+        .await?;
+    }
     Ok(demands)
 }
 
@@ -2450,8 +2601,22 @@ fn publish_query_diagnostics(
 }
 
 async fn evaluate_frozen(state: &AppState, frozen: FrozenQuery) -> Result<Value, ApiError> {
+    evaluate_frozen_profiled(state, frozen, &mut QueryProfile::default()).await
+}
+
+#[derive(Default)]
+struct QueryProfile {
+    native: Duration,
+    evaluate: Duration,
+}
+
+async fn evaluate_frozen_profiled(
+    state: &AppState,
+    frozen: FrozenQuery,
+    profile: &mut QueryProfile,
+) -> Result<Value, ApiError> {
     let cuts = frozen_query_cut_ids(&frozen);
-    let result = evaluate_frozen_inner(state, frozen).await;
+    let result = evaluate_frozen_inner(state, frozen, profile).await;
     if result.is_err() {
         core_call(state, move |core| {
             release_query_cuts(core, &cuts);
@@ -2465,8 +2630,11 @@ async fn evaluate_frozen(state: &AppState, frozen: FrozenQuery) -> Result<Value,
 async fn evaluate_frozen_inner(
     state: &AppState,
     mut frozen: FrozenQuery,
+    profile: &mut QueryProfile,
 ) -> Result<Value, ApiError> {
+    let native = std::time::Instant::now();
     let products = qualify_query_products(state, &mut frozen).await?;
+    profile.native = native.elapsed();
     let export_root = frozen.root.clone();
     let export_schema = value(&frozen.schema)?;
     let mut export_columns = frozen
@@ -2500,12 +2668,14 @@ async fn evaluate_frozen_inner(
     let raw_pending = frozen.raw_pending;
     let membership_ids = frozen.membership_ids;
     let scope_cuts = frozen.scope_cuts;
+    let evaluation = std::time::Instant::now();
     let mut result = crate::work::spawn_blocking(move || {
         weftext_data::execute_query(&frozen.input, &frozen.plan, &frozen.schema)
     })
     .await
     .map_err(|_| ApiError::internal(UiMessage::error_api_data_query_evaluation_incomplete()))?
     .map_err(data_error)?;
+    profile.evaluate = evaluation.elapsed();
     let diagnostics: Vec<weftext_core::CoreDescription> = result
         .diagnostics
         .drain(..)
@@ -2605,6 +2775,12 @@ async fn definitions(
 ) -> ApiResult {
     let output = core_call(&state, move |core| {
         let current = owner_source(core, &req.root, &req.owner)?;
+        if let Some(selection) = &req.selection {
+            let (definition, revision) = select_saved_definition(core, &req.root, &current, selection)?;
+            return Ok(json!({"definitions":[definition],"definitionRevision":revision,
+                "ownerRevision":current.file.revision,"owner":req.owner,
+                "ownerBaseId":current.file.base_id,"unavailable":[],"snapshotMode":"perFileObserved"}));
+        }
         let candidates = weftext_data::saved_queries(&current.source)
             .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))?;
         let mut admitted = Vec::new(); let mut unavailable = Vec::new();
@@ -3195,6 +3371,49 @@ pub(crate) async fn validate_embedded_query_plan(
     .await
 }
 
+fn select_saved_definition(
+    core: &mut Core,
+    root: &str,
+    current: &OwnerSource,
+    selection: &weftext_data::DefinitionSelection,
+) -> Result<(weftext_data::SavedQuery, Option<String>), CoreError> {
+    let node_id = current.entry.node_id.as_deref().unwrap();
+    let (key, revision, source) = match selection {
+        weftext_data::DefinitionSelection::Current { key } => (
+            key,
+            current.file.revision.clone(),
+            std::borrow::Cow::Borrowed(current.source.as_str()),
+        ),
+        weftext_data::DefinitionSelection::Pinned { key, revision } => {
+            let bytes = core.read_source_revision(root, node_id, revision)?;
+            let source = String::from_utf8(bytes).map_err(|_| {
+                CoreError::new(
+                    "definitionUnavailable",
+                    UiMessage::error_api_data_retained_definition_encoding(),
+                )
+            })?;
+            (key, Some(revision.clone()), std::borrow::Cow::Owned(source))
+        }
+    };
+    if !core.is_definition_key_admitted(root, node_id, key)? {
+        return Err(CoreError::new(
+            "definitionUnavailable",
+            UiMessage::error_api_data_definition_key_admission_missing(),
+        ));
+    }
+    let definition = weftext_data::saved_queries(&source)
+        .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))?
+        .into_iter()
+        .find(|definition| &definition.key == key)
+        .ok_or_else(|| {
+            CoreError::new(
+                "definitionUnavailable",
+                UiMessage::error_api_data_definition_key_at_revision_missing(),
+            )
+        })?;
+    Ok((definition, revision))
+}
+
 async fn run_definition(
     State(state): State<AppState>,
     RequestJson(req): RequestJson<DefinitionRunRequest>,
@@ -3202,41 +3421,12 @@ async fn run_definition(
     let (frozen, definition, revision, mode, owner_revision, changed) =
         core_call(&state, move |core| {
             let current = owner_source(core, &req.root, &req.owner)?;
-            let node_id = current.entry.node_id.as_deref().unwrap();
-            let (key, revision, mode, source) = match &req.selection {
-                weftext_data::DefinitionSelection::Current { key } => (
-                    key,
-                    current.file.revision.clone(),
-                    "current",
-                    current.source.clone(),
-                ),
-                weftext_data::DefinitionSelection::Pinned { key, revision } => {
-                    let bytes = core.read_source_revision(&req.root, node_id, revision)?;
-                    let source = String::from_utf8(bytes).map_err(|_| {
-                        CoreError::new(
-                            "definitionUnavailable",
-                            UiMessage::error_api_data_retained_definition_encoding(),
-                        )
-                    })?;
-                    (key, Some(revision.clone()), "pinned", source)
-                }
+            let (definition, revision) =
+                select_saved_definition(core, &req.root, &current, &req.selection)?;
+            let mode = match &req.selection {
+                weftext_data::DefinitionSelection::Current { .. } => "current",
+                weftext_data::DefinitionSelection::Pinned { .. } => "pinned",
             };
-            if !core.is_definition_key_admitted(&req.root, node_id, key)? {
-                return Err(CoreError::new(
-                    "definitionUnavailable",
-                    UiMessage::error_api_data_definition_key_admission_missing(),
-                ));
-            }
-            let definition = weftext_data::saved_queries(&source)
-                .map_err(|error| CoreError::from_data("invalidQueryDefinition", error))?
-                .into_iter()
-                .find(|definition| &definition.key == key)
-                .ok_or_else(|| {
-                    CoreError::new(
-                        "definitionUnavailable",
-                        UiMessage::error_api_data_definition_key_at_revision_missing(),
-                    )
-                })?;
             let current_config = core.read_config(&req.root, ConfigRole::Schema)?;
             if current_config.role_ref != definition.binding.schema {
                 return Err(CoreError::new(
@@ -3287,7 +3477,7 @@ async fn run_definition(
                     .and_then(|definitions| {
                         definitions
                             .into_iter()
-                            .find(|definition| &definition.key == key)
+                            .find(|candidate| candidate.key == definition.key)
                     });
             let changed = latest.as_ref().is_none_or(|latest| {
                 serde_json::to_value(latest).ok() != serde_json::to_value(&definition).ok()
@@ -3758,8 +3948,9 @@ mod tests {
             (path, format!("{}\n// observed external edit", note.source))
         };
         std::fs::write(&path, &source).unwrap();
-        let Json(rows) = ok(query(
+        let (_, Json(rows)) = ok(query(
             State(state.clone()),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 root: root.clone(),
                 parameters: BTreeMap::new(),
@@ -3828,17 +4019,14 @@ mod tests {
             default: None,
         };
         let plan = weftext_data::QueryPlan {
-            r#where: Some(format!(
-                "false && tagInSubtree(tagRef('{tag}'), tagRef('{missing}'))"
-            )),
+            r#where: Some(
+                format!("false && tagInSubtree(tagRef('{tag}'), tagRef('{missing}'))").into(),
+            ),
             select: vec![weftext_data::QueryColumn {
                 name: "value".into(),
                 expr: "true".into(),
             }],
-            advanced: Some(weftext_data::QueryAdvanced {
-                parameters: vec![parameter],
-                ..Default::default()
-            }),
+            parameters: vec![parameter],
             ..Default::default()
         };
         let mut request = definition_request(&document, original.clone(), None, "open");
@@ -3856,7 +4044,7 @@ mod tests {
         );
         let mut request = definition_request(&document, original, None, "open");
         request.plan = plan;
-        request.plan.r#where = Some(format!("false && tagInSubtree(tagRef('{tag}'), root)"));
+        request.plan.r#where = Some(format!("false && tagInSubtree(tagRef('{tag}'), root)").into());
         let Json(saved) = ok(save_definition(State(state), crate::RequestJson(request)).await);
         assert!(saved["definitionRevision"].is_string());
     }
@@ -3884,9 +4072,7 @@ mod tests {
         let parent = create(&mut core, None);
         let leaf = create(&mut core, Some(&parent));
         let plan = weftext_data::QueryPlan {
-            r#where: Some(format!(
-                "tagInSubtree(tagRef('{leaf}'), tagRef('{parent}'))"
-            )),
+            r#where: Some(format!("tagInSubtree(tagRef('{leaf}'), tagRef('{parent}'))").into()),
             select: vec![weftext_data::QueryColumn {
                 name: "value".into(),
                 expr: "true".into(),
@@ -3900,11 +4086,14 @@ mod tests {
         assert!(result.rows.is_empty());
         assert_eq!(result.coverage, "complete");
         let invalid = weftext_data::QueryPlan {
-            r#where: Some(format!(
-                "true || tagInSubtree(tagRef('{leaf}'), tagRef('weftext-tag://{}/{}'))",
-                parent.split('/').nth(2).unwrap(),
-                uuid::Uuid::new_v4()
-            )),
+            r#where: Some(
+                format!(
+                    "true || tagInSubtree(tagRef('{leaf}'), tagRef('weftext-tag://{}/{}'))",
+                    parent.split('/').nth(2).unwrap(),
+                    uuid::Uuid::new_v4()
+                )
+                .into(),
+            ),
             ..plan.clone()
         };
         let mut invalid = query_snapshot(&mut core, &root, invalid).unwrap();
@@ -3958,7 +4147,7 @@ mod tests {
             .open(Path::new(&root).join(".weftext-tags.json"))
             .unwrap();
         let exact = weftext_data::QueryPlan {
-            r#where: Some(format!("tagRef('{leaf}') == tagRef('{leaf}')")),
+            r#where: Some(format!("tagRef('{leaf}') == tagRef('{leaf}')").into()),
             ..plan.clone()
         };
         let mut unrelated = query_snapshot(&mut core, &root, exact).unwrap();
@@ -4312,8 +4501,9 @@ mod tests {
             document["nodeId"].as_str().unwrap()
         );
         let plan: weftext_data::QueryPlan = serde_json::from_value(json!({"scope":{"directory":entity,"descendants":true},"types":["task"],"where":"status == 'open'","select":[{"name":"status","expr":"status"}]})).unwrap();
-        let Json(rows) = ok(query(
+        let (_, Json(rows)) = ok(query(
             State(state.clone()),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),
@@ -4368,8 +4558,9 @@ mod tests {
             name: "status".into(),
             expr: "status".into(),
         }];
-        let Json(renamed_rows) = ok(query(
+        let (_, Json(renamed_rows)) = ok(query(
             State(state.clone()),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 root: root.clone(),
                 plan,
@@ -4397,6 +4588,7 @@ mod tests {
         ));
         let result = query(
             State(state),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 root,
                 plan: unavailable,
@@ -4700,8 +4892,11 @@ mod tests {
     #[tokio::test]
     async fn admitted_complete_zero_and_external_pending_remain_distinct() {
         let (_directory, state, root) = fixture();
-        let Json(empty) = ok(query(
+        let mut profile = axum::http::HeaderMap::new();
+        profile.insert("x-weftext-query-profile", HeaderValue::from_static("1"));
+        let (timing, Json(empty)) = ok(query(
             State(state.clone()),
+            profile,
             crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),
@@ -4709,14 +4904,19 @@ mod tests {
             }),
         )
         .await);
+        let timing = timing["server-timing"].to_str().unwrap();
+        for phase in ["scope", "native", "evaluate", "finish"] {
+            assert!(timing.contains(&format!("{phase};dur=")));
+        }
         assert!(empty["rows"].as_array().unwrap().is_empty());
         assert_eq!(empty["coverage"], "complete");
         assert_eq!(empty["aggregateExact"], true);
         let external = Path::new(&root).join("External");
         std::fs::create_dir(&external).unwrap();
         std::fs::write(external.join("External.typ"),format!("#metadata((id: \"{}\", types: (\"task\",), status: \"done\")) <weftext>\n外部未准入笔记\n",uuid::Uuid::new_v4())).unwrap();
-        let Json(raw) = ok(query(
+        let (_, Json(raw)) = ok(query(
             State(state),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root,
@@ -4886,8 +5086,9 @@ mod tests {
         .await);
         let mut plan = status_plan("open");
         plan.scope.lifecycle = "trash".into();
-        let Json(rows) = ok(query(
+        let (_, Json(rows)) = ok(query(
             State(state.clone()),
+            Default::default(),
             crate::RequestJson(QueryRequest {
                 parameters: BTreeMap::new(),
                 root: root.clone(),

@@ -2,7 +2,7 @@ import { uiDisplayParameter } from "./ui-locale";
 import { message as uiMessage, displayMessage, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, errorUiText, UiError, type UiText } from "./ui-locale";
 import type { AuthorInputFactory, AuthorInputSession } from "./author-input";
 import { action, ui } from "./data-panel";
-import { parseQueryPlan, type QueryPlan } from "./query-panel";
+import { parseQueryPlan, type QueryPlan } from "./query-plan";
 import { hostedCachePrefix } from "./hosted-state";
 import type { SourcePatch } from "./editor";
 import type { EmbeddedQueryBasis } from "./embedded-query";

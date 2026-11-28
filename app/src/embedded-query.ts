@@ -6,8 +6,10 @@ import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, 
 import { applySourcePatches, sourceBoundary, type SourcePatch } from "./editor";
 import { diagnosticText, fieldNames, formatNativeValue, type Cell, type DataSchema } from "./data-panel";
 import { queryPlanControls, queryCallControls } from "./query-plan-controls";
+import { queryArgumentControls } from "./query-argument-controls";
 import { initialOccurrenceView, decodeOccurrenceView, occurrenceViewControls, occurrenceProjection, renderOccurrenceCards, type OccurrenceView } from "./query-result-view";
-import { parseQueryParameters, parseQueryPlan, queryResultState, queryRowLifecycle, type QueryPlan, type QueryResult, type QueryRow } from "./query-panel";
+import { queryResultState, queryRowLifecycle, type QueryResult, type QueryRow } from "./query-panel";
+import { parseQueryParameters, parseQueryPlan, type QueryPlan } from "./query-plan";
 import type { Origin, RenderNode, ViewMode } from "./types";
 import { textareaSourceDraft, utf8Offset } from "./writing";
 import type { FrozenQuery, EmbeddedQuerySelection } from "./export-state";
@@ -533,7 +535,8 @@ export class EmbeddedQueryController {
                 }
                 this.refreshResult(item);
             };
-            parameters.append(input, element("p", "embedded-query-help", message("embeddedQuery.previewParametersHelp")));
+            parameters.append(input, queryArgumentControls(input, () => item.plan ?? null, () => this.formSchema),
+                element("p", "embedded-query-help", message("embeddedQuery.previewParametersHelp")));
             mount.append(parameters);
         }
         mount.append(element("div", "embedded-query-results"));
@@ -714,16 +717,12 @@ export class EmbeddedQueryController {
             state.authorSessionId = currentBasis.sessionId;
         }
         const inputs = state.authorInputs ??= this.host.authorInputs?.();
-        builder.append(plan.advanced?.call ? queryCallControls(plan, inputs) : queryPlanControls(plan, this.formSchema, changed, undefined, inputs));
+        const conditionLabel = () => `${uiTextValue(item.label)} ${uiTextValue(message("embeddedQuery.conditionLabel"))}`;
+        builder.append(plan.advanced?.call ? queryCallControls(plan, inputs)
+            : queryPlanControls(plan, this.formSchema, changed, undefined, inputs, conditionLabel));
         const add = (role: string, label: UiText, value: string, update: (value: string) => void, multiline = false): HTMLInputElement | HTMLTextAreaElement => { const field = element("label", "embedded-query-field", label), input = multiline ? element("textarea", "embedded-query-input") : element("input", "embedded-query-input"); input.value = value; inputs?.bind(input, `query-author:${role}`); input.dataset.controlKey = JSON.stringify(["embedded-query-builder", item.id, role]); setUiAttr(input, "aria-label", () => `${uiTextValue(item.label)} ${uiTextValue(label)}`); input.oninput = () => update(input.value); field.append(input); builder.append(field); return input; };
         if (!plan.advanced?.call) {
             add("types", message("embeddedQuery.typesLabel"), plan.types.join(", "), value => { plan.types = value.split(",").map(item => item.trim()).filter(Boolean); });
-            add("where", message("embeddedQuery.conditionLabel"), plan.where ?? "", value => {
-                if (value.trim())
-                    plan.where = value;
-                else
-                    delete plan.where;
-            }, true);
             const take = add("take", message("embeddedQuery.takeLabel"), plan.take == null ? "" : String(plan.take), value => {
                 if (!value.trim())
                     delete plan.take;

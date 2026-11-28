@@ -69,6 +69,7 @@ export interface DataSchema {
     fields: SchemaField[];
     types: SchemaType[];
     aliases: Record<string, string>;
+    relations?: { id: string }[];
     series_policies?: {
         key: string;
         kinds: string[];

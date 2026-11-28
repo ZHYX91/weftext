@@ -3,13 +3,12 @@
 Local APIs only establish the fixture's admissions. All tested effects and new
 object entry points use hosted HTTP without rewriting operator configuration.
 """
+from _http_test_suite import run_http_suite
 import uuid
 from _creation_result import created_document
 import base64
 import copy
 import json
-import sys
-import unittest
 
 from test_hosted import uid
 from test_hosted_history import HostedHistory
@@ -351,7 +350,4 @@ class HostedStructure(HostedHistory):
 
 
 if __name__ == '__main__':
-    selected = set(sys.argv[2:])
-    suite = unittest.TestSuite(HostedStructure(name) for name in sorted(HostedStructure.__dict__)
-                              if name.startswith('test_structure_') and (not selected or name in selected))
-    sys.exit(not unittest.TextTestRunner(verbosity=2).run(suite).wasSuccessful())
+    raise SystemExit(run_http_suite(HostedStructure))
