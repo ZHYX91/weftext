@@ -285,19 +285,17 @@ mod tests {
     #[tokio::test]
     async fn accepted_cancellation_crosses_blocking_and_nested_worker_boundaries() {
         let run = Arc::new(Run::default());
-        let worker = CURRENT
-            .scope(run.clone(), async {
-                crate::work::spawn(async {
-                    cancellation().await;
-                    crate::work::spawn_blocking(|| {
-                        assert!(weftext_data::query_checkpoint().is_err());
-                        assert!(publish().is_err());
-                    })
-                    .await
-                    .unwrap();
+        let worker = CURRENT.sync_scope(run.clone(), || {
+            crate::work::spawn(async {
+                cancellation().await;
+                crate::work::spawn_blocking(|| {
+                    assert!(weftext_data::query_checkpoint().is_err());
+                    assert!(publish().is_err());
                 })
+                .await
+                .unwrap();
             })
-            .await;
+        });
         assert!(run.cancel());
         worker.await.unwrap();
         run.jobs.drain().await.unwrap();
@@ -307,11 +305,9 @@ mod tests {
     #[tokio::test]
     async fn a_lost_nested_task_cannot_acknowledge_quiescence() {
         let run = Arc::new(Run::default());
-        let worker = CURRENT
-            .scope(run.clone(), async {
-                crate::work::spawn(std::future::pending::<()>())
-            })
-            .await;
+        let worker = CURRENT.sync_scope(run.clone(), || {
+            crate::work::spawn(std::future::pending::<()>())
+        });
         worker.abort();
         assert!(worker.await.unwrap_err().is_cancelled());
         assert!(run.jobs.drain().await.is_err());

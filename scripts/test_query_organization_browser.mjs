@@ -47,15 +47,15 @@ async function observe(target) {
   await target.addInitScript(() => {
     const views = new Map();
     const remember = () => {
-      const sessionId = document.querySelector('.topbar')?.dataset.session;
+      const sessionId = document.querySelector('.workspace-ribbon .document-controls[data-document-owner]')?.dataset.documentOwner;
       const content = document.querySelector('.source-host .cm-content');
       const view = content?.cmTile?.root?.view;
       if (sessionId && view?.contentDOM === content) views.set(sessionId, view);
     };
-    new MutationObserver(remember).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-session'] });
+    new MutationObserver(remember).observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-document-owner'] });
     window.weftextAcceptanceEditor = () => {
       remember();
-      const sessionId = document.querySelector('.topbar')?.dataset.session ?? null;
+      const sessionId = document.querySelector('.workspace-ribbon .document-controls[data-document-owner]')?.dataset.documentOwner ?? null;
       const view = views.get(sessionId);
       const active = document.activeElement;
       return { sessionId, source: view?.state.doc.toString() ?? null,
@@ -161,7 +161,15 @@ try {
 
   await workspaceCommand(page, 'file', '创建资料库'); let dialog = page.getByRole('dialog', { name:'创建资料库与文档排版语言', exact:true });
 
-  await dialog.getByLabel('新资料库完整路径').fill(root); await dialog.getByLabel('根节点初始内容').selectOption('queries'); await dialog.getByLabel('根笔记标题（可留空）').fill('我的普通首页😀'); await dialog.getByLabel('初始查询：任务', {exact:true}).check(); await dialog.getByLabel('初始查询：事件', {exact:true}).check(); await click('预览创建', dialog);
+  async function previewRootNote(dialog) {
+    await dialog.getByLabel('新资料库完整路径').fill(root);
+    await dialog.getByLabel('根节点初始内容').selectOption('queries');
+    await dialog.getByLabel('根笔记标题（可留空）').fill('我的普通首页😀');
+    await dialog.getByLabel('初始查询：任务', {exact:true}).check();
+    await dialog.getByLabel('初始查询：事件', {exact:true}).check();
+    await click('预览创建', dialog);
+  }
+  await previewRootNote(dialog);
 
   assert.match(await dialog.innerText(), /\.weftext-schema\.json/); await assert.rejects(access(root)); await click('关闭', dialog); await assert.rejects(access(root)); pass('Preset selection and actual scope/schema preview cancel without any author files or sample records.');
 
@@ -169,7 +177,15 @@ try {
 
   await page.route('**/api/library/create', async route => { creations.push(route.request().postDataJSON()); if (lose) { lose=false; const reply=await route.fetch(); result.lostCreation=await reply.json(); await route.abort('failed'); } else await route.continue(); });
 
-  await workspaceCommand(page, 'file', '创建资料库'); dialog = page.getByRole('dialog', { name:'创建资料库与文档排版语言', exact:true }); assert.equal(await dialog.getByLabel('根笔记标题（可留空）').inputValue(),'我的普通首页😀'); await click('预览创建',dialog); await click('创建资料库',dialog); await until(()=>dialog.getByRole('button',{name:'确认同一创建操作',exact:true}).isEnabled()); assert.equal(await dialog.getByLabel('根节点初始内容').isDisabled(),true); await click('关闭',dialog);
+  await workspaceCommand(page, 'file', '创建资料库');
+  dialog = page.getByRole('dialog', {name:'创建资料库与文档排版语言', exact:true});
+  assert.equal(await dialog.getByLabel('新资料库完整路径').inputValue(),'');
+  assert.equal(await dialog.getByLabel('根节点初始内容').inputValue(),'none');
+  await previewRootNote(dialog);
+  await click('创建资料库',dialog);
+  await until(()=>dialog.getByRole('button',{name:'确认同一创建操作',exact:true}).isEnabled());
+  assert.equal(await dialog.getByLabel('根节点初始内容').isDisabled(),true);
+  await click('关闭',dialog);
 
   await workspaceCommand(page, 'file', '创建资料库'); dialog=page.getByRole('dialog',{name:'创建资料库与文档排版语言',exact:true}); await click('确认同一创建操作',dialog); await until(()=>creations.length===2); await page.unroute('**/api/library/create'); assert.equal(creations.length,2); assert.deepEqual(creations[0],creations[1]);
 
@@ -201,7 +217,7 @@ try {
 
   await until(()=>query(tasks.label).getByRole('button',{name:'任务甲',exact:true}).count().then(count=>count===1)); await click('任务甲',query(tasks.label)); await expectSource(taskDocs[0].source); await page.waitForFunction(()=>document.querySelector('.status-right')?.textContent.includes('草稿预览已更新')); await workspaceMode(page, '可视编辑'); await until(async()=>await page.getByRole('button',{name:'可视编辑',exact:true}).getAttribute('aria-pressed')==='true'); await page.waitForFunction(()=>document.querySelector('.status-right')?.textContent.includes('草稿预览已更新')); await workspaceCommand(page, 'knowledge', '属性'); const properties=page.getByRole('complementary',{name:'笔记属性',exact:true}), due=properties.locator('.data-property').filter({has:page.getByRole('heading',{name:'截止日期',exact:true})});
 
-  await due.getByLabel('截止日期',{exact:true}).fill('2026-'); phase='property-refusal'; await click('应用到草稿',due); await expectSource(taskDocs[0].source); await click('刷新',properties); await until(()=>due.getByLabel('截止日期',{exact:true}).inputValue().then(value=>value==='2026-')); assert.equal(await readOwned(taskDocs[0].path),taskDocs[0].source);
+  await due.getByLabel('截止日期',{exact:true}).fill('2026-'); phase='property-refusal'; await click('应用到草稿',due); await expectSource(taskDocs[0].source); await click('刷新',properties.locator('.data-panel-heading')); await until(()=>due.getByLabel('截止日期',{exact:true}).inputValue().then(value=>value==='2026-')); assert.equal(await readOwned(taskDocs[0].path),taskDocs[0].source);
 
   phase='local';
   let releaseOldProjection, oldBasis;
@@ -213,7 +229,7 @@ try {
   };
   await page.route('**/api/data/project', holdProjection);
   try {
-    await click('刷新',properties); await until(()=>!!oldBasis);
+    await click('刷新',properties.locator('.data-panel-heading')); await until(()=>!!oldBasis);
     assert.equal(await due.getByLabel('截止日期',{exact:true}).inputValue(),'2026-');
     const newerProjection = page.waitForResponse(response => {
       if (new URL(response.url()).pathname !== '/api/render' || response.status() !== 200) return false;
@@ -262,14 +278,26 @@ try {
   else await workspaceCommand(page, 'file', '退出并清除本页缓存');
 
   await page.getByLabel('访问凭据',{exact:true}).fill(tokens.reader); await click('连接'); await click('普通首页'); await until(()=>page.locator('.embedded-query').count().then(count=>count===2)); await workspaceMode(page, 'V05 阅读'); await page.keyboard.press('Control+z'); await expectSource(original,true);
-  await query(tasks.label).getByRole('button',{name:'任务甲',exact:true}).waitFor({state:'visible'});
+  const readerTaskQuery = query(tasks.label);
+  const readerTask = readerTaskQuery.getByRole('button',{name:'任务甲',exact:true});
+  // Opening the note can start both embedded previews alongside the reading render.
+  // If the actual UI reports a busy preview, retry through its ordinary Run control.
+  for (let attempt = 0; attempt < 5 && !await readerTask.isVisible(); attempt++) {
+    const status = await readerTaskQuery.innerText();
+    if (status.includes('请稍后再试'))
+      await readerTaskQuery.getByRole('button',{name:/^(刷新结果|运行草稿查询)$/}).click();
+    await readerTask.waitFor({state:'visible',timeout:2000}).catch(error=>{
+      if (error.name !== 'TimeoutError') throw error;
+    });
+  }
+  await readerTask.waitFor({state:'visible'});
   await workspaceCommand(page, 'knowledge', '查询'); const readerQuery=page.getByRole('region',{name:'托管高级查询',exact:true}); await readerQuery.waitFor({state:'visible'}); await readerQuery.getByRole('heading',{name:'托管高级 Query',exact:true}).waitFor({state:'visible'}); await readerQuery.getByLabel('查询对象 Task0',{exact:true}).waitFor({state:'visible'});
   await click('运行托管高级查询',readerQuery); const readerResult=readerQuery.getByRole('table',{name:'托管高级查询冻结结果',exact:true}); await readerResult.waitFor({state:'visible'}); await readerResult.getByRole('row').nth(1).waitFor({state:'visible'});
   assert.equal(await page.locator('.embedded-query-more').count(),0); assert.equal(await page.locator('.embedded-query-builder').count(),0); assert.equal(await page.getByRole('button',{name:/独立字段权限/}).count(),0); await page.screenshot({path:path.join(out,'hosted-reader.png'),fullPage:true}); pass('Revocation clears retained query editors/data, and a reader gains neither source arrangement nor independent result-field writers.');
 
   await finishObservations(); result.expectedHttpErrors=[]; result.unexpectedHttpErrors=[];
 
-  for(const error of result.httpErrors){let code,message,detailsCode;try{const value=JSON.parse(error.body).error;code=value?.code;message=value?.message;detailsCode=value?.details?.code;}catch{}const expected=supersededProjection(error,code)||(error.route==='/api/query/embedded/run'&&error.status===409&&code==='busy'&&detailsCode==='busy'&&message?.endsWith('(os error 32)'))||(error.phase==='revoked'&&error.status===401&&code==='authentication'&&['/api/hosted/query/embedded/run','/api/hosted/editor/render'].includes(error.route))||(['hosted','revoked'].includes(error.phase)&&error.status===429&&code==='busy'&&['/api/hosted/query/embedded/run','/api/hosted/editor/render'].includes(error.route))||(error.route==='/api/knowledge/read'&&error.status===409&&code==='staleBase')||(error.phase==='fixture-seed'&&error.route==='/api/knowledge/read'&&error.status===409&&code==='citationCutChanged')||(error.status===409&&code==='stale_draft'&&['/api/render','/api/knowledge/read','/api/query/embedded/run','/api/hosted/editor/render','/api/hosted/query/embedded/run'].includes(error.route))||(error.status===404&&code==='unavailable'&&error.route==='/api/hosted/office/legacy-capabilities')||(error.phase==='revoked'&&[404,410].includes(error.status)&&['sessionExpired','unavailable'].includes(code))||((error.requestPhase==='property-refusal'||error.phase==='property-refusal')&&error.route==='/api/data/edit'&&error.status===400&&code==='invalid_data');(expected?result.expectedHttpErrors:result.unexpectedHttpErrors).push({...error,code});}
+  for(const error of result.httpErrors){let code,message,detailsCode,explanationKey;try{const value=JSON.parse(error.body).error;code=value?.code;message=value?.message;detailsCode=value?.details?.code;explanationKey=value?.explanation?.key;}catch{}const retiredHostedEditorMap=error.route==='/api/hosted/editor/map'&&error.status===409&&code==='stale_draft'&&explanationKey==='error.api.writing.editorBasisExpired'&&error.requestPhase==='hosted'&&error.phase==='revoked';const expected=retiredHostedEditorMap||supersededProjection(error,code)||(error.route==='/api/query/embedded/run'&&error.status===409&&code==='busy'&&detailsCode==='busy'&&message?.endsWith('(os error 32)'))||(error.phase==='revoked'&&error.status===401&&code==='authentication'&&['/api/hosted/query/embedded/run','/api/hosted/editor/render'].includes(error.route))||(['hosted','revoked'].includes(error.phase)&&error.status===429&&code==='busy'&&['/api/hosted/query/embedded/run','/api/hosted/editor/render'].includes(error.route))||(error.route==='/api/knowledge/read'&&error.status===409&&code==='staleBase')||(error.phase==='fixture-seed'&&error.route==='/api/knowledge/read'&&error.status===409&&code==='citationCutChanged')||(error.status===409&&code==='stale_draft'&&['/api/render','/api/knowledge/read','/api/query/embedded/run','/api/hosted/editor/render','/api/hosted/query/embedded/run'].includes(error.route))||(error.status===404&&code==='unavailable'&&error.route==='/api/hosted/office/legacy-capabilities')||(error.phase==='revoked'&&[404,410].includes(error.status)&&['sessionExpired','unavailable'].includes(code))||((error.requestPhase==='property-refusal'||error.phase==='property-refusal')&&error.route==='/api/data/edit'&&error.status===400&&code==='invalid_data');(expected?result.expectedHttpErrors:result.unexpectedHttpErrors).push({...error,code});}
 
   assert.deepEqual(result.pageErrors,[]); assert.deepEqual(result.observerErrors??[],[]); assert.deepEqual(result.unexpectedHttpErrors,[]); result.completed=true;
 
