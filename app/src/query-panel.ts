@@ -1022,6 +1022,7 @@ interface QueryInlineDraft {
     revision: number;
 }
 export class QueryPanel {
+    private runController?: AbortController;
     private readonly closeGuard = new ProposalCloseGuard();
     private readonly draftFlags = new Set<string>();
     private discardQueryProposals(): void {
@@ -1163,6 +1164,7 @@ export class QueryPanel {
         if (this.root === (library?.root ?? null) && this.workspaceId === library?.workspaceId)
             return;
         this.tagReferences = { nodes: [], state: "unavailable", messages: [] };
+        this.runController?.abort();
         this.refreshQueue.invalidate();
         this.environmentEpoch++;
         this.loading = false;
@@ -1385,6 +1387,8 @@ export class QueryPanel {
     }
     private async executeRefresh(intent: QueryRefreshIntent, selected: () => boolean): Promise<void> {
         return this.closeGuard.run(async () => {
+            const controller = new AbortController();
+            this.runController = controller;
             const key = this.intentKey(intent);
             const current = (): boolean => {
                 if (this.closeGuard.frozen || !selected())
@@ -1428,7 +1432,7 @@ export class QueryPanel {
                         definitionRevision?: string;
                         definition?: SavedQuery;
                         definitionChanged?: boolean;
-                    }>("/api/query/definition/run", { root: intent.root, owner: selection.owner, parameters: intent.parameters, selection: selectedDefinition });
+                    }>("/api/query/definition/run", { root: intent.root, owner: selection.owner, parameters: intent.parameters, selection: selectedDefinition }, controller.signal);
                     if (!current())
                         return;
                     const savedPlan = response.definition?.plan ?? null;
@@ -1461,7 +1465,7 @@ export class QueryPanel {
                     const errors = intent.inputs.exactPlan ? [] : preferenceFieldErrors(intent.inputs.preference, schema);
                     if (errors.length)
                         throw new UiError(joinUiText(errors, "；"));
-                    const plan = planForInputs(intent.inputs, schema), result = await this.host.request<QueryResult>("/api/query/run", { root: intent.root, plan, parameters: intent.parameters });
+                    const plan = planForInputs(intent.inputs, schema), result = await this.host.request<QueryResult>("/api/query/run", { root: intent.root, plan, parameters: intent.parameters }, controller.signal);
                     if (!current())
                         return;
                     this.result = decodeLocalQueryResult(result);
@@ -1482,6 +1486,7 @@ export class QueryPanel {
                 }
             }
             finally {
+                if (this.runController === controller) this.runController = undefined;
                 if (!this.closeGuard.frozen && selected()) {
                     this.loading = false;
                     this.renderControls();
@@ -1515,7 +1520,9 @@ export class QueryPanel {
     private mountControls(): void {
         this.controlUpdates = [];
         const heading = ui("div", "query-heading"), capture = this.action(message("queryCapture.title"), () => this.showCapture(), "data-button primary");
-        heading.append(ui("h2", "", message("queryPanel.libraryTitle")), this.action(message("common.refresh"), () => this.refresh(), "data-button compact"), capture,
+        const stop = this.action(message("queryPanel.cancelRun"), () => this.runController?.abort());
+        this.controlUpdates.push(() => { stop.hidden = !this.runController; });
+        heading.append(ui("h2", "", message("queryPanel.libraryTitle")), this.action(message("common.refresh"), () => this.refresh(), "data-button compact"), stop, capture,
             this.action(message("common.cancel"), () => this.discardQueryProposals()),
             this.action(message("queryEdit.discardAllFieldInputs"), () => { this.inlineDrafts.clear(); this.renderResults(); }));
         const savedNotice = ui("p", "query-result-status"), copy = this.action(message("queryPanel.copyDefinitionToTemporary"), () => {

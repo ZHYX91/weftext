@@ -200,6 +200,7 @@ interface QueryPresentation {
     resultBasis?: EmbeddedQueryBasis;
     resultPlan?: QueryPlan;
     loading: boolean;
+    controller?: AbortController;
     error?: UiText;
     expanded: boolean;
     builderOpen: boolean;
@@ -221,7 +222,7 @@ export interface EmbeddedQueryHost {
     basis(): EmbeddedQueryBasis;
     mode(): ViewMode;
     editable(): boolean;
-    request<T>(path: string, body: unknown): Promise<T>;
+    request<T>(path: string, body: unknown, signal?: AbortSignal): Promise<T>;
     prepareEdit(): Promise<void>;
     apply(patches: SourcePatch[], basis: EmbeddedQueryBasis, event: string): Promise<void>;
     reveal(occurrence: EmbeddedQueryOccurrence, host: HTMLElement): boolean;
@@ -305,6 +306,7 @@ export class EmbeddedQueryController {
     invalidate(): void {
         this.discoveryGeneration++;
         for (const state of this.states.values()) {
+            state.controller?.abort();
             state.gate.invalidate();
             state.loading = false;
         }
@@ -314,6 +316,7 @@ export class EmbeddedQueryController {
     /** Host-owned execution inputs change independently of native author source. */
     runInputsChanged(): void {
         for (const state of this.states.values()) {
+            state.controller?.abort();
             state.gate.invalidate();
             state.loading = false;
             state.resultBasis = undefined;
@@ -410,6 +413,8 @@ export class EmbeddedQueryController {
                 || button.dataset.queryEdit === "builderApply" && (!association.occurrence || !!this.state(association.occurrence).pendingEdit || !sameQueryBasis(this.state(association.occurrence).planBasis ?? null, this.host.basis()));
         if (association.occurrence) {
             const item = association.occurrence, state = this.state(item);
+            for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-query-cancel]"))
+                button.hidden = !state.loading;
             for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-query-run]"))
                 button.disabled = !this.current(association) || !item.runnable || state.loading;
             for (const button of mount.querySelectorAll<HTMLButtonElement>("[data-query-output]"))
@@ -454,7 +459,10 @@ export class EmbeddedQueryController {
         const run = action(state.loading ? message("embeddedQuery.running") : state.result ? message("embeddedQuery.refreshResults") : message("embeddedQuery.runDraft"), () => this.run(association), this.host);
         run.dataset.queryRun = "run";
         run.disabled = state.loading || !this.current(association) || !item.runnable;
-        heading.append(run);
+        const stop = action(message("queryPanel.cancelRun"), () => state.controller?.abort(), this.host);
+        stop.dataset.queryCancel = "run";
+        stop.hidden = !state.loading;
+        heading.append(run, stop);
         if (policy.sourceVisible) {
             const source = element("pre", "embedded-query-native-source", item.range.raw);
             setUiAttr(source, "aria-label", message("embeddedQuery.completeSourceLabel"));
@@ -605,11 +613,14 @@ export class EmbeddedQueryController {
         if (!item || !this.current(association) || !item.runnable)
             return;
         const basis = { ...this.host.basis() }, state = this.state(item), parameters = parseQueryParameters(state.parameters), token = state.gate.begin(basis, item.id, this.discovery?.sourceHash);
+        state.controller?.abort();
+        const controller = new AbortController();
+        state.controller = controller;
         state.loading = true;
         state.error = undefined;
         this.refreshResult(item);
         try {
-            const result = await this.host.request<EmbeddedQueryRun>("/api/query/embedded/run", { ...queryBasisWire(basis), occurrenceId: item.id, parameters });
+            const result = await this.host.request<EmbeddedQueryRun>("/api/query/embedded/run", { ...queryBasisWire(basis), occurrenceId: item.id, parameters }, controller.signal);
             if (!state.gate.accepts(token, this.host.basis(), result))
                 return;
             state.result = this.host.queryResultScope === "hosted" ? decodeHostedQueryResult(result.result,true) : decodeLocalQueryResult(result.result);
@@ -625,6 +636,7 @@ export class EmbeddedQueryController {
             }
         }
         finally {
+            if (state.controller === controller) state.controller = undefined;
             if (state.gate.current(token, this.host.basis())) {
                 state.loading = false;
                 this.refreshResult(item);

@@ -3556,6 +3556,7 @@ impl Core {
         let mut captures = Vec::new();
         let mut total = 0usize;
         for ((path, _guard), handle) in guards.iter().zip(&mut handles) {
+            crate::query_read_checkpoint()?;
             let captured = match handle {
                 Some(f) => Some(CapturedFile {
                     path: display(path),
@@ -3699,6 +3700,7 @@ impl Core {
         let mut expected = BTreeMap::new();
         let mut trashed = BTreeSet::new();
         for p in self.committed_plans()?.into_iter() {
+            crate::query_read_checkpoint()?;
             for b in self.read_births(&p.operation_id)? {
                 if b.workspace_id == workspace.workspace_id {
                     expected.insert(b.node_id.clone(), b);
@@ -3736,6 +3738,7 @@ impl Core {
             }
         }
         for (id, birth) in &expected {
+            crate::query_read_checkpoint()?;
             let Some(Some(candidate)) = admitted_by_id.get(id.as_str()) else {
                 complete = false;
                 warnings.push(
@@ -7978,6 +7981,7 @@ pub(crate) fn snapshot_tree(
             entries: sorted_entries(entries.clone(), &path),
         });
         for (name, attrs) in entries {
+            crate::query_read_checkpoint()?;
             if skip_instance_lock && path == root && name == "instance.lock" {
                 continue;
             }

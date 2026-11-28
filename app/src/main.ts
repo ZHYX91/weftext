@@ -2914,10 +2914,10 @@ function addDocument(opened: OpenedDocument): void {
         }),
         basis: () => ({ sessionId: session.opened.sessionId, source: session.source, serial: session.serial, inputId: session.inputId }), mode: () => doc.mode,
         editable: () => !bodyCloseFrozen && sourceConsumersAvailable(doc) && current === doc && doc.mode !== "read" && !readOnlySource(doc) && !doc.sourceTrashed && !writing.state.composing,
-        request: (path, basis) => {
+        request: (path, basis, signal) => {
             if (!sourceConsumersAvailable(doc))
                 return Promise.reject(new UiError(uiMessage("shell.queryNoteLocationNeedsComparison")));
-            return api(path, basis);
+            return api(path, basis, signal);
         }, prepareEdit: () => writing.flush(), notify: toast, output: query => workspaceTools.openQueryOutput(query),
         apply: async (patches, basis, event) => libraryCloseActivity.run(async () => {
 

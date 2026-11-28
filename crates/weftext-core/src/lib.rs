@@ -2018,3 +2018,7 @@ mod tests;
 
 #[cfg(test)]
 mod test_support;
+
+fn query_read_checkpoint() -> Result<()> {
+    weftext_data::query_checkpoint().map_err(|e| CoreError::from_data("queryCancelled", e))
+}

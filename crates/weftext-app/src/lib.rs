@@ -87,6 +87,7 @@ mod navigation_api;
 mod owned_process;
 mod processing_api;
 mod query_product_worker;
+mod query_runs;
 mod readonly_evidence;
 mod recognition_api;
 mod request_json;
@@ -328,7 +329,6 @@ impl ApiError {
                     "compile_timeout",
                     UiMessage::error_api_worker_deadline(),
                 ),
-                #[cfg(target_os = "linux")]
                 Kind::Cancelled => (
                     StatusCode::CONFLICT,
                     "compiler_cancelled",
@@ -1197,6 +1197,7 @@ async fn owned_compiler_worker(
     transport: compiler_worker::Transport,
 ) -> Result<Value, ApiError> {
     use worker_failure::{Kind, WorkerFailure};
+    crate::query_runs::check()?;
     let bytes = serde_json::to_vec(&input)
         .map_err(|_| ApiError::worker_failure(WorkerFailure::new(Kind::InputEncoding)))?;
     if bytes.len() > 96 * 1024 * 1024 {
@@ -1218,7 +1219,7 @@ async fn owned_compiler_worker(
         let mut stdin = child.stdin.take().ok_or((Kind::Setup, None, None))?;
         let stdout = child.stdout.take().ok_or((Kind::Setup, None, None))?;
         let stderr = child.stderr.take().ok_or((Kind::Setup, None, None))?;
-        let output = tokio::time::timeout(Duration::from_secs(20), async {
+        let exchange = tokio::time::timeout(Duration::from_secs(20), async {
             let input = async {
                 stdin
                     .write_all(&bytes)
@@ -1257,8 +1258,12 @@ async fn owned_compiler_worker(
             };
             let (_, (), (), status) = tokio::try_join!(input, result, diagnostics, status)?;
             Ok::<_, (Kind, Option<std::io::Error>)>(status)
-        })
-        .await
+        });
+        let output = tokio::select! {
+            biased;
+            () = crate::query_runs::cancellation() => return Err((Kind::Cancelled, None, None)),
+            result = exchange => result,
+        }
         .map_err(|_| (Kind::Deadline, None, None))?
         .map_err(|(kind, error)| (kind, error, None))?;
         if !output.success() {
@@ -1324,6 +1329,9 @@ async fn owned_compiler_worker(
             // Cleanup-induced cancellation cannot erase the original pump failure.
             _ => facts.kind,
         };
+    }
+    if !facts.cleanup_confirmed {
+        let _ = crate::query_runs::CURRENT.try_with(|r| r.jobs.mark_failed());
     }
     let facts = Arc::new(facts);
     let mut error = match protocol_error {

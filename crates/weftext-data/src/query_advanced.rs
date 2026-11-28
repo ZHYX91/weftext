@@ -1851,6 +1851,7 @@ fn related_notes(
             .or_insert(note);
     }
     'scan: for note in &input.notes {
+        crate::query_checkpoint()?;
         if !matches!(note.lifecycle.as_str(), "live" | "trash") {
             continue;
         }
@@ -2064,6 +2065,7 @@ fn sort_terminal(
         }
         let mut sorted = vec![];
         for row in std::mem::take(&mut result.rows) {
+            crate::query_checkpoint()?;
             let mut cells = row.cells.clone();
             cells.extend(parameters.clone());
             let keys = compiled_order
@@ -2167,6 +2169,7 @@ fn distinct_terminal(
     }
     let mut groups: BTreeMap<String, (String, QueryRow)> = BTreeMap::new();
     for mut row in std::mem::take(&mut result.rows) {
+        crate::query_checkpoint()?;
         let mut cells = row.cells.clone();
         cells.extend(parameters.clone());
         let values = compiled
@@ -2431,6 +2434,7 @@ fn transform(
             vec![(row.key.clone(), cells)]
         };
         for (key, cells) in expanded {
+            crate::query_checkpoint()?;
             if rows.len() >= limits.max_rows {
                 mark_partial(
                     &mut result,

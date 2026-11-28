@@ -153,7 +153,7 @@ export interface PanelHost {
     fieldInputs?: PanelFieldInputFactory;
     authorInputs?(basis: DocumentBasis): import("./author-input").AuthorInputSession | undefined;
     canEdit?(): boolean;
-    request<T>(path: string, body?: unknown): Promise<T>;
+    request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T>;
     requestBlob?(path: string, body: unknown): Promise<Blob>;
     getDocument(): DocumentBasis | null;
     applyPatch(patch: SourcePatch, basis: DocumentBasis): Promise<void>;

@@ -14,6 +14,7 @@ pub(crate) struct PendingRead<'a> {
 
 impl PendingRead<'_> {
     pub(crate) fn check_path(&self, path: &Path) -> Result<()> {
+        crate::query_read_checkpoint()?;
         self.core.backend.check_path(path)?;
         self.core
             .check_pending_path_in(path, self.unchecked.iter().copied())
@@ -26,6 +27,7 @@ impl PendingRead<'_> {
 
     pub(crate) fn recheck(&self) -> Result<()> {
         for plan in &self.committed {
+            crate::query_read_checkpoint()?;
             if !self.core.committed(&plan.operation_id)? {
                 return Err(CoreError::new(
                     "identityPending",
@@ -963,6 +965,7 @@ impl Core {
         self.backend.check_path(&self.data_dir)?;
         let mut plans = Vec::new();
         for plan in self.operations.values() {
+            crate::query_read_checkpoint()?;
             if self.committed(&plan.operation_id)? {
                 plans.push(plan);
             }

@@ -34779,6 +34779,10 @@
       "en-US": "A required lifecycle source differs from the original native World",
       "params": {}
     },
+    "error.api.data.queryCancelled": { "zh-CN": "查询已取消。", "en-US": "The query was cancelled.", "params": {} },
+    "error.api.data.queryRunUnavailable": { "zh-CN": "这次查询已无法取消或启动。", "en-US": "This query can no longer be cancelled or started.", "params": {} },
+    "error.api.data.queryRunLimit": { "zh-CN": "已有太多查询待运行或正在运行。", "en-US": "Too many queries are waiting or running.", "params": {} },
+    "queryPanel.cancelRun": { "zh-CN": "取消查询", "en-US": "Cancel query", "params": {} },
     "error.api.data.queryEvaluationIncomplete": {
       "zh-CN": "Query 评估未完成。",
       "en-US": "Query evaluation did not complete",

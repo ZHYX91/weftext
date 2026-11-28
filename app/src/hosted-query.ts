@@ -71,7 +71,7 @@ type Draft = HostedQueryDependencies & {
         mode: TagMatchMode;
     };
 };
-type Request = <T>(path: string, body?: unknown) => Promise<T>;
+type Request = <T>(path: string, body?: unknown, signal?: AbortSignal) => Promise<T>;
 const productNames: Record<Product, UiText> = { title: message("queryColumn.title"), body: message("hostedQuery.productBody"), headings: message("hostedQuery.productHeadings"), types: message("queryPlan.noteTypes"), self: message("hostedQuery.productSelf") };
 const basePlan = (): QueryPlan => ({ scope: { descendants: true, lifecycle: "live" }, types: [], select: [], order: [] });
 const initial = (): Draft => ({ resources: [], fields: [], products: [], relations: [], providers: {}, seriesPolicies: {}, plan: JSON.stringify(basePlan(), null, 2), parameters: "{}", owner: "", definition: "", selection: "current", revision: "" });
@@ -113,6 +113,7 @@ export class HostedQuery {
     private draft = initial();
     private catalog: Catalog = { resources: [], definitions: [] };
     private gate = new HostedQueryGate();
+    private runController?: AbortController;
     private busy = false;
     private result?: HostedQueryResult;
     private resultInput?: string;
@@ -171,6 +172,7 @@ export class HostedQuery {
         }
     }
     clear(removeCache = true) {
+        this.runController?.abort();
         this.view = initialOccurrenceView();
         this.tagReadSerial++;
         this.tagTree = undefined;
@@ -477,6 +479,7 @@ export class HostedQuery {
         const run = action(this.busy ? message("hostedQuery.running") : message("hostedQuery.run"), () => this.run());
         run.disabled = this.busy || !draft.resources.length;
         this.controls.append(run);
+        if (this.runController) this.controls.append(action(message("queryPanel.cancelRun"), () => this.runController?.abort()));
         for (const item of this.controls.querySelectorAll<HTMLDetailsElement>("details[data-query-disclosure]"))
             item.open = disclosures.get(item.dataset.queryDisclosure) ?? false;
         if (focus) {
@@ -619,6 +622,8 @@ export class HostedQuery {
     private async run() {
         if (this.busy)
             return;
+        const controller = new AbortController();
+        this.runController = controller;
         const epoch = this.epoch, fingerprint = this.fingerprint(), draft = structuredClone(this.draft), token = this.gate.begin(fingerprint);
         this.busy = true;
         setUiText(this.message, message("hostedQuery.runningInputHelp"));
@@ -636,7 +641,7 @@ export class HostedQuery {
             const dependencies = exactHostedDependencies(draft, this.catalog);
             const plan = parseQueryPlan(draft.plan);
             exactHostedScope(plan.scope, this.catalog);
-            const response = await this.request<HostedQueryResponse>("query", { resources: draft.resources, fields: draft.fields, products: draft.products, relations: draft.relations, ...dependencies, parameters: parseQueryParameters(draft.parameters), plan });
+            const response = await this.request<HostedQueryResponse>("query", { resources: draft.resources, fields: draft.fields, products: draft.products, relations: draft.relations, ...dependencies, parameters: parseQueryParameters(draft.parameters), plan }, controller.signal);
             if (!this.gate.current(token, this.fingerprint()))
                 return;
             this.result = decodeHostedQuery(response);
@@ -651,6 +656,7 @@ export class HostedQuery {
             }
         }
         finally {
+            if (this.runController === controller) this.runController = undefined;
             if (epoch === this.epoch) {
                 this.busy = false;
                 this.renderControls();

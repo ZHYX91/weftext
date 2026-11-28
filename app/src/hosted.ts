@@ -1,3 +1,4 @@
+import { cancellableQuery } from "./cancellable-query";
 import { OrderedDraft, type OrderedDraftTransmission } from "./ordered-draft";
 import { WorkspaceRibbon, type RibbonTab } from "./workspace-chrome";
 import "./workspace-chrome.css";
@@ -441,7 +442,10 @@ async function showCapturePicker(): Promise<void> {
     capturePanel.replaceChildren(captureUi("h2", "", uiMessage("capture.title")), captureUi("p", "", uiMessage("capture.restoreDraft")), existing, restore, captureUi("p", "", uiMessage("capture.target")), slots, create, diagnostic);
 }
 const fields = new HostedFields(el("fields"), request, (id, metadata) => showOfficeQuery(id, metadata), () => queries.environmentChanged(uiMessage("hostedShell.fieldsChangedQueryMustRerun")), authorInputs);
-const source: HostedEditor = new HostedEditor(el("source"), request, sourceChanged, () => { void run(save); }, error => status(errorUiText(error)), {
+function queryPanelRequest<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+    return request<T>(path, body, false, 0, signal);
+}
+const source: HostedEditor = new HostedEditor(el("source"), queryPanelRequest, sourceChanged, () => { void run(save); }, error => status(errorUiText(error)), {
     canOpenRow: row => (row as HostedQueryRow).canOpen === true && !!(row as HostedQueryRow).resource,
     openRow: row => {
         const target = row as HostedQueryRow;
@@ -628,7 +632,7 @@ const office: HostedOffice = new HostedOffice(el("office"), request, () => doc ?
 } : null, () => source.flush(), () => { void list().catch(e => status(e instanceof Error ? errorUiText(e) : uiMessage("hostedShell.refreshDocumentListFailed"))); }, {
     identity: hostedIdentity, basis: () => source.historyBasis(true), embeddedQueries: () => source.outputSelections(), authorizationChanged: authorizationsChanged,
 });
-const queries = new HostedQuery(el("query"), request, openQueryResource, (id, metadata) => showOfficeQuery(id, metadata), {
+const queries = new HostedQuery(el("query"), queryPanelRequest, openQueryResource, (id, metadata) => showOfficeQuery(id, metadata), {
     context: () => doc ? { resource: doc.resource, sessionId: doc.sessionId, baseId: doc.baseId, source: source.value, serial: source.serial, inputId: source.authorInputId, writable: doc.rights.write && source.viewMode !== "read", pending: !!draft?.pending, compare: compareRequired, definitionReservations: draft?.definitionReservations } : null,
     prepareBasis: () => source.prepareQueryBasis(),
     apply: (patches, basis) => source.applyQueryPatches(patches, basis, "input.query.definition.proposal"),
@@ -1237,8 +1241,17 @@ function clearDisplay(message: UiText, clearToken = false) {
     mountInterfaceLocale();
     status(() => uiTextValue(clearErrors.length ? displayMessage("hostedShell.protectedDisplayClearStorageFailure", { p0: uiDisplayParameter(message) }) : message) + uiTextValue(personalFailure ? uiMessage("hostedShell.personalInputMemoryAfterClearSuffix") : ""));
 }
-async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0, signal?: AbortSignal, failureScope?: "stagedTarget"): Promise<T> {
+async function request<T>(path: string, data?: unknown, bytes = false, attempt = 0, signal?: AbortSignal, failureScope?: "stagedTarget", queryRunId?: string): Promise<T> {
     const epoch = requestEpoch, credential = token;
+    if (signal && (path === "query" || path === "query/embedded/run")) {
+        const original = <V>(route: string, payload: unknown, id?: string): Promise<V> => {
+            if (epoch !== requestEpoch || credential !== token)
+                return Promise.reject(new UiError(uiMessage("hostedShell.authorizationChangedRefreshDocuments")));
+            return request<V>(route, payload, false, 0, undefined, undefined, id);
+        };
+        return cancellableQuery(signal, () => original("query/prepare", {}),
+            id => original<T>(path, data, id), runId => original("query/cancel", { runId }));
+    }
     const target = data as {
         sessionId?: string;
     } | undefined, installed = doc;
@@ -1263,7 +1276,7 @@ async function request<T>(path: string, data?: unknown, bytes = false, attempt =
     if (epoch !== requestEpoch || credential !== token)
         throw new UiError(uiMessage("hostedShell.authorizationChangedRefreshDocuments"));
     const audience = () => ({ epoch: authorizationEpoch, credential: token, actor: identity?.actor, deployment: identity?.deployment, generation: identity?.generation, sessionId: doc?.sessionId, queryVersion: queries.version }), captured = audience();
-    const response = await fetch(`/api/hosted/${path}`, { method: data === undefined ? "GET" : "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: data === undefined ? undefined : JSON.stringify(data), cache: "no-store", signal });
+    const response = await fetch(`/api/hosted/${path}`, { method: data === undefined ? "GET" : "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...(queryRunId ? { "X-Weftext-Query-Run": queryRunId } : {}) }, body: data === undefined ? undefined : JSON.stringify(data), cache: "no-store", signal });
     if (!response.ok) {
         const result = await readStrictJsonResponse(response) as {
             error?: {

@@ -154,6 +154,7 @@ impl Core {
         // in journal I/O. Every later inventory builds this evidence afresh.
         let mut nodes_by_identity = BTreeMap::new();
         for plan in self.committed_plans()? {
+            crate::query_read_checkpoint()?;
             for birth in self.read_births(&plan.operation_id)? {
                 nodes_by_identity
                     .entry(birth.identity)
@@ -205,6 +206,7 @@ impl Core {
             }
             children.sort_by(|a, b| a.0.cmp(&b.0));
             for (name, attrs) in children {
+                crate::query_read_checkpoint()?;
                 let path = directory.join(name);
                 if result.entries.len() >= MAX_ENTRIES {
                     result.complete = false;

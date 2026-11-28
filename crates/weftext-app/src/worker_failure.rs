@@ -14,7 +14,6 @@ pub(crate) enum Kind {
     StdoutBudget,
     StderrBudget,
     Deadline,
-    #[cfg(target_os = "linux")]
     Cancelled,
     Wait,
     NonzeroExit,

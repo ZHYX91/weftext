@@ -47,6 +47,8 @@ Enforce budgets for steps, time, input/decoded bytes, rows, result size, memory,
 
 Indexes are rebuildable projections. Define version, coverage, freshness, incremental updates, crash recovery and permission filtering. Measure size, write amplification, update latency and query benefit separately for full-text, common scalar, type, tag and relation indexes.
 
+Local, saved and embedded queries support cancellation while running. The client reserves a short-lived, single-use ticket at the authenticated `query/prepare` endpoint and passes it in the `X-Weftext-Query-Run` header. The `query/cancel` endpoint matches the original credential and ticket, and waits for active reads and native processes to finish. Once result delivery begins, cancellation returns unavailable.
+
 ## Delivery order
 
 Use independently executable slices for the entry-point inventory, core conditions and parameters, execution and benchmarks, text search, collections and relations, relative dates and parameter forms, frozen result views, and removal of obsolete code and documentation. Each slice records success and refusal cases and the commands and outcomes. Before release, combine index updates/recovery/revocation, concurrency and cancellation, paging and changed-input scenarios. Record implemented behavior, tested behavior and outstanding acceptance per surface.

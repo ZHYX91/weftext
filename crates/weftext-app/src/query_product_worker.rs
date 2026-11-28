@@ -91,12 +91,12 @@ pub(super) async fn run(
     query_sources: Vec<FrozenQuerySource>,
 ) -> Result<Vec<Product>, ApiError> {
     let length = query_sources.len();
-    let permit = state
-        .render_gate
-        .clone()
-        .acquire_owned()
-        .await
-        .map_err(|_| ApiError::internal(UiMessage::error_compile_service_unavailable()))?;
+    let permit = tokio::select! {
+        biased;
+        () = crate::query_runs::cancellation() => return Err(crate::query_runs::cancelled()),
+        permit = state.render_gate.clone().acquire_owned() => permit
+            .map_err(|_| ApiError::internal(UiMessage::error_compile_service_unavailable()))?,
+    };
     let payload = value(BatchRequest {
         root,
         style,

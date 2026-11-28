@@ -1527,6 +1527,7 @@ fn capture(
     for _ in 0..64 {
         let mut authority = Authority::default();
         for r in &resources {
+            crate::query_runs::check()?;
             authority.fields.insert(r.clone(), req.fields.clone());
             authority.products.insert(r.clone(), req.products.clone());
             authority.relations.insert(r.clone(), req.relations.clone());
@@ -1742,6 +1743,7 @@ fn capture(
             authority.products.clear();
             authority.relations.clear();
             for r in &resources {
+                crate::query_runs::check()?;
                 authority.fields.insert(r.clone(), req.fields.clone());
                 authority.products.insert(r.clone(), req.products.clone());
                 authority.relations.insert(r.clone(), req.relations.clone());
@@ -1754,6 +1756,7 @@ fn capture(
             return Err(unavailable());
         }
         for r in &resources {
+            crate::query_runs::check()?;
             row_access(inner, &actor, r, &req)?;
         }
         // Even resources=[] uses a real explicit authorized object as evidence
@@ -1807,10 +1810,12 @@ fn capture(
             .any(|p| matches!(p.as_str(), "title" | "body" | "headings"))
         {
             for r in &resources {
+                crate::query_runs::check()?;
                 needed_inputs.extend(inner.file(r)?.inputs.iter().cloned());
             }
         }
         for r in &needed_inputs {
+            crate::query_runs::check()?;
             inputs::access(inner, &actor, r)?;
         }
         authority.inputs.extend(needed_inputs.clone());
@@ -1889,6 +1894,7 @@ fn capture(
         let mut complete = true;
         if !validate_only {
             for r in &resources {
+                crate::query_runs::check()?;
                 let Some(file) = snapshots.get(r) else {
                     return Err(changed());
                 };
@@ -2031,6 +2037,7 @@ fn capture(
             // authority into downstream Office delivery as well as Query read.
             environment.attach_inputs(inner, &actor, captured_inputs.clone())?;
             for (entity, worker) in &mut workers {
+                crate::query_runs::check()?;
                 let resource = resource_map.get(entity).ok_or_else(changed)?;
                 if let Some(citations) = citations::freeze(inner, &actor, resource, &worker.source)?
                 {
@@ -2209,6 +2216,7 @@ async fn execute_captured(
             let products = match entry {
                 Some(entry) => Some(entry.products),
                 None => {
+                    crate::query_runs::check()?;
                     let output = editor::compile_frozen(state, worker).await?;
                     if output["ok"] != true {
                         None
@@ -2291,7 +2299,7 @@ async fn execute_captured(
                 note.products = Some(products);
             }
         }
-        let (result, provider_dependencies) =
+        let evaluate = || {
             weftext_data::execute_authorized_query_with_provider_dependencies(
                 &captured.input,
                 &captured.plan,
@@ -2302,7 +2310,12 @@ async fn execute_captured(
                 },
                 &captured.metadata,
             )
-            .map_err(|_| invalid())?;
+        };
+        let result = match crate::query_runs::CURRENT.try_with(Arc::clone) {
+            Ok(run) => run.read(evaluate),
+            Err(_) => evaluate(),
+        };
+        let (result, provider_dependencies) = result.map_err(|_| invalid())?;
         if result.rows.len() > 500 {
             return Err(invalid());
         }
@@ -2334,6 +2347,7 @@ async fn execute_captured(
         let mut public=serde_json::to_value(&result).map_err(|_|invalid())?;
         for row in public["rows"].as_array_mut().ok_or_else(invalid)?{if let Some(resource)=row["entityKey"].as_str().map(str::to_owned){row["resource"]=json!(resource);row["canOpen"]=json!(inner.file(&resource)?.lifecycle=="live"&&inner.file(&resource)?.editable&&inner.rights(&actor,&resource).is_ok());}}
         let tag_witness = if captured.authority.tag_structure {Some(captured.witnesses.iter().find(|(path, _)| Path::new(path) == inner.config.root.join(".weftext-tags.json")).ok_or_else(changed)?.clone())} else {None};
+        crate::query_runs::publish()?;
         let id=fields::retain_query(inner,&actor,result,captured.columns.clone(),captured.schema,captured.authority,tag_witness)?;
         Ok(json!({"result":public,"queryId":id,"columns":captured.columns,"scope":"authorizedProjection","readOnly":true}))
     }).await

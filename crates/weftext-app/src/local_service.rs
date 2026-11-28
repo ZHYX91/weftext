@@ -302,7 +302,7 @@ pub(crate) async fn admit_request(
 }
 
 fn router(state: api::AppState) -> Router {
-    Router::new()
+    let routes = Router::new()
         .merge(api::writing_api::router())
         .merge(api::client_preferences_api::router())
         .merge(api::builtin_module_api::router())
@@ -344,7 +344,8 @@ fn router(state: api::AppState) -> Router {
         .route("/api/recovery", get(api::recovery))
         .route("/api/recovery/inspect", post(api::inspect_recovery))
         .route("/api/recovery/resolve", post(api::resolve_recovery))
-        .fallback(api::assets)
+        .fallback(api::assets);
+    api::query_runs::attach(routes, "/api/query")
         .layer(DefaultBodyLimit::max(96 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(state.clone(), api::boundary))
         .with_state(state)

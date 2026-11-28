@@ -750,6 +750,9 @@ async fn boundary(State(state): State<HostedState>, mut request: Request, next: 
         {
             return protected_response(error.into_response());
         }
+        request
+            .extensions_mut()
+            .insert(crate::query_runs::Owner(auth.digest.clone()));
         request.extensions_mut().insert(auth);
     }
     protected_response(next.run(request).await)
@@ -1464,7 +1467,8 @@ impl HostedService {
                 "/api/hosted/admin/policy",
                 get(policy_read).post(update_policy),
             )
-            .fallback(hosted_assets)
+            .fallback(hosted_assets);
+        let app = crate::query_runs::attach(app, "/api/hosted/query")
             .layer(DefaultBodyLimit::max(3 * 1024 * 1024))
             .layer(middleware::from_fn_with_state(state.clone(), boundary))
             .with_state(state.clone())

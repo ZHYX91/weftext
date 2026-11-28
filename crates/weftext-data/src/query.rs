@@ -2686,6 +2686,7 @@ pub(crate) fn execute_query_leaf_traced(
     let mut bytes = 0usize;
     let mut data_rows = vec![];
     'notes: for note in notes {
+        crate::query_checkpoint()?;
         if note.lifecycle != lifecycle || !in_directory(&note.path, &plan.scope) {
             continue;
         }
@@ -2876,6 +2877,7 @@ pub(crate) fn execute_query_leaf_traced(
             vec![(note.entity_key.clone(), cells)]
         };
         for (key, cells) in expanded {
+            crate::query_checkpoint()?;
             if data_rows.len() >= limits.max_rows {
                 partial = true;
                 diagnostics.push(
@@ -2972,6 +2974,7 @@ pub(crate) fn execute_query_leaf_traced(
     if let Some(group) = &plan.group {
         let mut grouped: BTreeMap<String, GroupBucket> = BTreeMap::new();
         for (_, _, keys, agg) in data_rows {
+            crate::query_checkpoint()?;
             if keys
                 .iter()
                 .any(|k| matches!(k, Cell::Invalid { .. } | Cell::Unavailable { .. }))
@@ -3001,6 +3004,7 @@ pub(crate) fn execute_query_leaf_traced(
             grouped.insert("[]".into(), (vec![], vec![]));
         }
         for (key, (keys, values)) in grouped {
+            crate::query_checkpoint()?;
             let mut cells = group
                 .keys
                 .iter()

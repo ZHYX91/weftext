@@ -2351,6 +2351,9 @@ async fn render_query_misses(
     let encoded = crate::query_product_worker::encode_files(files);
     let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
     while let Some(batch) = remaining.pop_front() {
+        if crate::query_runs::check().is_err() {
+            break;
+        }
         let sources = batch
             .iter()
             .map(|&index| {
@@ -2422,6 +2425,7 @@ async fn qualify_query_products(
     state: &AppState,
     frozen: &mut FrozenQuery,
 ) -> Result<Vec<String>, ApiError> {
+    crate::query_runs::check()?;
     let owners = frozen
         .input
         .advanced
@@ -2634,6 +2638,7 @@ async fn evaluate_frozen_inner(
 ) -> Result<Value, ApiError> {
     let native = std::time::Instant::now();
     let products = qualify_query_products(state, &mut frozen).await?;
+    crate::query_runs::check()?;
     profile.native = native.elapsed();
     let export_root = frozen.root.clone();
     let export_schema = value(&frozen.schema)?;
@@ -2712,6 +2717,7 @@ async fn evaluate_frozen_inner(
     output["access"] = json!({"audience":"authenticatedLocalSession","scope":"admittedNodesAtSelectedLifecycle",
         "bodyProduct":products.iter().any(|product|product == "body"),"titleProduct":products.iter().any(|product|product == "title"),
         "headingsProduct":products.iter().any(|product|product == "headings"),"resultGrantsWriteAccess":false});
+    crate::query_runs::publish()?;
     export_api::retain_query(
         state,
         export_root,

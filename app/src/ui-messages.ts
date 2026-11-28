@@ -6772,6 +6772,10 @@ export const zhCN = {
   "error.api.data.competingLifecycleNode": "一个节点出现在相互竞争的原生命周期捕获中。",
   "error.api.data.lifecycleSourceOutsideLibrary": "生命周期源码越出其资料库。",
   "error.api.data.lifecycleSourceWorldMismatch": "所需生命周期源码与原原生 World 不同。",
+  "error.api.data.queryCancelled": "查询已取消。",
+  "error.api.data.queryRunUnavailable": "这次查询已无法取消或启动。",
+  "error.api.data.queryRunLimit": "已有太多查询待运行或正在运行。",
+  "queryPanel.cancelRun": "取消查询",
   "error.api.data.queryEvaluationIncomplete": "Query 评估未完成。",
   "error.api.data.definitionOwnerUnavailable": "定义所有者源码不可用。",
   "error.api.data.definitionOwnerIdentityChanged": "读取期间定义所有者身份发生了变化。",
@@ -17205,6 +17209,10 @@ export interface MessageParamsMap {
   "error.api.data.competingLifecycleNode": {  };
   "error.api.data.lifecycleSourceOutsideLibrary": {  };
   "error.api.data.lifecycleSourceWorldMismatch": {  };
+  "error.api.data.queryCancelled": {  };
+  "error.api.data.queryRunUnavailable": {  };
+  "error.api.data.queryRunLimit": {  };
+  "queryPanel.cancelRun": {  };
   "error.api.data.queryEvaluationIncomplete": {  };
   "error.api.data.definitionOwnerUnavailable": {  };
   "error.api.data.definitionOwnerIdentityChanged": {  };
@@ -28871,6 +28879,10 @@ export const messageParamTypes = {
   "error.api.data.competingLifecycleNode": {},
   "error.api.data.lifecycleSourceOutsideLibrary": {},
   "error.api.data.lifecycleSourceWorldMismatch": {},
+  "error.api.data.queryCancelled": {},
+  "error.api.data.queryRunUnavailable": {},
+  "error.api.data.queryRunLimit": {},
+  "queryPanel.cancelRun": {},
   "error.api.data.queryEvaluationIncomplete": {},
   "error.api.data.definitionOwnerUnavailable": {},
   "error.api.data.definitionOwnerIdentityChanged": {},
@@ -39943,6 +39955,10 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "error.api.data.competingLifecycleNode": "A Node appears in competing original lifecycle captures",
   "error.api.data.lifecycleSourceOutsideLibrary": "A lifecycle source escaped its library",
   "error.api.data.lifecycleSourceWorldMismatch": "A required lifecycle source differs from the original native World",
+  "error.api.data.queryCancelled": "The query was cancelled.",
+  "error.api.data.queryRunUnavailable": "This query can no longer be cancelled or started.",
+  "error.api.data.queryRunLimit": "Too many queries are waiting or running.",
+  "queryPanel.cancelRun": "Cancel query",
   "error.api.data.queryEvaluationIncomplete": "Query evaluation did not complete",
   "error.api.data.definitionOwnerUnavailable": "Definition owner source is unavailable",
   "error.api.data.definitionOwnerIdentityChanged": "Definition owner changed identity during reading",

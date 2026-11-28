@@ -29,6 +29,11 @@ impl Drop for Permit {
 }
 
 impl Registry {
+    pub(crate) fn mark_failed(&self) {
+        self.0.failed.store(true, Ordering::Release);
+        self.0.changed.notify_waiters();
+    }
+
     pub(crate) fn enter(&self) -> Permit {
         self.0.active.fetch_add(1, Ordering::AcqRel);
         Permit(self.clone())
@@ -72,9 +77,14 @@ where
     F::Output: Send + 'static,
 {
     let permit = registry().enter();
+    let query = crate::query_runs::CURRENT.try_with(Arc::clone).ok();
+    let query_permit = query.as_ref().map(|q| q.jobs.enter());
     tokio::spawn(async move {
-        let _permit = permit;
-        future.await
+        let _permits = (permit, query_permit);
+        match query {
+            Some(run) => crate::query_runs::CURRENT.scope(run, future).await,
+            None => future.await,
+        }
     })
 }
 
@@ -84,9 +94,14 @@ where
     R: Send + 'static,
 {
     let permit = registry().enter();
+    let query = crate::query_runs::CURRENT.try_with(Arc::clone).ok();
+    let query_permit = query.as_ref().map(|q| q.jobs.enter());
     tokio::task::spawn_blocking(move || {
-        let _permit = permit;
-        operation()
+        let _permits = (permit, query_permit);
+        match query {
+            Some(run) => crate::query_runs::CURRENT.sync_scope(run.clone(), || run.read(operation)),
+            None => operation(),
+        }
     })
 }
 
