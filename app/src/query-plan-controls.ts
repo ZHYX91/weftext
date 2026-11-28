@@ -7,6 +7,7 @@ import { action, fieldNames, resolveShape, typeNames, ui, valueEditor, emptyNati
 import { andPredicates, validateQueryPredicate, type QueryBoolean, type QueryPlan, type QueryPredicate, type QueryPredicateGroup } from "./query-plan";
 import { filterOperandShape, filterOperators, queryPredicate } from "./query-predicate";
 import { updateQueryChoices } from "./query-control-state";
+import { queryRelationControls } from "./query-relation-controls";
 export interface PlanField {
     key: string;
     expr: string;
@@ -282,6 +283,21 @@ export function queryPlanControls(plan: QueryPlan, schema: DataSchema | null, ch
         changed();
     };
     host.append(labeled(message("queryPanel.displayLimitLabel"), limit), error);
+    if (schema?.relations?.length || plan.advanced?.related) {
+        const relationHost = ui("div");
+        const showRelations = () => relationHost.replaceChildren(queryRelationControls(plan,
+            schema?.relations?.map(relation => relation.id) ?? [], next => safely(() => {
+                if (composing || expression.value !== syncedExpression)
+                    throw new UiError(message("queryRelations.adoptFilterFirst"));
+                // Keep the caller's proposal identity and rerender from its new plan.
+                for (const key of Object.keys(plan) as (keyof QueryPlan)[]) delete plan[key];
+                Object.assign(plan, next);
+                changed();
+                host.replaceWith(queryPlanControls(plan, schema, changed, references, inputs, conditionLabel));
+            })));
+        showRelations();
+        host.append(relationHost);
+    }
     return host;
 }
 export function queryCallControls(plan: QueryPlan, inputs?: AuthorInputSession): HTMLElement {

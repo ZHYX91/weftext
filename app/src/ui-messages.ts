@@ -790,6 +790,19 @@ export const zhCN = {
   "queryPlan.filterOperatorLabel": "筛选运算",
   "queryPlan.nestedFilterHelp": "多值／嵌套条件请使用下方 CEL，保留同项含义。",
   "queryPlan.filterValueLabel": "筛选值",
+  "queryRelations.title": "按关系查找",
+  "queryRelations.relation": "关系类型",
+  "queryRelations.nextRelation": "下一跳的关系类型",
+  "queryRelations.direction": "关系方向",
+  "queryRelations.forward": "指向的笔记",
+  "queryRelations.inverse": "指回的笔记",
+  "queryRelations.firstHop": "第一跳",
+  "queryRelations.secondHop": "第二跳",
+  "queryRelations.addHop": "添加一跳",
+  "queryRelations.updateHop": "更新这一跳",
+  "queryRelations.backToSource": "移除最后一跳并返回该跳之前的查询",
+  "queryRelations.useSource": "请在完整计划中编辑超过两跳的查询。",
+  "queryRelations.adoptFilterFirst": "请先采用手写条件，再修改关系。",
   "queryConditions.all": "全部满足",
   "queryConditions.any": "任一满足",
   "queryConditions.not": "取反",
@@ -982,9 +995,7 @@ export const zhCN = {
   "hostedQuery.unionExample": "两个准确来源的 unionAll",
   "hostedQuery.distinctExample": "按完整投影值 distinct",
   "hostedQuery.parameterExample": "带原生 wanted 参数",
-  "hostedQuery.relatedExample": "沿获权关系查询",
   "hostedQuery.addCombination": "将高级组合加入临时计划",
-  "hostedQuery.relationRequired": "请先选择独立获权的关系。",
   "hostedQuery.nativeExampleHelp": "示例仍是原生 Query 计划；运行由同一执行器核验完整 CEL、类型、关系和定义授权。参数、union、distinct、group、unnest 与保存定义调用可直接在完整计划中组合。",
   "hostedQuery.running": "正在运行托管 Query…",
   "hostedQuery.run": "运行托管高级查询",
@@ -11183,6 +11194,19 @@ export interface MessageParamsMap {
   "queryPlan.filterOperatorLabel": {  };
   "queryPlan.nestedFilterHelp": {  };
   "queryPlan.filterValueLabel": {  };
+  "queryRelations.title": {  };
+  "queryRelations.relation": {  };
+  "queryRelations.nextRelation": {  };
+  "queryRelations.direction": {  };
+  "queryRelations.forward": {  };
+  "queryRelations.inverse": {  };
+  "queryRelations.firstHop": {  };
+  "queryRelations.secondHop": {  };
+  "queryRelations.addHop": {  };
+  "queryRelations.updateHop": {  };
+  "queryRelations.backToSource": {  };
+  "queryRelations.useSource": {  };
+  "queryRelations.adoptFilterFirst": {  };
   "queryConditions.all": {  };
   "queryConditions.any": {  };
   "queryConditions.not": {  };
@@ -11375,9 +11399,7 @@ export interface MessageParamsMap {
   "hostedQuery.unionExample": {  };
   "hostedQuery.distinctExample": {  };
   "hostedQuery.parameterExample": {  };
-  "hostedQuery.relatedExample": {  };
   "hostedQuery.addCombination": {  };
-  "hostedQuery.relationRequired": {  };
   "hostedQuery.nativeExampleHelp": {  };
   "hostedQuery.running": {  };
   "hostedQuery.run": {  };
@@ -21819,6 +21841,19 @@ export const messageParamTypes = {
   "queryPlan.filterOperatorLabel": {},
   "queryPlan.nestedFilterHelp": {},
   "queryPlan.filterValueLabel": {},
+  "queryRelations.title": {},
+  "queryRelations.relation": {},
+  "queryRelations.nextRelation": {},
+  "queryRelations.direction": {},
+  "queryRelations.forward": {},
+  "queryRelations.inverse": {},
+  "queryRelations.firstHop": {},
+  "queryRelations.secondHop": {},
+  "queryRelations.addHop": {},
+  "queryRelations.updateHop": {},
+  "queryRelations.backToSource": {},
+  "queryRelations.useSource": {},
+  "queryRelations.adoptFilterFirst": {},
   "queryConditions.all": {},
   "queryConditions.any": {},
   "queryConditions.not": {},
@@ -22075,9 +22110,7 @@ export const messageParamTypes = {
   "hostedQuery.unionExample": {},
   "hostedQuery.distinctExample": {},
   "hostedQuery.parameterExample": {},
-  "hostedQuery.relatedExample": {},
   "hostedQuery.addCombination": {},
-  "hostedQuery.relationRequired": {},
   "hostedQuery.nativeExampleHelp": {},
   "hostedQuery.running": {},
   "hostedQuery.run": {},
@@ -33841,6 +33874,19 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "queryPlan.filterOperatorLabel": "Filter operator",
   "queryPlan.nestedFilterHelp": "For multivalue / nested conditions, use CEL below to retain same-item semantics.",
   "queryPlan.filterValueLabel": "Filter value",
+  "queryRelations.title": "Find related notes",
+  "queryRelations.relation": "Relation type",
+  "queryRelations.nextRelation": "Relation type for the next hop",
+  "queryRelations.direction": "Relation direction",
+  "queryRelations.forward": "Outgoing notes",
+  "queryRelations.inverse": "Incoming notes",
+  "queryRelations.firstHop": "First hop",
+  "queryRelations.secondHop": "Second hop",
+  "queryRelations.addHop": "Add a hop",
+  "queryRelations.updateHop": "Update this hop",
+  "queryRelations.backToSource": "Remove the final hop and return to its source query",
+  "queryRelations.useSource": "Edit queries beyond two hops in the complete plan.",
+  "queryRelations.adoptFilterFirst": "Adopt the edited condition before changing relations.",
   "queryConditions.all": "Match all",
   "queryConditions.any": "Match any",
   "queryConditions.not": "Negate",
@@ -34033,9 +34079,7 @@ export const enUS: Readonly<Record<MessageKey, string>> = {
   "hostedQuery.unionExample": "unionAll from two exact sources",
   "hostedQuery.distinctExample": "distinct by complete projected values",
   "hostedQuery.parameterExample": "With a native wanted parameter",
-  "hostedQuery.relatedExample": "Query along an authorized relationship",
   "hostedQuery.addCombination": "Add advanced combination to temporary plan",
-  "hostedQuery.relationRequired": "Select a separately authorized relationship first.",
   "hostedQuery.nativeExampleHelp": "Examples remain native Query plans. The same executor validates complete CEL, types, relationships and definition authorization at run time. Parameters, union, distinct, group, unnest and saved-definition invocations can be combined directly in the complete plan.",
   "hostedQuery.running": "Running hosted Query…",
   "hostedQuery.run": "Run hosted advanced query",

@@ -12,7 +12,7 @@ assert.ok(path.isAbsolute(process.argv[2]), 'Output must be absolute');
 const repo = path.resolve(import.meta.dirname, '..'), out = path.resolve(process.argv[2]);
 assert.ok(path.relative(repo, out).startsWith('..' + path.sep), 'Keep private evidence outside the product repository');
 await mkdir(out, { recursive: false });
-const inputs = ['app/src/query-panel.ts', 'app/src/query-predicate.ts', 'app/src/query-plan-controls.ts', 'app/src/query-argument-controls.ts', 'app/src/query-plan.ts', 'app/src/native-value-form.ts', 'app/src/query-refresh.ts', 'app/src/query-control-state.ts', 'app/src/tag-tree.ts', 'app/src/query-result.test-support.ts', 'app/src/ui-locale.ts', 'app/src/ui-messages.ts', 'app/package.json', 'app/package-lock.json', 'scripts/test_query_controls_browser.mjs'];
+const inputs = ['app/src/query-panel.ts', 'app/src/query-predicate.ts', 'app/src/query-plan-controls.ts', 'app/src/query-argument-controls.ts', 'app/src/query-relation-controls.ts', 'app/src/query-plan.ts', 'app/src/native-value-form.ts', 'app/src/query-refresh.ts', 'app/src/query-control-state.ts', 'app/src/tag-tree.ts', 'app/src/query-result.test-support.ts', 'app/src/ui-locale.ts', 'app/src/ui-messages.ts', 'app/package.json', 'app/package-lock.json', 'scripts/test_query_controls_browser.mjs'];
 const inventory = async () => Promise.all(inputs.map(async name => { const bytes = await readFile(path.join(repo, name)); return { path: name, bytes: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') }; }));
 const result = { startedUtc: new Date().toISOString(), frontend: 'current Vite source, isolated QueryPanel component', developmentOnly: true,
   limits: ['Bounded host returns schema, registry and a strict local Query result; no Core query evaluation or persisted author operation.', 'No native desktop, OS IME, assistive technology, performance or whole-product acceptance.'],
@@ -188,6 +188,37 @@ try {
     });
     assert.deepEqual(actual, { op: 'any', conditions: [{ op: 'not', conditions: ['title == "edited"'] }, 'title == "first"'] });
     await controls.evaluate(node => node.remove());
+  });
+  await check('relation controls keep the original seed and capture two distinct directed hops', async () => {
+    await page.evaluate(async () => {
+      const { queryRelationControls } = await import('/src/query-relation-controls.ts');
+      const container = document.createElement('div');
+      container.id = 'relation-fixture';
+      const draw = plan => {
+        window.fixture.relationPlan = plan;
+        container.replaceChildren(queryRelationControls(plan, ['parents', 'authors'], draw));
+      };
+      draw({ scope: { descendants: true, lifecycle: 'live' }, types: ['person'],
+        where: 'self == nodeRef("weftext-node://test/seed")', select: [], order: [] });
+      document.body.append(container);
+    });
+    const relations = page.locator('#relation-fixture');
+    const add = relations.getByRole('button', { name: '添加一跳', exact: true });
+    await add.click();
+    await relations.getByRole('combobox', { name: '下一跳的关系类型' }).selectOption('authors');
+    await relations.getByRole('combobox', { name: '关系方向', exact: true }).last().selectOption('inverse');
+    await add.click();
+    assert.equal(await add.count(), 0);
+    const actual = await page.evaluate(() => window.fixture.relationPlan.advanced.related);
+    assert.equal(actual.relation, 'authors');
+    assert.equal(actual.direction, 'inverse');
+    const first = actual.from.advanced.related;
+    assert.equal(first.relation, 'parents');
+    assert.equal(first.direction, 'forward');
+    assert.equal(first.from.where, 'self == nodeRef("weftext-node://test/seed")');
+    await relations.getByRole('button', { name: '移除最后一跳并返回该跳之前的查询' }).click();
+    assert.equal(await add.count(), 1);
+    await relations.evaluate(node => node.remove());
   });
   await check('typed argument controls preserve exact values, default omission and an independently edited draft', async () => {
     await page.evaluate(async () => {

@@ -4067,6 +4067,19 @@
       "en-US": "Filter value",
       "params": {}
     },
+    "queryRelations.title": { "zh-CN": "按关系查找", "en-US": "Find related notes", "params": {} },
+    "queryRelations.relation": { "zh-CN": "关系类型", "en-US": "Relation type", "params": {} },
+    "queryRelations.nextRelation": { "zh-CN": "下一跳的关系类型", "en-US": "Relation type for the next hop", "params": {} },
+    "queryRelations.direction": { "zh-CN": "关系方向", "en-US": "Relation direction", "params": {} },
+    "queryRelations.forward": { "zh-CN": "指向的笔记", "en-US": "Outgoing notes", "params": {} },
+    "queryRelations.inverse": { "zh-CN": "指回的笔记", "en-US": "Incoming notes", "params": {} },
+    "queryRelations.firstHop": { "zh-CN": "第一跳", "en-US": "First hop", "params": {} },
+    "queryRelations.secondHop": { "zh-CN": "第二跳", "en-US": "Second hop", "params": {} },
+    "queryRelations.addHop": { "zh-CN": "添加一跳", "en-US": "Add a hop", "params": {} },
+    "queryRelations.updateHop": { "zh-CN": "更新这一跳", "en-US": "Update this hop", "params": {} },
+    "queryRelations.backToSource": { "zh-CN": "移除最后一跳并返回该跳之前的查询", "en-US": "Remove the final hop and return to its source query", "params": {} },
+    "queryRelations.useSource": { "zh-CN": "请在完整计划中编辑超过两跳的查询。", "en-US": "Edit queries beyond two hops in the complete plan.", "params": {} },
+    "queryRelations.adoptFilterFirst": { "zh-CN": "请先采用手写条件，再修改关系。", "en-US": "Adopt the edited condition before changing relations.", "params": {} },
     "queryConditions.all": { "zh-CN": "全部满足", "en-US": "Match all", "params": {} },
     "queryConditions.any": { "zh-CN": "任一满足", "en-US": "Match any", "params": {} },
     "queryConditions.not": { "zh-CN": "取反", "en-US": "Negate", "params": {} },
@@ -5055,19 +5068,9 @@
       "en-US": "With a native wanted parameter",
       "params": {}
     },
-    "hostedQuery.relatedExample": {
-      "zh-CN": "沿获权关系查询",
-      "en-US": "Query along an authorized relationship",
-      "params": {}
-    },
     "hostedQuery.addCombination": {
       "zh-CN": "将高级组合加入临时计划",
       "en-US": "Add advanced combination to temporary plan",
-      "params": {}
-    },
-    "hostedQuery.relationRequired": {
-      "zh-CN": "请先选择独立获权的关系。",
-      "en-US": "Select a separately authorized relationship first.",
       "params": {}
     },
     "hostedQuery.nativeExampleHelp": {

@@ -128,6 +128,8 @@ Weftext Query 查询获权的库数据，Typst 官方 `query` 仍只做当前编
 
 `where` 接受单个 CEL 条件或结构化条件组。组使用 `op` 选择 `all`（全部）、`any`（任一）或 `not`（取反），`conditions` 按顺序保存 CEL 条件和子组；取反组恰有一项。条件树以根为第 0 层，最多 12 层嵌套和 256 个节点，生成的 CEL 最多 16 KiB。保存定义按原顺序保留条件树，依赖分析与执行使用同一逻辑，复制引用时只改写对应 CEL 条件中的引用位置。
 
+查询控件中的 **按关系查找** 以当前查询作为起点。每一跳分别选择已登记的关系及指向或指回方向，控件最多支持连续两跳。移除最后一跳会恢复该跳之前的查询。托管控件提供用户从已授权范围中选定的关系。
+
 基础节点为 `scan(scope,lifecycle)`、`read(fields/products)`、`filter(expr)`、`project(columns)`、`unnest(array,binding)`、`sort(keys)`、`take(limit)`、`union_all`、`distinct(keys)`、`group(keys,aggregates)`、`related(relation)` 与保存 Query 调用。默认displayed body/title/table来自该次Html final tree，native heading产品及显示关联按§3.1单列；生成/任意深heading只读存在不等于已显示或可写。显式Paged产品读另一个具名target，同run中每个product带compileIdentity/target且不跨目标拼值或occurrence。基础全文搜索生成显式 `textMatch` 节点，UI 显示是否查正文、目录/子目录/库范围及所有组合条件；本轮不另造查询 DSL。
 
 Query 用 SOURCE 的唯一 Type/Value：text、bool、i64 int、exact decimal、显式 float、civil date/time/local datetime、带 offset instant、ref、array、record 和 schema判别union。money+currency、quantity+unit与精度日期都是该shape系统定义的业务record，不增加未注册scalar codec。数组保序及重复；record 成员按 schema 解释，未知原生成员仍保留为只读值，不猜类型。无隐式 float↔decimal、date↔instant、币种↔币种或单位换算。显式换算需指定准确 provider 与版本，并纳入依赖。电话始终 text。schema 冲突/缺失不能从第一行数据推断 type。

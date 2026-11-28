@@ -4,6 +4,7 @@ import { message, setUiText, setUiAttr, setUiValidity, uiTextNode, uiTextValue, 
 import { action, diagnosticText, formatNativeValue, ui, fieldNames, type Cell, type DataSchema } from "./data-panel";
 import { queryPlanControls } from "./query-plan-controls";
 import { queryArgumentControls } from "./query-argument-controls";
+import { queryRelationControls } from "./query-relation-controls";
 import { initialOccurrenceView, occurrenceViewControls, renderOccurrenceCards } from "./query-result-view";
 import { directQueryField, queryResultState } from "./query-panel";
 import { andPredicates, parseQueryParameters, parseQueryPlan, type QueryPlan } from "./query-plan";
@@ -430,7 +431,8 @@ export class HostedQuery {
         catch { /* Invalid source is kept verbatim. */ }
         if (parsed && !parsed.advanced && !parsed.unnest) {
             const proposal = structuredClone(parsed), opening = draft.plan, controls = ui("details");
-            controls.append(ui("summary", "", message("hostedQuery.planControlsDisclosure")), queryPlanControls(proposal, this.catalog.formSchema ?? null, () => { }), action(message("hostedQuery.adoptControlProposal"), () => {
+            const schema = this.catalog.formSchema;
+            controls.append(ui("summary", "", message("hostedQuery.planControlsDisclosure")), queryPlanControls(proposal, schema ? { ...schema, relations: [] } : null, () => { }), action(message("hostedQuery.adoptControlProposal"), () => {
                 if (draft.plan !== opening) {
                     setUiText(this.message, message("hostedQuery.controlProposalSuperseded"));
                     return;
@@ -439,7 +441,17 @@ export class HostedQuery {
             }));
             visual.append(controls);
         }
-        const combination = select("combination", message("hostedQuery.combinationLabel"), [["union", message("hostedQuery.unionExample")], ["distinct", message("hostedQuery.distinctExample")], ["parameters", message("hostedQuery.parameterExample")], ["related", message("hostedQuery.relatedExample")]], "union");
+        if (parsed && (draft.relations.length || parsed.advanced?.related)) {
+            const opening = draft.plan;
+            visual.append(queryRelationControls(parsed, draft.relations, next => {
+                if (opening !== draft.plan) {
+                    setUiText(this.message, message("hostedQuery.controlProposalSuperseded"));
+                    return;
+                }
+                this.writePlan(next);
+            }));
+        }
+        const combination = select("combination", message("hostedQuery.combinationLabel"), [["union", message("hostedQuery.unionExample")], ["distinct", message("hostedQuery.distinctExample")], ["parameters", message("hostedQuery.parameterExample")]], "union");
         visual.append(combination, action(message("hostedQuery.addCombination"), () => {
             try {
                 const current = parseQueryPlan(draft.plan), advanced = { ...current.advanced };
@@ -452,12 +464,6 @@ export class HostedQuery {
                     current.where = andPredicates(current.where, "status == wanted");
                     this.writePlan(current);
                     return;
-                }
-                else {
-                    const relation = draft.relations[0];
-                    if (!relation)
-                        throw new UiError(message("hostedQuery.relationRequired"));
-                    advanced.related = { relation, from: structuredClone(current), direction: "forward" };
                 }
                 this.writePlan({ ...current, advanced });
             }
