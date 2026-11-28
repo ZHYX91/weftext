@@ -107,7 +107,13 @@ export class HeadingStructureView {
         setUiAttr(search, "aria-label", message("heading.searchOutline"));
         setUiAttr(search, "title", message("heading.outlineSearchKeys"));
         setUiAttr(search, "placeholder", message("heading.outlineSearchPlaceholder"));
-        search.oninput = event => { this.search = search.value; this.matchKey = null; if (!(event as InputEvent).isComposing) redraw(); };
+        search.oninput = event => {
+            // A commit is owned by compositionend. Redrawing the old render here
+            // could replace an externally admitted snapshot waiting in deferred.
+            if (this.composing || (event as InputEvent).isComposing) return;
+            this.search = search.value; this.matchKey = null;
+            redraw();
+        };
         search.addEventListener("compositionstart", () => { this.composing = true; });
         search.addEventListener("compositionend", () => {
             this.composing = false; this.search = search.value; this.matchKey = null;

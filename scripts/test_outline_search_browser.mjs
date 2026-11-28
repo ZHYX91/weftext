@@ -90,6 +90,22 @@ try {
   await page.evaluate(() => window.draw());
   assert.equal(await options.evaluate(element => element.open), false);
   assert.equal(await summary.evaluate(element => document.activeElement === element), true);
+  await page.locator('[data-outline-control="filter"]').selectOption('all');
+  await search.fill('章节');
+  await search.dispatchEvent('compositionstart');
+  await page.evaluate(() => window.draw([
+    { key: 'new-heading', text: '章节第一（新）', kind: 'heading', level: 1, generated: false },
+  ]));
+  await search.fill('章节第');
+  assert.equal(await page.locator('[data-heading-key="new-heading"]').count(), 0,
+    'Do not rebuild the input while it owns composition');
+  assert.equal(await focused(), true);
+  await search.dispatchEvent('compositionend');
+  await search.press('Enter');
+  const expected = ['last', 'first', 'figure', 'figure',
+    process.env.EXPECT_STALE_OUTLINE ? 'first' : 'new-heading'];
+  assert.deepEqual(await jumps(), expected, 'Committed input must search the latest admitted outline');
+  assert.equal(await focused(), true);
   assert.deepEqual(errors, []);
   console.log('PASS outline search: initial result, wrap, Enter, filters, no matches, and composition ownership');
 } finally {
