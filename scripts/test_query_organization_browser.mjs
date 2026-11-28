@@ -40,6 +40,7 @@ async function api(route, body, actor, expected = 200) { const response = await 
 async function frontend(hosted = false) { if (!process.env.WEFTEXT_DEV_FRONTEND) return base; await vite?.close(); const app = path.resolve(import.meta.dirname, '../app'); const { createServer } = await import(pathToFileURL(path.join(app, 'node_modules/vite/dist/node/index.js')).href); const proxy = { target: base, changeOrigin: true, configure(instance) { instance.on('proxyReq', (request, incoming) => { if (incoming.headers.origin) request.setHeader('Origin', base); }); } }; vite = await createServer({ root: app, configFile: false, server: { host: '127.0.0.1', port: 0, hmr: false, watch: { ignored: ['**/*'] }, proxy: { '/api': proxy, '/fonts': proxy } } }); await vite.listen(); return 'http://127.0.0.1:' + vite.httpServer.address().port + (hosted ? '/hosted.html' : ''); }
 
 const pendingObservations = new Set();
+const runWire = new Map();
 
 async function observe(target) {
   // Keep only references to the actual retained CodeMirror views. Reading an
@@ -69,6 +70,17 @@ async function observe(target) {
     const item = { sequence: ++sequence, phase, route: new URL(request.url()).pathname };
     try {
       const body = request.postDataJSON();
+      const embeddedRun = /^\/api\/(?:hosted\/)?query\/embedded\/run$/.test(item.route);
+      const cancellation = /^\/api\/(?:hosted\/)?query\/cancel$/.test(item.route);
+      if (embeddedRun || cancellation) {
+        const ticket = embeddedRun ? request.headers()['x-weftext-query-run'] : body?.runId;
+        if (typeof ticket === 'string') {
+          item.queryTicket = ticket;
+          const trace = runWire.get(ticket) ?? [];
+          trace.push(item);
+          runWire.set(ticket, trace);
+        }
+      }
       if (typeof body?.sessionId === 'string' && typeof body.source === 'string' && Number.isSafeInteger(body.serial)) {
         item.basis = { sessionId: body.sessionId, serial: body.serial, sourceHash: sha(body.source), sourceBytes: Buffer.byteLength(body.source) };
         basisRequests.push(item);
@@ -79,15 +91,32 @@ async function observe(target) {
   });
   target.on('pageerror', error => result.pageErrors.push(String(error)));
   target.on('response', response => {
+    const original = requests.get(response.request());
+    if (original?.queryTicket) {
+      original.status = response.status();
+      if (response.ok()) {
+        const outcome = response.json().then(value => {
+          original.outcome = original.route.endsWith('/cancel')
+            ? value?.status === 'cancelled' ? 'cancelled' : 'invalid'
+            : Array.isArray(value?.result?.rows) && typeof value?.occurrenceId === 'string' ? 'frozenResult' : 'invalid';
+        }).catch(() => { original.outcome = 'invalid'; });
+        pendingObservations.add(outcome);
+        void outcome.finally(() => pendingObservations.delete(outcome));
+      }
+    }
     if (!response.url().includes('/api/') || response.status() < 400) return;
-    const captured = phase, responseSequence = ++sequence, original = requests.get(response.request());
+    const captured = phase, responseSequence = ++sequence;
     // A later basis must already have been sent when this response arrives.
     // An edit made afterwards cannot excuse a still-current refusal.
     const later = basisRequests.filter(item => item.sequence > (original?.sequence ?? Infinity) && item.sequence < responseSequence);
     const observation = (async () => {
       try {
         const route = new URL(response.url()).pathname;
-        const error = { phase: captured, requestPhase: original?.phase, route, status: response.status(), body: await response.text() };
+        const error = { phase: captured, requestPhase: original?.phase, route, status: response.status(), body: await response.text(), queryTicket: original?.queryTicket };
+        if (original?.queryTicket && route === '/api/hosted/query/embedded/run' && response.status() === 429) {
+          const value = JSON.parse(error.body);
+          if (value?.error?.code === 'busy' && !value.result) original.outcome = 'busyRefusal';
+        }
         if (route === '/api/data/project') {
           error.requestBody = original?.requestBody;
           error.requestBasis = original?.basis;
@@ -107,6 +136,65 @@ async function observe(target) {
 }
 
 async function finishObservations() { await until(()=>pendingObservations.size===0); }
+
+function settledEmbeddedCancellation(error, code, explanation) {
+  if (error.status !== 409 || !error.queryTicket) return false;
+  const trace = runWire.get(error.queryTicket) ?? [];
+  const root = error.route.startsWith('/api/hosted/') ? '/api/hosted/query' : '/api/query';
+  const run = trace.find(item => item.route === root + '/embedded/run');
+  const cancel = trace.find(item => item.route === root + '/cancel');
+  if (!run || !cancel) return false;
+  if (error.route === run.route && code === 'queryCancelled' && explanation === 'error.api.data.queryCancelled')
+    return run.status === 409 && cancel.status === 200 && cancel.outcome === 'cancelled';
+  if (error.route === cancel.route && code === 'queryRunUnavailable' && explanation === 'error.api.data.queryRunUnavailable')
+    return cancel.status === 409 && ['frozenResult', 'busyRefusal'].includes(run.outcome);
+  return false;
+}
+
+function classifyHttpError(error) {
+  let wire;
+  try { wire = JSON.parse(error.body).error; } catch {}
+  const code = wire?.code;
+  const explanation = wire?.explanation?.key;
+  const { route, status, phase, requestPhase } = error;
+  const hostedPreview = ['/api/hosted/query/embedded/run', '/api/hosted/editor/render'].includes(route);
+  const staleDraftRoutes = [
+    '/api/render', '/api/knowledge/read', '/api/query/embedded/run',
+    '/api/hosted/editor/render', '/api/hosted/query/embedded/run',
+  ];
+  const retiredHostedEditorMap =
+    route === '/api/hosted/editor/map' && status === 409 && code === 'stale_draft'
+    && explanation === 'error.api.writing.editorBasisExpired'
+    && requestPhase === 'hosted' && phase === 'revoked';
+  const hostedAfterRevocation =
+    phase === 'revoked' && (
+      (status === 401 && code === 'authentication' && hostedPreview)
+      || ([404, 410].includes(status) && ['sessionExpired', 'unavailable'].includes(code))
+    );
+  const hostedBusy =
+    ['hosted', 'revoked'].includes(phase) && status === 429 && code === 'busy' && hostedPreview;
+  const localSharingConflict =
+    route === '/api/query/embedded/run' && status === 409 && code === 'busy'
+    && wire?.details?.code === 'busy' && wire?.message?.endsWith('(os error 32)');
+  const staleKnowledge =
+    route === '/api/knowledge/read' && status === 409
+    && (code === 'staleBase' || (phase === 'fixture-seed' && code === 'citationCutChanged'));
+  const rejectedProperty =
+    (requestPhase === 'property-refusal' || phase === 'property-refusal')
+    && route === '/api/data/edit' && status === 400 && code === 'invalid_data';
+  const expected =
+    settledEmbeddedCancellation(error, code, explanation)
+    || supersededProjection(error, code)
+    || retiredHostedEditorMap
+    || hostedAfterRevocation
+    || hostedBusy
+    || localSharingConflict
+    || staleKnowledge
+    || rejectedProperty
+    || (status === 409 && code === 'stale_draft' && staleDraftRoutes.includes(route))
+    || (route === '/api/hosted/office/legacy-capabilities' && status === 404 && code === 'unavailable');
+  return { code, expected };
+}
 
 function supersededProjection(error, code) {
   const original = error.requestBasis, newer = error.supersededBasis, editor = error.editorAtResponse;
@@ -295,9 +383,13 @@ try {
   await click('运行托管高级查询',readerQuery); const readerResult=readerQuery.getByRole('table',{name:'托管高级查询冻结结果',exact:true}); await readerResult.waitFor({state:'visible'}); await readerResult.getByRole('row').nth(1).waitFor({state:'visible'});
   assert.equal(await page.locator('.embedded-query-more').count(),0); assert.equal(await page.locator('.embedded-query-builder').count(),0); assert.equal(await page.getByRole('button',{name:/独立字段权限/}).count(),0); await page.screenshot({path:path.join(out,'hosted-reader.png'),fullPage:true}); pass('Revocation clears retained query editors/data, and a reader gains neither source arrangement nor independent result-field writers.');
 
-  await finishObservations(); result.expectedHttpErrors=[]; result.unexpectedHttpErrors=[];
+  await finishObservations(); result.queryCancellationWire=Object.fromEntries(runWire); result.expectedHttpErrors=[]; result.unexpectedHttpErrors=[];
 
-  for(const error of result.httpErrors){let code,message,detailsCode,explanationKey;try{const value=JSON.parse(error.body).error;code=value?.code;message=value?.message;detailsCode=value?.details?.code;explanationKey=value?.explanation?.key;}catch{}const retiredHostedEditorMap=error.route==='/api/hosted/editor/map'&&error.status===409&&code==='stale_draft'&&explanationKey==='error.api.writing.editorBasisExpired'&&error.requestPhase==='hosted'&&error.phase==='revoked';const expected=retiredHostedEditorMap||supersededProjection(error,code)||(error.route==='/api/query/embedded/run'&&error.status===409&&code==='busy'&&detailsCode==='busy'&&message?.endsWith('(os error 32)'))||(error.phase==='revoked'&&error.status===401&&code==='authentication'&&['/api/hosted/query/embedded/run','/api/hosted/editor/render'].includes(error.route))||(['hosted','revoked'].includes(error.phase)&&error.status===429&&code==='busy'&&['/api/hosted/query/embedded/run','/api/hosted/editor/render'].includes(error.route))||(error.route==='/api/knowledge/read'&&error.status===409&&code==='staleBase')||(error.phase==='fixture-seed'&&error.route==='/api/knowledge/read'&&error.status===409&&code==='citationCutChanged')||(error.status===409&&code==='stale_draft'&&['/api/render','/api/knowledge/read','/api/query/embedded/run','/api/hosted/editor/render','/api/hosted/query/embedded/run'].includes(error.route))||(error.status===404&&code==='unavailable'&&error.route==='/api/hosted/office/legacy-capabilities')||(error.phase==='revoked'&&[404,410].includes(error.status)&&['sessionExpired','unavailable'].includes(code))||((error.requestPhase==='property-refusal'||error.phase==='property-refusal')&&error.route==='/api/data/edit'&&error.status===400&&code==='invalid_data');(expected?result.expectedHttpErrors:result.unexpectedHttpErrors).push({...error,code});}
+  for (const error of result.httpErrors) {
+    const { code, expected } = classifyHttpError(error);
+    const observations = expected ? result.expectedHttpErrors : result.unexpectedHttpErrors;
+    observations.push({ ...error, code });
+  }
 
   assert.deepEqual(result.pageErrors,[]); assert.deepEqual(result.observerErrors??[],[]); assert.deepEqual(result.unexpectedHttpErrors,[]); result.completed=true;
 
