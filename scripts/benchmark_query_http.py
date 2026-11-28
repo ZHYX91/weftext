@@ -24,8 +24,8 @@ def fixture_id(key):
     return str(uuid.UUID(bytes=hashlib.sha256(key.encode()).digest()[:16], version=4))
 
 
-def synthetic_package(schema, size):
-    workspace = fixture_id(f"weftext-query-fixture/{size}")
+def synthetic_package(schema, size, *, full_text=False):
+    workspace = fixture_id(f"weftext-query-fixture/{size}" + ("/full-text" if full_text else ""))
     files = {'.weftext-schema.json': schema.encode('utf-8')}
     entries = {'.weftext-schema.json': {'role': 'schema'}}
     for index in range(size):
@@ -36,6 +36,10 @@ def synthetic_package(schema, size):
         source = (f'#metadata((id: "{node}", types: ("task",), status: "{status}")) <weftext>\n'
                   f'#set document(title: [任务 Task {index}])\n#title()\n\n'
                   + '会议纪要 meeting notes. ' * 8 + '\n')
+        if full_text:
+            source += f'词条 term{index:06} ' + ('needle search' if index % 2 == 0 else 'haystack') + '\n'
+            if index in (0, size - 1):
+                source += '#include "../shared-query-text.typ"\n'
         files[path] = source.encode('utf-8')
         entries[path] = {'role': 'source', 'nodeId': node}
 
@@ -58,7 +62,7 @@ def request(server, route, payload):
     return response
 
 
-def provision(data, root, size):
+def provision(data, root, size, *, full_text=False):
     server = Server(['--data-dir', str(data)])
     try:
         request(server, '/api/library/create', {'path': str(root), 'operationId': uid()})
@@ -66,7 +70,7 @@ def provision(data, root, size):
             'root': str(root), 'parent': str(root), 'name': 'Fixture anchor', 'operationId': uid(),
         }))
         schema = request(server, '/api/data/schema', {'root': str(root)})['source']
-        archive = synthetic_package(schema, size)
+        archive = synthetic_package(schema, size, full_text=full_text)
         plan = request(server, '/api/exchange/prepare', {
             'operationId': uid(), 'sessionId': anchor['sessionId'], 'baseId': anchor['baseId'],
             'root': str(root), 'parent': str(root), 'name': 'Synthetic', 'format': 'native',
@@ -77,6 +81,8 @@ def provision(data, root, size):
         })
         if committed['status'] != 'committed':
             raise RuntimeError('The synthetic package was not admitted')
+        if full_text:
+            (root / 'Synthetic/shared-query-text.typ').write_text('shared baseline\n', encoding='utf-8')
         return hashlib.sha256(archive).hexdigest()
     finally:
         server.close()
@@ -131,12 +137,67 @@ def measure(data, root, size, samples, output):
                        'serverPeakWorkingSetBytes': int(peak), 'expectedRowsBeforeTake': expected})
 
 
+def measure_full_text(data, root, size, samples, output):
+    if size < 40:
+        raise ValueError('Use at least 40 notes to exercise coverage beyond the former limit')
+
+    def measured(server, name, terms, expected, expected_misses):
+        start = time.perf_counter_ns()
+        outcome = request(server, '/api/query/run', {'root': str(root), 'plan': {
+            'types': ['task'], 'where': f'textMatch(body, "{terms}", "phrase")',
+            'select': [{'name': 'status', 'expr': 'status'}], 'take': 100,
+        }})
+        elapsed = (time.perf_counter_ns() - start) / 1_000_000
+        index = next((v for v in outcome.get('inputVersions', []) if v['role'] == 'nativeQueryIndex'), {})
+        sample = {'case': name, 'ms': elapsed, 'coverage': outcome['coverage'],
+                  'matches': outcome['totalKnown'], 'expectedMatches': expected,
+                  'index': index, 'expectedMisses': expected_misses}
+        output.append(sample)
+        if (outcome['coverage'] != 'complete' or outcome.get('externalPending')
+                or outcome['totalKnown'] != expected or len(outcome['rows']) != min(expected, 100)
+                or index.get('misses') != expected_misses or index.get('built') != expected_misses):
+            raise ValueError(f'Unexpected full-text coverage or incremental work for {name}: {sample}')
+        return elapsed
+
+    server = Server(['--data-dir', str(data)])
+    try:
+        expected = (size + 1) // 2
+        measured(server, 'cold', 'needle search', expected, size + 1)
+        warm = [measured(server, 'warm', 'needle search', expected, 0) for _ in range(samples)]
+        measured(server, 'last-document', f'term{size-1:06}', 1, 0)
+        name = f'Task-{size-1:06}'
+        path = root / 'Synthetic' / name / f'{name}.typ'
+        document = request(server, '/api/open', {'root': str(root), 'path': str(path)})
+        request(server, '/api/save', {'sessionId': document['sessionId'], 'baseId': document['baseId'],
+                                      'source': document['source'] + '\nnew unique phrase\n',
+                                      'operationId': uid()})
+        measured(server, 'single-edit', 'new unique phrase', 1, 1)
+        (root / 'Synthetic/shared-query-text.typ').write_text('shared revision\n', encoding='utf-8')
+        measured(server, 'shared-dependency-edit', 'shared revision', 2, 2)
+        measured(server, 'complete-no-match', 'shared baseline', 0, 0)
+        peak = subprocess.check_output([
+            'powershell.exe', '-NoProfile', '-Command',
+            f'(Get-Process -Id {server.process.pid}).PeakWorkingSet64',
+        ], text=True, timeout=10)
+    finally:
+        server.close()
+    server = Server(['--data-dir', str(data)])
+    try:
+        measured(server, 'restart-warm', 'shared revision', 2, 0)
+    finally:
+        server.close()
+    ordered = sorted(warm)
+    return {'p50Ms': statistics.median(warm), 'p95Ms': ordered[math.ceil(.95 * samples) - 1],
+            'serverPeakWorkingSetBytes': int(peak)}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('executable', type=Path)
     parser.add_argument('output', type=Path, help='New directory outside the source checkout')
     parser.add_argument('--notes', default=1000, type=int)
     parser.add_argument('--samples', default=20, type=int)
+    parser.add_argument('--full-text', action='store_true', help='Exercise native body coverage and incremental index changes')
     args = parser.parse_args()
     if not 1 <= args.notes <= 2000 or not 1 <= args.samples <= 100:
         parser.error('Use 1–2000 notes and 1–100 samples under the current inventory budget')
@@ -151,8 +212,11 @@ def main():
     result = {'executableSha256': executable_hash, 'platform': platform.platform(), 'notes': args.notes,
               'logicalCpuCount': os.cpu_count(), 'samplesPerCase': args.samples, 'cases': [], 'complete': False}
     try:
-        result['fixtureArchiveSha256'] = provision(data, root, args.notes)
-        measure(data, root, args.notes, args.samples, result['cases'])
+        result['fixtureArchiveSha256'] = provision(data, root, args.notes, full_text=args.full_text)
+        if args.full_text:
+            result['fullText'] = measure_full_text(data, root, args.notes, args.samples, result['cases'])
+        else:
+            measure(data, root, args.notes, args.samples, result['cases'])
         result['complete'] = True
     finally:
         (evidence / 'query-timings.json').write_text(json.dumps(result, indent=2) + '\n', encoding='utf-8')

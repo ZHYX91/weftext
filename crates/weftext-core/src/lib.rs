@@ -7,6 +7,7 @@ pub use author_order::{
 };
 mod capture_draft;
 mod compile_dependencies;
+mod query_product_index;
 pub use capture_draft::{
     CaptureAuthorInput, CaptureAuthorRawInput, CaptureAuthorRecovery, CaptureAuthorTexts,
     CaptureBodyMode, CaptureCreationRequest, CaptureDetachedAuthorInput, CaptureDetachedRawInput,
@@ -20,6 +21,7 @@ pub use capture_draft::{
 pub use compile_dependencies::{
     CompileDependency, CompileDependencyKind, CompileDependencyStatus, CompileDependencyWitness,
 };
+pub use query_product_index::{IndexedQueryProduct, QueryProductCut, QueryProductKey};
 mod device_state;
 mod directory_identity;
 pub use device_state::DeviceIdentity;
@@ -623,6 +625,7 @@ pub struct Core {
     admitted_cuts: HashMap<String, operations::AdmittedBasis>,
     compile_dependency_cuts: HashMap<String, compile_dependencies::CompileDependencyCut>,
     query_text_index: weftext_data::QueryTextIndex,
+    query_product_index: Option<query_product_index::QueryProductIndex>,
 }
 impl Core {
     pub fn query_text_index(&self, scope: &[&str]) -> weftext_data::QueryTextIndex {
@@ -742,6 +745,7 @@ impl Core {
             admitted_cuts: HashMap::new(),
             compile_dependency_cuts: HashMap::new(),
             query_text_index: Default::default(),
+            query_product_index: None,
         };
         if let Some((_, device_id)) = expected {
             let device = core.existing_device_identity()?;

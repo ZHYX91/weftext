@@ -4206,6 +4206,10 @@ impl Core {
         let mut directories = Vec::new();
         snapshot_tree(&self.backend, root, &mut captured, &mut directories, false)?;
         let (mut guards, handles) = self.hold_compile_tree(&captured, &directories)?;
+        let exact_paths: BTreeMap<_, _> = captured
+            .iter()
+            .map(|file| (file.path.as_str(), file))
+            .collect();
         for original in snapshot
             .files
             .iter()
@@ -4218,9 +4222,14 @@ impl Core {
                     UiMessage::error_core_operations_selected_source_basis_expired(),
                 )
             })?;
-            let current = captured
-                .iter()
-                .find(|f| locator_equal(&f.path, &original.path));
+            let current = exact_paths
+                .get(original.path.as_str())
+                .copied()
+                .or_else(|| {
+                    captured
+                        .iter()
+                        .find(|file| locator_equal(&file.path, &original.path))
+                });
             if basis.captured.as_ref().map(|f| (&f.stamp, &f.bytes))
                 != current.map(|f| (&f.stamp, &f.bytes))
             {

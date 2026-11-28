@@ -21,7 +21,7 @@ mod style_adapter;
 mod types;
 mod world;
 pub use fonts::{bundled_font_asset, bundled_font_manifest};
-pub use frozen::FrozenRenderRequest;
+pub use frozen::{FrozenQueryProduct, FrozenQuerySource, FrozenRenderRequest};
 pub use paged::PagedOutput;
 pub use products::RenderProducts;
 pub use style::*;

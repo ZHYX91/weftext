@@ -2308,6 +2308,75 @@ pub(crate) fn native_query_products(
     weftext_data::native_query_products(identity, products)
 }
 
+async fn render_query_misses(
+    state: &AppState,
+    frozen: &FrozenQuery,
+    files: &BTreeMap<String, Vec<u8>>,
+    misses: &[usize],
+) -> BTreeMap<usize, Result<weftext_engine::FrozenQueryProduct, ApiError>> {
+    let mut remaining = misses
+        .chunks(crate::query_product_worker::BATCH_NOTES)
+        .collect::<std::collections::VecDeque<_>>();
+    let mut output = BTreeMap::new();
+    let encoded = crate::query_product_worker::encode_files(files);
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
+    while let Some(batch) = remaining.pop_front() {
+        let sources = batch
+            .iter()
+            .map(|&index| {
+                let note = &frozen.input.notes[index];
+                weftext_engine::FrozenQuerySource {
+                    path: PathBuf::from(&note.path),
+                    source: note.source.clone(),
+                }
+            })
+            .collect();
+        let response = tokio::time::timeout_at(
+            deadline,
+            crate::query_product_worker::run(
+                state,
+                PathBuf::from(&frozen.root),
+                frozen.render_style.clone(),
+                encoded.clone(),
+                sources,
+            ),
+        )
+        .await;
+        match response {
+            Ok(Ok(products)) => {
+                output.extend(
+                    batch
+                        .iter()
+                        .copied()
+                        .zip(products.into_iter().map(|product| {
+                            product.map_err(|description| {
+                                ApiError::from_product(
+                                    StatusCode::UNPROCESSABLE_ENTITY,
+                                    "query_native_product",
+                                    None,
+                                    description,
+                                    Vec::new(),
+                                )
+                            })
+                        })),
+                );
+            }
+            Ok(Err(_)) if batch.len() > 1 => {
+                // Isolate an oversized or rejected batch. Each smaller batch
+                // remains subject to the original process and request budgets.
+                let (first, rest) = batch.split_at(batch.len() / 2);
+                remaining.push_front(rest);
+                remaining.push_front(first);
+            }
+            Ok(Err(error)) => {
+                output.insert(batch[0], Err(error));
+            }
+            Err(_) => break,
+        }
+    }
+    output
+}
+
 async fn qualify_query_products(
     state: &AppState,
     frozen: &mut FrozenQuery,
@@ -2322,93 +2391,117 @@ async fn qualify_query_products(
     if demands.is_empty() {
         return Ok(demands);
     }
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(60);
-    if let Some(files) = &frozen.render_files {
-        use base64::Engine as _;
-        let inputs = files.iter().map(|(path,bytes)|json!({"path":path,"byteLength":bytes.len(),
-            "contentHash":weftext_engine::source_hash(&base64::engine::general_purpose::STANDARD.encode(bytes))})).collect::<Vec<_>>();
+    let mut cached = Vec::new();
+    let mut rendered = BTreeMap::new();
+    let mut index_cut = None;
+    let mut index_keys = None;
+    if let Some(files) = frozen.render_files.take() {
+        let cut = std::sync::Arc::new(weftext_core::QueryProductCut::new(
+            &["local", &frozen.root],
+            &files,
+            frozen.render_style.as_ref(),
+        ));
+        let keys = std::sync::Arc::new(
+            frozen
+                .input
+                .notes
+                .iter()
+                .map(|note| cut.key(&note.entity_key, &note.path, &note.source))
+                .collect::<Vec<_>>(),
+        );
+        let lookup_cut = cut.clone();
+        let lookup_keys = keys.clone();
+        cached = core_call(state, move |core| {
+            Ok(core.query_product_entries(&lookup_cut, &lookup_keys))
+        })
+        .await?;
+        let inputs = files.iter().map(|(path, bytes)| {
+            json!({"path":path,"byteLength":bytes.len(),"contentHash":cut.file_fingerprint(path)})
+        }).collect::<Vec<_>>();
         frozen.versions.push(json!({"role":"nativeCompile","cutId":frozen.input.cut_id,"target":"html","files":inputs,
             "style":frozen.render_style.as_ref().map(|style|json!({"path":style.path,"sourceHash":weftext_engine::source_hash(&style.source),"enabled":style.enabled,"entryFunction":style.entry_function}))}));
+        let misses = cached
+            .iter()
+            .enumerate()
+            .filter_map(|(index, value)| value.is_none().then_some(index))
+            .collect::<Vec<_>>();
+        if !misses.is_empty() {
+            rendered = render_query_misses(state, frozen, &files, &misses).await;
+        }
+        let hits = cached.len() - misses.len();
+        let built = rendered
+            .values()
+            .filter(|value| matches!(value, Ok(product) if product.products.is_some()))
+            .count();
+        frozen.versions.push(
+            json!({"role":"nativeQueryIndex","hits":hits,"misses":misses.len(),"built":built}),
+        );
+        index_cut = Some(cut);
+        index_keys = Some(keys);
     }
-    for (index, note) in frozen.input.notes.iter_mut().enumerate() {
+    let mut entries = Vec::new();
+    for (position, note) in frozen.input.notes.iter_mut().enumerate() {
         let identity = format!(
             "native-html:{}:{}:{}",
             frozen.input.cut_id,
             note.entity_key,
             weftext_engine::source_hash(&note.source)
         );
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        let products = if index >= 32 || remaining.is_zero() {
+        let hit = cached.get_mut(position).and_then(Option::take);
+        let rendered_product = rendered.remove(&position);
+        let timed_out = index_cut.is_some() && hit.is_none() && rendered_product.is_none();
+        let qualified = match (hit, rendered_product) {
+            (Some(entry), _) => Some((entry.products, entry.dependencies, entry.compiler_version)),
+            (_, Some(Ok(output))) => {
+                if output.products.is_some() {
+                    if let (Some(cut), Some(keys)) = (&index_cut, &index_keys)
+                        && let Some(entry) = cut.record(&keys[position], &output)
+                    {
+                        entries.push(entry);
+                    }
+                    output
+                        .products
+                        .map(|products| (products, output.dependencies, output.compiler_version))
+                } else {
+                    frozen.engine_diagnostics.push(QueryEngineDiagnostics {
+                        entity_key: note.entity_key.clone(),
+                        diagnostics: output.diagnostics,
+                    });
+                    None
+                }
+            }
+            (_, Some(Err(error))) => {
+                frozen.product_errors.push(QueryProductError {
+                    entity_key: note.entity_key.clone(),
+                    error,
+                });
+                None
+            }
+            _ => None,
+        };
+        let products = if let Some((products, dependencies, compiler_version)) = qualified
+            && products.target == "html"
+        {
+            frozen.versions.push(json!({"role":"nativeProduct","entityKey":note.entity_key,"compileIdentity":identity,
+                "compilerVersion":compiler_version,"dependencies":dependencies}));
+            native_query_products(identity, products)
+        } else if timed_out {
             unavailable_products(
                 identity,
                 weftext_data::DataErrorKind::NativeBudget,
-                UiMessage::error_api_data_native_product_budget(),
+                UiMessage::error_api_data_native_product_deadline(),
             )
-        } else if let Some(files) = &frozen.render_files {
-            let request = weftext_engine::FrozenRenderRequest {
-                source: note.source.clone(),
-                path: PathBuf::from(&note.path),
-                root: PathBuf::from(&frozen.root),
-                files: files.clone(),
-                style: frozen.render_style.clone(),
-            };
-            match tokio::time::timeout(remaining, render_frozen_worker(state, request)).await {
-                Ok(Ok(output)) if output["ok"] == true => {
-                    match serde_json::from_value::<weftext_engine::RenderProducts>(
-                        output["products"].clone(),
-                    ) {
-                        Ok(products) if products.target == "html" => {
-                            frozen.versions.push(json!({"role":"nativeProduct","entityKey":note.entity_key,"compileIdentity":identity,
-                            "compilerVersion":output["compilerVersion"],"target":"html","dependencies":output["dependencies"]}));
-                            native_query_products(identity, products)
-                        }
-                        _ => unavailable_products(
-                            identity,
-                            weftext_data::DataErrorKind::Unavailable,
-                            UiMessage::error_api_data_native_products_unqualified(),
-                        ),
-                    }
-                }
-                Ok(Ok(output)) => {
-                    let diagnostics = serde_json::from_value::<Vec<weftext_engine::Diagnostic>>(
-                        output["diagnostics"].clone(),
-                    )
-                    .map_err(|error| {
-                        ApiError::internal(UiMessage::error_api_data_native_diagnostics_invalid())
-                            .diagnostic(weftext_messages::DiagnosticOrigin::Json, error.to_string())
-                    })?;
-                    frozen.engine_diagnostics.push(QueryEngineDiagnostics {
-                        entity_key: note.entity_key.clone(),
-                        diagnostics,
-                    });
-                    unavailable_products(
-                        identity,
-                        weftext_data::DataErrorKind::Unavailable,
-                        UiMessage::error_api_data_native_compile_failed(),
-                    )
-                }
-                Ok(Err(error)) => {
-                    frozen.product_errors.push(QueryProductError {
-                        entity_key: note.entity_key.clone(),
-                        error,
-                    });
-                    unavailable_products(
-                        identity,
-                        weftext_data::DataErrorKind::Unavailable,
-                        UiMessage::error_api_data_native_worker_unavailable(),
-                    )
-                }
-                Err(_) => unavailable_products(
-                    identity,
-                    weftext_data::DataErrorKind::NativeBudget,
-                    UiMessage::error_api_data_native_product_deadline(),
-                ),
-            }
-        } else {
+        } else if index_cut.is_none() {
             unavailable_products(
                 identity,
                 weftext_data::DataErrorKind::Unavailable,
                 UiMessage::error_api_data_native_environment_unavailable(),
+            )
+        } else {
+            unavailable_products(
+                identity,
+                weftext_data::DataErrorKind::Unavailable,
+                UiMessage::error_api_data_native_compile_failed(),
             )
         };
         let partial = demands.iter().any(|demand| {
@@ -2435,6 +2528,13 @@ async fn qualify_query_products(
             );
         }
         note.products = Some(products);
+    }
+    if !entries.is_empty() {
+        core_call(state, move |core| {
+            core.remember_query_products(entries);
+            Ok(())
+        })
+        .await?;
     }
     Ok(demands)
 }
