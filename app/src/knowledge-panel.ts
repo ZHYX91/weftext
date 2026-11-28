@@ -351,6 +351,7 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
     }>();
     let ruleScope = "", rules = new PersonalRelationRules(), diagnosticView: RelationshipDiagnosticsView;
     let mentionDomain = "all", exclusionScope = "note";
+    let diagnosticJump = 0;
     function relationNode(ref: KnowledgeNodeRef): RelationNode { return { key: nodeIdentity(ref), title: nodeLabel(ref), path: ref.path, reference: `weftext-node://${ref.workspaceId}/${ref.nodeId}` }; }
     function ensureRules(): void {
         const scope = host.context()?.workspaceId ?? "";
@@ -365,19 +366,26 @@ export function mountKnowledgePanel(container: HTMLElement, host: KnowledgeHost)
         }
         catch { /* Saving reports its own error. */ }
         rules = new PersonalRelationRules(next => localStorage.setItem(key, JSON.stringify(next)), stored);
-        diagnosticView = new RelationshipDiagnosticsView(rules, node => closeGuard.run(() => Promise.resolve(host.navigate(node.reference))), async (issue) => closeGuard.run(async () => {
+        diagnosticView = new RelationshipDiagnosticsView(rules, node => closeGuard.run(() => {
+            diagnosticJump++;
+            return Promise.resolve(host.navigate(node.reference));
+        }), async (issue) => closeGuard.run(async () => {
+            const jump = ++diagnosticJump;
+            const isCurrent = () => !disposed && jump === diagnosticJump;
             if (!sameKnowledgeBasis(snapshotBasis, host.context()))
                 throw new UiError(uiMessage("knowledge.diagnosticBasisChanged"));
             const current = host.context();
             if (!current || `${current.workspaceId}/${current.nodeId}` !== issue.source.key)
                 await host.navigate(issue.source.reference);
+            if (!isCurrent()) return;
             if (issue.field) {
                 host.notify(uiMessage("knowledge.propertyOwnerOpenedNoSource"));
                 return;
             }
             const { from, to } = issue;
-            if (!await applyVerifiedKnowledgeSource(() => disposed ? null : host.context(), issue.source.key, issue.sourceHash, nodeSourceHash,
-                () => { if (from !== undefined && to !== undefined) host.selectSource?.(from, to); }))
+            const applied = await applyVerifiedKnowledgeSource(() => isCurrent() ? host.context() : null, issue.source.key, issue.sourceHash, nodeSourceHash,
+                () => { if (from !== undefined && to !== undefined) host.selectSource?.(from, to); });
+            if (!applied && isCurrent())
                 host.notify(uiMessage("knowledge.sourceOpenedBodyChanged"), true);
         }), report);
     }
